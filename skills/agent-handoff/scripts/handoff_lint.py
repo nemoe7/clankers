@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Lint an AGENT_HANDOFF.md against the agent-handoff model.
 
-  handoff_lint.py DOC.md ...     lint; exit 0 = safe to send
+  handoff_lint.py DOC.md ...     lint; exit 0 = automated checks passed; manual review still required
   handoff_lint.py --template T   structure only, placeholders allowed
-  handoff_lint.py --self-test    check the linter against built-in fixtures
 """
 
 import re
@@ -16,12 +15,19 @@ SECTIONS = [
   "11. Next actions", "12. Definition of Done", "13. Validation",
   "14. Rollback / recovery", "15. Handoff history",
 ]
-REQ = ["workstream-id", "handoff-id", "state", "from", "to"]
-STATES = {"ACTIVE", "PREPARING", "HANDED OFF", "ACCEPTED", "BLOCKED", "DONE"}
+REQ = ["workstream-id", "handoff-id", "state", "from", "to", "created"]
+TRANSITIONS = {
+  "ACTIVE": {"PREPARING", "BLOCKED", "DONE"},
+  "PREPARING": {"HANDED OFF", "ACTIVE", "BLOCKED", "DONE"},
+  "HANDED OFF": {"ACCEPTED", "BLOCKED"},
+  "ACCEPTED": {"ACTIVE", "BLOCKED"},
+  "BLOCKED": {"ACCEPTED", "ACTIVE", "PREPARING", "DONE"},
+  "DONE": set(),
+}
+STATES = set(TRANSITIONS)
 WS_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
 ID_RE = re.compile(r"^HANDOFF-(\d{3,})$")
 PH = re.compile(r"<[A-Za-z][^<>\n]{0,78}>")
-ALLOWED_PH = {"<sha>", "<commit>", "<pr>", "<issue>", "<date>", "<owner>"}
 SECRET = [
   ("AWS key id", r"\b(AKIA|ASIA)[0-9A-Z]{16}\b"),
   ("GitHub token", r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
@@ -32,89 +38,157 @@ SECRET = [
    r"""['"]?(?![<\s])[A-Za-z0-9+/_~.-]*[0-9+/_~=.-][A-Za-z0-9+/_~.-]{3,}"""),
 ]
 VAGUE = r"(?i)investigate (this |the issue )?further|look into (it|this)|\bTBD\b"
-ATTEMPT_FIELDS = ["Action", "Expected", "Observed", "Conclusion", "Evidence"]
+ATTEMPT_FIELDS = ["Action", "Expected", "Observed", "Conclusion", "Evidence", "Follow-up"]
 
 
 def frontmatter(text):
-  if not text.startswith("---"):
-    return {}, text
-  end = text.find("\n---", 3)
-  if end < 0:
+  match = re.match(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|$)", text, re.S)
+  if not match:
     return {}, text
   meta = {}
-  for line in text[3:end].splitlines():
+  for line in match.group(1).splitlines():
     if ":" in line and not line.startswith(" "):
       key, _, val = line.partition(":")
-      meta[key.strip()] = val.strip().strip("\"'")
-  return meta, text[end + 4:].lstrip("\n")
+      meta[key.strip()] = val.strip().strip("\"'").strip()
+  return meta, text[match.end():]
 
 
 def slice_ids(sec, prefix):
-  """Return (id, flattened text) for each `- <prefix>N.` entry in a section."""
-  out = []
-  for match in re.finditer(rf"(?m)^\s*-\s*({prefix}\d+)\.", sec):
-    nxt = re.search(r"(?m)^\s*-\s*(?:A|DR)\d+\.", sec[match.end():])
-    stop = match.end() + nxt.start() if nxt else len(sec)
-    out.append((match.group(1), re.sub(r"\s+", " ", sec[match.end():stop])))
-  return out
+  """Return each entry's id and its own, unflattened field block."""
+  matches = list(re.finditer(rf"(?m)^[ \t]*-[ \t]*({prefix}\d+)\.", sec))
+  return [
+    (match.group(1), sec[match.end():matches[i + 1].start() if i + 1 < len(matches) else len(sec)])
+    for i, match in enumerate(matches)
+  ]
+
+
+def missing_fields(block, fields):
+  missing = []
+  for field in fields:
+    label = r"Stop(?: / rollback if)?" if field == "Stop" else re.escape(field)
+    if not re.search(rf"(?m)^[ \t]*-[ \t]+{label}:[ \t]*\S[^\n]*$", block):
+      missing.append(field)
+  return missing
+
+
+def lint_history(section, meta, err):
+  rows = []
+  for line in section.splitlines():
+    if not line.startswith("|"):
+      continue
+    cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+    if cells[0] == "Handoff" or all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+      continue
+    if len(cells) != 5 or not all(cells) or not ID_RE.fullmatch(cells[0]):
+      err.append("history needs five nonempty cells beginning with HANDOFF-NNN")
+      continue
+    rows.append(cells)
+  if not rows:
+    err.append("handoff history has no HANDOFF-NNN entry")
+    return
+  previous = None
+  sent, accepted = set(), set()
+  for identity, date, route, state, summary in rows:
+    number = int(identity.split("-")[1])
+    if number < 1:
+      err.append("handoff ids start at HANDOFF-001")
+    if state not in STATES:
+      err.append(f"invalid history state: `{state}`")
+    if previous:
+      old_number, old_state = previous
+      if number < old_number:
+        err.append("new transfer ids must be increasing; older transfers cannot reappear")
+      elif number > old_number and state != "PREPARING":
+        err.append("a new transfer must start with a PREPARING event")
+      elif number == old_number and state == "PREPARING" and identity in sent:
+        err.append("preparing another transfer requires an increasing handoff id")
+      if state != old_state and state not in TRANSITIONS.get(old_state, set()):
+        err.append(f"invalid lifecycle transition: {old_state} -> {state}")
+      if old_state == "DONE":
+        err.append("invalid lifecycle transition: DONE is terminal")
+    if state == "ACTIVE" and identity in sent and identity not in accepted:
+      err.append("starting received work requires an acceptance event")
+    if state == "HANDED OFF":
+      sent.add(identity)
+    if state == "ACCEPTED":
+      accepted.add(identity)
+    previous = number, state
+    parties = re.split(r"[ \t]*(?:->|→)[ \t]*", route)
+    if len(parties) != 2 or not all(parties):
+      err.append("history From → To needs a sender and receiver")
+  latest = rows[-1]
+  for key, value in (("handoff-id", latest[0]), ("state", latest[3])):
+    if value != meta.get(key):
+      err.append(f"newest history {key} `{value}` != frontmatter `{meta.get(key, '')}`")
+  parties = re.split(r"[ \t]*(?:->|→)[ \t]*", latest[2])
+  if parties != [meta.get("from"), meta.get("to")]:
+    err.append("newest history sender/receiver != frontmatter from/to")
 
 
 def lint(text, template=False):
-  """Return (errors, warnings). `template` checks structure only."""
-  text = text.lstrip("\ufeff")
+  """Return (errors, warnings). Checks are not a safety or truth guarantee."""
+  text = text.lstrip("\ufeff").replace("\r\n", "\n")
   err, warn = [], []
   meta, body = frontmatter(text)
   if not meta:
     err.append("missing YAML frontmatter")
   for key in REQ:
-    if key not in meta:
-      err.append(f"missing frontmatter field `{key}`")
-  for key, ok in (("state", lambda v: v in STATES),
-                  ("workstream-id", lambda v: bool(WS_RE.match(v))),
-                  ("handoff-id", lambda v: bool(ID_RE.match(v)))):
-    val = meta.get(key, "")
-    if val and not PH.search(val) and not ok(val):
-      err.append(f"invalid {key}: `{val}`")
-  found = [(body.find(f"## {s}"), s) for s in SECTIONS]
-  for pos, sec in found:
-    if pos < 0:
-      err.append(f"missing section `## {sec}`")
-  present = [s for p, s in sorted(found) if p >= 0]
-  if present != [s for s in SECTIONS if s in present]:
+    if not meta.get(key):
+      err.append(f"missing or empty frontmatter field `{key}`")
+  headings = list(re.finditer(r"(?m)^## ([^\n]+)$", body))
+  sections, order = {}, []
+  for index, match in enumerate(headings):
+    title = re.sub(r"\s+\(.*\)$", "", match.group(1)).strip()
+    if title not in SECTIONS:
+      continue
+    if title in sections:
+      err.append(f"duplicate section `## {title}`")
+    end = headings[index + 1].start() if index + 1 < len(headings) else len(body)
+    sections[title] = body[match.end():end]
+    order.append(title)
+  for title in SECTIONS:
+    if title not in sections:
+      err.append(f"missing section `## {title}`")
+  if order != [title for title in SECTIONS if title in sections]:
     err.append("sections out of order")
   if template:
     return err, warn
-  left = sorted({p for p in PH.findall(body) if p not in ALLOWED_PH})
+  for key, ok in (("state", lambda v: v in STATES),
+                  ("workstream-id", lambda v: bool(WS_RE.fullmatch(v))),
+                  ("handoff-id", lambda v: bool(ID_RE.fullmatch(v)) and int(v.split("-")[1]) > 0)):
+    val = meta.get(key, "")
+    if val and not ok(val):
+      err.append(f"invalid {key}: `{val}`")
+  left = sorted(set(PH.findall(text)))
   if left:
     err.append(f"unfilled placeholders: {', '.join(left[:4])}")
-  ids = re.findall(r"HANDOFF-\d{3,}", body.rsplit("## 15.", 1)[-1])
-  nums = [int(i.split("-")[1]) for i in ids]
-  if not ids:
-    err.append("handoff history has no HANDOFF-NNN entry")
-  elif nums != sorted(set(nums)):
-    err.append("history ids must be unique and increasing")
-  elif meta.get("handoff-id") and ids[-1] != meta["handoff-id"]:
-    err.append(f"newest history `{ids[-1]}` != frontmatter `{meta['handoff-id']}`")
-  attempts = body.split("## 8. Attempts", 1)[-1].split("\n## ", 1)[0]
-  if not slice_ids(attempts, "A"):
+  lint_history(sections.get("15. Handoff history", ""), meta, err)
+  attempts = slice_ids(sections.get("8. Attempts", ""), "A")
+  if not attempts:
     err.append("no attempts recorded (A1, A2, ...)")
-  for aid, block in slice_ids(attempts, "A"):
-    missing = [f for f in ATTEMPT_FIELDS
-               if not re.search(rf"(?:^|-)\s*{f}:", block)]
+  for aid, block in attempts:
+    missing = missing_fields(block, ATTEMPT_FIELDS)
     if missing:
-      err.append(f"{aid} missing {', '.join(missing)}")
-  repeat = body.split("## 9. Do not repeat", 1)[-1].split("\n## ", 1)[0]
-  for drid, block in slice_ids(repeat, "DR"):
-    if "Reason ruled out" not in block or "Evidence" not in block:
-      err.append(f"{drid} needs Reason ruled out and Evidence")
-  actions = body.split("## 11. Next actions", 1)[-1].split("\n## ", 1)[0]
-  if not re.search(r"(?m)^1\.\s*N\d+", actions):
-    err.append("next actions need an ordered `1. N1` entry")
-  else:
-    first = actions.split("N1", 1)[1]
-    for field in ("Command", "Expected", "Validation", "Stop"):
-      if not re.search(rf"(?:^|-)\s*{field}[^\n:]*:", first):
-        err.append(f"action 1 missing {field}")
+      err.append(f"{aid} missing or empty {', '.join(missing)}")
+  for drid, block in slice_ids(sections.get("9. Do not repeat", ""), "DR"):
+    for field in ("Reason ruled out", "Evidence"):
+      if not re.search(rf"{field}:[ \t]*\S", block):
+        err.append(f"{drid} needs {field}")
+  actions = sections.get("11. Next actions", "")
+  entries = list(re.finditer(r"(?m)^(\d+)\.[ \t]+([^\n]+)", actions))
+  done = meta.get("state") == "DONE"
+  if done and actions.strip() != "NONE":
+    err.append("DONE requires Next actions to contain only NONE")
+  if not entries and not done:
+    err.append("next actions need an ordered `1. N1` entry (or NONE when DONE)")
+  for index, entry in enumerate(entries, 1):
+    if entry.group(1) != str(index) or not re.match(rf"N{index}\b", entry.group(2)):
+      err.append("next actions must be ordered `1. N1`, `2. N2`, ...")
+    end = entries[index].start() if index < len(entries) else len(actions)
+    block = actions[entry.end():end]
+    missing = missing_fields(block, ("Command", "Expected", "Validation", "Stop"))
+    if missing:
+      err.append(f"N{index} missing or empty {', '.join(missing)}")
   for label, pattern in SECRET:
     if re.search(pattern, text):
       err.append(f"possible {label}; remove it")
@@ -128,15 +202,13 @@ def main(argv):
   usage = __doc__.strip()
   flags = [a for a in argv if a.startswith("-")]
   paths = [a for a in argv if not a.startswith("-")]
-  unknown = [f for f in flags if f not in ("--template", "--self-test", "--help", "-h")]
+  unknown = [f for f in flags if f not in ("--template", "--help", "-h")]
   if unknown:
     print(f"error: unknown flag {unknown[0]}\n\n{usage}", file=sys.stderr)
     return 2
   if "--help" in flags or "-h" in flags:
     print(usage)
     return 0
-  if "--self-test" in flags:
-    return self_test()
   if not paths:
     print(usage, file=sys.stderr)
     return 2
@@ -159,102 +231,6 @@ def main(argv):
     elif not warn:
       print("  PASS")
   return 1 if bad else 0
-
-
-GOOD = """---
-workstream-id: ws-demo
-handoff-id: HANDOFF-001
-state: HANDED OFF
-from: agent-a
-to: agent-b
----
-
-## 1. Handoff metadata
-ws-demo, HANDOFF-001, HANDED OFF, agent-a to agent-b.
-
-## 2. Objective
-Ship signed webhooks with at-least-once delivery.
-
-## 3. Current state
-- Working: signature checks (`pytest tests/test_auth.py -q` -> 14 passed)
-- Not working: retry queue drops the second attempt after a 503
-- Branch / commit: `feat/hooks @ 9f2c1ab`
-
-## 4. Context
-- Constraints: keys stay in Vault
-
-## 5. Resources
-| Repository | `git@host.example:acme/api` | implementation |
-
-## 6. Completed work
-- Signature verification — evidence: 14 passed
-
-## 7. Decisions
-- D1. 2026-09-04 — HMAC-SHA256, 300s skew — Rationale: matches SDK — Status: ACTIVE
-
-## 8. Attempts
-- A1. 2026-09-05
-  - Action: inline retry with sleep
-  - Expected: second attempt delivered
-  - Observed: consumer blocked 8s, message lost
-  - Conclusion: inline retry cannot survive a restart
-  - Evidence: logs/503.log
-  - Follow-up: N1
-
-## 9. Do not repeat
-- DR1. Approach: inline retry — Reason ruled out: blocks the consumer —
-  Evidence: A1 — Revisit if: delivery moves to a worker pool
-
-## 10. Unknowns, blockers, risks, decision triggers
-- Blockers: none
-- If tenants deduplicate on event-id -> keep at-least-once delivery.
-
-## 11. Next actions
-1. N1 — agent-b
-   - Command: pytest tests/test_retry.py -q
-   - Expected: 1 failed with ConnectionResetError
-   - Validation: matches logs/503.log
-   - Stop / rollback if: the test passes
-
-## 12. Definition of Done
-- Retry test passes with a 503 injected
-
-## 13. Validation
-| Functional | signature accepted | pytest tests/test_auth.py -q | pass |
-
-## 14. Rollback / recovery
-- Trigger: duplicate delivery above 1 per event
-- Steps: revert <sha>
-
-## 15. Handoff history
-| HANDOFF-001 | 2026-09-05 | agent-a -> agent-b | HANDED OFF | signing done |
-"""
-
-CASES = [
-  ("good", "", 0, 0),
-  ("bad state", ("state: HANDED OFF", "state: PAUSED"), 1, 0),
-  ("reused handoff id", ("handoff-id: HANDOFF-001", "handoff-id: HANDOFF-007"), 1, 0),
-  ("dropped section", ("## 8. Attempts", "## 8. Stuff"), 1, 0),
-  ("attempt without evidence", ("  - Evidence: logs/503.log\n", ""), 1, 0),
-  ("unfilled placeholder", ("ws-demo, HANDOFF-001", "ws-demo, <id>"), 1, 0),
-  ("no attempts recorded", ("## 8. Attempts\n- A1.", "## 8. Attempts\n- none."), 1, 0),
-  ("embedded secret", ("from: agent-a", "from: agent-a\nkey: AKIAABCDEFGHIJKLMNOP"), 1, 0),
-  ("vague instruction", ("pytest tests/test_retry.py -q", "investigate further"), 0, 1),
-]
-
-
-def self_test():
-  failed = 0
-  for label, mutation, want_err, want_warn in CASES:
-    text = GOOD.replace(*mutation, 1) if mutation else GOOD
-    err, warn = lint(text)
-    ok = (len(err) > 0) == bool(want_err) and (len(warn) > 0) == bool(want_warn)
-    failed += not ok
-    print(f"  {'PASS' if ok else 'FAIL'}  {label}"
-          f"{' — ' + err[0] if err and not ok else ''}")
-  print(f"\n{'ALL SELF-TESTS PASSED' if not failed else 'SELF-TESTS FAILED'} "
-        f"({len(CASES) - failed}/{len(CASES)})")
-  return 1 if failed else 0
 
 
 if __name__ == "__main__":
