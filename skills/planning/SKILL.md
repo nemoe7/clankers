@@ -1,6 +1,7 @@
 ---
 name: planning
 description: Structured planning for substantial or materially underspecified software, technical, research, and operational work. Use when requirements, scope, design, dependencies, sequencing, or acceptance criteria need clarification.
+license: MIT
 ---
 
 # Planning
