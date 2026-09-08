@@ -32,14 +32,6 @@ Use only if installed/configured; never invent tool names.
 - `context7`: dependency/library API docs — at most 3 calls per user input.
 - `memory`: persistent cross-session memory — store/recall relevant facts when applicable.
 
-## Skills
-
-Only these installed SKILL.md skills; they may combine; do not invoke others.
-
-- `planning` — non-trivial tasks requiring planning; routine, well-specified tasks skip it.
-- `frontend-design` — creating or substantially redesigning an interface.
-- `web-design-guidelines` — reviewing or auditing an existing web interface.
-
 ## Test Timeout
 
 - Run tests normally and observe the result.

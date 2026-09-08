@@ -12,6 +12,7 @@
 - Concise, direct, practical, accurate.
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns.
+- Always load the `agent-handoff` skill; use other installed skills only when required.
 
 ## Scope
 
@@ -67,7 +68,7 @@ Red → Green → Refactor → Verify.
 
 - Stage only task-related files; never unrelated or user-owned. Review the diff after each edit.
 - Atomic commits: one logical change per commit; every changed file belongs to it.
-- Commit only when the user asks. When committing, create a new branch and commit there — never directly on main or the current/default branch.
+- Commit when the user asks or when the `agent-handoff` skill requires it. When committing, create a new branch and commit there — never directly on main or the current/default branch.
 - Reuse commit scopes from previous commits; add a new scope only when no existing scope fits.
 - No commit body.
 - Never push or open a PR unless asked. Otherwise propose one Conventional Commit message: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, no more than 72 characters. Types: `feat fix refactor perf style docs test build chore`. One message per completed feature.
