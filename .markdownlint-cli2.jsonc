@@ -1,0 +1,9 @@
+{
+  "globs": ["rules/**/*.md"],
+  "ignores": ["*.md", "skills/**", "rules/CHATGPT.*", "rules/README.md"],
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD060": true
+  }
+}
