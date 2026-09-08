@@ -19,9 +19,22 @@ Move the work, not the transcript. The receiver must act without reading the
 originating chat. This skill owns handoff **semantics and state** only — no
 transport, auth, discovery, or credentials.
 
-**Run before:** pausing, blocking, switching workstreams, handing off, exiting.
-Also run on pickup. Do not rewrite after every small action — update on
-material change, complete at every boundary.
+Run at these boundaries, and on pickup. Do not rewrite after every small
+action.
+
+| Boundary | Trigger |
+| --- | --- |
+| Pause | Stopping unfinished work you intend to resume |
+| Block | Cannot proceed: missing credential, access, dependency, or answer |
+| Switch | Starting a different `workstream-id` while this one is unfinished |
+| Hand off | Another agent or person takes over — run all sender steps |
+| Exit | Session ending; only the graceful kind is detectable |
+
+Anchor updates to actions, not edits: before starting action N, confirm Current
+state and branch/commit still match; after completing or abandoning it, rewrite
+Current state, append the attempt, renumber what remains. Before ending any
+turn that changed work state, the document must already reflect it — that is
+the only exit an agent can detect.
 
 ## Document
 
@@ -74,7 +87,7 @@ a transport layer, not to this document.
 6. Execute action 1. Divergent result → follow the recorded branch or stop at
    the rollback condition.
 7. Update Current state on material change; append attempts and decisions as
-   they happen, not at the end.
+   they happen.
 8. Set `state: ACTIVE`; record acceptance in handoff history.
 9. Prepare a new handoff before passing the work on.
 
@@ -85,10 +98,9 @@ decisions, attempts, do-not-repeat, handoff history. When an entry stops being
 true, append `SUPERSEDED — see #N` and write the replacement. Never delete
 evidence, never renumber history, never re-embed an earlier handoff document.
 
-Material change worth recording: a decision, a failed experiment, a discovery
-that changes the plan, a state change invalidating a recorded claim. Not
-material: formatting, intermediate edits, routine progress inside a listed
-action.
+Material means: a decision, a failed experiment, a discovery that changes the
+plan, or a state change invalidating a recorded claim. Not material:
+formatting, intermediate edits, progress inside an action still running.
 
 ## Executability bar
 
@@ -125,6 +137,10 @@ deliberately transport-shaped so AHP can carry it unchanged: objective →
 Copy this directory into the agent's skill path; the folder must be named
 `agent-handoff`. Verified against vendor docs 2026-09-08.
 
+```bash
+mkdir -p .agents/skills && cp -R /path/to/agent-handoff .agents/skills/
+```
+
 | Agent | Project | Global | Notes |
 | --- | --- | --- | --- |
 | Antigravity | `.agents/skills/` (`.agent/skills/` still works) | `~/.gemini/config/skills/` | `name` optional, defaults to folder name |
@@ -132,8 +148,9 @@ Copy this directory into the agent's skill path; the folder must be named
 | Kilo Code | `.kilo/skills/` (also `.agents/skills/`) | `~/.kilo/skills/` | `name` must match folder; **project beats global**; `/reload` to re-scan |
 
 Cline and Kilo precedence are opposite — keep one copy in project scope when a
-team shares it. Avoid embedded ``!`cmd` `` blocks: Kilo executes them only from
-trusted (global) locations, so project-scope behavior would differ.
+team shares it. Avoid Kilo's embedded shell syntax (a backtick-bang prefix on a
+command inside the body): Kilo executes it only from trusted global locations,
+so project-scope behavior would differ.
 
 ## Template
 
@@ -172,6 +189,8 @@ One stand-alone paragraph: outcome, constraints, done versus remaining.
 ## 5. Resources
 | Resource | Reference | Why it matters |
 | --- | --- | --- |
+| Repository | `git@host.example:acme/api` | implementation |
+
 Repository · branch/commit · files · issues/PRs · specifications ·
 logs/traces · dashboards/screenshots · artifacts/runbooks. Link, don't embed.
 
@@ -212,6 +231,9 @@ logs/traces · dashboards/screenshots · artifacts/runbooks. Link, don't embed.
 
 ## 13. Validation
 | Area | Check | Command | Status |
+| --- | --- | --- | --- |
+| Tests | full suite | `pytest -q` | pass |
+
 Functional · edge and failure paths · tests · performance · security ·
 operational readiness. Mark N/A with a reason rather than deleting a row.
 
@@ -220,10 +242,20 @@ Trigger · steps · verification · kill switch or flag · escalation.
 
 ## 15. Handoff history  (append only; newest row mirrors frontmatter)
 | Handoff | Date | From → To | State | Summary |
+| --- | --- | --- | --- | --- |
 | HANDOFF-001 | <date> | <sender → receiver> | <state> | <one line> |
 ```
 
 ## Self-check before sending
+
+```bash
+python3 scripts/handoff_lint.py AGENT_HANDOFF.md   # exit 0 = safe to send
+python3 scripts/handoff_lint.py --self-test        # 9 built-in fixtures
+```
+
+The linter enforces structure, identity, lifecycle, attempt and next-action
+fields, history order, and common secret shapes. Placeholder and secret
+detection are heuristics, and it cannot judge truth. Then confirm by hand:
 
 - [ ] Objective reads correctly with no chat history open
 - [ ] All 15 sections present, in order; no `<placeholder>` left unfilled
