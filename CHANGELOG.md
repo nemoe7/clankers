@@ -8,6 +8,7 @@ Project history, newest first. Historical token tables are snapshots from their 
 - Planning and agent-handoff now include MIT license files; planning also declares its license in skill metadata.
 - Response rules now prefer numbered lists when presenting multiple points.
 - Agents may commit without separate authorization when commits are atomic, conventional, task-only, and off `main`; ChatGPT retains explicit authorization because its integration writes directly to `main`.
+- Arena keeps open-PR history reviewable by folding iterative fixes when safe and using lease-protected remote rewrites.
 - Generic rules always load `agent-handoff` and select other skills when their domains fit; Arena and Cline contain no handoff-specific policy.
 - Skills no longer contain platform-specific exemptions or cross-skill planning requirements.
 - Agent-handoff references now call it a skill and use `SKILL.md` only as its filename.

@@ -33,7 +33,7 @@ KISS/YAGNI/DRY; guard clauses, early returns; cohesive, low-coupling modules, sm
 
 ## Git
 
-Stage only task-related changes, never unrelated/user-owned changes. Atomic commits: one logical change each. Reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 characters. Types: feat fix refactor perf style docs test build chore. When not committing, propose one message per completed feature.
+Stage only task-related changes, never unrelated/user-owned changes. Atomic commits: one logical change each. Reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 characters. Types: feat fix refactor perf style docs test build chore. For open PRs, keep unmerged history clean and reviewable: fold iterative fixes into logical atomic commits when safe; use `--force-with-lease`, never plain `--force`, for remote rewrites. When not committing, propose one message per completed feature.
 
 ## Workspace
 
