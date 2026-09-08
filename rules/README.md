@@ -36,7 +36,10 @@ python3 apply_rules.py
 ```
 
 On Windows, use `python apply_rules.py` or `apply.bat` from the repository root.
-The script copies these two files, creating destination directories as needed:
+The script previews unified diffs for changed files, asks once for confirmation,
+then copies these two files, creating destination directories as needed. Enter
+`y` or `yes` to apply; any other response aborts. If both destinations are
+current, it exits without prompting.
 
 | Source | Destination relative to the base directory |
 | --- | --- |
