@@ -4,11 +4,11 @@ Project history, newest first. One entry per pull request, not per feature or co
 
 ## 2026-09-09 — Always commit, never push
 
-AGENTS.md now makes committing mandatory (atomic, Conventional, off `main`) by folding the push/PR allowance into the commit clause and removing the "only when the user requires it" push/PR permission. Scope: AGENTS.md only.
+AGENTS.md now makes committing mandatory (atomic, Conventional, off `main`) by folding the push/PR allowance into the commit clause and removing the "only when the user requires it" push/PR permission. Scope: AGENTS.md only. Squashed the commit clause wording with the `squash` skill (`belonging to it` → `in it`, `characters` → `chars`) with no loss of meaning.
 
 | File | Tokens | Change |
 | --- | --- | --- |
-| `rules/AGENTS.md` | 861 | -8 |
+| `rules/AGENTS.md` | 860 | -9 |
 
 ## 2026-09-08 — Gate pull requests, add mermaid guidance, and document compression
 
