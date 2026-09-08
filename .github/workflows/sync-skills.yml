@@ -42,7 +42,7 @@ jobs:
           GIT_TERMINAL_PROMPT: "0"
           SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
-          git subtree split --prefix=skills --rejoin -b skills-sync
+          SKILLS_SHA="$(git subtree split --prefix=skills)"
           git push \
             "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git" \
-            skills-sync:main
+            "${SKILLS_SHA}:main"
