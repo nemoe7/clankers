@@ -1,0 +1,52 @@
+name: Sync to clankers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-to-clankers
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout clankers
+        uses: actions/checkout@v4
+        with:
+          repository: nemoe7/clankers
+          ref: main
+          token: ${{ secrets.SYNC_TOKEN }}
+          fetch-depth: 0
+
+      - name: Add skills remote
+        env:
+          SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          git remote add skills \
+            "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git"
+          git fetch skills main
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync skills subtree
+        run: |
+          git subtree pull \
+            --prefix=skills \
+            skills main \
+            --squash \
+            -m "chore(skills): sync from SOT"
+
+      - name: Push clankers
+        run: |
+          git push origin main
