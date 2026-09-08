@@ -40,6 +40,9 @@ Rules folder.
 
 ## Shared core content (AGENTS / ARENA-embedded copy)
 
+- **General (skills):** no `## Skills` section in any rule file — a single
+  General bullet states that `agent-handoff` is always loaded and other
+  installed skills are used only when required.
 - **Scope:** only the requested task; nothing beyond what's required, needed to
   verify, or necessary. Smallest coherent change; stop when implemented and
   verified. Preserve behavior, architecture, interfaces, intent, conventions
@@ -107,9 +110,6 @@ Rules folder.
   search/navigation/context/callers/callees/impact analysis); `context7`
   (dependency/library docs, no more than 3 calls per input); `memory`
   (persistent cross-session memory).
-- **Skills** (only these installed SKILL.md skills; may combine): `planning`
-  (non-trivial tasks), `frontend-design` (creating/redesigning an interface),
-  `web-design-guidelines` (reviewing/auditing a web interface).
 - **Test Timeout (alternative only):** run tests normally first. Only if a test
   does time out (does not exit) use the alternative protocol — redirect output
   to `.test-output.tmp`; wait with `ping` at most 30 s; treat non-exit as
@@ -126,6 +126,10 @@ Rules folder.
   it loaded them, and not to edit the file. Deploy by uploading ARENA.md with an
   explicit instruction to follow it; verify with a probe ("summarize your
   rules").
+- **Git/commits:** ARENA.md allows committing when the user asks or when the
+  `agent-handoff` skill requires it (handoff documents must reflect work state
+  before a turn ends); still on a new branch, never on main, and push/PR only
+  when asked.
 - **Omitted sections:** ARENA.md has no `## Tools` section (per owner decision).
   `## Git` was restored when Arena gained GitHub access, so the core sections
   present are General, Scope, Engineering, Debugging, Testing, Review, Code
@@ -193,6 +197,8 @@ Rules folder.
   default rules still enforced on AGENTS.md and CLINE.md.
 - The `≤` character is avoided in favor of "no more than" — models handle it
   more reliably.
+- ARENA.md commit policy also permits commits required by the `agent-handoff`
+  skill, since a handoff must be recorded before the turn ends.
 - Commit policy: atomic commits are allowed without asking, but always on a
   dedicated new branch (never directly on main; branch first if on the default
   branch) — the branch rule is the enforcement, not per-commit permission;
@@ -211,8 +217,10 @@ Rules folder.
   AGENTS.md CLINE.md` → 0 issues.
 - Tokens: `tiktoken` cl100k_base.
 - Core sync: compare shared sections (General, Scope, Engineering, Debugging,
-  Testing, Review, Code style, Git, Responses) byte-for-byte between AGENTS.md
-  and ARENA.md — must match. CLINE.md is exempt (no embedded core).
+  Testing, Review, Code style, Responses) byte-for-byte between
+  AGENTS.md and ARENA.md — must match; Git differs by design (ARENA.md ties
+  commit permission to the user or the `agent-handoff` skill). CLINE.md is
+  exempt (no embedded core).
 
 ## Current baseline
 
