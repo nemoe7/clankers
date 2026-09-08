@@ -34,16 +34,13 @@ jobs:
         env:
           SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
-          git remote add skills \
-            "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git"
+          test -n "$SKILLS_TOKEN"
+          AUTH="$(printf 'x-access-token:%s' "$SKILLS_TOKEN" | base64 -w0)"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic $AUTH"
+          git remote add skills https://github.com/nemoe7/skills.git
           git fetch skills main
 
       - name: Push skills subtree
-        env:
-          GIT_TERMINAL_PROMPT: "0"
-          SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
           SKILLS_SHA="$(git subtree split --prefix=skills)"
-          git push \
-            "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git" \
-            "${SKILLS_SHA}:main"
+          git push skills "${SKILLS_SHA}:main"
