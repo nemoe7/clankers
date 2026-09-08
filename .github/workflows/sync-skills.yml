@@ -36,6 +36,7 @@ jobs:
         run: |
           git remote add skills \
             "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git"
+          git fetch skills main
 
       - name: Push skills subtree
         env:
