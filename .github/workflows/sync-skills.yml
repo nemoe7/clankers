@@ -25,6 +25,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Add skills remote
         env:
           SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
@@ -33,7 +38,11 @@ jobs:
             "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git"
 
       - name: Push skills subtree
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+          SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
         run: |
-          git subtree push \
-            --prefix=skills \
-            skills main
+          git subtree split --prefix=skills --rejoin -b skills-sync
+          git push \
+            "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git" \
+            skills-sync:main
