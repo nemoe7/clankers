@@ -56,7 +56,7 @@ Red → Green → Refactor → Verify.
 ## Git
 
 - Stage only task-related files, never unrelated or user-owned; review the diff after each edit.
-- Always commit on a branch other than `main`. Atomic commits: one logical change each, every changed file belonging to it. One Conventional Commit message per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 characters. Types: `feat fix refactor perf style docs test build chore`. Never push or open a PR.
+- Always commit on a branch other than `main`. Atomic commits: one logical change each, every changed file in it. One Conventional Commit message per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars. Types: `feat fix refactor perf style docs test build chore`. Never push or open a PR.
 - Reuse commit scopes from previous commits; add a new scope only when none fits. No commit body.
 
 ## Responses
