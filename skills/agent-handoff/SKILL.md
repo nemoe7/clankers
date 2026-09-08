@@ -6,6 +6,7 @@ description: >
   or exited, or when explicitly asked to prepare or update a handoff.
 license: MIT
 metadata:
+  origin: first-party, maintained in this repository
   version: "2.1.0"
   semantic-model: ahp-derived
   transport: none
@@ -13,9 +14,7 @@ metadata:
 
 # Agent Handoff
 
-Move the work, not the transcript. Load only this `SKILL.md` by default;
-read the supporting files below only for the operation you are performing.
-This skill owns handoff state and commit checkpoints, not transport or credentials.
+Move the work, not the transcript. Load only this `SKILL.md` by default; read the supporting files below only for the operation you are performing. This skill owns handoff state and commit checkpoints, not transport or credentials.
 
 ## When to act
 
@@ -37,13 +36,7 @@ This skill owns handoff state and commit checkpoints, not transport or credentia
 
 ## File-backed plans
 
-If the agent supports a plan mode that writes to a file, include an explicit
-"Update the canonical handoff" step in that plan file. Place it after
-verification and before pause, transfer, or completion. The step must update
-current state, evidence, remaining actions, and any lifecycle change, then
-commit the handoff as an atomic checkpoint; a chat reminder is not a substitute.
-If no handoff is needed, record that outcome instead of creating an unnecessary
-document.
+If the agent supports a plan mode that writes to a file, include an explicit "Update the canonical handoff" step in that plan file. Place it after verification and before pause, transfer, or completion. The step must update current state, evidence, remaining actions, and any lifecycle change, then commit the handoff as an atomic checkpoint; a chat reminder is not a substitute. If no handoff is needed, record that outcome instead of creating an unnecessary document.
 
 ## Load on demand
 
@@ -54,5 +47,4 @@ document.
 | Need an example | [Examples](references/examples.md) |
 | Validate a prepared document | Run `scripts/handoff_lint.py` against it; see the protocol for invocation and manual checks |
 
-Paths above are relative to this skill directory, not the target repository.
-Do not load templates or reference files for routine awareness.
+Paths above are relative to this skill directory, not the target repository. Do not load templates or reference files for routine awareness.

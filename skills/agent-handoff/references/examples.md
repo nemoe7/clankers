@@ -1,7 +1,6 @@
 # Handoff examples
 
-These are focused excerpts, not complete documents to submit to the linter.
-Use the [template](../templates/AGENT_HANDOFF.md) for a complete handoff.
+These are focused excerpts, not complete documents to submit to the linter. Use the [template](../templates/AGENT_HANDOFF.md) for a complete handoff.
 
 ## Actionable continuation
 
@@ -30,9 +29,7 @@ passed); the retry queue drops the second attempt after a 503.
 
 ## Acceptance, blocking, and another transfer
 
-Each row is an event. Acceptance does not invent another transfer ID.
-For this excerpt's final row, frontmatter is `handoff-id: HANDOFF-002`,
-`state: HANDED OFF`, `from: agent-b`, and `to: agent-c`.
+Each row is an event. Acceptance does not invent another transfer ID. For this excerpt's final row, frontmatter is `handoff-id: HANDOFF-002`, `state: HANDED OFF`, `from: agent-b`, and `to: agent-c`.
 
 | Handoff | Date | From → To | State | Summary |
 | --- | --- | --- | --- | --- |
@@ -44,9 +41,7 @@ For this excerpt's final row, frontmatter is `handoff-id: HANDOFF-002`,
 | HANDOFF-002 | 2026-09-08T08:30:00Z | agent-b → agent-c | PREPARING | Preparing transfer after replay |
 | HANDOFF-002 | 2026-09-08T08:32:00Z | agent-b → agent-c | HANDED OFF | Replay evidence and fix instructions ready |
 
-If the same agent instead completes the work, append `DONE` under the existing
-transfer ID and use `NONE` in Next actions. Do not create another transfer just
-to record completion.
+If the same agent instead completes the work, append `DONE` under the existing transfer ID and use `NONE` in Next actions. Do not create another transfer just to record completion.
 
 ## Superseded evidence
 
@@ -59,5 +54,4 @@ DR3. Timestamped keys — Reason ruled out: duplicate exports — Evidence: A6 �
 Revisit if: tenants explicitly accept versioned exports
 ```
 
-Current context cites D3, not D2's superseded conclusion. The original D2 record
-remains unchanged as evidence of what was tried.
+Current context cites D3, not D2's superseded conclusion. The original D2 record remains unchanged as evidence of what was tried.
