@@ -55,9 +55,10 @@ Red → Green → Refactor → Verify.
 
 ## Git
 
-- Stage only task-related files, never unrelated or user-owned; review the diff after each edit.
+- Stage only task-related files, never unrelated or user-owned; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
 - Always commit on a branch other than `main`. Atomic commits: one logical change each, every changed file in it. One Conventional Commit message per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars. Types: `feat fix refactor perf style docs test build chore`. Never push or open a PR.
 - Reuse commit scopes from previous commits; add a new scope only when none fits. No commit body.
+- Never commit the handoff document (`AGENT_HANDOFF.md`), despite the `agent-handoff` skill; keep it local.
 
 ## Responses
 

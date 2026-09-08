@@ -2,6 +2,14 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-09 — Respect global gitignore, never commit handoff
+
+Staging now requires respecting the user's global gitignore (`core.excludesFile`), and `AGENT_HANDOFF.md` is never committed, overriding the `agent-handoff` skill's commit requirement. A minimal root `AGENTS.md` points agents to the README and changelog for compression guidelines. The added clauses raise `rules/AGENTS.md` above its prior budget; compression of the surrounding wording was declined.
+
+| File | Tokens | Change |
+| --- | --- | --- |
+| `rules/AGENTS.md` | 901 | +41 |
+
 ## 2026-09-09 — Always commit, never push
 
 AGENTS.md now makes committing mandatory (atomic, Conventional, off `main`) by folding the push/PR allowance into the commit clause and removing the "only when the user requires it" push/PR permission. Scope: AGENTS.md only. Squashed the commit clause wording with the `squash` skill (`belonging to it` → `in it`, `characters` → `chars`) with no loss of meaning.
