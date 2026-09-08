@@ -2,7 +2,6 @@
 name: agent-handoff
 description: >
   Preserve or resume ongoing work through one canonical AGENT_HANDOFF.md.
-  Not for Arena.ai agents.
   Use when unfinished work is paused, blocked, switched, handed off, resumed,
   or exited, or when explicitly asked to prepare or update a handoff.
 license: MIT
@@ -14,10 +13,7 @@ metadata:
 
 # Agent Handoff
 
-This skill does not apply to Arena.ai agents. On Arena, do not load its
-references or run its handoff, plan-file, or commit workflow.
-
-Move the work, not the transcript. Load only this entry point by default;
+Move the work, not the transcript. Load only this `SKILL.md` by default;
 read the supporting files below only for the operation you are performing.
 This skill owns handoff state and commit checkpoints, not transport or credentials.
 

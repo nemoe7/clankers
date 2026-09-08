@@ -5,8 +5,7 @@
 - Concise, direct, practical, accurate.
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns. Skills specialize defaults, never weaken explicit requirements or replace project conventions.
-- Unless running on Arena.ai, always load the `agent-handoff` entry point; load its templates and references only when needed. Use other installed skills only when required.
-- Treat your installed skills as read-only: do not install, edit, update, or delete them. Report missing or incompatible skills; leave changes to a human maintainer.
+- Always load the `agent-handoff` skill; load its templates and references only when needed. Use other skills when the domain fits.
 
 ## Scope
 
@@ -61,8 +60,7 @@ Red → Green → Refactor → Verify.
 ## Git
 
 - Stage only task-related files; never unrelated or user-owned. Review the diff after each edit.
-- Atomic commits: one logical change per commit; every changed file belongs to it.
-- Never commit directly to `main`.
+- Always commit on a branch other than `main`; use atomic commits: one logical change each, with every changed file belonging to it.
 - Reuse commit scopes from previous commits; add a new scope only when no existing scope fits.
 - No commit body.
 - Never push or open a PR unless asked. Otherwise propose one Conventional Commit message: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, no more than 72 characters. Types: `feat fix refactor perf style docs test build chore`. One message per completed feature.
@@ -70,4 +68,5 @@ Red → Green → Refactor → Verify.
 ## Responses
 
 - Report what changed/found; verification run and result; relevant files/decisions when useful; unresolved issues/assumptions/limitations.
+- Prefer numbered lists when listing multiple points.
 - Concise, task-focused; don't repeat the task.

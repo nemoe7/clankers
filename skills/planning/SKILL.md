@@ -1,6 +1,7 @@
 ---
 name: planning
 description: Structured planning for substantial or materially underspecified software, technical, research, and operational work. Use when requirements, scope, design, dependencies, sequencing, or acceptance criteria need clarification.
+license: MIT
 ---
 
 # Planning
@@ -98,8 +99,6 @@ When planning precedes implementation:
 - record unresolved assumptions explicitly
 - make the plan concrete enough that implementation does not require re-deriving the investigation
 - return to planning when implementation reveals a material requirement or planning conflict
-
-If the agent is not running on Arena.ai and supports a plan mode that writes to a file, include an explicit "Update the canonical handoff" step in that plan file, following the `agent-handoff` skill. Place it after verification and before pause, transfer, or completion; update an existing handoff to reflect completion rather than leaving it active.
 
 Planning owns **understanding, requirements, decomposition, and execution planning**.
 

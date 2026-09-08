@@ -7,21 +7,21 @@ Rules and skills for AI agents.
 
 `apply_rules.py` copies the global rule files. `apply.bat` runs it on Windows.
 
-## Token counts
+## Instruction budgets
 
-Latest counts as of 2026-09-08, using `cl100k_base` via `tiktoken 0.12.0`. Counts cover complete files, including whitespace and markup—not model-specific billing.
+Latest measurements as of 2026-09-08. ARENA.md is measured by uploaded file size and CHATGPT.txt by its custom-instruction character limit; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
 
-Only agent-facing rule files and `SKILL.md` entry points are tracked. Supporting files loaded on demand are not included. See [CHANGELOG.md](CHANGELOG.md) for previous counts and changes.
+| File | Measure | Current |
+| --- | --- | --- |
+| `rules/AGENTS.md` | `cl100k_base` tokens | 893 |
+| `rules/ARENA.md` | UTF-8 file size | 3,906 bytes |
+| `rules/CHATGPT.txt` | Unicode characters | 1,446 / 1,500 |
+| `rules/CLINE.md` | `cl100k_base` tokens | 625 |
+| `rules/COMMIT_SPEC.txt` | `cl100k_base` tokens | 46 |
+| `skills/agent-handoff/SKILL.md` | `cl100k_base` tokens | 837 |
+| `skills/frontend-design/SKILL.md` | `cl100k_base` tokens | 1,058 |
+| `skills/planning/SKILL.md` | `cl100k_base` tokens | 842 |
+| `skills/ponytail/SKILL.md` | `cl100k_base` tokens | 1,596 |
+| `skills/web-design-guidelines/SKILL.md` | `cl100k_base` tokens | 287 |
 
-| File | Tokens |
-| --- | --- |
-| `rules/AGENTS.md` | 923 |
-| `rules/ARENA.md` | 818 |
-| `rules/CHATGPT.txt` | 292 |
-| `rules/CLINE.md` | 752 |
-| `rules/COMMIT_SPEC.txt` | 46 |
-| `skills/agent-handoff/SKILL.md` | 873 |
-| `skills/frontend-design/SKILL.md` | 1,058 |
-| `skills/planning/SKILL.md` | 910 |
-| `skills/ponytail/SKILL.md` | 1,596 |
-| `skills/web-design-guidelines/SKILL.md` | 287 |
+Measurements cover complete files, including whitespace and markup.
