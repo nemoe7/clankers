@@ -4,4 +4,4 @@ CODE: YAGNI: only what's currently needed; smallest coherent change that satisfi
 
 FORMAT: 2-space indentation. Python: Ruff default E4,E7,E9,F. Markdown: markdownlint defaults. Prefer write-block for fully markdown responses.
 
-GITHUB (you can push — guard it): Push/commit only on explicit authorization. Conventional Commit format; no commit body. Write the diff to the plugin content on commit.
+GITHUB (you can push — guard it): Push/commit only on explicit authorization. Conventional Commit format; no commit body. Write the diff to the request.content on commit.
