@@ -99,6 +99,8 @@ When planning precedes implementation:
 - make the plan concrete enough that implementation does not require re-deriving the investigation
 - return to planning when implementation reveals a material requirement or planning conflict
 
+If the agent is not running on Arena.ai and supports a plan mode that writes to a file, include an explicit "Update the canonical handoff" step in that plan file, following the `agent-handoff` skill. Place it after verification and before pause, transfer, or completion; update an existing handoff to reflect completion rather than leaving it active.
+
 Planning owns **understanding, requirements, decomposition, and execution planning**.
 
 Implementation owns **carrying out the technical work**.
@@ -112,34 +114,6 @@ When information changes:
 - record significant changes and decisions
 - preserve useful traceability
 - do not silently change committed requirements or scope
-
-## Implementation Plan
-
-When appropriate, use `implementation_plan.md` as a **local-only** handoff artifact unless project conventions specify otherwise.
-
-Keep it concrete enough for another coding agent to execute without re-deriving context.
-
-Use:
-
-```md
-### 1. <task>
-
-<implementation details>
-
-STATUS: 🔴
-```
-
-On completion:
-
-```md
-~~### 1. <task>~~
-
-~~<implementation details>~~
-
-STATUS: 🟢 - `<commit hash>`: <commit message>
-```
-
-Update the plan as implementation reveals new information. Do not commit it unless explicitly required by project conventions.
 
 ## Standards
 
