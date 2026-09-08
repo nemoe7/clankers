@@ -2,6 +2,14 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-09 — Always commit, never push
+
+AGENTS.md now makes committing mandatory (atomic, Conventional, off `main`) by folding the push/PR allowance into the commit clause and removing the "only when the user requires it" push/PR permission. Scope: AGENTS.md only.
+
+| File | Tokens | Change |
+| --- | --- | --- |
+| `rules/AGENTS.md` | 861 | -8 |
+
 ## 2026-09-08 — Gate pull requests, add mermaid guidance, and document compression
 
 - Pull requests open only when the user requires it; commits still follow the atomic Conventional Commit rules. Arena also outputs a squashed commit list before committing: local commits and fixes folded into a clean timeline, updated as work lands.
