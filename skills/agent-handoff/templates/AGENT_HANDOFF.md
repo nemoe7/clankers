@@ -92,8 +92,7 @@ Reference files, issues, specifications, logs, and artifacts by location; do not
 | --- | --- | --- | --- |
 | Tests | `<relevant behavior>` | `<exact command>` | not run |
 
-Record applicable functional, failure-path, performance, security, and operational checks.
-Use N/A with a reason for inapplicable checks; never invent a passing result.
+Record applicable functional, failure-path, performance, security, and operational checks. Use N/A with a reason for inapplicable checks; never invent a passing result.
 
 ## 14. Rollback / recovery
 
