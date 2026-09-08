@@ -5,6 +5,7 @@
 - Concise, direct, practical, accurate.
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns.
+- Always load the `agent-handoff` skill; use other installed skills only when required.
 
 ## Scope
 
