@@ -3,7 +3,7 @@
 Rules and skills for AI agents.
 
 - [rules/](rules/): shared and platform-specific agent instructions, ChatGPT custom instructions, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
-- [skills/](skills/): reusable skills for handoffs, planning, simpler code, frontend design, and UI reviews. Each skill has a `SKILL.md` entry point and any supporting files.
+- [skills/](skills/README.md): reusable skills for handoffs, planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
 
 `apply_rules.py` copies the global rule files. `apply.bat` runs it on Windows.
 
@@ -13,15 +13,27 @@ Latest measurements as of 2026-09-08. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` tokens | 893 |
-| `rules/ARENA.md` | UTF-8 file size | 3,906 bytes |
-| `rules/CHATGPT.txt` | Unicode characters | 1,446 / 1,500 |
-| `rules/CLINE.md` | `cl100k_base` tokens | 625 |
+| `rules/AGENTS.md` | `cl100k_base` tokens | 869 |
+| `rules/ARENA.md` | UTF-8 file size | 3,899 bytes |
+| `rules/CHATGPT.txt` | Unicode characters | 1,499 / 1,500 |
+| `rules/CLINE.md` | `cl100k_base` tokens | 573 |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` tokens | 46 |
-| `skills/agent-handoff/SKILL.md` | `cl100k_base` tokens | 837 |
-| `skills/frontend-design/SKILL.md` | `cl100k_base` tokens | 1,058 |
-| `skills/planning/SKILL.md` | `cl100k_base` tokens | 842 |
-| `skills/ponytail/SKILL.md` | `cl100k_base` tokens | 1,596 |
-| `skills/web-design-guidelines/SKILL.md` | `cl100k_base` tokens | 287 |
+| `skills/agent-handoff/SKILL.md` | `cl100k_base` tokens | 843 |
+| `skills/frontend-design/SKILL.md` | `cl100k_base` tokens | 2,011 |
+| `skills/planning/SKILL.md` | `cl100k_base` tokens | 855 |
+| `skills/ponytail/SKILL.md` | `cl100k_base` tokens | 1,675 |
+| `skills/squash/SKILL.md` | `cl100k_base` tokens | 1,263 |
+| `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` tokens | 523 |
 
 Measurements cover complete files, including whitespace and markup.
+
+## Compression
+
+Agent-facing rule files are compressed against the budgets above. Compression is editorial, not lossy: it removes words, never rules.
+
+1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves.
+2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.
+3. Merge related bullets, drop redundant qualifiers and restated clauses, and prefer the shorter of two equivalent phrasings. Do not invent new abbreviations or telegraphic syntax that changes how a rule reads.
+4. Keep section headings and their order. Compression does not restructure the rule set.
+5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
+6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
