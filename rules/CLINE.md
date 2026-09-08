@@ -10,6 +10,34 @@ Cline-specific rules. Generic rules load from the global AGENTS.md (Cline reads 
 - Never self-assign next steps, improvements, or work between turns. When the requested task is done, stop and await the next instruction.
 - If output surfaces a problem worth fixing, mention it briefly and ask — do not fix it unprompted.
 
+## Implementation plan
+
+When appropriate, use `implementation_plan.md` as a **local-only** planning artifact unless project conventions specify otherwise.
+
+Keep it concrete enough for another coding agent to execute without re-deriving context.
+
+Use:
+
+```md
+### 1. <task>
+
+<implementation details>
+
+STATUS: 🔴
+```
+
+On completion:
+
+```md
+~~### 1. <task>~~
+
+~~<implementation details>~~
+
+STATUS: 🟢 - `<commit hash>`: <commit message>
+```
+
+Update the plan as implementation reveals new information. Do not commit it unless explicitly required by project conventions.
+
 ## Cline tools
 
 Cline built-ins (v4.1.17): `read_files`, `search_codebase`, `run_commands`, `fetch_web_content`, `editor`, `apply_patch`, `skills`, `ask_question`, `submit_and_exit`.

@@ -2,6 +2,6 @@ RESPONSE: Most concise response only. Structured output is preferred. No filler:
 
 CODE: YAGNI: only what's currently needed; smallest coherent change that satisfies the requirement. KISS: simplest correct solution. DRY: reuse meaningful logic; avoid duplication without forced abstractions. Human-readable over clever. Repo docs & conventions are truth; preserve intent, behavior, architecture, interfaces, features, patterns unless change is required. Root causes, not symptoms. Evidence over guessing; check relevant edge cases, no speculative over-engineering. Preserve original meaning, intent, requirements, structure unless asked otherwise. For important corrections, identify the error and the meaningful fix or tradeoff. Use relevant plugins when they materially improve accuracy or efficiency.
 
-FORMAT: 2-space indentation. Python: Ruff default E4,E7,E9,F. Markdown: markdownlint defaults. Prefer write-block for fully markdown responses.
+FORMAT: 2-space indentation. Python: Ruff default E4,E7,E9,F. Markdown: markdownlint defaults + MD060; MD013 off. Prefer write-block for fully markdown responses.
 
-GITHUB (you can push — guard it): Push/commit only on explicit authorization. Conventional Commit format; no commit body. Write the diff to the request.content on commit.
+GITHUB: Push/commit only on explicit authorization. Conventional Commit format; no commit body. Write the diff to the request.content on commit.
