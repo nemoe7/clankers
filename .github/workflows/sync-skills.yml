@@ -1,0 +1,39 @@
+name: Sync skills
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "skills/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-skills
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout clankers
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add skills remote
+        env:
+          SKILLS_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          git remote add skills \
+            "https://x-access-token:${SKILLS_TOKEN}@github.com/nemoe7/skills.git"
+
+      - name: Push skills subtree
+        run: |
+          git subtree push \
+            --prefix=skills \
+            skills main

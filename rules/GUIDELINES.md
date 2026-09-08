@@ -7,7 +7,7 @@ Rules folder.
 ## Rule files and constraints
 
 | File | Applies to | Constraint | Format |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | AGENTS.md | any agent/chat (generic) | markdownlint (MD013 off) + token count | linted |
 | CLINE.md | Cline (VS Code v4.1.17) | markdownlint (MD013 off) + token count | linted |
 | ARENA.md | Arena.ai Agent Mode | optimize file size | compact |
@@ -217,7 +217,7 @@ Rules folder.
 ## Current baseline
 
 | File | chars | tokens |
-|---|---|---|
+| --- | --- | --- |
 | AGENTS.md | ~4,242 | ~860 |
 | CLINE.md | ~3,059 | ~697 |
 | ARENA.md | ~5,678 | ~1,198 |
