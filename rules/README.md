@@ -14,7 +14,7 @@ suite, or GitHub Actions workflows are required.
 
 | File or directory | Purpose | How to use |
 | --- | --- | --- |
-| [rules/AGENTS.md](AGENTS.md) | Generic core rules | Install in the agent's supported global rules location; requires the `agent-handoff` entry point except on Arena.ai |
+| [rules/AGENTS.md](AGENTS.md) | Generic core rules | Install in the agent's supported global rules location; requires the `agent-handoff` skill except on Arena.ai |
 | [rules/CLINE.md](CLINE.md) | Cline-specific overlay | Load alongside AGENTS.md; it deliberately does not duplicate the core |
 | [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload or point the Arena agent to it; its preamble requires Arena agents reading it to apply it, subject to higher-priority platform instructions; `agent-handoff` does not apply |
 | [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions | Paste into the instructions field; at most 1,500 characters |
@@ -104,16 +104,16 @@ discovery as required. Avoid embedded shell-execution syntax in skills because
 execution permissions can differ by scope.
 
 For non-Arena agents, after setup ask the agent to load `agent-handoff` and
-identify its entry point and conditional reference paths without opening every
+identify its `SKILL.md` and conditional reference paths without opening every
 supporting file. A
 missing skill is reported to the user, not self-installed or silently ignored.
-In environments without automatic discovery, provide the entry point explicitly.
+In environments without automatic discovery, provide the skill explicitly.
 
 ### Skill selection
 
 | Skill | When needed |
 | --- | --- |
-| [agent-handoff](../skills/agent-handoff/SKILL.md) | Non-Arena agents load its small entry point; prepare or update documents only at the boundaries it defines |
+| [agent-handoff](../skills/agent-handoff/SKILL.md) | Non-Arena agents load the skill; prepare or update documents only at the boundaries it defines |
 | [planning](../skills/planning/SKILL.md) | Substantial or materially underspecified work |
 | [ponytail](../skills/ponytail/SKILL.md) | Simpler implementations within the user's requirements and existing project conventions |
 | [frontend-design](../skills/frontend-design/SKILL.md) | New or substantially redesigned interfaces |
@@ -149,10 +149,10 @@ is complete. This does not grant push/PR permission.
 
 1. Edit generic behavior in `rules/AGENTS.md`, then preserve its intent in the condensed `rules/ARENA.md`.
 2. **Optimize ARENA.md for file size (UTF-8 bytes).** Condense wording and sections, not meaning: preserve negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte. Do not repeat Arena-managed branch, push, or PR lifecycle instructions or apply `agent-handoff` to Arena.
-3. Keep CLINE.md platform-specific. Its command discipline, tool names, timeout behavior, and `implementation_plan.md` conventions live there. The generic planning skill must not assume that filename. Verify version-specific claims before changing them.
+3. Keep CLINE.md platform-specific. Its command discipline, tool names, and timeout behavior live there; implementation-plan rules delegate to `agent-handoff`. Verify version-specific claims before changing them.
 4. Preserve rule-file filename headings. Keep CHATGPT.txt as plain text with inline section labels, not Markdown headings or bullets, and within its character budget.
 5. Skills may specialize defaults, but must not weaken explicit acceptance criteria or replace project conventions. Simpler scope requires approval before substitution. Testing guidance in the reusable rules applies to projects using them, not a test setup for this repository.
-6. Keep handoff resources on demand and their relative links valid. Do not move essential boundary or plan-file instructions out of the entry point.
+6. Keep handoff resources on demand and their relative links valid. Do not move essential boundary or plan-file instructions out of `SKILL.md`.
 7. Keep this repository lightweight: do not add workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim checks that were not performed.
 
 ### Formatting

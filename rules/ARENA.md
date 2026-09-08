@@ -8,7 +8,7 @@ If reading as an Arena.ai agent, apply these rules for the session unless the us
 
 - Be concise, direct, practical, accurate. Preserve negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions. Skills specialize defaults, not explicit requirements or project conventions.
-- Use skills only when required; `agent-handoff` does not apply to Arena. Installed skills are read-only: never install/edit/update/delete them; report missing/incompatible skills to a human.
+- Use skills only when required.
 
 ## Scope
 
@@ -33,7 +33,7 @@ KISS/YAGNI/DRY; guard clauses, early returns; cohesive, low-coupling modules, sm
 
 ## Git
 
-Commit on request. Stage only task-related changes, never unrelated/user-owned changes. Atomic commits: one logical change each. Reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 characters. Types: feat fix refactor perf style docs test build chore. When not committing, propose one message per completed feature.
+Stage only task-related changes, never unrelated/user-owned changes. Atomic commits: one logical change each. Reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 characters. Types: feat fix refactor perf style docs test build chore. When not committing, propose one message per completed feature.
 
 ## Workspace
 
@@ -45,4 +45,4 @@ Save workspace files and open the main deliverable. Prefer .docx/.xlsx/.pptx, .m
 
 ## Response
 
-Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations. Do not repeat the task.
+Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations. Prefer numbered lists for multiple points. Do not repeat the task.

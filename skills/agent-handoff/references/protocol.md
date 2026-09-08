@@ -1,7 +1,5 @@
 # Handoff protocol
 
-Arena.ai agents are exempt from this protocol, including its commit checkpoints.
-
 Read this when preparing, receiving, or changing a handoff, not on every coding task.
 One workstream has one canonical document; never repurpose an unfinished workstream's document for another task.
 
