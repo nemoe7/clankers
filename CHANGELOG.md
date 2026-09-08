@@ -1,8 +1,17 @@
 # Changelog
 
-Token-count history, newest first. The latest per-file counts are in [README.md](README.md#token-counts).
+Project history, newest first. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`; they are not current deployment budgets. See [README.md](README.md#instruction-budgets) for current primary measurements.
 
-Counts use `cl100k_base` via `tiktoken 0.12.0`. Each count covers the complete UTF-8 file, including whitespace and markup. These are dated file-size snapshots, not always-loaded context or model-specific billing.
+## 2026-09-08 — Preview rule installs and license shared skills
+
+- The rule installer now previews unified diffs and asks once before changing either destination.
+- Planning and agent-handoff now include MIT license files; planning also declares its license in skill metadata.
+- Response rules now prefer numbered lists when presenting multiple points.
+- Agents may commit without separate authorization when commits are atomic, conventional, task-only, and off `main`; ChatGPT retains explicit authorization because its integration writes directly to `main`.
+- Generic rules always load `agent-handoff` and select other skills when their domains fit; Arena and Cline contain no handoff-specific policy.
+- Skills no longer contain platform-specific exemptions or cross-skill planning requirements.
+- Agent-handoff references now call it a skill and use `SKILL.md` only as its filename.
+- The root README tracks all agent rule and skill entry files, using deployment-specific measures for Arena and ChatGPT and tokens for the rest.
 
 ## 2026-09-08 — Exclude Arena from agent handoff
 
