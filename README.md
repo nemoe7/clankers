@@ -29,7 +29,7 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Agent-facing rule files are compressed against the budgets above. Compression is editorial, not lossy: it removes words, never rules.
+Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of these guidelines. Compression is editorial, not lossy: it removes words, never rules.
 
 1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves.
 2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.
