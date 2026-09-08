@@ -4,8 +4,9 @@
 
 - Concise, direct, practical, accurate.
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
-- Follow repo docs and conventions; prefer existing patterns.
-- Always load the `agent-handoff` skill; use other installed skills only when required.
+- Follow repo docs and conventions; prefer existing patterns. Skills specialize defaults, never weaken explicit requirements or replace project conventions.
+- Unless running on Arena.ai, always load the `agent-handoff` entry point; load its templates and references only when needed. Use other installed skills only when required.
+- Treat your installed skills as read-only: do not install, edit, update, or delete them. Report missing or incompatible skills; leave changes to a human maintainer.
 
 ## Scope
 
@@ -54,14 +55,14 @@ Red → Green → Refactor → Verify.
 ## Code style
 
 - 2-space indentation (overrides formatter defaults); simple, readable code.
-- Markdown: markdownlint defaults with no line-length limit. Python: Ruff default selection (E4, E7, E9, F).
+- Markdown: markdownlint defaults + MD060; MD013 (line length) disabled. Python: Ruff default selection (E4, E7, E9, F).
 - Preserve architecture; leave unrelated code untouched.
 
 ## Git
 
 - Stage only task-related files; never unrelated or user-owned. Review the diff after each edit.
 - Atomic commits: one logical change per commit; every changed file belongs to it.
-- Commit on a dedicated new branch — never directly on main or the current/default branch. If on the default branch, create and switch to a new branch before committing.
+- Never commit directly to `main`.
 - Reuse commit scopes from previous commits; add a new scope only when no existing scope fits.
 - No commit body.
 - Never push or open a PR unless asked. Otherwise propose one Conventional Commit message: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, no more than 72 characters. Types: `feat fix refactor perf style docs test build chore`. One message per completed feature.

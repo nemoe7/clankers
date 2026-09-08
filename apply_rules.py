@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 
 RULES = Path(__file__).parent / "rules"
-BASE = Path(os.environ.get("APPLY_RULES_BASE", os.environ["USERPROFILE"]))
+BASE = Path(os.environ.get("APPLY_RULES_BASE") or Path.home())
 
 MAPPINGS = [
     (RULES / "AGENTS.md", BASE / ".agents" / "AGENTS.md"),
