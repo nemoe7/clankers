@@ -33,7 +33,6 @@ EXPECTED_BUDGETS = {
   "rules/CHATGPT.txt": "Unicode chars",
   "rules/CLINE.md": "cl100k_base",
   "rules/COMMIT_SPEC.txt": "cl100k_base",
-  "skills/agent-handoff/SKILL.md": "cl100k_base",
   "skills/frontend-design/SKILL.md": "cl100k_base",
   "skills/planning/SKILL.md": "cl100k_base",
   "skills/ponytail/SKILL.md": "cl100k_base",

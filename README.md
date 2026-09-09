@@ -3,10 +3,10 @@
 Rules and skills for AI agents.
 
 - [rules/](rules/): shared and platform-specific agent instructions, ChatGPT custom instructions, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
-- [skills/](skills/README.md): reusable skills for handoffs, planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
-- [maintenance/](maintenance/README.md): dependency-free validation and README measurement tooling.
+- [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
+- [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
 
-`apply_rules.py` copies the global rule files. `apply.bat` runs it on Windows.
+`rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
 ## Instruction budgets
 
@@ -14,12 +14,11 @@ Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,048 `tok` |
+| `rules/AGENTS.md` | `cl100k_base` | 989 `tok` |
 | `rules/ARENA.md` | `UTF-8 file size` | 3,899 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,499 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 573 `tok` |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` | 46 `tok` |
-| `skills/agent-handoff/SKILL.md` | `cl100k_base` | 843 `tok` |
 | `skills/frontend-design/SKILL.md` | `cl100k_base` | 2,011 `tok` |
 | `skills/planning/SKILL.md` | `cl100k_base` | 855 `tok` |
 | `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
