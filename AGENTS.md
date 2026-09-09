@@ -38,7 +38,7 @@ Agent-facing rule files and `SKILL.md` entry points have token or size budgets t
 
 ## Skill loading order
 
-Load `agent-handoff` and `ponytail` (full) before any other skill. If either is unloaded, the next action must invoke its `skill` tool.
+Load `agent-handoff` before any other skill. If it is unloaded, the next action must invoke its `skill` tool.
 
 ## Lightweight repo
 

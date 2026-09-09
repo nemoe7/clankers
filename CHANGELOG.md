@@ -2,6 +2,16 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-09 — Inline ponytail lite into the generic core
+
+`rules/AGENTS.md` Engineering now carries ponytail at `lite` intensity inline: the ladder (needed at all, existing helper/pattern, stdlib, native feature, installed dependency, one line, minimum code), the lite behavior of building what is asked and naming the lazier alternative in one line for the user to pick, the "never lazy about understanding" caveat, the never-simplify list (trust-boundary validation, error handling preventing data loss, security, accessibility), a `simplified:` corner-cut comment, and the no-unrequested-abstraction rules. No rule file loads or names the skill anymore: the mandatory load is `agent-handoff` alone in both `rules/AGENTS.md` and the root `AGENTS.md`, and the corner-cut comment marker is `simplified:` rather than `ponytail:`. The skill stays in `skills/ponytail/` unchanged, for `full` or `ultra`; the rules specification's skill table records that the rules no longer load it. The added rules exceeded the budget, so the rest of the file was compressed in the same change (bullet merges and wording only, no constraint dropped).
+
+Compression guidance now runs to exhaustion: README step 1 requires repeating passes until a pass yields nothing, matching the `squash` skill's loop.
+
+| File | Tokens | Change |
+| --- | --- | --- |
+| `rules/AGENTS.md` | 1,048 | -21 |
+
 ## 2026-09-09 — Respect global gitignore, never commit handoff
 
 Staging now requires respecting the user's global gitignore (`core.excludesFile`), and `AGENT_HANDOFF.md` is never committed, overriding the `agent-handoff` skill's commit requirement. A minimal root `AGENTS.md` points agents to the README and changelog for compression guidelines. The added clauses raise `rules/AGENTS.md` above its prior budget; compression of the surrounding wording was declined.
