@@ -3,12 +3,11 @@
 ## General
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats. Follow repo docs, conventions, patterns; skills specialize defaults, never weaken explicit requirements or replace conventions.
-- MUST load the `agent-handoff` skill before any other action; if unloaded, next action MUST invoke its `skill` tool.
 
 ## Scope
 
-- Plans MUST be numbered, concrete, executable without clarification, and incomplete until they define TDD (red, green, refactor, verify; say why a step is inapplicable), handoff updates, and one atomic commit with its message per logical change.
-- MUST read all project instructions and the current handoff before changes, then follow the approved plan step-by-step, verifying each logical change; stop and ask if reasoning, investigation, or implementation deviates.
+- Plans MUST be numbered, concrete, executable without clarification, and incomplete until they define TDD (red, green, refactor, verify; say why a step is inapplicable) and one atomic commit with its message per logical change.
+- MUST read all project instructions before changes, then follow the approved plan step-by-step, verifying each logical change; stop and ask if reasoning, investigation, or implementation deviates.
 - Only requested work plus implementation and verification; smallest coherent change; stop when verified. Keep behavior, architecture, interfaces, intent, conventions unless change is required: no proactive refactor, optimization, redesign, rename, reformat, dependency, error-handling/security, or tests.
 - Investigate just enough: no alternative-hunting past a suitable pattern, speculating on unrelated requirements or edge cases, or replanning without new evidence. Unrelated findings stay out of scope unless blocking; ask only on material scope or behavior ambiguity.
 
@@ -37,7 +36,7 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Git
 
-- Stage only task-related files, never unrelated or user-owned; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit. Never commit the handoff document (`AGENT_HANDOFF.md`) despite `agent-handoff`; keep it local.
+- Stage only task-related files, never unrelated or user-owned; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
 - Always commit on a branch other than `main`. Atomic commits: one logical change each, every changed file in it. One Conventional Commit per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. Never push or open a PR.
 
 ## Responses
