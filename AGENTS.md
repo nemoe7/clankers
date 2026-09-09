@@ -1,45 +1,40 @@
 # AGENTS.md
 
-Repository guide for agents working in this repo. Read these before acting.
+Guide for agents in this repository. Read these first.
 
-- [README.md](README.md) — instruction budgets, compression guidelines, architecture overview
+- [README.md](README.md) — budgets, compression procedure, layout
 - [CHANGELOG.md](CHANGELOG.md) — rule history and token changes
-- [rules/README.md](rules/README.md) — rule system structure, installation, and maintenance
-- [skills/README.md](skills/README.md) — skill format, upstream sources, and install notes
+- [rules/README.md](rules/README.md) — rule structure, installation, maintenance
+- [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
+- [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
 
 ## Repo type
 
-Rules/skills repository, not a software project. There is no build system, CI workflow, package manifest, or test suite. Verification is via `python3 maintenance/check.py` (or `python maintenance/check.py` on Windows), which validates skill metadata, README measurements, internal links, and the ChatGPT character limit. Run it after any change that touches skills, rules, or README budgets.
+A rules/skills repository, not a software project: no build system, CI workflow, package manifest, or test suite. Verify with `python3 maintenance/check.py` (`python` on Windows), which needs `markdown-it-py` and `tiktoken` and validates skill metadata, README measurements, internal links, and the ChatGPT character limit. Run it after changing skills, rules, or README budgets.
 
 ## Skills
 
-Skills in `skills/` must conform to the [Agent Skills specification](https://agentskills.io/specification). Every `SKILL.md` needs YAML frontmatter with only allowed fields: `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`. `name` must match the directory name. Skills adapted from elsewhere record `metadata.upstream`; first-party skills record `metadata.origin`. `SKILL.md` must stay under 500 lines.
+Skills in `skills/` follow the [Agent Skills specification](https://agentskills.io/specification). Every `SKILL.md` needs YAML frontmatter using only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`; `name` matches its directory; adapted skills record `metadata.upstream`, first-party ones `metadata.origin`; the file stays under 500 lines.
 
 ## Rules
 
-Agent-facing rule files live in `rules/`. The generic core is `rules/AGENTS.md`; platform-specific overlays are `rules/CLINE.md`, `rules/ARENA.md`, and `rules/CHATGPT.txt`. Rule files are installed into agent environments via `apply_rules.py` or `apply.bat` — that is a human maintenance task, not an agent task. Agents may inspect but must treat installed copies as read-only.
+Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`. Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task; treat installed copies as read-only.
 
 ## Budgets
 
-Agent-facing rule files and `SKILL.md` entry points have token or size budgets tracked in [README.md](README.md#instruction-budgets). When changing these files, re-measure and update the table. Compression uses the `squash` skill: remove words, never rules. If a new rule exceeds a budget, compress the rest of the file in the same change.
+Rule files and `SKILL.md` entry points have budgets tracked in [README.md](README.md#instruction-budgets); re-measure and update the table when changing them. Compression removes words, never rules. A new rule may exceed a budget only if the rest of the file is compressed in the same change.
 
 ## Markdown
 
-- 2-space indentation (overrides formatter defaults).
-- Do not hard-wrap prose: keep each paragraph, list item, and table row on one line and let the editor soft-wrap.
-- markdownlint applies only to agent rule files under `rules/`: markdownlint defaults, **MD060 enabled**, **MD013 disabled**. Run from the repo root without additional file globs. Excluded: README files, skills, references, templates, CHATGPT.txt.
-- Python style: Ruff default selection (E4, E7, E9, F).
+- 2-space indentation, overriding formatter defaults.
+- No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
+- markdownlint covers only `rules/*.md`, **MD060 enabled**, **MD013 disabled**; run markdownlint-cli2 from the repository root with no extra globs. README files, skills, references, and CHATGPT.txt are excluded.
+- Python: Ruff default selection (E4, E7, E9, F).
 
 ## Git
 
-- Always commit on a branch other than `main`. Atomic commits: one logical change each, every changed file in it. One Conventional Commit message per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars. Types: `feat fix refactor perf style docs test build chore`. No commit body. Never push or open a PR.
-- Stage only task-related files; respect the user's global gitignore (`core.excludesFile`).
-- Never commit `AGENT_HANDOFF.md`.
-
-## Skill loading order
-
-Load `agent-handoff` before any other skill. If it is unloaded, the next action must invoke its `skill` tool.
+Commit on a branch other than `main`, one logical change per commit with every changed file in it. One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Stage only task-related files. Never push or open a pull request unless asked.
 
 ## Lightweight repo
 
-Do not add workflows, dependency manifests, test scaffolding, or tooling installations unless explicitly requested. Review changes directly and never claim unperformed checks.
+Add no workflows, dependency manifests, test scaffolding, or tooling installs unless explicitly requested. Review changes directly and never claim unperformed checks.
