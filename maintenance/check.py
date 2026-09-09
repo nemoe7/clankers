@@ -28,17 +28,17 @@ EXPECTED_SKILL_FIELDS = {
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 EXPECTED_BUDGETS = {
-  "rules/AGENTS.md": "cl100k_base tokens",
+  "rules/AGENTS.md": "cl100k_base",
   "rules/ARENA.md": "UTF-8 file size",
-  "rules/CHATGPT.txt": "Unicode characters",
-  "rules/CLINE.md": "cl100k_base tokens",
-  "rules/COMMIT_SPEC.txt": "cl100k_base tokens",
-  "skills/agent-handoff/SKILL.md": "cl100k_base tokens",
-  "skills/frontend-design/SKILL.md": "cl100k_base tokens",
-  "skills/planning/SKILL.md": "cl100k_base tokens",
-  "skills/ponytail/SKILL.md": "cl100k_base tokens",
-  "skills/squash/SKILL.md": "cl100k_base tokens",
-  "skills/web-interface-guidelines/SKILL.md": "cl100k_base tokens",
+  "rules/CHATGPT.txt": "Unicode chars",
+  "rules/CLINE.md": "cl100k_base",
+  "rules/COMMIT_SPEC.txt": "cl100k_base",
+  "skills/agent-handoff/SKILL.md": "cl100k_base",
+  "skills/frontend-design/SKILL.md": "cl100k_base",
+  "skills/planning/SKILL.md": "cl100k_base",
+  "skills/ponytail/SKILL.md": "cl100k_base",
+  "skills/squash/SKILL.md": "cl100k_base",
+  "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
 }
 
 _token_encoder: Any = None
@@ -227,28 +227,34 @@ def load_token_encoder() -> Any:
 def measure(path: Path, kind: str) -> int:
   text = path.read_text(encoding="utf-8")
 
-  if kind == "Unicode characters":
+  if kind == "Unicode chars":
     return len(text)
 
   if kind == "UTF-8 file size":
     return len(text.encode("utf-8"))
 
-  if kind == "cl100k_base tokens":
+  if kind == "cl100k_base":
     encoder = load_token_encoder()
     return len(encoder.encode(text))
 
   raise ValueError(f"unsupported measurement: {kind}")
 
 
-def format_budget_kind(kind: str) -> str:
-  if kind == "cl100k_base tokens":
-    return "`cl100k_base` tokens"
-
-  return f"`{kind}`"
-
-
 def format_measurement(value: int) -> str:
   return f"{value:,}"
+
+
+def format_unit(kind: str) -> str:
+  if kind == "Unicode chars":
+    return "chars"
+
+  if kind == "UTF-8 file size":
+    return "B"
+
+  if kind == "cl100k_base":
+    return "tok"
+
+  raise ValueError(f"unsupported measurement: {kind}")
 
 
 def update_readme_measurements() -> bool:
@@ -319,8 +325,9 @@ def update_readme_measurements() -> bool:
           raise RuntimeError(f"README budget path missing: {relative}")
 
         current = format_measurement(measure(path, kind))
+        unit = format_unit(kind)
 
-        replacement = f"| `{relative}` | {format_budget_kind(kind)} | {current} |\n"
+        replacement = f"| `{relative}` | `{kind}` | {current} `{unit}` |\n"
 
         if replacement != line:
           changed = True
@@ -492,7 +499,7 @@ def validate(errors: list[str]) -> None:
     characters = len(chat.read_text(encoding="utf-8"))
 
     if characters > 1500:
-      errors.append("rules/CHATGPT.txt exceeds 1,500 Unicode characters")
+      errors.append("rules/CHATGPT.txt exceeds 1,500 Unicode chars")
 
 
 def main() -> int:

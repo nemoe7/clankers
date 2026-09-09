@@ -14,17 +14,17 @@ Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` tokens | 901 |
-| `rules/ARENA.md` | `UTF-8 file size` | 3,899 |
-| `rules/CHATGPT.txt` | `Unicode characters` | 1,499 |
-| `rules/CLINE.md` | `cl100k_base` tokens | 573 |
-| `rules/COMMIT_SPEC.txt` | `cl100k_base` tokens | 46 |
-| `skills/agent-handoff/SKILL.md` | `cl100k_base` tokens | 843 |
-| `skills/frontend-design/SKILL.md` | `cl100k_base` tokens | 2,011 |
-| `skills/planning/SKILL.md` | `cl100k_base` tokens | 855 |
-| `skills/ponytail/SKILL.md` | `cl100k_base` tokens | 1,675 |
-| `skills/squash/SKILL.md` | `cl100k_base` tokens | 1,263 |
-| `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` tokens | 523 |
+| `rules/AGENTS.md` | `cl100k_base` | 1,068 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 3,899 `B` |
+| `rules/CHATGPT.txt` | `Unicode chars` | 1,499 `chars` |
+| `rules/CLINE.md` | `cl100k_base` | 573 `tok` |
+| `rules/COMMIT_SPEC.txt` | `cl100k_base` | 46 `tok` |
+| `skills/agent-handoff/SKILL.md` | `cl100k_base` | 843 `tok` |
+| `skills/frontend-design/SKILL.md` | `cl100k_base` | 2,011 `tok` |
+| `skills/planning/SKILL.md` | `cl100k_base` | 855 `tok` |
+| `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
+| `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
+| `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 523 `tok` |
 
 Measurements cover complete files, including whitespace and markup.
 
