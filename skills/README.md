@@ -4,7 +4,6 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 | Skill | Purpose |
 | --- | --- |
-| [agent-handoff](agent-handoff/SKILL.md) | Transfer a workstream between agents with a canonical handoff document |
 | [frontend-design](frontend-design/SKILL.md) | Deliberate visual design for new or substantially redesigned interfaces |
 | [planning](planning/SKILL.md) | Structured planning for substantial or materially underspecified work |
 | [ponytail](ponytail/SKILL.md) | The simplest implementation that meets the requirements |

@@ -46,5 +46,3 @@ jobs:
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20
-        with:
-          globs: "rules/{AGENTS,ARENA,CLINE}.md"

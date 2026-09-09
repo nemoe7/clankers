@@ -1,6 +1,6 @@
 ---
 name: planning
-description: Structured planning for substantial or materially underspecified software, technical, research, and operational work. Use when requirements, scope, design, dependencies, sequencing, or acceptance criteria need clarification.
+description: Structured planning for substantial or materially underspecified software, technical, research, and operational work. Use whenever you are in plan mode, and when requirements, scope, design, dependencies, sequencing, or acceptance criteria need clarification.
 license: MIT
 metadata:
   origin: first-party, maintained in this repository
@@ -14,6 +14,7 @@ Create the smallest useful plan that makes substantial work clear, executable, a
 
 Use for:
 
+- any work while in plan mode
 - substantial or materially underspecified work
 - unclear requirements, scope, design, dependencies, sequencing, or acceptance criteria
 - work requiring phases, tasks, risks, constraints, or significant decisions
