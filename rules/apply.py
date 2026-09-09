@@ -3,25 +3,29 @@ import os
 import shutil
 from pathlib import Path
 
-RULES = Path(__file__).parent / "rules"
+RULES = Path(__file__).parent
 BASE = Path(os.environ.get("APPLY_RULES_BASE") or Path.home())
 
 MAPPINGS = [
-    (RULES / "AGENTS.md", BASE / ".agents" / "AGENTS.md"),
-    (RULES / "CLINE.md", BASE / "Documents" / "Cline" / "Rules" / "CLINE.md"),
+  (RULES / "AGENTS.md", BASE / ".agents" / "AGENTS.md"),
+  (RULES / "CLINE.md", BASE / "Documents" / "Cline" / "Rules" / "CLINE.md"),
 ]
 
 changes = []
 diffs = []
 for src, dst in MAPPINGS:
-  current = dst.read_text(encoding="utf-8").splitlines(keepends=True) if dst.exists() else []
+  current = (
+    dst.read_text(encoding="utf-8").splitlines(keepends=True) if dst.exists() else []
+  )
   proposed = src.read_text(encoding="utf-8").splitlines(keepends=True)
-  diff = list(difflib.unified_diff(
-    current,
-    proposed,
-    fromfile=f"{dst} (current)",
-    tofile=f"{dst} (proposed)",
-  ))
+  diff = list(
+    difflib.unified_diff(
+      current,
+      proposed,
+      fromfile=f"{dst} (current)",
+      tofile=f"{dst} (proposed)",
+    )
+  )
   if diff:
     changes.append((src, dst))
     diffs.extend(diff)

@@ -4,7 +4,7 @@ This file defines the rule system's structure, constraints, installation, and ma
 
 Commands and paths in code spans are relative to the repository root unless stated otherwise.
 
-The scripts use only Python's standard library. No package installation, test suite, or GitHub Actions workflow is required.
+The scripts for installation use only Python's standard library. No package installation, test suite, or GitHub Actions workflow is required.
 
 ## Contents and activation
 

@@ -21,11 +21,14 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Validate repository
-        run: python maintenance/validate.py
+      - name: Install maintenance dependencies
+        run: python -m pip install tiktoken markdown-it-py
 
-      - name: Compile maintenance scripts
-        run: python -m compileall maintenance
+      - name: Validate repository
+        run: python maintenance/check.py
+
+      - name: Compile maintenance script
+        run: python -m compileall maintenance/check.py
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20

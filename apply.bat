@@ -1,2 +1,2 @@
 @echo off
-python apply_rules.py
+python rules/apply.py
