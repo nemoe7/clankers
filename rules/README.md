@@ -84,7 +84,7 @@ For non-Arena agents, after setup ask the agent to load `agent-handoff` and iden
 | --- | --- |
 | [agent-handoff](../skills/agent-handoff/SKILL.md) | Non-Arena agents load the skill; prepare or update documents only at the boundaries it defines |
 | [planning](../skills/planning/SKILL.md) | Substantial or materially underspecified work |
-| [ponytail](../skills/ponytail/SKILL.md) | Simpler implementations within the user's requirements and existing project conventions |
+| [ponytail](../skills/ponytail/SKILL.md) | Not loaded by the rules: the core Engineering section inlines its `lite` intensity. Load the skill only for `full` or `ultra` |
 | [frontend-design](../skills/frontend-design/SKILL.md) | New or substantially redesigned interfaces |
 | [web-interface-guidelines](../skills/web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](../skills/squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |

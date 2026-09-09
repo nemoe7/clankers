@@ -14,7 +14,7 @@ Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,069 `tok` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,048 `tok` |
 | `rules/ARENA.md` | `UTF-8 file size` | 3,899 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,499 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 573 `tok` |
@@ -32,7 +32,7 @@ Measurements cover complete files, including whitespace and markup.
 
 Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of these guidelines. Compression is editorial, not lossy: it removes words, never rules.
 
-1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves.
+1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves. Repeat until a pass yields nothing.
 2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.
 3. Merge related bullets, drop redundant qualifiers and restated clauses, and prefer the shorter of two equivalent phrasings. Do not invent new abbreviations or telegraphic syntax that changes how a rule reads.
 4. Keep section headings and their order. Compression does not restructure the rule set.
