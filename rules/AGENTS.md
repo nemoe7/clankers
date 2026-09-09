@@ -4,10 +4,16 @@
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, existing patterns. Skills specialize defaults, never weaken explicit requirements or replace project conventions.
-- Always load the `agent-handoff` skill; its templates and references only when needed. Use other skills when the domain fits.
+- MUST load the `agent-handoff` and `ponytail` (full) skills before any other action. If either is unloaded, next action MUST invoke its `skill` tool.
 
 ## Scope
 
+- Plans MUST be numbered, concrete, and executable without clarification.
+- Plans MUST include TDD: Red, Green, Refactor, Verify. If a step is inapplicable, state why.
+- Plans MUST define exact handoff updates and exact atomic commits per logical change, including commit messages.
+- Plans are incomplete until TDD, handoff updates, and commits are defined.
+- MUST read all project instructions and current handoff before changes.
+- MUST follow the approved plan exactly. If reasoning, investigation, or implementation deviates, stop and ask the user.
 - Only the requested task plus what it takes to implement and verify; smallest coherent change; stop when verified.
 - Preserve behavior, architecture, interfaces, intent, conventions unless change is required.
 - No proactive refactor, optimization, redesign, rename, reformat, dependency change, error-handling/security, or test additions.
@@ -51,7 +57,7 @@ Red → Green → Refactor → Verify.
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled. Python: Ruff default selection (E4, E7, E9, F).
 - Leave unrelated code untouched.
-- Repository hygiene: keep scratch files, scripts, and output outside the repo or delete them once used; never commit or abandon them.
+- MUST maintain repository hygiene. Keep scratch files, scripts, and output outside the repo or delete them. If Plan mode was used, MUST delete all generated plan files.
 
 ## Git
 
@@ -66,3 +72,5 @@ Red → Green → Refactor → Verify.
 - Prefer numbered lists for multiple points.
 - Use a mermaid diagram when structure or flow beats prose and the surface renders it; fit a narrow viewport (phone, sidebar): top-down, short labels, no wide rows.
 - Concise, task-focused; don't repeat the task.
+- MUST follow the plan step-by-step and verify each logical change before continuing.
+- Before completion, MUST confirm planned changes, checks, commits, and cleanup are complete.
