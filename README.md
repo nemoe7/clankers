@@ -4,6 +4,7 @@ Rules and skills for AI agents.
 
 - [rules/](rules/): shared and platform-specific agent instructions, ChatGPT custom instructions, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
 - [skills/](skills/README.md): reusable skills for handoffs, planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
+- [maintenance/](maintenance/README.md): dependency-free validation and README measurement tooling.
 
 `apply_rules.py` copies the global rule files. `apply.bat` runs it on Windows.
 
@@ -14,8 +15,8 @@ Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` tokens | 901 |
-| `rules/ARENA.md` | UTF-8 file size | 3,899 bytes |
-| `rules/CHATGPT.txt` | Unicode characters | 1,499 / 1,500 |
+| `rules/ARENA.md` | `UTF-8 file size` | 3,899 bytes |
+| `rules/CHATGPT.txt` | `Unicode characters` | 1,499 / 1,500 |
 | `rules/CLINE.md` | `cl100k_base` tokens | 573 |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` tokens | 46 |
 | `skills/agent-handoff/SKILL.md` | `cl100k_base` tokens | 843 |
