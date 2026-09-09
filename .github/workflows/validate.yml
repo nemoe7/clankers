@@ -1,0 +1,33 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate repository
+        run: python maintenance/validate.py
+
+      - name: Compile maintenance scripts
+        run: python -m compileall maintenance
+
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@v20
+        with:
+          globs: "rules/{AGENTS,ARENA,CLINE}.md"
