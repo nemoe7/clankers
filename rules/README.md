@@ -70,11 +70,11 @@ Paths and precedence are vendor/version-specific. Confirm them with your install
 
 | Agent | Project | Global |
 | --- | --- | --- |
-| Antigravity | `.agents/skills/` or legacy `.agent/skills/` | `~/.gemini/config/skills/` |
+| Antigravity for VS Code | `.agents/skills/` or legacy `.agent/skills/` | `~/.gemini/config/skills/` |
 | Cline | `.cline/skills/` | `~/.cline/skills/` |
 | Kilo Code | `.kilo/skills/` or `.agents/skills/` | `~/.kilo/skills/` |
 
-Keep one active copy unless you have verified precedence. Reload or restart discovery as required. Avoid embedded shell-execution syntax in skills, since execution permissions differ by scope.
+The Antigravity row covers the VS Code extension only; it does not document Antigravity CLI paths. Keep one active copy unless you have verified precedence. Reload or restart discovery as required. Avoid embedded shell-execution syntax in skills, since execution permissions differ by scope.
 
 For non-Arena agents, after setup ask the agent to load `agent-handoff` and identify its `SKILL.md` and conditional reference paths without opening every supporting file. A missing skill is reported to the user, not self-installed or silently ignored. Without automatic discovery, provide the skill explicitly.
 
