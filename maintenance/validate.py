@@ -25,14 +25,30 @@ def frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
   if end < 0:
     return {}, ["unterminated YAML frontmatter"]
   values: dict[str, str] = {}
-  for line in text[4:end].splitlines():
+  lines = text[4:end].splitlines()
+  index = 0
+  while index < len(lines):
+    line = lines[index]
     if not line.strip():
+      index += 1
       continue
-    if ":" not in line:
+    if ":" not in line or line.startswith((" ", "\t")):
       errors.append(f"invalid frontmatter line: {line}")
+      index += 1
       continue
-    key, value = line.split(":", 1)
-    values[key.strip()] = value.strip().strip('"').strip("'")
+    key, raw = line.split(":", 1)
+    key = key.strip()
+    raw = raw.strip()
+    if raw in {">", "|"}:
+      parts: list[str] = []
+      index += 1
+      while index < len(lines) and (lines[index].startswith((" ", "\t")) or not lines[index].strip()):
+        parts.append(lines[index].strip())
+        index += 1
+      values[key] = " ".join(part for part in parts if part)
+      continue
+    values[key] = raw.strip('"').strip("'")
+    index += 1
   return values, errors
 
 
@@ -47,7 +63,7 @@ def read_budget_table() -> dict[str, tuple[str, str]]:
       break
     if in_table:
       match = README_ROW_RE.match(line)
-      if match and match.group(1) != "File":
+      if match:
         result[match.group(1)] = (match.group(2), match.group(3))
   return result
 
@@ -61,11 +77,23 @@ def measure(path: Path, kind: str) -> int | None:
   return None
 
 
+def check_internal_links(path: Path, errors: list[str]) -> None:
+  text = path.read_text(encoding="utf-8")
+  for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+    target = target.split("#", 1)[0]
+    if not target or re.match(r"^[a-z][a-z0-9+.-]*://", target):
+      continue
+    candidate = (path.parent / target).resolve()
+    if not candidate.exists():
+      errors.append(f"{path.relative_to(ROOT)}: broken internal link {target}")
+
+
 def main() -> int:
   errors: list[str] = []
   skills = sorted(p for p in SKILLS.iterdir() if p.is_dir() and not p.name.startswith("."))
 
-  readme_skills = set(re.findall(r"\[([a-z0-9-]+)\]\([a-z0-9-]+/SKILL\.md\)", (SKILLS / "README.md").read_text(encoding="utf-8")))
+  skills_readme = (SKILLS / "README.md").read_text(encoding="utf-8")
+  readme_skills = set(re.findall(r"\[([a-z0-9-]+)\]\([a-z0-9-]+/SKILL\.md\)", skills_readme))
   actual_skills = {p.name for p in skills}
   if readme_skills != actual_skills:
     errors.append(f"skills/README.md list mismatch: documented={sorted(readme_skills)} actual={sorted(actual_skills)}")
@@ -75,7 +103,8 @@ def main() -> int:
     if not path.is_file():
       errors.append(f"{skill.relative_to(ROOT)}: missing SKILL.md")
       continue
-    values, fm_errors = frontmatter(path.read_text(encoding="utf-8"))
+    skill_text = path.read_text(encoding="utf-8")
+    values, fm_errors = frontmatter(skill_text)
     errors.extend(f"{path.relative_to(ROOT)}: {error}" for error in fm_errors)
     unknown = set(values) - EXPECTED_SKILL_FIELDS
     if unknown:
@@ -86,12 +115,17 @@ def main() -> int:
       errors.append(f"{path.relative_to(ROOT)}: invalid name {name!r}")
     if not 1 <= len(description) <= 1024:
       errors.append(f"{path.relative_to(ROOT)}: description length is {len(description)}, expected 1..1024")
-    for ref in re.findall(r"`([^`]+\.(?:md|py|txt|json|jsonc))`", path.read_text(encoding="utf-8")):
+    if len(skill_text.splitlines()) > 500:
+      errors.append(f"{path.relative_to(ROOT)}: SKILL.md exceeds 500 lines")
+    for ref in re.findall(r"`([^`]+\.(?:md|py|txt|json|jsonc))`", skill_text):
       if ref.startswith(("http://", "https://")):
         continue
       candidate = skill / ref
-      if not candidate.exists() and ("/" in ref or ref.startswith(("references/", "templates/", "scripts/", "assets/"))):
+      if "/" in ref and not candidate.exists():
         errors.append(f"{path.relative_to(ROOT)}: missing referenced file {ref}")
+
+  for path in [README, SKILLS / "README.md", RULES / "README.md"]:
+    check_internal_links(path, errors)
 
   budgets = read_budget_table()
   for relative, (kind, recorded) in budgets.items():
@@ -99,12 +133,12 @@ def main() -> int:
     if not path.is_file():
       errors.append(f"README budget path missing: {relative}")
       continue
-    value = measure(path, kind)
-    if value is None:
+    value_now = measure(path, kind)
+    if value_now is None:
       continue
-    recorded_value = int(re.search(r"\d+", recorded).group())
-    if value != recorded_value:
-      errors.append(f"README budget stale for {relative}: recorded={recorded_value} actual={value}")
+    match = re.search(r"\d+", recorded)
+    if not match or value_now != int(match.group()):
+      errors.append(f"README budget stale for {relative}: recorded={recorded} actual={value_now}")
 
   chat = RULES / "CHATGPT.txt"
   if len(chat.read_text(encoding="utf-8")) > 1500:
