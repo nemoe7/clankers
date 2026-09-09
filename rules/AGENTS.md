@@ -4,7 +4,7 @@
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, existing patterns. Skills specialize defaults, never weaken explicit requirements or replace project conventions.
-- MUST load the `agent-handoff` and `ponytail` (full) skills before any other action. If either is unloaded, next action MUST invoke its `skill` tool.
+- You MUST load the `agent-handoff` and `ponytail` (full) skills before any other action. If either is unloaded, next action MUST invoke its `skill` tool.
 
 ## Scope
 
