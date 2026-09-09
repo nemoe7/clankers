@@ -1,0 +1,534 @@
+#!/usr/bin/env python3
+"""Validate repository structure and maintain README measurements."""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+from markdown_it import MarkdownIt
+
+ROOT = Path(__file__).resolve().parent.parent
+README = ROOT / "README.md"
+SKILLS = ROOT / "skills"
+RULES = ROOT / "rules"
+
+EXPECTED_SKILL_FIELDS = {
+  "name",
+  "description",
+  "license",
+  "compatibility",
+  "metadata",
+  "allowed-tools",
+}
+
+NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+EXPECTED_BUDGETS = {
+  "rules/AGENTS.md": "cl100k_base tokens",
+  "rules/ARENA.md": "UTF-8 file size",
+  "rules/CHATGPT.txt": "Unicode characters",
+  "rules/CLINE.md": "cl100k_base tokens",
+  "rules/COMMIT_SPEC.txt": "cl100k_base tokens",
+  "skills/agent-handoff/SKILL.md": "cl100k_base tokens",
+  "skills/frontend-design/SKILL.md": "cl100k_base tokens",
+  "skills/planning/SKILL.md": "cl100k_base tokens",
+  "skills/ponytail/SKILL.md": "cl100k_base tokens",
+  "skills/squash/SKILL.md": "cl100k_base tokens",
+  "skills/web-interface-guidelines/SKILL.md": "cl100k_base tokens",
+}
+
+_token_encoder: Any = None
+
+
+def parse_args() -> argparse.Namespace:
+  parser = argparse.ArgumentParser(
+    description=("Validate the repository and optionally update README measurements.")
+  )
+  parser.add_argument(
+    "--update",
+    action="store_true",
+    help="Update README measurements before validation.",
+  )
+  return parser.parse_args()
+
+
+def parse_frontmatter(
+  text: str,
+) -> tuple[dict[str, str], list[str]]:
+  errors: list[str] = []
+
+  if not text.startswith("---\n"):
+    return {}, ["missing YAML frontmatter"]
+
+  end = text.find("\n---", 4)
+
+  if end < 0:
+    return {}, ["unterminated YAML frontmatter"]
+
+  values: dict[str, str] = {}
+  lines = text[4:end].splitlines()
+  index = 0
+
+  while index < len(lines):
+    line = lines[index]
+
+    if not line.strip():
+      index += 1
+      continue
+
+    # Nested YAML content belongs to the preceding top-level key.
+    if line.startswith((" ", "\t")):
+      index += 1
+      continue
+
+    if ":" not in line:
+      errors.append(f"invalid frontmatter line: {line}")
+      index += 1
+      continue
+
+    key, raw = line.split(":", 1)
+    key = key.strip()
+    raw = raw.strip()
+
+    if not key:
+      errors.append(f"invalid frontmatter line: {line}")
+      index += 1
+      continue
+
+    if raw in {">", "|"}:
+      parts: list[str] = []
+      index += 1
+
+      while index < len(lines) and (
+        lines[index].startswith((" ", "\t")) or not lines[index].strip()
+      ):
+        parts.append(lines[index].strip())
+        index += 1
+
+      values[key] = " ".join(part for part in parts if part)
+      continue
+
+    values[key] = raw.strip('"').strip("'")
+    index += 1
+
+  return values, errors
+
+
+def markdown_inline_text(token: Any) -> str:
+  """Reconstruct inline text while preserving text around code spans."""
+  if not token.children:
+    return token.content
+
+  return "".join(
+    child.content
+    for child in token.children
+    if child.type
+    in {
+      "text",
+      "code_inline",
+      "html_inline",
+      "softbreak",
+      "hardbreak",
+    }
+  )
+
+
+def parse_budget_table(text: str) -> list[list[str]]:
+  """Parse Markdown tables and return rendered cell text."""
+  markdown = MarkdownIt("commonmark").enable("table")
+  tokens = markdown.parse(text)
+
+  tables: list[list[list[str]]] = []
+  current_table: list[list[str]] | None = None
+  current_row: list[str] | None = None
+
+  for token in tokens:
+    if token.type == "table_open":
+      current_table = []
+      continue
+
+    if token.type == "tr_open":
+      current_row = []
+      continue
+
+    if token.type == "inline" and current_row is not None:
+      current_row.append(markdown_inline_text(token))
+      continue
+
+    if token.type == "tr_close":
+      if current_table is not None and current_row is not None:
+        current_table.append(current_row)
+      current_row = None
+      continue
+
+    if token.type == "table_close":
+      if current_table is not None:
+        tables.append(current_table)
+      current_table = None
+
+  for table in tables:
+    if table and table[0] == ["File", "Measure", "Current"]:
+      return table
+
+  raise RuntimeError("README budget table not found")
+
+
+def normalize_budget_kind(kind: str) -> str:
+  return kind.strip()
+
+
+def read_budget_table() -> dict[str, tuple[str, str]]:
+  text = README.read_text(encoding="utf-8")
+  rows = parse_budget_table(text)
+
+  result: dict[str, tuple[str, str]] = {}
+
+  for row in rows[1:]:
+    if len(row) != 3:
+      continue
+
+    relative, kind, current = row
+
+    relative = relative.strip()
+
+    if relative.startswith("`") and relative.endswith("`"):
+      relative = relative[1:-1]
+
+    result[relative] = (
+      normalize_budget_kind(kind),
+      current.strip(),
+    )
+
+  return result
+
+
+def load_token_encoder() -> Any:
+  global _token_encoder
+
+  if _token_encoder is not None:
+    return _token_encoder
+
+  try:
+    import tiktoken
+  except ImportError as exc:
+    raise RuntimeError(
+      "tiktoken is required for cl100k_base measurements. "
+      "Install it with: python -m pip install tiktoken"
+    ) from exc
+
+  _token_encoder = tiktoken.get_encoding("cl100k_base")
+  return _token_encoder
+
+
+def measure(path: Path, kind: str) -> int:
+  text = path.read_text(encoding="utf-8")
+
+  if kind == "Unicode characters":
+    return len(text)
+
+  if kind == "UTF-8 file size":
+    return len(text.encode("utf-8"))
+
+  if kind == "cl100k_base tokens":
+    encoder = load_token_encoder()
+    return len(encoder.encode(text))
+
+  raise ValueError(f"unsupported measurement: {kind}")
+
+
+def format_budget_kind(kind: str) -> str:
+  if kind == "cl100k_base tokens":
+    return "`cl100k_base` tokens"
+
+  return f"`{kind}`"
+
+
+def format_measurement(value: int) -> str:
+  return f"{value:,}"
+
+
+def update_readme_measurements() -> bool:
+  text = README.read_text(encoding="utf-8")
+  budgets = read_budget_table()
+
+  missing = set(EXPECTED_BUDGETS) - set(budgets)
+
+  if missing:
+    raise RuntimeError(f"README budget table is missing entries: {sorted(missing)}")
+
+  unknown = set(budgets) - set(EXPECTED_BUDGETS)
+
+  if unknown:
+    raise RuntimeError(f"README budget table has unexpected entries: {sorted(unknown)}")
+
+  lines = text.splitlines(keepends=True)
+  output: list[str] = []
+  in_table = False
+  changed = False
+
+  for line in lines:
+    stripped = line.strip()
+
+    if stripped == "| File | Measure | Current |":
+      in_table = True
+      output.append(line)
+      continue
+
+    if in_table and not stripped.startswith("|"):
+      in_table = False
+
+    if in_table and stripped.startswith("|"):
+      cells = [cell.strip() for cell in stripped.split("|")]
+
+      if len(cells) == 5:
+        relative = cells[1]
+        kind = normalize_budget_kind(cells[2])
+
+        if relative.startswith("`") and relative.endswith("`"):
+          relative = relative[1:-1]
+
+        # Skip the separator row.
+        if relative == "---":
+          output.append(line)
+          continue
+
+        expected_kind = EXPECTED_BUDGETS.get(relative)
+
+        if expected_kind is None:
+          raise RuntimeError(f"README budget has unexpected entry: {relative}")
+
+        if kind.startswith("`") and "`" in kind[1:]:
+          end = kind.find("`", 1)
+          code = kind[1:end]
+          suffix = kind[end + 1 :].strip()
+          kind = f"{code} {suffix}".strip()
+
+        if kind != expected_kind:
+          raise RuntimeError(
+            f"README budget kind mismatch for {relative}: "
+            f"recorded={kind!r} expected={expected_kind!r}"
+          )
+
+        path = ROOT / relative
+
+        if not path.is_file():
+          raise RuntimeError(f"README budget path missing: {relative}")
+
+        current = format_measurement(measure(path, kind))
+
+        replacement = f"| `{relative}` | {format_budget_kind(kind)} | {current} |\n"
+
+        if replacement != line:
+          changed = True
+
+        output.append(replacement)
+        continue
+
+    output.append(line)
+
+  updated = "".join(output)
+
+  if changed:
+    README.write_text(updated, encoding="utf-8")
+
+  return changed
+
+
+def check_internal_links(
+  path: Path,
+  errors: list[str],
+) -> None:
+  text = path.read_text(encoding="utf-8")
+
+  for target in re.findall(
+    r"\[[^\]]+\]\(([^)]+)\)",
+    text,
+  ):
+    target = target.split("#", 1)[0].strip()
+
+    if not target:
+      continue
+
+    if re.match(
+      r"^[a-z][a-z0-9+.-]*://",
+      target,
+      re.IGNORECASE,
+    ):
+      continue
+
+    candidate = (path.parent / target).resolve()
+
+    if not candidate.exists():
+      errors.append(f"{path.relative_to(ROOT)}: broken internal link {target}")
+
+
+def validate(errors: list[str]) -> None:
+  skills = sorted(
+    path for path in SKILLS.iterdir() if path.is_dir() and not path.name.startswith(".")
+  )
+
+  skills_readme_path = SKILLS / "README.md"
+
+  if not skills_readme_path.is_file():
+    errors.append("skills/README.md is missing")
+  else:
+    skills_readme = skills_readme_path.read_text(encoding="utf-8")
+
+    documented_skills = set(
+      re.findall(
+        r"\[([a-z0-9-]+)\]\([a-z0-9-]+/SKILL\.md\)",
+        skills_readme,
+      )
+    )
+    actual_skills = {path.name for path in skills}
+
+    if documented_skills != actual_skills:
+      errors.append(
+        "skills/README.md list mismatch: "
+        f"documented={sorted(documented_skills)} "
+        f"actual={sorted(actual_skills)}"
+      )
+
+  for skill in skills:
+    path = skill / "SKILL.md"
+
+    if not path.is_file():
+      errors.append(f"{skill.relative_to(ROOT)}: missing SKILL.md")
+      continue
+
+    text = path.read_text(encoding="utf-8")
+    values, frontmatter_errors = parse_frontmatter(text)
+
+    errors.extend(f"{path.relative_to(ROOT)}: {error}" for error in frontmatter_errors)
+
+    unknown = set(values) - EXPECTED_SKILL_FIELDS
+
+    if unknown:
+      errors.append(
+        f"{path.relative_to(ROOT)}: unknown frontmatter fields: {sorted(unknown)}"
+      )
+
+    name = values.get("name", "")
+    description = values.get("description", "")
+
+    if name != skill.name or not NAME_RE.fullmatch(name):
+      errors.append(f"{path.relative_to(ROOT)}: invalid name {name!r}")
+
+    if not 1 <= len(description) <= 1024:
+      errors.append(
+        f"{path.relative_to(ROOT)}: "
+        f"description length is {len(description)}, "
+        "expected 1..1024"
+      )
+
+    if len(text.splitlines()) > 500:
+      errors.append(f"{path.relative_to(ROOT)}: SKILL.md exceeds 500 lines")
+
+  for path in (
+    README,
+    SKILLS / "README.md",
+    RULES / "README.md",
+  ):
+    if path.is_file():
+      check_internal_links(path, errors)
+
+  budgets = read_budget_table()
+
+  if set(budgets) != set(EXPECTED_BUDGETS):
+    errors.append(
+      "README budget table entries mismatch: "
+      f"documented={sorted(budgets)} "
+      f"expected={sorted(EXPECTED_BUDGETS)}"
+    )
+  else:
+    for relative, expected_kind in EXPECTED_BUDGETS.items():
+      recorded_kind, recorded_value = budgets[relative]
+
+      if recorded_kind != expected_kind:
+        errors.append(
+          f"README budget kind mismatch for {relative}: "
+          f"recorded={recorded_kind!r} "
+          f"expected={expected_kind!r}"
+        )
+        continue
+
+      path = ROOT / relative
+
+      if not path.is_file():
+        errors.append(f"README budget path missing: {relative}")
+        continue
+
+      try:
+        actual = measure(path, expected_kind)
+      except RuntimeError as exc:
+        errors.append(str(exc))
+        continue
+
+      match = re.search(
+        r"\d[\d,]*",
+        recorded_value,
+      )
+
+      if not match:
+        errors.append(
+          f"README budget invalid for {relative}: recorded={recorded_value}"
+        )
+        continue
+
+      recorded = int(match.group().replace(",", ""))
+
+      if actual != recorded:
+        errors.append(
+          f"README budget stale for {relative}: recorded={recorded} actual={actual}"
+        )
+
+  chat = RULES / "CHATGPT.txt"
+
+  if chat.is_file():
+    characters = len(chat.read_text(encoding="utf-8"))
+
+    if characters > 1500:
+      errors.append("rules/CHATGPT.txt exceeds 1,500 Unicode characters")
+
+
+def main() -> int:
+  args = parse_args()
+
+  if args.update:
+    try:
+      changed = update_readme_measurements()
+    except (RuntimeError, OSError) as exc:
+      print(f"README update failed: {exc}")
+      return 1
+
+    if changed:
+      print("Updated README measurements.")
+    else:
+      print("README measurements already up to date.")
+
+  errors: list[str] = []
+  validate(errors)
+
+  if errors:
+    print("Validation failed:")
+
+    for error in errors:
+      print(f"- {error}")
+
+    return 1
+
+  skills = sum(
+    1 for path in SKILLS.iterdir() if path.is_dir() and not path.name.startswith(".")
+  )
+
+  print(f"Validation passed: {skills} skills and README measurements checked.")
+
+  return 0
+
+
+if __name__ == "__main__":
+  sys.exit(main())
