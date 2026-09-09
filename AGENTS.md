@@ -3,14 +3,14 @@
 Guide for agents in this repository. Read these first.
 
 - [README.md](README.md) — budgets, compression procedure, layout
-- [CHANGELOG.md](CHANGELOG.md) — rule history and token changes
+- [CHANGELOG.md](CHANGELOG.md) — rule history and token changes; always follow its stated entry rule, one entry per pull request, extending the open entry while its pull request is unmerged
 - [rules/README.md](rules/README.md) — rule structure, installation, maintenance
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
 
 ## Repo type
 
-A rules/skills repository, not a software project: no build system, CI workflow, package manifest, or test suite. Verify with `python3 maintenance/check.py` (`python` on Windows), which needs `markdown-it-py` and `tiktoken` and validates skill metadata, README measurements, internal links, and the ChatGPT character limit. Run it after changing skills, rules, or README budgets.
+A rules/skills repository, not a software project: no build system, package manifest, or test suite. Verify with `python3 maintenance/check.py` (`python` on Windows), which needs `markdown-it-py` and `tiktoken` and validates skill metadata, README measurements, internal links, and the ChatGPT character limit. Run it after changing skills, rules, or README budgets. `.github/workflows/validate.yml` runs the same check on every push and pull request, commits refreshed README measurements, and lints Markdown.
 
 ## Skills
 
@@ -37,4 +37,4 @@ Commit on a branch other than `main`, one logical change per commit with every c
 
 ## Lightweight repo
 
-Add no workflows, dependency manifests, test scaffolding, or tooling installs unless explicitly requested. Review changes directly and never claim unperformed checks.
+Add no further workflows, dependency manifests, test scaffolding, or tooling installs unless explicitly requested. Review changes directly and never claim unperformed checks.
