@@ -4,7 +4,7 @@ This file defines the rule system's structure, constraints, installation, and ma
 
 Commands and paths in code spans are relative to the repository root unless stated otherwise.
 
-The installation script uses only Python's standard library. There is no test suite or GitHub Actions workflow. The validator in `maintenance/` requires `markdown-it-py` and `tiktoken`.
+The installation script uses only Python's standard library. There is no test suite. The validator in `maintenance/` requires `markdown-it-py` and `tiktoken`, which [.github/workflows/validate.yml](../.github/workflows/validate.yml) installs before running it on every push and pull request, committing refreshed README measurements and linting Markdown.
 
 ## Contents and activation
 
@@ -55,7 +55,7 @@ python .\rules\apply.py
 
 Installation, updates, and removal are human maintenance, not agent tasks. Agents may inspect available skills but must treat installed copies as read-only, reporting missing or incompatible files rather than installing or repairing them. Requested edits to skill source in this repository do not authorize changes to an agent's installed copies.
 
-Copy complete skill folders into a discovery path your agent supports. Keep the folder name and include any `references/`, `templates/`, and `scripts/`; copying only `SKILL.md` is not enough.
+Copy complete skill folders into a discovery path your agent supports. Keep the folder name and include any `scripts/`, `references/`, and `assets/`; copying only `SKILL.md` is not enough.
 
 For an agent that discovers project skills under `.agents/skills/`, a human maintainer can run:
 
@@ -97,14 +97,14 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 5. Skills may specialize defaults but must not weaken explicit acceptance criteria or replace project conventions. Simpler scope requires approval before substitution. Testing guidance in the reusable rules applies to projects using them, not a test setup for this repository.
 6. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 7. Keep every skill conformant to the [Agent Skills specification](https://agentskills.io/specification): `name` matches its directory, and frontmatter uses only the specified fields. Skills adapted from elsewhere record `metadata.upstream`; refresh them from that source, then re-apply the local `Precedence` section. See [skills/README.md](../skills/README.md#format).
-8. Keep this repository lightweight: add no workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
+8. Keep this repository lightweight: beyond the existing validation workflow, add no workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
 
 ### Formatting
 
-Markdown linting applies only to agent rule files under `rules/`: currently AGENTS.md, ARENA.md, and CLINE.md. ChatGPT instructions and this specification are excluded, as are the root README, skills, references, and templates.
+Markdown linting applies only to agent rule files under `rules/`: currently AGENTS.md, ARENA.md, and CLINE.md. ChatGPT instructions and this specification are excluded, as are the root README, skills, and references.
 
 Do not hard-wrap prose. Keep each paragraph, list item, and table row on one line and let the editor soft-wrap; third-party licenses keep their original wrapping.
 
-[.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps file selection, exclusions, and rule settings together: markdownlint defaults, **MD060 enabled** for table-column consistency, and **MD013 disabled** so there is no line-length constraint. MD060 uses its default `any` style. If markdownlint-cli2 is available, run it from the repository root without additional file globs to use this scope. No tooling installation is required.
+[.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps file selection, exclusions, and rule settings together: markdownlint defaults, **MD060 enabled** for table-column consistency, and **MD013 disabled** so there is no line-length constraint. MD060 uses its default `any` style. If markdownlint-cli2 is available, run it from the repository root without additional file globs to use this scope; the workflow passes no globs either, so both use this one definition. No tooling installation is required.
 
 Python style stays defined in the core rules (Ruff selection E4, E7, E9, F), without a managed Ruff dependency. Keep CHATGPT.txt within 1,500 Unicode characters, including newlines.
