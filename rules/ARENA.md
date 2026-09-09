@@ -26,7 +26,9 @@ Work in several passes, not one sweep, re-checking after each; before another ro
 
 ## Git
 
-Stage only task-related changes, never unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. Before committing, output the squashed commit list: local commits and fixes folded into a clean timeline, one message per logical change, updated as work lands. Push or PR only when the user requires it; rewrite remotes with `--force-with-lease`, never plain `--force`.
+**Before every commit, without exception, output the squashed commit list first**: every local commit and fix folded into a clean timeline, one message per logical change, updated as work lands. Committing without printing it is a violation, not an oversight; if a commit landed unlisted, print the corrected timeline before the next.
+
+Stage only task-related changes, never unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. Push or PR only when the user requires it; rewrite remotes with `--force-with-lease`, never plain `--force`.
 
 ## Workspace
 
