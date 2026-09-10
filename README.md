@@ -1,21 +1,22 @@
 # Clankers
 
-Rules and skills for AI agents.
+Rules, skills, and workflows for AI agents.
 
 - [rules/](rules/): shared and platform-specific agent instructions, ChatGPT custom instructions, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
 - [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
+- [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size and CHATGPT.txt by its custom-instruction character limit; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
+Latest measurements as of 2026-09-10. ARENA.md is measured by uploaded file size and CHATGPT.txt by its custom-instruction character limit; the remaining agent-facing rule files, `SKILL.md` entry files, and workflow files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,061 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 4,852 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 4,947 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,495 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 580 `tok` |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` | 58 `tok` |
@@ -24,6 +25,7 @@ Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size
 | `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 523 `tok` |
+| `workflows/init-docs.md` | `cl100k_base` | 4,102 `tok` |
 
 Measurements cover complete files, including whitespace and markup.
 

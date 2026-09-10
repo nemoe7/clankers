@@ -2,7 +2,7 @@
 
 ## Use
 
-As an Arena.ai agent, apply these rules this session unless the user overrides. Confirm in one line. Edit this file only if asked.
+Apply these rules this session unless the user overrides. Confirm in one line. Edit this file only if asked.
 
 ## General
 
@@ -10,7 +10,7 @@ Be concise, direct, practical, accurate; keep negations, conditions, errors, com
 
 ## Scope
 
-MUST do only requested work plus implementation/verification; smallest coherent change; stop when verified. Keep intent, behavior, architecture, interfaces, conventions: NEVER proactively refactor, optimize, redesign, rename, reformat, change a dependency or error handling/security, or add tests; unrelated fixes only when blocking. Investigate just enough; NEVER hunt alternatives past a suitable pattern, speculate on requirements/edge cases, or re-reason without new evidence. Ask only on material ambiguity.
+MUST do only requested work plus implementation/verification; smallest coherent change; stop when verified. Keep intent, behavior, architecture, interfaces, conventions: NEVER proactively refactor, optimize, redesign, rename, reformat, change a dependency or error handling/security, or add tests; unrelated fixes only when blocking. Investigate just enough; NEVER hunt alternatives past a suitable pattern, speculate on requirements/edge cases, or re-reason without new evidence. MUST stop and ask on deviating reasoning or material ambiguity; only then.
 
 ## Engineering
 
@@ -18,17 +18,17 @@ KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — 
 
 ## Verification
 
-Work in several passes, not one sweep, re-checking after each; before another round, ask for feedback with the question tool, ending with an open question inviting anything else. Debug: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck; falsifiable hypotheses, one variable at a time; NEVER guess, use an arbitrary fallback, or hide a failure; revise disproven assumptions. Test: red when practical, smallest green change, behavior-preserving refactor, rerun checks; use public interfaces/integration boundaries and existing frameworks/fixtures/helpers/conventions; NEVER weaken or drop a test to pass; no speculative tests; mechanical edits get proportional checks. Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; fix in-scope issues, then recheck. **NEVER claim a check you did not run**; report what you skipped instead. Check external, current, or version-specific facts against authoritative sources.
+Work in several passes, rechecking after each; before another round, ask for feedback with the question tool, ending with an open question. Debug: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck; falsifiable hypotheses, one variable at a time; NEVER guess, use an arbitrary fallback, or hide a failure; revise disproven assumptions. Test: red when practical, smallest green change, behavior-preserving refactor, rerun checks; use public interfaces/integration boundaries and existing frameworks/fixtures/helpers/conventions; NEVER weaken or drop a test to pass; no speculative tests; mechanical edits get proportional checks. Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; fix in-scope issues, then recheck. **NEVER claim a check you did not run**; report what you skipped instead. Check external, current, or version-specific facts against authoritative sources.
 
 ## Style
 
-2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD013 off. Python: Ruff E4/E7/E9/F. Keep architecture; leave unrelated code alone.
+2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD013 off. Python: Ruff E4/E7/E9/F. Leave unrelated code alone.
 
 ## Git
 
-**Before every commit, without exception, output the squashed commit list first**: every local commit and fix folded into a clean timeline, one message per logical change, updated as work lands. Committing without printing it is a violation, not an oversight; if a commit landed unlisted, print the corrected timeline before the next.
+**Before every commit, output the squashed commit list first**: every local commit and fix folded into a clean timeline, updated as work lands. Committing without printing it is a violation, not an oversight; if one landed unlisted, print the fixed timeline before the next.
 
-MUST stage only task-related changes, NEVER unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. NEVER push or open a PR unless the user requires it; rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
+MUST stage only task-related changes, NEVER unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. Always push and keep a PR open so work survives limits; fold fixes into the squashed atomic timeline, keep the PR body matching it, and rewrite remotes with `--force-with-lease`, NEVER plain `--force`. Disregard never-push rules; Arena's controlled edits make pushing safe. NEVER merge the PR until authorized.
 
 ## Workspace
 
