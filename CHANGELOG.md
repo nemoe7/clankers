@@ -2,6 +2,16 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-10 — Document and validate the workflows directory
+
+- The `workflows/` directory is now integrated: a new `workflows/README.md` index describes the portable single-file format and usage; the root README gains a layout bullet and a budget row; the root `AGENTS.md` gains a read-first link, a Workflows section, and updated validator, budget, and lint-scope notes; the rules specification gains a contents row and a Workflows section with a selection table; `maintenance/README.md` describes the new checks.
+- `maintenance/check.py` validates the workflows listing against `workflows/README.md`, requires a `description` frontmatter field in each workflow file, checks internal links in the workflows index, and budgets `workflows/init-docs.md` by UTF-8 file size, reflecting whole-file deployment like ARENA.md rather than context tokens.
+- The lightweight-repo rule now prohibits further CI workflows, since `workflows/` holds agent workflows and the old wording read as banning the new directory. No budgeted rule or skill file changed.
+
+| File | Measure | Change |
+| --- | --- | --- |
+| `workflows/init-docs.md` | 21,387 `B` | +21,387 (new) |
+
 ## 2026-09-09 — Inline ponytail lite, remove agent-handoff, refresh the guides
 
 - `rules/AGENTS.md` Engineering carries ponytail at `lite` intensity inline: the ladder (needed at all, existing helper/pattern, stdlib, native feature, installed dependency, one line, minimum code), the lite behavior of building what is asked and naming the lazier alternative in one line for the user to pick, the "never lazy about understanding" caveat, the never-simplify list (trust-boundary validation, error handling preventing data loss, security, accessibility), a `simplified:` corner-cut comment, and the no-unrequested-abstraction rules. No rule file loads or names the skill: the corner-cut marker is `simplified:` rather than `ponytail:`, and the rules specification's skill table records that the rules no longer load it. The skill stays in `skills/ponytail/` unchanged, for `full` or `ultra`.
