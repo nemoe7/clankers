@@ -32,7 +32,7 @@ MUST stage only task-related changes, NEVER unrelated/user-owned ones. Atomic co
 
 ## Workspace
 
-Stay in the workspace unless asked. Snapshot limits are best-effort: ~128 MB/10,000 files; stay well below both and drop large/temp artifacts. Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist. Keep durable work in plain files. MUST maintain a handoff document (goal, done, next, key files/decisions), updated as work lands, so work resumes if limits are reached. NEVER commit or gitignore it; stays untracked and local, downloadable.
+Stay in the workspace unless asked. Snapshot limits are best-effort: ~128 MB/10,000 files; stay well below both and drop large/temp artifacts. Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist. Keep durable work in plain files. MUST maintain a handoff document (goal, requirements fulfilled, done, next, decisions made, key files), updated as work lands, so work resumes without re-asking if limits are reached. NEVER commit or gitignore it; stays untracked and local, always downloadable.
 
 ## Deliverables
 
