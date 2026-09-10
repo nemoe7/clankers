@@ -16,6 +16,7 @@ The installation script uses only Python's standard library. There is no test su
 | [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions | Paste into the instructions field; at most 1,500 characters |
 | [rules/COMMIT_SPEC.txt](COMMIT_SPEC.txt) | Compact commit-message reference | Use when preparing an authorized commit or proposed message |
 | [skills/](../skills/README.md) | Reusable skills | Install complete skill directories, including supporting files |
+| [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into your platform's workflow location, or run it as-is |
 
 Rules and tools load differently across agent versions. Verify which files are active in your installed release; never assume a filename alone enables loading. ARENA.md condenses the core because it deploys independently. CLINE.md relies on AGENTS.md also being loaded; if that stops holding, fix installation or deliberately re-embed the core rather than silently losing it.
 
@@ -88,21 +89,31 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 | [web-interface-guidelines](../skills/web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](../skills/squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 
+## Workflows
+
+Workflows are portable across coding-agent platforms: the workflow body depends on no platform-specific tool, agent name, model, provider, UI, permission, or interaction mechanism. Each workflow is one self-contained Markdown file with a `description` frontmatter field, budgeted in `cl100k_base` tokens in the [root README](../README.md#instruction-budgets); format details are in [workflows/README.md](../workflows/README.md).
+
+| Workflow | When needed |
+| --- | --- |
+| [init-docs](../workflows/init-docs.md) | Initializing or reconciling repository documentation from user-selected templates, in PLAN or APPLY mode |
+
+Installation is human maintenance, not an agent task: copy the workflow file into your platform's workflow location, or run it as-is where the platform accepts a file path. The installer does not deploy workflows. Agents treat installed copies as read-only, reporting problems rather than repairing them.
+
 ## Rule maintenance
 
 1. Edit generic behavior in `rules/AGENTS.md`, then preserve its intent in the condensed `rules/ARENA.md`.
-2. **Optimize ARENA.md for file size (UTF-8 bytes).** Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte. Do not repeat Arena-managed branch or push lifecycle instructions; PR creation stays user-required, as in the core rules.
+2. **Optimize ARENA.md for file size (UTF-8 bytes).** Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push and PR handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Do not repeat Arena-managed branch mechanics beyond that.
 3. Keep CLINE.md platform-specific. Its command discipline, tool names, and timeout behavior live there. Verify version-specific claims before changing them.
 4. Preserve rule-file filename headings. Keep CHATGPT.txt as plain text with inline section labels, not Markdown headings or bullets, within its character budget, and aligned with AGENTS.md where the instruction field allows.
 5. **Emphasis is rationed.** Hard rules read as `MUST` or `NEVER`; ordinary guidance stays plain. Bold is reserved for at most two clauses per file, currently the honesty rule and the squashed commit list, so emphasis keeps its meaning. Adding a third bold clause means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
 6. Skills may specialize defaults but must not weaken explicit acceptance criteria or replace project conventions. Simpler scope requires approval before substitution. Testing guidance in the reusable rules applies to projects using them, not a test setup for this repository.
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the [Agent Skills specification](https://agentskills.io/specification): `name` matches its directory, and frontmatter uses only the specified fields. Skills adapted from elsewhere record `metadata.upstream`; refresh them from that source, then re-apply the local `Precedence` section. See [skills/README.md](../skills/README.md#format).
-9. Keep this repository lightweight: beyond the existing validation workflow, add no workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
+9. Keep this repository lightweight: beyond the existing validation workflow, add no CI workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
 
 ### Formatting
 
-Markdown linting applies only to agent rule files under `rules/`: currently AGENTS.md, ARENA.md, and CLINE.md. ChatGPT instructions and this specification are excluded, as are the root README, skills, and references.
+Markdown linting applies only to agent rule files under `rules/`: currently AGENTS.md, ARENA.md, and CLINE.md. ChatGPT instructions and this specification are excluded, as are the root README, skills, workflows, and references.
 
 Do not hard-wrap prose. Keep each paragraph, list item, and table row on one line and let the editor soft-wrap; third-party licenses keep their original wrapping.
 

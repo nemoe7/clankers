@@ -8,7 +8,7 @@ description: Initialize and reconcile repository documentation with user-selecte
 
 # Initialize Repository Documentation
 
-Initialize or reconcile repository documentation using the repository as the primary source of truth and the user-selected documentation templates.
+Initialize or reconcile repository documentation from the repository and the user-selected templates.
 
 The workflow MUST be portable across coding-agent platforms.
 
@@ -19,15 +19,14 @@ The workflow body MUST NOT depend on platform-specific tools, agent names, model
 - The repository is the primary source of truth.
 - Existing valid documentation MUST be preserved.
 - Existing authoritative documentation MUST NOT be duplicated.
-- New documentation MUST only be created when it is a required baseline document, explicitly selected by the user, or necessary to reconcile an existing authoritative document.
+- New documentation MUST only be created when a required baseline document, explicitly selected by the user, or necessary to reconcile an existing authoritative document.
 - Technical documentation is the default.
 - Business/product documentation MUST NOT be introduced unless explicitly requested.
 - Do not invent facts, requirements, architecture, constraints, stakeholders, business goals, quality targets, or implementation details.
 - Do not silently resolve material ambiguity.
 - Do not rewrite documentation merely for style.
 - Do not remove valid user content without justification.
-- Do not create empty directories.
-- Do not create empty ADR directories.
+- Do not create empty directories, including ADR directories.
 - Do not unnecessarily renumber existing ADRs.
 - Do not create duplicate sources of truth.
 - Do not commit or push unless explicitly requested.
@@ -113,7 +112,7 @@ Inspect, where present:
 - API, CLI, and interface definitions;
 - schemas and data models;
 - configuration examples;
-- relevant Git history when necessary to establish intent, ownership, or decisions.
+- relevant Git history when needed to establish intent, ownership, or decisions.
 
 Determine only from evidence:
 
@@ -183,7 +182,7 @@ If **No**:
 - do not create a BRD;
 - do not create product vision documentation.
 
-If **Yes**, show the available templates and let the user select them:
+If **Yes**, show the available templates for user selection:
 
 - Vision;
 - Business Case;
@@ -205,7 +204,7 @@ Do not infer business or product requirements from technical documentation.
 
 ### Baseline
 
-The following are always maintained in APPLY mode:
+Always maintain in APPLY mode:
 
 - `README.md`
 - `AGENTS.md`
@@ -234,7 +233,7 @@ Baseline maintenance is NOT optional-template selection.
 
 - `docs/adr/`
 
-Show the optional technical templates and let the user select them.
+Show the optional technical templates for user selection.
 
 Do not silently expand the selected set.
 
@@ -242,7 +241,7 @@ Existing equivalent documents MUST be reconciled rather than duplicated.
 
 ## 8. Default Layout
 
-Use the repository's existing documentation layout when one is already established.
+Use the repository's existing documentation layout when established.
 
 Otherwise, the default structure is:
 
@@ -268,9 +267,9 @@ repo/
         └── ...
 ```
 
-Do not force this structure when the repository already has an established equivalent.
+Do not force this structure on a repository with an established equivalent.
 
-Do not create `docs/adr/` until at least one ADR is actually created.
+Do not create `docs/adr/` until creating at least one ADR.
 
 ## 9. README.md
 
@@ -589,7 +588,7 @@ Use:
 docs/adr/
 ```
 
-Create the directory only when at least one ADR is created.
+Create the directory only when creating at least one ADR.
 
 Preserve existing numbering.
 
@@ -641,7 +640,7 @@ Do not use `SECURITY.md` as a substitute for technical security architecture.
 
 ## 16. Supporting Technical Documentation
 
-Only create supporting documents when selected and when each has a clear purpose.
+Only create supporting documents when selected and each has a clear purpose.
 
 ### `docs/api.md`
 
@@ -680,10 +679,8 @@ For every selected template:
 3. Determine the canonical location.
 4. Compare existing content against the selected template.
 5. Preserve valid material.
-6. Identify missing material.
-7. Identify duplication.
-8. Identify conflicts.
-9. Update the authoritative document where appropriate.
+6. Identify missing material, duplication, and conflicts.
+7. Update the authoritative document where appropriate.
 
 If two plausible sources of truth conflict and authority is unclear:
 
@@ -695,12 +692,7 @@ Do not silently merge contradictory information.
 
 When updating an existing document:
 
-- preserve valid content;
-- preserve established terminology;
-- preserve stable identifiers;
-- preserve useful examples;
-- preserve working links;
-- preserve repository conventions;
+- preserve valid content, established terminology, stable identifiers, useful examples, working links, and repository conventions;
 - add missing information only when supported;
 - correct stale information when supported by current evidence;
 - remove duplication only when authority is clear;
@@ -710,7 +702,7 @@ Do not rewrite an entire document solely to make it resemble the selected templa
 
 ## 19. Cross-Document Consistency
 
-After all selected documents are created or updated, check consistency across them.
+After creating or updating all selected documents, check consistency across them.
 
 Verify consistency of:
 
@@ -777,7 +769,7 @@ DO NOT:
 - continue using a material assumption;
 - hide uncertainty;
 - substitute generic template content;
-- restart the workflow after receiving the answer.
+- restart the workflow after the answer.
 
 ## 21. Final Uncertainty Audit
 
@@ -832,8 +824,7 @@ On subsequent runs:
 - preserve valid documentation;
 - update stale documentation when supported;
 - reconcile missing sections;
-- do not create duplicate documents;
-- do not create duplicate ADRs;
+- do not create duplicate documents or ADRs;
 - do not unnecessarily renumber ADRs;
 - preserve stable requirement IDs;
 - do not perform formatting-only rewrites;
