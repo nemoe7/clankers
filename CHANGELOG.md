@@ -9,10 +9,12 @@ Project history, newest first. One entry per pull request, not per feature or co
 - The lightweight-repo rule now prohibits further CI workflows, since `workflows/` holds agent workflows and the old wording read as banning the new directory. No budgeted rule or skill file changed.
 - Added a disabled `distribute-arena` workflow template (`.github/workflows/distribute-arena.yml.disabled`, 388 tokens): on manual dispatch it pushes `rules/ARENA.md` to each listed repo's `ARENA.md` over HTTPS with a short-expiry fine-grained PAT stored as `ARENA_DIST_PAT`, amending the prior sync commit when HEAD is one and committing only when the file changed. The default list holds `nemoe7/clankers`, a dispatch input overrides it, and renaming to `.yml` enables the workflow.
 - Squashed `workflows/init-docs.md` from 4,153 to 4,102 `tok` (4 passes, -1.2%): merged same-subject bullets, cut filler and restated clauses; headings, order, lists, code blocks, and every rule, condition, and identifier preserved.
+- `rules/ARENA.md` gains a handoff clause in Workspace: MUST maintain a handoff document (goal, done, next, key files/decisions), updated as work lands, so work resumes if limits are reached. Squashing cut 140 bytes elsewhere (dropped `As an Arena.ai agent`, `not one sweep`, `without exception`, `Keep architecture`, `one message per logical change`, `re-checking` to `rechecking`, `corrected` to `fixed`, `a commit` to `one`), so the 136-byte clause lands the file at 4,848 against a prior 4,852.
 
 | File | Measure | Change |
 | --- | --- | --- |
 | `workflows/init-docs.md` | 4,102 `tok` | +4,102 (new; squashed from 4,153) |
+| `rules/ARENA.md` | 4,848 `B` | -4 |
 
 ## 2026-09-09 — Inline ponytail lite, remove agent-handoff, refresh the guides
 

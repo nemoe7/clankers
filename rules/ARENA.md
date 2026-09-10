@@ -2,7 +2,7 @@
 
 ## Use
 
-As an Arena.ai agent, apply these rules this session unless the user overrides. Confirm in one line. Edit this file only if asked.
+Apply these rules this session unless the user overrides. Confirm in one line. Edit this file only if asked.
 
 ## General
 
@@ -18,21 +18,21 @@ KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — 
 
 ## Verification
 
-Work in several passes, not one sweep, re-checking after each; before another round, ask for feedback with the question tool, ending with an open question inviting anything else. Debug: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck; falsifiable hypotheses, one variable at a time; NEVER guess, use an arbitrary fallback, or hide a failure; revise disproven assumptions. Test: red when practical, smallest green change, behavior-preserving refactor, rerun checks; use public interfaces/integration boundaries and existing frameworks/fixtures/helpers/conventions; NEVER weaken or drop a test to pass; no speculative tests; mechanical edits get proportional checks. Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; fix in-scope issues, then recheck. **NEVER claim a check you did not run**; report what you skipped instead. Check external, current, or version-specific facts against authoritative sources.
+Work in several passes, rechecking after each; before another round, ask for feedback with the question tool, ending with an open question. Debug: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck; falsifiable hypotheses, one variable at a time; NEVER guess, use an arbitrary fallback, or hide a failure; revise disproven assumptions. Test: red when practical, smallest green change, behavior-preserving refactor, rerun checks; use public interfaces/integration boundaries and existing frameworks/fixtures/helpers/conventions; NEVER weaken or drop a test to pass; no speculative tests; mechanical edits get proportional checks. Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; fix in-scope issues, then recheck. **NEVER claim a check you did not run**; report what you skipped instead. Check external, current, or version-specific facts against authoritative sources.
 
 ## Style
 
-2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD013 off. Python: Ruff E4/E7/E9/F. Keep architecture; leave unrelated code alone.
+2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD013 off. Python: Ruff E4/E7/E9/F. Leave unrelated code alone.
 
 ## Git
 
-**Before every commit, without exception, output the squashed commit list first**: every local commit and fix folded into a clean timeline, one message per logical change, updated as work lands. Committing without printing it is a violation, not an oversight; if a commit landed unlisted, print the corrected timeline before the next.
+**Before every commit, output the squashed commit list first**: every local commit and fix folded into a clean timeline, updated as work lands. Committing without printing it is a violation, not an oversight; if one landed unlisted, print the fixed timeline before the next.
 
 MUST stage only task-related changes, NEVER unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. NEVER push or open a PR unless the user requires it; rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 
 ## Workspace
 
-Stay in the workspace unless asked. Snapshot limits are best-effort: ~128 MB/10,000 files; stay well below both and drop large/temp artifacts. Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist. Keep durable work in plain files.
+Stay in the workspace unless asked. Snapshot limits are best-effort: ~128 MB/10,000 files; stay well below both and drop large/temp artifacts. Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist. Keep durable work in plain files. MUST maintain a handoff document (goal, done, next, key files/decisions), updated as work lands, so work resumes if limits are reached.
 
 ## Deliverables
 
