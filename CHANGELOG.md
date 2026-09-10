@@ -8,10 +8,11 @@ Project history, newest first. One entry per pull request, not per feature or co
 - `maintenance/check.py` validates the workflows listing against `workflows/README.md`, requires a `description` frontmatter field in each workflow file, checks internal links in the workflows index, and budgets `workflows/init-docs.md` in `cl100k_base` tokens like the other entry files.
 - The lightweight-repo rule now prohibits further CI workflows, since `workflows/` holds agent workflows and the old wording read as banning the new directory. No budgeted rule or skill file changed.
 - Added a disabled `distribute-arena` workflow template (`.github/workflows/distribute-arena.yml.disabled`, 388 tokens): on manual dispatch it pushes `rules/ARENA.md` to each listed repo's `ARENA.md` over HTTPS with a short-expiry fine-grained PAT stored as `ARENA_DIST_PAT`, amending the prior sync commit when HEAD is one and committing only when the file changed. The default list holds `nemoe7/clankers`, a dispatch input overrides it, and renaming to `.yml` enables the workflow.
+- Squashed `workflows/init-docs.md` from 4,153 to 4,102 `tok` (4 passes, -1.2%): merged same-subject bullets, cut filler and restated clauses; headings, order, lists, code blocks, and every rule, condition, and identifier preserved.
 
 | File | Measure | Change |
 | --- | --- | --- |
-| `workflows/init-docs.md` | 4,153 `tok` | +4,153 (new) |
+| `workflows/init-docs.md` | 4,102 `tok` | +4,102 (new; squashed from 4,153) |
 
 ## 2026-09-09 — Inline ponytail lite, remove agent-handoff, refresh the guides
 
