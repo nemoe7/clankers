@@ -6,15 +6,20 @@ Guide for agents in this repository. Read these first.
 - [CHANGELOG.md](CHANGELOG.md) — rule history and token changes; always follow its stated entry rule, one entry per pull request, extending the open entry while its pull request is unmerged
 - [rules/README.md](rules/README.md) — rule structure, installation, maintenance
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
+- [workflows/README.md](workflows/README.md) — workflow format, portability, usage
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
 
 ## Repo type
 
-A rules/skills repository, not a software project: no build system, package manifest, or test suite. Verify with `python3 maintenance/check.py` (`python` on Windows), which needs `markdown-it-py` and `tiktoken` and validates skill metadata, README measurements, internal links, and the ChatGPT character limit. Run it after changing skills, rules, or README budgets. `.github/workflows/validate.yml` runs the same check on every push and pull request, commits refreshed README measurements, and lints Markdown.
+A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite. Verify with `python3 maintenance/check.py` (`python` on Windows), which needs `markdown-it-py` and `tiktoken` and validates skill metadata, workflow frontmatter, README measurements, internal links, and the ChatGPT character limit. Run it after changing skills, rules, workflows, or README budgets. `.github/workflows/validate.yml` runs the same check on every push and pull request, commits refreshed README measurements, and lints Markdown.
 
 ## Skills
 
 Skills in `skills/` follow the [Agent Skills specification](https://agentskills.io/specification). Every `SKILL.md` needs YAML frontmatter using only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`; `name` matches its directory; adapted skills record `metadata.upstream`, first-party ones `metadata.origin`; the file stays under 500 lines.
+
+## Workflows
+
+Workflows in `workflows/` are portable across coding-agent platforms: the workflow body depends on no platform-specific tool, name, or mechanism. Each workflow is a self-contained Markdown file with a `description` frontmatter field; format and usage are in [workflows/README.md](workflows/README.md).
 
 ## Rules
 
@@ -22,13 +27,13 @@ Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the p
 
 ## Budgets
 
-Rule files and `SKILL.md` entry points have budgets tracked in [README.md](README.md#instruction-budgets); re-measure and update the table when changing them. Compression removes words, never rules. A new rule may exceed a budget only if the rest of the file is compressed in the same change.
+Rule files, `SKILL.md` entry points, and workflow files have budgets tracked in [README.md](README.md#instruction-budgets); re-measure and update the table when changing them. Compression removes words, never rules. A new rule may exceed a budget only if the rest of the file is compressed in the same change.
 
 ## Markdown
 
 - 2-space indentation, overriding formatter defaults.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- markdownlint covers only `rules/*.md`, **MD060 enabled**, **MD013 disabled**; run markdownlint-cli2 from the repository root with no extra globs. README files, skills, references, and CHATGPT.txt are excluded.
+- markdownlint covers only `rules/*.md`, **MD060 enabled**, **MD013 disabled**; run markdownlint-cli2 from the repository root with no extra globs. README files, skills, workflows, references, and CHATGPT.txt are excluded.
 - Python: Ruff default selection (E4, E7, E9, F).
 
 ## Git
@@ -37,4 +42,4 @@ Commit on a branch other than `main`, one logical change per commit with every c
 
 ## Lightweight repo
 
-Add no further workflows, dependency manifests, test scaffolding, or tooling installs unless explicitly requested. Review changes directly and never claim unperformed checks.
+Add no further CI workflows, dependency manifests, test scaffolding, or tooling installs unless explicitly requested. Review changes directly and never claim unperformed checks.

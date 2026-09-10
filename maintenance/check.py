@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 SKILLS = ROOT / "skills"
 RULES = ROOT / "rules"
+WORKFLOWS = ROOT / "workflows"
 
 EXPECTED_SKILL_FIELDS = {
   "name",
@@ -38,6 +39,7 @@ EXPECTED_BUDGETS = {
   "skills/ponytail/SKILL.md": "cl100k_base",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
+  "workflows/init-docs.md": "UTF-8 file size",
 }
 
 _token_encoder: Any = None
@@ -115,6 +117,37 @@ def parse_frontmatter(
     index += 1
 
   return values, errors
+
+
+def workflow_description(text: str) -> str:
+  """Return a workflow file's frontmatter description, ignoring comments."""
+  if not text.startswith("---\n"):
+    return ""
+
+  end = text.find("\n---", 4)
+
+  if end < 0:
+    return ""
+
+  for line in text[4:end].splitlines():
+    stripped = line.strip()
+
+    if not stripped or stripped.startswith("#"):
+      continue
+
+    # Nested YAML content belongs to the preceding top-level key.
+    if line.startswith((" ", "\t")):
+      continue
+
+    if ":" not in stripped:
+      continue
+
+    key, raw = stripped.split(":", 1)
+
+    if key.strip() == "description":
+      return raw.strip().strip('"').strip("'")
+
+  return ""
 
 
 def markdown_inline_text(token: Any) -> str:
@@ -434,10 +467,48 @@ def validate(errors: list[str]) -> None:
     if len(text.splitlines()) > 500:
       errors.append(f"{path.relative_to(ROOT)}: SKILL.md exceeds 500 lines")
 
+  workflows = sorted(
+    path
+    for path in WORKFLOWS.iterdir()
+    if path.suffix == ".md" and path.name != "README.md"
+  )
+
+  workflows_readme_path = WORKFLOWS / "README.md"
+
+  if not workflows_readme_path.is_file():
+    errors.append("workflows/README.md is missing")
+  else:
+    workflows_readme = workflows_readme_path.read_text(encoding="utf-8")
+
+    documented_workflows = set(
+      re.findall(
+        r"\[([a-z0-9-]+)\]\([a-z0-9-]+\.md\)",
+        workflows_readme,
+      )
+    )
+    actual_workflows = {path.stem for path in workflows}
+
+    if documented_workflows != actual_workflows:
+      errors.append(
+        "workflows/README.md list mismatch: "
+        f"documented={sorted(documented_workflows)} "
+        f"actual={sorted(actual_workflows)}"
+      )
+
+  for workflow in workflows:
+    if not NAME_RE.fullmatch(workflow.stem):
+      errors.append(f"{workflow.relative_to(ROOT)}: invalid workflow filename")
+
+    text = workflow.read_text(encoding="utf-8")
+
+    if not workflow_description(text):
+      errors.append(f"{workflow.relative_to(ROOT)}: missing frontmatter description")
+
   for path in (
     README,
     SKILLS / "README.md",
     RULES / "README.md",
+    WORKFLOWS / "README.md",
   ):
     if path.is_file():
       check_internal_links(path, errors)
@@ -531,7 +602,16 @@ def main() -> int:
     1 for path in SKILLS.iterdir() if path.is_dir() and not path.name.startswith(".")
   )
 
-  print(f"Validation passed: {skills} skills and README measurements checked.")
+  workflows = sum(
+    1
+    for path in WORKFLOWS.iterdir()
+    if path.is_file() and path.suffix == ".md" and path.name != "README.md"
+  )
+
+  print(
+    f"Validation passed: {skills} skills, "
+    f"{workflows} workflows, and README measurements checked."
+  )
 
   return 0
 

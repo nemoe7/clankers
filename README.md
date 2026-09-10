@@ -1,16 +1,17 @@
 # Clankers
 
-Rules and skills for AI agents.
+Rules, skills, and workflows for AI agents.
 
 - [rules/](rules/): shared and platform-specific agent instructions, ChatGPT custom instructions, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
 - [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
+- [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size and CHATGPT.txt by its custom-instruction character limit; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
+Latest measurements as of 2026-09-10. ARENA.md and workflow files are measured by UTF-8 file size, reflecting whole-file deployment, and CHATGPT.txt by its custom-instruction character limit; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -24,6 +25,7 @@ Latest measurements as of 2026-09-09. ARENA.md is measured by uploaded file size
 | `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 523 `tok` |
+| `workflows/init-docs.md` | `UTF-8 file size` | 21,387 `B` |
 
 Measurements cover complete files, including whitespace and markup.
 

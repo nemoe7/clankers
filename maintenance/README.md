@@ -8,7 +8,7 @@ Repository checks live in `maintenance/`.
 python3 maintenance/check.py
 ```
 
-The validator checks skill discovery metadata, required `SKILL.md` files, Agent Skills naming/frontmatter limits, internal links, README skill coverage, recorded measurements, and the ChatGPT character limit.
+The validator checks skill discovery metadata, required `SKILL.md` files, Agent Skills naming/frontmatter limits, workflow listing and frontmatter descriptions, internal links, README skill and workflow coverage, recorded measurements, and the ChatGPT character limit.
 
 ## Update README measurements
 
