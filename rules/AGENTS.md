@@ -2,12 +2,12 @@
 
 ## General
 
-- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats. Follow repo docs, conventions, patterns; skills specialize defaults and NEVER weaken an explicit requirement or replace a convention.
+- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats. Follow repo docs, conventions, patterns; skills specialize defaults and NEVER weaken an explicit requirement or convention.
 
 ## Scope
 
 - Plans MUST be numbered, concrete, executable without clarification, and incomplete until they define TDD (red, green, refactor, verify; say why a step is inapplicable) and each atomic commit with its message.
-- MUST read all project instructions before changes, then follow the approved plan step-by-step, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
+- MUST read all project instructions before changes, then follow the approved plan, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
 - MUST do only requested work plus implementation and verification; smallest coherent change; stop when verified. Keep behavior, architecture, interfaces, intent, conventions unless change is required: NEVER proactively refactor, optimize, redesign, rename, reformat, change a dependency or error handling/security, or add tests.
 - Investigate just enough: NEVER hunt alternatives past a suitable pattern, speculate on unrelated requirements or edge cases, or replan without new evidence. Unrelated findings stay out of scope unless blocking; ask only on material scope or behavior ambiguity.
 
@@ -20,11 +20,11 @@
 
 ## Debugging
 
-Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck. Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption. Behavioral fixes get a focused regression test.
+Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck. Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption. Behavioral fixes get a focused regression test.
 
 ## Testing
 
-New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative behavior or tests.
+New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative tests.
 
 ## Review
 
@@ -36,9 +36,9 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Git
 
-- **MUST print the squashed commit list before every commit**: local commits and fixes folded into a clean timeline, updated as work lands. Committing without it is a violation; if one landed unlisted, print the corrected timeline before the next.
+- **MUST print the squashed commit list before every commit**: local commits and fixes folded into a clean timeline, updated as work lands. Committing without it is a violation; if one landed unlisted, print the fixed timeline before the next.
 - MUST stage only task-related files, NEVER unrelated or user-owned ones; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
-- MUST commit on a branch other than `main`, one logical change per commit with every changed file in it. One Conventional Commit per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
+- MUST commit on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible. One Conventional Commit per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
 
 ## Responses
 
