@@ -14,11 +14,12 @@ Project history, newest first. One entry per pull request, not per feature or co
 - The handoff document now names its contents (goal, requirements fulfilled, done, next, decisions made, key files), must let work resume without re-asking, and stays always downloadable. The 55 added bytes are all requested content with no safe recovery left, so the budget rises from 4,962 to 5,017 bytes.
 - Scratched the handoff document: `rules/ARENA.md` now always pushes the branch and keeps a PR open so work survives limits, folding fixes into the squashed atomic timeline, matching the PR body to it, and rewriting remotes with `--force-with-lease`, never plain `--force`. The swap nets -168 bytes (handoff removal outweighs the push rule); the budget falls from 5,017 to 4,849. The rules specification records the intentional push/PR divergence from the core.
 - `rules/ARENA.md` now disregards never-push rules (Arena controlled edits make pushing safe, judged safe for now) and NEVER merges the PR until authorized. The 109 added bytes are all requested content with no safe recovery left; the budget rises from 4,849 to 4,958 bytes.
+- Squashed `rules/ARENA.md` by 11 bytes (`Always push the branch` to `Always push`); the budget falls from 4,958 to 4,947 bytes.
 
 | File | Measure | Change |
 | --- | --- | --- |
 | `workflows/init-docs.md` | 4,102 `tok` | +4,102 (new; squashed from 4,153) |
-| `rules/ARENA.md` | 4,958 `B` | +106 |
+| `rules/ARENA.md` | 4,947 `B` | +95 |
 
 ## 2026-09-09 — Inline ponytail lite, remove agent-handoff, refresh the guides
 
