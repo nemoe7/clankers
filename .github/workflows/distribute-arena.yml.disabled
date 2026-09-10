@@ -1,5 +1,5 @@
 # Disabled template: rename to distribute-arena.yml to enable.
-# Pushes rules/ARENA.md to each listed repo's $DEST on manual dispatch.
+# Pushes rules/ARENA.md to each listed repo's $DEST, amending the prior sync commit.
 # Needs a short-expiry fine-grained PAT (Contents read/write on every
 # target repo) stored as the ARENA_DIST_PAT secret.
 name: distribute-arena
@@ -30,7 +30,11 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add "$DEST"
-            git diff --cached --quiet || { git commit -m "chore(arena): sync ARENA.md from nemoe7/clankers" && git push; }
+            msg="chore(arena): sync ARENA.md from nemoe7/clankers"
+            git diff --cached --quiet || {
+              if [ "$(git log -1 --format=%s)" = "$msg" ]; then git commit --amend --no-edit; else git commit -m "$msg"; fi
+              git push --force-with-lease
+            }
             cd "$OLDPWD"
             rm -rf "$work"
           done
