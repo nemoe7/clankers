@@ -2,6 +2,16 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-10 — Harden atomic commit requirements
+
+- `rules/AGENTS.md` now defines atomic commits: one logical change with every changed file, each keeping checks green and independently revertible, under the bullet MUST. Funded by trimming `replace a convention` to `convention`, `behavior or tests` to `tests`, `corrected` to `fixed`, `per completed feature` to `per change`, `root cause not the symptom` to `root cause`, and dropping `step-by-step` (numbered plans plus per-change verification entail sequence); lands at 1,059 against 1,061.
+- `rules/ARENA.md` condenses the same as MUST-class `Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible`, gaining the completeness half the core already had. No safe recovery remained at the audited floor, so the budget rises from 4,947 to 5,012 bytes rather than dropping a constraint.
+
+| File | Measure | Change |
+| --- | --- | --- |
+| `rules/AGENTS.md` | 1,059 `tok` | -2 |
+| `rules/ARENA.md` | 5,012 `B` | +65 |
+
 ## 2026-09-10 — Document and validate the workflows directory
 
 - The `workflows/` directory is now integrated: a new `workflows/README.md` index describes the portable single-file format and usage; the root README gains a layout bullet and a budget row; the root `AGENTS.md` gains a read-first link, a Workflows section, and updated validator, budget, and lint-scope notes; the rules specification gains a contents row and a Workflows section with a selection table; `maintenance/README.md` describes the new checks.
