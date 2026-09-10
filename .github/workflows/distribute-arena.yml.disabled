@@ -1,0 +1,36 @@
+# Disabled template: rename to distribute-arena.yml to enable.
+# Pushes rules/ARENA.md to each listed repo's $DEST on manual dispatch.
+# Needs a short-expiry fine-grained PAT (Contents read/write on every
+# target repo) stored as the ARENA_DIST_PAT secret.
+name: distribute-arena
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: Space-separated owner/repo list; overrides REPOS
+        required: false
+        default: ""
+env:
+  REPOS: nemoe7/clankers
+  DEST: ARENA.md
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          list="${{ inputs.repos }}"
+          [ -n "$list" ] || list="$REPOS"
+          for repo in $list; do
+            work=$(mktemp -d)
+            git clone --depth 1 "https://x-access-token:${{ secrets.ARENA_DIST_PAT }}@github.com/$repo.git" "$work"
+            cp rules/ARENA.md "$work/$DEST"
+            cd "$work"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "$DEST"
+            git diff --cached --quiet || { git commit -m "chore(arena): sync ARENA.md from nemoe7/clankers" && git push; }
+            cd "$OLDPWD"
+            rm -rf "$work"
+          done
