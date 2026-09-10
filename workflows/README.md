@@ -11,7 +11,7 @@ Portable agent workflows. Each workflow is a self-contained Markdown file usable
 - A workflow is one Markdown file with YAML frontmatter carrying a `description` of what it does and when to use it.
 - The workflow body MUST be portable: no platform-specific tools, agent names, models, providers, UI, permissions, or interaction mechanisms. Platform-specific activation stays in commented frontmatter hints.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- Workflow files have budgets tracked in the [root README](../README.md#instruction-budgets), measured by UTF-8 file size; re-measure and update the table when changing them.
+- Workflow files have budgets tracked in the [root README](../README.md#instruction-budgets), measured in `cl100k_base` tokens; re-measure and update the table when changing them.
 
 ## Use
 

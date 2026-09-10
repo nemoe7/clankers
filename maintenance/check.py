@@ -39,7 +39,7 @@ EXPECTED_BUDGETS = {
   "skills/ponytail/SKILL.md": "cl100k_base",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
-  "workflows/init-docs.md": "UTF-8 file size",
+  "workflows/init-docs.md": "cl100k_base",
 }
 
 _token_encoder: Any = None

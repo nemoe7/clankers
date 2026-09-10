@@ -91,7 +91,7 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 
 ## Workflows
 
-Workflows are portable across coding-agent platforms: the workflow body depends on no platform-specific tool, agent name, model, provider, UI, permission, or interaction mechanism. Each workflow is one self-contained Markdown file with a `description` frontmatter field, budgeted by UTF-8 file size in the [root README](../README.md#instruction-budgets); format details are in [workflows/README.md](../workflows/README.md).
+Workflows are portable across coding-agent platforms: the workflow body depends on no platform-specific tool, agent name, model, provider, UI, permission, or interaction mechanism. Each workflow is one self-contained Markdown file with a `description` frontmatter field, budgeted in `cl100k_base` tokens in the [root README](../README.md#instruction-budgets); format details are in [workflows/README.md](../workflows/README.md).
 
 | Workflow | When needed |
 | --- | --- |
