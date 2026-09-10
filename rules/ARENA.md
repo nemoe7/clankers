@@ -28,11 +28,11 @@ Work in several passes, rechecking after each; before another round, ask for fee
 
 **Before every commit, output the squashed commit list first**: every local commit and fix folded into a clean timeline, updated as work lands. Committing without printing it is a violation, not an oversight; if one landed unlisted, print the fixed timeline before the next.
 
-MUST stage only task-related changes, NEVER unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. NEVER push or open a PR unless the user requires it; rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
+MUST stage only task-related changes, NEVER unrelated/user-owned ones. Atomic commits: one logical change each; reuse scopes; no body. Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars. Types: feat fix refactor perf style docs test build chore. Always push the branch and keep a PR open so work survives limits; fold fixes into the squashed atomic timeline, keep the PR body matching it, and rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 
 ## Workspace
 
-Stay in the workspace unless asked. Snapshot limits are best-effort: ~128 MB/10,000 files; stay well below both and drop large/temp artifacts. Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist. Keep durable work in plain files. MUST maintain a handoff document (goal, requirements fulfilled, done, next, decisions made, key files), updated as work lands, so work resumes without re-asking if limits are reached. NEVER commit or gitignore it; stays untracked and local, always downloadable.
+Stay in the workspace unless asked. Snapshot limits are best-effort: ~128 MB/10,000 files; stay well below both and drop large/temp artifacts. Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist. Keep durable work in plain files.
 
 ## Deliverables
 
