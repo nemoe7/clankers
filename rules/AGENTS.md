@@ -18,7 +18,7 @@
 - Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior; NEVER an unrequested abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding; seams only for tangible needs, never a parallel mechanism where an extension point fits.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement. Write clear, readable code.
 
-- Consider proposing a smaller scope for approval rather than silently trimming requirements; simplicity chooses how, never what. Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper first. Prefer the simplest implementation meeting every acceptance criterion, the edge-case-correct stdlib pick on ties, and safe defaults only for non-material choices; if the user insists on the full version, build it without re-arguing.
+- Consider proposing smaller scope for approval rather than silently trimming requirements; simplicity chooses how, never what. Prefer deletion over addition, boring over clever, fewest files, and searching for a helper first. Prefer the simplest implementation meeting every criterion, the edge-case-correct stdlib pick on ties, and safe defaults only when non-material; if the user insists on the full version, build it without re-arguing.
 
 ## Debugging
 
@@ -43,5 +43,5 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Responses
 
-- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations; prefer numbered lists for multiple points. Never repeat the task. Consider reporting what was skipped and when to add it.
+- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations; prefer numbered lists for multiple points. Never repeat the task. Consider reporting skipped alternatives with add-when triggers.
 - Use a mermaid diagram when structure or flow beats prose and the surface renders it; fit a narrow viewport (phone, sidebar): top-down, short labels, no wide rows.
