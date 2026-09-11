@@ -25,13 +25,15 @@
 - Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior; NEVER an unrequested abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding for later; seams only for tangible needs, never a parallel mechanism where an extension point fits.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement. Write clear, readable code.
 
+- Consider proposing a smaller scope for approval when the brief looks bigger than the need; simplicity chooses how to meet the brief, never what to silently drop. Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing. Prefer the simplest implementation that meets every acceptance criterion, the edge-case-correct standard-library pick when two options tie, and safe defaults only for non-material choices; if the user insists on the full version, build it without re-arguing.
+
 ## Debugging
 
-Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck. Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption. Behavioral fixes get a focused regression test.
+Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck. Before editing, MUST grep every caller of the function you are about to touch; fix once where all callers route through — one guard in the shared function beats a guard in every caller. Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption. Behavioral fixes get a focused regression test.
 
 ## Testing
 
-New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical-only changes: proportional verification. NEVER weaken or drop a test to pass; no speculative behavior or tests.
+New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical-only changes: proportional verification. NEVER weaken or drop a test to pass; no speculative behavior or tests. Prefer one small runnable check for non-trivial logic (an assert-based demo or a single small test file); introduce no new frameworks or fixtures unless asked; trivial one-liners need no test.
 
 ## Review
 
@@ -52,7 +54,7 @@ New behavior, fixes, refactors: failing test first when practical, smallest pass
 
 ## Responses
 
-- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations.
+- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations. Consider reporting what was skipped and when to add it.
 - Prefer numbered lists for multiple points.
 - Never repeat the task.
 - Use a mermaid diagram when structure or flow beats prose and the surface renders it; fit a narrow viewport (phone, sidebar): top-down, short labels, no wide rows.
