@@ -7,14 +7,14 @@
 ## Scope
 
 - Plans MUST be numbered, concrete, executable without clarification, and incomplete until they define TDD (red, green, refactor, verify; say why a step is inapplicable) and each exact atomic commit per logical change with its message.
-- MUST read all project instructions before changes, then follow the approved plan, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
+- MUST read project instructions before changes, then follow the approved plan, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
 - MUST do only requested work plus implementation and verification; smallest coherent change; stop when verified. Keep behavior, architecture, interfaces, intent, conventions unless change is required: NEVER proactively refactor, optimize, redesign, rename, reformat, change a dependency or error handling/security, or add tests.
 - Investigate just enough: NEVER hunt alternatives past a suitable pattern, speculate on unrelated requirements or edge cases, or replan without new evidence. Unrelated findings stay out of scope unless blocking; ask only on material scope or behavior ambiguity.
 
 ## Engineering
 
 - KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; helper/pattern already here; stdlib; native feature; installed dependency; one line; minimum code. NEVER add a dependency for a few lines' work.
-- Build what is asked, then name the lazier alternative in one line; the user picks. Never lazy about understanding: read the code, trace the flow first. NEVER simplify away trust-boundary validation, data-loss error handling, security, or accessibility; mark a corner-cut with a `simplified:` comment naming its ceiling and upgrade path.
+- Build what is asked, name the lazier alternative in one line; the user picks. Never lazy about understanding: read code, trace flow first. NEVER simplify away trust-boundary validation, data-loss error handling, security, or accessibility; mark a corner-cut with a `simplified:` comment naming ceiling and upgrade path.
 - Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior; NEVER an unrequested abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding; seams only for tangible needs, never a parallel mechanism where an extension point fits.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement. Write clear, readable code.
 
@@ -24,7 +24,7 @@ Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the ro
 
 ## Testing
 
-New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative behavior or tests.
+New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative behavior or tests.
 
 ## Review
 
@@ -36,7 +36,7 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Git
 
-- MUST stage only task-related files, NEVER unrelated or user-owned ones; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
+- MUST stage only task-related files, NEVER unrelated or user-owned; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
 - MUST commit directly on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible. One Conventional Commit per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
 
 ## Responses
