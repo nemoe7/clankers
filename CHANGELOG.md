@@ -2,6 +2,16 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-11 — Apply Arena amendments with Ruff gates
+
+- `rules/ARENA.md` replaces Use with the Arena-agent preamble (every chat, task, first message, explicit override confirm), and appends: Engineering per-case dependency approval; Verification grep-verify after edits with scripted splice for large replacements plus repo validation entrypoints and generated-config parsing; Style `ruff.toml` conventions and `ruff check`/`ruff format` gates; Git report/audit local-only commits, REST PR title/body updates with PATCH re-fetch verification, current titles, and squashed-timeline bodies; Deliverables regenerated doc sections. All 2,081 added bytes are requested content with no safe recovery left at the audited floor, so the budget rises from 5,012 to 7,093 bytes rather than dropping a constraint.
+- Added `ruff.toml` (103 `B`, not budgeted) with exactly the amended conventions: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults, nothing else.
+- `maintenance/check.py` gains the executable bit (100644 → 100755, no content change) so `ruff check` passes EXE001 under Ruff defaults; `ruff format` leaves all 18 files unchanged.
+
+| File | Measure | Change |
+| --- | --- | --- |
+| `rules/ARENA.md` | 7,093 `B` | +2,081 |
+
 ## 2026-09-10 — Harden atomic commit requirements
 
 - `rules/AGENTS.md` now defines atomic commits: one logical change with every changed file, each keeping checks green and independently revertible, under the bullet MUST. Funded by trimming `replace a convention` to `convention`, `behavior or tests` to `tests`, `corrected` to `fixed`, `per completed feature` to `per change`, `root cause not the symptom` to `root cause`, and dropping `step-by-step` (numbered plans plus per-change verification entail sequence); lands at 1,059 against 1,061.
