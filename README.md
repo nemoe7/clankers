@@ -6,6 +6,7 @@ Rules, skills, and workflows for AI agents.
 - [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
 - [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
+- [ref/](ref/README.md): baseline copies of the agent-facing rule files for measurement.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
@@ -15,11 +16,11 @@ Latest measurements as of 2026-09-11. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,059 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 6,965 `B` |
-| `rules/CHATGPT.txt` | `Unicode chars` | 1,495 `chars` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,096 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 6,955 `B` |
+| `rules/CHATGPT.txt` | `Unicode chars` | 1,490 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 580 `tok` |
-| `rules/COMMIT_SPEC.txt` | `cl100k_base` | 58 `tok` |
+| `rules/COMMIT_SPEC.txt` | `cl100k_base` | 47 `tok` |
 | `skills/frontend-design/SKILL.md` | `cl100k_base` | 2,011 `tok` |
 | `skills/planning/SKILL.md` | `cl100k_base` | 871 `tok` |
 | `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
