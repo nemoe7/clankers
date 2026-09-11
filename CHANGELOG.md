@@ -7,10 +7,12 @@ Project history, newest first. One entry per pull request, not per feature or co
 - `rules/ARENA.md` replaces Use with the Arena-agent preamble (every chat, task, first message, explicit override confirm), and appends: Engineering per-case dependency approval; Verification grep-verify after edits with scripted splice for large replacements plus repo validation entrypoints and generated-config parsing; Style `ruff.toml` conventions and `ruff check`/`ruff format` gates; Git report/audit local-only commits, REST PR title/body updates with PATCH re-fetch verification, current titles, and squashed-timeline bodies; Deliverables regenerated doc sections. All 2,081 added bytes are requested content with no safe recovery left at the audited floor, so the budget rises from 5,012 to 7,093 bytes rather than dropping a constraint.
 - Added `ruff.toml` (103 `B`, not budgeted) with exactly the amended conventions: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults, nothing else.
 - `maintenance/check.py` gains the executable bit (100644 → 100755, no content change) so `ruff check` passes EXE001 under Ruff defaults; `ruff format` leaves all 18 files unchanged.
+- `rules/ARENA.md` gains criticism duties in Verification (`Criticize everything: docs may be stale; code may be wrong`) and a clarified report workflow in Git (always commit report/audit artifacts locally at the end for diff-viewer visibility, NEVER push to the repo, undo that commit next turn and continue). Compressed in two squash passes to hold the budget: Use preamble (`Arena agent reading this`, `rules for`, `first message in this repo`, `Explicit user instructions`, `confirm override`), General punctuation (`docs, conventions, patterns`, `defaults, NEVER`, `requirement/convention`, `used only when domain fits`), Engineering (`then`, `the code/flow`, `with `simplified:` comment`), Verification (`root cause`, recheck `then`, `actually`, `a scripted splice`, `repo's validation`), Style (dropped the redundant `Python: Ruff E4/E7/E9/F` pin kept in the core, `Ruff uses`, `If missing`, `create it exactly`, `before gates`), Git (`a timeline`, `keep PR open`), Deliverables (`after source changes`), pass 2 (`it covers`, list comma for `or`); 7,093 → 6,965 (-128), below prior with both amendments aboard. Pass 3 found no further safe cuts.
+- `.gitignore` gains `reports/` so report/audit artifacts live in a git-ignored output dir, force-added to a local-only end-of-turn commit for diff-viewer visibility and never pushed.
 
 | File | Measure | Change |
 | --- | --- | --- |
-| `rules/ARENA.md` | 7,093 `B` | +2,081 |
+| `rules/ARENA.md` | 6,965 `B` | +1,953 |
 
 ## 2026-09-10 — Harden atomic commit requirements
 
