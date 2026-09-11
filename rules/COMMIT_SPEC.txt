@@ -1,1 +1,1 @@
-MUST print the squashed commit list before committing. Conventional Commits only: <type>(<scope>): <subject>; imperative, lowercase after ":", no period, <=72 chars; types feat fix refactor perf style docs test build chore; reuse prior scopes; NEVER a body.
+Conventional Commits only: <type>(<scope>): <subject>; imperative, lowercase after ":", no period, <=72 chars; types feat fix refactor perf style docs test build chore; reuse prior scopes; NEVER a body.

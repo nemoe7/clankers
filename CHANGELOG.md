@@ -9,10 +9,19 @@ Project history, newest first. One entry per pull request, not per feature or co
 - `maintenance/check.py` gains the executable bit (100644 → 100755, no content change) so `ruff check` passes EXE001 under Ruff defaults; `ruff format` leaves all 18 files unchanged.
 - `rules/ARENA.md` gains criticism duties in Verification (`Criticize everything: docs may be stale; code may be wrong`) and a clarified report workflow in Git (always commit report/audit artifacts locally at the end for diff-viewer visibility, NEVER push to the repo, undo that commit next turn and continue). Compressed in two squash passes to hold the budget: Use preamble (`Arena agent reading this`, `rules for`, `first message in this repo`, `Explicit user instructions`, `confirm override`), General punctuation (`docs, conventions, patterns`, `defaults, NEVER`, `requirement/convention`, `used only when domain fits`), Engineering (`then`, `the code/flow`, `with `simplified:` comment`), Verification (`root cause`, recheck `then`, `actually`, `a scripted splice`, `repo's validation`), Style (dropped the redundant `Python: Ruff E4/E7/E9/F` pin kept in the core, `Ruff uses`, `If missing`, `create it exactly`, `before gates`), Git (`a timeline`, `keep PR open`), Deliverables (`after source changes`), pass 2 (`it covers`, list comma for `or`); 7,093 → 6,965 (-128), below prior with both amendments aboard. Pass 3 found no further safe cuts.
 - `.gitignore` gains `reports/` so report/audit artifacts live in a git-ignored output dir, force-added to a local-only end-of-turn commit for diff-viewer visibility and never pushed.
+- `rules/ARENA.md` fixes the REST PATCH snippet (`--arg title <title>`, `repos/<owner>/<repo>` prefix), sets criticism venue to chat and reports, and caps reports at MD013 120; funded by squashing (`every chat, task`, `first message here`, `confirm in`, `whether or not repeated`, `user picks`, `naming ceiling`, `every edit`, dropping `with JSON on stdin`); 6,965 → 6,955.
+- `rules/AGENTS.md` drops the squashed commit list (generic agents commit directly on their branch) and gains the user's Ruff style rules (`ruff.toml` conventions plus `ruff check`/`ruff format` gates); 1,059 → 1,096 `tok`. `rules/COMMIT_SPEC.txt` drops its MUST-print clause to match the core; 58 → 47 `tok`. ChatGPT keeps its squashed list.
+- `rules/CHATGPT.txt` strengthened inside its 1,500-char ceiling: NEVER mermaid unless explicitly asked, NEVER filler or essays, and a spelled-out Conventional `<type>(scope): subject` format; 1,495 → 1,490 chars.
+- `maintenance/check.py --update` now manages the README date (UTC) whenever measurements change; DTZ011 fixed timezone-aware. `rules/apply.py` gains `--yes`/`--dry-run` plus a missing-source guard (exit 1, no traceback); `apply.bat` forwards args.
+- `rules/README.md` moves skill/workflow install and selection detail into `skills/README.md` and `workflows/README.md`, crisps Rule maintenance to 10 one-line items with detail subsections (Arena file, Emphasis, Skill rules, Baselines), corrects the emphasis note for the AGENTS list-drop, and documents the MD007 pin. `.markdownlint-cli2.jsonc` pins MD007 indent 2 explicitly.
+- New `ref/` baseline: tracking copies of the five agent-facing rule files snapshotted from `main` (`dcea8d3`, 2026-09-10) for agents measuring without git history; refreshed on intentional rebaselines.
 
 | File | Measure | Change |
 | --- | --- | --- |
-| `rules/ARENA.md` | 6,965 `B` | +1,953 |
+| `rules/AGENTS.md` | 1,096 `tok` | +37 |
+| `rules/ARENA.md` | 6,955 `B` | +1,943 |
+| `rules/CHATGPT.txt` | 1,490 `chars` | -5 |
+| `rules/COMMIT_SPEC.txt` | 47 `tok` | -11 |
 
 ## 2026-09-10 — Harden atomic commit requirements
 

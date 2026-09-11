@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -372,6 +373,11 @@ def update_readme_measurements() -> bool:
   updated = "".join(output)
 
   if changed:
+    updated = re.sub(
+      r"Latest measurements as of \d{4}-\d{2}-\d{2}\.",
+      f"Latest measurements as of {datetime.now(timezone.utc).date().isoformat()}.",
+      updated,
+    )
     README.write_text(updated, encoding="utf-8")
 
   return changed

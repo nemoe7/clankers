@@ -15,7 +15,11 @@ Portable agent workflows. Each workflow is a self-contained Markdown file usable
 
 ## Use
 
-Copy a workflow file into your platform's workflow location, or run it as-is where the platform accepts a file path. Installation and selection details are in the [rules specification](../rules/README.md#workflows).
+Copy a workflow file into your platform's workflow location, or run it as-is where the platform accepts a file path. Portability requirements are in the [rules specification](../rules/README.md#workflows).
+
+| Workflow | When needed |
+| --- | --- |
+| [init-docs](init-docs.md) | Initializing or reconciling repository documentation from user-selected templates, in PLAN or APPLY mode |
 
 Installation is human maintenance, not an agent task. Agents treat installed copies as read-only, reporting missing or incompatible files rather than installing or repairing them. Requested edits to workflow source in this repository do not authorize changes to an agent's installed copies.
 
