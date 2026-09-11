@@ -70,7 +70,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification with recorded provenance (see Skill rules).
 9. Keep this repository lightweight: no further CI workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
-10. Amend `rules/refs/` first, then compress into `rules/` (see Baselines).
+10. Amend `rules/refs/` and the live rule together: full wording in refs, compressed form in `rules/` (see Baselines).
 
 ### Arena file
 
@@ -86,7 +86,7 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 ### Baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first in complete sentences, then squash it into the live file, preserving every negation, condition, command, number, threshold, filename, and caveat. Files equal their live counterparts where no compression was applied.
+`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first in complete sentences, then squash it into the live file, preserving every negation, condition, command, number, threshold, filename, and caveat. Files equal their live counterparts where no compression was applied. Every rule change amends both files, so the original wording is always preserved in refs.
 
 ### Commit disciplines
 

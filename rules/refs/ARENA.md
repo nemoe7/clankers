@@ -22,8 +22,8 @@ KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — 
 ## Verification
 
 - Work in several passes, not one sweep, re-checking after each; before another round, ask for feedback with the question tool, ending with an open question inviting anything else.
-- Debug: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck; falsifiable hypotheses, one variable at a time; NEVER guess, use an arbitrary fallback, or hide a failure; revise disproven assumptions.
-- Test: red when practical, smallest green change, behavior-preserving refactor, rerun checks; use public interfaces/integration boundaries and existing frameworks/fixtures/helpers/conventions; NEVER weaken or drop a test to pass; no speculative tests; mechanical edits get proportional checks.
+- Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; falsifiable hypotheses, one variable at a time; NEVER guess, use an arbitrary fallback, or hide a failure; revise disproven assumptions.
+- Test: red when practical, smallest green change, behavior-preserving refactor, rerun checks; use public interfaces/integration boundaries and existing frameworks/fixtures/helpers/conventions; NEVER weaken or drop a test to pass; no speculative behavior or tests; mechanical edits get proportional checks.
 - Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; fix in-scope issues, then recheck.
 - Always criticize documentation, which could be stale, and code, which could be deeply flawed. Do this in both chat responses and report files. In short, criticize everything.
 - **NEVER claim a check you did not run**; report what you skipped instead.
