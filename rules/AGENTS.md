@@ -2,11 +2,11 @@
 
 ## General
 
-- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats. Follow repo docs, conventions, patterns; skills specialize defaults and NEVER weaken an explicit requirement or convention.
+- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats. Follow repo docs, conventions, patterns; skills specialize defaults and NEVER weaken an explicit requirement or replace a convention.
 
 ## Scope
 
-- Plans MUST be numbered, concrete, executable without clarification, and incomplete until they define TDD (red, green, refactor, verify; say why a step is inapplicable) and each atomic commit with its message.
+- Plans MUST be numbered, concrete, executable without clarification, and incomplete until they define TDD (red, green, refactor, verify; say why a step is inapplicable) and each exact atomic commit per logical change with its message.
 - MUST read all project instructions before changes, then follow the approved plan, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
 - MUST do only requested work plus implementation and verification; smallest coherent change; stop when verified. Keep behavior, architecture, interfaces, intent, conventions unless change is required: NEVER proactively refactor, optimize, redesign, rename, reformat, change a dependency or error handling/security, or add tests.
 - Investigate just enough: NEVER hunt alternatives past a suitable pattern, speculate on unrelated requirements or edge cases, or replan without new evidence. Unrelated findings stay out of scope unless blocking; ask only on material scope or behavior ambiguity.
@@ -20,11 +20,11 @@
 
 ## Debugging
 
-Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause, cover, recheck. Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption. Behavioral fixes get a focused regression test.
+Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck. Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption. Behavioral fixes get a focused regression test.
 
 ## Testing
 
-New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative tests.
+New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative behavior or tests.
 
 ## Review
 
@@ -32,7 +32,7 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Code style
 
-2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060, MD013 off. Python: Ruff defaults (E4, E7, E9, F). Python uses the repo's `ruff.toml` (`required-version = "0.16.6"`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code alone. MUST keep repository hygiene: scratch files, scripts, and output stay outside the repo or are deleted, including generated plan files.
+2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060, MD013 off. Python: Ruff defaults (E4, E7, E9, F). Python uses the repo's `ruff.toml` (`required-version = "0.16.6"`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code alone. MUST keep repository hygiene: scratch files, scripts, and output stay outside the repo or are deleted once used, including generated plan files.
 
 ## Git
 

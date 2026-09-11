@@ -18,14 +18,16 @@ Project history, newest first. One entry per pull request, not per feature or co
 - `rules/ARENA.md` pins `required-version = "0.16.6"` in its `ruff.toml` spec and keeps a single report file (updated in place); funded by dropping the `rosters` example and restated `atomic`, keeping the `-f` war story per direction; 6,955 → 6,989 (+34, no safe recovery left).
 - `ruff.toml` sets `required-version = "0.16.6"` so gates run the pinned defaults; `rules/AGENTS.md` style spec records the pin. `ref/` reframed as living uncompressed originals with an amend-first rule (maintenance item 10); `ref/ARENA.md` reconstructed at 7,645 B, others mirror live. Spec gains a commit-disciplines table; `maintenance/README.md` documents the `TIKTOKEN_CACHE_DIR` offline path.
 - `ref/` moved to `rules/refs/` via `git mv` (history kept) with all in-repo references relinked; baselines rebuilt clause-by-clause from `main` history (`7841d84`–`dcea8d3`) so each file keeps its longest historical sentence form — restored squash victims (`without exception`, `one message per logical change`, `step-by-step`, `not the symptom`, `the branch`, `Keep architecture`, plan/TDD/commit bullets) while deleted rules (handoff, `agent-handoff`, MUST-print for agents, dropped scope items) stay deleted and MUST/NEVER markers stay as emphasis. `rules/refs/AGENTS.md` 5,653 B, `rules/refs/ARENA.md` 7,820 B; `COMMIT_SPEC.txt` equals live, never compressed.
+- Squash audit (`rules/refs/` vs `rules/`) verdicts: no silent meaning loss; 9 weak wordings restored to explicit form instead of relying on cover — AGENTS regains `replace a convention`, `exact` + `per logical change` plans, `not the symptom`, `no speculative behavior or tests`, `deleted once used` (1,108 → 1,121 `tok`); ARENA regains the same plus `clean timeline`, `one message per logical change`, `updated in place` (6,989 → 7,086 `B`); CHATGPT regains `yet clear` and `detail on request`, funded by dropping illustrative `postambles` and entailed `phone-sized` (1,490 → 1,494 chars). Budgets rise rather than keep inferred-only wording.
+- Rule maintenance now requires dual amendment: every rule change amends `rules/refs/` (full original) and the live file (compressed form) together, so originals are never lost; item 10, Baselines, and `refs/README.md` agree.
 - Fixed `rules/refs/AGENTS.md`: dropped the MUST-print bullet the rebuild resurrected — generic agents are exempt,
   the deletion stands and the baseline now matches its own methodology note.
 
 | File | Measure | Change |
 | --- | --- | --- |
-| `rules/AGENTS.md` | 1,108 `tok` | +49 |
-| `rules/ARENA.md` | 6,989 `B` | +1,977 |
-| `rules/CHATGPT.txt` | 1,490 `chars` | -5 |
+| `rules/AGENTS.md` | 1,121 `tok` | +62 |
+| `rules/ARENA.md` | 7,086 `B` | +2,074 |
+| `rules/CHATGPT.txt` | 1,494 `chars` | -1 |
 | `rules/COMMIT_SPEC.txt` | 47 `tok` | -11 |
 
 ## 2026-09-10 — Harden atomic commit requirements
