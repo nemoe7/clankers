@@ -6,7 +6,7 @@ Rules, skills, and workflows for AI agents.
 - [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
 - [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
-- [ref/](ref/README.md): uncompressed rule originals; amend here before compressing.
+- [rules/refs/](rules/refs/README.md): uncompressed rule originals; amend here before compressing.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
