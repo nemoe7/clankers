@@ -32,13 +32,12 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Code style
 
-2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060, MD013 off. Python: Ruff defaults (E4, E7, E9, F). Leave unrelated code alone. MUST keep repository hygiene: scratch files, scripts, and output stay outside the repo or are deleted, including generated plan files.
+2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060, MD013 off. Python: Ruff defaults (E4, E7, E9, F). Python uses the repo's `ruff.toml` (`required-version = "0.16.6"`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code alone. MUST keep repository hygiene: scratch files, scripts, and output stay outside the repo or are deleted, including generated plan files.
 
 ## Git
 
-- **MUST print the squashed commit list before every commit**: local commits and fixes folded into a clean timeline, updated as work lands. Committing without it is a violation; if one landed unlisted, print the fixed timeline before the next.
 - MUST stage only task-related files, NEVER unrelated or user-owned ones; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
-- MUST commit on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible. One Conventional Commit per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
+- MUST commit directly on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible. One Conventional Commit per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
 
 ## Responses
 

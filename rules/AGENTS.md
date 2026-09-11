@@ -32,7 +32,7 @@ Before finishing check requirements, acceptance criteria, scope; verify behavior
 
 ## Code style
 
-2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060, MD013 off. Python: Ruff defaults (E4, E7, E9, F). Python uses the repo's `ruff.toml` (`indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code alone. MUST keep repository hygiene: scratch files, scripts, and output stay outside the repo or are deleted, including generated plan files.
+2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060, MD013 off. Python: Ruff defaults (E4, E7, E9, F). Python uses the repo's `ruff.toml` (`required-version = "0.16.6"`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code alone. MUST keep repository hygiene: scratch files, scripts, and output stay outside the repo or are deleted, including generated plan files.
 
 ## Git
 

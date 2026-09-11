@@ -1,5 +1,5 @@
-# Baseline rule copies
+# Uncompressed rule originals
 
-Tracking copies of the agent-facing rule files, snapshotted from `main` (`dcea8d3`, 2026-09-10) as a measurement baseline for agents working without git history. Compare working copies against these to verify compression (wording changes only, no rule changes) and to re-derive budgets.
+`ref/` mirrors the agent-facing rule files in full, uncompressed wording. Amendments are written here first in complete sentences, then squashed into `rules/`, preserving every negation, condition, command, number, threshold, filename, and caveat.
 
-Refresh these copies when budgets are intentionally rebaselined so they stay in sync with the [root README](../README.md#instruction-budgets).
+These copies start from `main` (`dcea8d3`, 2026-09-10); later amendments appear here in original wording even where the live file carries a compressed form. Files equal their live counterparts where no compression was applied.

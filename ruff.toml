@@ -1,3 +1,4 @@
+required-version = "0.16.6"
 indent-width = 2
 
 [lint]

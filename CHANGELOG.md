@@ -15,11 +15,13 @@ Project history, newest first. One entry per pull request, not per feature or co
 - `maintenance/check.py --update` now manages the README date (UTC) whenever measurements change; DTZ011 fixed timezone-aware. `rules/apply.py` gains `--yes`/`--dry-run` plus a missing-source guard (exit 1, no traceback); `apply.bat` forwards args.
 - `rules/README.md` moves skill/workflow install and selection detail into `skills/README.md` and `workflows/README.md`, crisps Rule maintenance to 10 one-line items with detail subsections (Arena file, Emphasis, Skill rules, Baselines), corrects the emphasis note for the AGENTS list-drop, and documents the MD007 pin. `.markdownlint-cli2.jsonc` pins MD007 indent 2 explicitly.
 - New `ref/` baseline: tracking copies of the five agent-facing rule files snapshotted from `main` (`dcea8d3`, 2026-09-10) for agents measuring without git history; refreshed on intentional rebaselines.
+- `rules/ARENA.md` pins `required-version = "0.16.6"` in its `ruff.toml` spec and keeps a single report file (updated in place); funded by dropping the `rosters` example and restated `atomic`, keeping the `-f` war story per direction; 6,955 → 6,989 (+34, no safe recovery left).
+- `ruff.toml` sets `required-version = "0.16.6"` so gates run the pinned defaults; `rules/AGENTS.md` style spec records the pin. `ref/` reframed as living uncompressed originals with an amend-first rule (maintenance item 10); `ref/ARENA.md` reconstructed at 7,645 B, others mirror live. Spec gains a commit-disciplines table; `maintenance/README.md` documents the `TIKTOKEN_CACHE_DIR` offline path.
 
 | File | Measure | Change |
 | --- | --- | --- |
-| `rules/AGENTS.md` | 1,096 `tok` | +37 |
-| `rules/ARENA.md` | 6,955 `B` | +1,943 |
+| `rules/AGENTS.md` | 1,108 `tok` | +49 |
+| `rules/ARENA.md` | 6,989 `B` | +1,977 |
 | `rules/CHATGPT.txt` | 1,490 `chars` | -5 |
 | `rules/COMMIT_SPEC.txt` | 47 `tok` | -11 |
 

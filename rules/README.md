@@ -15,7 +15,7 @@ The installation script uses only Python's standard library. There is no test su
 | [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload or point the Arena agent to it; its preamble requires Arena agents reading it to apply it |
 | [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions | Paste into the instructions field; at most 1,500 characters |
 | [rules/COMMIT_SPEC.txt](COMMIT_SPEC.txt) | Compact commit-message reference | Use when preparing an authorized commit or proposed message |
-| [ref/](../ref/README.md) | Baseline rule copies | Diff working copies against these when compressing |
+| [ref/](../ref/README.md) | Uncompressed rule originals | Amend here first, then compress into `rules/` |
 | [skills/](../skills/README.md) | Reusable skills | Install complete skill directories, including supporting files |
 | [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into your platform's workflow location, or run it as-is |
 
@@ -70,7 +70,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification with recorded provenance (see Skill rules).
 9. Keep this repository lightweight: no further CI workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
-10. Track baselines: keep the `ref/` copies current (see Baselines).
+10. Amend `ref/` first, then compress into `rules/` (see Baselines).
 
 ### Arena file
 
@@ -86,7 +86,17 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 ### Baselines
 
-`ref/` holds tracking copies of the agent-facing rule files as a measurement baseline for agents working without git history. It records the source commit and date in `ref/README.md`; refresh it when budgets are intentionally rebaselined so it stays in sync with the [root README](../README.md#instruction-budgets).
+`ref/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first in complete sentences, then squash it into the live file, preserving every negation, condition, command, number, threshold, filename, and caveat. Files equal their live counterparts where no compression was applied.
+
+### Commit disciplines
+
+| File | Discipline |
+| --- | --- |
+| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no squashed list. |
+| `rules/ARENA.md` | Print the squashed commit list before every commit; always push and keep a PR open. |
+| `rules/CHATGPT.txt` | Print the squashed commit list first; commit only when required. |
+| `rules/CLINE.md` | Follows the core: commit directly; no list. |
+| `rules/COMMIT_SPEC.txt` | Format reference only; matches the core (no list). |
 
 ### Formatting
 
