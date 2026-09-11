@@ -47,7 +47,6 @@ New behavior, fixes, refactors: failing test first when practical, smallest pass
 
 ## Git
 
-- **MUST print the squashed commit list before every commit**: local commits and fixes folded into a clean timeline, updated as work lands. Committing without it is a violation; if one landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related files, NEVER unrelated or user-owned ones; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
 - MUST commit directly on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible. One Conventional Commit per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
 
