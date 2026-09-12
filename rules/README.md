@@ -74,7 +74,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 
 ### Arena file
 
-Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push and PR handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Do not repeat Arena-managed branch mechanics beyond that.
+Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible. Do not repeat Arena-managed branch mechanics beyond that.
 
 ### Emphasis
 
@@ -92,17 +92,19 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 | File | Discipline |
 | --- | --- |
-| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no commit list. |
-| `rules/ARENA.md` | Print the planned final commit list before every commit; always push and keep a PR open. |
+| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no commit list; merge fast-forward when possible. |
+| `rules/ARENA.md` | Print the planned final commit list before every commit; always push and keep a PR open; never merge until authorized, then fast-forward when possible. |
 | `rules/CHATGPT.txt` | Print the planned final commit list before committing; commit only when required. |
 | `rules/CLINE.md` | Follows the core: commit directly; no list. |
 | `rules/COMMIT_SPEC.txt` | Format reference only; matches the core (no list). |
 
 ### Formatting
 
-Markdown linting applies only to agent rule files under `rules/`: currently AGENTS.md, ARENA.md, and CLINE.md. ChatGPT instructions and this specification are excluded, as are the root README, skills, workflows, and references.
+Markdown linting applies to the agent rule files under `rules/`, `rules/refs/` included: currently `AGENTS.md`, `ARENA.md`, `CLINE.md`, and the five Markdown files in `rules/refs/` — 8 files in all. Excluded are `rules/CHATGPT.txt`, this specification, root-level Markdown, and skills.
 
 Do not hard-wrap prose. Keep each paragraph, list item, and table row on one line and let the editor soft-wrap; third-party licenses keep their original wrapping.
+
+Rule files keep one rule per line, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.1: bullets in the Markdown rule files, one plain line per rule in `CHATGPT.txt`, which item 4 keeps free of headings and bullets. A line may carry one rule's parameters, enumeration, or exact command; it does not carry two rules. Each Markdown rule file opens with a `Use` section and closes with `When in doubt`; the core and `ARENA.md` also carry a constitution, while `CLINE.md` inherits the core's rather than duplicating it. `CHATGPT.txt` and `COMMIT_SPEC.txt` keep their fixed formats instead, per item 4 and their single-purpose scope.
 
 [.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps file selection, exclusions, and rule settings together: markdownlint defaults, **MD060 enabled** for table-column consistency, **MD013 disabled** so there is no line-length constraint, and **MD007 pinned** to 2-space list indent. MD060 uses its default `any` style. If markdownlint-cli2 is available, run it from the repository root without additional file globs to use this scope; the workflow passes no globs either, so both use this one definition. No tooling installation is required.
 
