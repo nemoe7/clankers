@@ -6,7 +6,7 @@ Rules, skills, and workflows for AI agents.
 - [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
 - [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
-- [rules/refs/](rules/refs/README.md): uncompressed rule originals and the AGENTS.md writing guidelines; amend here first, copy onto the live file, then compress the live copy.
+- [rules/refs/](rules/refs/README.md): uncompressed rule originals and the AGENTS.md writing guidelines; amend here first, mirror the amendment into the live file in compressed form, then squash it.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
@@ -32,11 +32,11 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of these guidelines. Amend `rules/refs/` first, copy the amended baseline onto its live counterpart, then compress that live copy; refs stay uncompressed as the baseline. Compression is editorial, not lossy: it removes words, never rules.
+Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of the rules below. Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash that file back under budget; refs stay uncompressed as the baseline. Compression is editorial, not lossy: it removes words, never rules.
 
 1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves. Repeat until a pass yields nothing.
 2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.
 3. Merge related bullets, drop redundant qualifiers and restated clauses, and prefer the shorter of two equivalent phrasings. Do not invent new abbreviations or telegraphic syntax that changes how a rule reads.
-4. Keep section headings and their order. Compression does not restructure the rule set.
+4. Keep the section headings and order the refs baseline already has; restructuring is an amendment, made in refs first.
 5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).

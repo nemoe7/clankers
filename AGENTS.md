@@ -22,7 +22,7 @@ Read these first:
 
 - Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
 - NEVER claim a check you did not run.
-- Amend `rules/refs/` first, copy the amended baseline onto its live counterpart, then squash the live copy; refs stay uncompressed.
+- Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash that file; refs stay uncompressed.
 - Compression removes words, never rules.
 - A new rule may exceed a budget only if the same change compresses the rest of the file.
 - Commit on a branch other than `main`, one logical change per commit.
@@ -35,9 +35,9 @@ Read these first:
 
 - A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
-- It validates skill metadata, workflow frontmatter, README measurements, internal links, and the ChatGPT character limit.
+- It validates skill metadata, workflow frontmatter, README measurements, internal links, the ChatGPT character limit, the distributed `ARENA.md` copy, the markdownlint scope, and refs/live rule parity.
 - `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on every push and pull request.
-- On pushes it commits refreshed README measurements; it also compiles the maintenance script and lints Markdown with markdownlint-cli2.
+- On pushes it commits refreshed README measurements; it also runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
 ## Verification
 
@@ -50,7 +50,7 @@ Read these first:
 
 - Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
-- Amend `rules/refs/` first, copy the amended baseline onto its live counterpart in `rules/`, then squash the live copy back under its budget; refs stay uncompressed as the baseline.
+- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash that file back under its budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
 
 ## Budgets

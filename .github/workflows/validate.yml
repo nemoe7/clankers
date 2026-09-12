@@ -41,6 +41,16 @@ jobs:
           git commit -m "chore(maintenance): update README measurements"
           git push
 
+      - name: Install Ruff
+        run: |
+          VERSION=$(sed -n 's/^required-version = "\(.*\)"$/\1/p' ruff.toml)
+          python -m pip install "ruff==$VERSION"
+
+      - name: Lint and format-check Python
+        run: |
+          ruff check .
+          ruff format --diff .
+
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
 
