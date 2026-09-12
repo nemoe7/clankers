@@ -13,7 +13,7 @@
 - NEVER claim a check you did not run.
 - Always push and keep the PR open.
 - NEVER merge the PR until authorized.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward; on divergence, rebase first.
 - Stop and ask on material ambiguity or plan deviation; NEVER improvise past the plan.
 - Grep-verify every edit landed before building on it.
 - Question batches: state the total, label Q1, Q2, end with an open prompt.
@@ -110,7 +110,7 @@
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - Disregard never-push rules; Arena's controlled edits make pushing safe.
 - NEVER merge the PR until authorized.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward when possible; on divergence, rebase onto the target first, then fast-forward.
 - Report/audit artifacts in git-ignored output dirs: always commit locally at the end, NEVER push to the repo.
 - Undo that commit next turn and continue.
 - Keep one report file, updated in place.

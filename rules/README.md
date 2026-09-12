@@ -74,7 +74,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 
 ### Arena file
 
-Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible. Do not repeat Arena-managed branch mechanics beyond that.
+Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible, rebasing onto the target first when the branch has diverged. Do not repeat Arena-managed branch mechanics beyond that.
 
 ### Emphasis
 
@@ -92,8 +92,8 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 | File | Discipline |
 | --- | --- |
-| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no commit list; merge fast-forward when possible. |
-| `rules/ARENA.md` | Print the planned final commit list before every commit; always push and keep a PR open; never merge until authorized, then fast-forward when possible. |
+| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no commit list; merge fast-forward when possible, rebasing first on divergence. |
+| `rules/ARENA.md` | Print the planned final commit list before every commit; always push and keep a PR open; never merge until authorized, then fast-forward when possible, rebasing first on divergence. |
 | `rules/CHATGPT.txt` | Print the planned final commit list before committing; commit only when required. |
 | `rules/CLINE.md` | Follows the core: commit directly; no list. |
 | `rules/COMMIT_SPEC.txt` | Format reference only; matches the core (no list). |
