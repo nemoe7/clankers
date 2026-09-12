@@ -33,7 +33,7 @@ KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — 
 
 ## Style
 
-2-space indentation overrides formatter defaults. Markdown: markdownlint defaults + MD060 and MD007 at 2-space list indent, MD013 off. Python: Ruff E4/E7/E9/F. Keep architecture; leave unrelated code alone. Ruff is configured by the repo's ruff.toml holding my conventions (Ruff's default rule set, indent-width = 2 [lint] ignore = ["BLE001", "S110"] extend-safe-fixes = ["C408", "PERF102", "RUF059"], required-version = "0.16.6", nothing else until flagged). If the repo has no ruff.toml, create it with exactly that before running gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Reports must allow lines up to 120 characters (MD013 at 120).
+2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD013 off. Python: Ruff E4/E7/E9/F. Keep architecture; leave unrelated code alone. Ruff is configured by the repo's ruff.toml holding my conventions (Ruff's default rule set, indent-width = 2 [lint] ignore = ["BLE001", "S110"] extend-safe-fixes = ["C408", "PERF102", "RUF059"], required-version = "0.16.6", nothing else until flagged). If the repo has no ruff.toml, create it with exactly that before running gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Reports must allow lines up to 120 characters (MD013 at 120).
 
 ## Git
 
