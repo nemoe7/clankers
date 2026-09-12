@@ -5,13 +5,15 @@
 - This file is the generic core ruleset for coding agents: it applies to all code in a repository, all agents, and all sessions, whether or not a prompt repeats it.
 - These rules outrank skill and plugin instructions: skills specialize defaults and NEVER weaken an explicit requirement here or replace project conventions.
 - An explicit user instruction in chat outranks this file; state the override in one line and follow it.
-- In Arena, MUST also read and follow the repository's `ARENA.md` as an additional applicable ruleset; AGENTS.md stays in force beside it, and where the two collide its Arena-specific handling (pushing and pull requests) wins.
+- In Arena, MUST also read and follow the repository's `ARENA.md` as an additional applicable ruleset; AGENTS.md stays in force beside it, and where the two collide its Arena-specific handling (pushing, pull requests, and merges) wins.
 
 ## Constitution
 
 - Do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change.
-- Read all project instructions and the approved plan before changing anything; follow the plan step-by-step.
-- Verify with the exact gates before every commit; NEVER claim a check you did not run.
+- Read all project instructions and the approved plan before changing anything.
+- Follow the approved plan step-by-step.
+- Verify with the exact gates before every commit.
+- NEVER claim a check you did not run.
 - Preserve behavior, architecture, interfaces, intent, and conventions unless change is required.
 - Stage only task-related files; one logical change per Conventional Commit.
 - Fix root causes, not symptoms; grep every caller before editing a function.
@@ -21,52 +23,78 @@
 
 ## General
 
-- Concise, direct, practical, accurate. Preserve key details: negations, conditions, errors, commands, numbers, caveats. Follow repo docs and conventions; prefer existing patterns.
+- Concise, direct, practical, accurate.
+- Preserve key details: negations, conditions, errors, commands, numbers, caveats.
+- Follow repo docs and conventions; prefer existing patterns.
 
 ## Scope
 
 - Plans MUST be numbered, concrete, and executable without clarification.
-- Plans MUST include TDD: Red, Green, Refactor, Verify. If a step is inapplicable, state why.
+- Plans MUST include TDD: Red, Green, Refactor, Verify.
+- If a TDD step is inapplicable, state why.
 - Plans MUST define exact atomic commits per logical change, including commit messages.
 - Plans are incomplete until TDD and commits are defined.
 - MUST read all project instructions before changes.
-- MUST follow the approved plan step-by-step, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
+- MUST follow the approved plan step-by-step, verifying each logical change.
+- MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
 - MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - Preserve behavior, architecture, interfaces, intent, conventions unless change is required.
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests only when requested or necessary to verify the change.
 - Investigate only as needed: stop at a suitable pattern, skip unrelated requirements and edge cases, and replan only on new evidence.
-- Unrelated findings stay out of scope unless blocking. Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then. For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
+- Unrelated findings stay out of scope unless blocking.
+- Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then.
+- For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 
 ## Engineering
 
-- KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; helper/pattern already here; stdlib; native feature; installed dependency; one line; minimum code. NEVER add a dependency for a few lines' work.
-- Build what is asked; when a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies. Never lazy about understanding: read the code, trace the flow first. NEVER simplify away trust-boundary validation, error handling preventing data loss, security, or accessibility; mark a deliberate corner-cut with a `simplified:` comment naming its ceiling and upgrade path.
-- Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior. Add an abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding only for a tangible present need; cut a seam only for a tangible need, and prefer an existing extension point over a parallel mechanism.
-- Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement. Write clear, readable code.
-- Consider proposing a smaller scope for approval when the brief looks bigger than the need; simplicity chooses how to meet the brief, never what to silently drop. Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing. Prefer the simplest implementation that meets every acceptance criterion, the edge-case-correct standard-library pick when two options tie, and safe defaults only for non-material choices; if the user insists on the full version, build it without re-arguing.
+- KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; helper/pattern already here; stdlib; native feature; installed dependency; one line; minimum code.
+- NEVER add a dependency for a few lines' work.
+- Build what is asked.
+- When a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies.
+- Never lazy about understanding: read the code, trace the flow first.
+- NEVER simplify away trust-boundary validation, error handling preventing data loss, security, or accessibility.
+- Mark a deliberate corner-cut with a `simplified:` comment naming its ceiling and upgrade path.
+- Guard clauses, early returns.
+- Cohesive modules, low coupling, small interfaces, local data/behavior.
+- Add an abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding only for a tangible present need.
+- Cut a seam only for a tangible need, and prefer an existing extension point over a parallel mechanism.
+- Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
+- Write clear, readable code.
+- Consider proposing a smaller scope for approval when the brief looks bigger than the need; simplicity chooses how to meet the brief, never what to silently drop.
+- Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing.
+- Prefer the simplest implementation that meets every acceptance criterion, the edge-case-correct standard-library pick when two options tie, and safe defaults only for non-material choices.
+- If the user insists on the full version, build it without re-arguing.
 
 ## Debugging
 
 - Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
-- Before editing, MUST grep every caller of the function you are about to touch; fix once where all callers route through — one guard in the shared function beats a guard in every caller.
-- Falsifiable hypotheses, evidence over guessing, one variable at a time; NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
+- Before editing, MUST grep every caller of the function you are about to touch.
+- Fix once where all callers route through — one guard in the shared function beats a guard in every caller.
+- Falsifiable hypotheses, evidence over guessing, one variable at a time.
+- NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
 - Behavioral fixes get a focused regression test.
 
 ## Testing
 
-- New behavior, fixes, refactors: when a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, rerun checks.
-- Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions.
+- New behavior, fixes, refactors: when a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck.
+- Test public interfaces and integration boundaries.
+- Reuse existing frameworks/fixtures/helpers/conventions.
 - Mechanical-only changes: proportional verification.
-- NEVER weaken or drop a test to pass; no speculative behavior or tests.
-- Prefer one small runnable check for non-trivial logic (an assert-based demo or a single small test file); introduce no new frameworks or fixtures unless asked; trivial one-liners need no test.
+- NEVER weaken or drop a test to pass.
+- No speculative behavior or tests.
+- Prefer one small runnable check for non-trivial logic (an assert-based demo or a single small test file).
+- Introduce no new frameworks or fixtures unless asked.
+- Trivial one-liners need no test.
 
 ## Review
 
-- Before finishing: check requirements, acceptance criteria, scope; verify behavior via tests/linters/formatters/builds.
+- Before finishing, check requirements, acceptance criteria, and scope.
+- Verify behavior via tests/linters/formatters/builds.
 - Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
 - Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
-- Fix in-scope issues, re-verify; NEVER claim a check you did not run; report what you skipped instead.
+- Fix in-scope issues, then recheck.
+- **NEVER claim a check you did not run**; report what you skipped instead.
 - Confirm planned changes, checks, commits, and cleanup are done.
 
 ## Code style
@@ -74,19 +102,29 @@
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
 - Python: Ruff default selection (E4, E7, E9, F).
-- Python uses the repo's `ruff.toml` (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`); if missing, create it exactly before gates.
+- Python uses the repo's `ruff.toml` (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`).
+- If `ruff.toml` is missing, create it exactly before gates.
 - Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
 - Leave unrelated code untouched.
-- MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit. If Plan mode was used, MUST delete all generated plan files.
+- MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
+- If Plan mode was used, MUST delete all generated plan files.
 
 ## Git
 
-- MUST stage only task-related files, leaving unrelated and user-owned files unstaged; respect the user's global gitignore (`core.excludesFile`); review the diff after each edit.
-- MUST commit directly on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible. One Conventional Commit per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body. Types: `feat fix refactor perf style docs test build chore`. Reuse previous scopes, adding one only when none fits. NEVER push or open a PR unless asked.
+- MUST stage only task-related files, leaving unrelated and user-owned files unstaged.
+- Respect the user's global gitignore (`core.excludesFile`).
+- Review the diff after each edit.
+- MUST commit directly on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible.
+- One Conventional Commit per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body.
+- Types: `feat fix refactor perf style docs test build chore`.
+- Reuse previous scopes, adding one only when none fits.
+- NEVER push or open a PR unless asked.
+- Merges MUST be fast-forward when possible.
 
 ## Responses
 
-- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations, without unnecessary prose but with the detail the task requires or the user requests. Consider reporting what was skipped and when to add it.
+- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations, without unnecessary prose but with the detail the task requires or the user requests.
+- Consider reporting what was skipped and when to add it.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it; fit a narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no unnecessarily wide rows.

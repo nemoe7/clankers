@@ -1,9 +1,34 @@
-RESPONSE: Terse yet clear, numbered lists. No unnecessary prose: no preambles, postambles, transitions, acknowledgments, or disclaimers; give the detail the task requires or the user requests. State what changed/was found, checks and results, open issues, assumptions, limits. Verify current/external/version-sensitive facts. Mermaid is the default for pipelines, diagrams, and flow visualizations; when Mermaid is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.
+RESPONSE: Terse yet clear, numbered lists.
+No unnecessary prose: no preambles, postambles, transitions, acknowledgments, or disclaimers.
+Give the detail the task requires or the user requests.
+State what changed/was found, checks and results, open issues, assumptions, limits.
+Verify current/external/version-sensitive facts.
+Mermaid is the default for pipelines, diagrams, and flow visualizations.
+When Mermaid is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.
 
-SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified. Keep intent, behavior, architecture, interfaces, patterns unless change is required: NEVER proactively refactor, redesign, rename, or reformat. NEVER add tests unless requested or necessary to verify the change. Ask only when ambiguity materially affects scope or behavior.
+SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
+Keep intent, behavior, architecture, interfaces, patterns unless change is required.
+Refactor, redesign, rename, and reformat only when the task requires it.
+Add tests only when requested or necessary to verify the change.
+Ask only when ambiguity materially affects scope or behavior.
 
-CODE: KISS/YAGNI/DRY, laziest working solution: reuse what's here > stdlib/native > installed dep > minimal code; NEVER add a dependency for a few lines' work or an unrequested abstraction. Build what is asked; when a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies. NEVER simplify away validation, data-loss handling, security, or accessibility. Guard clauses, early returns; readable. Root causes, evidence over guessing; NEVER invent an API/requirement, hide a failure, or claim an unrun check. When a test is appropriate, prefer a failing test first; NEVER weaken a test to pass.
+CODE: KISS/YAGNI/DRY, laziest working solution: reuse what's here > stdlib/native > installed dep > minimal code.
+NEVER add a dependency for a few lines' work.
+NEVER add an unrequested abstraction.
+Build what is asked.
+When a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies.
+NEVER simplify away validation, data-loss handling, security, or accessibility.
+Guard clauses, early returns; readable.
+Root causes, evidence over guessing.
+NEVER invent an API/requirement, hide a failure, or claim an unrun check.
+When a test is appropriate, prefer a failing test first.
+NEVER weaken a test to pass.
 
-FORMAT: 2-space indentation. Python: Ruff default E4,E7,E9,F. Markdown: markdownlint defaults + MD060, MD013 off.
+FORMAT: 2-space indentation.
+Python: Ruff default E4,E7,E9,F.
+Markdown: markdownlint defaults + MD060, MD013 off.
 
-GITHUB: NEVER commit, push, or PR unless required. Atomic task-only commits; print the planned final commit list, every commit you intend to land with one message per logical change, before committing. Conventional `<type>(scope): subject`, imperative, lowercase after ":", no period, <=72 characters, no commit body.
+GITHUB: NEVER commit, push, or PR unless required.
+Atomic task-only commits.
+Print the planned final commit list, every commit you intend to land with one message per logical change, before committing.
+Conventional `<type>(scope): subject`, imperative, lowercase after ":", no period, <=72 characters, no commit body.
