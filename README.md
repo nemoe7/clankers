@@ -16,8 +16,8 @@ Latest measurements as of 2026-09-12. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,357 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 8,077 `B` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,334 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 8,016 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,494 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 580 `tok` |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` | 47 `tok` |
