@@ -26,7 +26,7 @@ Latest measurements as of 2026-09-12. ARENA.md is measured by uploaded file size
 | `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 523 `tok` |
-| `workflows/init-docs.md` | `cl100k_base` | 4,091 `tok` |
+| `workflows/init-docs.md` | `cl100k_base` | 4,139 `tok` |
 
 Measurements cover complete files, including whitespace and markup.
 
@@ -40,3 +40,5 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 4. Keep the section headings and order the refs baseline already has; restructuring is an amendment, made in refs first.
 5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
+
+One deliberate exception is open: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, exempted on request rather than squashed, so the workflow's documentation templates keep their readable form. Squash it back when that file is next touched.
