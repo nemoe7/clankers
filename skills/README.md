@@ -4,9 +4,7 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 | Skill | Purpose |
 | --- | --- |
-| [frontend-design](frontend-design/SKILL.md) | Deliberate visual design for new or substantially redesigned interfaces |
 | [planning](planning/SKILL.md) | Structured planning for substantial or materially underspecified work |
-| [ponytail](ponytail/SKILL.md) | The simplest implementation that meets the requirements |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
@@ -27,8 +25,6 @@ Skills adapted from elsewhere record their origin in `metadata.upstream`. Pull u
 
 | Skill | Upstream |
 | --- | --- |
-| [frontend-design](frontend-design/SKILL.md) | [anthropics/skills](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md) |
-| [ponytail](ponytail/SKILL.md) | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
 The remaining skills are first-party and maintained here, marked `metadata.origin`. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
@@ -65,8 +61,6 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 | Skill | When needed |
 | --- | --- |
 | [planning](planning/SKILL.md) | Plan mode, or substantial or materially underspecified work |
-| [ponytail](ponytail/SKILL.md) | Not loaded by the rules: the core Engineering section inlines its `lite` intensity. Load the skill only for `full` or `ultra` |
-| [frontend-design](frontend-design/SKILL.md) | New or substantially redesigned interfaces |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 
