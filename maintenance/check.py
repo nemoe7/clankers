@@ -45,8 +45,6 @@ EXPECTED_BUDGETS = {
 }
 
 REFS = RULES / "refs"
-ARENA_SOURCE = RULES / "ARENA.md"
-ARENA_COPY = ROOT / "ARENA.md"
 LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
 
 # The markdownlint scope, recomputed from LINT_CONFIG on every run.
@@ -504,24 +502,6 @@ def rule_line_count(path: Path) -> int:
   return sum(1 for line in text.splitlines() if line.strip())
 
 
-def check_distributed_arena(errors: list[str]) -> None:
-  if not ARENA_SOURCE.is_file():
-    errors.append("rules/ARENA.md is missing")
-    return
-
-  if not ARENA_COPY.is_file():
-    errors.append(
-      "ARENA.md is missing; distribute-arena.yml syncs rules/ARENA.md to it"
-    )
-    return
-
-  if ARENA_COPY.read_bytes() != ARENA_SOURCE.read_bytes():
-    errors.append(
-      "ARENA.md differs from rules/ARENA.md; refresh the distributed copy "
-      "with: cp rules/ARENA.md ARENA.md"
-    )
-
-
 def check_lint_scope(errors: list[str]) -> None:
   if not LINT_CONFIG.is_file():
     errors.append(".markdownlint-cli2.jsonc is missing")
@@ -767,7 +747,6 @@ def validate(errors: list[str]) -> None:
     if characters > 1500:
       errors.append("rules/CHATGPT.txt exceeds 1,500 Unicode chars")
 
-  check_distributed_arena(errors)
   check_lint_scope(errors)
   check_refs_parity(errors)
 
@@ -810,8 +789,7 @@ def main() -> int:
 
   print(
     f"Validation passed: {skills} skills, {workflows} workflows, README "
-    "measurements, the distributed ARENA.md copy, the markdownlint scope, "
-    "and refs/live parity checked."
+    "measurements, the markdownlint scope, and refs/live parity checked."
   )
 
   return 0

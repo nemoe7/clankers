@@ -74,7 +74,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 
 ### Arena file
 
-Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible, rebasing onto the target first when the branch has diverged. Do not repeat Arena-managed branch mechanics beyond that.
+Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible, rebasing onto the target first when the branch has diverged. Do not repeat Arena-managed branch mechanics beyond that. The duplication of the core is deliberate: Arena loads ARENA.md on its own, without AGENTS.md, so the file stands alone instead of overlaying the core. Root `ARENA.md` is a copy of `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories; refresh it with `cp rules/ARENA.md ARENA.md` after every amendment rather than gating the identity.
 
 ### Emphasis
 

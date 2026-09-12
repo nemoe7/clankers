@@ -298,32 +298,11 @@ DO NOT turn the README into the complete requirements, design, or architecture s
 
 ## 10. AGENTS.md
 
-`AGENTS.md` is the repository's agent operating guide.
+`AGENTS.md` is the repository's agent operating guide, written to this skeleton: `Use` (scope, precedence over skills and plugins, user instructions outrank it), a constitution of one-line rules that must never be lost, one testable rule per line under domain headings with exact commands, and a `When in doubt` closer.
 
-Maintain applicable information such as:
+Maintain applicable information: repository structure; sources of truth; development, test, lint, and formatting commands; verification requirements; architecture boundaries; coding conventions; repository constraints; documentation rules; Git rules; and agent-specific operating requirements.
 
-- repository structure;
-- sources of truth;
-- development commands;
-- test commands;
-- lint and formatting commands;
-- verification requirements;
-- architecture boundaries;
-- coding conventions;
-- repository constraints;
-- documentation rules;
-- Git rules;
-- agent-specific operating requirements.
-
-`AGENTS.md` MUST NOT replace:
-
-- `README.md`;
-- `SRS.md`;
-- `SDD.md`;
-- architecture documentation;
-- ADRs.
-
-Instructions SHOULD be actionable and repository-specific.
+`AGENTS.md` MUST NOT replace `README.md`, `SRS.md`, `SDD.md`, architecture documentation, or ADRs. Keep instructions actionable and repository-specific.
 
 ## 11. Software Requirements Specification
 
@@ -337,29 +316,11 @@ Do not claim formal compliance unless explicitly established.
 
 Include, as applicable:
 
-### Introduction
+- **Introduction** — purpose; scope; references; definitions; acronyms and abbreviations.
 
-- purpose;
-- scope;
-- references;
-- definitions;
-- acronyms and abbreviations.
+- **Overall Description** — product perspective; product functions; operating environment; constraints; assumptions; dependencies.
 
-### Overall Description
-
-- product perspective;
-- product functions;
-- operating environment;
-- constraints;
-- assumptions;
-- dependencies.
-
-### External Interfaces
-
-- user interfaces;
-- external systems;
-- APIs;
-- hardware or infrastructure interfaces where applicable.
+- **External Interfaces** — user interfaces; external systems; APIs; hardware or infrastructure interfaces where applicable.
 
 ### Functional Requirements
 
@@ -391,40 +352,17 @@ If a material quality target is unknown:
 
 **STOP and ASK THE USER.**
 
-### Data Requirements
+- **Data Requirements** — document applicable: data; relationships; validation; persistence; retention.
 
-Document applicable:
+- **Constraints** — document established: technical constraints; platform constraints; compatibility constraints; regulatory or policy constraints.
 
-- data;
-- relationships;
-- validation;
-- persistence;
-- retention.
+- **Assumptions and Dependencies** — Only document established assumptions and dependencies.
 
-### Constraints
+- **Verification** — Describe how requirements can be verified.
 
-Document established:
+- **Traceability** — Trace requirements to relevant design elements, tests, or authoritative artifacts where practical.
 
-- technical constraints;
-- platform constraints;
-- compatibility constraints;
-- regulatory or policy constraints.
-
-### Assumptions and Dependencies
-
-Only document established assumptions and dependencies.
-
-### Verification
-
-Describe how requirements can be verified.
-
-### Traceability
-
-Trace requirements to relevant design elements, tests, or authoritative artifacts where practical.
-
-### Open Issues
-
-Record unresolved requirements and decisions rather than inventing answers.
+- **Open Issues** — Record unresolved requirements and decisions rather than inventing answers.
 
 ## 12. Software Design Description
 
@@ -438,112 +376,31 @@ Do not claim active formal compliance or certification.
 
 Include, as applicable:
 
-### Identification and Scope
+- **Identification and Scope** — system identity; design scope; design boundaries.
 
-- system identity;
-- design scope;
-- design boundaries.
+- **Design Context** — external systems; operating context; relevant environmental assumptions.
 
-### Design Context
+- **Design Viewpoints** — use only viewpoints relevant to the system, such as: context; composition; logical structure; dependencies; information; interfaces; interaction; state; deployment.
 
-- external systems;
-- operating context;
-- relevant environmental assumptions.
+- **Design Views** — use appropriate representations: Mermaid; UML; tables; structured text; diagrams. Views MUST represent verified architecture rather than imagined architecture.
 
-### Design Viewpoints
+- **Design Elements** — Describe significant design elements and relationships. Do not document every function or source file.
 
-Use only viewpoints relevant to the system, such as:
+- **Structural Design** — document: components; modules; responsibilities; dependencies; boundaries.
 
-- context;
-- composition;
-- logical structure;
-- dependencies;
-- information;
-- interfaces;
-- interaction;
-- state;
-- deployment.
+- **Behavioral Design** — document: important workflows; state transitions; control flow; significant interactions.
 
-### Design Views
+- **Data Design** — document: important entities; relationships; persistence; validation; ownership where established.
 
-Use appropriate representations:
+- **Interface Design** — document: APIs; internal interfaces; external interfaces; protocols; important contracts.
 
-- Mermaid;
-- UML;
-- tables;
-- structured text;
-- diagrams.
+- **Deployment Design** — document: runtime components; hosting; infrastructure relationships; deployment boundaries.
 
-Views MUST represent verified architecture rather than imagined architecture.
+- **Design Constraints** — Document established implementation constraints.
 
-### Design Elements
+- **Design Rationale** — Document significant design reasoning where useful. Do not turn routine implementation details into design rationale.
 
-Describe significant design elements and relationships.
-
-Do not document every function or source file.
-
-### Structural Design
-
-Document:
-
-- components;
-- modules;
-- responsibilities;
-- dependencies;
-- boundaries.
-
-### Behavioral Design
-
-Document:
-
-- important workflows;
-- state transitions;
-- control flow;
-- significant interactions.
-
-### Data Design
-
-Document:
-
-- important entities;
-- relationships;
-- persistence;
-- validation;
-- ownership where established.
-
-### Interface Design
-
-Document:
-
-- APIs;
-- internal interfaces;
-- external interfaces;
-- protocols;
-- important contracts.
-
-### Deployment Design
-
-Document:
-
-- runtime components;
-- hosting;
-- infrastructure relationships;
-- deployment boundaries.
-
-### Design Constraints
-
-Document established implementation constraints.
-
-### Design Rationale
-
-Document significant design reasoning where useful.
-
-Do not turn routine implementation details into design rationale.
-
-### Traceability
-
-Connect important design elements to requirements or other authoritative artifacts where practical.
-
+- **Traceability** — Connect important design elements to requirements or other authoritative artifacts where practical.
 ## 13. Architecture Documentation
 
 Only create `docs/architecture.md` when selected.
@@ -704,37 +561,11 @@ Do not rewrite an entire document solely to make it resemble the selected templa
 
 After creating or updating all selected documents, check consistency across them.
 
-Verify consistency of:
-
-- project name;
-- scope;
-- terminology;
-- functional requirements;
-- quality requirements;
-- architecture;
-- components;
-- interfaces;
-- data models;
-- deployment;
-- configuration;
-- commands;
-- paths;
-- links;
-- requirement identifiers;
-- ADR references;
-- document status.
+Verify consistency of: project name; scope; terminology; functional requirements; quality requirements; architecture; components; interfaces; data models; deployment; configuration; commands; paths; links; requirement identifiers; ADR references; document status.
 
 Documentation MUST NOT make contradictory claims.
 
-Do not state:
-
-- draft as final;
-- proposed as accepted;
-- planned as implemented;
-- unverified as verified;
-- intended behavior as current behavior;
-
-unless supported by evidence.
+Do not state draft as final, proposed as accepted, planned as implemented, unverified as verified, or intended behavior as current behavior, unless supported by evidence.
 
 ## 20. Uncertainty Control
 
@@ -797,9 +628,7 @@ In APPLY mode, verify the resulting documentation.
 
 Verify, where applicable:
 
-- referenced commands exist;
-- referenced paths exist;
-- referenced files exist;
+- referenced commands, paths, and files exist;
 - links resolve;
 - configuration names are correct;
 - APIs are correctly represented;
