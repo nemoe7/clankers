@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from datetime import datetime, timezone
@@ -42,6 +43,34 @@ EXPECTED_BUDGETS = {
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",
 }
+
+REFS = RULES / "refs"
+ARENA_SOURCE = RULES / "ARENA.md"
+ARENA_COPY = ROOT / "ARENA.md"
+LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
+
+# The markdownlint scope, recomputed from LINT_CONFIG on every run.
+EXPECTED_LINTED = (
+  "rules/AGENTS.md",
+  "rules/ARENA.md",
+  "rules/CLINE.md",
+  "rules/refs/AGENTS.md",
+  "rules/refs/ARENA.md",
+  "rules/refs/CLINE.md",
+  "rules/refs/GUIDELINES.md",
+  "rules/refs/README.md",
+)
+
+# Where the documented markdownlint file count lives, and how to find it.
+LINT_COUNT_CLAIMS = (
+  (RULES / "README.md", r"(\d+) files in all"),
+  (ROOT / "AGENTS.md", r"— (\d+) files,"),
+)
+
+# Refs baselines hold full wording; live files compress it. Compression may
+# merge rule lines but never add them, so live counts stay at or below refs.
+SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md")
+PLAIN_PAIRS = ("CHATGPT.txt", "COMMIT_SPEC.txt")
 
 _token_encoder: Any = None
 
@@ -411,6 +440,167 @@ def check_internal_links(
       errors.append(f"{path.relative_to(ROOT)}: broken internal link {target}")
 
 
+def strip_jsonc_comments(text: str) -> str:
+  return re.sub(r"^[ \t]*//.*$", "", text, flags=re.MULTILINE)
+
+
+def expand_ignore_pattern(pattern: str) -> set[Path]:
+  """Expand one markdownlint ignore pattern to the paths it excludes.
+
+  ``Path.glob`` resolves a trailing ``**`` to directories only, while
+  markdownlint's globby excludes everything below a matched directory, so
+  directory matches are expanded recursively here.
+  """
+  matched: set[Path] = set()
+
+  for path in ROOT.glob(pattern):
+    matched.add(path)
+
+    if path.is_dir():
+      matched.update(path.rglob("*"))
+
+  return matched
+
+
+def linted_rule_files() -> set[Path]:
+  config = json.loads(strip_jsonc_comments(LINT_CONFIG.read_text(encoding="utf-8")))
+  selected: set[Path] = set()
+
+  for pattern in config.get("globs", []):
+    selected.update(path for path in ROOT.glob(pattern) if path.is_file())
+
+  ignored: set[Path] = set()
+
+  for pattern in config.get("ignores", []):
+    ignored.update(expand_ignore_pattern(pattern))
+
+  return selected - ignored
+
+
+def section_rule_counts(text: str) -> list[tuple[str, int]]:
+  counts: list[tuple[str, int]] = []
+  heading: str | None = None
+  rules = 0
+
+  for line in text.splitlines():
+    if line.startswith("## "):
+      if heading is not None:
+        counts.append((heading, rules))
+
+      heading = line[3:].strip()
+      rules = 0
+    elif heading is not None and line.strip():
+      rules += 1
+
+  if heading is not None:
+    counts.append((heading, rules))
+
+  return counts
+
+
+def rule_line_count(path: Path) -> int:
+  text = path.read_text(encoding="utf-8")
+
+  return sum(1 for line in text.splitlines() if line.strip())
+
+
+def check_distributed_arena(errors: list[str]) -> None:
+  if not ARENA_SOURCE.is_file():
+    errors.append("rules/ARENA.md is missing")
+    return
+
+  if not ARENA_COPY.is_file():
+    errors.append(
+      "ARENA.md is missing; distribute-arena.yml syncs rules/ARENA.md to it"
+    )
+    return
+
+  if ARENA_COPY.read_bytes() != ARENA_SOURCE.read_bytes():
+    errors.append(
+      "ARENA.md differs from rules/ARENA.md; refresh the distributed copy "
+      "with: cp rules/ARENA.md ARENA.md"
+    )
+
+
+def check_lint_scope(errors: list[str]) -> None:
+  if not LINT_CONFIG.is_file():
+    errors.append(".markdownlint-cli2.jsonc is missing")
+    return
+
+  actual = tuple(sorted(str(path.relative_to(ROOT)) for path in linted_rule_files()))
+
+  if actual != EXPECTED_LINTED:
+    errors.append(
+      f"markdownlint scope changed: expected={list(EXPECTED_LINTED)} actual={list(actual)}"
+    )
+
+  for document, pattern in LINT_COUNT_CLAIMS:
+    relative = document.relative_to(ROOT)
+
+    if not document.is_file():
+      errors.append(f"{relative} is missing")
+      continue
+
+    match = re.search(pattern, document.read_text(encoding="utf-8"))
+
+    if match is None:
+      errors.append(f"{relative}: no documented markdownlint file count found")
+    elif int(match.group(1)) != len(actual):
+      errors.append(
+        f"{relative}: documented markdownlint count {match.group(1)} != actual {len(actual)}"
+      )
+
+
+def check_refs_parity(errors: list[str]) -> None:
+  for name in SECTIONED_PAIRS:
+    reference = REFS / name
+    live = RULES / name
+
+    if not reference.is_file() or not live.is_file():
+      errors.append(f"rules/{name}: refs/live pair incomplete")
+      continue
+
+    ref_counts = section_rule_counts(reference.read_text(encoding="utf-8"))
+    live_counts = section_rule_counts(live.read_text(encoding="utf-8"))
+    ref_headings = [heading for heading, _ in ref_counts]
+    live_headings = [heading for heading, _ in live_counts]
+
+    if ref_headings != live_headings:
+      errors.append(
+        f"rules/{name}: section headings diverge from rules/refs/{name}: "
+        f"refs={ref_headings} live={live_headings}"
+      )
+      continue
+
+    ref_map = dict(ref_counts)
+
+    for heading, live_rules in live_counts:
+      ref_rules = ref_map[heading]
+
+      if live_rules > ref_rules:
+        errors.append(
+          f"rules/{name} '{heading}': {live_rules} rule lines vs {ref_rules} in "
+          f"rules/refs/{name}; compression may merge lines but never add rules"
+        )
+
+  for name in PLAIN_PAIRS:
+    reference = REFS / name
+    live = RULES / name
+
+    if not reference.is_file() or not live.is_file():
+      errors.append(f"rules/{name}: refs/live pair incomplete")
+      continue
+
+    ref_rules = rule_line_count(reference)
+    live_rules = rule_line_count(live)
+
+    if live_rules > ref_rules:
+      errors.append(
+        f"rules/{name}: {live_rules} rule lines vs {ref_rules} in rules/refs/{name}; "
+        "compression may merge lines but never add rules"
+      )
+
+
 def validate(errors: list[str]) -> None:
   skills = sorted(
     path for path in SKILLS.iterdir() if path.is_dir() and not path.name.startswith(".")
@@ -577,6 +767,10 @@ def validate(errors: list[str]) -> None:
     if characters > 1500:
       errors.append("rules/CHATGPT.txt exceeds 1,500 Unicode chars")
 
+  check_distributed_arena(errors)
+  check_lint_scope(errors)
+  check_refs_parity(errors)
+
 
 def main() -> int:
   args = parse_args()
@@ -615,8 +809,9 @@ def main() -> int:
   )
 
   print(
-    f"Validation passed: {skills} skills, "
-    f"{workflows} workflows, and README measurements checked."
+    f"Validation passed: {skills} skills, {workflows} workflows, README "
+    "measurements, the distributed ARENA.md copy, the markdownlint scope, "
+    "and refs/live parity checked."
   )
 
   return 0

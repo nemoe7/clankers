@@ -15,9 +15,12 @@
 - Verify with the exact gates before every commit.
 - NEVER claim a check you did not run.
 - Preserve behavior, architecture, interfaces, intent, and conventions unless change is required.
-- Stage only task-related files; one logical change per Conventional Commit.
-- Fix root causes, not symptoms; grep every caller before editing a function.
-- Ground every choice in requirements, code, tests, docs, or observations; NEVER invent an API or constraint.
+- Stage only task-related files.
+- One logical change per Conventional Commit.
+- Fix root causes, not symptoms.
+- Grep every caller before editing a function.
+- Ground every choice in requirements, code, tests, docs, or observations.
+- NEVER invent an API or constraint.
 - Keep scratch files out of the repository; delete them once used.
 - On material ambiguity, stop and ask; otherwise make the most reasonable assumption and state it.
 

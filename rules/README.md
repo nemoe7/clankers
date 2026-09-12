@@ -15,7 +15,7 @@ The installation script uses only Python's standard library. There is no test su
 | [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload or point the Arena agent to it; its preamble requires Arena agents reading it to apply it |
 | [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions | Paste into the instructions field; at most 1,500 characters |
 | [rules/COMMIT_SPEC.txt](COMMIT_SPEC.txt) | Compact commit-message reference | Use when preparing an authorized commit or proposed message |
-| [rules/refs/](refs/README.md) | Uncompressed rule originals, plus the AGENTS.md writing guidelines | Amend here first, copy onto the live file, then squash the live copy |
+| [rules/refs/](refs/README.md) | Uncompressed rule originals, plus the AGENTS.md writing guidelines | Amend here first, mirror the amendment into the live file in compressed form, then squash it |
 | [skills/](../skills/README.md) | Reusable skills | Install complete skill directories, including supporting files |
 | [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into your platform's workflow location, or run it as-is |
 
@@ -70,7 +70,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification with recorded provenance (see Skill rules).
 9. Keep this repository lightweight: no further CI workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
-10. Amend `rules/refs/` first, copy the amended baseline onto its live counterpart, then squash that copy: full wording in refs, compressed form in `rules/` (see Baselines).
+10. Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash that file: full wording in refs, compressed form in `rules/` (see Baselines).
 
 ### Arena file
 
@@ -78,7 +78,7 @@ Condense wording and sections, not meaning: keep negations, conditions, commands
 
 ### Emphasis
 
-Bold is reserved for at most two clauses per file, currently the honesty rule and, in ARENA.md, the planned final commit list, so emphasis keeps its meaning. MUST and NEVER stay on irreversible, dangerous, and honesty rules; every other rule reads positively, because a negated rule that guards nothing costs emphasis (see [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.7). Adding a third bold clause means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
+Bold is reserved for at most two clauses per deployed rule file, so emphasis keeps its meaning: the honesty rule in `AGENTS.md` and `ARENA.md`, the planned final commit list in `ARENA.md`, `STOP` and the self-assignment ban in `CLINE.md`, and the two markdownlint settings in the root `AGENTS.md`. The cap covers the deployed rule files and their refs baselines, not this specification, the skills, or the workflows. MUST and NEVER stay on irreversible, dangerous, and honesty rules; every other rule reads positively, because a negated rule that guards nothing costs emphasis (see [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.7). Adding a third bold clause to a rule file means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
 
 ### Skill rules
 
@@ -86,7 +86,7 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 ### Baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first, in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Then copy the amended baseline onto its corresponding live file and squash that copy back under budget; refs stay unsquashed as the baseline. Files equal their live counterparts where no compression was applied, so the original wording is always preserved in refs. `GUIDELINES.md` sits beside them as the writing standard these baselines are audited against; it is a reference, not a rule baseline, and has no live counterpart.
+`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first, in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Then mirror the amendment into its corresponding live file in compressed form and squash that file back under budget; copying a refs baseline verbatim would exceed every live budget, so the mirroring is where compression happens. Refs stay unsquashed as the baseline. Files equal their live counterparts where no compression was applied, so the original wording is always preserved in refs. `GUIDELINES.md` sits beside them as the writing standard these baselines are audited against; it is a reference, not a rule baseline, and has no live counterpart.
 
 ### Commit disciplines
 
@@ -106,6 +106,6 @@ Do not hard-wrap prose. Keep each paragraph, list item, and table row on one lin
 
 Rule files keep one rule per line, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.1: bullets in the Markdown rule files, one plain line per rule in `CHATGPT.txt`, which item 4 keeps free of headings and bullets. A line may carry one rule's parameters, enumeration, or exact command; it does not carry two rules. Each Markdown rule file opens with a `Use` section and closes with `When in doubt`; the core and `ARENA.md` also carry a constitution, while `CLINE.md` inherits the core's rather than duplicating it. `CHATGPT.txt` and `COMMIT_SPEC.txt` keep their fixed formats instead, per item 4 and their single-purpose scope.
 
-[.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps file selection, exclusions, and rule settings together: markdownlint defaults, **MD060 enabled** for table-column consistency, **MD013 disabled** so there is no line-length constraint, and **MD007 pinned** to 2-space list indent. MD060 uses its default `any` style. If markdownlint-cli2 is available, run it from the repository root without additional file globs to use this scope; the workflow passes no globs either, so both use this one definition. No tooling installation is required.
+[.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps file selection, exclusions, and rule settings together: markdownlint defaults, **MD060 enabled** for table-column consistency, and **MD013 disabled** so there is no line-length constraint. MD060 uses its default `any` style, and MD007 its default 2-space list indent, so neither needs a pin. If markdownlint-cli2 is available, run it from the repository root without additional file globs to use this scope; the workflow passes no globs either, so both use this one definition. `maintenance/check.py` recomputes the scope from this config and fails when it drifts from the counts recorded here and in the root guide. No tooling installation is required.
 
 Python style stays defined in the core rules (Ruff selection E4, E7, E9, F), without a managed Ruff dependency. Keep CHATGPT.txt within 1,500 Unicode characters, including newlines.

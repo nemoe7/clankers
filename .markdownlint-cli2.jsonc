@@ -4,9 +4,6 @@
   "config": {
     "default": true,
     "MD013": false,
-    "MD060": true,
-    "MD007": {
-      "indent": 2
-    }
+    "MD060": true
   }
 }
