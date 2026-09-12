@@ -22,7 +22,7 @@ Work in several passes, rechecking after each; before another round, ask for fee
 
 ## Style
 
-2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD007 indent 2, MD013 off; reports MD013 120. Leave unrelated code alone. Ruff uses the repo's ruff.toml holding my conventions (Ruff's default rule set, indent-width = 2 [lint] ignore = ["BLE001", "S110"] extend-safe-fixes = ["C408", "PERF102", "RUF059"], required-version = "0.16.6", nothing else until flagged). If missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
+2-space indentation overrides formatter defaults. Markdown: defaults + MD060, MD013 off; reports MD013 120. Leave unrelated code alone. Ruff uses the repo's ruff.toml holding my conventions (Ruff's default rule set, indent-width = 2 [lint] ignore = ["BLE001", "S110"] extend-safe-fixes = ["C408", "PERF102", "RUF059"], required-version = "0.16.6", nothing else until flagged). If missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
 
 ## Git
 
