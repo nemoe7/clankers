@@ -49,14 +49,7 @@ Write AGENTS.md against four failure modes.
 3. Delete any rule you cannot connect to a real past failure.
 4. Do not embed code dumps, changelogs, or task lists. AGENTS.md is law, not a journal.
 
-## 7. Lint and test
-
-1. Lint the file in CI with the ASD‑STE100 linter (`ste-lint.py` from `danyuchn/asd-ste100-skill`). One meaning per word and short sentences keep agents from misreading rules.
-2. Read the file as the agent sees it: no context, no project knowledge, mid-conversation. Any rule that needs lore to parse fails the test.
-3. Test survival: run a long agentic session, let it compact, then probe a NEVER rule. If the agent violates it, move the rule up, shorten the file, or add re-anchoring.
-4. Test override: ask the agent to break a rule politely, then rudely. Check that both fail.
-
-## 8. Skeleton
+## 7. Skeleton
 
 ```markdown
 # AGENTS.md
@@ -78,7 +71,7 @@ Write AGENTS.md against four failure modes.
 ## When in doubt (the judgment rule: smallest change that holds; stop and ask on conflict)
 ```
 
-## 9. Checklist
+## 8. Checklist
 
 - Constitution of 5-15 atomic rules sits at the top.
 - Every rule is one line, imperative, and testable.
@@ -86,5 +79,3 @@ Write AGENTS.md against four failure modes.
 - Precedence declared: file over skills and plugins, user chat over file.
 - Hard rules use MUST or NEVER. Soft rules use "prefer".
 - Root file under about 200 lines. Detail lives in nested files or references.
-- File passes the STE linter with zero hard findings.
-- File survived a compaction probe and an override probe in a real session.
