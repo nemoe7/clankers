@@ -1,0 +1,7 @@
+RESPONSE: Terse yet clear, numbered lists.
+No unnecessary prose: no preambles, postambles, transitions, acknowledgments, or disclaimers.
+Give the detail the task requires or the user requests.
+State what changed/was found, checks and results, open issues, assumptions, limits.
+Verify current/external/version-sensitive facts.
+Mermaid is the default for pipelines, diagrams, and flow visualizations.
+When Mermaid is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.

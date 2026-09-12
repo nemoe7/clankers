@@ -17,7 +17,7 @@ Every skill must conform to the [Agent Skills specification](https://agentskills
 - `SKILL.md` is required, with YAML frontmatter followed by Markdown instructions.
 - `name` is required: 1–64 characters, lowercase letters, digits, and single internal hyphens, and it **must match the directory name**.
 - `description` is required: 1–1024 characters covering both what the skill does and when to use it, since agents load only the name and description when deciding whether to activate it.
-- Optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`. No other top-level keys are allowed; anything else, including `argument-hint`, belongs under `metadata` as a string value.
+- Optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`, except that `license` is required on any skill recording `metadata.upstream`, which the validator enforces. No other top-level keys are allowed; anything else, including `argument-hint`, belongs under `metadata` as a string value.
 - Optional directories follow the convention `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` under 500 lines and move detail into `references/`, which agents load only when needed.
 
@@ -31,7 +31,7 @@ Skills adapted from elsewhere record their origin in `metadata.upstream`. Pull u
 | [ponytail](ponytail/SKILL.md) | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
-The remaining skills are first-party and maintained here, marked `metadata.origin`. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass and carries no bundled license.
+The remaining skills are first-party and maintained here, marked `metadata.origin`. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
 
 ## Install
 

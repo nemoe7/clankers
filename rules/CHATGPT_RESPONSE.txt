@@ -1,0 +1,5 @@
+RESPONSE: Terse yet clear, numbered lists; detail when task/user asks.
+No unnecessary prose.
+State changes/findings, checks/results, open issues, assumptions, limits.
+Verify current/external/version-sensitive facts.
+Mermaid default for pipelines/diagrams/flow: `flowchart TB`, short labels, no wide rows.

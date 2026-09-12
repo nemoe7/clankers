@@ -65,6 +65,8 @@
 - Before asking questions, state the total number of questions that batch will hold and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same batch without first stating the updated total.
 - Always end the multi-question block with an open prompt inviting anything else, such as "Any more questions?" or "Anything else?"
+- If the question tool fails, times out, or renders only part of a batch, ask the same questions in plain text with the same labels and totals.
+- If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
 - Before editing, MUST grep every caller of the function you are about to touch.
 - Fix once where all callers route through.
@@ -84,7 +86,7 @@
 - Fix in-scope issues, then recheck.
 - Always criticize documentation, which could be stale, and code, which could be deeply flawed.
 - Criticize in both chat responses and report files. In short, criticize everything.
-- **NEVER claim a check you did not run**; report what you skipped instead.
+- NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
 - After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
 - For large function replacements, prefer a scripted splice.
@@ -125,7 +127,7 @@
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `gh pr edit` may fail on older repos (GraphQL projects-classic deprecation).
 - Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
-- NEVER `-f body=@path` — `-f` posts the literal `@path` string (it once replaced a whole PR body with `@/tmp/pr_body.md`).
+- **NEVER `-f body=@path`** — `-f` posts the literal `@path` string (it once replaced a whole PR body with `@/tmp/pr_body.md`).
 - Stage PR text in the workspace, never /tmp.
 - A 200 from a PR PATCH is not proof.
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live.

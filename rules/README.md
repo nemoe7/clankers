@@ -13,7 +13,8 @@ The installation script uses only Python's standard library. There is no test su
 | [rules/AGENTS.md](AGENTS.md) | Generic core rules | Install in the agent's supported global rules location |
 | [rules/CLINE.md](CLINE.md) | Cline-specific overlay | Load alongside AGENTS.md; it deliberately does not duplicate the core |
 | [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload or point the Arena agent to it; its preamble requires Arena agents reading it to apply it |
-| [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions | Paste into the instructions field; at most 1,500 characters |
+| [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions, first field | Paste into the field asking what ChatGPT should know; at most 1,500 characters |
+| [rules/CHATGPT_RESPONSE.txt](CHATGPT_RESPONSE.txt) | ChatGPT custom instructions, second field | Paste into the field asking how ChatGPT should respond; at most 1,500 characters |
 | [rules/COMMIT_SPEC.txt](COMMIT_SPEC.txt) | Compact commit-message reference | Use when preparing an authorized commit or proposed message |
 | [rules/refs/](refs/README.md) | Uncompressed rule originals, plus the AGENTS.md writing guidelines | Amend here first, mirror the amendment into the live file in compressed form, then squash it |
 | [skills/](../skills/README.md) | Reusable skills | Install complete skill directories, including supporting files |
@@ -51,7 +52,7 @@ $env:APPLY_RULES_BASE = "C:\path\to\profile"
 python .\rules\apply.py
 ```
 
-**Existing destination files are overwritten.** Back up local customization before applying. The installer does not install skills, ARENA.md, or CHATGPT.txt; use their separate setup steps. Do not install this specification as an agent rule.
+**Existing destination files are overwritten.** Back up local customization before applying. The installer does not install skills, ARENA.md, or the ChatGPT files; use their separate setup steps. Do not install this specification as an agent rule.
 
 ## Workflows
 
@@ -64,7 +65,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 1. Edit generic behavior in `rules/AGENTS.md`, then condense it into `rules/ARENA.md`.
 2. Optimize `rules/ARENA.md` for UTF-8 file size; match the core semantically, except push/PR handling (see Arena file).
 3. Keep `rules/CLINE.md` platform-specific (command discipline, tool names, timeouts); verify version-specific claims.
-4. Preserve rule-file filename headings. Keep `rules/CHATGPT.txt` plain text with inline labels, never Markdown headings or bullets, within budget, aligned with the core where it fits.
+4. Preserve rule-file filename headings. Keep `rules/CHATGPT.txt` and `rules/CHATGPT_RESPONSE.txt` — ChatGPT's two custom-instruction fields, split so both fit their limits — plain text with inline labels, never Markdown headings or bullets, each within its own 1,500-character budget, aligned with the core where it fits.
 5. Ration emphasis: hard rules are `MUST`/`NEVER`, bold at most two clauses per file (see Emphasis).
 6. Skills specialize defaults; NEVER weaken explicit requirements, conventions, or acceptance criteria.
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
@@ -78,7 +79,11 @@ Condense wording and sections, not meaning: keep negations, conditions, commands
 
 ### Emphasis
 
-Bold is reserved for at most two clauses per deployed rule file, so emphasis keeps its meaning: the honesty rule in `AGENTS.md` and `ARENA.md`, the planned final commit list in `ARENA.md`, `STOP` and the self-assignment ban in `CLINE.md`, and the two markdownlint settings in the root `AGENTS.md`. The cap covers the deployed rule files and their refs baselines, not this specification, the skills, or the workflows. MUST and NEVER stay on irreversible, dangerous, and honesty rules; every other rule reads positively, because a negated rule that guards nothing costs emphasis (see [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.7). Adding a third bold clause to a rule file means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
+Bold is reserved for at most two clauses per deployed rule file, so emphasis keeps its meaning: the honesty rule in `AGENTS.md`, the planned final commit list and the `-f body=@path` ban in `ARENA.md`, `STOP` and the self-assignment ban in `CLINE.md`, and the two markdownlint settings in the root `AGENTS.md`. The cap covers the deployed rule files and their refs baselines, not this specification, the skills, or the workflows. MUST and NEVER stay on irreversible, dangerous, and honesty rules; every other rule reads positively, because a negated rule that guards nothing costs emphasis (see [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.7). Adding a third bold clause to a rule file means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
+
+### Persona rules
+
+A few rules state voice rather than observable behavior: `Concise, direct, practical, accurate`, `Write clear, readable code`, `Never lazy about understanding`, and `Criticize all`. They are deliberate, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 2.3, which says not to fight the persona on style, and section 4.8, which asks that a deliberate deviation be marked rather than defended. They cost roughly 60 `tok` in the core and 400 `B` in ARENA.md, they stay, and an audit reads them as marked corner cuts rather than untestable-rule violations.
 
 ### Skill rules
 
@@ -94,18 +99,18 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 | --- | --- |
 | `rules/AGENTS.md` | Commit directly on a branch other than `main`; no commit list; merge fast-forward when possible, rebasing first on divergence. |
 | `rules/ARENA.md` | Print the planned final commit list before every commit; always push and keep a PR open; never merge until authorized, then fast-forward when possible, rebasing first on divergence. |
-| `rules/CHATGPT.txt` | Print the planned final commit list before committing; commit only when required. |
+| `rules/CHATGPT.txt`, `rules/CHATGPT_RESPONSE.txt` | Print the planned final commit list before committing; commit only when required. |
 | `rules/CLINE.md` | Follows the core: commit directly; no list. |
 | `rules/COMMIT_SPEC.txt` | Format reference only; matches the core (no list). |
 
 ### Formatting
 
-Markdown linting applies to the agent rule files under `rules/`, `rules/refs/` included: currently `AGENTS.md`, `ARENA.md`, `CLINE.md`, and the five Markdown files in `rules/refs/` — 8 files in all. Excluded are `rules/CHATGPT.txt`, this specification, root-level Markdown, and skills.
+Markdown linting applies to the agent rule files under `rules/`, `rules/refs/` included: currently `AGENTS.md`, `ARENA.md`, `CLINE.md`, and the five Markdown files in `rules/refs/` — 8 files in all. Excluded are the ChatGPT text files, this specification, root-level Markdown, and skills.
 
 Do not hard-wrap prose. Keep each paragraph, list item, and table row on one line and let the editor soft-wrap; third-party licenses keep their original wrapping.
 
-Rule files keep one rule per line, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.1: bullets in the Markdown rule files, one plain line per rule in `CHATGPT.txt`, which item 4 keeps free of headings and bullets. A line may carry one rule's parameters, enumeration, or exact command; it does not carry two rules. Each Markdown rule file opens with a `Use` section and closes with `When in doubt`; the core and `ARENA.md` also carry a constitution, while `CLINE.md` inherits the core's rather than duplicating it. `CHATGPT.txt` and `COMMIT_SPEC.txt` keep their fixed formats instead, per item 4 and their single-purpose scope.
+Rule files keep one rule per line, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.1: bullets in the Markdown rule files, one plain line per rule in the ChatGPT files, which item 4 keeps free of headings and bullets. A line may carry one rule's parameters, enumeration, or exact command; it does not carry two rules. Each Markdown rule file opens with a `Use` section and closes with `When in doubt`; the core and `ARENA.md` also carry a constitution, while `CLINE.md` inherits the core's rather than duplicating it. The ChatGPT files and `COMMIT_SPEC.txt` keep their fixed formats instead, per item 4 and their single-purpose scope.
 
 [.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps file selection, exclusions, and rule settings together: markdownlint defaults, **MD060 enabled** for table-column consistency, and **MD013 disabled** so there is no line-length constraint. MD060 uses its default `any` style, and MD007 its default 2-space list indent, so neither needs a pin. If markdownlint-cli2 is available, run it from the repository root without additional file globs to use this scope; the workflow passes no globs either, so both use this one definition. `maintenance/check.py` recomputes the scope from this config and fails when it drifts from the counts recorded here and in the root guide. No tooling installation is required.
 
-Python style stays defined in the core rules (Ruff selection E4, E7, E9, F), without a managed Ruff dependency. Keep CHATGPT.txt within 1,500 Unicode characters, including newlines.
+Python style stays defined in the core rules (Ruff selection E4, E7, E9, F), without a managed Ruff dependency. Keep each ChatGPT field within 1,500 Unicode characters, including newlines; the validator checks both.

@@ -1,16 +1,9 @@
-RESPONSE: Terse yet clear, numbered lists.
-No unnecessary prose: no preambles, postambles, transitions, acknowledgments, or disclaimers.
-Give the detail the task requires or the user requests.
-State what changed/was found, checks and results, open issues, assumptions, limits.
-Verify current/external/version-sensitive facts.
-Mermaid is the default for pipelines, diagrams, and flow visualizations.
-When Mermaid is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.
-
 SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when the task requires it.
 Add tests only when requested or necessary to verify the change.
-Ask only when ambiguity materially affects scope or behavior.
+Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then.
+For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: reuse what's here > stdlib/native > installed dep > minimal code.
 NEVER add a dependency for a few lines' work.

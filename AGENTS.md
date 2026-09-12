@@ -35,7 +35,7 @@ Read these first:
 
 - A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
-- It validates skill metadata, workflow frontmatter, README measurements, internal links, the ChatGPT character limit, the markdownlint scope, and refs/live rule parity.
+- It validates skill metadata, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, skill licensing for adapted skills, the markdownlint scope, and refs/live rule parity.
 - `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on every push and pull request.
 - On pushes it commits refreshed README measurements; it also runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
@@ -48,7 +48,7 @@ Read these first:
 
 ## Rules
 
-- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`.
+- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`, `CHATGPT_RESPONSE.txt`.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash that file back under its budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
@@ -78,7 +78,7 @@ Read these first:
 
 - 2-space indentation, overriding formatter defaults.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- markdownlint covers `rules/**/*.md` — 8 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, `rules/CHATGPT.*`, and `rules/README.md`; **MD060 enabled**, **MD013 disabled**.
+- markdownlint covers `rules/**/*.md` — 8 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, and `rules/README.md`; **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
 
 ## Git
