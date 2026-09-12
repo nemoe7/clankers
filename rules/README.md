@@ -78,7 +78,7 @@ Condense wording and sections, not meaning: keep negations, conditions, commands
 
 ### Emphasis
 
-Bold is reserved for at most two clauses per file, currently the honesty rule and, in ARENA.md, the squashed commit list, so emphasis keeps its meaning. Adding a third bold clause means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
+Bold is reserved for at most two clauses per file, currently the honesty rule and, in ARENA.md, the planned final commit list, so emphasis keeps its meaning. Adding a third bold clause means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
 
 ### Skill rules
 
@@ -92,9 +92,9 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 | File | Discipline |
 | --- | --- |
-| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no squashed list. |
-| `rules/ARENA.md` | Print the squashed commit list before every commit; always push and keep a PR open. |
-| `rules/CHATGPT.txt` | Print the squashed commit list first; commit only when required. |
+| `rules/AGENTS.md` | Commit directly on a branch other than `main`; no commit list. |
+| `rules/ARENA.md` | Print the planned final commit list before every commit; always push and keep a PR open. |
+| `rules/CHATGPT.txt` | Print the planned final commit list before committing; commit only when required. |
 | `rules/CLINE.md` | Follows the core: commit directly; no list. |
 | `rules/COMMIT_SPEC.txt` | Format reference only; matches the core (no list). |
 

@@ -3,6 +3,7 @@
 ## General
 
 - Concise, direct, practical, accurate. Preserve key details: negations, conditions, errors, commands, numbers, caveats. Follow repo docs and conventions; prefer existing patterns. Skills specialize defaults and NEVER weaken an explicit requirement or replace project conventions.
+- Agents operating under this file in Arena MUST also read and follow the repository's `ARENA.md` as an additional applicable ruleset; it supplements AGENTS.md and NEVER replaces it.
 
 ## Scope
 
@@ -12,16 +13,17 @@
 - Plans are incomplete until TDD and commits are defined.
 - MUST read all project instructions before changes.
 - MUST follow the approved plan step-by-step, verifying each logical change. MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
-- MUST do only the requested task plus what it takes to implement and verify; smallest coherent change; stop when verified.
+- MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - Preserve behavior, architecture, interfaces, intent, conventions unless change is required.
-- NEVER proactively refactor, optimize, redesign, rename, reformat, change a dependency or error handling/security, or add tests.
+- NEVER proactively refactor, optimize, redesign, rename, reformat, or change a dependency or error handling/security.
+- NEVER add tests unless requested or necessary to verify the change.
 - Investigate only as needed; NEVER hunt alternatives past a suitable pattern, speculate on unrelated requirements or edge cases, or replan without new evidence.
-- Unrelated findings stay out of scope unless blocking. Ask only when ambiguity materially affects safe scope or behavior.
+- Unrelated findings stay out of scope unless blocking. Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then. For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 
 ## Engineering
 
 - KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; helper/pattern already here; stdlib; native feature; installed dependency; one line; minimum code. NEVER add a dependency for a few lines' work.
-- Build what is asked, then name the lazier alternative in one line; the user picks. Never lazy about understanding: read the code, trace the flow first. NEVER simplify away trust-boundary validation, error handling preventing data loss, security, or accessibility; mark a deliberate corner-cut with a `simplified:` comment naming its ceiling and upgrade path.
+- Build what is asked; when a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies. Never lazy about understanding: read the code, trace the flow first. NEVER simplify away trust-boundary validation, error handling preventing data loss, security, or accessibility; mark a deliberate corner-cut with a `simplified:` comment naming its ceiling and upgrade path.
 - Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior; NEVER an unrequested abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding for later; seams only for tangible needs, never a parallel mechanism where an extension point fits.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement. Write clear, readable code.
 
@@ -33,7 +35,7 @@ Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the ro
 
 ## Testing
 
-New behavior, fixes, refactors: failing test first when practical, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical-only changes: proportional verification. NEVER weaken or drop a test to pass; no speculative behavior or tests. Prefer one small runnable check for non-trivial logic (an assert-based demo or a single small test file); introduce no new frameworks or fixtures unless asked; trivial one-liners need no test.
+New behavior, fixes, refactors: when a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse existing frameworks/fixtures/helpers/conventions. Mechanical-only changes: proportional verification. NEVER weaken or drop a test to pass; no speculative behavior or tests. Prefer one small runnable check for non-trivial logic (an assert-based demo or a single small test file); introduce no new frameworks or fixtures unless asked; trivial one-liners need no test.
 
 ## Review
 
@@ -54,7 +56,7 @@ New behavior, fixes, refactors: failing test first when practical, smallest pass
 
 ## Responses
 
-- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations. Consider reporting what was skipped and when to add it.
+- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations, without unnecessary prose but with the detail the task requires or the user requests. Consider reporting what was skipped and when to add it.
 - Prefer numbered lists for multiple points.
 - Never repeat the task.
-- Use a mermaid diagram when structure or flow beats prose and the surface renders it; fit a narrow viewport (phone, sidebar): top-down, short labels, no wide rows.
+- Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it; fit a narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no unnecessarily wide rows.
