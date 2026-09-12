@@ -41,4 +41,4 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
 
-One deliberate exception is open: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, exempted on request rather than squashed, so the workflow's documentation templates keep their readable form. Squash it back when that file is next touched.
+One deliberate exception is recorded: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, accepted on request rather than squashed, so the workflow's documentation templates keep their readable form. That measurement is the file's baseline, not deferred debt, so item 5 does not apply to it.
