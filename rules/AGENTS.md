@@ -16,7 +16,7 @@
 
 - KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; helper/pattern already here; stdlib; native feature; installed dependency; one line; minimum code. NEVER add a dependency for a few lines' work.
 - Build what is asked; name a relevant lazier alternative in one line, user picks, no commentary when none applies. Never lazy about understanding: read code, trace flow first. NEVER simplify away trust-boundary validation, data-loss error handling, security, or accessibility; mark a corner-cut with a `simplified:` comment naming ceiling and upgrade path.
-- Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior; NEVER an unrequested abstraction (one-implementation interface, one-product factory, config for a constant), boilerplate, or scaffolding; seams only for tangible needs, never a parallel mechanism where an extension point fits.
+- Guard clauses, early returns; cohesive modules, low coupling, small interfaces, local data/behavior; NEVER an unrequested abstraction, boilerplate, or scaffolding; seams only for tangible needs, never a parallel mechanism where an extension point fits.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement. Write clear, readable code.
 
 - Consider proposing smaller scope for approval over silent trims; simplicity chooses how, never what. Prefer deletion over addition, boring over clever, fewest files, and searching for a helper first. Prefer the simplest implementation meeting every criterion, the edge-case-correct stdlib pick on ties, and safe defaults only when non-material; if the user insists on the full version, build it without re-arguing.
@@ -27,7 +27,7 @@ Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the ro
 
 ## Testing
 
-New behavior, fixes, refactors: when a test is appropriate, failing test first, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative behavior or tests. Prefer one small runnable check for non-trivial logic (assert-based demo or one small test file); introduce no new frameworks or fixtures unless asked; trivial one-liners need no test.
+New behavior, fixes, refactors: when a test is appropriate, failing test first, smallest passing change, refactor without behavior change, rerun checks. Test public interfaces and integration boundaries; reuse frameworks/fixtures/helpers/conventions. Mechanical edits get proportional checks. NEVER weaken or drop a test to pass; no speculative behavior or tests. Prefer one small runnable check for non-trivial logic; introduce no new frameworks or fixtures unless asked; trivial one-liners need no test.
 
 ## Review
 

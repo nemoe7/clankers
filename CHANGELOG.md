@@ -11,12 +11,13 @@ Project history, newest first. One entry per pull request, not per feature or co
 - Root `ARENA.md` is re-copied from `rules/ARENA.md` and stays byte-identical, matching what `.github/workflows/distribute-arena.yml` pushes to target repos.
 - `rules/refs/` was amended first per the Baselines rule: `refs/AGENTS.md`, `refs/ARENA.md`, and `refs/CHATGPT.txt` hold the full uncompressed wording of every clause that landed live, including `before committing` and `no unnecessarily wide rows` where the live ChatGPT file compresses to `first` and `no wide rows`. `refs/CHATGPT.txt` omits amendments 4 and 7 so the baseline keeps mirroring its live file; their full wording lives in `refs/AGENTS.md` and `refs/ARENA.md`.
 - `rules/README.md` renames the printed list in the Emphasis note and the commit-disciplines table (`Print the planned final commit list before committing`, `before every commit`, and `no commit list` for the core) so the specification stays truthful about amendment 6. `rules/CLINE.md`, `rules/COMMIT_SPEC.txt`, and root `AGENTS.md` are untouched: the overlay is platform-specific, the commit spec carries no list rule, and the Arena clause belongs to the distributed core by decision.
+- Budget funding pass after review: `rules/AGENTS.md` drops the illustrative unrequested-abstraction examples (one-implementation interface, one-product factory, config for a constant) and the runnable-check parenthetical (assert-based demo or one small test file); `rules/ARENA.md` and root `ARENA.md` drop the criticism rationale (`docs may be stale; code may be wrong`) and the `(tables from fixtures)` example. Every cut removes illustration only, keeping its rule and full wording in `rules/refs/`. 1,357 → 1,334 `tok` and 8,077 → 8,016 `B`; root `ARENA.md` re-copied and still byte-identical. The residual over prior (1,263 `tok`, 7,544 `B`) is requested amendment content: the remaining candidates are one restated clause (`Python: Ruff defaults (E4, E7, E9, F)`, ~12 `tok`, restated by the `ruff.toml` spec in the same section) and two deterrents strengthened on purpose in earlier rounds (`Committing without printing it is a violation, not an oversight`, and the `-f` war story kept per direction), so they were left alone.
 - Checks run: `maintenance/check.py` passes and refreshed the README table and date; markdownlint-cli2 reports 0 issues across the 7 linted files; `ruff check` and `ruff format --diff` are clean at the pinned 0.16.6, with no Python changed.
 
 | File | Measure | Change |
 | --- | --- | --- |
-| `rules/AGENTS.md` | 1,357 `tok` | +94 |
-| `rules/ARENA.md` | 8,077 `B` | +533 |
+| `rules/AGENTS.md` | 1,334 `tok` | +71 |
+| `rules/ARENA.md` | 8,016 `B` | +472 |
 | `rules/CHATGPT.txt` | 1,494 `chars` | 0 |
 
 ## 2026-09-11 — Apply Arena amendments with Ruff gates
