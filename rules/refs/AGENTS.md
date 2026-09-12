@@ -51,7 +51,16 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; helper/pattern already here; stdlib; native feature; installed dependency; one line; minimum code.
+- KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
+- Rung 1 — Does this need to exist at all? Skip speculative additions, not explicit requirements; propose a smaller scope for approval if the brief itself should change (YAGNI).
+- Rung 2 — Already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write, because re-implementing what is a few files over is the most common slop.
+- Rung 3 — Stdlib does it? Use it.
+- Rung 4 — Native platform feature covers it? A date input over a picker library, CSS over JS, a database constraint over application code.
+- Rung 5 — Already-installed dependency solves it? Use it, and never add a new one for what a few lines can do.
+- Rung 6 — Can it be one line? One line.
+- Rung 7 — Only then, the minimum code that works.
+- The ladder is a reflex, not a research project, and it runs after you understand the problem rather than instead of it: read the task and the code it touches, trace the real flow end to end, then climb; when two rungs work, take the higher one and move on.
+- MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how to meet the brief, NEVER what to silently drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
 - When a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies.
@@ -64,7 +73,6 @@
 - Cut a seam only for a tangible need, and prefer an existing extension point over a parallel mechanism.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - Write clear, readable code.
-- Consider proposing a smaller scope for approval when the brief looks bigger than the need; simplicity chooses how to meet the brief, never what to silently drop.
 - Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing.
 - Prefer the simplest implementation that meets every acceptance criterion, the edge-case-correct standard-library pick when two options tie, and safe defaults only for non-material choices.
 - If the user insists on the full version, build it without re-arguing.
@@ -86,7 +94,7 @@
 - Mechanical-only changes: proportional verification.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
-- Prefer one small runnable check for non-trivial logic (an assert-based demo or a single small test file).
+- MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
 - Introduce no new frameworks or fixtures unless asked.
 - Trivial one-liners need no test.
 

@@ -3,7 +3,7 @@
 Rules, skills, and workflows for AI agents.
 
 - [rules/](rules/): shared and platform-specific agent instructions, ChatGPT's two custom-instruction fields, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
-- [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
+- [skills/](skills/README.md): reusable skills for planning, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
 - [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
 - [rules/refs/](rules/refs/README.md): uncompressed rule originals and the AGENTS.md writing guidelines; amend here first, mirror the amendment into the live file in compressed form, then squash it.
@@ -16,17 +16,15 @@ Latest measurements as of 2026-09-12. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,731 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 9,205 `B` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,818 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 9,841 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,351 `chars` |
 | `rules/CHATGPT_RESPONSE.txt` | `Unicode chars` | 305 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` | 47 `tok` |
-| `skills/frontend-design/SKILL.md` | `cl100k_base` | 2,011 `tok` |
 | `skills/planning/SKILL.md` | `cl100k_base` | 871 `tok` |
-| `skills/ponytail/SKILL.md` | `cl100k_base` | 1,675 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
-| `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 533 `tok` |
+| `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,139 `tok` |
 
 Measurements cover complete files, including whitespace and markup.
@@ -42,4 +40,4 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
 
-One deliberate exception is recorded: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, accepted on request rather than squashed, so the workflow's documentation templates keep their readable form. That measurement is the file's baseline, not deferred debt, so item 5 does not apply to it.
+One deliberate exception is recorded: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, accepted on request rather than squashed, so the workflow's documentation templates keep their readable form. That measurement is the file's baseline, not deferred debt, so item 5 does not apply to it. Two more are recorded from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements are the two files' baselines, not deferred debt, so item 5 does not apply to them either.
