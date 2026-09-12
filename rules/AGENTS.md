@@ -118,7 +118,7 @@
 - Types: `feat fix refactor perf style docs test build chore`.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward when possible; on divergence, rebase onto the target first, then fast-forward.
 
 ## Responses
 

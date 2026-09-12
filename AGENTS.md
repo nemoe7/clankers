@@ -28,7 +28,7 @@ Read these first:
 - Commit on a branch other than `main`, one logical change per commit.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward when possible; on divergence, rebase onto the target first.
 - Keep one CHANGELOG entry per pull request, extending the open entry while that pull request is unmerged.
 
 ## Repository type
@@ -87,7 +87,7 @@ Read these first:
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
 - Stage only task-related files.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 
 ## Boundaries
 

@@ -14,7 +14,7 @@
 - NEVER claim a check you did not run.
 - Always push the branch and keep a PR open.
 - NEVER merge the PR until authorized.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - Stop and ask on material ambiguity or a deviation from the plan; NEVER improvise past the plan.
 - After every file edit, grep-verify the change landed before building on it.
 - Ask questions in labeled batches that state their total and end with an open prompt.
@@ -117,7 +117,7 @@
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - Disregard never-push rules; Arena's controlled edits make pushing safe.
 - NEVER merge the PR until authorized.
-- Merges MUST be fast-forward when possible.
+- Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - Report and audit artifacts live in git-ignored output dirs.
 - Always commit them locally at the end of the turn so they show in the diff viewer, and NEVER push them to the repository.
 - On the next turn, undo that local commit and continue from there.
