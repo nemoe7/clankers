@@ -6,7 +6,7 @@ Rules, skills, and workflows for AI agents.
 - [skills/](skills/README.md): reusable skills for planning, simpler code, frontend design, UI reviews, and text compression. Each skill has a `SKILL.md` entry point and any supporting files.
 - [workflows/](workflows/README.md): portable agent workflows, currently repository documentation initialization. Each workflow is a self-contained Markdown file usable as-is.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
-- [rules/refs/](rules/refs/README.md): uncompressed rule originals; amend here before compressing.
+- [rules/refs/](rules/refs/README.md): uncompressed rule originals and the AGENTS.md writing guidelines; amend here first, copy onto the live file, then compress the live copy.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
@@ -16,7 +16,7 @@ Latest measurements as of 2026-09-12. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,335 `tok` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,632 `tok` |
 | `rules/ARENA.md` | `UTF-8 file size` | 8,017 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,494 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 580 `tok` |
@@ -32,7 +32,7 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of these guidelines. Compression is editorial, not lossy: it removes words, never rules.
+Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of these guidelines. Amend `rules/refs/` first, copy the amended baseline onto its live counterpart, then compress that live copy; refs stay uncompressed as the baseline. Compression is editorial, not lossy: it removes words, never rules.
 
 1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves. Repeat until a pass yields nothing.
 2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.

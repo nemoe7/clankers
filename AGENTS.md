@@ -8,6 +8,7 @@ Guide for agents in this repository. Read these first.
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
 - [workflows/README.md](workflows/README.md) — workflow format, portability, usage
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
+- [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) — the standard for writing an AGENTS.md; audit rule files against it
 
 ## Repo type
 
@@ -23,7 +24,7 @@ Workflows in `workflows/` are portable across coding-agent platforms: the workfl
 
 ## Rules
 
-Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`. Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task; treat installed copies as read-only.
+Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`. Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task; treat installed copies as read-only. Amend `rules/refs/` first, copy the amended baseline onto its live counterpart in `rules/`, then squash the live copy back under its budget; refs stay uncompressed as the baseline.
 
 ## Budgets
 
