@@ -15,7 +15,7 @@ The installation script uses only Python's standard library. There is no test su
 | [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload or point the Arena agent to it; its preamble requires Arena agents reading it to apply it |
 | [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions | Paste into the instructions field; at most 1,500 characters |
 | [rules/COMMIT_SPEC.txt](COMMIT_SPEC.txt) | Compact commit-message reference | Use when preparing an authorized commit or proposed message |
-| [rules/refs/](refs/README.md) | Uncompressed rule originals | Amend here first, then compress into `rules/` |
+| [rules/refs/](refs/README.md) | Uncompressed rule originals, plus the AGENTS.md writing guidelines | Amend here first, copy onto the live file, then squash the live copy |
 | [skills/](../skills/README.md) | Reusable skills | Install complete skill directories, including supporting files |
 | [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into your platform's workflow location, or run it as-is |
 
@@ -70,7 +70,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification with recorded provenance (see Skill rules).
 9. Keep this repository lightweight: no further CI workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
-10. Amend `rules/refs/` and the live rule together: full wording in refs, compressed form in `rules/` (see Baselines).
+10. Amend `rules/refs/` first, copy the amended baseline onto its live counterpart, then squash that copy: full wording in refs, compressed form in `rules/` (see Baselines).
 
 ### Arena file
 
@@ -78,7 +78,7 @@ Condense wording and sections, not meaning: keep negations, conditions, commands
 
 ### Emphasis
 
-Bold is reserved for at most two clauses per file, currently the honesty rule and, in ARENA.md, the planned final commit list, so emphasis keeps its meaning. Adding a third bold clause means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
+Bold is reserved for at most two clauses per file, currently the honesty rule and, in ARENA.md, the planned final commit list, so emphasis keeps its meaning. MUST and NEVER stay on irreversible, dangerous, and honesty rules; every other rule reads positively, because a negated rule that guards nothing costs emphasis (see [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.7). Adding a third bold clause means demoting another. Do not emphasize a rule merely because it is important; emphasize the ones that get violated.
 
 ### Skill rules
 
@@ -86,7 +86,7 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 ### Baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first in complete sentences, then squash it into the live file, preserving every negation, condition, command, number, threshold, filename, and caveat. Files equal their live counterparts where no compression was applied. Every rule change amends both files, so the original wording is always preserved in refs.
+`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first, in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Then copy the amended baseline onto its corresponding live file and squash that copy back under budget; refs stay unsquashed as the baseline. Files equal their live counterparts where no compression was applied, so the original wording is always preserved in refs. `GUIDELINES.md` sits beside them as the writing standard these baselines are audited against; it is a reference, not a rule baseline, and has no live counterpart.
 
 ### Commit disciplines
 

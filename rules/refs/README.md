@@ -1,6 +1,6 @@
 # rules/refs baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording, extrapolated clause-by-clause from `main` history (oldest rules commit `7841d84` through `dcea8d3`). Each clause keeps its longest historical sentence form; MUST/NEVER hard-rule markers are emphasis and kept as-is. Amendments are written here first in complete sentences, then squashed into `rules/`, preserving every negation, condition, command, number, threshold, filename, and caveat. Every change amends both this baseline and the live rule, so original wording is always preserved.
+`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording, extrapolated clause-by-clause from `main` history (oldest rules commit `7841d84` through `dcea8d3`). Each clause keeps its longest historical sentence form. MUST/NEVER markers are emphasis and stay on irreversible, dangerous, and honesty rules; other rules read positively (see `GUIDELINES.md` section 4.7). Amend here first, before touching any live file: write the amendment in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Then copy the amended baseline onto its corresponding live file in `rules/`, and squash that live copy back under its budget. Refs stay unsquashed, so the original wording is never lost.
 
 ## Files
 
@@ -9,3 +9,4 @@
 - `CHATGPT.txt` — uncompressed ChatGPT instructions.
 - `CLINE.md` — uncompressed Cline overlay.
 - `COMMIT_SPEC.txt` — equals the live file; no compression was ever applied.
+- `GUIDELINES.md` — the standard for writing an AGENTS.md, which these baselines are audited against. A reference, not a rule baseline: no live counterpart, never squashed.
