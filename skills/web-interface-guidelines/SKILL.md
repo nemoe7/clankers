@@ -36,7 +36,7 @@ Sacrifice grammar for brevity, but never report a finding you did not verify in 
 
 Use this skill to review an existing interface: UI reviews, accessibility audits, UX audits, and web best-practice checks.
 
-Do not use it in place of `frontend-design` when creating or substantially redesigning an interface.
+Do not use it in place of design work when creating or substantially redesigning an interface.
 
 ## Input
 

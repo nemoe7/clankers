@@ -35,7 +35,9 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY, laziest working solution: stop at the first rung that holds — needed at all; existing helper/pattern; stdlib; native feature; installed dependency; one line; minimum code.
+- KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not explicit requirements); 2 existing helper/pattern, look before writing; 3 stdlib; 4 native feature; 5 installed dependency; 6 one line; 7 minimum code.
+- The ladder is a reflex, not a research project: climb after understanding; two rungs work, take the higher one.
+- MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to silently drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
 - Name a relevant lazier alternative in one line, user picks, no commentary when none applies.
@@ -47,7 +49,6 @@
 - Add an abstraction, boilerplate, or scaffolding only for a tangible present need.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - Dependencies need explicit per-case user approval, even "small" ones, covering only the dependency and purpose named.
-- Consider proposing smaller scope for approval over silent trims; simplicity chooses how, never what.
 - Prefer deletion over addition, boring over clever, fewest files, searching for a helper first.
 - Prefer the simplest implementation meeting every criterion, the edge-case-correct stdlib pick on ties, safe defaults only when non-material.
 - A user insisting on the full version gets it without re-arguing.
@@ -61,6 +62,7 @@
 - End the multi-question block with an open prompt ("Anything else?").
 - Question tool failing or rendering partially: ask in plain text with the same labels and totals.
 - A duplicated, garbled, or later-disowned message: confirm the reading in one line before acting.
+- The client is unreliable: it resends messages, truncates replies, and returns empty results from tools that ran. A repeated message is a resend, not a new instruction: answer what is pending, restate what is done in one line, never redo finished work or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix root cause not the symptom, cover, recheck.
 - MUST grep every caller of the function before editing.
 - Fix once where all callers route through.
@@ -72,7 +74,7 @@
 - Reuse frameworks/fixtures/helpers/conventions.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
-- Prefer one small runnable check for non-trivial logic.
+- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or one small test file.
 - No new frameworks or fixtures unless asked.
 - Trivial one-liners need no test.
 - Mechanical changes get proportional checks.
