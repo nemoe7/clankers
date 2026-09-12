@@ -8,7 +8,7 @@ Repository checks live in `maintenance/`.
 python3 maintenance/check.py
 ```
 
-The validator checks skill discovery metadata, required `SKILL.md` files, Agent Skills naming/frontmatter limits, workflow listing and frontmatter descriptions, internal links, README skill and workflow coverage, recorded measurements, the ChatGPT character limit, byte-identity between the distributed root `ARENA.md` and `rules/ARENA.md`, the markdownlint scope recomputed from `.markdownlint-cli2.jsonc` against the counts documented in this repository, and refs/live rule parity: identical section headings in the same order, with each live section holding no more rule lines than its refs baseline.
+The validator checks skill discovery metadata, required `SKILL.md` files, Agent Skills naming/frontmatter limits, workflow listing and frontmatter descriptions, internal links, README skill and workflow coverage, recorded measurements, the ChatGPT character limit, the markdownlint scope recomputed from `.markdownlint-cli2.jsonc` against the counts documented in this repository, and refs/live rule parity: identical section headings in the same order, with each live section holding no more rule lines than its refs baseline.
 
 ## Update README measurements
 

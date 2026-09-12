@@ -35,7 +35,7 @@ Read these first:
 
 - A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
-- It validates skill metadata, workflow frontmatter, README measurements, internal links, the ChatGPT character limit, the distributed `ARENA.md` copy, the markdownlint scope, and refs/live rule parity.
+- It validates skill metadata, workflow frontmatter, README measurements, internal links, the ChatGPT character limit, the markdownlint scope, and refs/live rule parity.
 - `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on every push and pull request.
 - On pushes it commits refreshed README measurements; it also runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 

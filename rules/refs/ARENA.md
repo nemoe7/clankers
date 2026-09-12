@@ -122,6 +122,7 @@
 - Always commit them locally at the end of the turn so they show in the diff viewer, and NEVER push them to the repository.
 - On the next turn, undo that local commit and continue from there.
 - Maintain a single report file and update it in place rather than adding new files, so diffs stay readable.
+- Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `gh pr edit` may fail on older repos (GraphQL projects-classic deprecation).
 - Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
 - NEVER `-f body=@path` — `-f` posts the literal `@path` string (it once replaced a whole PR body with `@/tmp/pr_body.md`).
