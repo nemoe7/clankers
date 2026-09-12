@@ -47,7 +47,7 @@ New behavior, fixes, refactors: when a test is appropriate, prefer a failing tes
 
 ## Code style
 
-2-space indentation (overrides formatter defaults). Markdown: markdownlint defaults + MD060; MD013 disabled. Python: Ruff default selection (E4, E7, E9, F). Python uses the repo's `ruff.toml` (`required-version = "0.16.6"`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, Ruff defaults); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code untouched. MUST maintain repository hygiene. Keep scratch files, scripts, and output outside the repo or delete them once used. Never commit or abandon them. If Plan mode was used, MUST delete all generated plan files.
+2-space indentation (overrides formatter defaults). Markdown: markdownlint defaults + MD060 and MD007 at 2-space list indent; MD013 disabled. Python: Ruff default selection (E4, E7, E9, F). Python uses the repo's `ruff.toml` (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`); if missing, create it exactly before gates. Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides. Leave unrelated code untouched. MUST maintain repository hygiene. Keep scratch files, scripts, and output outside the repo or delete them once used. Never commit or abandon them. If Plan mode was used, MUST delete all generated plan files.
 
 ## Git
 
