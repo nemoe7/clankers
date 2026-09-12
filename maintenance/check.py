@@ -34,6 +34,7 @@ EXPECTED_BUDGETS = {
   "rules/AGENTS.md": "cl100k_base",
   "rules/ARENA.md": "UTF-8 file size",
   "rules/CHATGPT.txt": "Unicode chars",
+  "rules/CHATGPT_RESPONSE.txt": "Unicode chars",
   "rules/CLINE.md": "cl100k_base",
   "rules/COMMIT_SPEC.txt": "cl100k_base",
   "skills/frontend-design/SKILL.md": "cl100k_base",
@@ -68,7 +69,10 @@ LINT_COUNT_CLAIMS = (
 # Refs baselines hold full wording; live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md")
-PLAIN_PAIRS = ("CHATGPT.txt", "COMMIT_SPEC.txt")
+PLAIN_PAIRS = ("CHATGPT.txt", "CHATGPT_RESPONSE.txt", "COMMIT_SPEC.txt")
+
+# ChatGPT's custom instructions are two fields, each capped at 1,500 characters.
+CHATGPT_FIELDS = ("CHATGPT.txt", "CHATGPT_RESPONSE.txt")
 
 _token_encoder: Any = None
 
@@ -627,6 +631,22 @@ def validate(errors: list[str]) -> None:
         f"{path.relative_to(ROOT)}: unknown frontmatter fields: {sorted(unknown)}"
       )
 
+    adapted = re.search(
+      r"^[ \t]+upstream:", text[: text.find("\n---", 4)], re.MULTILINE
+    )
+    license_value = str(values.get("license", ""))
+
+    if adapted and not license_value:
+      errors.append(
+        f"{path.relative_to(ROOT)}: adapted skill records metadata.upstream "
+        "but declares no license"
+      )
+
+    if "LICENSE.txt" in license_value and not (skill / "LICENSE.txt").is_file():
+      errors.append(
+        f"{path.relative_to(ROOT)}: license points at a missing LICENSE.txt"
+      )
+
     name = values.get("name", "")
     description = values.get("description", "")
 
@@ -739,13 +759,14 @@ def validate(errors: list[str]) -> None:
           f"README budget stale for {relative}: recorded={recorded} actual={actual}"
         )
 
-  chat = RULES / "CHATGPT.txt"
+  for field in CHATGPT_FIELDS:
+    chat = RULES / field
 
-  if chat.is_file():
-    characters = len(chat.read_text(encoding="utf-8"))
+    if chat.is_file():
+      characters = len(chat.read_text(encoding="utf-8"))
 
-    if characters > 1500:
-      errors.append("rules/CHATGPT.txt exceeds 1,500 Unicode chars")
+      if characters > 1500:
+        errors.append(f"rules/{field} exceeds 1,500 Unicode chars")
 
   check_lint_scope(errors)
   check_refs_parity(errors)

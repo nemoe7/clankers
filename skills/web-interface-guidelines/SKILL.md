@@ -1,6 +1,7 @@
 ---
 name: web-interface-guidelines
 description: Review UI code for compliance with the Vercel Web Interface Guidelines, covering accessibility, focus states, forms, animation, typography, performance, touch, dark mode, i18n, hydration, and copy. Use for UI reviews, accessibility audits, UX audits, and web best-practice checks of existing interfaces.
+license: MIT. LICENSE.txt has complete terms
 metadata:
   author: vercel
   version: "2.0.0"
