@@ -37,13 +37,14 @@
 - Plans are incomplete until TDD and commits are defined.
 - MUST read project instructions before changes, then follow the approved plan, verifying each logical change.
 - MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
-- MUST do only requested work plus work strictly necessary to implement/verify it; smallest coherent change; stop when verified.
+- MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
 - Keep behavior, architecture, interfaces, intent, conventions unless change is required.
 - Only refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security when required.
 - Only add tests when requested or needed to verify.
-- Investigate just enough: stop at a suitable pattern, skip unrelated requirements/edge cases, replan only on new evidence.
+- Investigate just enough: stop at a suitable pattern, skip unrelated requirements/edge cases, replan only on evidence.
 - Unrelated findings stay out of scope unless blocking.
 - Material ambiguity = reasonable readings that could change behavior/data/interfaces/scope/outcome: ask only then, before implementing, not after.
+- Prefer the question tool when the surface has one.
 - Never block an unattended run: record the question, proceed on a stated assumption.
 - Else assume the most reasonable, stating it when it materially affects the result.
 
@@ -64,7 +65,7 @@
 - Cut a seam only for a tangible need; prefer an existing extension point over a parallel mechanism.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - Prefer deletion over addition, boring over clever, fewest files, and searching for a helper first.
-- Prefer the simplest implementation meeting every criterion, the edge-case-correct stdlib pick on ties, safe defaults only when non-material.
+- Prefer the simplest implementation meeting all criteria, the edge-case-correct stdlib pick on ties, safe defaults only when non-material.
 - If the user insists on the full version, build it without re-arguing.
 
 ## Debugging
@@ -93,7 +94,7 @@
 - Before finishing check requirements, acceptance criteria, scope.
 - Verify behavior via tests/linters/formatters/builds.
 - Verify external, version-specific, or time-sensitive facts against authoritative sources.
-- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
+- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every file belongs.
 - Fix in-scope issues and recheck.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Confirm planned changes, checks, commits, and cleanup are done.
@@ -107,28 +108,28 @@
 - If missing, create it exactly before gates.
 - Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
 - Leave unrelated code alone.
-- MUST keep repository hygiene: scratch files, scripts, and output stay out of the repo or are deleted once used, out of every commit.
+- MUST keep repository hygiene: scratch files, scripts, output stay out of the repo or are deleted once used, out of every commit.
 - If Plan mode was used, MUST delete generated plan files.
 
 ## Git
 
-- MUST stage only task-related files, leaving unrelated and user-owned files unstaged.
+- MUST stage only task-related files, leaving unrelated/user-owned unstaged.
 - Respect the user's global gitignore (`core.excludesFile`).
 - Review the diff after each edit.
-- MUST commit on a branch other than `main`: one logical change per commit with every changed file in it, checks green, independently revertible.
-- One Conventional Commit per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body.
+- MUST commit on a branch other than `main`: one logical change per commit with every file in it, checks green, independently revertible.
+- One Conventional Commit per change: `<type>(scope): <subject>` — imperative, specific, lowercase, no period, <=72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
-- Merges MUST be fast-forward when possible; on divergence, rebase onto the target first, then fast-forward.
+- Merges MUST be fast-forward when possible; on divergence, rebase onto the target, then fast-forward.
 
 ## Responses
 
-- Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; no unnecessary prose; detail when asked.
+- Report changes/findings, checks/results, useful files/decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
 - Consider reporting skipped alternatives with add-when triggers.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- Default to mermaid for pipelines, diagrams, and flows where the surface renders it; fit a narrow viewport (phone, sidebar): `flowchart TB`, short labels, no unnecessarily wide rows.
+- Default to mermaid for pipelines, diagrams, and flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 
 ## When in doubt
 
