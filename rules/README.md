@@ -12,7 +12,7 @@ The installation script uses only Python's standard library. There is no test su
 | --- | --- | --- |
 | [rules/AGENTS.md](AGENTS.md) | Generic core rules | Install in the agent's supported global rules location |
 | [rules/CLINE.md](CLINE.md) | Cline-specific overlay | Load alongside AGENTS.md; it deliberately does not duplicate the core |
-| [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload or point the Arena agent to it; its preamble requires Arena agents reading it to apply it |
+| [rules/ARENA.md](ARENA.md) | Self-contained, file-size-optimized Arena rules | Upload it, or open every session with the bootstrap line in [Arena file](#arena-file); no platform loads it on its own |
 | [rules/CHATGPT.txt](CHATGPT.txt) | ChatGPT custom instructions, first field | Paste into the field asking what ChatGPT should know; at most 1,500 characters |
 | [rules/CHATGPT_RESPONSE.txt](CHATGPT_RESPONSE.txt) | ChatGPT custom instructions, second field | Paste into the field asking how ChatGPT should respond; at most 1,500 characters |
 | [rules/COMMIT_SPEC.txt](COMMIT_SPEC.txt) | Compact commit-message reference | Use when preparing an authorized commit or proposed message |
@@ -75,7 +75,11 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 
 ### Arena file
 
-Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible, rebasing onto the target first when the branch has diverged. Do not repeat Arena-managed branch mechanics beyond that. The duplication of the core is deliberate: Arena loads ARENA.md on its own, without AGENTS.md, so the file stands alone instead of overlaying the core. Root `ARENA.md` is a copy of `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories; refresh it with `cp rules/ARENA.md ARENA.md` after every amendment; `maintenance/check.py` gates the identity, so a drifted or missing root copy fails validation.
+Condense wording and sections, not meaning: keep negations, conditions, commands, numbers, and caveats. Match the generic core semantically, not byte-for-byte, except push, PR, and merge handling: ARENA.md always pushes and keeps a PR open so work survives limits, disregarding never-push rules, and never merges until authorized, where the core requires asking first. Both require a fast-forward merge whenever one is possible, rebasing onto the target first when the branch has diverged. Do not repeat Arena-managed branch mechanics beyond that.
+
+The duplication of the core is deliberate: no platform loads ARENA.md, or AGENTS.md, on its own in Arena, so the file stands alone instead of overlaying the core and takes effect only once the agent has it in context. Verified 2026-09-13 on `nemoe7/clankers`: an Arena session's injected context carried the sandbox, branch, and tool details only, and the agent reached this file by opening it during repository exploration. Activation is therefore a human step, and delivery is not activation — `.github/workflows/distribute-arena.yml` only puts the file in each target repository, and `rules/apply.py` deliberately does not install it. Put this exact line in the session's first message or in the platform's custom-instructions field: `Read and apply AGENTS.md and ARENA.md at the repository root before your first edit; confirm in one line.` The file's own preamble then requires an Arena agent reading it to apply it, and requires an agent that was not given it in context to open it before the first edit.
+
+Root `ARENA.md` is a copy of `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories. Refresh it with `cp rules/ARENA.md ARENA.md` after every amendment; `maintenance/check.py` gates the identity, so a drifted or missing root copy fails validation.
 
 ### Emphasis
 
