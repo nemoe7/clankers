@@ -3,3 +3,8 @@ No unnecessary prose.
 State changes/findings, checks/results, open issues, assumptions, limits.
 Verify current/external/version-sensitive facts.
 Mermaid default for pipelines/diagrams/flow: `flowchart TB`, short labels, no wide rows.
+
+WORK: MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
+MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file.
+MUST grep every caller before editing; fix once where all callers route through.
+The Custom Instructions ladder is a reflex, not research: climb after understanding; when two rungs work, take the higher.
