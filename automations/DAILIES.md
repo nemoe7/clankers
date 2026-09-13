@@ -3,8 +3,9 @@
 ## Use
 
 - A recurring automation prompt, not a rule file: an agent reads this file at run time, executes all five sections in one pass, and writes one report.
+- The runtime is a ChatGPT scheduled monitoring task: web search, the GitHub connector, and the automation metadata are the tools; there is no shell, no git, no writable file, and no state carried between runs beyond that metadata.
 - These rules apply to every run, whether or not the run prompt repeats them.
-- They outrank skill and plugin instructions; an explicit user instruction in the run prompt outranks this file, confirmed in one line.
+- They outrank skill and plugin instructions, and on report shape they outrank the account's custom instructions and any saved memory; an explicit user instruction in the run prompt outranks this file, confirmed in one line.
 - Sections 1 to 4 define what may enter the report; section 5 defines the only report a run may produce.
 - This file is self-contained: a run needs no other file.
 - Edit this file only when asked.
@@ -15,48 +16,67 @@
 - Current UTC+8 (Asia/Manila) datetime: `2026-09-12 17:40:00`.
 - Update that embedded datetime on EVERY RUN before monitoring, using the actual current execution time.
 - Update it only at execution: an edit or a view of this prompt leaves it as it is.
+- Take the run's actual date, time, and comparison window from the automation metadata, which wins whenever both it and the embedded datetime are available.
 - Emit actionable content only: omit a section, row, or item that carries no actionable change, recommendation, issue, or required action.
-- NEVER include a no-change, unchanged, informational-only, or "no actionable change" entry.
+- NEVER include a no-change, unchanged, informational-only, or "no actionable change" entry; the Coverage section is the one exception.
+- NEVER state a version, tag, date, or commit SHA that is not in content you fetched this run, and NEVER claim a check you did not run.
 - On a change-based monitor, the first run establishes a baseline and does not report that baseline.
 - Keep an ephemeral monitoring item until its purpose is complete or it is explicitly removed.
 - Use the exact section names, order, table columns, and templates section 5 specifies.
 - Output nothing when no section has an actionable change.
 
+## Run state and evidence
+
+- Read the automation metadata before monitoring: `last_run`, `next_run`, `updated`, `timezone`, `schedule`, `enabled`, `paused_count`, `completed_count`.
+- The comparison window runs from `last_run` to the current run time; report a change whose published, opened, or merged timestamp falls inside it.
+- Derive the report date and every date you print from the metadata timestamps and `timezone`, converted to UTC+8 (Asia/Manila); NEVER infer the current date from memory.
+- Treat a missing `last_run`, or a first run, as a baseline: record what you saw and report nothing from it.
+- Treat a `last_run` older than `schedule`, or a risen `paused_count`, as missed windows: widen the window to `last_run` and name the gap in Coverage.
+- When the metadata is not visible in the run, say so in Coverage and fall back to the 24 hours before the run time.
+- Route `nemoe7` repositories, private ones included, through the GitHub connector; route everything else through web search and the URLs in section 1.
+- Cite in the Source or Evidence cell the URL or identifier you actually fetched for every version, tag, date, and SHA you report.
+- Omit an item whose source you could not fetch, and name it in Coverage.
+- Work the sections in the order 1, 4, 2, 3, so the expensive repository audit runs last; the report keeps the order section 5 specifies.
+- When a section cannot be completed, output the sections you completed and name the gap in Coverage; NEVER fill a gap with inferred content.
+
 ## 1. Stable software updates
 
-Monitor the official stable release channel of each item below.
+Monitor the official stable release channel of each item below, preferring its GitHub or GitLab releases page and falling back to the official channel.
 
 | Software | Preferred source |
 | --- | --- |
-| Kilo Code | GitHub Releases |
-| LiteLLM | GitHub Releases |
-| Tailscale | Changelog |
-| zrok | GitHub Releases |
-| MacroDroid | Google Play version history |
-| Idle Obelisk Miner | Google Play version history |
-| Bambuddy | GitHub Releases |
-| Headroom | GitHub Releases |
-| Open WebUI | GitHub Releases |
-| Arena.ai | Product changelog |
-| OpenGym | GitLab Releases |
+| Kilo Code | `https://github.com/Kilo-Org/kilocode/releases` |
+| LiteLLM | `https://github.com/BerriAI/litellm/releases` |
+| Tailscale | `https://github.com/tailscale/tailscale/releases`, then `https://tailscale.com/changelog` |
+| zrok | `https://github.com/openziti/zrok/releases` |
+| MacroDroid | `https://play.google.com/store/apps/details?id=com.arlosoft.macrodroid` |
+| Idle Obelisk Miner | `https://play.google.com/store/apps/details?id=com.checkbox.minershminer` |
+| Bambuddy | `https://github.com/maziggy/bambuddy/releases` |
+| Headroom | unresolved: one of `https://github.com/headroomlabs-ai/headroom/releases`, `https://github.com/gglucass/headroom-desktop/releases`, `https://github.com/michellzappa/headroom/releases` |
+| Open WebUI | `https://github.com/open-webui/open-webui/releases` |
+| Arena.ai | `https://arena.ai/company/product-changelog` |
+| OpenGym | `https://gitlab.com/DuarteSantos8/opengym/-/releases` |
 
-- Report a release only when it is stable and newer than the previous check.
+- Report a release only when it is stable and published inside the comparison window.
 - Ignore commits, dev builds, nightlies, pre-releases, and tags without a stable release.
 - Write the Updates table with exactly these columns: `Software | Ver. | Source`.
 - Make `Source` a direct official link to the release.
 - Give a meaningful feature update its own `### <Software>` heading below the table.
+- For the two Google Play listings, report only what the listing itself exposes and cite the listing; NEVER substitute a third-party tracker in the Source cell.
+- Skip Headroom while its source stays unresolved, and name it in Coverage.
 
 ## 2. Wiki audit
 
-- Inspect `nemoe7/wiki` and public GitHub repositories for genuinely useful additions, updates, and removals.
+- Inspect `nemoe7/wiki` and the public `nemoe7` repositories, not GitHub at large, for genuinely useful additions, updates, and removals.
 - Treat only public repositories as wiki candidates.
+- Report at most five recommendations per run, highest value first.
 - Report recommendations only; NEVER modify the wiki.
 - Write only `### Add` and `### Update/remove` under Wiki.
 - Write the Add table with exactly these columns: `Repo | Section | Why | Docs`.
 
 ## 3. Repository audit
 
-- Inspect every `nemoe7` GitHub repository for a pull request newly opened since the previous daily check.
+- Inspect every `nemoe7` GitHub repository for a pull request newly opened inside the comparison window.
 - Treat a repository as active when it is not archived and shows meaningful activity in the last 90 days.
 - Audit active repositories for actionable maintenance and quality issues.
 - Audit private repositories too, for health and public-release readiness.
@@ -71,6 +91,7 @@ Monitor the official stable release channel of each item below.
 - Use an aggregate diff, file list, changelog, or CI result only to verify or refine that basis.
 - NEVER base release notes primarily on aggregate file counts or a generic final-tree summary.
 - Account for every meaningful commit, grouping related commits that represent the same user-visible change.
+- Where the connector cannot prove ancestry, CI state, or pull-request state, say so in the Evidence cell instead of inferring it.
 
 ### Release recommendation
 
@@ -106,6 +127,8 @@ Monitor the official stable release channel of each item below.
 - Notify only when those final changes ship in an official stable LiteLLM release.
 - A dev or pre-release inclusion does not count.
 - Reference merge commit `59da6e75a50024dcca1af5efa90e4eec340b89b` when useful; it is not the tracked identifier.
+- A material change is a new stable release containing the tracked commit, a revert of it, or an official statement that it will not ship.
+- Once that change is reported, the item is complete: stop checking it and state in one line that it needs removal from this prompt.
 
 ## 5. Output
 
@@ -115,10 +138,26 @@ Monitor the official stable release channel of each item below.
 - Keep Wiki to `### Add` and `### Update/remove`, with the Add table `Repo | Section | Why | Docs`.
 - Keep Repo Audit to its one combined table.
 - Write Watched only for a material change in the LiteLLM status or a stable release, with exactly these columns: `Status | PR/Commit | Latest checked version | Evidence`.
-- Output nothing when no section has an actionable change.
+- End every report with `## Coverage`, appended after `## 4. Watched` as the only permitted addition to that list: the sources and repositories you reached, the ones you did not with the reason, and the sections you did not complete.
+- Output nothing when no section has an actionable change; on a surface that cannot send an empty message, output exactly `# Dailies — YYYY-MM-DD — no actionable change` followed by `## Coverage`, and never let that line replace an empty output on a surface that can send one.
+
+### Columns and legend
+
+- `Ver.` is the release tag exactly as published, for example `v0.0.0`.
+- `Source`, `Evidence`, and `Docs` are URLs or identifiers you fetched this run: a release URL, a compare URL, a commit SHA, a pull-request number.
+- `Section` is the wiki section a recommendation targets, and `Why` is one sentence.
+- `Latest checked version` is the newest stable LiteLLM release you inspected this run.
+- `Status` names the change: `In pre-release`, `Shipped in stable`, or `Closed without shipping`.
+- Priority takes a circle emoji only: 🔴 High for a finding that blocks use or exposes a secret, 🟠 Medium, 🟡 Low.
+- The example rows below are shape only, and their values are placeholders to never report:
+  - Updates: `| <Software> | v0.0.0 | https://example.invalid/releases/tag/v0.0.0 |`
+  - Wiki Add: `| nemoe7/<repo> | <wiki section> | <one-sentence why> | https://example.invalid/<doc> |`
+  - Repo Audit: `| nemoe7/<repo> | 🟠 | <finding and its baseline> | https://example.invalid/compare/v0.0.0...main |`
+  - Watched: `| <status> | <tracked sha> | <version> | https://example.invalid/releases/tag/v0.0.0 |`
 
 ## When in doubt
 
 - Smallest report that holds: include what a rule above requires, omit everything else, and stop.
 - Where two sections collide, the more specific one wins; section 5 wins on report shape.
+- When a fact is not in fetched content, leave the item out and name the gap in Coverage rather than improvise an entry.
 - When that does not settle it, stop and ask rather than improvise an entry.
