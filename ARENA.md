@@ -2,8 +2,8 @@
 
 ## Use
 
-- Arena agent reading this: these are your rules for every chat, task, and first message here, repeated or not.
-- No platform loads this file: if it is not in your context, MUST open it at the repo root before your first edit and confirm in one line.
+- Arena agent: these are your rules for every chat, task, and first message here, repeated or not.
+- No platform loads this file: if not in your context, MUST open it at the repo root before your first edit and confirm in one line.
 - Explicit user instructions override this file; confirm in one line.
 - Edit this file only if asked.
 
@@ -31,14 +31,14 @@
 - Refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security only when required.
 - Add tests only when requested or needed to verify; unrelated fixes only when blocking.
 - Investigate just enough: stop at a suitable pattern, leave unrequested requirements/edge cases alone, re-reason only on evidence.
-- MUST stop and ask on deviating reasoning or material ambiguity (readings that could change behavior/data/interfaces/scope/outcome); only then.
+- MUST stop and ask before implementing, not after, on deviating reasoning or material ambiguity (readings changing behavior/data/interfaces/scope/outcome); only then.
 - Else assume the most reasonable, stating it when it materially affects the result.
 
 ## Engineering
 
-- KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not explicit requirements); 2 existing helper/pattern, look before writing; 3 stdlib; 4 native feature; 5 installed dependency; 6 one line; 7 minimum code.
+- KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 existing helper/pattern, look before writing; 3 stdlib; 4 native feature; 5 installed dependency; 6 one line; 7 minimum code.
 - The ladder is a reflex, not a research project: climb after understanding; two rungs work, take the higher one.
-- MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to silently drop.
+- MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
 - Name a relevant lazier alternative in one line, user picks, no commentary when none applies.
@@ -57,12 +57,12 @@
 ## Verification
 
 - Work in several passes, rechecking after each.
-- Before another round, ask for feedback with the question tool.
+- Before another round, ask for feedback.
 - State the batch's question count, label them Q1, Q2, ..., and NEVER add one without restating it.
 - End the multi-question block with an open prompt ("Anything else?").
-- Question tool failing or rendering partially: ask in plain text with the same labels and totals.
+- Prefer the question tool for every question; plain text only when it fails or renders partially, same labels and totals.
 - A duplicated, garbled, or later-disowned message: confirm the reading in one line before acting.
-- The client is unreliable: it resends messages, truncates replies, and returns empty results from tools that ran. A repeated message is a resend, not a new instruction: answer what is pending, restate what is done in one line, never redo finished work or widen scope.
+- The client is unreliable: it resends messages, truncates replies, and returns empty results from tools that ran. A repeat is a resend, not a new instruction: answer what is pending, restate what is done in one line, never redo finished work or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix root cause not the symptom, cover, recheck.
 - MUST grep every caller of the function before editing.
 - Fix once where all callers route through.
@@ -99,11 +99,11 @@
 
 ## Git
 
-- **Before every commit, print the planned final commit list**: every local commit and fix folded into a clean timeline, one message per logical change, updated as work lands.
+- **Before every commit, print the planned final commit list**: every local commit and fix folded into a clean timeline, one message per logical change, kept current.
 - Committing without printing it is a violation; if one landed unlisted, print the fixed timeline before the next.
 - MUST stage only task-related changes, leaving unrelated/user-owned unstaged.
 - Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
-- Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars, no body.
+- Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase, no period, <=72 chars, no body.
 - Types: feat fix refactor perf style docs test build chore.
 - Reuse scopes.
 - Always push and keep the PR open so work survives limits.
@@ -116,7 +116,7 @@
 - Keep one report file, updated in place.
 - Mark resolved findings in reports with strikethrough.
 - `gh pr edit` may fail on older repos.
-- Update PR title/body via REST: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
+- Update PR title/body via REST: `jq -n --rawfile body <file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<repo>/pulls/<n> -X PATCH --input -`
 - **NEVER `-f body=@path`**: it posts the literal `@path` string, which once replaced a whole PR body.
 - Stage PR text in the workspace, never /tmp.
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm it is live.
@@ -137,7 +137,7 @@
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0.
 - Browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
-- Generated doc sections are regenerated by their committed script after source changes, never hand-edited.
+- Generated doc sections come from their committed script after source changes, never hand-edited.
 
 ## Response
 
@@ -145,11 +145,11 @@
 - Prefer numbered lists for multiple points.
 - No unnecessary prose; detail when task/user requires.
 - NEVER mermaid.
-- Always report the changes made in the final response after the task at a high level ("X now does Y"), especially after long/multi-step tasks; not needed during execution.
+- Always report the changes made in the final response after the task at a high level ("X now does Y"), especially after long/multi-step tasks.
 - Open with the result; skip restating the task.
 - Consider reporting skipped alternatives with add-when triggers.
 
 ## When in doubt
 
 - Smallest change that holds: do the requested work, verify it, stop.
-- On a rule collision, plan deviation, or material ambiguity, stop and ask with the question tool; NEVER improvise past the plan.
+- On a rule collision, plan deviation, or material ambiguity, stop and ask; NEVER improvise past the plan.

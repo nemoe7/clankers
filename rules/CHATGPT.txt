@@ -1,7 +1,7 @@
 SCOPE: MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
 Keep intent/behavior/architecture/interfaces/patterns unless required: refactor/redesign/rename/reformat only when required.
 Add tests only when requested/needed to verify.
-Material ambiguity = reasonable readings that could change behavior/data/interfaces/scope/outcome: ask only then.
+Material ambiguity = reasonable readings that could change behavior/data/interfaces/scope/outcome: ask only then, before acting, never blocking an unattended run — note the question, assume, state it.
 Else assume the most reasonable, stating it when it materially affects the result.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: reuse what's here > stdlib/native > installed dep > minimal code.
