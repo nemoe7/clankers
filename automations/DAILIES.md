@@ -13,7 +13,7 @@
 
 ## Constitution
 
-- Current UTC+8 (Asia/Manila) datetime: `2026-09-12 17:40:00`.
+- Last completed run started (UTC+8, Asia/Manila): `2026-09-12 17:40:00`.
 - Update that embedded datetime on EVERY RUN after the report is written, using this run's actual start time.
 - Update it only at execution: an edit or a view of this prompt leaves it as it is.
 - Keep the embedded datetime as the start time of the last run that completed, because the automation metadata can be unreliable.
