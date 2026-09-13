@@ -3,7 +3,7 @@
 ## Use
 
 - A recurring automation prompt, not a rule file: an agent reads this file at run time, executes all five sections in one pass, and writes one report.
-- The runtime is a ChatGPT scheduled monitoring task: it runs unattended, at most once a day, and also whenever the user asks for it. Web search, the GitHub connector (linked to the account this repository lives on), and the automation metadata are the tools; a terminal and local files exist only when the task decides it needs them, so never depend on them. The state between runs is the embedded datetime in this prompt, whose update lands on some runs and not others, and the automation metadata, which can itself be unreliable.
+- The runtime is a ChatGPT scheduled monitoring task: it runs unattended, at most once a day, and also whenever the user asks for it. Web search, the GitHub connector (linked to the account this repository lives on, able to read and write), and the automation metadata are the tools; a terminal and local files exist only when the task decides it needs them, so never depend on them. The state between runs is the embedded datetime in this prompt, whose update lands on some runs and not others, and the automation metadata, which can itself be unreliable.
 - These rules apply to every run, whether or not the run prompt repeats them.
 - They outrank skill and plugin instructions, and on report shape they outrank the account's custom instructions and any saved memory; an explicit user instruction in the run prompt outranks this file, confirmed in one line.
 - Sections 1 to 4 define what may enter the report; section 5 defines the only report a run may produce.
