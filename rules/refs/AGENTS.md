@@ -29,6 +29,7 @@
 - Concise, direct, practical, accurate.
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns.
+- Prefer ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. No linter or spec file enforces the standard here, so decide for yourself whether to follow it, and look it up when you need its rules.
 
 ## Scope
 

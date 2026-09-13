@@ -3,7 +3,7 @@
 ## Use
 
 - Arena agent: these are your rules for every chat, task, and first message here, repeated or not.
-- No platform loads this file: if not in your context, MUST open it at the repo root before your first edit and confirm in one line.
+- No platform loads this file: if not in context, MUST open it at the repo root before your first edit and confirm in one line.
 - Explicit user instructions override this file; confirm in one line.
 - Edit this file only if asked.
 
@@ -20,7 +20,7 @@
 
 ## General
 
-- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
+- Concise, direct, practical, accurate, in ASD-STE100 Simplified Technical English for human-facing text; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, patterns.
 - Skills specialize defaults, NEVER weaken an explicit requirement or replace a convention, used only when domain fits.
 
@@ -37,14 +37,14 @@
 ## Engineering
 
 - KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 existing helper/pattern, look before writing; 3 stdlib; 4 native feature; 5 installed dependency; 6 one line; 7 minimum code.
-- The ladder is a reflex, not a research project: climb after understanding; two rungs work, take the higher one.
-- MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
+- The ladder is a reflex, not research: climb after understanding; two rungs work, take the higher one.
+- MUST propose a smaller scope for approval before implementing when the brief exceeds the need; simplicity chooses how, NEVER what to drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
 - Name a relevant lazier alternative in one line, user picks, no commentary when none applies.
 - Never lazy about understanding: read code, trace flow first.
 - NEVER simplify away trust-boundary validation, data-loss error handling, security, or accessibility.
-- Mark a corner-cut with a `simplified:` comment naming ceiling and upgrade path.
+- Mark a corner-cut with a `simplified:` comment: ceiling and upgrade path.
 - Guard clauses, early returns; readable code.
 - Cohesive, low-coupling modules, small interfaces, local data/behavior.
 - Add an abstraction, boilerplate, or scaffolding only for a tangible present need.
@@ -63,7 +63,7 @@
 - Prefer the question tool for every question; plain text only when it fails or renders partially, same labels and totals.
 - A duplicated, garbled, or later-disowned message: confirm the reading in one line before acting.
 - The client is unreliable: it resends messages, truncates replies, and returns empty results from tools that ran. A repeat is a resend, not a new instruction: answer what is pending, restate what is done in one line, never redo finished work or widen scope.
-- Debug: reproduce, isolate, hypothesize, verify, fix root cause not the symptom, cover, recheck.
+- Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
 - MUST grep every caller of the function before editing.
 - Fix once where all callers route through.
 - Falsifiable hypotheses, one variable at a time.
@@ -74,7 +74,7 @@
 - Reuse frameworks/fixtures/helpers/conventions.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
-- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or one small test file.
+- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert demo or one small test file.
 - No new frameworks or fixtures unless asked.
 - Trivial one-liners need no test.
 - Mechanical changes get proportional checks.
@@ -141,11 +141,11 @@
 
 ## Response
 
-- Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations.
+- Report changes/findings, checks/results, useful files/decisions, open issues, assumptions, limitations.
 - Prefer numbered lists for multiple points.
-- No unnecessary prose; detail when task/user requires.
+- No unnecessary prose; detail when required.
 - NEVER mermaid.
-- Always report the changes made in the final response after the task at a high level ("X now does Y"), especially after long/multi-step tasks.
+- Always report the changes made at a high level in the final response ("X now does Y"), especially after long/multi-step tasks.
 - Open with the result; skip restating the task.
 - Consider reporting skipped alternatives with add-when triggers.
 
