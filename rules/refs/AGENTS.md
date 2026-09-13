@@ -47,6 +47,7 @@
 - Investigate only as needed: stop at a suitable pattern, skip unrelated requirements and edge cases, and replan only on new evidence.
 - Unrelated findings stay out of scope unless blocking.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then, and ask before implementing rather than after.
+- Prefer the question tool whenever the surface provides one, rather than asking the same questions in prose; plain text is the fallback only when no such tool exists, or when it fails or renders part of a batch.
 - NEVER block an unattended run on a question: a scheduled task or automation agent records the question in its output and proceeds on the most reasonable assumption, stated as such.
 - For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 
