@@ -6,8 +6,8 @@
 
 - `AGENTS.md` — uncompressed core rules.
 - `ARENA.md` — uncompressed Arena rules.
-- `CHATGPT.txt` — uncompressed ChatGPT instructions for the first custom-instruction field.
-- `CHATGPT_RESPONSE.txt` — uncompressed ChatGPT instructions for the second, response field.
+- `CHATGPT-CUSTOM.txt` — uncompressed ChatGPT instructions for Personalization's `Custom Instructions` field.
+- `CHATGPT-MORE.txt` — uncompressed ChatGPT instructions for Personalization's `More about you` field: the response rules plus the work MUSTs the other field cannot fit.
 - `CLINE.md` — uncompressed Cline overlay; it no longer carries an MCPs section, dropped on request, so the `tokensave` reference went with it.
 - `COMMIT_SPEC.txt` — equals the live file; no compression was ever applied.
 - `GUIDELINES.md` — the standard for writing an AGENTS.md, which these baselines are audited against. A reference, not a rule baseline: no live counterpart, never squashed. Kept verbatim, so parts of it describe a platform this repository does not use: section 1.2's Kilo loading behavior and `<system-reminder>` wrapping, and section 2.1's `kilo/enforce-rules-plugin/` pointer.

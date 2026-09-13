@@ -47,7 +47,7 @@ Read these first:
 
 ## Rules
 
-- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT.txt`, `CHATGPT_RESPONSE.txt`.
+- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash that file back under its budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
