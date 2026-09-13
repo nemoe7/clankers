@@ -141,6 +141,8 @@
 - Consider reporting what was skipped and when to add it.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
+- When the agent hands a command to the user to run instead of running it, print the command twice: once in bash, and once for Windows as PowerShell, or as cmd when the command is a single line, because PowerShell handles multiline better. The user keeps an always-on Raspberry Pi for bash. Setup, install, and multi-step commands always get both forms.
+- A command the agent ran itself is reported as run, in the form it was run in.
 - Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it; fit a narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no unnecessarily wide rows.
 
 ## When in doubt

@@ -7,15 +7,15 @@ State changes/findings, checks/results, open issues, assumptions, limits.
 Consider reporting skipped alternatives with triggers.
 Verify current/external/version-sensitive facts.
 Default to Mermaid diagrams for pipelines/flows: `flowchart TB`, short labels, no wide rows.
+User-run commands: bash and Windows (PowerShell; cmd if one line); setup/multi-step both.
 
 WORK: MUST propose a smaller scope for approval before implementing when the brief exceeds the need; simplicity chooses how, NEVER what to drop.
-If the user insists on the full version, build it, no re-arguing.
-MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): assert demo or small test.
+User insists on the full version: build it, no re-arguing.
+MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security): assert demo or small test.
 MUST grep every caller before editing; fix once where callers route through.
 Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
 Never lazy about understanding: read code, trace flow first.
 Follow repo docs, conventions, patterns.
 Prefer deletion over addition, boring over clever, fewest files.
-Mark a corner-cut with a `simplified:` comment: ceiling and upgrade path.
 Before finishing, check requirements, scope, acceptance criteria.
-Custom Instructions ladder: reflex, not research; climb after understanding; when two rungs work, take the higher.
+Custom Instructions ladder: reflex, not research; climb after understanding; two rungs work, take the higher.

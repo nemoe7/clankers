@@ -5,7 +5,7 @@
 - Generic core ruleset for coding agents: all code, agents, sessions, repeated in a prompt or not.
 - Outranks skills/plugins: they specialize defaults, NEVER weaken an explicit requirement or replace a convention.
 - An explicit user instruction in chat outranks this file; state the override in one line.
-- In Arena, MUST also follow `ARENA.md` as an added ruleset; AGENTS.md stays in force, and its Arena-specific handling (push/PR/merges) wins collisions.
+- In Arena, MUST also follow `ARENA.md`; AGENTS.md stays in force, and its Arena-specific handling (push/PR/merges) wins collisions.
 
 ## Constitution
 
@@ -20,7 +20,7 @@
 - Fix root causes, not symptoms.
 - Grep every caller before editing a function.
 - Ground choices in requirements, code, tests, docs, observations.
-- NEVER invent an API or constraint.
+- NEVER invent an API, constraint, or requirement.
 - Scratch files stay out of the repo; delete them once used.
 - Material ambiguity: stop and ask; else assume the most reasonable, stated.
 
@@ -51,7 +51,7 @@
 ## Engineering
 
 - KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern already here, look before writing; 3 stdlib; 4 native feature; 5 installed dependency; 6 one line; 7 minimum code.
-- The ladder is a reflex, not research: climb after understanding; when two rungs work, take the higher.
+- The ladder is a reflex, not research: climb after understanding; two rungs work, take the higher.
 - MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
@@ -61,17 +61,16 @@
 - Mark a corner-cut with a `simplified:` comment naming ceiling and upgrade path.
 - Guard clauses, early returns; readable code.
 - Cohesive modules, low coupling, small interfaces, local data/behavior.
-- Add an abstraction, boilerplate, or scaffolding only for a tangible present need.
+- Add abstraction, boilerplate, or scaffolding only for a tangible present need.
 - Cut a seam only for a tangible need; prefer an existing extension point over a parallel mechanism.
-- Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - Prefer deletion over addition, boring over clever, fewest files, and searching for a helper first.
 - Prefer the simplest implementation meeting all criteria, the edge-case-correct stdlib pick on ties, safe defaults only when non-material.
-- If the user insists on the full version, build it without re-arguing.
+- A user insisting on the full version gets it without re-arguing.
 
 ## Debugging
 
 - Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix root cause not the symptom, cover, recheck.
-- MUST grep every caller of the function before editing.
+- MUST grep every caller before editing.
 - Fix once where all callers route through.
 - Falsifiable hypotheses, evidence over guessing, one variable at a time.
 - NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
@@ -128,6 +127,7 @@
 - Consider reporting skipped alternatives with add-when triggers.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
+- Hand the user a command to run: print bash and Windows forms, PowerShell by default, cmd for one line; setup and multi-step commands always get both.
 - Default to mermaid for pipelines, diagrams, and flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 
 ## When in doubt
