@@ -10,6 +10,7 @@ Consider reporting the alternatives you skipped, each with the trigger that woul
 Verify current/external/version-sensitive facts.
 Mermaid diagrams are the default for pipelines, diagrams, and flow visualizations. Mermaid is a diagram syntax: a fenced code block tagged ```mermaid that a supporting surface renders as a picture, so name it as Mermaid diagrams rather than as Mermaid alone.
 When a Mermaid diagram is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.
+When the agent hands a command to the user to run instead of running it, print the command twice: once in bash, and once for Windows as PowerShell, or as cmd when the command is a single line, because PowerShell handles multiline better. The user keeps an always-on Raspberry Pi for bash. Setup, install, and multi-step commands always get both forms.
 
 WORK: MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how to meet the brief, NEVER what to silently drop.
 If the user insists on the full version after you proposed a smaller scope, build it without re-arguing.
