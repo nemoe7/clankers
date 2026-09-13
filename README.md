@@ -17,9 +17,9 @@ Latest measurements as of 2026-09-13. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,818 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 9,835 `B` |
-| `rules/CHATGPT.txt` | `Unicode chars` | 1,351 `chars` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,817 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 9,716 `B` |
+| `rules/CHATGPT.txt` | `Unicode chars` | 1,438 `chars` |
 | `rules/CHATGPT_RESPONSE.txt` | `Unicode chars` | 305 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
 | `rules/COMMIT_SPEC.txt` | `cl100k_base` | 47 `tok` |
@@ -41,4 +41,4 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
 
-One deliberate exception is recorded: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, accepted on request rather than squashed, so the workflow's documentation templates keep their readable form. That measurement is the file's baseline, not deferred debt, so item 5 does not apply to it. Two more are recorded from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements are the two files' baselines, not deferred debt, so item 5 does not apply to them either.
+One deliberate exception is recorded: `workflows/init-docs.md` carries an unfunded rise of 37 `tok` (4,102 → 4,139) from its section 10 rewrite, accepted on request rather than squashed, so the workflow's documentation templates keep their readable form. That measurement is the file's baseline, not deferred debt, so item 5 does not apply to it. Two more are recorded from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements were the two files' baselines, not deferred debt. Both have since been squashed back below them (`rules/ARENA.md` to 9,716 `B`, `rules/AGENTS.md` to 1,817 `tok`, funded inside the same changes that amended them), so item 5 applies to them again at the measurements in the table above.
