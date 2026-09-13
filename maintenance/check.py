@@ -33,8 +33,8 @@ NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EXPECTED_BUDGETS = {
   "rules/AGENTS.md": "cl100k_base",
   "rules/ARENA.md": "UTF-8 file size",
-  "rules/CHATGPT.txt": "Unicode chars",
-  "rules/CHATGPT_RESPONSE.txt": "Unicode chars",
+  "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
+  "rules/CHATGPT-MORE.txt": "Unicode chars",
   "rules/CLINE.md": "cl100k_base",
   "rules/COMMIT_SPEC.txt": "cl100k_base",
   "skills/planning/SKILL.md": "cl100k_base",
@@ -71,11 +71,11 @@ LINT_COUNT_CLAIMS = (
 # Refs baselines hold full wording; live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md")
-PLAIN_PAIRS = ("CHATGPT.txt", "CHATGPT_RESPONSE.txt", "COMMIT_SPEC.txt")
+PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT_SPEC.txt")
 
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
 # and `More about you`, each capped at 1,500 characters.
-CHATGPT_FIELDS = ("CHATGPT.txt", "CHATGPT_RESPONSE.txt")
+CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
 
 _token_encoder: Any = None
 
