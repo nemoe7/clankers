@@ -76,7 +76,7 @@ Read these first:
 ## Automations
 
 - Automation prompts live in `automations/`: self-contained text pasted into an external scheduler, not rules an agent loads.
-- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task: web search and the GitHub connector, with no shell, no git, and no repo access.
+- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request: web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them, so a prompt must not depend on them.
 - Prompts carry no budget row and no validator gate, because the scheduler owns its own copy and edits the embedded datetime between runs; CI must not depend on their contents.
 - Amend one here, then re-paste it into the task: an edit in the repo never reaches a running automation.
 
