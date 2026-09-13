@@ -43,6 +43,10 @@ EXPECTED_BUDGETS = {
   "workflows/init-docs.md": "cl100k_base",
 }
 
+# Root `ARENA.md` is the copy `.github/workflows/distribute-arena.yml` pushes to
+# the target repositories, so it must stay byte-identical to its source.
+ROOT_COPIES = ("ARENA.md",)
+
 REFS = RULES / "refs"
 LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
 
@@ -583,6 +587,25 @@ def check_refs_parity(errors: list[str]) -> None:
       )
 
 
+def check_root_copies(errors: list[str]) -> None:
+  for name in ROOT_COPIES:
+    source = RULES / name
+    copy = ROOT / name
+
+    if not source.is_file():
+      errors.append(f"rules/{name} is missing")
+      continue
+
+    if not copy.is_file():
+      errors.append(f"{name}: root copy missing; run `cp rules/{name} {name}`")
+      continue
+
+    if copy.read_bytes() != source.read_bytes():
+      errors.append(
+        f"{name}: root copy differs from rules/{name}; run `cp rules/{name} {name}`"
+      )
+
+
 def validate(errors: list[str]) -> None:
   skills = sorted(
     path for path in SKILLS.iterdir() if path.is_dir() and not path.name.startswith(".")
@@ -768,6 +791,7 @@ def validate(errors: list[str]) -> None:
 
   check_lint_scope(errors)
   check_refs_parity(errors)
+  check_root_copies(errors)
 
 
 def main() -> int:
@@ -808,7 +832,8 @@ def main() -> int:
 
   print(
     f"Validation passed: {skills} skills, {workflows} workflows, README "
-    "measurements, the markdownlint scope, and refs/live parity checked."
+    "measurements, the markdownlint scope, refs/live parity, and the root "
+    "ARENA.md copy checked."
   )
 
   return 0
