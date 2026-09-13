@@ -35,7 +35,7 @@ Read these first:
 
 - A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
-- It validates skill metadata, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, skill licensing for adapted skills, the markdownlint scope, and refs/live rule parity.
+- It validates skill metadata, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, skill licensing for adapted skills, the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
 - `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on every push and pull request.
 - On pushes it commits refreshed README measurements; it also runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
@@ -43,8 +43,7 @@ Read these first:
 
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
-3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements.
-4. `cmp rules/ARENA.md ARENA.md` — root `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories.
+3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories.
 
 ## Rules
 
