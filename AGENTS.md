@@ -5,7 +5,7 @@
 - Guide for agents working in this repository: these rules apply to every task and session here, whether or not a prompt repeats them.
 - They outrank skill and plugin instructions.
 - An explicit user instruction in chat outranks this file, confirmed in one line.
-- In Arena, also follow [ARENA.md](ARENA.md) as an additional ruleset; it wins on Arena-specific handling, including pushing, pull requests, and merges.
+- In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset before your first edit; it wins on Arena-specific handling, including pushing, pull requests, and merges.
 - Edit this file only when asked.
 
 Read these first:
