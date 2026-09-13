@@ -152,7 +152,7 @@ Monitor the official stable release channel of each item below, preferring its G
 - Keep Wiki to `### Add` and `### Update/remove`, with the Add table `Repo | Section | Why | Docs`.
 - Keep Repo Audit to its one combined table.
 - Write Watched only for a material change in the LiteLLM status or a stable release, with exactly these columns: `Status | PR/Commit | Latest checked version | Evidence`.
-- End every report with `## Coverage`, appended after `## 4. Watched` as the only permitted addition to that list: the sources and repositories you reached, the ones you did not with the reason, and the sections you did not complete.
+- End every report with `## Coverage`, appended after `## 4. Watched` as the only permitted addition to that list: the sources and repositories you reached, the ones you did not with the reason, the sections you did not complete, and any question you could not ask with the assumption you proceeded on.
 - Output nothing when no section has an actionable change; on a surface that cannot send an empty message, output exactly `# Dailies — YYYY-MM-DD — no actionable change` followed by `## Coverage`, and never let that line replace an empty output on a surface that can send one.
 
 ### Columns and legend
@@ -174,4 +174,4 @@ Monitor the official stable release channel of each item below, preferring its G
 - Smallest report that holds: include what a rule above requires, omit everything else, and stop.
 - Where two sections collide, the more specific one wins; section 5 wins on report shape.
 - When a fact is not in fetched content, leave the item out and name the gap in Coverage rather than improvise an entry.
-- When that does not settle it, stop and ask rather than improvise an entry.
+- When that does not settle it, NEVER block the run on a question: record it in Coverage, proceed on the most reasonable assumption, and state it rather than improvise an entry.
