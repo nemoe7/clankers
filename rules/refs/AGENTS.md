@@ -46,7 +46,8 @@
 - Add tests only when requested or necessary to verify the change.
 - Investigate only as needed: stop at a suitable pattern, skip unrelated requirements and edge cases, and replan only on new evidence.
 - Unrelated findings stay out of scope unless blocking.
-- Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then.
+- Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then, and ask before implementing rather than after.
+- NEVER block an unattended run on a question: a scheduled task or automation agent records the question in its output and proceeds on the most reasonable assumption, stated as such.
 - For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 
 ## Engineering
