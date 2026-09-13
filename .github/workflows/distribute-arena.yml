@@ -1,6 +1,10 @@
-# Pushes rules/ARENA.md to each listed repo's $DEST, amending the prior sync commit.
+# Pushes rules/ARENA.md to each listed repo's $DEST, amending the prior sync commit,
+# then verifies each target's committed copy matches the source byte for byte.
 # Needs a short-expiry fine-grained PAT (Contents read/write on every
 # target repo) stored as the ARENA_DIST_PAT secret.
+# Dispatch only: a repository not in REPOS (or the repos input) never receives
+# ARENA.md, so add new targets to REPOS. Delivery is not activation; see
+# rules/README.md#arena-file for the bootstrap line a session needs.
 name: distribute-arena
 on:
   workflow_dispatch:
@@ -32,6 +36,8 @@ jobs:
           list="${{ inputs.repos }}"
           [ -n "$list" ] || list="$REPOS"
           [ -n "$list" ] || { echo "::error::no target repos: set REPOS or pass the repos input"; exit 1; }
+          src="$GITHUB_WORKSPACE/rules/ARENA.md"
+          [ -f "$src" ] || { echo "::error::rules/ARENA.md missing from the checkout"; exit 1; }
           failed=""
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
           # shellcheck disable=SC2086 -- intentional word splitting of the repo list
@@ -42,7 +48,7 @@ jobs:
               trap 'rm -rf "$work"' EXIT
               git clone --depth 1 "https://github.com/$repo.git" "$work"
               mkdir -p "$work/$(dirname "$DEST")"
-              cp rules/ARENA.md "$work/$DEST"
+              cp "$src" "$work/$DEST"
               cd "$work"
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -51,6 +57,10 @@ jobs:
               git diff --cached --quiet || {
                 if [ "$(git log -1 --format=%s)" = "$msg" ]; then git commit --amend --no-edit; else git commit -m "$msg"; fi
                 git push --force-with-lease -u origin HEAD
+              }
+              git show "HEAD:$DEST" | cmp -s - "$src" || {
+                echo "::error::$repo: HEAD:$DEST does not match rules/ARENA.md after sync"
+                exit 1
               }
             ) || failed="$failed $repo"
           done
