@@ -14,9 +14,9 @@
 ## Constitution
 
 - Current UTC+8 (Asia/Manila) datetime: `2026-09-12 17:40:00`.
-- Update that embedded datetime on EVERY RUN before monitoring, using the actual current execution time.
+- Update that embedded datetime on EVERY RUN after the report is written, using this run's actual start time.
 - Update it only at execution: an edit or a view of this prompt leaves it as it is.
-- Keep the embedded datetime as the running record of the last completed run, because the automation metadata can be unreliable.
+- Keep the embedded datetime as the start time of the last run that completed, because the automation metadata can be unreliable.
 - When the embedded datetime and `last_run` disagree, take the later as the window start and name the disagreement in Coverage.
 - Emit actionable content only: omit a section, row, or item that carries no actionable change, recommendation, issue, or required action.
 - NEVER include a no-change, unchanged, informational-only, or "no actionable change" entry; the Coverage section is the one exception.
@@ -34,7 +34,8 @@
 - Treat a missing `last_run`, or a first run, as a baseline: record what you saw and report nothing from it.
 - Treat a `last_run` older than `schedule`, or a risen `paused_count`, as missed windows: widen the window to `last_run` and name the gap in Coverage.
 - When the metadata is not visible in the run, say so in Coverage and take the window start from the embedded datetime alone.
-- Attempt the embedded-datetime update on every run; when the edit does not land, say so in Coverage and treat `last_run` as the record of that run.
+- Attempt the embedded-datetime update on every run; when the edit does not land, say so in Coverage and treat `last_run` as that run's record.
+- A window re-covered because an update did not land may repeat an item already reported: report it again, since a missed release costs more than a duplicate.
 - Route `nemoe7` repositories, private ones included, through the GitHub connector; route everything else through web search and the URLs in section 1.
 - Cite in the Source or Evidence cell the URL or identifier you actually fetched for every version, tag, date, and SHA you report.
 - Omit an item whose source you could not fetch, and name it in Coverage.
