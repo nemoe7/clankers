@@ -52,8 +52,8 @@ Monitor the official stable release channel of each item below, preferring its G
 | LiteLLM | `https://github.com/BerriAI/litellm/releases` |
 | Tailscale | `https://github.com/tailscale/tailscale/releases`, then `https://tailscale.com/changelog` |
 | zrok | `https://github.com/openziti/zrok/releases` |
-| MacroDroid | `https://play.google.com/store/apps/details?id=com.arlosoft.macrodroid` |
-| Idle Obelisk Miner | `https://play.google.com/store/apps/details?id=com.checkbox.minershminer` |
+| MacroDroid | `https://www.macrodroidforum.com/index.php?forums/macrodroid-news-and-announcements.3/` |
+| Idle Obelisk Miner | `https://idleobeliskminer.com/patchnotes` |
 | Bambuddy | `https://github.com/maziggy/bambuddy/releases` |
 | Headroom | `https://github.com/headroomlabs-ai/headroom/releases` |
 | Open WebUI | `https://github.com/open-webui/open-webui/releases` |
@@ -65,12 +65,13 @@ Monitor the official stable release channel of each item below, preferring its G
 - Write the Updates table with exactly these columns: `Software | Ver. | Source`.
 - Make `Source` a direct official link to the release.
 - Give a meaningful feature update its own `### <Software>` heading below the table.
-- For the two Google Play listings, report only what the listing itself exposes and cite the listing; NEVER substitute a third-party tracker in the Source cell.
+- For MacroDroid, take stable releases from the News and Announcements board only; its Beta Releases board is a pre-release channel and is ignored.
+- A Google Play listing pinned to `&hl=en` may corroborate a release date for either app; NEVER put a listing or a third-party tracker in the Source cell.
 
 ### Tracking a new item
 
 - Add the item as one row in the table above, holding its name and the source URL you fetched to verify it exists.
-- Prefer a GitHub or GitLab releases page; use the official changelog, store listing, or vendor release feed only when the project publishes none.
+- Prefer a GitHub or GitLab releases page; use the official changelog, patch-notes page, or vendor release feed when the project publishes none, and treat a store listing as date corroboration, never as a version source.
 - Fetch the URL before adding it, and record the version or date it showed so the first run has a baseline rather than a gap.
 - Say in the row what counts as a stable release for that item when its channel mixes stable releases with pre-releases.
 - Mark a temporary item ephemeral in its row, so it is removed when its purpose is complete.
