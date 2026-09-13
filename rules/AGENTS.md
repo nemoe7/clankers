@@ -45,7 +45,7 @@
 - Unrelated findings stay out of scope unless blocking.
 - Material ambiguity = reasonable readings that could change behavior/data/interfaces/scope/outcome: ask only then, before implementing, not after.
 - Prefer the question tool when the surface has one.
-- Never block an unattended run: record the question, proceed on a stated assumption.
+- NEVER block an unattended run: record the question, proceed on a stated assumption.
 - Else assume the most reasonable, stating it when it materially affects the result.
 
 ## Engineering
