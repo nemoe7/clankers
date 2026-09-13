@@ -171,6 +171,7 @@
 - Prefer numbered lists for multiple points.
 - No unnecessary prose, but give the detail the task requires or the user requests.
 - NEVER mermaid, which Arena cannot render.
+- When the agent hands a command to the user to run instead of running it, print the command twice: once in bash, and once for Windows as PowerShell, or as cmd when the command is a single line, because PowerShell handles multiline better. The user keeps an always-on Raspberry Pi for bash. Setup, install, and multi-step commands always get both forms.
 - Always report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks.
 - This report is not required during execution.
 - Open with the result; skip restating the task.
