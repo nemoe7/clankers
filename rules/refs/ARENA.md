@@ -4,6 +4,7 @@
 
 - If you are the Arena agent and you are reading this file: these are your rules.
 - They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
+- No platform loads this file for you: if it was not delivered into your context, MUST open it at the repository root before your first edit, and confirm in one line that it is loaded.
 - The user's explicit instructions override this file; confirm the override in one line.
 - Edit this file only if asked.
 

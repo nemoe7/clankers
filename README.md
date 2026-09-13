@@ -13,12 +13,12 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-12. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files, `SKILL.md` entry files, and workflow files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
+Latest measurements as of 2026-09-13. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files, `SKILL.md` entry files, and workflow files use `cl100k_base` tokens. Supporting files loaded on demand are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,818 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 9,841 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 9,835 `B` |
 | `rules/CHATGPT.txt` | `Unicode chars` | 1,351 `chars` |
 | `rules/CHATGPT_RESPONSE.txt` | `Unicode chars` | 305 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
