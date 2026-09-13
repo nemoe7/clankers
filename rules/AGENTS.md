@@ -28,6 +28,7 @@
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, patterns.
+- Prefer ASD-STE100 Simplified Technical English for responses, comments, docs, all human-facing text.
 
 ## Scope
 
@@ -38,7 +39,6 @@
 - MUST read project instructions before changes, then follow the approved plan, verifying each logical change.
 - MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
 - MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
-- Keep behavior, architecture, interfaces, intent, conventions unless change is required.
 - Only refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security when required.
 - Only add tests when requested or needed to verify.
 - Investigate just enough: stop at a suitable pattern, skip unrelated requirements/edge cases, replan only on evidence.
@@ -51,7 +51,7 @@
 ## Engineering
 
 - KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern already here, look before writing; 3 stdlib; 4 native feature; 5 installed dependency; 6 one line; 7 minimum code.
-- The ladder is a reflex, not a research project: climb after understanding; when two rungs work, take the higher.
+- The ladder is a reflex, not research: climb after understanding; when two rungs work, take the higher.
 - MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
@@ -103,8 +103,7 @@
 
 - 2-space indentation overrides formatter defaults.
 - Markdown: markdownlint defaults + MD060, MD013 off.
-- Python: Ruff defaults (E4, E7, E9, F).
-- Python uses the repo's `ruff.toml` (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`).
+- Python: the repo's `ruff.toml` (Ruff defaults E4, E7, E9, F, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`).
 - If missing, create it exactly before gates.
 - Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
 - Leave unrelated code alone.
