@@ -73,7 +73,8 @@ LINT_COUNT_CLAIMS = (
 SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md")
 PLAIN_PAIRS = ("CHATGPT.txt", "CHATGPT_RESPONSE.txt", "COMMIT_SPEC.txt")
 
-# ChatGPT's custom instructions are two fields, each capped at 1,500 characters.
+# ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
+# and `More about you`, each capped at 1,500 characters.
 CHATGPT_FIELDS = ("CHATGPT.txt", "CHATGPT_RESPONSE.txt")
 
 _token_encoder: Any = None
