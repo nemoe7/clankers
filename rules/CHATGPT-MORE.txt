@@ -6,12 +6,12 @@ Open with the result; skip restating the task.
 State changes/findings, checks/results, open issues, assumptions, limits.
 Consider reporting skipped alternatives with triggers.
 Verify current/external/version-sensitive facts.
-Default to Mermaid diagrams for pipelines/flows: `flowchart TB`, short labels, no wide rows.
+Default to Mermaid diagrams for pipelines/flows: `flowchart TB`, short labels/rows; NEVER ASCII art.
 User-run commands: bash and Windows (PowerShell; cmd if one line); setup/multi-step both.
 
-WORK: MUST propose a smaller scope for approval before implementing when the brief exceeds the need; simplicity chooses how, NEVER what to drop.
-User insists on the full version: build it, no re-arguing.
-MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security): assert demo or small test.
+WORK: MUST propose a smaller scope for approval before implementing when brief exceeds need; simplicity chooses how, NEVER what to drop.
+User insists on full version: build it, no re-arguing.
+MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security): assert demo, small test.
 MUST grep every caller before editing; fix once where callers route through.
 Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
 Never lazy about understanding: read code, trace flow first.
