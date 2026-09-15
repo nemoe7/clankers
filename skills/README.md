@@ -4,7 +4,6 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 | Skill | Purpose |
 | --- | --- |
-| [planning](planning/SKILL.md) | Structured planning for substantial or materially underspecified work |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
@@ -39,7 +38,7 @@ For an agent that discovers project skills under `.agents/skills/`, a human main
 
 ```bash
 mkdir -p .agents/skills
-cp -R /path/to/clankers/skills/planning .agents/skills/
+cp -R /path/to/clankers/skills/squash .agents/skills/
 ```
 
 ### Discovery notes
@@ -60,7 +59,6 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 
 | Skill | When needed |
 | --- | --- |
-| [planning](planning/SKILL.md) | Plan mode, or substantial or materially underspecified work |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 
