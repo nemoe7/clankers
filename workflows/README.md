@@ -2,7 +2,11 @@
 
 Portable agent workflows. Each workflow is a self-contained Markdown file usable as-is across coding-agent platforms.
 
-This directory currently holds no workflows. The format below is what a new workflow must meet, so the framework stays ready without shipping an entry that has no owner.
+This directory holds the following workflows:
+
+- [init-docs](init-docs.md) — initialize and reconcile repository documentation on the Diátaxis map, with user-selected templates.
+
+The format below is what a new workflow must meet.
 
 ## Format
 
