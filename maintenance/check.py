@@ -37,6 +37,7 @@ EXPECTED_BUDGETS = {
   "rules/CHATGPT-MORE.txt": "Unicode chars",
   "rules/CLINE.md": "cl100k_base",
   "rules/COMMIT-SPEC.txt": "cl100k_base",
+  "skills/arena-live-steering/SKILL.md": "cl100k_base",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",
