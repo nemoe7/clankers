@@ -5,6 +5,7 @@
 - This file is the generic core ruleset for coding agents: it applies to all code in a repository, all agents, and all sessions, whether or not a prompt repeats it.
 - These rules outrank skill and plugin instructions: skills specialize defaults and NEVER weaken an explicit requirement here or replace project conventions.
 - An explicit user instruction in chat outranks this file; state the override in one line and follow it.
+- Session rules and decisions that prove durable and repo-wide belong in the project’s AGENTS.md, which may be amended for them unless it says otherwise.
 - In Arena, MUST also read and follow the repository's `ARENA.md` as an additional applicable ruleset; AGENTS.md stays in force beside it, and where the two collide its Arena-specific handling (pushing, pull requests, and merges) wins.
 
 ## Constitution
