@@ -93,7 +93,7 @@
 
 - New behavior, fixes, refactors: when a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck.
 - Test public interfaces and integration boundaries.
-- Reuse existing frameworks/fixtures/helpers/conventions.
+- Reuse the project's existing frameworks, fixtures, helpers, and conventions.
 - Mechanical-only changes: proportional verification.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
@@ -104,7 +104,7 @@
 ## Review
 
 - Before finishing, check requirements, acceptance criteria, and scope.
-- Verify behavior via tests/linters/formatters/builds.
+- Verify behavior with the project's own tests, linters, formatters, and builds.
 - Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
 - Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
 - Fix in-scope issues, then recheck.
@@ -115,10 +115,11 @@
 
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
-- Python: Ruff default selection (E4, E7, E9, F).
-- Python uses the repo's `ruff.toml` (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`).
-- If `ruff.toml` is missing, create it exactly before gates.
-- Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
+- For a Python project, use Ruff with its default rule selection.
+- For a Python project, use the project's own `ruff.toml` when it has one.
+- When the project has none, the conventions are `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, and `required-version = "0.16.6"`.
+- For a Python project with no `ruff.toml`, create one exactly as above before running the gates.
+- For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
 - If Plan mode was used, MUST delete all generated plan files.
@@ -129,8 +130,10 @@
 - Respect the user's global gitignore (`core.excludesFile`).
 - Review the diff after each edit.
 - MUST commit directly on a branch other than `main`, one logical change per commit with every changed file in it, each keeping checks green and independently revertible.
-- One Conventional Commit per completed feature: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, <=72 chars, no body.
-- Types: `feat fix refactor perf style docs test build chore`.
+- Follow the project's commit-message convention when the project states one.
+- When the project states none, use Conventional Commits: one per completed feature, in the form `<type>[optional scope]: <description>`, with `!` before the colon to mark a breaking change.
+- Write the subject imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body.
+- Types: `feat fix refactor perf style docs test build chore`; the specification at <https://www.conventionalcommits.org/en/v1.0.0/> mandates only `feat` and `fix`, and the rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.

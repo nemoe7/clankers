@@ -87,7 +87,7 @@
 - Revise disproven assumptions.
 - Test: when a test is appropriate, prefer red first, then the smallest green change, behavior-preserving refactor, recheck.
 - Test public interfaces and integration boundaries.
-- Use existing frameworks/fixtures/helpers/conventions.
+- Use the project's existing frameworks, fixtures, helpers, and conventions.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
@@ -109,11 +109,11 @@
 
 - 2-space indentation overrides formatter defaults.
 - Markdown: defaults + MD060, MD013 off.
-- Python: Ruff E4/E7/E9/F.
+- For a Python project, use Ruff with its default rule selection.
 - Keep architecture; leave unrelated code alone.
-- Ruff is configured by the repo's `ruff.toml` holding my conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`, nothing else until flagged).
-- If the repo has no `ruff.toml`, create it with exactly that before running gates.
-- Gates before every commit: `ruff check` and `ruff format`, no CLI rule overrides.
+- For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding my conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`, nothing else until flagged).
+- For a Python project with no `ruff.toml`, create one with exactly that before running gates.
+- For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
 - Reports must allow lines up to 120 characters (MD013 at 120).
 
 ## Git
@@ -122,8 +122,9 @@
 - Committing without printing it is a violation, not an oversight; if a commit landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.
 - Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
-- Conventional Commits: `<type>(scope): <subject>`; imperative, specific, lowercase subject, no period, <=72 chars, no body.
-- Types: feat fix refactor perf style docs test build chore.
+- Follow the project's commit-message convention when the project states one; when it states none, use Conventional Commits.
+- Conventional Commits form: `<type>[optional scope]: <description>`, imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body, with `!` before the colon to mark a breaking change.
+- Types: feat fix refactor perf style docs test build chore; only `feat` and `fix` are mandated by the specification at <https://www.conventionalcommits.org/en/v1.0.0/>, and the rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - Always push the branch and keep a PR open so work survives limits.
 - Fold fixes into the squashed atomic timeline.
