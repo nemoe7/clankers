@@ -1,41 +1,41 @@
 ---
-description: Initialize and reconcile repository documentation on the Diátaxis map, with user-selected templates
+description: Bootstrap and reconcile repository documentation for downstream users and agents
 
 # agent: code # Uncomment for Kilo
 # agent: build # Uncomment for OpenCode
 # other platforms can use this workflow as-is
 ---
 
-# Initialize Repository Documentation
+# Repository Documentation
 
-Initialize or reconcile repository documentation from the repository and the user-selected templates.
+Build repository documentation for two audiences: downstream users who consume the repo, and agents that work in it. Human-only repos skip the agent layer; the workflow adapts.
 
-The workflow MUST be portable across coding-agent platforms.
+The workflow MUST be portable across coding-agent platforms. The body MUST NOT depend on platform-specific tools, agent names, models, providers, UI, permissions, or interaction mechanisms.
 
-The workflow body MUST NOT depend on platform-specific tools, agent names, models, providers, UI, permissions, or interaction mechanisms.
+Quadrant rules follow Diátaxis ([diataxis.fr](https://diataxis.fr/), aligned 2026-09); on conflict this file governs.
 
-Documentation is organized on the Diátaxis map ([diataxis.fr](https://diataxis.fr/)): tutorials, how-to guides, reference, and explanation, one page per reader need. When this workflow and that site disagree on a quadrant, the site wins.
+Read by task: bootstrapping an empty repo — Core Rules through Bootstrap, then the Catalog. Adding one document — the Catalog for whether it is warranted, then that document's section. Reconciling existing docs — Inspection, Audit, then Reconciliation through Verification. Full pass — straight through.
 
 ## 1. Core Rules
 
 - The repository is the primary source of truth.
-- Existing valid documentation MUST be preserved.
-- Existing authoritative documentation MUST NOT be duplicated.
-- Organize documentation by reader need on the Diátaxis map: tutorials, how-to guides, reference, explanation.
-- One page serves one need; quadrants link to each other instead of absorbing each other.
+- Serve two audiences: downstream users who consume the repo, and agents that work in it.
+- The client chooses what gets built: propose, let them pick, confirm before creating beyond the baseline.
+- New documentation is created only for baseline documents, user-selected documents, or reconciliation of an authoritative document.
+- Existing valid documentation is preserved; existing authoritative documentation is never duplicated.
 - Link to the authoritative location instead of duplicating it.
-- Do not split documentation merely for organization.
-- New documentation MUST only be created when a required baseline document, explicitly selected by the user, or necessary to reconcile an existing authoritative document.
-- Technical documentation is the default.
-- Business/product documentation MUST NOT be introduced unless explicitly requested.
-- Do not invent facts, requirements, architecture, constraints, stakeholders, business goals, quality targets, or implementation details.
-- Do not silently resolve material ambiguity.
-- Do not rewrite documentation merely for style.
-- Do not remove valid user content without justification.
-- Do not create empty directories, including ADR directories.
-- Do not unnecessarily renumber existing ADRs.
-- Do not create duplicate sources of truth.
-- Do not commit or push unless explicitly requested.
+- Organize by reader need on the Diátaxis map: tutorials, how-to guides, reference, explanation.
+- One page serves one need; quadrants link to each other instead of absorbing each other.
+- Split by need only, never merely for organization.
+- Technical documentation is the default; business/product documentation needs explicit request.
+- Never assert a fact without repository evidence or an explicit user statement.
+- Never silently resolve material ambiguity.
+- Never rewrite for style alone.
+- Never remove valid user content without justification.
+- Never create duplicate sources of truth.
+- Never choose a license; detect and ask.
+- Never commit or push unless explicitly requested.
+- Do not create empty directories.
 
 ## 2. Execution Mode
 
@@ -48,7 +48,7 @@ PLAN mode MUST:
 - inspect the repository;
 - audit existing documentation;
 - identify gaps, conflicts, duplication, and sources of truth;
-- determine applicable templates;
+- determine applicable documents;
 - ask required questions;
 - produce the proposed documentation set and changes.
 
@@ -75,11 +75,19 @@ APPLY mode MUST:
 
 If the host agent has different planning/execution terminology, map these semantics to the closest equivalent.
 
-## 3. User Interaction
+### Unattended runs
 
-When user input is required:
+Establish up front whether the run is interactive or unattended. Interactive runs stop and ask on material uncertainty. Unattended runs never block: record each unanswered question, proceed on the most reasonable assumption, state it, and report every assumption for review.
 
-**ASK THE USER using the host agent's available user-interaction mechanism.**
+## 3. The client decides
+
+The client chooses what the docs become; downstream users and agents consume the result. The agent proposes; the client disposes.
+
+- Present the proposed document set before creating anything beyond the baseline, and let the client add, drop, or reorder.
+- Re-confirm when scope emerges mid-run: a newly discovered need is a proposal, never a silent addition.
+- Ask with the host agent's available user-interaction mechanism.
+- Baseline documents need no per-item approval; everything else does.
+- Minor editorial judgment needs no questions.
 
 When a material uncertainty blocks progress:
 
@@ -90,13 +98,20 @@ When a material uncertainty blocks progress:
 5. Apply the answer.
 6. RESUME from the exact blocked point.
 
-DO NOT restart the workflow.
+DO NOT restart the workflow. DO NOT continue the blocked action on an assumption (interactive runs).
 
-DO NOT continue the blocked action using an assumption.
+## 4. Bootstrap
 
-Minor editorial uncertainty does not require user interaction.
+When the repo has no usable docs, build the floor first, in this order:
 
-## 4. Repository Inspection
+1. `README.md`: identity, purpose, how to run.
+2. `LICENSE`: ask which; never pick one.
+3. `AGENTS.md`: only if agents will work in the repo — ask.
+4. Ask what the client wants next; offer the catalog.
+
+Do not scaffold the whole tree in one run. A thin floor that is true beats a full tree that is aspirational.
+
+## 5. Repository Inspection
 
 Inspect the repository before deciding what documentation is needed.
 
@@ -104,13 +119,12 @@ Inspect, where present:
 
 - root structure;
 - `README.md`;
-- `AGENTS.md`;
-- `CLAUDE.md`;
-- `CONTEXT.md`;
-- other agent instruction files;
+- `LICENSE*`;
+- `AGENTS.md` and tool-specific instruction files (`CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md`, and the like) as evidence of established conventions;
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`, `FUNDING.yml`;
+- issue and pull request templates;
 - `docs/`;
-- existing requirements and design documentation;
-- existing ADRs;
+- existing requirements, design, and decision documentation;
 - package and dependency manifests;
 - build, test, lint, and format configuration;
 - CI/CD configuration;
@@ -151,178 +165,95 @@ DO NOT infer:
 - numeric quality targets;
 - architectural decisions unsupported by evidence.
 
-## 5. Documentation Audit
+## 6. Documentation Audit
 
-Audit each relevant documentation category before editing.
+Audit each relevant document before editing. For each, determine:
 
-For each category determine:
-
-- whether a document exists;
-- whether it is applicable;
-- whether it appears current;
-- whether it is authoritative;
+- whether it is applicable and appears current;
+- whether it is authoritative, and where the canonical location is;
 - which Diátaxis quadrant it serves, if any;
 - whether equivalent information exists elsewhere;
 - whether conflicting versions exist;
-- whether it can safely be updated;
-- where the canonical location is.
+- whether it can safely be updated.
 
-If authority or canonical location is unclear:
+If authority or canonical location is unclear: STOP and ASK. Never create another source of truth to dodge the ambiguity.
 
-**STOP and ASK THE USER.**
+Unclassifiable but valuable documents (governance notes, wiki exports, changelogs-as-docs): preserve as-is and flag for a decision; do not force them into a quadrant.
 
-Do not create another source of truth to avoid resolving the ambiguity.
+FAQs dissolve: sort each entry into the quadrant it actually serves and remove the FAQ once empty. A surviving FAQ is a sign the quadrants are incomplete.
 
-## 6. Business/Product Gate
+## 7. The catalog
 
-Business/product documentation is NOT part of the default documentation set.
+Every document the workflow can produce, with its audience and warrant:
 
-ASK:
+| Document | Audience | Warrant |
+| --- | --- | --- |
+| `README.md` | users, agents | always: the repo's front door |
+| `LICENSE` | users | always: ask which, never pick |
+| `AGENTS.md` | agents | when agents will work in the repo |
+| Community bundle: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, templates | users | public or contributor-accepting repos |
+| `docs/SRS.md` | users, agents | when the outcome must be verifiable, especially agent-built work |
+| `docs/tutorials/` | users | when there is a skill to teach by doing |
+| `docs/how-to/` | users, agents | when real tasks need directions |
+| `docs/reference/` | users, agents | when the machinery needs exact description |
+| `docs/explanation/` | users | when the why needs telling |
+| `CHANGELOG.md` | users | when releases or notable changes exist |
+| `ROADMAP.md` | users | when future intent is worth stating; maintained or linked, never dead |
+| `docs/adr/` | users, agents | when a decision's why must survive |
+| Design proposals | users, agents | per change needing review before implementation |
+| `docs/SDD.md` | users | formal track: contracts, regulators, enterprise process |
+| Business/product docs | users | only when explicitly requested |
+| `llms.txt` | agents | optional satellite for docs-heavy products; a proposal, not a standard |
 
-> SHOULD BUSINESS / PRODUCT DOCUMENTATION BE INCLUDED?
+Present this catalog, trimmed to what fits the repo, for selection. The baseline — `README.md`, `LICENSE`, plus `AGENTS.md` when agents are in play — needs no per-item approval; everything else is offered, never assumed, and created only when selected. Never silently expand the selected set. Reconcile existing equivalents instead of duplicating them.
 
-If **No**:
-
-- skip all business/product documentation;
-- do not create a business case;
-- do not create stakeholder documentation;
-- do not create a BRD;
-- do not create product vision documentation.
-
-If **Yes**, show the available templates for user selection:
-
-- Vision;
-- Business Case;
-- Stakeholder Register;
-- Stakeholder Analysis;
-- Business Requirements Document;
-- Product Requirements Document;
-- Market Analysis;
-- Business Process Documentation;
-- Other explicitly requested business/product documentation.
-
-Only create selected templates.
-
-A Vision document MUST NOT be created unless business/product documentation is explicitly enabled and Vision is selected.
-
-Do not infer business or product requirements from technical documentation.
-
-## 7. Technical Template Selection
-
-### Baseline
-
-Always maintain in APPLY mode:
-
-- `README.md`
-- `AGENTS.md`
-
-Baseline maintenance is NOT optional-template selection.
-
-### Optional repository-level documents
-
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-- `CHANGELOG.md`
-
-### Optional Diátaxis quadrants
-
-- `docs/tutorials/` — learning-oriented lessons that teach by doing.
-- `docs/how-to/` — goal-oriented guides that solve real reader problems.
-- `docs/reference/` — austere technical description of the machinery.
-- `docs/explanation/` — discursive treatment of why and context.
-
-Scaffold quadrants only when the repository has content that needs them; an empty quadrant is never created.
-
-### Optional formal specifications
-
-- `docs/SRS.md`
-- `docs/SDD.md`
-
-Create these only when standards-aligned formal structure is explicitly required; quadrant documentation is the default, and formal specifications MUST NOT duplicate it — link instead.
-
-### Optional ADRs
-
-- `docs/adr/`
-
-Show the optional templates for user selection.
-
-Do not silently expand the selected set.
-
-Existing equivalent documents MUST be reconciled rather than duplicated.
-
-Architecture material splits by need: rationale, context, and decisions go to `docs/explanation/` with ADRs alongside; topology and component facts go to `docs/reference/`. No standalone architecture document unless the repository already keeps one worth preserving.
+Business/product documentation (Vision, Business Case, Stakeholder Register, BRD, PRD, Market Analysis, and anything else explicitly requested) is offered only when explicitly requested. Never infer it from technical docs.
 
 ## 8. Default Layout
 
-Use the repository's existing documentation layout when established.
-
-Otherwise, the default structure is:
+Use the repository's existing layout when established. Otherwise:
 
 ```text
 repo/
 ├── README.md
-├── AGENTS.md
-├── CONTRIBUTING.md          # optional
-├── SECURITY.md              # optional
-├── CHANGELOG.md             # optional
+├── LICENSE                  # ask which; never pick
+├── AGENTS.md                  # only when agents work here
+├── CONTRIBUTING.md            # optional
+├── CODE_OF_CONDUCT.md         # optional
+├── SECURITY.md                # optional
+├── CHANGELOG.md               # optional
+├── ROADMAP.md                 # optional; or link the live board
+├── llms.txt                   # optional satellite
 └── docs/
-    ├── tutorials/             # optional; only when lessons exist
-    │   └── getting-started.md
+    ├── tutorials/             # optional
     ├── how-to/                # optional
     ├── reference/             # optional
-    │   └── api.md
     ├── explanation/           # optional
-    ├── SRS.md                 # optional; formal track only
+    ├── SRS.md                 # optional; outcome contract
     ├── SDD.md                 # optional; formal track only
-    └── adr/                   # optional; only when ADRs exist
-        ├── 0001-title.md
-        └── ...
+    ├── proposals/             # optional; per-change design docs
+    └── adr/                   # only when ADRs exist
 ```
 
-Do not force this structure on a repository with an established equivalent.
-
-Do not create empty quadrant directories.
-
-Do not create `docs/adr/` until creating at least one ADR.
+Never force this on a repo with an established equivalent.
 
 ## 9. README.md
 
-`README.md` is the primary repository orientation and usage document.
+`README.md` is the front door for both audiences: identity, purpose, and how to run.
 
-Maintain applicable information such as:
+Cover, as applicable: project name; purpose; scope; capabilities; prerequisites; installation; configuration; usage; development setup; testing; deployment; relevant links.
 
-- project name;
-- purpose;
-- scope;
-- capabilities;
-- prerequisites;
-- installation;
-- configuration;
-- usage;
-- development setup;
-- testing;
-- deployment;
-- relevant links.
-
-Commands MUST be verified against the repository.
-
-DO NOT invent commands.
-
-DO NOT turn the README into the complete requirements, design, or architecture specification.
-
-Link each quadrant from the README; DO NOT duplicate quadrant content into it.
+Commands MUST be verified against the repository. Never invent commands. Never turn the README into the requirements, design, or architecture specification. Link each quadrant from the README; never duplicate quadrant content into it.
 
 ## 10. AGENTS.md
 
-`AGENTS.md` is the repository's agent operating guide, written to this skeleton: `Use` (scope, precedence over skills and plugins, user instructions outrank it), a constitution of one-line rules that must never be lost, one testable rule per line under domain headings with exact commands, and a `When in doubt` closer.
+`AGENTS.md` is operational context for coding agents: how to build, test, and contribute here. Only create it when agents will work in the repo.
 
-Maintain applicable information: repository structure; sources of truth; development, test, lint, and formatting commands; verification requirements; architecture boundaries; coding conventions; repository constraints; documentation rules; Git rules; and agent-specific operating requirements.
+Follow the de-facto standard's shape: plain Markdown, no required schema, operational over descriptive. Cover: scope and precedence (user instructions outrank it); build, test, lint, and format commands, exact and verified; sources of truth; architecture boundaries; repo constraints; documentation and Git rules. Repos with an established house skeleton keep it.
 
-`AGENTS.md` MUST NOT replace `README.md`, `SRS.md`, `SDD.md`, architecture documentation, or ADRs. Keep instructions actionable and repository-specific.
+Tool-specific files may exist alongside (`CLAUDE.md`, `.cursor/rules/`, and the like). Treat them as evidence, keep shared instructions in `AGENTS.md`, and let thin tool files defer to it rather than duplicating it.
 
 ## 11. Tutorials
-
-Only create tutorials when selected.
 
 A tutorial is a learning-oriented lesson: the reader completes meaningful work toward a goal and acquires skill along the way.
 
@@ -333,18 +264,15 @@ A tutorial is a learning-oriented lesson: the reader completes meaningful work t
 
 ## 12. How-to Guides
 
-Only create how-to guides when selected.
-
 A how-to guide is goal-oriented directions through a real reader problem: deployment, operations, troubleshooting, development workflows.
 
 - Write from the reader's problem, not from the machinery's motions; one guide answers one task the reader actually has.
 - Give an adaptable logical sequence of actions the reader can check as they go; fork and rejoin where real problems demand it.
 - Omit what the competent reader already knows; usability beats completeness.
+- Link prerequisite lessons as tutorials instead of reteaching them inline.
 - Never inline explanation or reference; link them out instead.
 
 ## 13. Reference
-
-Only create reference material when selected.
 
 Reference is austere technical description of the machinery: APIs, contracts, configuration, components, interfaces, errors.
 
@@ -355,8 +283,6 @@ Reference is austere technical description of the machinery: APIs, contracts, co
 
 ## 14. Explanation
 
-Only create explanation when selected.
-
 Explanation is discursive treatment that builds understanding: why things are so, context, decisions, trade-offs, alternatives.
 
 - Open with the why-question the page answers, and bound the topic tightly; one page explores one area.
@@ -366,553 +292,136 @@ Explanation is discursive treatment that builds understanding: why things are so
 
 ## 15. Software Requirements Specification
 
-Only create or update an SRS when selected.
+The SRS defines WHAT done means. It is the outcome contract — most valuable when agents build the work, because agents check conformance but cannot infer intent.
 
-The SRS defines **WHAT the software must do**.
-
-Use an **ISO/IEC/IEEE 29148:2018-aligned** structure.
-
-Do not claim formal compliance unless explicitly established.
-
-Include, as applicable:
-
-### Introduction
-
-- purpose;
-- scope;
-- references;
-- definitions;
-- acronyms and abbreviations.
-
-### Overall Description
-
-- product perspective;
-- product functions;
-- operating environment;
-- constraints;
-- assumptions;
-- dependencies.
-
-### External Interfaces
-
-- user interfaces;
-- external systems;
-- APIs;
-- hardware or infrastructure interfaces where applicable.
+Use an ISO/IEC/IEEE 29148:2018-aligned structure when formal rigor is required; otherwise keep the shape and drop the ceremony. Never claim formal compliance unless established.
 
 ### Functional Requirements
 
-Use stable identifiers:
+Testable, unambiguous, traceable, with stable identifiers:
 
 ```text
 FR-001
 FR-002
-FR-003
 ```
 
-Requirements SHOULD be specific, testable, unambiguous, and traceable.
+Each FR MUST be verifiable by a named check or test. An untestable requirement is a wish; rewrite it or drop it.
 
 ### Quality Requirements
 
-Use stable identifiers:
+Stable identifiers (`NFR-001`, …). Only targets supported by evidence or explicit user statements. Never invent numeric performance, availability, scalability, security, or usability targets. Unknown material targets are questions, not guesses.
 
-```text
-NFR-001
-NFR-002
-NFR-003
-```
+### Scope and context
 
-Only document quality targets supported by evidence or explicitly provided by the user.
+Purpose, scope, references, definitions; product perspective and functions; operating environment; constraints; assumptions; dependencies; external interfaces (user, system, API, hardware as applicable); data requirements (entities, relationships, validation, persistence, retention).
 
-DO NOT invent numeric performance, availability, scalability, security, or usability targets.
+### Traceability
 
-If a material quality target is unknown:
+Trace each requirement to the design element, test, or artifact that satisfies it. Open issues stay listed as open; never invent answers.
 
-**STOP and ASK THE USER.**
+### Boundary with the quadrants
 
-### Data Requirements
+Normative statements and their IDs live here. Tutorials, how-tos, reference, and explanation teach, direct, describe, and discuss — and cite requirement IDs instead of restating them.
 
-Document applicable:
+## 16. Design proposals
 
-- data;
-- relationships;
-- validation;
-- persistence;
-- retention.
+A design proposal argues for one change before it is implemented: problem, options considered, the chosen design, interfaces affected, verification plan. It is reviewed, approved, then implemented — and then it is history, not standing documentation.
 
-### Constraints
+Use proposals for changes big enough to get wrong: new components, interface changes, data-model changes, anything crossing a boundary the SRS or the repo's conventions set.
 
-Document established:
-
-- technical constraints;
-- platform constraints;
-- compatibility constraints;
-- regulatory or policy constraints.
-
-### Assumptions and Dependencies
-
-Only document established assumptions and dependencies.
-
-### Verification
-
-Describe how requirements can be verified.
-
-### Requirements Traceability
-
-Trace requirements to relevant design elements, tests, or authoritative artifacts where practical.
-
-### Open Issues
-
-Record unresolved requirements and decisions rather than inventing answers.
-
-## 16. Software Design Description
-
-Only create or update an SDD when selected.
-
-The SDD defines **HOW the software is designed**.
-
-Use an **IEEE 1016-2009-aligned** structure.
-
-Do not claim active formal compliance or certification.
-
-Include, as applicable:
-
-### Identification and Scope
-
-- system identity;
-- design scope;
-- design boundaries.
-
-### Design Context
-
-- external systems;
-- operating context;
-- relevant environmental assumptions.
-
-### Design Viewpoints
-
-Use only viewpoints relevant to the system, such as:
-
-- context;
-- composition;
-- logical structure;
-- dependencies;
-- information;
-- interfaces;
-- interaction;
-- state;
-- deployment.
-
-### Design Views
-
-Use appropriate representations:
-
-- Mermaid;
-- UML;
-- tables;
-- structured text;
-- diagrams.
-
-Views MUST represent verified architecture rather than imagined architecture.
-
-### Design Elements
-
-Describe significant design elements and relationships.
-
-Do not document every function or source file.
-
-### Structural Design
-
-Document:
-
-- components;
-- modules;
-- responsibilities;
-- dependencies;
-- boundaries.
-
-### Behavioral Design
-
-Document:
-
-- important workflows;
-- state transitions;
-- control flow;
-- significant interactions.
-
-### Data Design
-
-Document:
-
-- important entities;
-- relationships;
-- persistence;
-- validation;
-- ownership where established.
-
-### Interface Design
-
-Document:
-
-- APIs;
-- internal interfaces;
-- external interfaces;
-- protocols;
-- important contracts.
-
-### Deployment Design
-
-Document:
-
-- runtime components;
-- hosting;
-- infrastructure relationships;
-- deployment boundaries.
-
-### Design Constraints
-
-Document established implementation constraints.
-
-### Design Rationale
-
-Document significant design reasoning where useful.
-
-Do not turn routine implementation details into design rationale.
-
-### Design Traceability
-
-Connect important design elements to requirements or other authoritative artifacts where practical.
+Keep proposals in `docs/proposals/`, one file per change, named by date or sequence. A proposal never outlives its implementation as guidance; lasting decisions graduate to ADRs, lasting facts to reference.
 
 ## 17. Architecture Decision Records
 
-Only create ADRs when selected.
+An ADR records WHY one significant decision was made, so the reasoning survives the people who made it. The SDD (when it exists) records HOW the current design works.
 
-An ADR records **WHY a significant architectural or design decision was made**.
+Do not use ADRs for routine implementation, minor configuration, every library choice, or anything the design docs already capture.
 
-An SDD records **HOW the current design works**.
+Keep them in `docs/adr/`, numbered (`0001-title.md`), preserving existing numbers. Each ADR carries: title, status, context, decision, consequences. Never duplicate a decision already recorded authoritatively.
 
-Do not use ADRs for:
+## 18. Software Design Description
 
-- routine implementation details;
-- minor configuration changes;
-- every library choice;
-- information already adequately captured by design documentation.
+The standing SDD describes HOW the system is designed. Create it only for the formal track: contracts, regulators, or enterprise process demand it. Otherwise the design lives where it is used — interfaces in reference, rationale in ADRs and explanation, behavior in how-tos.
 
-Use:
+When created, use an IEEE 1016-2009-aligned structure: identification and scope; design context; relevant viewpoints (context, composition, logical, dependency, information, interface, interaction, state, deployment); views in Mermaid, UML, tables, or structured text; structural, behavioral, data, interface, and deployment design; constraints; significant rationale; traceability to requirements.
 
-```text
-docs/adr/
-```
+Views MUST represent verified architecture, never imagined architecture. Never document every function or file. Never claim active formal compliance or certification.
 
-Create the directory only when creating at least one ADR.
+## 19. Community files
 
-Preserve existing numbering.
+Offered as a bundle for public or contributor-accepting repos; private repos take only what fits.
 
-Do not unnecessarily renumber existing ADRs.
+- `LICENSE`: detect the current license. If none, ask which — never pick one for the client.
+- `CODE_OF_CONDUCT.md`: use the canonical Contributor Covenant text from its published source; never reproduce it from memory.
+- `CONTRIBUTING.md`: setup, workflow, and PR expectations, verified against the repo. Never copy a template nobody follows.
+- `SECURITY.md`: vulnerability reporting, supported versions, disclosure process, established contacts only. Technical security architecture lives in the SDD or reference, never here. Never invent contacts or procedures.
+- Templates: issue and pull request templates matching how the repo actually triages.
+- `SUPPORT.md` and `FUNDING.yml`: where the repo needs them.
 
-Use:
+## 20. Time-axis documents
 
-```md
-# ADR-0001: Decision Title
+The changelog looks back; the roadmap looks forward. Keep both root-level and dated.
 
-## Status
+`CHANGELOG.md`: notable changes per release, newest first. Record what changed and why it matters; never reconstruct history from guesses.
 
-## Context
+`ROADMAP.md`: future intent in coarse, explicitly non-committal terms. Maintain it with dated entries, or link the live board instead of keeping a file. Reconfirm any roadmap whose dates are all past; a dead roadmap misleads agents into building canceled futures.
 
-## Decision
+## 21. Reconciliation
 
-## Consequences
-```
+For every selected document: locate existing equivalents; identify the apparent source of truth; determine the canonical location; compare against the selected shape; preserve valid material; add only supported missing material; correct only stale material current evidence contradicts; dedupe only when authority is clear; avoid reformatting for its own sake.
 
-Do not create duplicate ADRs for decisions already documented authoritatively.
+Never rewrite a document solely to match a template. Never silently merge contradictions — conflicting sources of truth with unclear authority are a question, not a judgment call.
 
-## 18. Security Documentation
+Precedence when existing pages mix quadrants: split them only when the page is being updated anyway and authority is clear; otherwise preserve the page and flag the mix in FINDINGS. Preservation beats purity on pages nobody asked to touch.
 
-Only create `SECURITY.md` when selected.
+## 22. Cross-document consistency
 
-For repository-level security policy, use the repository root:
+After creating or updating the selected documents, check consistency of: project name; scope; terminology; functional and quality requirements; architecture; components; interfaces; data models; deployment; configuration; commands; paths; links; requirement identifiers; ADR references; document status.
 
-```text
-SECURITY.md
-```
+Never make contradictory claims. Never state draft as final, proposed as accepted, planned as implemented, unverified as verified, or intended behavior as current behavior, unless evidence supports it.
 
-Use it for applicable concerns such as:
+## 23. Uncertainty
 
-- vulnerability reporting;
-- supported versions;
-- disclosure process;
-- security-policy scope;
-- established security contact information.
+Material uncertainty — unknown intent, ambiguous scope, conflicting requirements or docs, unclear authority or ownership, unknown targets, ambiguous architecture, unclear selection, anything that could materially change the result — is a question, never a guess.
 
-Technical security architecture belongs in technical documentation such as:
+Interactive runs: STOP, identify the exact uncertainty, ASK the minimum question, WAIT, apply the answer, RESUME from the blocked point. Never restart, never proceed on assumption, never hide the uncertainty, never substitute generic template content.
 
-- `SDD.md`;
-- reference or explanation material;
-- other selected technical documents.
+Unattended runs: record the question, proceed on the most reasonable stated assumption, report every assumption for review.
 
-Do not invent security contacts or procedures.
-
-Do not use `SECURITY.md` as a substitute for technical security architecture.
-
-## 19. Template Reconciliation
-
-For every selected template:
-
-1. Locate existing equivalents.
-2. Identify the apparent source of truth.
-3. Determine the canonical location.
-4. Compare existing content against the selected template.
-5. Preserve valid material.
-6. Identify missing material, duplication, and conflicts.
-7. Update the authoritative document where appropriate.
-
-If two plausible sources of truth conflict and authority is unclear:
-
-**STOP and ASK THE USER.**
-
-Do not silently merge contradictory information.
-
-## 20. Content Reconciliation
-
-When updating an existing document:
-
-- preserve valid content, established terminology, stable identifiers, useful examples, working links, and repository conventions;
-- add missing information only when supported;
-- correct stale information when supported by current evidence;
-- remove duplication only when authority is clear;
-- avoid unnecessary reformatting.
-
-Do not rewrite an entire document solely to make it resemble the selected template.
-
-## 21. Cross-Document Consistency
-
-After creating or updating all selected documents, check consistency across them.
-
-Verify consistency of:
-
-- project name;
-- scope;
-- terminology;
-- functional requirements;
-- quality requirements;
-- architecture;
-- components;
-- interfaces;
-- data models;
-- deployment;
-- configuration;
-- commands;
-- paths;
-- links;
-- requirement identifiers;
-- ADR references;
-- document status.
-
-Documentation MUST NOT make contradictory claims.
-
-Do not state:
-
-- draft as final;
-- proposed as accepted;
-- planned as implemented;
-- unverified as verified;
-- intended behavior as current behavior;
-
-unless supported by evidence.
-
-## 22. Uncertainty Control
-
-A material uncertainty includes:
-
-- unknown user intent;
-- ambiguous scope;
-- conflicting requirements;
-- conflicting documentation;
-- unclear source of truth;
-- unclear canonical location;
-- unknown ownership;
-- unknown requirements;
-- unknown quality targets;
-- ambiguous architecture;
-- conflicting design interpretations;
-- unclear template selection;
-- any decision that could materially change the resulting documentation.
-
-For any material uncertainty:
-
-1. STOP.
-2. Identify the exact uncertainty.
-3. ASK the minimum necessary question.
-4. WAIT.
-5. Apply the answer.
-6. RESUME from the exact blocked point.
-
-DO NOT:
-
-- guess;
-- continue using a material assumption;
-- hide uncertainty;
-- substitute generic template content;
-- restart the workflow after the answer.
-
-## 23. Final Uncertainty Audit
-
-Before finalizing, classify material statements as:
-
-1. Verified directly from the repository.
-2. Established elsewhere in the repository.
-3. Explicitly provided by the user.
-4. Clearly labeled inference.
-5. A decision requiring user input.
-
-For category 5:
-
-**STOP and ASK THE USER.**
-
-For category 4, if the inference materially affects the documentation:
-
-**STOP and ASK THE USER.**
-
-Do not leave material uncertainty disguised as fact.
+Before finalizing, every material statement MUST be traceable to repository evidence or an explicit user statement. Anything else is an open question. There is no third category.
 
 ## 24. Verification
 
-In APPLY mode, verify the resulting documentation.
+In APPLY mode, verify the result: referenced commands, paths, and files exist; links resolve; names are correct; APIs, components, deployment, and diagrams match the repository; requirement identifiers are unique and stable; traceability references are valid; standards references are correctly named; repo conventions are followed.
 
-Verify, where applicable:
+Each quadrant page serves exactly one quadrant; quadrants link rather than duplicate.
 
-- referenced commands exist;
-- referenced paths exist;
-- referenced files exist;
-- links resolve;
-- configuration names are correct;
-- APIs are correctly represented;
-- components match the repository;
-- deployment descriptions match the repository;
-- diagrams match the documented architecture;
-- requirement identifiers are unique and stable;
-- traceability references are valid;
-- standards references are correctly named;
-- repository documentation conventions are followed;
-- each page serves exactly one quadrant;
-- quadrants link rather than duplicate.
-
-Use repository-provided documentation validation, Markdown linting, link checking, or similar checks when available.
-
-Do not run unrelated or unnecessarily expensive tests solely because documentation changed.
+Use repo-provided validation, linting, and link checking when available. Never run unrelated or expensive tests solely because docs changed.
 
 ## 25. Idempotency
 
-The workflow MUST be safe to run repeatedly.
+Repeat runs MUST be safe: preserve valid docs; update stale ones on evidence; reconcile missing sections; never duplicate documents or ADRs; never renumber ADRs or requirement IDs without cause; never formatting-only rewrites; never remove valid user content without justification; never recreate what already satisfies the selection.
 
-On subsequent runs:
+Destructive or materially reorganizing changes are questions first.
 
-- preserve valid documentation;
-- update stale documentation when supported;
-- reconcile missing sections;
-- do not create duplicate documents or ADRs;
-- do not unnecessarily renumber ADRs;
-- preserve stable requirement IDs;
-- do not perform formatting-only rewrites;
-- do not remove valid user content without justification;
-- do not create empty directories;
-- do not recreate documents that already satisfy the selected template.
+## 26. Worked examples
 
-Any destructive or materially reorganizing change:
+Classifying `docs/deploy.md` ("here is how our deploy pipeline works, step by step, and why we chose blue-green"): the steps are a how-to, the blue-green rationale is explanation, the pipeline's flags and environments are reference. Three pages, linked.
 
-**STOP and ASK THE USER.**
+Classifying `docs/api.md` ("endpoints, auth flows with examples, rate-limit policy"): endpoints and rate limits are reference; the auth flows walk the reader through a task and belong in how-to, linked from reference.
 
-## 26. PLAN Mode Output
+Classifying `FAQ.md` ("how do I reset the db?", "what versions are supported?", "why Postgres?"): reset steps go to how-to, supported versions to reference (or `SECURITY.md`), the Postgres rationale to explanation. Delete the FAQ when empty.
 
-Report:
+## 27. PLAN Mode Output
 
-### Proposed Baseline
+Report: proposed baseline; proposed selected documents; existing sources of truth; conflicts and unclear authority; what would be created, updated, preserved, skipped; decisions blocking safe execution. Modify nothing.
 
-- `README.md`
-- `AGENTS.md`
+## 28. APPLY Mode Output
 
-### Proposed Optional Documents
+Report: CREATED; UPDATED; PRESERVED (authoritative content intentionally retained, with mixes flagged); SKIPPED (with reason); STANDARDS ALIGNMENT (for example SRS: ISO/IEC/IEEE 29148:2018-aligned — never claim compliance unless established); FINDINGS (inconsistencies, gaps, observations); VERIFICATION (checks performed and results — never claim unrun checks).
 
-Only the selected or strongly applicable documents.
+## 29. Completion
 
-### Existing Sources of Truth
+End in exactly one state: PLAN completed (nothing modified), APPLY completed (selected docs reconciled and verified), or BLOCKED (state the exact decision required).
 
-Identify authoritative existing documents.
-
-### Conflicts
-
-Identify conflicting documentation or unclear authority.
-
-### Proposed Changes
-
-Describe what would be:
-
-- created;
-- updated;
-- preserved;
-- skipped.
-
-### Required User Decisions
-
-List only decisions that block safe execution.
-
-Do not modify files.
-
-## 27. APPLY Mode Output
-
-Report:
-
-### CREATED
-
-Files created.
-
-### UPDATED
-
-Files updated.
-
-### PRESERVED
-
-Existing authoritative content intentionally retained.
-
-### SKIPPED
-
-Selected or considered documentation intentionally not created, with reason where useful.
-
-### STANDARDS ALIGNMENT
-
-State applicable alignment, for example:
-
-- SRS: ISO/IEC/IEEE 29148:2018-aligned.
-- SDD: IEEE 1016-2009-aligned.
-
-Do not claim formal compliance unless established.
-
-### FINDINGS
-
-Important documentation inconsistencies, gaps, or repository observations.
-
-### VERIFICATION
-
-Checks performed and their results.
-
-Do not claim checks were performed if they were not.
-
-## 28. Completion Rules
-
-The workflow MUST end in exactly one of these states:
-
-- **PLAN completed** — no file modifications were made.
-- **APPLY completed** — selected documentation was reconciled and verified.
-- **BLOCKED** — a material user decision is required.
-
-A BLOCKED result MUST state the exact decision required.
-
-Never silently continue through material uncertainty.
-
-Never invent missing project information.
-
-Never introduce business/product documentation without explicit user selection.
-
-Never create duplicate sources of truth.
-
-Never commit or push unless explicitly requested.
+Never continue through material uncertainty. Never invent project information. Never introduce business/product docs without explicit selection. Never duplicate sources of truth. Never commit or push unless requested.
