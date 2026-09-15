@@ -251,6 +251,8 @@ Repo-wide rules and decisions live here; session scratch stays out.
 
 Follow the de-facto standard's shape: plain Markdown, no required schema, operational over descriptive. Cover: scope and precedence (user instructions outrank it); build, test, lint, and format commands, exact and verified; sources of truth; architecture boundaries; repo constraints; documentation and Git rules. Repos with an established house skeleton keep it.
 
+State the nesting rule: a nearer `AGENTS.md` outranks this one; the closest file to the work wins.
+
 Tool-specific files may exist alongside (`CLAUDE.md`, `.cursor/rules/`, and the like). Treat them as evidence, keep shared instructions in `AGENTS.md`, and let thin tool files defer to it rather than duplicating it.
 
 ## 11. Tutorials
