@@ -101,6 +101,8 @@
 - Check external, current, or version-specific facts against authoritative sources.
 - For large function replacements, prefer a scripted splice.
 - Prefer the file read/write tools over shell for file operations: they batch dozens of calls into one block, while shell file work goes command by command; reserve shell for commands that genuinely need it.
+- Tool blocks take 100 cheap calls: the ceiling is result tokens, not call count. A `write_file` result costs about 12 tokens, so 100 fit; a `web_search` result costs about 800, so 100 need an 80k block. Hard caps found: 10 speech clips per turn with further calls rejected, and `count` at most 5 per image search. Parallel I/O scaled to 200 concurrent requests with no loss.
+- Never put the verifier in the same block as the work: a count ran before 24 edits landed and printed no-such-file while all 24 later showed on disk. Verify in the next message, after the writes land.
 - Before finishing, run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 

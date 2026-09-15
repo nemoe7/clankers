@@ -80,6 +80,8 @@
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
 - Prefer read/write tools over shell; for large function replacements prefer a scripted splice.
+- Blocks take 100 cheap calls; the ceiling is result tokens, not count. Hard caps: 10 speech clips per turn, image-search `count` <= 5.
+- Never verify in the same block; count in the next message, after the writes land.
 - Before finishing, run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 

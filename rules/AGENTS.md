@@ -2,12 +2,10 @@
 
 ## Use
 
-- Generic core ruleset for coding agents: all code, agents, sessions, mentioned or not.
+- Generic core ruleset for coding agents: all code, agents, sessions, repeated in a prompt or not.
 - Outranks skills/plugins: they specialize defaults, NEVER weaken an explicit requirement or replace a convention.
 - An explicit user instruction in chat outranks this file; state the override in one line.
-- Nearest AGENTS.md wins.
-- In Arena, MUST follow `ARENA.md`; AGENTS.md stays in force, and its Arena-specific handling (push/PR/merges) wins.
-- Amend this file when a rule/decision proves durable and repo-wide; session scratch stays out.
+- In Arena, MUST also follow `ARENA.md`; AGENTS.md stays in force, and its Arena-specific handling (push/PR/merges) wins.
 
 ## Constitution
 
@@ -48,22 +46,22 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern already here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
+- KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern already here, look before writing; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
 - The ladder is a reflex, not research: climb after understanding; two rungs work, take the higher.
-- MUST propose a smaller scope before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
+- MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how, NEVER what to drop.
 - NEVER add a dependency for a few lines' work.
 - Build what is asked.
 - Name a relevant lazier alternative in one line, user picks, no commentary otherwise.
-- Never lazy about understanding: read code, trace flow.
+- Never lazy about understanding: read code, trace flow first.
 - NEVER simplify away trust-boundary validation, data-loss error handling, security, or accessibility.
 - Mark a corner-cut with a `simplified:` comment naming ceiling and upgrade path.
 - Guard clauses, early returns; readable code.
 - Cohesive modules, low coupling, small interfaces, local data/behavior.
 - Add abstraction, boilerplate, or scaffolding only for a tangible present need.
-- Cut a seam only for a tangible need; prefer an existing extension point over parallel mechanism.
-- Prefer deletion over addition, boring over clever, fewest files, search for a helper first.
+- Cut a seam only for a tangible need; prefer an existing extension point over a parallel mechanism.
+- Prefer deletion over addition, boring over clever, fewest files, and search for a helper first.
 - Prefer the simplest implementation that meets criteria, the edge-case-correct stdlib pick on ties, safe defaults only when non-material.
-- Build the full version on insistence, without re-arguing.
+- A user insisting on the full version gets it without re-arguing.
 
 ## Debugging
 
@@ -90,7 +88,7 @@
 - Before finishing check requirements, acceptance criteria, scope.
 - Verify behavior via the project's tests/linters/formatters/builds.
 - Verify external, version-specific, or time-sensitive facts against authoritative sources.
-- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.
+- Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every file belongs.
 - Fix in-scope issues and recheck.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Confirm planned changes, checks, commits, and cleanup are done.
@@ -100,7 +98,7 @@
 - 2-space indentation overrides formatter defaults.
 - Markdown: markdownlint defaults + MD060, MD013 off.
 - Python projects: Ruff defaults; the project's own `ruff.toml` when it has one.
-- When none: `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; create it exactly before gates.
+- When none, the conventions are `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; create it exactly before gates.
 - Python projects: gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
 - Leave unrelated code alone.
 - MUST keep repository hygiene: scratch files, scripts, output stay out of the repo or are deleted once used, out of every commit.
@@ -117,15 +115,15 @@
 - Types: `feat fix refactor perf style docs test build chore`; spec mandates only `feat`/`fix`, rest via Angular `@commitlint/config-conventional`; prefer history's types.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
-- Merges MUST be fast-forward when possible; on divergence, rebase onto the target.
+- Merges MUST be fast-forward when possible; on divergence, rebase onto the target, then fast-forward.
 
 ## Responses
 
-- Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
+- Report changes/findings, checks/results, useful files/decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
 - Consider reporting skipped alternatives with add-when triggers.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- User-run commands: print bash and Windows forms, PowerShell by default, cmd for one line; setup and multi-step always get both.
+- User-run commands: print bash and Windows forms, PowerShell by default, cmd for one line; setup and multi-step commands always get both.
 - Default to mermaid for pipelines, diagrams, and flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 
 ## When in doubt
