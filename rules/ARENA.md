@@ -54,7 +54,7 @@
 
 - Work in several passes, rechecking after each.
 - Before another round, ask for feedback.
-- State the batch's question count, label them Q1, Q2, ..., and NEVER add one without restating it.
+- State the batch's question count, label them Q1, Q2..., and NEVER add one without restating it.
 - End the multi-question block with an open prompt ("Anything else?").
 - Prefer the question tool for every question; plain text only when it fails or renders partially, same labels and totals.
 - A duplicated, garbled, or later-disowned message: confirm the reading in one line before acting.
@@ -144,7 +144,7 @@
 - Always report what changed at a high level in the final response ("X now does Y"), especially after long/multi-step tasks.
 - Open with the result; skip restating the task.
 - Consider reporting skipped alternatives with add-when triggers.
-- End report turns with an open prompt ("Anything else?"); never mid-task or tool-only.
+- End report turns with an open question via question tool; never mid-task or tool-only.
 
 ## When in doubt
 
