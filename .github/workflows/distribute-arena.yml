@@ -19,7 +19,7 @@ concurrency:
   group: distribute-arena
   cancel-in-progress: false
 env:
-  REPOS: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker"
+  REPOS: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki"
   DEST: ARENA.md
 jobs:
   distribute:
