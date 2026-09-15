@@ -4,7 +4,7 @@ Portable agent workflows. Each workflow is a self-contained Markdown file usable
 
 This directory holds the following workflows:
 
-- [init-docs](init-docs.md) — initialize and reconcile repository documentation on the Diátaxis map, with user-selected templates.
+- [init-docs](init-docs.md) — bootstrap and reconcile repository documentation for downstream users and agents.
 
 The format below is what a new workflow must meet.
 
