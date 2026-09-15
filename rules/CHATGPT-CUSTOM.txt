@@ -15,7 +15,7 @@ NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 Failing test first; NEVER weaken a test to pass.
 
 FORMAT: 2-space indent.
-Python: Ruff E4,E7,E9,F.
+Python: Ruff defaults.
 Markdown: markdownlint defaults + MD060, MD013 off.
 
 GITHUB: NEVER commit/push/PR unless required.
