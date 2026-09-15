@@ -72,17 +72,18 @@ if "STOP:" in content.upper():
 **With helper:**
 ```python
 from scripts.check_steering import check_steering
+
 notes = check_steering()
 ```
 
 **Recommended agent loop:**
 ```python
 for step in agent_loop:
-    notes = check_steering()
-    if "STOP:" in notes.upper():
-        print("STOP detected, pivoting")
-        # adjust plan
-    # continue work
+  notes = check_steering()
+  if "STOP:" in notes.upper():
+    print("STOP detected, pivoting")
+    # adjust plan
+  # continue work
 ```
 
 ### ntfy.sh API
@@ -121,7 +122,7 @@ Follows https://agentskills.io/specification.md:
 - Directory name matches skill name: `arena-live-steering`
 - SKILL.md has required frontmatter: name, description
 - Description includes when to use
-- Frontmatter includes `DO NOT USE THIS SKILL IF YOU ARE NOT ON ARENA` as required
+- Frontmatter states the Arena-only scope in `description` and `compatibility`
 - Scripts in `scripts/`
 - References in `references/`
 - No external deps (stdlib only)

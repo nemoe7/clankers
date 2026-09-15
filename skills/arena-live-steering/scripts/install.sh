@@ -1,11 +1,11 @@
 #!/bin/bash
 # Portable install - generates random topic and starts poller
-# DO NOT USE THIS SKILL IF YOU ARE NOT ON ARENA
+# Arena.ai Agent Mode sessions only
 set -e
 cd "$(dirname "$0")/.."
 
 echo "🎯 Arena Live Steering Skill - Portable Install"
-echo "DO NOT USE THIS SKILL IF YOU ARE NOT ON ARENA"
+echo "Scope: Arena.ai Agent Mode sessions only"
 echo ""
 
 # Generate topic if not exists

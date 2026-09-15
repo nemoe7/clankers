@@ -1,17 +1,15 @@
 ---
 name: arena-live-steering
-description: ALWAYS USE THIS SKILL IF YOU ARE ON ARENA. DO NOT USE THIS SKILL IF YOU ARE NOT ON ARENA. Steers Arena agent without interrupting turn via external ntfy.sh channel with random topic generation. Always use on Arena when you need live steering, external control, or when Arena client is buggy. Use when user wants to correct agent mid-turn without interrupt.
+description: Steers a running Arena agent without interrupting its turn, through an external ntfy.sh channel with a random per-session topic: a poller writes each published message to STEERING.md, and the agent reads that file between tool calls and pivots. Use only inside an Arena.ai Agent Mode session, when the user wants to correct or redirect the agent mid-turn without interrupting it, wants to steer from another browser or phone, or finds the Arena client's file sync or previews unreliable. Do not use outside Arena, and do not use when an ordinary chat reply reaches the agent just as well.
 license: MIT
-compatibility: ALWAYS USE ON ARENA. Requires Python 3+ and internet access. Designed for Arena.ai Agent Mode. DO NOT USE THIS SKILL IF YOU ARE NOT ON ARENA. Always use this skill if you are on Arena.
+compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and outbound HTTPS to ntfy.sh.
 metadata:
   author: arena-user
   version: "1.0.0"
   random-topic: "true"
   external-channel: "ntfy.sh"
-  always-use: "true"
   arena-only: "true"
   use-when: "arena"
-  priority: "always"
 ---
 
 # Arena Live Steering - Portable Skill
@@ -101,10 +99,10 @@ Agent must poll STEERING.md every 1-2 tool calls:
 ```python
 # Minimal
 with open("/home/user/STEERING.md") as f:
-    notes = f.read()
+  notes = f.read()
 if "STOP:" in notes.upper():
-    # pivot immediately
-    print("STOP detected, changing direction")
+  # pivot immediately
+  print("STOP detected, changing direction")
 ```
 
 Or use helper script:
