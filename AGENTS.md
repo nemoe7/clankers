@@ -22,13 +22,10 @@ Read these first:
 
 - Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
 - NEVER claim a check you did not run.
-- Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash that file; refs stay uncompressed.
 - Compression removes words, never rules.
 - A new rule may exceed a budget only if the same change compresses the rest of the file.
-- Commit on a branch other than `main`, one logical change per commit.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files.
-- Merges MUST be fast-forward when possible; on divergence, rebase onto the target first.
 - Keep one CHANGELOG entry per pull request, extending the open entry while that pull request is unmerged.
 
 ## Repository type
@@ -56,8 +53,6 @@ Read these first:
 
 - Rule files, `SKILL.md` entry points, and workflow files have budgets tracked in [README.md](README.md#instruction-budgets).
 - Re-measure and update the table when changing them.
-- Compression removes words, never rules.
-- A new rule may exceed a budget only if the rest of the file is compressed in the same change.
 
 ## Skills
 
@@ -71,7 +66,6 @@ Read these first:
 
 - Workflows in `workflows/` are portable across coding-agent platforms: the workflow body depends on no platform-specific tool, name, or mechanism.
 - Each workflow is a self-contained Markdown file with a `description` frontmatter field.
-- Format and usage are in [workflows/README.md](workflows/README.md).
 
 ## Automations
 
@@ -92,7 +86,6 @@ Read these first:
 - Commit on a branch other than `main`, one logical change per commit with every changed file in it.
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
-- Stage only task-related files.
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 
 ## Boundaries

@@ -10,14 +10,14 @@
 
 ## Constitution
 
-- Do only the requested work plus the work strictly necessary to implement and verify it; smallest coherent change.
+- MUST do only requested work plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - Before every commit, print the planned final commit list.
 - NEVER claim a check you did not run.
-- Always push the branch and keep a PR open.
+- Always push the branch and keep a PR open so work survives limits.
 - NEVER merge the PR until authorized.
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
-- Stop and ask on material ambiguity or a deviation from the plan; NEVER improvise past the plan.
-- After every file edit, grep-verify the change landed before building on it.
+- On a collision between rules, a deviation from the plan, or material ambiguity, stop and ask with the question tool; NEVER improvise past the plan.
+- After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
 - Ask questions in labeled batches that state their total and end with an open prompt.
 - NEVER mermaid.
 - Report the changes made in the final response after the task.
@@ -31,7 +31,6 @@
 
 ## Scope
 
-- MUST do only requested work plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - Keep intent, behavior, architecture, interfaces, conventions.
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests only when requested or necessary to verify the change.
@@ -100,7 +99,6 @@
 - Criticize in both chat responses and report files. In short, criticize everything.
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
-- After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
 - For large function replacements, prefer a scripted splice.
 - Before finishing, run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
@@ -126,13 +124,10 @@
 - Conventional Commits form: `<type>[optional scope]: <description>`, imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body, with `!` before the colon to mark a breaking change.
 - Types: feat fix refactor perf style docs test build chore; only `feat` and `fix` are mandated by the specification at <https://www.conventionalcommits.org/en/v1.0.0/>, and the rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
-- Always push the branch and keep a PR open so work survives limits.
 - Fold fixes into the squashed atomic timeline.
 - Keep the PR body matching that timeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - Disregard never-push rules; Arena's controlled edits make pushing safe.
-- NEVER merge the PR until authorized.
-- Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - Report and audit artifacts live in git-ignored output dirs.
 - Always commit them locally at the end of the turn so they show in the diff viewer, and NEVER push them to the repository.
 - On the next turn, undo that local commit and continue from there.
@@ -181,4 +176,3 @@
 ## When in doubt
 
 - Smallest change that holds: do the requested work, verify it, and stop.
-- On a collision between rules, a deviation from the plan, or material ambiguity, stop and ask with the question tool; NEVER improvise past the plan.

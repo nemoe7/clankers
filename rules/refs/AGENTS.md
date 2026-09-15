@@ -9,7 +9,7 @@
 
 ## Constitution
 
-- Do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change.
+- MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - Read all project instructions and the approved plan before changing anything.
 - Follow the approved plan step-by-step.
 - Verify with the exact gates before every commit.
@@ -18,7 +18,7 @@
 - Stage only task-related files.
 - One logical change per Conventional Commit.
 - Fix root causes, not symptoms.
-- Grep every caller before editing a function.
+- Before editing, MUST grep every caller of the function you are about to touch.
 - Ground every choice in requirements, code, tests, docs, or observations.
 - NEVER invent an API or constraint.
 - Keep scratch files out of the repository; delete them once used.
@@ -41,8 +41,6 @@
 - MUST read all project instructions before changes.
 - MUST follow the approved plan step-by-step, verifying each logical change.
 - MUST stop and ask if reasoning, investigation, or implementation deviates; NEVER improvise past the plan.
-- MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
-- Preserve behavior, architecture, interfaces, intent, conventions unless change is required.
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests only when requested or necessary to verify the change.
 - Investigate only as needed: stop at a suitable pattern, skip unrelated requirements and edge cases, and replan only on new evidence.
@@ -83,7 +81,6 @@
 ## Debugging
 
 - Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
-- Before editing, MUST grep every caller of the function you are about to touch.
 - Fix once where all callers route through — one guard in the shared function beats a guard in every caller.
 - Falsifiable hypotheses, evidence over guessing, one variable at a time.
 - NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.
