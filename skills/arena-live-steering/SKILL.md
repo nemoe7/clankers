@@ -14,7 +14,7 @@ metadata:
 
 # Arena Live Steering - Portable Skill
 
-Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is buggy. Uses external ntfy.sh channel with random topic generation.
+Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is buggy. Two transports carry the notes: an external ntfy.sh channel with random topic generation, and GitHub issue or pull request comments where egress is allowlisted.
 
 ## When to use this skill
 
@@ -23,6 +23,7 @@ Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is b
 - Need external control from phone/browser
 - User says "steer without interrupting" or "live steering"
 - Need random private channel per session
+- Sandbox egress cannot reach `ntfy.sh`: use the GitHub comment transport, which needs only `api.github.com`
 
 ## How it works
 
@@ -30,6 +31,23 @@ Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is b
 2. **External poller**: Polls `https://ntfy.sh/TOPIC/json?poll=1` every 3s, deduplicates via seen_ids + since param
 3. **Writes to STEERING.md**: Agent checks this file every 1-2 tool calls
 4. **User publishes**: From any browser/phone at `https://ntfy.sh/TOPIC` - no login needed
+
+## Transports
+
+| Transport | Script | Egress needed | Who can steer |
+| --- | --- | --- | --- |
+| ntfy.sh topic | `scripts/external_steering.py` | `ntfy.sh` | Anyone who learns the topic |
+| GitHub comments | `scripts/github_steering.py` | `api.github.com` | Anyone with access to the repository |
+
+Both write the same `## Current Notes:` section, so the agent side never changes. Start the GitHub transport on a pull request or issue number, with `STEERING_FILE` on a path the repository ignores:
+
+```bash
+STEERING_REPO=owner/name STEERING_ISSUE=13 \
+  STEERING_FILE=reports/STEERING.md \
+  python3 -u scripts/github_steering.py
+```
+
+Prefer it in an Arena sandbox, where egress is allowlisted: `ntfy.sh` closes the TLS connection and `api.github.com` answers. The [reference guide](references/REFERENCE.md) carries its environment, endpoints, deduplication, and trust boundary.
 
 ## Installation (portable)
 
@@ -117,6 +135,7 @@ python3 scripts/check_steering.py
 
 - `scripts/generate_topic.py` - Generates random topic `arena-steer-{8 hex}`, saves to multiple locations for portability
 - `scripts/external_steering.py` - Main poller, deduplicates, handles 429 backoff, writes to STEERING.md
+- `scripts/github_steering.py` - GitHub comment poller for allowlisted egress, appends attributed notes
 - `scripts/install.sh` - One-click install, generates topic, QR code
 - `scripts/check_steering.py` - Helper for agents to check steering file
 
@@ -162,6 +181,7 @@ Arena client file sync and previews are buggy as of 2026-09. This bypasses Arena
 - `SKILL.md` - This file (required)
 - `scripts/generate_topic.py` - Random topic generator
 - `scripts/external_steering.py` - External poller
+- `scripts/github_steering.py` - GitHub comment poller
 - `scripts/install.sh` - Installer
 - `scripts/check_steering.py` - Agent helper
 - `references/REFERENCE.md` - Detailed reference
@@ -173,6 +193,7 @@ Arena client file sync and previews are buggy as of 2026-09. This bypasses Arena
 - `STEERING_FILE` - Override STEERING.md path (default: /home/user/STEERING.md)
 - `LOG_FILE` - Override log path (default: /home/user/STEERING_LOG.md)
 - `PORT` - For optional web UI (if you add steering_server.py)
+- GitHub transport: `GH_TOKEN` or `GITHUB_TOKEN`, `STEERING_REPO`, `STEERING_ISSUE`, `POLL_INTERVAL`, `STEERING_IGNORE_AUTHORS` - defaults and endpoints in the reference guide
 
 ## Example Session
 
