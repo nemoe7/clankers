@@ -247,6 +247,8 @@ Commands MUST be verified against the repository. Never invent commands. Never t
 
 `AGENTS.md` is operational context for coding agents: how to build, test, and contribute here. Only create it when agents will work in the repo.
 
+Repo-wide rules and decisions live here; session scratch stays out.
+
 Follow the de-facto standard's shape: plain Markdown, no required schema, operational over descriptive. Cover: scope and precedence (user instructions outrank it); build, test, lint, and format commands, exact and verified; sources of truth; architecture boundaries; repo constraints; documentation and Git rules. Repos with an established house skeleton keep it.
 
 Tool-specific files may exist alongside (`CLAUDE.md`, `.cursor/rules/`, and the like). Treat them as evidence, keep shared instructions in `AGENTS.md`, and let thin tool files defer to it rather than duplicating it.
