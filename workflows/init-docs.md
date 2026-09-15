@@ -203,7 +203,6 @@ Every document the workflow can produce, with its audience and warrant:
 | Design proposals | users, agents | per change needing review before implementation |
 | `docs/SDD.md` | users | formal track: contracts, regulators, enterprise process |
 | Business/product docs | users | only when explicitly requested |
-| `llms.txt` | agents | optional satellite for docs-heavy products; a proposal, not a standard |
 
 Present this catalog, trimmed to what fits the repo, for selection. The baseline — `README.md`, `LICENSE`, plus `AGENTS.md` when agents are in play — needs no per-item approval; everything else is offered, never assumed, and created only when selected. Never silently expand the selected set. Reconcile existing equivalents instead of duplicating them.
 
@@ -223,7 +222,6 @@ repo/
 ├── SECURITY.md                # optional
 ├── CHANGELOG.md               # optional
 ├── ROADMAP.md                 # optional; or link the live board
-├── llms.txt                   # optional satellite
 └── docs/
     ├── tutorials/             # optional
     ├── how-to/                # optional

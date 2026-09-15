@@ -25,7 +25,7 @@ Latest measurements as of 2026-09-15. ARENA.md is measured by uploaded file size
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
-| `workflows/init-docs.md` | `cl100k_base` | 4,821 `tok` |
+| `workflows/init-docs.md` | `cl100k_base` | 4,787 `tok` |
 
 Measurements cover complete files, including whitespace and markup.
 
