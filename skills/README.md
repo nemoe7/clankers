@@ -4,6 +4,7 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 | Skill | Purpose |
 | --- | --- |
+| [arena-live-steering](arena-live-steering/SKILL.md) | Steer a running Arena agent from an external ntfy.sh channel without interrupting its turn |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
@@ -27,7 +28,7 @@ Skills adapted from elsewhere record their origin in `metadata.upstream`. Pull u
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
-The remaining skills are first-party and maintained here, marked `metadata.origin`. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
+The remaining skills are first-party and maintained here; `squash` marks `metadata.origin`, and `arena-live-steering` does not carry that marker yet. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
 
 ## Install
 
@@ -62,5 +63,6 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
+| [arena-live-steering](arena-live-steering/SKILL.md) | Arena sessions that need steering from outside the client, mid-turn and without an interrupt |
 
 Skills are independent of the rule files in [rules/](../rules/) and usable on their own.
