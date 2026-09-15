@@ -100,6 +100,7 @@
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
 - For large function replacements, prefer a scripted splice.
+- Prefer the file read/write tools over shell for file operations: they batch dozens of calls into one block, while shell file work goes command by command; reserve shell for commands that genuinely need it.
 - Before finishing, run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 

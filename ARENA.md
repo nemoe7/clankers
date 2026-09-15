@@ -79,7 +79,7 @@
 - Criticize all, chat and reports.
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
-- For large function replacements prefer a scripted splice.
+- Prefer read/write tools over shell; for large function replacements prefer a scripted splice.
 - Before finishing, run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 
@@ -113,7 +113,7 @@
 - Mark resolved findings in reports with strikethrough.
 - `gh pr edit` may fail on older repos.
 - PR title/body via REST: `jq -n --rawfile body <file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<repo>/pulls/<n> -X PATCH --input -`
-- **NEVER `-f body=@path`**: it posts the literal `@path` string, which once replaced a whole PR body.
+- **NEVER `-f body=@path`**: it posts the literal `@path` string.
 - Stage PR text in the workspace, never /tmp.
 - After every PATCH, re-fetch both and diff against the staged file to confirm it is live.
 - Keep the PR title current alongside the body.
