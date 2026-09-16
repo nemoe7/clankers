@@ -1,8 +1,8 @@
 ---
 name: arena-live-steering
-description: Steers a running Arena agent without interrupting its turn, through a DNS TXT record the user edits from any browser or phone: a poller reads the record over UDP/53, writes each change to STEERING.md, and the agent reads that file between tool calls and pivots. Use only inside an Arena.ai Agent Mode session, when the user wants to correct or redirect the agent mid-turn without interrupting it, wants to steer from another browser or phone, or finds the Arena client's file sync or previews unreliable. Do not use outside Arena, and do not use when an ordinary chat reply reaches the agent just as well.
+description: Steers a running Arena agent without interrupting its turn, through an ntfy topic the user posts to from any browser or phone: the agent reads the topic with its page-fetch tool, ingests each message into STEERING.md, and pivots on what it finds. A DNS TXT record with a background poller is the fallback where there is no agent-side fetch path. Use only inside an Arena.ai Agent Mode session, when the user wants to correct or redirect the agent mid-turn without interrupting it, wants to steer from another browser or phone, or finds the Arena client's file sync or previews unreliable. Do not use outside Arena, and do not use when an ordinary chat reply reaches the agent just as well.
 license: MIT
-compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and a DNS resolver that answers UDP/53. No HTTP egress, no account, and no third-party service are required.
+compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+. The ntfy route needs an agent-side page-fetch path and nothing else, since the user's side is ntfy's web UI or app; the DNS fallback needs a resolver answering UDP/53 and a zone the user can edit.
 metadata:
   author: arena-user
   version: "1.0.0"
@@ -26,20 +26,21 @@ Steer the Arena agent WITHOUT interrupting its turn, even when the Arena client 
 
 ## How it works
 
-Two channels are supported, and they differ in who can read them. A DNS TXT record is the only one a process inside the sandbox can poll, so it is the only one that delivers while the agent is mid-turn. An ntfy topic needs no provider account, no token, no record editing, and no page: any device with a browser or the phone app publishes to it in one step, which makes it the portable choice. Its cost is that only the agent's page-fetch path can reach it, so notes are read at turn boundaries rather than continuously.
+Two channels are supported. ntfy is the default: no account, no token, no zone, and no page of our own, since the user posts from ntfy's own web UI or phone app, publishing is instant rather than waiting on a TTL, messages are append-only, and the server holds them for 12 hours, so one read at the next turn boundary catches everything. Its limit is that only the agent's page-fetch path reaches it, so there is no background poller. DNS is the fallback, and it earns its place for one reason: a process inside the sandbox can poll it by itself, so it still works in a session with no fetch path at all. `REFERENCE.md` carries both routes' measurements.
+
+The ntfy route:
+
+1. **Pick a topic**: a random name, told to the user in chat and never committed, since ntfy has no sign-up and its docs call the topic essentially a password.
+2. **The user publishes**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>`.
+3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=all` through its page-fetch path, then pipes the body to `scripts/ntfy_steering.py`, which delivers each message once into the same notes and log files the poller writes, deduplicated by ntfy's message id.
+
 
 The DNS route:
 
 1. **Pick a record**: any hostname whose zone the user can edit, such as `steering.example.com`. A free dynamic DNS zone works; the sandbox never contacts the provider, only the resolver.
 2. **Poller**: `scripts/dns_steering.py` queries that name's TXT record every `POLL_INTERVAL` seconds with stdlib sockets, over UDP/53.
 3. **Writes to STEERING.md**: each new value is appended under `## Current Notes:` with an attribution comment, and the agent reads that file every one or two tool calls.
-4. **User edits the record**: from a browser, a phone, or a one-line API call. No login on the sandbox side, no notification, nothing in a commit. `assets/steer.html` is a single-file page for this: one textarea that autosaves, and a green or red light driven by DNS-over-HTTPS, so it shows what a poller can actually resolve.
-
-The ntfy route:
-
-1. **Pick a topic**: a random name, because ntfy has no sign-up and its own docs say the topic is essentially a password. Generate one, tell the user in chat, and never commit it: a topic in a public repository is public write access to the agent.
-2. **The user publishes**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>`. Messages are append-only, so there is no edit limit, no 255-octet split, and no rewriting of what was already sent.
-3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=all` through its page-fetch path, then pipes the body to `scripts/ntfy_steering.py`, which delivers each message once into the same notes and log files the poller writes, deduplicated by ntfy's message id.
+4. **User edits the record**: from the provider's own panel, a phone, or a one-line API call. No login on the sandbox side, no notification, nothing in a commit.
 
 ## Setup
 
@@ -74,7 +75,9 @@ CONTEXT: the user actually wants X
 
 ## Agent integration
 
-The agent reads `STEERING.md` every one or two tool calls and pivots on what it finds:
+How often to check depends on what a read costs. On ntfy it is a network round trip inside the turn, so check at the start of every turn and again before anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build; do not poll in between, since `since=all` returns everything the 12-hour cache still holds. On the DNS fallback a poller is already capturing into a local file, so reading `STEERING.md` every one or two tool calls costs nothing.
+
+Either way the agent pivots on what it finds:
 
 Two clauses are not optional, because the user cannot see any of this:
 
@@ -101,7 +104,6 @@ STEERING_FILE=reports/STEERING.md python3 scripts/check_steering.py
 - `scripts/steering_notes.py` - shared note writer: header, append, tail cap, line diff, digest dedup, directives
 - `scripts/check_steering.py` - agent-side helper that reads the notes file
 - `scripts/ntfy_steering.py` - turns an ntfy poll body into notes: id dedup, titles kept, code fences stripped, an empty body reported as an empty topic rather than as a failure
-- `assets/steer.html` - the user's side: the note, the terminal command that sends it, and a DNS-over-HTTPS sync light that says so when it cannot reach a resolver
 
 See the [reference guide](references/REFERENCE.md) for the environment, the behaviour, the hazards, and the channels that were measured and not shipped.
 
@@ -123,9 +125,8 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - **The sandbox blinks, and a blink looks like an empty record.** Ten queries of the live record returned its value five times and NOERROR-with-no-data five times, while every control name answered correctly on every try, so the record was being served and the observer was at fault half the time. The poller therefore queries a control name before saying anything about the record, and the read to trust is DNS-over-HTTPS through the agent's page-fetch path, which returned the full value every time. Keep the interval at 30s or slower regardless.
 - **A blocked host is blocked for processes, not for the agent.** `ntfy.sh`, `gist.githubusercontent.com`, and `dns.google` are all closed to the sandbox's sockets and were all read through the agent's page-fetch path, so an external channel is usable agent-side when the sandbox cannot reach it. The cost is that it can only be read when the agent acts: no background poller can use that path.
 - **One character-string is 255 octets.** Longer values are split by the provider and rejoined by the poller, which a 370-character multi-line note confirmed in live use.
-- **ntfy is read at turn boundaries.** Only the agent's page-fetch path reaches it and that path is a tool call, so no background poller can watch a topic; a note sent mid-turn waits for the next one. DNS is the channel to use when a note has to land while the agent is working.
-- **A topic is not an archive.** ntfy.sh serves what its message cache still holds, a bounded window, so an old note is gone from the topic and survives only in the notes file.
-- **The agent cannot publish to ntfy.** The sandbox's sockets are TLS-closed to it, the page-fetch path is GET-only, and repository secrets answer 403 for an installation token, so there is no outbound relay and no way to prefill a fresh topic. The first message has to come from the user.
+- **ntfy is read at turn boundaries.** Only the agent's page-fetch path reaches it and that is a tool call, so no background poller can watch a topic. DNS is the route for a note that has to be captured while the agent is working.
+- **A topic is not an archive, and the agent cannot write to one.** ntfy.sh serves 12 hours of cache, so an old note survives only in the notes file; and with the sandbox's sockets TLS-closed, the fetch path GET-only, and repository secrets 403, there is no outbound relay, so a fresh topic's first message comes from the user.
 - **The channel is one-way.** The sandbox can read DNS but cannot reach a zone's authoritative servers to write it, so questions from the agent travel through the Arena client instead.
 
 ## Files
@@ -135,7 +136,6 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - `scripts/steering_notes.py` - shared note writer
 - `scripts/check_steering.py` - agent helper
 - `references/REFERENCE.md` - detailed reference
-- `assets/steer.html` - the user's sending page
 
 ## Example Session
 

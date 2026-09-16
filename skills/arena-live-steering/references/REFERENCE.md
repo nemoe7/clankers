@@ -51,7 +51,19 @@ for step in agent_loop:
   # continue work
 ```
 
-## DNS TXT transport
+## ntfy transport, the default
+
+A topic on `ntfy.sh` is the default channel, because the user's side needs nothing: no account, no token, no zone, no page of our own. Publishing is a POST to `https://ntfy.sh/<topic>` from ntfy's web UI, its phone app, or `curl -d "note" ntfy.sh/<topic>`, and it is instant, where a DNS edit waits on a TTL. Messages are append-only, so a new note never rewrites the ones before it, and there is no 255-octet character-string to split.
+
+The topic name is the credential. ntfy has no sign-up, so anyone who knows the name can read and write it, which for a steering channel means anyone could inject directives. Generate a random one, give it to the user in chat, and keep it out of the repository: `reports/` is ignored, and a topic committed to a public repository is a public write access to the agent.
+
+Reading is `https://ntfy.sh/<topic>/json?poll=1&since=all` through the agent's page-fetch path, then `scripts/ntfy_steering.py` on the body. Use the poll form: plain `/json` is a stream that never terminates and a page fetch cannot return one, and `/atom` and `/feed.xml` are 404 on `ntfy.sh`. An empty topic returns an empty body, which a page-fetch tool can report as its own HTTP 500, and `httpbin.org/status/200` fails identically, so that error is not evidence ntfy is unreachable. Messages carry an `expires` field: 12.0 hours after `time`, measured on 2026-09-16, so the notes file is the archive and the topic is not.
+
+Check at the start of every turn and before anything expensive or hard to undo, and do not poll in between. A read costs a network round trip inside the turn, and waiting loses nothing, since `since=all` returns everything the cache still holds.
+
+Verified live on 2026-09-16 in `nemoe7/clankers`: seven messages published by the user from a browser were read in one poll, ingested into the same notes and log files the DNS poller writes, and a second ingest of the same body delivered nothing, which is dedup by ntfy's message id working on real ids rather than on synthetic ones.
+
+## DNS TXT transport, the fallback
 
 `scripts/dns_steering.py` carries notes over one DNS TXT record, for a sandbox whose egress allowlist blocks HTTP entirely. Measured in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: `ntfy.sh`, three public ntfy instances, and 23 other notification, paste, chat, webhook, Google, and `e2b.app` hosts all close the TLS connection (curl exit 35, HTTP 000), while a TXT query to the resolver answers in about 1 ms. DNS is the only external channel a *process* in the sandbox can use, which is not the same as the only channel an agent can read: the page-fetch path reached `dns.google`, `gist.githubusercontent.com`, and `ntfy.sh` on the same day, all three closed to these sockets.
 
@@ -77,23 +89,15 @@ python3 -c "import sys; sys.path.insert(0,'scripts'); import dns_steering as d; 
 
 ### Sending a note from your own machine
 
-`assets/steer.html` is a single-file page for the user's side: one textarea that autosaves 1.2s after typing stops, and a sync light that says whether the change actually landed. Open it from a browser, no server needed.
-
-The light is driven by DNS-over-HTTPS rather than by the provider's API, so it verifies what a poller can resolve instead of what the provider claims to have stored. It samples Google's resolver three times, which is the same network the sandbox's `8.8.8.8` sits on and so the best predictor of what the poller will see, and Cloudflare's three times as an independent check; when the samples disagree the light is amber and the page says two caches are still catching up, which is the disagreement measured below. Green means the resolver returns exactly the text in the box. Red distinguishes NXDOMAIN, a name that does not exist, from a name that resolves with no TXT record, since the fixes differ.
-
-The page's send path is a terminal command, not a browser call, because a browser cannot make one against this provider: dynv6 answers the preflight with an empty `Access-Control-Allow-Origin`, observed in a real browser on 2026-09-16, so every `PATCH` from a page is blocked before it is sent. There is also no CORS-free shortcut, since the provider's `GET /api/update` endpoint is the dyndns2 protocol and carries `ipv4` and `ipv6` only, never a TXT value. So the page renders the command live as you type, quoting the note through `argv` rather than a pipe or a heredoc, which a test confirmed carries an apostrophe, a newline, a double quote, a backslash, an unexpanded `$VAR`, an unexecuted backtick, and a non-ASCII character byte-exact; and it offers a `dynsteer` shell function to install once so sending is one command. The browser API path is still there for a provider that does send the header, and the light works in every case because verification never needed the API. A token stays in that browser's localStorage and goes only to the provider.
-
-Editing the record in the provider's web UI works too, and is what the live verification used. Where the provider has an HTTP API, one call is faster than the form. For dynv6, whose API takes a bearer token from the account's Keys menu:
+The provider's own panel is the sending UI, and a one-line API call is the fast path. A single-file page of our own was built for this route and then removed: a browser cannot call the provider's API at all, since dynv6 answers the CORS preflight with an empty `Access-Control-Allow-Origin`, and its `GET /api/update` is the dyndns2 protocol, which carries `ipv4` and `ipv6` and never a TXT value, so the page could only ever render a terminal command for the user to run elsewhere. What it did uniquely was verify over DNS-over-HTTPS, and with ntfy as the default route the verification is the provider's own UI confirming the post instantly. If this route is ever needed again, the sending side is:
 
 ```bash
-TOKEN=... ; ZONE=...   # zone id from: curl -sH "Authorization: Bearer $TOKEN" https://dynv6.com/api/v2/zones
-RECORD=...             # record id from: curl -sH "Authorization: Bearer $TOKEN" https://dynv6.com/api/v2/zones/$ZONE/records
-curl -sX PATCH "https://dynv6.com/api/v2/zones/$ZONE/records/$RECORD" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"data":"STOP: use vanilla JS"}'
+curl -sS -X PATCH "https://dynv6.com/api/v2/zones/$ZONE/records/$RECORD" \
+  -H "Authorization: Bearer $DYNV6_TOKEN" -H "Content-Type: application/json" \
+  --data-binary "$(python3 -c 'import json,sys; print(json.dumps({"data":sys.argv[1]}))' "$NOTE")"
 ```
 
-These calls run on the user's machine, not in the sandbox, where `dynv6.com` is TLS-blocked like every other HTTP host, so they are unverified from here and taken from the provider's published API specification.
+The note travels as `argv` rather than through a pipe or a heredoc, since the stdin form appends a newline to every note. That quoting was tested against a note carrying an apostrophe, a newline, a double quote, a backslash, an unexpanded `$VAR`, an unexecuted backtick, and a non-ASCII character, all of which round-tripped byte-exact.
 
 ### Environment
 
