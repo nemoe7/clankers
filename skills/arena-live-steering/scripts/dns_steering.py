@@ -15,7 +15,8 @@ Environment:
   STEERING_DNS_NAME     required, the record to watch, e.g. `steer.example.com`
   STEERING_FILE         default `STEERING.md` in the working directory
   LOG_FILE              default `STEERING_LOG.md` beside it
-  POLL_INTERVAL         seconds, default 10
+  POLL_INTERVAL         seconds, default 30; a free provider's zone may not
+                        survive a faster poll, see the reference
   DNS_RESOLVER          override the resolver, default the `nameserver` lines in
                         `/etc/resolv.conf`, falling back to 8.8.8.8
   DNS_TIMEOUT           seconds per query, default 5
@@ -281,7 +282,7 @@ def main() -> None:
   if not name:
     sys.exit("STEERING_DNS_NAME is required, for example steer.example.com")
 
-  interval = float(os.environ.get("POLL_INTERVAL", "10"))
+  interval = float(os.environ.get("POLL_INTERVAL", "30"))
   timeout = float(os.environ.get("DNS_TIMEOUT", "5"))
   steering_file = pathlib.Path(os.environ.get("STEERING_FILE", "STEERING.md"))
   log_file = pathlib.Path(os.environ.get("LOG_FILE", "STEERING_LOG.md"))
