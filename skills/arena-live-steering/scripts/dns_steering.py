@@ -39,13 +39,17 @@ import socket
 import struct
 import sys
 import time
-from datetime import datetime, timezone
 
 from steering_notes import added_lines, deliver, digest
 
 TXT = 16
 RESOLV_CONF = pathlib.Path("/etc/resolv.conf")
 FALLBACK_RESOLVER = "8.8.8.8"
+RCODES = {0: "NOERROR", 1: "FORMERR", 2: "SERVFAIL", 3: "NXDOMAIN", 5: "REFUSED"}
+# A resolver can serve two different cached values for the same name, so the same
+# record can arrive repeatedly and out of order. The log carries each delivered
+# value's digest, which makes a restart as deduplicating as a running poller.
+SEEN_RE = re.compile(r"\[dns txt [^\]]*hash=([0-9a-f]{12})\]")
 
 
 def read_resolvers() -> list[str]:
@@ -147,19 +151,21 @@ def parse_txt(data: bytes) -> list[str]:
   return sorted(values)
 
 
-def query_txt(name: str, resolvers: list[str], timeout: float) -> str | None:
-  """Return the name's TXT records joined by newlines.
+def query_records(
+  name: str, qtype: int, resolvers: list[str], timeout: float
+) -> tuple[int, list[str]] | None:
+  """Return `(rcode, values)`, or `None` when no resolver answered.
 
-  An empty string means the name resolved and holds no TXT record. `None` means
-  no resolver answered, which is not the same fact and must not move a baseline:
-  treating a failed query as an empty record would replay the whole record as a
-  note on the next successful poll.
+  The rcode is what separates a name that does not exist, NXDOMAIN, from one
+  that exists and holds no such record, NOERROR with no answers. A poller reads
+  both as an empty value, and their fixes are completely different, so the
+  startup report says which one it got.
   """
   query_id = random.randint(0, 0xFFFF)
   packet = (
     struct.pack(">HHHHHH", query_id, 0x0100, 1, 0, 0, 0)
     + encode_name(name)
-    + struct.pack(">HH", TXT, 1)
+    + struct.pack(">HH", qtype, 1)
   )
   errors: list[str] = []
 
@@ -170,7 +176,8 @@ def query_txt(name: str, resolvers: list[str], timeout: float) -> str | None:
     try:
       sock.sendto(packet, (resolver, 53))
       data, _ = sock.recvfrom(65535)
-      return "\n".join(parse_txt(data))
+      values = parse_txt(data) if qtype == TXT else []
+      return data[3] & 0x0F, values
     except OSError as error:
       errors.append(f"{resolver}: {error}")
     finally:
@@ -178,6 +185,49 @@ def query_txt(name: str, resolvers: list[str], timeout: float) -> str | None:
 
   print(f"DNS query failed for {name}: {'; '.join(errors)}", flush=True)
   return None
+
+
+def query_txt(name: str, resolvers: list[str], timeout: float) -> str | None:
+  """Return the name's TXT records joined by newlines.
+
+  An empty string means the name resolved and holds no TXT record. `None` means
+  no resolver answered, which is not the same fact and must not move a baseline:
+  treating a failed query as an empty record would replay the whole record as a
+  note on the next successful poll.
+  """
+  answer = query_records(name, TXT, resolvers, timeout)
+  return None if answer is None else "\n".join(answer[1])
+
+
+def load_seen(log_file: pathlib.Path) -> set[str]:
+  """Return the digests of values already delivered, recovered from the log."""
+  try:
+    text = log_file.read_text(encoding="utf-8")
+  except OSError:
+    return set()
+
+  return set(SEEN_RE.findall(text))
+
+
+def probe_startup(
+  name: str, resolvers: list[str], timeout: float, attempts: int = 3
+) -> tuple[tuple[int, list[str]] | None, int]:
+  """Return the startup answer and how many queries it took.
+
+  A resolver serving two caches can answer NXDOMAIN for a name that exists,
+  measured live on a name that had just delivered three notes, so one answer is
+  not enough to tell the user their channel is dead. NXDOMAIN is retried; any
+  other answer is believed at once.
+  """
+  answer = query_records(name, TXT, resolvers, timeout)
+  used = 1
+
+  while answer is not None and answer[0] == 3 and used < attempts:
+    time.sleep(1)
+    answer = query_records(name, TXT, resolvers, timeout)
+    used += 1
+
+  return answer, used
 
 
 def poll_once(
@@ -188,6 +238,7 @@ def poll_once(
   steering_file: pathlib.Path,
   log_file: pathlib.Path,
   mode: str = "current",
+  seen: set[str] | None = None,
 ) -> str | None:
   """Poll once, ingest a change, and return the note delivered, if any.
 
@@ -203,19 +254,24 @@ def poll_once(
   if baseline[0] is None:
     baseline[0] = "" if mode == "empty" else current
 
-  if digest(current) == digest(baseline[0]):
+  delivered = set() if seen is None else seen
+  value_hash = digest(current)
+
+  if value_hash in delivered or value_hash == digest(baseline[0]):
+    # Already delivered, or a stale cache serving a value that was. Track it so
+    # the prefix diff stays useful, and say nothing.
+    baseline[0] = current
     return None
 
   added = added_lines(baseline[0], current)
   baseline[0] = current
+  delivered.add(value_hash)
 
   if not added:
     return None
 
-  read_at = f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}"
-  deliver(
-    added, f"dns txt {name}", f"dns txt {name} at {read_at}", steering_file, log_file
-  )
+  source = f"dns txt {name} hash={value_hash}"
+  deliver(added, f"dns txt {name}", source, steering_file, log_file)
   return added
 
 
@@ -235,10 +291,15 @@ def main() -> None:
     sys.exit(f"STEERING_DNS_BASELINE must be current or empty, got {mode!r}")
 
   resolvers = read_resolvers()
-  first = query_txt(name, resolvers, timeout)
+  answer, attempts = probe_startup(name, resolvers, timeout)
+  first = None if answer is None else "\n".join(answer[1])
   baseline: list[str | None] = [
     None if first is None else ("" if mode == "empty" else first)
   ]
+  seen = load_seen(log_file)
+
+  if first:
+    seen.add(digest(first))
 
   print(f"DNS steering active on the TXT record {name}", flush=True)
   print(f"Resolvers: {', '.join(resolvers)}", flush=True)
@@ -252,13 +313,34 @@ def main() -> None:
     else f"{len(first)} characters"
   )
   print(f"Baseline {mode!r}: {held}", flush=True)
+  print(f"Already delivered: {len(seen)} value(s), recovered from the log", flush=True)
+
+  if answer is not None and answer[0] == 3:
+    print(
+      f"WARNING: {name} is NXDOMAIN on {attempts} queries, so no note can arrive.",
+      flush=True,
+    )
+    print(
+      "  Check the zone exists and its apex is delegated. A dead name reads", flush=True
+    )
+    print("  exactly like an empty record, which is how this stays silent.", flush=True)
+  elif answer is not None and not answer[1]:
+    rcode = RCODES.get(answer[0], f"rcode {answer[0]}")
+    print(f"{name} resolves ({rcode}) but holds no TXT record yet.", flush=True)
+
+  if attempts > 1 and (answer is None or answer[0] != 3):
+    print(
+      f"Note: the resolver said NXDOMAIN first and took {attempts} queries to agree.",
+      flush=True,
+    )
+
   print(
     "Edit that TXT record to steer; it is public, so never put a secret in it",
     flush=True,
   )
 
   while True:
-    poll_once(name, resolvers, timeout, baseline, steering_file, log_file, mode)
+    poll_once(name, resolvers, timeout, baseline, steering_file, log_file, mode, seen)
     time.sleep(interval)
 
 
