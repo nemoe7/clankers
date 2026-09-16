@@ -75,7 +75,7 @@ CONTEXT: the user actually wants X
 
 ## Agent integration
 
-How often to check depends on what a read costs. On ntfy it is a network round trip inside the turn, so check at the start of every turn and again before anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build; do not poll in between, since `since=all` returns everything the 12-hour cache still holds. On the DNS fallback a poller is already capturing into a local file, so reading `STEERING.md` every one or two tool calls costs nothing.
+How often to check depends on what a read costs. On ntfy it is a network round trip inside the turn, so check at the start of every turn, once more before the turn ends, and again before anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build; do not poll in between, since `since=all` returns everything the 12-hour cache still holds. The closing check is not optional and the user asked for it by name: a note sent while the agent was working is otherwise read a turn late, and the acknowledgment clause cannot fire on a note nobody has read. On the DNS fallback a poller is already capturing into a local file, so reading `STEERING.md` every one or two tool calls costs nothing.
 
 Either way the agent pivots on what it finds:
 
