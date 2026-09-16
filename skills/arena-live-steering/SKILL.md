@@ -26,10 +26,20 @@ Steer the Arena agent WITHOUT interrupting its turn, even when the Arena client 
 
 ## How it works
 
+Two channels are supported, and they differ in who can read them. A DNS TXT record is the only one a process inside the sandbox can poll, so it is the only one that delivers while the agent is mid-turn. An ntfy topic needs no provider account, no token, no record editing, and no page: any device with a browser or the phone app publishes to it in one step, which makes it the portable choice. Its cost is that only the agent's page-fetch path can reach it, so notes are read at turn boundaries rather than continuously.
+
+The DNS route:
+
 1. **Pick a record**: any hostname whose zone the user can edit, such as `steering.example.com`. A free dynamic DNS zone works; the sandbox never contacts the provider, only the resolver.
 2. **Poller**: `scripts/dns_steering.py` queries that name's TXT record every `POLL_INTERVAL` seconds with stdlib sockets, over UDP/53.
 3. **Writes to STEERING.md**: each new value is appended under `## Current Notes:` with an attribution comment, and the agent reads that file every one or two tool calls.
 4. **User edits the record**: from a browser, a phone, or a one-line API call. No login on the sandbox side, no notification, nothing in a commit. `assets/steer.html` is a single-file page for this: one textarea that autosaves, and a green or red light driven by DNS-over-HTTPS, so it shows what a poller can actually resolve.
+
+The ntfy route:
+
+1. **Pick a topic**: a random name, because ntfy has no sign-up and its own docs say the topic is essentially a password. Generate one, tell the user in chat, and never commit it: a topic in a public repository is public write access to the agent.
+2. **The user publishes**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>`. Messages are append-only, so there is no edit limit, no 255-octet split, and no rewriting of what was already sent.
+3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=all` through its page-fetch path, then pipes the body to `scripts/ntfy_steering.py`, which delivers each message once into the same notes and log files the poller writes, deduplicated by ntfy's message id.
 
 ## Setup
 
@@ -40,6 +50,15 @@ STEERING_DNS_NAME=steering.example.com \
 ```
 
 Point `STEERING_FILE` and `LOG_FILE` at paths the repository ignores, such as `reports/`, so notes never reach a commit. The startup banner reports what the resolver said: a value, `NOERROR` with no TXT record yet, or `NXDOMAIN`, which means the name does not exist and no note can ever arrive.
+
+For the ntfy route there is no poller to start. Read the topic with the agent's page-fetch tool and ingest the body:
+
+```bash
+STEERING_NTFY_TOPIC=<topic> STEERING_FILE=reports/STEERING.md \
+  LOG_FILE=reports/STEERING_LOG.md python3 scripts/ntfy_steering.py body.ndjson
+```
+
+`STEERING_NTFY_BASELINE=current` marks the messages already in a topic as seen without delivering them, and records their ids in the log so a later run does not deliver them either. The default delivers everything unseen.
 
 `STEERING_DNS_BASELINE` decides what the first poll does. `current`, the default, holds whatever the record already says so a stale note is never replayed; `empty` ingests the first value found, which is what you want when the record was written before the poller started.
 
@@ -81,6 +100,7 @@ STEERING_FILE=reports/STEERING.md python3 scripts/check_steering.py
 - `scripts/dns_steering.py` - the poller: one TXT record, stdlib sockets, no HTTP
 - `scripts/steering_notes.py` - shared note writer: header, append, tail cap, line diff, digest dedup, directives
 - `scripts/check_steering.py` - agent-side helper that reads the notes file
+- `scripts/ntfy_steering.py` - turns an ntfy poll body into notes: id dedup, titles kept, code fences stripped, an empty body reported as an empty topic rather than as a failure
 - `assets/steer.html` - the user's side: the note, the terminal command that sends it, and a DNS-over-HTTPS sync light that says so when it cannot reach a resolver
 
 See the [reference guide](references/REFERENCE.md) for the environment, the behaviour, the hazards, and the channels that were measured and not shipped.
@@ -103,6 +123,9 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - **The sandbox blinks, and a blink looks like an empty record.** Ten queries of the live record returned its value five times and NOERROR-with-no-data five times, while every control name answered correctly on every try, so the record was being served and the observer was at fault half the time. The poller therefore queries a control name before saying anything about the record, and the read to trust is DNS-over-HTTPS through the agent's page-fetch path, which returned the full value every time. Keep the interval at 30s or slower regardless.
 - **A blocked host is blocked for processes, not for the agent.** `ntfy.sh`, `gist.githubusercontent.com`, and `dns.google` are all closed to the sandbox's sockets and were all read through the agent's page-fetch path, so an external channel is usable agent-side when the sandbox cannot reach it. The cost is that it can only be read when the agent acts: no background poller can use that path.
 - **One character-string is 255 octets.** Longer values are split by the provider and rejoined by the poller, which a 370-character multi-line note confirmed in live use.
+- **ntfy is read at turn boundaries.** Only the agent's page-fetch path reaches it and that path is a tool call, so no background poller can watch a topic; a note sent mid-turn waits for the next one. DNS is the channel to use when a note has to land while the agent is working.
+- **A topic is not an archive.** ntfy.sh serves what its message cache still holds, a bounded window, so an old note is gone from the topic and survives only in the notes file.
+- **The agent cannot publish to ntfy.** The sandbox's sockets are TLS-closed to it, the page-fetch path is GET-only, and repository secrets answer 403 for an installation token, so there is no outbound relay and no way to prefill a fresh topic. The first message has to come from the user.
 - **The channel is one-way.** The sandbox can read DNS but cannot reach a zone's authoritative servers to write it, so questions from the agent travel through the Arena client instead.
 
 ## Files
