@@ -34,7 +34,6 @@ also handles a description that is replaced outright.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import pathlib
@@ -43,15 +42,13 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
 
-from steering_notes import append_log, append_note
+from steering_notes import added_lines, deliver, digest
 
 API = "https://api.github.com"
 # The log line for an ingested comment carries the digest of the body that was
 # ingested, which is what makes comment mode edit-aware across a restart.
 SEEN_RE = re.compile(r"\[gh:(\d+) hash=([0-9a-f]{12})")
-DIRECTIVES = ("STOP:", "PRIORITY:", "CONTEXT:")
 
 
 def read_token() -> str:
@@ -61,10 +58,6 @@ def read_token() -> str:
     sys.exit("GH_TOKEN or GITHUB_TOKEN is required")
 
   return value
-
-
-def digest(text: str) -> str:
-  return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
 
 
 def fetch(url: str, token: str, etag: str) -> tuple[int, str, str]:
@@ -111,41 +104,6 @@ def load_seen(log_file: pathlib.Path) -> dict[str, str]:
   except OSError as error:
     print(f"Could not read {log_file}: {error}", flush=True)
     return {}
-
-
-def added_lines(previous: str, current: str) -> str:
-  """Return the lines of `current` after its shared line prefix with `previous`."""
-  old = previous.splitlines()
-  new = current.splitlines()
-  index = 0
-
-  while index < len(old) and index < len(new) and old[index] == new[index]:
-    index += 1
-
-  return "\n".join(new[index:]).strip()
-
-
-def deliver(
-  text: str,
-  note_source: str,
-  log_source: str,
-  steering_file: pathlib.Path,
-  log_file: pathlib.Path,
-) -> None:
-  """Write one note to both files and echo it with any directive it carries."""
-  read_at = f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}"
-  append_note(steering_file, f"\n<!-- from {note_source}, read {read_at} -->\n", text)
-  append_log(log_file, f"--- {read_at} [{log_source}] ---", text)
-
-  print(f"\nSteering from {note_source}", flush=True)
-  print(text[:2000], flush=True)
-  print("-" * 60, flush=True)
-
-  upper = text.upper()
-
-  for directive in DIRECTIVES:
-    if directive in upper:
-      print(f">> {directive} the agent must act on this note", flush=True)
 
 
 def wait(status: int, detail: str, url: str, failures: int, interval: float) -> int:

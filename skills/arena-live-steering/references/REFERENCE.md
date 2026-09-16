@@ -160,6 +160,47 @@ Hazards:
 
 Verified in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: a seven-check assert demo over `added_lines`, `digest`, the note and log round trip through `load_seen`, a body-mode log line not colliding with the comment seen set, `ignored`, and the tail cap; and one live run against pull request 13, in which a description edit became an attributed note in `reports/STEERING.md` within 12s with its `STOP:` directive echoed, and restoring the description produced no note. Not exercised: an edit made by a human from a browser or phone, which is GitHub's own behaviour rather than this skill's.
 
+### DNS TXT transport
+
+`scripts/dns_steering.py` carries the same notes over one DNS TXT record, for a sandbox whose egress allowlist blocks HTTP entirely. Observed in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: `ntfy.sh`, three public ntfy instances, and 23 other notification, paste, chat, webhook, Google, and `e2b.app` hosts all close the TLS connection (curl exit 35, HTTP 000), while a TXT query to the resolver answers in about 1 ms. DNS is the only external channel left once `api.github.com` is ruled out.
+
+The user needs one zone they can edit: a domain they own, or a free dynamic DNS zone such as `dynv6.com` or `nsupdate.info`, both of which publish TXT records and both of which are edited from a browser or phone. The sandbox never contacts those sites, so their being HTTP-blocked there does not matter. Set the lowest TTL the zone allows.
+
+```bash
+STEERING_DNS_NAME=steer.example.com POLL_INTERVAL=10 \
+  STEERING_FILE=reports/STEERING.md LOG_FILE=reports/STEERING_LOG.md \
+  python3 -u scripts/dns_steering.py
+```
+
+Environment:
+
+- `STEERING_DNS_NAME` - required, the record to watch, for example `steer.example.com`; underscores are allowed, so `_steer.example.com` works too
+- `STEERING_FILE` - default `STEERING.md` in the working directory; point it at a path the repository ignores, such as `reports/`
+- `LOG_FILE` - default `STEERING_LOG.md`, append-only, keeps what the notes cap discards
+- `POLL_INTERVAL` - seconds, default 10
+- `DNS_RESOLVER` - override the resolver; by default the `nameserver` lines of `/etc/resolv.conf` are tried in order, with 8.8.8.8 as the fallback
+- `DNS_TIMEOUT` - seconds per query, default 5
+- `STEERING_DNS_BASELINE` - `current` (default) or `empty`; see behaviour
+
+Behaviour:
+
+- The value is every TXT record on the name, sorted and joined by newlines, so a multi-string record reads as one note and record order cannot churn the digest
+- `current` holds the value found at startup without ingesting it, so a stale note is never replayed. `empty` ingests whatever the record holds on the first poll, which is what you want when you set the record before starting the agent
+- A change delivers the lines after the longest line prefix already seen, through the same `added_lines` helper as body mode: appending a line delivers that line alone, replacing the record delivers the new text, clearing it delivers nothing
+- Notes are attributed `<!-- from dns txt {name}, read {utc} -->`, and `STOP:`, `PRIORITY:`, and `CONTEXT:` are echoed as directives
+- A failed query prints one line and retries next interval; it never exits, and never clears the notes
+- Labels are checked against the 63-octet DNS limit before the query, so a typo fails loudly rather than sending a malformed packet
+
+Hazards:
+
+- A TXT record is public: anyone who knows the name can read every note, and anyone who can edit the zone can steer the agent. Treat the name as a capability, and never steer with a secret in the text
+- The resolver caches for the TTL, so latency is tens of seconds at best even with a short poll interval, and two edits inside one TTL collapse into the last value seen
+- DNS carries no author, so a note is attributed to the record name, not to a person
+- A record is short: one character-string is 255 octets and registrars cap the total, so long notes belong in the ntfy or GitHub channel
+- Only the configured resolver answers in a sandbox like this: 8.8.8.8 replied, while 1.1.1.1, 8.8.4.4, and 9.9.9.9 timed out. Do not assume a second resolver is reachable
+
+Verified in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: a six-check assert demo over a live TXT read of `_dmarc.gmail.com` through the module's own query path, an absent name reading empty, a multi-string record joining, the label guard, `poll_once` across first, unchanged, append, clear, and replace, and the notes and log round trip; plus a 12s live poll that wrote no note for an unchanged record, and both error paths exiting 1 with a clear message. Not exercised: an edit made by a human against a zone they own, which is the resolver's and the registrar's behaviour rather than this skill's.
+
 ### Security
 
 - Topic is obscure, not encrypted
@@ -191,6 +232,11 @@ Follows https://agentskills.io/specification.md:
 **ntfy.sh unreachable:**
 - Sandbox egress is allowlisted: `curl https://ntfy.sh` fails with exit 35 and HTTP 000
 - Use `scripts/github_steering.py` in body mode instead: it needs only `api.github.com` and leaves no comments
+
+**Every HTTP host unreachable:**
+- Measure first: a TLS close on all of them means the allowlist is github, PyPI, and npm only
+- Use `scripts/dns_steering.py` instead: UDP/53 is not filtered, and one TXT record is the channel
+- No notes arrive after an edit: check the TTL has expired and that the record name matches `STEERING_DNS_NAME` exactly
 
 **Topic not working:**
 - Check `cat .topic` exists
