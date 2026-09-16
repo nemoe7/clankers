@@ -71,6 +71,7 @@
 </style>
 </head>
 <body>
+<div id="banner" hidden style="margin:12px;padding:10px 12px;border:1px solid #b42318;background:#fef3f2;color:#7a271a;border-radius:8px;font-size:14px;white-space:pre-wrap"></div>
 
 <h1>DNS steering</h1>
 <p class="lede">
@@ -166,6 +167,9 @@ const SAMPLES = 3;          // per resolver, to catch two caches disagreeing
 const DEBOUNCE_MS = 1200;
 const RECHECK_MS = 8000;
 const KEY = "dns-steering-settings";
+// Pre-filled so the light works before any setup, and so a frame that cannot
+// reach localStorage still verifies this session's record instead of going blank.
+const DEFAULT_NAME = "steering.vlht-mrsv.dns.army";
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -181,6 +185,23 @@ let recheck = null;
 let watching = null;
 let busy = false;
 
+/* ---------- failures that used to be silent ---------- */
+
+function showBanner(text) {
+  const el = $("banner");
+  if (el) { el.hidden = false; el.textContent = text; }
+}
+
+// A throw anywhere left the page looking merely inert. Now it says what broke.
+window.addEventListener("error", (event) => {
+  showBanner(`The page hit an error and part of it may be dead: ${event.message} (line ${event.lineno}). `
+    + "Open this file directly in a browser tab instead of a preview frame, and send the agent this text.");
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const why = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+  showBanner(`A request failed: ${why}`);
+});
+
 /* ---------- state ---------- */
 
 function load() {
@@ -188,8 +209,17 @@ function load() {
     const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
     settings = Object.assign(settings, saved);
   } catch { /* a corrupt key is not worth blocking on */ }
+  try {
+    localStorage.setItem(`${KEY}-probe`, "1");
+    localStorage.removeItem(`${KEY}-probe`);
+  } catch {
+    showBanner("This browser context cannot save settings (sandboxed frame or blocked storage), so the page "
+      + "starts blank on every open. The record name below is pre-filled and the sync light still works. "
+      + "Open this file directly in a browser tab to keep the token between visits.");
+  }
   els.token.value = settings.token || "";
-  els.name.value = settings.name || "";
+  els.name.value = settings.name || DEFAULT_NAME;
+  settings.name = els.name.value;
   if (settings.zoneId) {
     els.zone.innerHTML = `<option value="${settings.zoneId}">${settings.zoneName || settings.zoneId}</option>`;
     $("records").disabled = false;
@@ -204,7 +234,9 @@ function load() {
 function persist() {
   settings.token = els.token.value.trim();
   settings.name = els.name.value.trim();
-  localStorage.setItem(KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(settings));
+  } catch { /* blocked storage is not worth breaking typing over; load() already said so */ }
 }
 
 function set(state, text, detail) {
@@ -251,19 +283,25 @@ async function dohOnce(url, name) {
 async function dohSampled(provider, name) {
   const seen = [];
   const rcodes = [];
+  let error = "";
   for (let i = 0; i < SAMPLES; i++) {
     try {
       const answer = await dohOnce(provider.url, name);
       rcodes.push(answer.rcode);
       seen.push(answer.values);
-    } catch (error) {
-      seen.push(`ERR ${error.message}`);
+    } catch (e) {
+      // A TypeError here is the browser refusing the call, not a DNS answer.
+      error = e.name === "TypeError" ? "the browser blocked or could not reach the resolver" : e.message;
+      seen.push(`ERR ${e.message}`);
     }
   }
   const tally = new Map();
   for (const value of seen) tally.set(value, (tally.get(value) || 0) + 1);
   const [top, count] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
-  return { value: top, count, of: seen.length, split: tally.size > 1, rcode: rcodes[0] };
+  return {
+    value: top, count, of: seen.length, split: tally.size > 1, rcode: rcodes[0],
+    failed: rcodes.length === 0, error,
+  };
 }
 
 async function verify() {
@@ -278,8 +316,22 @@ async function verify() {
   for (const provider of DOH) {
     const sample = await dohSampled(provider, name);
     results.push({ provider, ...sample });
-    $(`${provider.id}-val`).textContent = sample.value ? `${sample.value.slice(0, 48)}${sample.value.length > 48 ? "…" : ""}` : "(empty)";
+    $(`${provider.id}-val`).textContent = sample.failed
+      ? `FAILED: ${sample.error}`
+      : (sample.value ? `${sample.value.slice(0, 48)}${sample.value.length > 48 ? "…" : ""}` : "(empty)");
     $(`${provider.id}-agree`).textContent = `${sample.count}/${sample.of}`;
+  }
+
+  // Both resolvers unreachable is not a stale record, and saying "stale" here
+  // sent the user looking at the provider for a problem in their own browser.
+  if (results.every((r) => r.failed)) {
+    const why = results[0].error || "no response";
+    set("red", "cannot reach the resolvers",
+      `every DNS-over-HTTPS call failed: ${why}. An extension, a VPN, a proxy, or a preview frame can block dns.google and cloudflare-dns.com.`);
+    showBanner(`The sync light cannot verify anything from this browser context (${why}). `
+      + "The note you send still lands; only the confirmation is blocked. Open this file directly in a browser tab and try again.");
+    scheduleRecheck();
+    return null;
   }
 
   const google = results[0];

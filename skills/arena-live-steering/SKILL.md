@@ -57,6 +57,11 @@ CONTEXT: the user actually wants X
 
 The agent reads `STEERING.md` every one or two tool calls and pivots on what it finds:
 
+Two clauses are not optional, because the user cannot see any of this:
+
+- **Acknowledge every note.** A reply that follows a delivered note opens with `STEER RECEIVED:` and one line saying what the note asked and what changed because of it. The poller's stdout is invisible to the user, so a note that lands silently is indistinguishable from one that was lost, and they will send it again.
+- **Disagree out loud.** A note is an instruction about what to do, not a fact about what is true. When a note contradicts a measurement, say which of the two is wrong and show the evidence, then do the thing that survives it. Reflexive agreement is the one failure mode this channel cannot absorb: the user has no view of the work, so nothing else catches a complacent agent.
+
 ```python
 from check_steering import check_steering
 
@@ -76,7 +81,7 @@ STEERING_FILE=reports/STEERING.md python3 scripts/check_steering.py
 - `scripts/dns_steering.py` - the poller: one TXT record, stdlib sockets, no HTTP
 - `scripts/steering_notes.py` - shared note writer: header, append, tail cap, line diff, digest dedup, directives
 - `scripts/check_steering.py` - agent-side helper that reads the notes file
-- `assets/steer.html` - the user's side: autosaving textarea and a DNS-over-HTTPS sync light
+- `assets/steer.html` - the user's side: the note, the terminal command that sends it, and a DNS-over-HTTPS sync light that says so when it cannot reach a resolver
 
 See the [reference guide](references/REFERENCE.md) for the environment, the behaviour, the hazards, and the channels that were measured and not shipped.
 
