@@ -175,7 +175,7 @@
 - This report is not required during execution.
 - Open with the result; skip restating the task.
 - Consider reporting what was skipped and when to add it.
-- End a final report turn with an open question through the question tool, inviting follow-ups. This question is for report turns only; it never forces a question mid-task or after a tool-only turn, and plain text is the fallback only when the tool fails or renders partially.
+- End a final report turn by reading the session's steering channel rather than by asking an open question through the question tool. This is for report turns only; it never forces a check mid-task or after a tool-only turn.
 
 ## When in doubt
 
