@@ -147,8 +147,14 @@ def parse_txt(data: bytes) -> list[str]:
   return sorted(values)
 
 
-def query_txt(name: str, resolvers: list[str], timeout: float) -> str:
-  """Return the name's TXT records joined by newlines, or an empty string."""
+def query_txt(name: str, resolvers: list[str], timeout: float) -> str | None:
+  """Return the name's TXT records joined by newlines.
+
+  An empty string means the name resolved and holds no TXT record. `None` means
+  no resolver answered, which is not the same fact and must not move a baseline:
+  treating a failed query as an empty record would replay the whole record as a
+  note on the next successful poll.
+  """
   query_id = random.randint(0, 0xFFFF)
   packet = (
     struct.pack(">HHHHHH", query_id, 0x0100, 1, 0, 0, 0)
@@ -171,22 +177,31 @@ def query_txt(name: str, resolvers: list[str], timeout: float) -> str:
       sock.close()
 
   print(f"DNS query failed for {name}: {'; '.join(errors)}", flush=True)
-  return ""
+  return None
 
 
 def poll_once(
   name: str,
   resolvers: list[str],
   timeout: float,
-  baseline: list[str],
+  baseline: list[str | None],
   steering_file: pathlib.Path,
   log_file: pathlib.Path,
+  mode: str = "current",
 ) -> str | None:
   """Poll once, ingest a change, and return the note delivered, if any.
 
-  `baseline` holds one element, the value last seen, and is updated in place.
+  `baseline` holds one element, the value last seen, and is updated in place. It
+  starts as `None` when the startup query failed, so the first answer that does
+  arrive establishes the baseline instead of being read as a change.
   """
   current = query_txt(name, resolvers, timeout)
+
+  if current is None:
+    return None
+
+  if baseline[0] is None:
+    baseline[0] = "" if mode == "empty" else current
 
   if digest(current) == digest(baseline[0]):
     return None
@@ -221,7 +236,9 @@ def main() -> None:
 
   resolvers = read_resolvers()
   first = query_txt(name, resolvers, timeout)
-  baseline = ["" if mode == "empty" else first]
+  baseline: list[str | None] = [
+    None if first is None else ("" if mode == "empty" else first)
+  ]
 
   print(f"DNS steering active on the TXT record {name}", flush=True)
   print(f"Resolvers: {', '.join(resolvers)}", flush=True)
@@ -229,14 +246,19 @@ def main() -> None:
   print(
     f"Polling every {interval:g}s; the resolver caches for the record's TTL", flush=True
   )
-  print(f"Baseline {mode!r}: {len(baseline[0])} characters held", flush=True)
+  held = (
+    "no answer yet, the first one that arrives sets it"
+    if first is None
+    else f"{len(first)} characters"
+  )
+  print(f"Baseline {mode!r}: {held}", flush=True)
   print(
     "Edit that TXT record to steer; it is public, so never put a secret in it",
     flush=True,
   )
 
   while True:
-    poll_once(name, resolvers, timeout, baseline, steering_file, log_file)
+    poll_once(name, resolvers, timeout, baseline, steering_file, log_file, mode)
     time.sleep(interval)
 
 
