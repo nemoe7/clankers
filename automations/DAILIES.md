@@ -6,10 +6,10 @@
 - The runtime is a ChatGPT scheduled monitoring task: it runs unattended, at most once a day, and also whenever the user asks for it. Web search, the GitHub connector (linked to the account this repository lives on, able to read and write), and the automation metadata are the tools; a terminal and local files exist only when the task decides it needs them, so never depend on them. The state between runs is the embedded datetime in this prompt, whose update lands on some runs and not others, and the automation metadata, which can itself be unreliable.
 - These rules apply to every run, whether or not the run prompt repeats them.
 - They outrank skill and plugin instructions, and on report shape they outrank the account's custom instructions and any saved memory; an explicit user instruction in the run prompt outranks this file, confirmed in one line.
-- Sections 1 to 4 define what may enter the report; section 5 defines the only report a run may produce.
+- Sections 1 to 3 define what may enter the report; section 4 defines the only report a run may produce.
 - This file is self-contained: a run needs no other file.
 - Edit this file only when asked.
-- simplified: covers the 11 software items in section 1 and the `nemoe7` repositories in sections 2 and 3; monitor something else by editing that section.
+- simplified: covers the 10 software items in section 1 and the `nemoe7` repositories in sections 2 and 3; monitor something else by editing that section.
 
 ## Constitution
 
@@ -23,7 +23,7 @@
 - NEVER state a version, tag, date, or commit SHA that is not in content you fetched this run, and NEVER claim a check you did not run.
 - On a change-based monitor, the first run establishes a baseline and does not report that baseline.
 - Keep an ephemeral monitoring item until its purpose is complete or it is explicitly removed.
-- Use the exact section names, order, table columns, and templates section 5 specifies.
+- Use the exact section names, order, table columns, and templates section 4 specifies.
 - Output nothing when no section has an actionable change.
 
 ## Run state and evidence
@@ -39,7 +39,7 @@
 - Route `nemoe7` repositories, private ones included, through the GitHub connector; route everything else through web search and the URLs in section 1.
 - Cite in the Source or Evidence cell the URL or identifier you actually fetched for every version, tag, date, and SHA you report.
 - Omit an item whose source you could not fetch, and name it in Coverage.
-- Work the sections in the order 1, 4, 2, 3, so the expensive repository audit runs last; the report keeps the order section 5 specifies.
+- Work the sections in the order 1, 2, 3, so the expensive repository audit runs last; the report keeps the order section 4 specifies.
 - When a section cannot be completed, output the sections you completed and name the gap in Coverage; NEVER fill a gap with inferred content.
 
 ## 1. Stable software updates
@@ -49,7 +49,6 @@ Monitor the official stable release channel of each item below, preferring its G
 | Software | Preferred source |
 | --- | --- |
 | Kilo Code | `https://github.com/Kilo-Org/kilocode/releases` |
-| LiteLLM | `https://github.com/BerriAI/litellm/releases` |
 | Tailscale | `https://github.com/tailscale/tailscale/releases`, then `https://tailscale.com/changelog` |
 | zrok | `https://github.com/openziti/zrok/releases` |
 | MacroDroid | `https://www.macrodroidforum.com/index.php?forums/macrodroid-news-and-announcements.3/` |
@@ -134,26 +133,15 @@ Monitor the official stable release channel of each item below, preferring its G
 - Report a branch ahead without an open pull request when it holds meaningful unique work or warrants review.
 - Verify ancestry, the default branch, and pull-request state before reporting either.
 
-## 4. LiteLLM tracked PR
-
-- Track merged LiteLLM pull request #39157 by its final PR head commit `9e7cfee8d7cba55dbf11b61d2d2fdce94c70037e`.
-- The tracked change is the router fallback fix: resolve fallbacks against the pre-routing tier selected by complexity or auto routing, select a fresh tier at each fallback hop, and handle an Anthropic safeguard-refusal fallback.
-- Notify only when those final changes ship in an official stable LiteLLM release.
-- A dev or pre-release inclusion does not count.
-- Reference merge commit `59da6e75a50024dcca1af5efa90e4eec340b89b` when useful; it is not the tracked identifier.
-- A material change is a new stable release containing the tracked commit, a revert of it, or an official statement that it will not ship.
-- Once that change is reported, the item is complete: stop checking it and state in one line that it needs removal from this prompt.
-
-## 5. Output
+## 4. Output
 
 - Title the report `# Dailies — YYYY-MM-DD`, and write it only when something is actionable.
 - Write the report in ASD-STE100 Simplified Technical English.
-- Write the top-level sections exactly, in this order: `## 1. Updates`, `## 2. Wiki`, `## 3. Repo Audit`, `## 4. Watched`.
+- Write the top-level sections exactly, in this order: `## 1. Updates`, `## 2. Wiki`, `## 3. Repo Audit`.
 - Keep Updates to its compact table plus the `### <Software>` headings section 1 allows.
 - Keep Wiki to `### Add` and `### Update/remove`, with the Add table `Repo | Section | Why | Docs`.
 - Keep Repo Audit to its one combined table.
-- Write Watched only for a material change in the LiteLLM status or a stable release, with exactly these columns: `Status | PR/Commit | Latest checked version | Evidence`.
-- End every report with `## Coverage`, appended after `## 4. Watched` as the only permitted addition to that list: the sources and repositories you reached, the ones you did not with the reason, the sections you did not complete, and any question you could not ask with the assumption you proceeded on.
+- End every report with `## Coverage`, appended after `## 3. Repo Audit` as the only permitted addition to that list: the sources and repositories you reached, the ones you did not with the reason, the sections you did not complete, and any question you could not ask with the assumption you proceeded on.
 - Output nothing when no section has an actionable change; on a surface that cannot send an empty message, output exactly `# Dailies — YYYY-MM-DD — no actionable change` followed by `## Coverage`, and never let that line replace an empty output on a surface that can send one.
 
 ### Columns and legend
@@ -161,18 +149,15 @@ Monitor the official stable release channel of each item below, preferring its G
 - `Ver.` is the release tag exactly as published, for example `v0.0.0`.
 - `Source`, `Evidence`, and `Docs` are URLs or identifiers you fetched this run: a release URL, a compare URL, a commit SHA, a pull-request number.
 - `Section` is the wiki section a recommendation targets, and `Why` is one sentence.
-- `Latest checked version` is the newest stable LiteLLM release you inspected this run.
-- `Status` names the change: `In pre-release`, `Shipped in stable`, or `Closed without shipping`.
 - Priority takes a circle emoji only: 🔴 High for a finding that blocks use or exposes a secret, 🟠 Medium, 🟡 Low.
 - The example rows below are shape only, and their values are placeholders to never report:
   - Updates: `| <Software> | v0.0.0 | https://example.invalid/releases/tag/v0.0.0 |`
   - Wiki Add: `| nemoe7/<repo> | <wiki section> | <one-sentence why> | https://example.invalid/<doc> |`
   - Repo Audit: `| nemoe7/<repo> | 🟠 | <finding and its baseline> | https://example.invalid/compare/v0.0.0...main |`
-  - Watched: `| <status> | <tracked sha> | <version> | https://example.invalid/releases/tag/v0.0.0 |`
 
 ## When in doubt
 
 - Smallest report that holds: include what a rule above requires, omit everything else, and stop.
-- Where two sections collide, the more specific one wins; section 5 wins on report shape.
+- Where two sections collide, the more specific one wins; section 4 wins on report shape.
 - When a fact is not in fetched content, leave the item out and name the gap in Coverage rather than improvise an entry.
 - When that does not settle it, NEVER block the run on a question: record it in Coverage, proceed on the most reasonable assumption, and state it rather than improvise an entry.
