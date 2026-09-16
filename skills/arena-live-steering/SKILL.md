@@ -2,7 +2,7 @@
 name: arena-live-steering
 description: Steers a running Arena agent without interrupting its turn, through an external ntfy.sh channel with a random per-session topic: a poller writes each published message to STEERING.md, and the agent reads that file between tool calls and pivots. Use only inside an Arena.ai Agent Mode session, when the user wants to correct or redirect the agent mid-turn without interrupting it, wants to steer from another browser or phone, or finds the Arena client's file sync or previews unreliable. Do not use outside Arena, and do not use when an ordinary chat reply reaches the agent just as well.
 license: MIT
-compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and outbound HTTPS to ntfy.sh.
+compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and outbound HTTPS to ntfy.sh, to api.github.com for the GitHub transport, or to a DNS resolver for the TXT transport.
 metadata:
   author: arena-user
   version: "1.0.0"
@@ -14,7 +14,7 @@ metadata:
 
 # Arena Live Steering - Portable Skill
 
-Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is buggy. Two channels carry the notes: an external ntfy.sh topic, and a GitHub issue or pull request for a sandbox whose egress is allowlisted.
+Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is buggy. Four channels carry the notes: an external ntfy.sh topic, a GitHub issue or pull request for a sandbox whose egress is allowlisted, and a DNS TXT record for a sandbox that blocks both.
 
 ## When to use this skill
 
@@ -24,6 +24,7 @@ Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is b
 - User says "steer without interrupting" or "live steering"
 - Need random private channel per session
 - Sandbox egress cannot reach `ntfy.sh`, or steering must leave no comments behind: use the GitHub transport, which needs only `api.github.com`
+- Sandbox egress allows DNS only, or steering must leave no trace on any service: use the DNS transport, which needs only the resolver
 
 ## How it works
 
@@ -39,8 +40,9 @@ Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is b
 | ntfy.sh topic | `scripts/external_steering.py` | `ntfy.sh` | Anyone who learns the topic |
 | GitHub issue body | `scripts/github_steering.py` | `api.github.com` | Anyone who can edit that issue |
 | GitHub comments | `scripts/github_steering.py` with `STEERING_SOURCE=comments` | `api.github.com` | Anyone with access to the repository |
+| DNS TXT record | `scripts/dns_steering.py` | UDP/53 to the resolver | Anyone who can edit the zone |
 
-All three write the same `## Current Notes:` section, so the agent side never changes. Body mode leaves nothing behind; comment mode costs one comment per note, or one comment the user keeps editing. Start the GitHub transport on an issue or pull request number, with `STEERING_FILE` on a path the repository ignores:
+All four write the same `## Current Notes:` section, so the agent side never changes. Body mode leaves nothing behind; comment mode costs one comment per note, or one comment the user keeps editing; DNS mode needs no HTTP egress and touches no service, but a TXT record is public to anyone who knows its name and the resolver caches it for the record's TTL. Start the GitHub transport on an issue or pull request number, with `STEERING_FILE` on a path the repository ignores:
 
 ```bash
 STEERING_REPO=owner/name STEERING_ISSUE=14 \
@@ -137,7 +139,8 @@ python3 scripts/check_steering.py
 - `scripts/generate_topic.py` - Generates random topic `arena-steer-{8 hex}`, saves to multiple locations for portability
 - `scripts/external_steering.py` - Main poller, deduplicates, handles 429 backoff, writes to STEERING.md
 - `scripts/github_steering.py` - GitHub poller: issue body edits by default, comments opt-in
-- `scripts/steering_notes.py` - Shared note writer: one header, append, tail cap
+- `scripts/dns_steering.py` - DNS poller: one TXT record, stdlib sockets, no HTTP
+- `scripts/steering_notes.py` - Shared note writer: one header, append, tail cap, line diff, directives
 - `scripts/install.sh` - One-click install, generates topic, QR code
 - `scripts/check_steering.py` - Helper for agents to check steering file
 
@@ -184,6 +187,7 @@ Arena client file sync and previews are buggy as of 2026-09. This bypasses Arena
 - `scripts/generate_topic.py` - Random topic generator
 - `scripts/external_steering.py` - External poller
 - `scripts/github_steering.py` - GitHub poller
+- `scripts/dns_steering.py` - DNS poller
 - `scripts/steering_notes.py` - Shared note writer
 - `scripts/install.sh` - Installer
 - `scripts/check_steering.py` - Agent helper
@@ -197,6 +201,7 @@ Arena client file sync and previews are buggy as of 2026-09. This bypasses Arena
 - `LOG_FILE` - Override log path (default: /home/user/STEERING_LOG.md)
 - `PORT` - For optional web UI (if you add steering_server.py)
 - GitHub transport: `GH_TOKEN` or `GITHUB_TOKEN`, `STEERING_REPO`, `STEERING_ISSUE`, `STEERING_SOURCE`, `POLL_INTERVAL`, `STEERING_IGNORE_AUTHORS` - defaults and endpoints in the reference guide
+- DNS transport: `STEERING_DNS_NAME`, `POLL_INTERVAL`, `DNS_RESOLVER`, `DNS_TIMEOUT`, `STEERING_DNS_BASELINE` - setup and hazards in the reference guide
 
 ## Example Session
 
