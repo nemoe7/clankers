@@ -55,7 +55,7 @@ def append_log(path: pathlib.Path, stamp: str, body: str) -> None:
   try:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as log:
-      log.write(f"\n\n{stamp}{body}\n")
+      log.write(f"\n\n{stamp}\n{body}\n")
   except OSError as error:
     print(f"Could not write {path}: {error}", flush=True)
 
