@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS steering</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --fg: #e6edf3; --dim: #8b949e;
+    --green: #3fb950; --red: #f85149; --amber: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 760px; margin-inline: auto;
+  }
+  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .01em; }
+  p.lede { margin: 0 0 14px; color: var(--dim); font-size: 13px; }
+  #banner {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    margin-bottom: 12px;
+  }
+  #dot {
+    width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto;
+    background: var(--dim); box-shadow: 0 0 0 4px rgba(139,148,158,.12);
+    transition: background .2s, box-shadow .2s;
+  }
+  #dot.green { background: var(--green); box-shadow: 0 0 0 4px rgba(63,185,80,.16); }
+  #dot.red { background: var(--red); box-shadow: 0 0 0 4px rgba(248,81,73,.16); }
+  #dot.amber { background: var(--amber); box-shadow: 0 0 0 4px rgba(210,153,34,.16); }
+  #state { font-weight: 600; font-size: 14px; }
+  #detail { color: var(--dim); font-size: 12.5px; margin-top: 2px; }
+  textarea {
+    width: 100%; min-height: 150px; resize: vertical; padding: 12px;
+    background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 10px; font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  textarea:focus { outline: none; border-color: #58a6ff; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+  .meta { color: var(--dim); font-size: 12px; margin-left: auto; }
+  button {
+    background: #21262d; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: #58a6ff; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: #238636; border-color: #2ea043; }
+  details {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    padding: 10px 12px; margin-bottom: 12px;
+  }
+  summary { cursor: pointer; font-size: 13.5px; color: var(--dim); }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 10px 0 3px; }
+  input, select {
+    width: 100%; padding: 8px 10px; background: #0d1117; color: var(--fg);
+    border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px;
+  }
+  pre {
+    background: #010409; border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; overflow-x: auto; font-size: 12px; color: #c9d1d9; white-space: pre-wrap;
+  }
+  .warn { color: var(--amber); font-size: 12.5px; }
+  .hide { display: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  td, th { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<h1>DNS steering</h1>
+<p class="lede">
+  Type a note. It is saved to one TXT record and verified over DNS-over-HTTPS, so the light
+  means the value a poller can actually resolve. The record is public: never put a secret in it.
+</p>
+
+<div id="banner">
+  <div id="dot"></div>
+  <div>
+    <div id="state">idle</div>
+    <div id="detail">set up the record below, then type</div>
+  </div>
+</div>
+
+<textarea id="note" placeholder="STOP: use vanilla JS, not React" spellcheck="false"></textarea>
+<div class="row">
+  <button id="send" class="primary">Send now</button>
+  <button id="check">Check sync</button>
+  <button id="clear">Clear record</button>
+  <span class="meta"><span id="bytes">0</span> bytes · autosaves 1.2s after you stop typing</span>
+</div>
+
+<details id="setup">
+  <summary>Record setup</summary>
+
+  <label for="token">dynv6 HTTP token (account → Keys)</label>
+  <input id="token" type="password" placeholder="paste token" autocomplete="off">
+
+  <div class="row">
+    <button id="zones">Load zones</button>
+    <button id="records" disabled>Load records</button>
+    <span class="meta" id="apimsg"></span>
+  </div>
+
+  <label for="zone">Zone</label>
+  <select id="zone"><option value="">—</option></select>
+
+  <label for="record">TXT record</label>
+  <select id="record"><option value="">—</option></select>
+
+  <label for="name">Name the poller watches (STEERING_DNS_NAME)</label>
+  <input id="name" placeholder="steering.yourzone.dns.army" autocomplete="off">
+
+  <div class="row">
+    <button id="save">Save settings</button>
+    <button id="forget">Forget token</button>
+  </div>
+  <p class="warn">
+    The token is kept in this browser's localStorage and sent only to dynv6.com. If your browser
+    blocks the API call (CORS), sending falls back to the curl command below and the sync light
+    keeps working, because verification uses DNS rather than the API.
+  </p>
+</details>
+
+<div id="fallback" class="hide">
+  <label>API blocked in the browser — send it from a terminal instead</label>
+  <pre id="curl"></pre>
+  <div class="row"><button id="copy">Copy command</button></div>
+</div>
+
+<details>
+  <summary>What the resolvers say</summary>
+  <table>
+    <tr><th>resolver</th><th>value</th><th>agrees</th></tr>
+    <tr><td>Google DoH (same network the sandbox resolver uses)</td><td id="g-val">—</td><td id="g-agree">—</td></tr>
+    <tr><td>Cloudflare DoH (independent check)</td><td id="c-val">—</td><td id="c-agree">—</td></tr>
+  </table>
+  <p class="warn" id="split"></p>
+</details>
+
+<script>
+"use strict";
+
+const API = "https://dynv6.com/api/v2";
+const DOH = [
+  { id: "g", label: "Google", url: "https://dns.google/resolve" },
+  { id: "c", label: "Cloudflare", url: "https://cloudflare-dns.com/dns-query" },
+];
+const SAMPLES = 3;          // per resolver, to catch two caches disagreeing
+const DEBOUNCE_MS = 1200;
+const RECHECK_MS = 8000;
+const KEY = "dns-steering-settings";
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  dot: $("dot"), state: $("state"), detail: $("detail"), note: $("note"),
+  bytes: $("bytes"), token: $("token"), zone: $("zone"), record: $("record"),
+  name: $("name"), apimsg: $("apimsg"), curl: $("curl"), fallback: $("fallback"),
+  split: $("split"),
+};
+
+let settings = { token: "", zoneId: "", zoneName: "", recordId: "", name: "" };
+let timer = null;
+let recheck = null;
+let busy = false;
+
+/* ---------- state ---------- */
+
+function load() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+    settings = Object.assign(settings, saved);
+  } catch { /* a corrupt key is not worth blocking on */ }
+  els.token.value = settings.token || "";
+  els.name.value = settings.name || "";
+  if (settings.zoneId) {
+    els.zone.innerHTML = `<option value="${settings.zoneId}">${settings.zoneName || settings.zoneId}</option>`;
+    $("records").disabled = false;
+  }
+  if (settings.recordId) {
+    els.record.innerHTML = `<option value="${settings.recordId}">TXT record ${settings.recordId}</option>`;
+  }
+  updateBytes();
+  reflect();
+}
+
+function persist() {
+  settings.token = els.token.value.trim();
+  settings.name = els.name.value.trim();
+  localStorage.setItem(KEY, JSON.stringify(settings));
+}
+
+function set(state, text, detail) {
+  els.dot.className = state;
+  els.state.textContent = text;
+  if (detail !== undefined) els.detail.textContent = detail;
+}
+
+function updateBytes() {
+  const n = new TextEncoder().encode(els.note.value).length;
+  els.bytes.textContent = n;
+  els.bytes.parentElement.classList.toggle("warn", n > 255);
+}
+
+/* ---------- DNS-over-HTTPS ---------- */
+
+// A TXT answer arrives in DNS presentation format: one or more quoted
+// character-strings, which the provider splits at 255 octets, with special
+// octets escaped as \\DDD or \\c. Joining the strings and unescaping both
+// forms rebuilds the note exactly as the poller reads it off the wire.
+function joinTxt(data) {
+  const parts = [];
+  const re = /"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while ((m = re.exec(data)) !== null) parts.push(m[1]);
+  return parts
+    .join("")
+    .replace(/\\(\d{1,3}|.)/g, (_, esc) =>
+      /^\d+$/.test(esc) ? String.fromCharCode(parseInt(esc, 10)) : esc
+    );
+}
+
+async function dohOnce(url, name) {
+  const res = await fetch(`${url}?name=${encodeURIComponent(name)}&type=TXT`, {
+    headers: { accept: "application/dns-json" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`DoH HTTP ${res.status}`);
+  const json = await res.json();
+  const answers = (json.Answer || []).filter((a) => a.type === 16);
+  return { rcode: json.Status, values: answers.map((a) => joinTxt(a.data)).sort().join("\n") };
+}
+
+async function dohSampled(provider, name) {
+  const seen = [];
+  const rcodes = [];
+  for (let i = 0; i < SAMPLES; i++) {
+    try {
+      const answer = await dohOnce(provider.url, name);
+      rcodes.push(answer.rcode);
+      seen.push(answer.values);
+    } catch (error) {
+      seen.push(`ERR ${error.message}`);
+    }
+  }
+  const tally = new Map();
+  for (const value of seen) tally.set(value, (tally.get(value) || 0) + 1);
+  const [top, count] = [...tally.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { value: top, count, of: seen.length, split: tally.size > 1, rcode: rcodes[0] };
+}
+
+async function verify() {
+  const name = els.name.value.trim() || settings.name;
+  if (!name) {
+    set("", "no name", "set the record name in setup");
+    return null;
+  }
+
+  const wanted = els.note.value;
+  const results = [];
+  for (const provider of DOH) {
+    const sample = await dohSampled(provider, name);
+    results.push({ provider, ...sample });
+    $(`${provider.id}-val`).textContent = sample.value ? `${sample.value.slice(0, 48)}${sample.value.length > 48 ? "…" : ""}` : "(empty)";
+    $(`${provider.id}-agree`).textContent = `${sample.count}/${sample.of}`;
+  }
+
+  const google = results[0];
+  els.split.textContent = results.some((r) => r.split)
+    ? "The resolver served more than one value for this name. Two caches disagreeing is normal for a minute or two after an edit; the poller deduplicates it."
+    : "";
+
+  if (google.value === wanted) {
+    set("green", "in sync", `${name} resolves to exactly what is in the box`);
+    stopRechecking();
+  } else if (google.value && wanted && google.value !== wanted) {
+    set("amber", "stale", `resolver still serves the previous value; rechecking every ${RECHECK_MS / 1000}s`);
+    scheduleRecheck();
+  } else if (!google.value && google.rcode === 3) {
+    set("red", "name does not exist", `${name} is NXDOMAIN — check the hostname and that the zone is still delegated`);
+    scheduleRecheck();
+  } else if (!google.value) {
+    set("red", "no TXT record", `${name} resolves but holds no TXT record — check the record type, or that the provider is still serving the zone`);
+    scheduleRecheck();
+  } else {
+    set("amber", "not sent yet", "the box has text the record does not");
+  }
+  return google.value;
+}
+
+function scheduleRecheck() {
+  if (recheck) return;
+  recheck = setTimeout(() => { recheck = null; verify(); }, RECHECK_MS);
+}
+
+function stopRechecking() {
+  if (recheck) { clearTimeout(recheck); recheck = null; }
+}
+
+/* ---------- dynv6 API ---------- */
+
+async function api(path, options = {}) {
+  const token = els.token.value.trim() || settings.token;
+  if (!token) throw new Error("no token");
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text().then((t) => t.slice(0, 90))}`);
+  return res.status === 204 ? null : res.json();
+}
+
+function blocked(error, what) {
+  // A browser-side failure is almost always CORS, which the terminal is not
+  // subject to, so the fallback is a command rather than an apology.
+  els.apimsg.textContent = `${what} failed in the browser: ${error.message}`;
+  showCurl();
+  set("red", "send blocked", "the browser could not reach the dynv6 API; use the curl below, the sync light still works");
+}
+
+function showCurl() {
+  const zone = settings.zoneId || "$ZONE";
+  const record = settings.recordId || "$RECORD";
+  const token = settings.token ? "<your token, saved in this browser>" : "$TOKEN";
+  els.curl.textContent =
+    `curl -sX PATCH "https://dynv6.com/api/v2/zones/${zone}/records/${record}" \\\n` +
+    `  -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \\\n` +
+    `  -d '${JSON.stringify({ data: els.note.value }).replace(/'/g, "'\\''")}'`;
+  els.fallback.classList.remove("hide");
+}
+
+async function send() {
+  if (busy) return;
+  busy = true;
+  const zone = els.zone.value || settings.zoneId;
+  const record = els.record.value || settings.recordId;
+  persist();
+
+  if (!zone || !record) {
+    set("amber", "no record selected", "load zones and records in setup, or send with the curl below");
+    showCurl();
+    busy = false;
+    await verify();
+    return;
+  }
+
+  set("amber", "sending", "PATCH to dynv6");
+  try {
+    await api(`/zones/${zone}/records/${record}`, {
+      method: "PATCH",
+      body: JSON.stringify({ data: els.note.value }),
+    });
+    els.apimsg.textContent = "sent";
+    set("amber", "sent, waiting on DNS", "verifying through the resolver");
+    await verify();
+  } catch (error) {
+    blocked(error, "send");
+  } finally {
+    busy = false;
+  }
+}
+
+async function loadZones() {
+  try {
+    const zones = await api("/zones");
+    els.zone.innerHTML = zones
+      .map((z) => `<option value="${z.id}">${z.name}</option>`)
+      .join("");
+    settings.zoneId = String(zones[0]?.id || "");
+    settings.zoneName = zones[0]?.name || "";
+    els.apimsg.textContent = `${zones.length} zone(s)`;
+    $("records").disabled = false;
+    persist();
+  } catch (error) {
+    blocked(error, "loading zones");
+  }
+}
+
+async function loadRecords() {
+  const zone = els.zone.value;
+  if (!zone) return;
+  try {
+    const records = await api(`/zones/${zone}/records`);
+    const txt = records.filter((r) => r.type === "TXT" || r.type === "SPF");
+    els.record.innerHTML = txt
+      .map((r) => `<option value="${r.id}">${r.name || "@"} ${r.type}</option>`)
+      .join("");
+    const chosen = txt[0];
+    if (chosen) {
+      settings.recordId = String(chosen.id);
+      const zoneName = els.zone.selectedOptions[0]?.textContent || settings.zoneName;
+      settings.name = chosen.name && chosen.name !== "@" && chosen.name !== zoneName
+        ? `${chosen.name}.${zoneName}`
+        : zoneName;
+      els.name.value = settings.name;
+      els.note.value = chosen.data || "";
+      updateBytes();
+      persist();
+    }
+    els.apimsg.textContent = `${txt.length} TXT/SPF record(s) of ${records.length}`;
+    $("records").disabled = false;
+    await verify();
+  } catch (error) {
+    blocked(error, "loading records");
+  }
+}
+
+/* ---------- wiring ---------- */
+
+function reflect() {
+  if (!els.name.value.trim() && !settings.name) {
+    set("", "idle", "set up the record below, then type");
+  }
+}
+
+els.note.addEventListener("input", () => {
+  updateBytes();
+  clearTimeout(timer);
+  timer = setTimeout(send, DEBOUNCE_MS);
+});
+els.note.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { clearTimeout(timer); send(); }
+});
+
+$("send").addEventListener("click", () => { clearTimeout(timer); send(); });
+$("check").addEventListener("click", verify);
+$("zones").addEventListener("click", loadZones);
+$("records").addEventListener("click", loadRecords);
+$("save").addEventListener("click", () => { persist(); set("green", "saved", "settings kept in this browser"); verify(); });
+$("copy").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(els.curl.textContent);
+  $("copy").textContent = "copied";
+  setTimeout(() => { $("copy").textContent = "Copy command"; }, 1200);
+});
+$("forget").addEventListener("click", () => {
+  localStorage.removeItem(KEY);
+  els.token.value = "";
+  settings = { token: "", zoneId: "", zoneName: "", recordId: "", name: els.name.value.trim() };
+  set("", "forgotten", "token removed from this browser");
+});
+$("clear").addEventListener("click", () => { els.note.value = ""; updateBytes(); send(); });
+els.zone.addEventListener("change", () => {
+  settings.zoneId = els.zone.value;
+  settings.zoneName = els.zone.selectedOptions[0]?.textContent || "";
+  persist();
+});
+els.record.addEventListener("change", () => { settings.recordId = els.record.value; persist(); });
+
+load();
+if (settings.name) verify();
+</script>
+</body>
+</html>

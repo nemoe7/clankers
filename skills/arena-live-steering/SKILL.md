@@ -29,14 +29,14 @@ Steer the Arena agent WITHOUT interrupting its turn, even when the Arena client 
 1. **Pick a record**: any hostname whose zone the user can edit, such as `steering.example.com`. A free dynamic DNS zone works; the sandbox never contacts the provider, only the resolver.
 2. **Poller**: `scripts/dns_steering.py` queries that name's TXT record every `POLL_INTERVAL` seconds with stdlib sockets, over UDP/53.
 3. **Writes to STEERING.md**: each new value is appended under `## Current Notes:` with an attribution comment, and the agent reads that file every one or two tool calls.
-4. **User edits the record**: from a browser, a phone, or a one-line API call. No login on the sandbox side, no notification, nothing in a commit.
+4. **User edits the record**: from a browser, a phone, or a one-line API call. No login on the sandbox side, no notification, nothing in a commit. `assets/steer.html` is a single-file page for this: one textarea that autosaves, and a green or red light driven by DNS-over-HTTPS, so it shows what a poller can actually resolve.
 
 ## Setup
 
 ```bash
 STEERING_DNS_NAME=steering.example.com \
   STEERING_FILE=reports/STEERING.md LOG_FILE=reports/STEERING_LOG.md \
-  POLL_INTERVAL=10 python3 -u scripts/dns_steering.py
+  POLL_INTERVAL=30 python3 -u scripts/dns_steering.py
 ```
 
 Point `STEERING_FILE` and `LOG_FILE` at paths the repository ignores, such as `reports/`, so notes never reach a commit. The startup banner reports what the resolver said: a value, `NOERROR` with no TXT record yet, or `NXDOMAIN`, which means the name does not exist and no note can ever arrive.
@@ -76,6 +76,7 @@ STEERING_FILE=reports/STEERING.md python3 scripts/check_steering.py
 - `scripts/dns_steering.py` - the poller: one TXT record, stdlib sockets, no HTTP
 - `scripts/steering_notes.py` - shared note writer: header, append, tail cap, line diff, digest dedup, directives
 - `scripts/check_steering.py` - agent-side helper that reads the notes file
+- `assets/steer.html` - the user's side: autosaving textarea and a DNS-over-HTTPS sync light
 
 See the [reference guide](references/REFERENCE.md) for the environment, the behaviour, the hazards, and the channels that were measured and not shipped.
 
@@ -84,7 +85,7 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - `STEERING_DNS_NAME` - required, the TXT record to watch
 - `STEERING_FILE` - notes path, default `STEERING.md` in the working directory
 - `LOG_FILE` - append-only log path, default `STEERING_LOG.md`
-- `POLL_INTERVAL` - seconds between queries, default 10
+- `POLL_INTERVAL` - seconds between queries, default 30
 - `DNS_RESOLVER` - override the resolver; by default the `nameserver` lines of `/etc/resolv.conf`
 - `DNS_TIMEOUT` - seconds per query, default 5
 - `STEERING_DNS_BASELINE` - `current` (default) or `empty`
@@ -94,6 +95,7 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - **The record is public.** Anyone who knows the name can read every note, and anyone who can edit the zone can steer the agent. Never put a secret in a note.
 - **Latency is the TTL, not the poll interval.** A 60s TTL means up to a minute per edit, and a name that did not exist before can take the zone's negative-cache TTL to appear.
 - **Resolvers can disagree.** Two caches serving the same name were measured returning different values for minutes, so the poller deduplicates by value digest and keeps the digests in the log. Re-setting a value that was already delivered is ignored; change one character to send it again.
+- **Polling hard can cost the zone.** A free provider's zone went empty, for every name under it, after roughly 500 queries in 25 minutes. Keep the interval at 30s or slower and check the provider's panel before blaming the poller.
 - **One character-string is 255 octets.** Longer values are split by the provider and rejoined by the poller, which a 370-character multi-line note confirmed in live use.
 - **The channel is one-way.** The sandbox can read DNS but cannot reach a zone's authoritative servers to write it, so questions from the agent travel through the Arena client instead.
 
@@ -104,6 +106,7 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - `scripts/steering_notes.py` - shared note writer
 - `scripts/check_steering.py` - agent helper
 - `references/REFERENCE.md` - detailed reference
+- `assets/steer.html` - the user's sending page
 
 ## Example Session
 
