@@ -1,10 +1,12 @@
-# Pushes rules/ARENA.md to each listed repo's $DEST, amending the prior sync commit,
-# then verifies each target's committed copy matches the source byte for byte.
+# Pushes rules/ARENA.md to each listed repo's $DEST and mirrors $SKILL_SRC into
+# each target's $SKILL_DEST, amending the prior sync commit, then verifies every
+# target's committed copies match the source byte for byte.
 # Needs a short-expiry fine-grained PAT (Contents read/write on every
 # target repo) stored as the ARENA_DIST_PAT secret.
 # Dispatch only: a repository not in REPOS (or the repos input) never receives
-# ARENA.md, so add new targets to REPOS. Delivery is not activation; see
-# rules/README.md#arena-file for the bootstrap line a session needs.
+# ARENA.md or the skill, so add new targets to REPOS. Delivery is not activation;
+# see rules/README.md#arena-file for the bootstrap line a session needs, and a
+# delivered skill still needs its steering channel started per session.
 name: distribute-arena
 on:
   workflow_dispatch:
@@ -21,6 +23,8 @@ concurrency:
 env:
   REPOS: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki"
   DEST: ARENA.md
+  SKILL_SRC: skills/arena-live-steering
+  SKILL_DEST: .agents/skills/arena-live-steering
 jobs:
   distribute:
     runs-on: ubuntu-latest
@@ -28,7 +32,7 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@v4
-      - name: Sync ARENA.md to target repos
+      - name: Sync ARENA.md and the steering skill to target repos
         env:
           ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
         run: |
@@ -37,7 +41,13 @@ jobs:
           [ -n "$list" ] || list="$REPOS"
           [ -n "$list" ] || { echo "::error::no target repos: set REPOS or pass the repos input"; exit 1; }
           src="$GITHUB_WORKSPACE/rules/ARENA.md"
+          skill_src="$GITHUB_WORKSPACE/$SKILL_SRC"
           [ -f "$src" ] || { echo "::error::rules/ARENA.md missing from the checkout"; exit 1; }
+          [ -d "$skill_src" ] || { echo "::error::$SKILL_SRC missing from the checkout"; exit 1; }
+          # Distribute what is tracked rather than whatever is on disk, so a local
+          # build artifact can never ride along into four repositories.
+          files=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_SRC" | sed "s|^$SKILL_SRC/||")
+          [ -n "$files" ] || { echo "::error::no tracked files under $SKILL_SRC"; exit 1; }
           failed=""
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
           # shellcheck disable=SC2086 -- intentional word splitting of the repo list
@@ -49,11 +59,18 @@ jobs:
               git clone --depth 1 "https://github.com/$repo.git" "$work"
               mkdir -p "$work/$(dirname "$DEST")"
               cp "$src" "$work/$DEST"
+              # Mirror the skill exactly: clear the destination first, so a file
+              # deleted upstream cannot survive in the target.
+              rm -rf "$work/$SKILL_DEST"
+              for f in $files; do
+                mkdir -p "$work/$SKILL_DEST/$(dirname "$f")"
+                cp "$skill_src/$f" "$work/$SKILL_DEST/$f"
+              done
               cd "$work"
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add "$DEST"
-              msg="chore(arena): sync ARENA.md from nemoe7/clankers"
+              git add "$DEST" "$SKILL_DEST"
+              msg="chore(arena): sync ARENA.md and arena-live-steering from nemoe7/clankers"
               git diff --cached --quiet || {
                 if [ "$(git log -1 --format=%s)" = "$msg" ]; then git commit --amend --no-edit; else git commit -m "$msg"; fi
                 git push --force-with-lease -u origin HEAD
@@ -62,6 +79,19 @@ jobs:
                 echo "::error::$repo: HEAD:$DEST does not match rules/ARENA.md after sync"
                 exit 1
               }
+              have=$(git ls-tree -r --name-only "HEAD:$SKILL_DEST" | sort)
+              want=$(printf '%s\n' $files | sort)
+              [ "$have" = "$want" ] || {
+                echo "::error::$repo: $SKILL_DEST holds a different file list than $SKILL_SRC"
+                exit 1
+              }
+              for f in $files; do
+                git show "HEAD:$SKILL_DEST/$f" | cmp -s - "$skill_src/$f" || {
+                  echo "::error::$repo: HEAD:$SKILL_DEST/$f does not match $SKILL_SRC/$f after sync"
+                  exit 1
+                }
+              done
+              echo "$repo: ARENA.md and $(printf '%s\n' $files | wc -l) skill file(s) verified"
             ) || failed="$failed $repo"
           done
           [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }
