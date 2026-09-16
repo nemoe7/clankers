@@ -4,7 +4,7 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 | Skill | Purpose |
 | --- | --- |
-| [arena-live-steering](arena-live-steering/SKILL.md) | Steer a running Arena agent from a DNS TXT record without interrupting its turn |
+| [arena-live-steering](arena-live-steering/SKILL.md) | Steer a running Arena agent from an ntfy topic or a DNS TXT record without interrupting its turn |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
