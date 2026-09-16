@@ -14,7 +14,7 @@
 - Before every commit, print the planned final commit list.
 - NEVER claim a check you did not run.
 - Always push the branch and keep a PR open so work survives limits.
-- In an Arena session, always activate `skills/arena-live-steering` and read its channel at the start of the turn, again before anything expensive or hard to undo, and once more before the turn ends. Do not poll between those: a read costs a round trip inside the turn, and the channel holds what arrives in between.
+- In an Arena session, always activate `skills/arena-live-steering`. For ntfy, read only through the agent's page-fetch tool, never curl or another HTTP client inside the sandbox, because the egress proxy returns a fake empty HTTP 200 while a topic holds messages. Check at the start and end of every turn, after about every five tool calls, after reasoning in the middle of a turn, and before anything expensive or hard to undo. Without the browser relay tab open, there is no background capture.
 - NEVER merge the PR until authorized.
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - On a collision between rules, a deviation from the plan, or material ambiguity, stop and ask with the question tool; NEVER improvise past the plan.

@@ -10,7 +10,7 @@
 ## Constitution
 
 - NEVER merge the PR until authorized.
-- Always activate `skills/arena-live-steering`; read its channel at turn start, before anything expensive or hard to undo, and once before the turn ends. NEVER poll between: a read costs a round trip inside the turn, and the channel holds whatever arrives meanwhile.
+- Always activate `skills/arena-live-steering`. For ntfy, read only through the agent's page-fetch tool, never curl or another in-sandbox HTTP client: check at turn start, turn end, after about every five tool calls, after reasoning mid-turn, and before anything expensive or hard to undo. Without the relay tab open there is no background capture.
 - Stop and ask on material ambiguity or plan deviation; NEVER improvise past the plan.
 - Grep-verify every edit landed before building on it.
 - NEVER mermaid.
