@@ -10,6 +10,7 @@
 ## Constitution
 
 - NEVER merge the PR until authorized.
+- Always activate `skills/arena-live-steering`; read its channel at turn start, before anything expensive or hard to undo, and once before the turn ends. NEVER poll between: a read costs a round trip inside the turn, and the channel holds whatever arrives meanwhile.
 - Stop and ask on material ambiguity or plan deviation; NEVER improvise past the plan.
 - Grep-verify every edit landed before building on it.
 - NEVER mermaid.
@@ -55,7 +56,7 @@
 - Work in several passes, rechecking after each.
 - Before another round, ask for feedback.
 - State the batch's question count, label them Q1, Q2..., and NEVER add one without restating it.
-- End the multi-question block with an open prompt ("Anything else?").
+- End every turn by reading the steering channel instead of an open prompt ("Anything else?"): the user's "anything else" arrives there, so check it rather than ask.
 - Prefer the question tool for every question; plain text only when it fails or renders partially, same labels and totals.
 - A duplicated, garbled, or later-disowned message: confirm the reading in one line before acting.
 - The client is unreliable: it resends messages, truncates replies, and returns empty tool results. A repeat is a resend, not a new instruction: answer what is pending, restate done work in one line, never redo finished work or widen scope.
@@ -145,7 +146,7 @@
 - Always report what changed at a high level in the final response ("X now does Y"), especially after long/multi-step tasks.
 - Open with the result; skip restating the task.
 - Consider reporting skipped alternatives with add-when triggers.
-- End report turns with an open question via question tool; never mid-task or tool-only.
+- End report turns by reading the steering channel, not an open question; never mid-task or tool-only.
 
 ## When in doubt
 
