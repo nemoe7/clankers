@@ -23,7 +23,7 @@ Latest measurements as of 2026-09-16. ARENA.md is measured by uploaded file size
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,473 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-live-steering/SKILL.md` | `cl100k_base` | 1,756 `tok` |
+| `skills/arena-live-steering/SKILL.md` | `cl100k_base` | 1,944 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
