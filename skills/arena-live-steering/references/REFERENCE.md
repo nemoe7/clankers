@@ -56,7 +56,7 @@ for step in agent_loop:
 `scripts/dns_steering.py` carries notes over one DNS TXT record, for a sandbox whose egress allowlist blocks HTTP entirely. Measured in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: `ntfy.sh`, three public ntfy instances, and 23 other notification, paste, chat, webhook, Google, and `e2b.app` hosts all close the TLS connection (curl exit 35, HTTP 000), while a TXT query to the resolver answers in about 1 ms. DNS is the only external channel left once `api.github.com` is ruled out.
 
 ```bash
-STEERING_DNS_NAME=steering.example.com POLL_INTERVAL=10 \
+STEERING_DNS_NAME=steering.example.com POLL_INTERVAL=30 \
   STEERING_FILE=reports/STEERING.md LOG_FILE=reports/STEERING_LOG.md \
   python3 -u scripts/dns_steering.py
 ```
@@ -77,7 +77,13 @@ python3 -c "import sys; sys.path.insert(0,'scripts'); import dns_steering as d; 
 
 ### Sending a note from your own machine
 
-Editing the record in the provider's web UI works and is what was verified live. Where the provider has an HTTP API, one call is faster than the form. For dynv6, whose API takes a bearer token from the account's Keys menu:
+`assets/steer.html` is a single-file page for the user's side: one textarea that autosaves 1.2s after typing stops, and a sync light that says whether the change actually landed. Open it from a browser, no server needed.
+
+The light is driven by DNS-over-HTTPS rather than by the provider's API, so it verifies what a poller can resolve instead of what the provider claims to have stored. It samples Google's resolver three times, which is the same network the sandbox's `8.8.8.8` sits on and so the best predictor of what the poller will see, and Cloudflare's three times as an independent check; when the samples disagree the light is amber and the page says two caches are still catching up, which is the disagreement measured below. Green means the resolver returns exactly the text in the box. Red distinguishes NXDOMAIN, a name that does not exist, from a name that resolves with no TXT record, since the fixes differ.
+
+Sending uses the provider's API where the browser is allowed to call it, and falls back to a copyable `curl` command where CORS blocks it; the light keeps working either way, because verification never needed the API. The token is kept in that browser's localStorage and sent only to the provider.
+
+Editing the record in the provider's web UI works too, and is what the live verification used. Where the provider has an HTTP API, one call is faster than the form. For dynv6, whose API takes a bearer token from the account's Keys menu:
 
 ```bash
 TOKEN=... ; ZONE=...   # zone id from: curl -sH "Authorization: Bearer $TOKEN" https://dynv6.com/api/v2/zones
@@ -94,7 +100,7 @@ These calls run on the user's machine, not in the sandbox, where `dynv6.com` is 
 - `STEERING_DNS_NAME` - required, the record to watch; underscores are allowed, so `_steer.example.com` works too
 - `STEERING_FILE` - default `STEERING.md` in the working directory; point it at a path the repository ignores, such as `reports/`
 - `LOG_FILE` - default `STEERING_LOG.md`, append-only, keeps what the notes cap discards and the digests a restart recovers
-- `POLL_INTERVAL` - seconds, default 10
+- `POLL_INTERVAL` - seconds, default 30, and see the query-volume hazard below before making it faster
 - `DNS_RESOLVER` - override the resolver; by default the `nameserver` lines of `/etc/resolv.conf` are tried in order, with 8.8.8.8 as the fallback
 - `DNS_TIMEOUT` - seconds per query, default 5
 - `STEERING_DNS_BASELINE` - `current` (default) or `empty`
@@ -119,6 +125,7 @@ These calls run on the user's machine, not in the sandbox, where `dynv6.com` is 
 - One character-string is 255 octets. Providers split longer values and the poller rejoins them, which a 370-character multi-line note confirmed live, but a provider that rejects long values will cap the note
 - Only the configured resolver answers in a sandbox like this: 8.8.8.8 replied in about 1 ms, while 1.1.1.1, 8.8.4.4, and 9.9.9.9 timed out, as did all three authoritative `ns*.dynv6.com` servers. So the channel is read-only from the sandbox: no RFC 2136 update, no TSIG, and no way for the agent to write a question back into DNS
 - A resolver that answers inconsistently can also fake an NXDOMAIN at startup, which is why the probe confirms it, and can fake a cleared record mid-run, which is why the dedup and the untouched baseline exist
+- Polling a free provider's zone hard may cost the zone. Measured 2026-09-16: after roughly 500 queries of one name in 25 minutes, at 8-10s intervals plus four ad-hoc test loops, every name under that zone began answering NOERROR with no records of any type, including names that had never been queried and the zone's own SOA, while random names under three other zones still returned NXDOMAIN correctly and every control name still resolved. So the zone stayed delegated and went empty. Whether that is provider-side throttling or a policy in the sandbox's resolver path cannot be told from inside, and the user had deleted nothing. The mitigations are the slower default poll, checking the provider's panel or DoH from a browser before blaming the poller, and treating a suddenly empty zone as a rate limit to wait out rather than a channel to rebuild
 
 ### Verified
 
