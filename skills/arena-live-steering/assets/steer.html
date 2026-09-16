@@ -74,8 +74,9 @@
 
 <h1>DNS steering</h1>
 <p class="lede">
-  Type a note. It is saved to one TXT record and verified over DNS-over-HTTPS, so the light
-  means the value a poller can actually resolve. The record is public: never put a secret in it.
+  Type a note, send it with one command, and watch the light confirm it over DNS-over-HTTPS —
+  which reports what a poller can actually resolve, not what a provider claims to have stored.
+  The record is public: never put a secret in it.
 </p>
 
 <div id="banner">
@@ -88,10 +89,10 @@
 
 <textarea id="note" placeholder="STOP: use vanilla JS, not React" spellcheck="false"></textarea>
 <div class="row">
-  <button id="send" class="primary">Send now</button>
-  <button id="check">Check sync</button>
+  <button id="send">Send via browser API</button>
+  <button id="check" class="primary">Check sync</button>
   <button id="clear">Clear record</button>
-  <span class="meta"><span id="bytes">0</span> bytes · autosaves 1.2s after you stop typing</span>
+  <span class="meta"><span id="bytes">0</span> bytes · light rechecks every 8s</span>
 </div>
 
 <details id="setup">
@@ -126,10 +127,21 @@
   </p>
 </details>
 
-<div id="fallback" class="hide">
-  <label>API blocked in the browser — send it from a terminal instead</label>
+<div id="sendbox">
+  <label for="method">How the note is sent</label>
+  <select id="method">
+    <option value="curl">Terminal: curl to the provider API (works everywhere)</option>
+    <option value="nsupdate">Terminal: nsupdate with a TSIG key</option>
+    <option value="api">This browser: call the API directly (needs CORS permission)</option>
+  </select>
+  <p class="warn" id="methodnote"></p>
   <pre id="curl"></pre>
-  <div class="row"><button id="copy">Copy command</button></div>
+  <div class="row">
+    <button id="copy">Copy command</button>
+    <button id="fn">Copy shell function</button>
+  </div>
+  <label>Or install this once, then send with <code>dynsteer "STOP: ..."</code></label>
+  <pre id="func"></pre>
 </div>
 
 <details>
@@ -166,6 +178,7 @@ const els = {
 let settings = { token: "", zoneId: "", zoneName: "", recordId: "", name: "" };
 let timer = null;
 let recheck = null;
+let watching = null;
 let busy = false;
 
 /* ---------- state ---------- */
@@ -323,18 +336,11 @@ function blocked(error, what) {
   // subject to, so the fallback is a command rather than an apology.
   els.apimsg.textContent = `${what} failed in the browser: ${error.message}`;
   showCurl();
-  set("red", "send blocked", "the browser could not reach the dynv6 API; use the curl below, the sync light still works");
+  set("red", "browser cannot send", "this provider does not permit cross-origin calls; run the command below instead, and the light still verifies it");
 }
 
 function showCurl() {
-  const zone = settings.zoneId || "$ZONE";
-  const record = settings.recordId || "$RECORD";
-  const token = settings.token ? "<your token, saved in this browser>" : "$TOKEN";
-  els.curl.textContent =
-    `curl -sX PATCH "https://dynv6.com/api/v2/zones/${zone}/records/${record}" \\\n` +
-    `  -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \\\n` +
-    `  -d '${JSON.stringify({ data: els.note.value }).replace(/'/g, "'\\''")}'`;
-  els.fallback.classList.remove("hide");
+  renderCommand();
 }
 
 async function send() {
@@ -421,16 +427,92 @@ function reflect() {
   }
 }
 
+function shellQuote(text) {
+  return `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+function command() {
+  const zone = settings.zoneId || "$DYNV6_ZONE";
+  const record = settings.recordId || "$DYNV6_RECORD";
+  const token = settings.token ? "$DYNV6_TOKEN" : "$DYNV6_TOKEN";
+  const name = els.name.value.trim() || settings.name || "steering.example.com";
+  const method = $("method").value;
+
+  if (method === "nsupdate") {
+    // The zone is what the provider told us, not a guess at the label count:
+    // a hostname under dns.army has a three-label zone, and one under a normal
+    // domain has two.
+    const zoneName = settings.zoneName || name.split(".").slice(1).join(".");
+    return [
+      `nsupdate -y hmac-sha256:$TSIG_KEYNAME:$TSIG_SECRET <<EOF`,
+      `server ns1.dynv6.com`,
+      `zone ${zoneName}`,
+      `update delete ${name} TXT`,
+      `update add ${name} 60 TXT ${shellQuote(els.note.value)}`,
+      `send`,
+      `EOF`,
+    ].join("\n");
+  }
+
+  // The note travels as argv, never through a pipe or a heredoc, so its
+  // newlines and quotes survive into the JSON exactly as typed.
+  return [
+    `curl -sX PATCH "https://dynv6.com/api/v2/zones/${zone}/records/${record}" \\`,
+    `  -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \\`,
+    `  -d "$(python3 -c 'import json,sys; print(json.dumps({"data": sys.argv[1]}))' ${shellQuote(els.note.value)})"`,
+  ].join("\n");
+}
+
+function shellFunction() {
+  return [
+    `# paste into ~/.zshrc or ~/.bashrc once, with your own ids and token`,
+    `export DYNV6_TOKEN=${settings.token || "<your token>"}`,
+    `export DYNV6_ZONE=${settings.zoneId || "<zone id>"}`,
+    `export DYNV6_RECORD=${settings.recordId || "<record id>"}`,
+    `dynsteer() {`,
+    `  curl -sX PATCH "https://dynv6.com/api/v2/zones/$DYNV6_ZONE/records/$DYNV6_RECORD" \\`,
+    `    -H "Authorization: Bearer $DYNV6_TOKEN" -H "Content-Type: application/json" \\`,
+    `    -d "$(python3 -c 'import json,sys; print(json.dumps({"data": sys.argv[1]}))' "$*")"`,
+    `}`,
+  ].join("\n");
+}
+
+const METHOD_NOTES = {
+  curl: "Runs on your machine, so no CORS applies. The light below confirms it landed.",
+  nsupdate: "Needs a TSIG key from the provider. Port 53 outbound from your machine, not the sandbox.",
+  api: "dynv6 answers a preflight with an empty Access-Control-Allow-Origin, measured in a browser, so this fails there. It is kept for a provider that does send the header.",
+};
+
+function renderCommand() {
+  els.curl.textContent = command();
+  $("func").textContent = shellFunction();
+  $("methodnote").textContent = METHOD_NOTES[$("method").value];
+}
+
+function startWatch() {
+  if (watching) return;
+  watching = setInterval(() => {
+    if (!document.hidden && (els.name.value.trim() || settings.name)) verify();
+  }, RECHECK_MS);
+}
+
 els.note.addEventListener("input", () => {
   updateBytes();
+  renderCommand();
   clearTimeout(timer);
-  timer = setTimeout(send, DEBOUNCE_MS);
+  if ($("method").value === "api") timer = setTimeout(send, DEBOUNCE_MS);
 });
 els.note.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { clearTimeout(timer); send(); }
 });
 
 $("send").addEventListener("click", () => { clearTimeout(timer); send(); });
+$("method").addEventListener("change", renderCommand);
+$("fn").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("func").textContent);
+  $("fn").textContent = "copied";
+  setTimeout(() => { $("fn").textContent = "Copy shell function"; }, 1200);
+});
 $("check").addEventListener("click", verify);
 $("zones").addEventListener("click", loadZones);
 $("records").addEventListener("click", loadRecords);
@@ -455,6 +537,8 @@ els.zone.addEventListener("change", () => {
 els.record.addEventListener("change", () => { settings.recordId = els.record.value; persist(); });
 
 load();
+renderCommand();
+startWatch();
 if (settings.name) verify();
 </script>
 </body>
