@@ -14,7 +14,7 @@ metadata:
 
 # Arena Live Steering - Portable Skill
 
-Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is buggy. Two transports carry the notes: an external ntfy.sh channel with random topic generation, and GitHub issue or pull request comments where egress is allowlisted.
+Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is buggy. Two channels carry the notes: an external ntfy.sh topic, and a GitHub issue or pull request for a sandbox whose egress is allowlisted.
 
 ## When to use this skill
 
@@ -23,7 +23,7 @@ Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is b
 - Need external control from phone/browser
 - User says "steer without interrupting" or "live steering"
 - Need random private channel per session
-- Sandbox egress cannot reach `ntfy.sh`: use the GitHub comment transport, which needs only `api.github.com`
+- Sandbox egress cannot reach `ntfy.sh`, or steering must leave no comments behind: use the GitHub transport, which needs only `api.github.com`
 
 ## How it works
 
@@ -37,17 +37,18 @@ Steer the Arena agent WITHOUT interrupting its turn, even when Arena client is b
 | Transport | Script | Egress needed | Who can steer |
 | --- | --- | --- | --- |
 | ntfy.sh topic | `scripts/external_steering.py` | `ntfy.sh` | Anyone who learns the topic |
-| GitHub comments | `scripts/github_steering.py` | `api.github.com` | Anyone with access to the repository |
+| GitHub issue body | `scripts/github_steering.py` | `api.github.com` | Anyone who can edit that issue |
+| GitHub comments | `scripts/github_steering.py` with `STEERING_SOURCE=comments` | `api.github.com` | Anyone with access to the repository |
 
-Both write the same `## Current Notes:` section, so the agent side never changes. Start the GitHub transport on a pull request or issue number, with `STEERING_FILE` on a path the repository ignores:
+All three write the same `## Current Notes:` section, so the agent side never changes. Body mode leaves nothing behind; comment mode costs one comment per note, or one comment the user keeps editing. Start the GitHub transport on an issue or pull request number, with `STEERING_FILE` on a path the repository ignores:
 
 ```bash
-STEERING_REPO=owner/name STEERING_ISSUE=13 \
+STEERING_REPO=owner/name STEERING_ISSUE=14 \
   STEERING_FILE=reports/STEERING.md \
   python3 -u scripts/github_steering.py
 ```
 
-Prefer it in an Arena sandbox, where egress is allowlisted: `ntfy.sh` closes the TLS connection and `api.github.com` answers. The [reference guide](references/REFERENCE.md) carries its environment, endpoints, deduplication, and trust boundary.
+Prefer it where egress is allowlisted — an Arena sandbox closes the TLS connection to `ntfy.sh` and answers on `api.github.com` — and where comment noise is unwanted. Never point body mode at a description the agent itself writes, or the agent steers itself; stop the poller around such a write. The [reference guide](references/REFERENCE.md) carries the environment, endpoints, change detection, permissions, and hazards.
 
 ## Installation (portable)
 
@@ -135,7 +136,8 @@ python3 scripts/check_steering.py
 
 - `scripts/generate_topic.py` - Generates random topic `arena-steer-{8 hex}`, saves to multiple locations for portability
 - `scripts/external_steering.py` - Main poller, deduplicates, handles 429 backoff, writes to STEERING.md
-- `scripts/github_steering.py` - GitHub comment poller for allowlisted egress, appends attributed notes
+- `scripts/github_steering.py` - GitHub poller: issue body edits by default, comments opt-in
+- `scripts/steering_notes.py` - Shared note writer: one header, append, tail cap
 - `scripts/install.sh` - One-click install, generates topic, QR code
 - `scripts/check_steering.py` - Helper for agents to check steering file
 
@@ -181,7 +183,8 @@ Arena client file sync and previews are buggy as of 2026-09. This bypasses Arena
 - `SKILL.md` - This file (required)
 - `scripts/generate_topic.py` - Random topic generator
 - `scripts/external_steering.py` - External poller
-- `scripts/github_steering.py` - GitHub comment poller
+- `scripts/github_steering.py` - GitHub poller
+- `scripts/steering_notes.py` - Shared note writer
 - `scripts/install.sh` - Installer
 - `scripts/check_steering.py` - Agent helper
 - `references/REFERENCE.md` - Detailed reference
@@ -193,7 +196,7 @@ Arena client file sync and previews are buggy as of 2026-09. This bypasses Arena
 - `STEERING_FILE` - Override STEERING.md path (default: /home/user/STEERING.md)
 - `LOG_FILE` - Override log path (default: /home/user/STEERING_LOG.md)
 - `PORT` - For optional web UI (if you add steering_server.py)
-- GitHub transport: `GH_TOKEN` or `GITHUB_TOKEN`, `STEERING_REPO`, `STEERING_ISSUE`, `POLL_INTERVAL`, `STEERING_IGNORE_AUTHORS` - defaults and endpoints in the reference guide
+- GitHub transport: `GH_TOKEN` or `GITHUB_TOKEN`, `STEERING_REPO`, `STEERING_ISSUE`, `STEERING_SOURCE`, `POLL_INTERVAL`, `STEERING_IGNORE_AUTHORS` - defaults and endpoints in the reference guide
 
 ## Example Session
 
