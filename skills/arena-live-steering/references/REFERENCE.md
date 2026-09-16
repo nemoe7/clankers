@@ -188,7 +188,7 @@ Behaviour:
 - `current` holds the value found at startup without ingesting it, so a stale note is never replayed. `empty` ingests whatever the record holds on the first poll, which is what you want when you set the record before starting the agent
 - A change delivers the lines after the longest line prefix already seen, through the same `added_lines` helper as body mode: appending a line delivers that line alone, replacing the record delivers the new text, clearing it delivers nothing
 - Notes are attributed `<!-- from dns txt {name}, read {utc} -->`, and `STOP:`, `PRIORITY:`, and `CONTEXT:` are echoed as directives
-- A failed query prints one line and retries next interval; it never exits, and never clears the notes
+- A failed query prints one line and retries next interval; it never exits, never clears the notes, and never moves the baseline, so a transient failure cannot replay the whole record as one note on the next answer. `query_txt` returns `None` when no resolver answered and an empty string when the name holds no TXT record, because the two are not the same fact, and `poll_once` establishes a baseline late when the startup query itself failed
 - Labels are checked against the 63-octet DNS limit before the query, so a typo fails loudly rather than sending a malformed packet
 
 Hazards:
@@ -199,7 +199,7 @@ Hazards:
 - A record is short: one character-string is 255 octets and registrars cap the total, so long notes belong in the ntfy or GitHub channel
 - Only the configured resolver answers in a sandbox like this: 8.8.8.8 replied, while 1.1.1.1, 8.8.4.4, and 9.9.9.9 timed out. Do not assume a second resolver is reachable
 
-Verified in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: a six-check assert demo over a live TXT read of `_dmarc.gmail.com` through the module's own query path, an absent name reading empty, a multi-string record joining, the label guard, `poll_once` across first, unchanged, append, clear, and replace, and the notes and log round trip; plus a 12s live poll that wrote no note for an unchanged record, and both error paths exiting 1 with a clear message. Not exercised: an edit made by a human against a zone they own, which is the resolver's and the registrar's behaviour rather than this skill's.
+Verified in an Arena sandbox on 2026-09-16 in `nemoe7/clankers`: a ten-check assert demo over a live TXT read of `_dmarc.gmail.com` through the module's own query path, an absent name reading empty, a multi-string record joining, the label guard, `poll_once` across first, unchanged, append, clear, and replace, the notes and log round trip, a failed query leaving the baseline intact so nothing replays, a baseline established late in both modes, and the two readings of empty versus unreachable over a real socket; plus a 12s live poll that wrote no note for an unchanged record, and both error paths exiting 1 with a clear message. Not exercised: an edit made by a human against a zone they own, which is the resolver's and the registrar's behaviour rather than this skill's.
 
 ### Security
 
