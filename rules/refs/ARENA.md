@@ -14,11 +14,12 @@
 - Before every commit, print the planned final commit list.
 - NEVER claim a check you did not run.
 - Always push the branch and keep a PR open so work survives limits.
+- In an Arena session, always activate `skills/arena-live-steering` and read its channel at the start of the turn, again before anything expensive or hard to undo, and once more before the turn ends. Do not poll between those: a read costs a round trip inside the turn, and the channel holds what arrives in between.
 - NEVER merge the PR until authorized.
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - On a collision between rules, a deviation from the plan, or material ambiguity, stop and ask with the question tool; NEVER improvise past the plan.
 - After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
-- Ask questions in labeled batches that state their total and end with an open prompt.
+- Ask questions in labeled batches that state their total; the turn-ending steering check replaces the open prompt.
 - NEVER mermaid.
 - Report the changes made in the final response after the task.
 
@@ -73,7 +74,7 @@
 - Before another round, ask for feedback with the question tool.
 - Before asking questions, state the total number of questions that batch will hold and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same batch without first stating the updated total.
-- Always end the multi-question block with an open prompt inviting anything else, such as "Any more questions?" or "Anything else?"
+- End every turn by reading the session's steering channel, which takes the place of the open prompt inviting anything else: the user's "anything else" arrives there, so check for it instead of asking for it.
 - Prefer the question tool for every question you ask, rather than asking the same questions in prose.
 - If the question tool fails, times out, or renders only part of a batch, ask the same questions in plain text with the same labels and totals.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
