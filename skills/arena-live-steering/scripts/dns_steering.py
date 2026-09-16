@@ -200,6 +200,21 @@ def query_txt(name: str, resolvers: list[str], timeout: float) -> str | None:
   return None if answer is None else "\n".join(answer[1])
 
 
+CONTROL_NAME = "_dmarc.google.com"  # a name that always holds a TXT record
+
+
+def control_answers(resolvers: list[str], timeout: float) -> bool:
+  """Return True when a known-good TXT name still answers.
+
+  No data for the steering name means one of two very different things: the zone
+  is being served empty, or this process's resolver path has gone blind. Only a
+  control tells them apart. Blaming the provider for a dead path sends the user
+  to inspect a record that was there the whole time, which is what happened here.
+  """
+  answer = query_records(CONTROL_NAME, TXT, resolvers, timeout)
+  return bool(answer and answer[1])
+
+
 def load_seen(log_file: pathlib.Path) -> set[str]:
   """Return the digests of values already delivered, recovered from the log."""
   try:
@@ -327,7 +342,41 @@ def main() -> None:
     print("  exactly like an empty record, which is how this stays silent.", flush=True)
   elif answer is not None and not answer[1]:
     rcode = RCODES.get(answer[0], f"rcode {answer[0]}")
-    print(f"{name} resolves ({rcode}) but holds no TXT record yet.", flush=True)
+    if control_answers(resolvers, timeout):
+      print(f"{name} resolves ({rcode}) but no TXT data was served for it.", flush=True)
+      print(
+        "  A control name that always holds a TXT record still answers, so the",
+        flush=True,
+      )
+      print(
+        "  zone is being served empty rather than this process being unable to",
+        flush=True,
+      )
+      print(
+        "  resolve. Check the provider's panel: a record can sit there and still",
+        flush=True,
+      )
+      print(
+        "  not be served, which a free zone does under sustained query volume.",
+        flush=True,
+      )
+    else:
+      print(
+        f"{name} resolves ({rcode}) with no TXT data, and neither does a control",
+        flush=True,
+      )
+      print(
+        "  name that always should, so this resolver path is blind and nothing",
+        flush=True,
+      )
+      print(
+        "  observed here proves the record is empty. Read the name over",
+        flush=True,
+      )
+      print(
+        "  DNS-over-HTTPS from a network path that works before trusting this.",
+        flush=True,
+      )
 
   if attempts > 1 and (answer is None or answer[0] != 3):
     print(
