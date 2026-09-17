@@ -1,10 +1,9 @@
-"""Note handling shared by the arena-live-steering transports.
+"""Note handling for the arena-live-steering ntfy transport.
 
-Every transport appends attributed notes to one file, under one header, with
-one tail cap, and reports the same directives, so the agent side never has to
-know which channel delivered a note. Import this from a script in the same
-directory; the script directory is already on `sys.path` when Python runs a
-file directly.
+The transport appends attributed notes to one file, under one header, with one
+tail cap, and reports the same directives, so the agent side never has to know
+how a note arrived. Import this from a script in the same directory; the script
+directory is already on `sys.path` when Python runs a file directly.
 """
 
 from __future__ import annotations

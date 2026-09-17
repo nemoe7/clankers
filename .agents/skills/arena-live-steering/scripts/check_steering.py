@@ -4,7 +4,7 @@
 import os
 import pathlib
 
-STEERING_FILE = os.environ.get("STEERING_FILE", "/home/user/STEERING.md")
+STEERING_FILE = os.environ.get("STEERING_FILE", "reports/STEERING.md")
 
 
 def check_steering():
