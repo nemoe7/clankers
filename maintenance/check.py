@@ -36,6 +36,7 @@ EXPECTED_BUDGETS = {
   "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
   "rules/CHATGPT-MORE.txt": "Unicode chars",
   "rules/CLINE.md": "cl100k_base",
+  "rules/KILO.md": "cl100k_base",
   "rules/COMMIT-SPEC.txt": "cl100k_base",
   "skills/arena-live-steering/SKILL.md": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
@@ -55,10 +56,12 @@ EXPECTED_LINTED = (
   "rules/AGENTS.md",
   "rules/ARENA.md",
   "rules/CLINE.md",
+  "rules/KILO.md",
   "rules/refs/AGENTS.md",
   "rules/refs/ARENA.md",
   "rules/refs/CLINE.md",
   "rules/refs/GUIDELINES.md",
+  "rules/refs/KILO.md",
   "rules/refs/README.md",
 )
 
@@ -70,7 +73,7 @@ LINT_COUNT_CLAIMS = (
 
 # Refs baselines hold full wording; live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
-SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md")
+SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md", "KILO.md")
 PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT-SPEC.txt")
 
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`

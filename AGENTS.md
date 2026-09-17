@@ -41,14 +41,22 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories.
-4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. The same allowlist blocks `ntfy.sh`, every public ntfy instance, and 23 other notification, paste, chat, webhook, and Google hosts for processes in the sandbox, which is not the whole story: the agent's own page-fetch path is not behind it, and it read `ntfy.sh`, `dns.google`, and public gist content on 2026-09-16, all three closed to these sockets. So `skills/arena-live-steering` carries notes over an ntfy topic by default, which needs no account and publishes instantly, and keeps a DNS TXT record as the fallback for a session with no agent-side fetch path, since that is the one channel a sandbox process can poll by itself. DNS is not filtered: a TXT query to the resolver named in `/etc/resolv.conf` answers in about a millisecond, and only that resolver answers, since 1.1.1.1, 8.8.4.4, 9.9.9.9, and a zone's own authoritative servers all time out, which makes the channel read-only and one-way from the sandbox. Two caches can also disagree about a value for minutes, so the poller deduplicates by digest, and the resolver path itself blinks: ten queries of a live record returned its value five times and `NOERROR` with no data five times while every control name answered correctly each time, so an empty answer is evidence about the observer rather than about the record, and the poller queries a control name before reporting on one.
+4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. The same allowlist blocks `ntfy.sh`, every public ntfy instance, and 23 other notification, paste, chat, webhook, and Google hosts for processes in the sandbox, which is not the whole story: the agent's own page-fetch path is not behind it, and it read `ntfy.sh`, `dns.google`, and public gist content on 2026-09-16, all three closed to these sockets. So `skills/arena-live-steering` carries notes over an ntfy topic, which needs no account and publishes instantly, and reads it only through the agent's page-fetch path, never through curl or another in-sandbox HTTP client, because the egress proxy answers an in-sandbox GET with a fake empty 200 even while the topic holds messages.
 
 ## Rules
 
-- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
+- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
+- Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`. They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash that file back under its budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
+
+## Reports and approval
+
+- Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it.
+- No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
+- Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
+- Keep one report file per change in a git-ignored output dir, updated in place across turns, committed locally only and never pushed.
 
 ## Budgets
 
@@ -79,7 +87,7 @@ Read these first:
 
 - 2-space indentation, overriding formatter defaults.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- markdownlint covers `rules/**/*.md` — 8 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, and `rules/README.md`; **MD060 enabled**, **MD013 disabled**.
+- markdownlint covers `rules/**/*.md` — 10 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`; **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
 
 ## Git
