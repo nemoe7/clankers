@@ -3,7 +3,7 @@
 ## Use
 
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
-- No platform loads this file: if it was not in context, MUST open it at the repo root before the first edit and confirm it in one line.
+- No platform loads this file: if it was not in context, MUST open it at the repo root before the first edit, and the session's first reply opens with the one-line confirmation plus the steering channel link, so silent non-activation is visible to the user.
 - User instructions override it, confirmed in one line; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
 
 ## Constitution

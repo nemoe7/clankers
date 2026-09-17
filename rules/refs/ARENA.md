@@ -4,7 +4,7 @@
 
 - If you are the Arena agent and you are reading this file: these are your rules.
 - They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
-- No platform loads this file for you: if it was not delivered into your context, MUST open it at the repository root before your first edit, and confirm in one line that it is loaded.
+- No platform loads this file for you: if it was not delivered into your context, MUST open it at the repository root before your first edit, and the session's first reply MUST open with a one-line confirmation that it is loaded together with the steering channel link, so that a silently unactivated session is visible to the user instead of invisible to them.
 - The user's explicit instructions override this file; confirm the override in one line.
 - In Arena, the repository's `AGENTS.md` stays in force beside this file, and where the two collide this file's Arena-specific handling (pushing, pull requests, and merges) wins.
 
