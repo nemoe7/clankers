@@ -10,9 +10,9 @@ the writing happens here: feed this script the body of
 
     https://ntfy.sh/<topic>/json?poll=1&since=all
 
-and it delivers every message it has not delivered before into the same notes and
-log files the DNS poller writes, deduplicated by ntfy's own message id rather than
-by a digest of the text, because ntfy hands out an id that cannot collide.
+and it delivers every message it has not delivered before into the notes and log
+files the shared writer owns, deduplicated by ntfy's own message id rather than by
+a digest of the text, because ntfy hands out an id that cannot collide.
 
 Two details of that read path are worth knowing before trusting a failure. An
 empty topic makes the body empty, and a fetch tool can report an empty 200 as its
