@@ -18,7 +18,7 @@ Every skill must conform to the [Agent Skills specification](https://agentskills
 - Optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`, except that `license` is required on any skill recording `metadata.upstream`, which the validator enforces. No other top-level keys are allowed; anything else, including `argument-hint`, belongs under `metadata` as a string value.
 - Optional directories follow the convention `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` under 500 lines and move detail into `references/`, which agents load only when needed.
-- A skill may carry `BASELINE.md`, the unsquashed original of its `SKILL.md`. Amend the baseline first, then squash it into `SKILL.md` and re-measure that entry point against its budget; the baseline itself carries no budget. `squash` is the first skill to use one, mirroring the way `rules/refs/` holds the rule originals.
+- A skill may carry `BASELINE.md`, the unsquashed original of its `SKILL.md`. Amend the baseline first, then squash it into `SKILL.md` and re-measure that entry point against its budget; the baseline itself carries no budget. `squash` is the first skill to use one and `arena-live-steering` the second, each mirroring the way `rules/refs/` holds the rule originals.
 
 ## Upstream sources
 
