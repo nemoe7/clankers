@@ -27,7 +27,7 @@ Latest measurements as of 2026-09-17. ARENA.md is measured by uploaded file size
 | `rules/kilo/debug.md` | `cl100k_base` | 288 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 212 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,473 `B` |
+| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,022 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
@@ -49,4 +49,4 @@ Two deliberate exceptions are recorded, both from 2026-09-13: `rules/AGENTS.md` 
 
 A third exception is recorded from 2026-09-17, after the resquash ran: `rules/AGENTS.md` lands below its prior measurement, 1,785 → 1,549 `tok`, and `skills/arena-live-steering/SKILL.md` far below its own, 13,419 → 8,132 `B`, but `rules/ARENA.md` settles at 10,307 `B` against a prior 10,129 `B`. The live ARENA file was squashed in the same change, from the 11,580 `B` its amendments first produced, recovering 1,273 `B` of wording; the residual 178 `B` is new rules this change adds on request — the SOLID pair, the tool-call batching rule, and fix-once-where-callers-route-through — and no wording remains to fund them without dropping one. Item 5 applies again once a pass can pay for them.
 
-A fourth exception is recorded from 2026-09-17: the steering-channel note added on request to `skills/arena-live-steering/SKILL.md` — the channel must be sent in chat before the first fetch, which fails until the user has posted in it — lands the file at 8,473 `B` against its 8,132 `B` squashed baseline, +341 `B`, with no wording left to fund it without dropping a rule.
+A fourth exception is recorded from 2026-09-17 and paid back in the same change: the steering-channel note added on request to `skills/arena-live-steering/SKILL.md` — the channel must be sent in chat before the first fetch, which fails until the user has posted in it — first lands the file at 8,473 `B` against its 8,132 `B` squashed baseline, +341 `B`, and the squash pass that moves the unsquashed wording into the skill's new `BASELINE.md` pays it back in full: 8,022 `B`, 110 `B` under its prior measurement, so no exception remains.
