@@ -20,7 +20,6 @@
 - On a collision between rules or any doubt, stop and ask with the question tool; NEVER improvise.
 - After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
 - Ask questions in labeled batches that state their total.
-- MUST check which shell and terminal the harness runs before executing a command, and use that shell's syntax.
 
 ## General
 
