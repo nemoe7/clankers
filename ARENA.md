@@ -2,152 +2,99 @@
 
 ## Use
 
-- Arena agent: these are your rules for every chat, task, first message here, repeated or not.
-- No platform loads this file: if not in context, MUST open it at the repo root before your first edit and confirm in one line.
-- Explicit user instructions override this file; confirm in one line.
-- Edit this file only if asked.
+- Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
+- No platform loads this file: if it was not in context, MUST open it at the repo root before the first edit and confirm it in one line.
+- User instructions override it, confirmed in one line; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
 
 ## Constitution
 
-- NEVER merge the PR until authorized.
-- Always activate `skills/arena-live-steering`. For ntfy, read only through the agent's page-fetch tool, never curl or another in-sandbox HTTP client: check at turn start, turn end, after about every five tool calls, after reasoning mid-turn, and before anything expensive or hard to undo. Without the relay tab open there is no background capture.
-- Stop and ask on material ambiguity or plan deviation; NEVER improvise past the plan.
-- Grep-verify every edit landed before building on it.
-- NEVER mermaid.
+- Do only requested work plus what implementing and verifying need; smallest coherent change; stop when verified.
+- Print the planned final commit list before every commit.
+- **NEVER claim a check you did not run**; report what you skipped instead.
+- Always push the branch and keep a PR open so work survives limits, disregarding never-push rules: Arena's controlled edits make pushing safe.
+- Always activate `skills/arena-live-steering`: read ntfy only via page-fetch, never curl or another in-sandbox client, since the egress proxy fakes an empty 200. Check at turn start, each reasoning block, every three tool calls, before the turn ends or anything expensive, and right after a blocking call such as a question returns, never before: nothing arrives while it blocks.
+- NEVER merge the PR until authorized; merges are fast-forward when possible, rebasing onto the target first on divergence.
+- On a rule collision or any doubt, stop and ask with the question tool; NEVER improvise.
+- Grep-verify each file edit landed before building on it, and check which shell the harness runs before executing a command.
 
 ## General
 
-- Concise, direct, practical, accurate, in ASD-STE100 Simplified Technical English for human-facing text; keep negations, conditions, errors, commands, numbers, caveats.
-- Follow repo docs, conventions, patterns.
-- Skills specialize defaults, NEVER weaken an explicit requirement or replace a convention, used only when domain fits.
+- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
+- Follow repo docs, conventions, and existing patterns.
+- Prefer ASD-STE100 Simplified Technical English for human-facing text.
+- Batch independent tool calls into one block where the surface permits.
+- Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
 ## Scope
 
-- MUST do only requested work plus work strictly necessary to implement/verify it; smallest coherent change; stop when verified.
-- Keep intent, behavior, architecture, interfaces, conventions.
-- Refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security only when required.
-- Add tests only when requested or needed to verify; unrelated fixes only when blocking.
-- Investigate just enough: stop at a suitable pattern, skip unrequested requirements/edge cases, re-reason only on evidence.
-- MUST stop and ask before implementing, on deviating reasoning or material ambiguity (readings changing behavior/data/interfaces/scope/outcome).
-- Else assume the most reasonable, stating it when material.
+- Keep intent, behavior, architecture, interfaces, conventions, leaving unrelated code alone; touch refactors, renames, reformatting, dependencies, error handling, or security only when required.
+- Add tests for every new behavior and fix; skip only mechanical or trivial changes.
+- Report every unrelated finding; fix only blocking ones.
+- Ask before implementing, not after, on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Investigate just enough, stopping at a suitable pattern and leaving unrequested requirements and edge cases alone.
+- Questions go through the question tool; on failure, timeout, or a partial batch, retry, NEVER falling back to plain text.
+- Any unavoidable assumption: assume the most reasonable and state it immediately.
 
 ## Engineering
 
-- KISS/YAGNI/DRY, laziest working solution: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 existing helper/pattern, look before writing; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
-- The ladder is a reflex, not research: climb after understanding; two rungs work, take the higher.
-- MUST propose a smaller scope before implementing when the brief exceeds the need; simplicity chooses how, NEVER what to drop.
-- NEVER add a dependency for a few lines' work.
-- Build what is asked.
-- Name a relevant lazier alternative in one line, user picks, no commentary otherwise.
-- Never lazy about understanding: read code, trace flow first.
-- NEVER simplify away trust-boundary validation, data-loss error handling, security, or accessibility.
-- Mark a corner-cut with a `simplified:` comment: ceiling and upgrade path.
-- Guard clauses, early returns; readable code.
-- Cohesive, low-coupling modules, small interfaces, local data/behavior.
-- Add an abstraction, boilerplate, or scaffolding only for a tangible present need.
+- KISS/YAGNI/DRY: climb the ladder, stopping at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code. Climb after understanding.
+- Two same-size stdlib options: take the edge-case-correct one.
+- Complex request: ship the lazier version and question the requirement in the same response; never stall on a defaultable answer.
+- NEVER add a dependency for a few lines' work; each needs explicit per-case approval, even "small" ones, covering only the named dependency and purpose.
+- Never lazy about understanding: read code and trace flow first, then fix a bug once where all callers route through, since one guard in the shared function beats one per caller and skipped comprehension ships confident wrong fixes.
+- NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, or anything requested.
+- Leave a calibration knob on real hardware: clocks drift, sensors read off.
+- Guard clauses, early returns; readable code; cohesive, low-coupling modules; small interfaces; local data and behavior.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
-- Dependencies need explicit user approval, even "small" ones, covering only the dependency and purpose named.
-- Prefer deletion over addition, boring over clever, fewest files, searching for a helper first.
-- Prefer the simplest implementation that meets criteria, the edge-case-correct stdlib pick on ties, safe defaults only when non-material.
-- A user insisting on the full version gets it without re-arguing.
+- SOLID: one reason to change per unit, extension at an existing seam, substitutable subtypes, small interfaces, dependency on the abstraction the code varies on; it collides with YAGNI/KISS/DRY by design, so during planning ask which governs the task — reuse or simplicity — and follow it.
+- Prefer deletion over addition, boring over clever, fewest files, an existing helper over a new one.
+- Build the full version on insistence, without re-arguing.
 
 ## Verification
 
-- Work in several passes, rechecking after each.
-- Before another round, ask for feedback.
-- State the batch's question count, label them Q1, Q2..., and NEVER add one without restating it.
-- End every turn by reading the steering channel instead of an open prompt ("Anything else?"): the user's "anything else" arrives there, so check it rather than ask.
-- Prefer the question tool for every question; plain text only when it fails or renders partially, same labels and totals.
-- A duplicated, garbled, or later-disowned message: confirm the reading in one line before acting.
-- The client is unreliable: it resends messages, truncates replies, and returns empty tool results. A repeat is a resend, not a new instruction: answer what is pending, restate done work in one line, never redo finished work or widen scope.
-- Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
-- MUST grep every caller before editing.
-- Fix once where callers route through.
-- Falsifiable hypotheses, one variable at a time.
-- NEVER guess, use an arbitrary fallback, or hide a failure.
-- Revise disproven assumptions.
-- Test: when appropriate, red first, smallest green change, behavior-preserving refactor, recheck.
-- Test public interfaces/integration boundaries.
-- Reuse the project's frameworks/fixtures/helpers/conventions.
-- NEVER weaken or drop a test to pass.
-- No speculative behavior or tests.
-- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security): an assert demo or one small test file.
-- No new frameworks or fixtures unless asked.
-- Trivial one-liners need no test.
-- Mechanical changes get proportional checks.
-- Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.
-- Fix in-scope issues, then recheck.
-- Criticize all, chat and reports.
-- NEVER claim a check you did not run; report what you skipped instead.
-- Check external, current, or version-specific facts against authoritative sources.
-- Prefer read/write tools over shell; for large function replacements prefer a scripted splice.
-- Compute-bound shell parallelism caps at 2 CPU workers; keep file work on read/write tools.
-- Before finishing, run the repo's own validation entrypoints (test suite, config validators).
-- Parse every generated config the change touches.
+- Work in several passes, not one sweep; label questions Q1, Q2, …, state the batch total first, restating it before adding one; end every turn reading the steering channel, where the user's "anything else" arrives, so check rather than ask.
+- Confirm a duplicated, garbled, or disowned message in one line before acting, keeping its edit reversible until then; the Arena client resends, truncates, and returns empty results from tools that ran, so treat a repeat as a resend: answer what is pending, restate finished work in one line, never redo or widen scope.
+- Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; grep every caller first, keep hypotheses falsifiable, one variable at a time, NEVER guess, use a fallback, or hide a failure, and revise disproven assumptions.
+- Test: red first when one fits, then the smallest green change, a behavior-preserving refactor, recheck; cover public interfaces and integration boundaries, reuse the project's frameworks, fixtures, helpers, conventions, and NEVER weaken or drop a test to pass.
+- MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file, nothing more — no frameworks, fixtures, or per-function suites. Mechanical changes get proportional checks.
+- Review each diff before finishing for requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, and debug artifacts; fix in-scope issues, recheck, and criticize documentation and code always, in chat and reports, checking external or version-specific facts against authoritative sources.
+- Prefer a scripted splice for large function replacements; keep file work on the batching read/write tools, shell for what needs it, capped at 2 CPU workers; run the repo's validation entrypoints before finishing, parsing every generated config the change touches.
 
 ## Style
 
-- 2-space indentation overrides formatter defaults.
-- Markdown: defaults + MD060, MD013 off; reports MD013 120.
-- Leave unrelated code alone.
-- Python projects: the project's own `ruff.toml` when it has one (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; nothing else until flagged).
-- If missing, create it exactly before gates.
-- Python projects: gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
+- `nemoe7` repos: 2-space indent overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off; Python is Ruff defaults, configured by the project's `ruff.toml` when present, else one created exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; gates are `ruff check` and `ruff format`, no CLI overrides.
+- Reports must allow lines up to 120 characters (MD013 at 120).
+- Minimum code/config comments: only when necessary, or the function is convoluted enough.
 
 ## Git
 
-- **Before every commit, print the planned final commit list**: every local commit and fix folded into a clean timeline, one message per logical change, kept current.
-- Committing without printing it is a violation; if one landed unlisted, print the fixed timeline before the next.
-- MUST stage only task-related changes, leaving unrelated/user-owned unstaged.
-- Commits MUST be atomic: one logical change with all its files, checks green, independently revertible.
-- Project's commit convention first; else Conventional Commits.
-- Conventional Commits: `<type>[optional scope]: <description>`; imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` before the colon marks breaking.
-- Types: feat fix refactor perf style docs test build chore; prefer history's types (spec mandates `feat`/`fix`, rest Angular).
-- Reuse scopes.
-- Always push and keep the PR open so work survives limits.
+- **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, with the PR title and body matching it; committing unlisted is a violation: print the corrected timeline first.
+- Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
+- Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, only `feat`/`fix` spec-mandated, the rest Angular `@commitlint/config-conventional`; reuse history's scopes, adding one only when none fits.
+- Report and audit artifacts live in git-ignored dirs: commit them locally at turn end for the diff viewer, NEVER push them, undo that commit next turn, and keep one report file updated in place, marking each disposition.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
-- Disregard never-push rules.
-- NEVER merge the PR until authorized.
-- Merges MUST be fast-forward when possible; on divergence, rebase onto the target first.
-- Report/audit artifacts in git-ignored output dirs: commit locally at the end, NEVER push.
-- Undo that commit next turn and continue.
-- Keep one report file, updated in place.
-- Mark resolved findings in reports with strikethrough.
-- `gh pr edit` may fail on older repos.
-- PR title/body via REST: `jq -n --rawfile body <file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<repo>/pulls/<n> -X PATCH --input -`
-- **NEVER `-f body=@path`**: it posts the literal `@path` string.
-- Stage PR text in the workspace, never /tmp.
-- After every PATCH, re-fetch both and diff against the staged file to confirm it is live.
-- Keep the PR title current alongside the body.
-- PR body is a squashed timeline: group by fixes and features, fold fixes in, no round headers.
+- `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.
+- **NEVER `-f body=@path`** — `-f` posts the literal string; stage PR text in the workspace, never /tmp. A 200 from a PR PATCH is not proof: re-fetch title and body, diff against the staged file, keep both current.
+- PR body is a squashed timeline: features then fixes, no round headers.
 
 ## Workspace
 
-- Stay in the workspace unless asked.
-- Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, drop large/temp artifacts.
-- Cache/build/dependency dirs, installed packages, and processes do not persist.
-- Keep durable work in plain files.
+- Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.
+- Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist, so keep durable work in plain files.
 
 ## Deliverables
 
-- Save workspace files; open the main deliverable.
-- Prefer .docx/.xlsx/.pptx, .md, .html, .pdf; .doc/.ppt download-only.
+- Save workspace files; open the main deliverable. Markdown by default, other formats only when asked.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
-- Servers bind 0.0.0.0.
-- Browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
-- Generated doc sections come from their committed script after source changes, never hand-edited.
+- Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
+- Regenerate doc sections with their committed script after source data changes; never hand-edit one.
 
 ## Response
 
-- Report changes/findings, checks/results, useful files/decisions, open issues, assumptions, limitations.
-- Prefer numbered lists for multiple points.
-- No unnecessary prose; detail when required.
-- User-run commands: bash and Windows forms, PowerShell by default, cmd for one line; setup/multi-step always both.
-- Always report what changed at a high level in the final response ("X now does Y"), especially after long/multi-step tasks.
-- Open with the result; skip restating the task.
-- Consider reporting skipped alternatives with add-when triggers.
-- End report turns by reading the steering channel, not an open question; never mid-task or tool-only.
+- Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines, since requested explanation is the only kind that is not debt.
+- NEVER mermaid, which Arena cannot render.
+- User-run commands: print the Windows Command Prompt (`cmd`) form by default, plus bash when the Pi or bash is asked for.
+- Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
 
 ## When in doubt
 
-- Smallest change that holds: do the requested work, verify it, stop.
+- Smallest change that holds: do the requested work, verify it, and stop.
