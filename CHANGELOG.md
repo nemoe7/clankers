@@ -2,6 +2,13 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Each entry opens with at most three summary bullets — what changed, what it cost, what remains deferred — before its detail bullets; the entries below 2026-09-12 predate that convention and keep their form. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-17 — Make live steering send its channel in chat before its first fetch
+
+- **Summary** — `skills/arena-live-steering` step 1 now requires the ntfy link to be sent in chat, as the first line of the agent's reply, rather than merely to open the agent's output, and states the ordering the failure mode forces: a fetch fails until the user has sent something in the channel, because the agent cannot publish to a topic (GET-only fetch, TLS-killed POSTs) and the page-fetch tool reports an empty topic as its own HTTP 500, so the link must be visible in chat before the agent attempts to fetch and that first failure is expected, not a broken channel.
+- **Cost** — `skills/arena-live-steering/SKILL.md` 8,132 → 8,473 `B` (+341), recorded as a fourth deliberate exception in the README rather than funded, since the file was resquashed to 8,132 `B` the same day and no wording remains to drop without losing a rule; the delivered copy in `.agents/skills/arena-live-steering` follows byte for byte.
+- `references/REFERENCE.md` carries the matching sentence in the ntfy transport chapter: the channel is sent to the user in chat before the first read, and a fresh channel's first empty-topic 500 is the expected state, not a fault to debug.
+- `metadata.version` 1.1.0 → 1.2.0.
+
 ## 2026-09-17 — Ship live Kilo mode overrides, scope the shell check to the core, and resquash ARENA
 
 - **Summary** — the three Kilo mode overrides gain live counterparts: `rules/kilo/{plan,code,debug}.md`, each compressed from its `rules/refs/kilo/` baseline, registered in the README budget table, and gated by a new `KILO_PAIRS` parity check in `maintenance/check.py` that fails when a live override states more rules than its refs baseline. The shell-check rule leaves `rules/ARENA.md` and stays in the core, because Arena sessions do not choose a terminal. `rules/ARENA.md` is squashed again to absorb both changes.
