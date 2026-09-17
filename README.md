@@ -13,17 +13,18 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-16. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except `skills/arena-live-steering/SKILL.md`, which is measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including a skill's `BASELINE.md`, are not included.
+Latest measurements as of 2026-09-17. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except `skills/arena-live-steering/SKILL.md`, which is measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including a skill's `BASELINE.md`, are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,785 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 10,129 `B` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,549 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 10,440 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,490 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,473 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
+| `rules/KILO.md` | `cl100k_base` | 185 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 13,419 `B` |
+| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,132 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
@@ -42,3 +43,5 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
 
 Two deliberate exceptions are recorded, both from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements were the two files' baselines, not deferred debt. Both have since been squashed back below them (`rules/ARENA.md` to 9,716 `B`, `rules/AGENTS.md` to 1,816 `tok`, funded inside the same changes that amended them), so item 5 applies to them again at the measurements in the table above.
+
+A third exception is recorded from 2026-09-17, after the resquash ran: `rules/AGENTS.md` lands below its prior measurement, 1,785 → 1,549 `tok`, and `skills/arena-live-steering/SKILL.md` well below its own, 13,419 → 8,132 `B`, but `rules/ARENA.md` settles at 10,440 `B` against a prior 10,129 `B`. The live ARENA file was squashed in the same change, from the 11,580 `B` the amendments first produced, which recovered 1,140 `B` of wording; the residual 311 `B` is new rules this change adds on request — the SOLID pair, the shell check, the tool-call batching rule, the blocking-call steering cadence, and fix-once-where-callers-route-through — and no wording remains to fund them without dropping one. Item 5 applies again once a pass can pay for them.
