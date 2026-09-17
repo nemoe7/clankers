@@ -1,6 +1,6 @@
 {
   "globs": ["rules/**/*.md"],
-  "ignores": ["*.md", "skills/**", "rules/CHATGPT.*", "rules/README.md", "rules/refs/kilo/**"],
+  "ignores": ["*.md", "skills/**", "rules/CHATGPT.*", "rules/README.md", "rules/refs/kilo/**", "rules/kilo/**"],
   "config": {
     "default": true,
     "MD013": false,
