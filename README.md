@@ -27,7 +27,7 @@ Latest measurements as of 2026-09-17. ARENA.md is measured by uploaded file size
 | `rules/kilo/debug.md` | `cl100k_base` | 288 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 212 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,132 `B` |
+| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,473 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
@@ -48,3 +48,5 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 Two deliberate exceptions are recorded, both from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements were the two files' baselines, not deferred debt. Both have since been squashed back below them (`rules/ARENA.md` to 9,716 `B`, `rules/AGENTS.md` to 1,816 `tok`, funded inside the same changes that amended them), so item 5 applies to them again at the measurements in the table above.
 
 A third exception is recorded from 2026-09-17, after the resquash ran: `rules/AGENTS.md` lands below its prior measurement, 1,785 → 1,549 `tok`, and `skills/arena-live-steering/SKILL.md` far below its own, 13,419 → 8,132 `B`, but `rules/ARENA.md` settles at 10,307 `B` against a prior 10,129 `B`. The live ARENA file was squashed in the same change, from the 11,580 `B` its amendments first produced, recovering 1,273 `B` of wording; the residual 178 `B` is new rules this change adds on request — the SOLID pair, the tool-call batching rule, and fix-once-where-callers-route-through — and no wording remains to fund them without dropping one. Item 5 applies again once a pass can pay for them.
+
+A fourth exception is recorded from 2026-09-17: the steering-channel note added on request to `skills/arena-live-steering/SKILL.md` — the channel must be sent in chat before the first fetch, which fails until the user has posted in it — lands the file at 8,473 `B` against its 8,132 `B` squashed baseline, +341 `B`, with no wording left to fund it without dropping a rule.
