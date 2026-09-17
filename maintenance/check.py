@@ -37,6 +37,9 @@ EXPECTED_BUDGETS = {
   "rules/CHATGPT-MORE.txt": "Unicode chars",
   "rules/CLINE.md": "cl100k_base",
   "rules/KILO.md": "cl100k_base",
+  "rules/kilo/code.md": "cl100k_base",
+  "rules/kilo/debug.md": "cl100k_base",
+  "rules/kilo/plan.md": "cl100k_base",
   "rules/COMMIT-SPEC.txt": "cl100k_base",
   "skills/arena-live-steering/SKILL.md": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
@@ -75,6 +78,10 @@ LINT_COUNT_CLAIMS = (
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md", "KILO.md")
 PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT-SPEC.txt")
+
+# Kilo mode overrides live under a directory on both sides, so they are paired by
+# name and compared the plain way: live compresses wording, never adds rules.
+KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
 # and `More about you`, each capped at 1,500 characters.
@@ -572,6 +579,23 @@ def check_refs_parity(errors: list[str]) -> None:
           f"rules/{name} '{heading}': {live_rules} rule lines vs {ref_rules} in "
           f"rules/refs/{name}; compression may merge lines but never add rules"
         )
+
+  for name in KILO_PAIRS:
+    reference = REFS / "kilo" / name
+    live = RULES / "kilo" / name
+
+    if not reference.is_file() or not live.is_file():
+      errors.append(f"rules/kilo/{name}: refs/live pair incomplete")
+      continue
+
+    ref_rules = rule_line_count(reference)
+    live_rules = rule_line_count(live)
+
+    if live_rules > ref_rules:
+      errors.append(
+        f"rules/kilo/{name}: {live_rules} rule lines vs {ref_rules} in rules/refs/kilo/{name}; "
+        "compression may merge lines but never add rules"
+      )
 
   for name in PLAIN_PAIRS:
     reference = REFS / name

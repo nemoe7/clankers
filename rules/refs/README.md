@@ -10,6 +10,6 @@
 - `CHATGPT-MORE.txt` — uncompressed ChatGPT instructions for Personalization's `More about you` field: the precedence rule, the response rules, and the work rules the other field cannot fit.
 - `CLINE.md` — uncompressed Cline overlay; it no longer carries an MCPs section, dropped on request, so the `tokensave` reference went with it.
 - `KILO.md` — uncompressed Kilo Code overlay: the two tool rules and the pointer to the mode overrides, with nothing the core already states.
-- `kilo/plan.md`, `kilo/code.md`, `kilo/debug.md` — Kilo mode overrides, refs-only and with no live counterpart: each opens with an empty line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
+- `kilo/plan.md`, `kilo/code.md`, `kilo/debug.md` — Kilo mode overrides, paired with the live `rules/kilo/`: each opens with an empty line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - `COMMIT-SPEC.txt` — equals the live file; no compression was ever applied.
 - `GUIDELINES.md` — the standard for writing an AGENTS.md, which these baselines are audited against. A reference, not a rule baseline: no live counterpart, never squashed. Kept verbatim, so parts of it describe a platform this repository does not use: section 1.2's Kilo loading behavior and `<system-reminder>` wrapping, and section 2.1's `kilo/enforce-rules-plugin/` pointer.
