@@ -2,6 +2,14 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Each entry opens with at most three summary bullets — what changed, what it cost, what remains deferred — before its detail bullets; the entries below 2026-09-12 predate that convention and keep their form. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-18 — Ignore irrelevant files in CI triggers
+
+- **Summary** — `.github/workflows/validate.yml` adds `paths-ignore` on `push` and `pull_request` triggers for non-essential and unvalidated files: `.github/workflows/distribute-arena.yml`, `.gitignore`, `apply.bat`, `automations/**`, `CHANGELOG.md`, and `maintenance/README.md`.
+- **Cost** — No instruction budgets affected; all rule files, skills, and workflows remain unchanged.
+- **Deferred** — None.
+- Push and pull request events for the repository validation workflow previously ran on every commit across all branches. Edits confined to project history (`CHANGELOG.md`), external scheduler prompts (`automations/`), Windows launcher wrappers (`apply.bat`), git exclusions (`.gitignore`), manual dispatch workflows (`distribute-arena.yml`), or tooling reference docs (`maintenance/README.md`) triggered redundant validation runs without touching validated assets.
+- Validated with YAML parsing and existing repository gates (`maintenance/check.py`, `markdownlint`, `ruff check`, `ruff format`).
+
 ## 2026-09-18 — Query websites with both read paths, and live steering amendments A-E
 
 - **Summary** — `rules/ARENA.md` gains two amendments: one Verification rule querying websites with both read paths (page-fetch renders JS, reaches hosts the sandbox closes to curl; curl reports status, headers, TLS SAN, RDAP a renderer hides; either failure or 404 is an artifact until the other confirms it), and an operational rule naming `scripts/ntfy_steering.py` and its anchor. `skills/arena-live-steering` is amended to version 1.5.0 across four areas: co-issuing the pull inside every tool-call block so the cadence is executable on a batching surface; duty to inform the user in chat when the channel comes back mangled (while keeping quiet channels silent); recording every check into `STEERING_LOG.md` even on empty bodies so quiet channels still leave proof; and making activation observable on disk via that log line. `BASELINE.md` and `rules/refs/ARENA.md` take the full wording first; mirrors and `.agents` tracked copy updated byte-identical.
