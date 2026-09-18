@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.2.0"
+  version: "1.3.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -33,7 +33,7 @@ One channel. ntfy needs no account, no token, no zone, and no page of our own, s
 
 1. **Send the channel in chat**: the moment this skill is read, generate a random topic and send its full clickable `https://ntfy.sh/<topic>` link in chat, as the first line of the agent's reply, before any tool call and before any other work. The link must be visible before the agent attempts to fetch, because a fetch fails until the user has sent something in the channel: the agent cannot publish to one (GET-only fetch, TLS-killed POSTs), and the page-fetch tool reports an empty topic as its own HTTP 500, so that first failure is expected, not a broken channel. Never defer the link to a summary or a later message, and never commit the topic, since ntfy has no sign-up and its docs call the topic essentially a password.
 2. **The user publishes outside the sandbox**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>` on their own machine; sandbox POSTs are TLS-killed.
-3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=all` only through its page-fetch tool, never through curl or another in-sandbox HTTP client, then passes the returned body verbatim to `scripts/ntfy_steering.py`, which delivers each message once into the notes and log files, deduplicated by ntfy's message id.
+3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=<lastmessage>`, where `<lastmessage>` is the newest message id the log already holds and the first read uses `since=all` instead, fetched only through its page-fetch tool, never through curl or another in-sandbox HTTP client, then passes the returned body verbatim to `scripts/ntfy_steering.py`, which delivers each message once into the notes and log files, deduplicated by ntfy's message id, and prints the URL to pull next.
 
 ## Setup
 
@@ -44,7 +44,7 @@ STEERING_NTFY_TOPIC=<topic> STEERING_FILE=reports/STEERING.md \
   LOG_FILE=reports/STEERING_LOG.md python3 scripts/ntfy_steering.py body.ndjson
 ```
 
-Point `STEERING_FILE` and `LOG_FILE` at paths the repository ignores, such as `reports/`, so notes never reach a commit. `STEERING_NTFY_BASELINE=current` marks the messages already in a topic as seen without delivering them, and records their ids in the log so a later run does not deliver them either. The default delivers everything unseen.
+Point `STEERING_FILE` and `LOG_FILE` at paths the repository ignores, such as `reports/`, so notes never reach a commit. `STEERING_NTFY_BASELINE=current` marks the messages already in a topic as seen without delivering them, and records their ids in the log so a later run does not deliver them either. The default delivers everything unseen. The log is also what the `since=<lastmessage>` anchor is read from, so losing it costs one full read rather than a note: an id the server no longer holds resolves to the start of the cache, and the whole cache comes back.
 
 ## Note format and directives
 
@@ -58,7 +58,7 @@ CONTEXT: the user actually wants X
 
 ## Agent integration
 
-Fetch only through the page-fetch tool, with `poll=1&since=all` every time, because id dedup makes repeated full reads safe. Check at the start of every turn, after every reasoning block, whenever tool calls are batched or a tool call will take long, and before the turn ends or anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build. After a blocking tool call such as a question, read right after it returns rather than before it, because nothing new can arrive while it blocks; a read spent just before a blocking call is wasted. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late.
+Fetch only through the page-fetch tool, and always by pulling the link: every check is a read of `https://ntfy.sh/<topic>/json?poll=1&since=<lastmessage>`, never a look at `STEERING.md` on its own, because the notes file holds only what some earlier read delivered. Check at the start of every turn, after every reasoning block, before and after every tool call, and before the turn ends or anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build. No check is skipped because the last read came back empty or because the call looked short, and no read is spent on the notes file in place of a pull. After a blocking tool call such as a question, read right after it returns rather than before it, because nothing new can arrive while it blocks. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late. Anchor each read on the newest id the log recorded, which returns only what is new: that is what makes a read at every boundary affordable, and it is what ntfy's own docs tell a repeated poller to pass instead of re-fetching the whole cache.
 
 The agent pivots on what it finds. Two clauses are not optional, because the user cannot see any of this:
 
@@ -83,7 +83,7 @@ STEERING_FILE=reports/STEERING.md python3 scripts/check_steering.py
 
 - `scripts/steering_notes.py` - shared note writer: header, append, tail cap, digest dedup, directives
 - `scripts/check_steering.py` - agent-side helper that reads the notes file
-- `scripts/ntfy_steering.py` - turns an ntfy poll body into notes: id dedup, titles kept, code fences stripped, an empty body reported as an empty topic rather than as a failure
+- `scripts/ntfy_steering.py` - turns an ntfy poll body into notes: id dedup, titles kept, code fences stripped, an empty body reported as an empty topic rather than as a failure, and the `since=` URL to pull next
 
 See the [reference guide](references/REFERENCE.md) for the environment, the behaviour, the hazards, and the channels that were measured and not shipped.
 
@@ -99,7 +99,7 @@ See the [reference guide](references/REFERENCE.md) for the environment, the beha
 - **A topic is not an archive, and the agent cannot write to one.** ntfy.sh serves 12 hours of cache, so an old note survives only in the notes file; sandbox POSTs are TLS-killed and the page-fetch path is GET-only, so a fresh topic's first message comes from the user.
 - **The topic name is the credential.** Anyone who knows it can read and write it, so generate a random one, keep it out of the repository, and never put a secret in a note.
 - **A filtered host can lie to a process while working for the agent.** The sandbox egress proxy returns HTTP 200 and zero bytes for ntfy GETs even while the topic holds messages, so only the page-fetch path is evidence about ntfy contents.
-- **ntfy needs repeated active reads.** Only the agent's page-fetch path reads it correctly, so fetch at the cadence above; there is no background capture.
+- **ntfy needs repeated active reads.** Only the agent's page-fetch path reads it correctly, so fetch at the cadence above; there is no background capture. Read with the `since=<lastmessage>` URL the ingest script prints, because a `since=all` poll re-reads the topic's whole cache every time.
 
 ## Files
 
@@ -119,6 +119,7 @@ $ curl -d "STOP: use vanilla JS not React" ntfy.sh/clankers-example
 $ STEERING_NTFY_TOPIC=clankers-example STEERING_FILE=reports/STEERING.md \
     python3 scripts/ntfy_steering.py body.ndjson
 1 message(s) in the body, 1 delivered, 0 already seen or held as the baseline.
+Next pull: https://ntfy.sh/clankers-example/json?poll=1&since=hwQ2YpKdmg
 ```
 
-The agent then reads `reports/STEERING.md`, opens its next reply with `STEER RECEIVED:`, and pivots.
+The agent then reads `reports/STEERING.md`, opens its next reply with `STEER RECEIVED:`, and pivots, pulling the printed URL on its next check rather than `since=all`.
