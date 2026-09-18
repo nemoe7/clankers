@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.3.0"
+  version: "1.4.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -62,7 +62,7 @@ Fetch only through the page-fetch tool, and always by pulling the link: every ch
 
 The agent pivots on what it finds. Two clauses are not optional, because the user cannot see any of this:
 
-- **Acknowledge every note.** A reply that follows a delivered note opens with `STEER RECEIVED:` and one line saying what the note asked and what changed because of it. A note that lands silently is indistinguishable from one that was lost, and the user will send it again.
+- **Acknowledge every note in chat, never in thought.** A reply that follows a delivered note opens with `STEER RECEIVED:` in the chat text the user reads, followed by one line saying what the note asked and what changed because of it. The acknowledgement is a message, not a step: an agent that registers the note in its reasoning, in a tool call, or in `STEERING.md` has read the note and told no one, which from the user's side is exactly a dropped note. Nothing the user cannot see counts as an acknowledgement, and they will send the note again.
 - **Disagree out loud.** A note is an instruction about what to do, not a fact about what is true. When a note contradicts a measurement, say which of the two is wrong and show the evidence, then do the thing that survives it. Reflexive agreement is the one failure mode this channel cannot absorb.
 
 ```python
@@ -122,4 +122,4 @@ $ STEERING_NTFY_TOPIC=clankers-example STEERING_FILE=reports/STEERING.md \
 Next pull: https://ntfy.sh/clankers-example/json?poll=1&since=hwQ2YpKdmg
 ```
 
-The agent then reads `reports/STEERING.md`, opens its next reply with `STEER RECEIVED:`, and pivots, pulling the printed URL on its next check rather than `since=all`.
+The agent then reads `reports/STEERING.md`, opens its next reply with `STEER RECEIVED:` in the chat text the user reads rather than in its reasoning, and pivots, pulling the printed URL on its next check rather than `since=all`. An acknowledgement the user cannot see is not one: nothing in a thinking block, a tool call, or the notes file reaches them, so the reply carries the line or the note reads as dropped.
