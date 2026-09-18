@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.3.0"
+  version: "1.4.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -25,7 +25,7 @@ Steer the Arena agent WITHOUT interrupting its turn, even when the Arena client 
 
 ## How it works
 
-One channel. ntfy needs no account, no token, no zone, and no page of our own; publishing is instant, messages are append-only, and the server holds them for 12 hours. Only the agent's page-fetch path reads ntfy correctly: the sandbox egress proxy gives in-sandbox GETs a fake empty HTTP 200 even while a topic holds messages.
+One channel. ntfy needs no account, no token, no zone, and no page of our own; publishing is instant, messages are append-only, and the server holds them for 12 hours. Only the agent's page-fetch path reads ntfy correctly: the egress proxy gives in-sandbox GETs a fake empty HTTP 200 even while a topic holds messages.
 
 1. **Send the channel in chat**: on reading this skill, generate a random topic and send its clickable `https://ntfy.sh/<topic>` link in chat as the reply's first line, before any tool call. It must be visible before the first fetch, because a fetch fails until the user has sent something in the channel: the agent cannot publish to one, and the page-fetch tool reports an empty topic as its own HTTP 500, so that first failure is expected, not a broken channel. Never defer it to a summary or a later message, and never commit the topic, since ntfy has no sign-up and its docs call the topic essentially a password.
 2. **The user publishes outside the sandbox**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>` on their own machine; sandbox POSTs are TLS-killed.
@@ -33,7 +33,7 @@ One channel. ntfy needs no account, no token, no zone, and no page of our own; p
 
 ## Setup
 
-Read the topic with the page-fetch tool and ingest the body it returns, because a successful empty response can be filtered rather than empty:
+Page-fetch the topic and ingest the body it returns, because a successful empty response can be filtered rather than empty:
 
 ```bash
 STEERING_NTFY_TOPIC=<topic> STEERING_FILE=reports/STEERING.md \
@@ -58,7 +58,7 @@ Fetch only via page-fetch, always by pulling the link, since the notes file hold
 
 Two clauses are not optional, because the user cannot see any of this:
 
-- **Acknowledge every note.** A reply that follows a delivered note opens with `STEER RECEIVED:` and one line saying what the note asked and what changed because of it. A note that lands silently is indistinguishable from one that was lost, and the user will send it again.
+- **Acknowledge every note in chat.** `STEER RECEIVED:` and the line saying what the note asked and what changed belong in the reply the user reads, never in reasoning, a tool call, or `STEERING.md`: an ack nobody can see is a dropped note, and they will send it again.
 - **Disagree out loud.** A note is an instruction about what to do, not a fact about what is true. When a note contradicts a measurement, say which of the two is wrong and show the evidence, then do the thing that survives it. Reflexive agreement is the one failure mode this channel cannot absorb.
 
 Read the notes file with the helper:
@@ -73,7 +73,7 @@ STEERING_FILE=reports/STEERING.md python3 scripts/check_steering.py
 - `scripts/check_steering.py` - agent-side helper that reads the notes file
 - `scripts/ntfy_steering.py` - turns an ntfy poll body into notes: id dedup, titles kept, fences stripped, the next-pull URL printed, an empty body reported as an empty topic rather than as a failure
 
-See [references/REFERENCE.md](references/REFERENCE.md) for the environment, the behaviour, the hazards, and the channels measured and not shipped.
+See [references/REFERENCE.md](references/REFERENCE.md) for the environment, behaviour, hazards, and channels measured and not shipped.
 
 ## Environment Variables
 
@@ -110,4 +110,4 @@ $ STEERING_NTFY_TOPIC=clankers-example STEERING_FILE=reports/STEERING.md \
 Next pull: https://ntfy.sh/clankers-example/json?poll=1&since=hwQ2YpKdmg
 ```
 
-The agent then reads `reports/STEERING.md`, opens its next reply with `STEER RECEIVED:`, and pivots.
+The agent then reads `reports/STEERING.md`, opens the next chat reply with `STEER RECEIVED:` in visible text, not a thought, and pivots.
