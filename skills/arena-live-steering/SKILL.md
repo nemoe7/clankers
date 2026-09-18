@@ -54,7 +54,7 @@ CONTEXT: the user actually wants X
 
 ## Agent integration
 
-Fetch only through the page-fetch tool, with `poll=1&since=all` every time, because id dedup makes repeated full reads safe. Check at the start of every turn, after every reasoning block, after every three tool calls, and before the turn ends or anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build. After a blocking tool call such as a question, read right after it returns rather than before it, because nothing new can arrive while it blocks. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late.
+Fetch only via page-fetch, with `poll=1&since=all` every time, because id dedup makes repeated reads safe. Check at turn start, after every reasoning block, when tool calls are batched or will take long, and before turn end or anything expensive or hard to undo, such as push, rewrite, delete, or long build. After a blocking call such as a question, read right after it returns, not before, because nothing new can arrive while it blocks; a read before a blocking call is wasted. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late.
 
 Two clauses are not optional, because the user cannot see any of this:
 

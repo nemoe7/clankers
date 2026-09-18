@@ -18,7 +18,7 @@ Latest measurements as of 2026-09-18. ARENA.md is measured by uploaded file size
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,549 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 10,428 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 10,424 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,490 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,473 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
@@ -27,7 +27,7 @@ Latest measurements as of 2026-09-18. ARENA.md is measured by uploaded file size
 | `rules/kilo/debug.md` | `cl100k_base` | 288 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 212 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,024 `B` |
+| `skills/arena-live-steering/SKILL.md` | `UTF-8 file size` | 8,023 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
