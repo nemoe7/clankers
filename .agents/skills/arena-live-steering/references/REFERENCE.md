@@ -17,6 +17,8 @@ The agent reads everything after `## Current Notes:`. The file keeps its last 8,
 
 ## Agent integration patterns
 
+Activation is observable rather than inferred, and it leaves two marks: the topic named in the chat reply's first line, and the log the ingest script writes. Since the check line lands on every run, including a run whose body held nothing, a quiet channel still produces `STEERING_LOG.md`, so a session with no log never ran the ingest whatever rule file it read, and the first check line's timestamp says when the skill started.
+
 **Minimal (bash):**
 
 ```bash
@@ -77,6 +79,7 @@ The `since=<lastmessage>` anchor is documented by ntfy and read from its server 
 - `LOG_FILE` - default `STEERING_LOG.md`, append-only, keeps what the notes cap discards, the message ids a restart recovers, and the `since=` anchor the next read is built from
 - `STEERING_NTFY_TOPIC` - the topic name notes are attributed to; it never leaves the machine
 - `STEERING_NTFY_BASELINE` - `empty` (default) delivers everything unseen; `current` holds what the topic already holds, recording those ids in the log so a later run does not deliver them either
+- `STEERING_NTFY_ERROR` - the error text of a mangled read, which the run stamps into its check line in the log; unset means the body was simply empty
 
 ### Behaviour
 
@@ -84,7 +87,7 @@ The `since=<lastmessage>` anchor is documented by ntfy and read from its server 
 - Messages are deduplicated by ntfy's message id, which cannot collide; a message without one falls back to a digest of its text, so it is still deduplicated rather than replayed
 - Every run prints `Next pull: <url>`, anchored on the newest real id the log holds and `since=all` while it holds none, so reads chain without an id being remembered between them and a digest stamp is never offered to the server as an anchor
 - `open` and `keepalive` events are skipped, and a message's title is kept above its text
-- An empty body is reported as an empty topic rather than as a failure, because the fetch tool renders an empty 200 as its own HTTP 500
+- An empty body is reported as an empty topic rather than as a failure, because the fetch tool renders an empty 200 as its own HTTP 500; it still stamps one check line into the log, `--- <utc> [ntfy <topic> checked, 0 delivered] ---`, so a quiet or mangled channel leaves proof the check happened, and that stamp carries no `id=`, so it never becomes an anchor
 - Notes are attributed `<!-- from ntfy {topic}, read {utc} -->`, and `STOP:`, `PRIORITY:`, and `CONTEXT:` are echoed as directives
 - A failed fetch is not an empty topic: the two are indistinguishable in-sandbox, which is why only the page-fetch path is trusted for reads
 
@@ -131,6 +134,14 @@ Follows https://agentskills.io/specification.md:
 - Confirm the user published to the topic the agent posted, and read the same topic name
 - An empty page-fetch body renders as the tool's HTTP 500, so retry once and check the topic through the agent's page-fetch path before concluding anything
 - Because an in-sandbox GET returns a fake empty 200, never test the channel with curl inside the sandbox
+
+**The pull itself comes back mangled:**
+
+- An empty topic renders as the tool's HTTP 500, which is the quiet case and not a fault, so it is reported as no new messages
+- The fetch tool can report `"status": "success"` while the body it returns is an error from its own upstream storage, such as an object-store `SignatureDoesNotMatch` naming a key id and a string to sign, so read the body it returned rather than the status field it reports: the field can say success while the content is a failure
+- An in-sandbox TLS kill says nothing about the topic, since that path is closed to ntfy by design and is never evidence about its contents
+- A mangled channel is told to the user in the chat reply, in one line naming the error, because steering is the user's only way in while the agent works and silence reads as a working channel; a quiet one is not
+- Pass the error text in as `STEERING_NTFY_ERROR` and the ingester's check line records it in the log, which is where a count of consecutive failures comes from
 
 **The same note arrives twice:**
 
