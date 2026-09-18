@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.4.0"
+  version: "1.5.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -54,7 +54,7 @@ CONTEXT: the user actually wants X
 
 ## Agent integration
 
-Fetch only via page-fetch, always by pulling the link, since the notes file holds only what some earlier read delivered: at turn start, after every reasoning block, before and after every tool call, and before turn end or anything expensive or hard to undo, such as push, rewrite, delete, or long build. Skip no check because the last read came back empty or the call looked short. Use the `since=<lastmessage>` URL the ingest script prints, which returns only what is new. After a blocking call such as a question, read right after it returns, not before, because nothing new can arrive while it blocks. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late.
+Fetch only via page-fetch, always by pulling the link, since the notes file holds only what some earlier read delivered: at turn start, after every reasoning block, before and after every tool call, and before turn end or anything expensive or hard to undo, such as push, rewrite, delete, or long build. Skip no check because the last read came back empty or the call looked short. Where the surface batches independent tool calls into one block, co-issue the pull inside every block as one of its parallel calls and read it again once the block returns: calls in a block issue at the same instant, so none can run before each of them in sequence, and a block is the unit of the cadence there. Batching places the pull inside the block it brackets; it is never a reason to pull less often. Use the `since=<lastmessage>` URL the ingest script prints, which returns only what is new. After a blocking call such as a question, read right after it returns, not before, because nothing new can arrive while it blocks. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late. Activation is observable, not inferred: the topic named in the first reply, and a `STEERING_LOG.md` whose first check line lands on the first ingest run, so a session with no log never ran the skill, whatever it read.
 
 Two clauses are not optional, because the user cannot see any of this:
 
@@ -80,6 +80,7 @@ See [references/REFERENCE.md](references/REFERENCE.md) for the environment, beha
 - `STEERING_FILE` - notes path, default `STEERING.md` in the working directory
 - `LOG_FILE` - append-only log path, default `STEERING_LOG.md`
 - `STEERING_NTFY_TOPIC` - the topic name notes are attributed to
+- `STEERING_NTFY_ERROR` - text of a mangled read, recorded in the log's check line for that run
 
 ## Limits, and what they cost
 
@@ -87,6 +88,7 @@ See [references/REFERENCE.md](references/REFERENCE.md) for the environment, beha
 - **The topic name is the credential.** Anyone who knows it can read and write it, so generate a random one, keep it out of the repository, and never put a secret in a note.
 - **A filtered host can lie to a process while working for the agent.** In-sandbox ntfy GETs get the fake empty 200 even while the topic holds messages, so only the page-fetch path is evidence about ntfy contents.
 - **ntfy needs repeated active reads.** Pull the link at the cadence above, with the URL the script prints; there is no background capture.
+- **A quiet channel is not a mangled one.** No new messages is reported as it stands today and earns nothing in chat; a read the channel mangles - the fetch tool failing, answering with its own upstream error body, or returning something that is not the topic's JSON - is told to the user in one line naming the error, with the text passed to the ingest run as `STEERING_NTFY_ERROR` so the log's check line carries it.
 
 ## Files
 

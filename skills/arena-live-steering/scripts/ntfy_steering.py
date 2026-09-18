@@ -13,7 +13,7 @@ the writing happens here: feed this script the body of
 and it delivers every message it has not delivered before into the notes and log
 files the shared writer owns, deduplicated by ntfy's own message id rather than by
 a digest of the text, because ntfy hands out an id that cannot collide. It then
-prints the URL to pull next, so an id only has to survive in the log.
+prints the URL to pull next, so an id only has to survive in the log. A body that holds no messages still stamps one check line into the log, so the fact that the agent checked survives a quiet or mangled channel, and `STEERING_NTFY_ERROR` puts the error text into that line.
 
 The anchor is what keeps a repeated read small: `since=<message id>` returns only
 what came after that id, where `since=all` re-reads the topic's whole cache, which
@@ -45,6 +45,8 @@ import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from datetime import datetime, timezone
 
 from steering_notes import append_log, deliver, digest
 
@@ -136,6 +138,15 @@ def main() -> int:
 
   messages = parse_messages(body)
   if not messages:
+    # A quiet or mangled channel still has to leave proof the check happened:
+    # the stamp carries no `id=`, so it never becomes an anchor.
+    read_at = f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M:%S}"
+    error = os.environ.get("STEERING_NTFY_ERROR", "").strip()
+    append_log(
+      log_file,
+      f"--- {read_at} [ntfy {topic} checked, 0 delivered] ---",
+      error or "(no messages in the body)",
+    )
     print(f"No messages in that body for {topic}.", flush=True)
     print(
       "  An empty topic returns an empty body, which a page-fetch tool can report",
