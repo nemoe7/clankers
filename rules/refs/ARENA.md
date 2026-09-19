@@ -4,7 +4,7 @@
 
 - If you are the Arena agent and you are reading this file: these are your rules.
 - They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
-- No platform loads this file for you: if it was not delivered into your context, MUST open it at the repository root before your first edit, and the session's first reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded` as its first line, together with the clickable steering channel link, so that a silently unactivated session is visible to the user instead of invisible to them. The first-read of this file and of the live steering skill may precede that reply; tool calls that open those files are not a violation of the link-first rule.
+- No platform loads this file for you: if it was not delivered into context, MUST open it at the repository root before the first edit. The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`. Initial reads of this file and the preview skill may precede that reply. Name the live preview in chat once its server starts; never claim it is visible before the user confirms it.
 - The user's explicit instructions override this file; confirm the override in one line.
 - In Arena, the repository's `AGENTS.md` stays in force beside this file, and where the two collide this file's Arena-specific handling (pushing, pull requests, and merges) wins.
 
@@ -14,12 +14,12 @@
 - Before every commit, print the planned final commit list.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Always push the branch and keep a PR open so work survives limits; disregard never-push rules, because Arena's controlled edits make pushing safe.
-- In an Arena session, always activate `skills/arena-live-steering`. For ntfy, read only through the agent's page-fetch tool, never curl or another HTTP client inside the sandbox, because the egress proxy returns a fake empty HTTP 200 while a topic holds messages. Always pull the link: every check is a fresh read of the topic, and reading the notes file is not a check, because the notes file only holds what an earlier read delivered. Pass every body the pull returns to the skill's ingest script, `scripts/ntfy_steering.py`, which writes the notes and the log the anchor comes from and prints the URL to pull next, so a session that pulls without ingesting has no anchor, no notes, and no record that it checked. Check at the start of every turn, after every reasoning block, before and after every tool call, and before the turn ends or anything expensive or hard to undo; no check is skipped because the last read came back empty or because the next tool call looked short. Fetch the poll form anchored on the newest message id the log recorded, `poll=1&since=<lastmessage>`, whose body carries only what is new, and use `since=all` only for the first read or after that log is lost. After a blocking tool call such as a question, read right after it returns rather than before it, because nothing new can arrive while it blocks. Where the surface batches independent tool calls into one block, co-issue the pull inside every tool-call block as one of its parallel calls, and read it again once the block returns, because the calls in a block issue at the same instant, so none of them can run before another in sequence, and the block is therefore the unit of the cadence on that surface. A block that carries no pull is a violation, not an oversight. The only exception is the first block of the session's first reply, which must show the topic link before its first pull; a block whose only call blocks, such as a question, keeps the read-after-return rule above instead, because nothing new can arrive while it blocks. Ack a delivered note in the chat reply the user reads, opening that reply with the literal characters `ACK:` — never paraphrased, never folded into a sentence, and used for nothing else, so a reply that acknowledges no note carries no prefix — and never in thought: a reasoning block is not a channel, and silence on this one reads as a dropped message.
+- In an Arena session, always activate `arena-preview-steering` from its source or installed skill path. Read its actual inbox with `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. Co-issue a read inside each parallel block and read again after it returns; a block is the cadence unit. A blocking-only call needs its read after return. Initial discovery and server startup may precede the first read. Missing or failed reads are errors, never empty inboxes. Acknowledge each delivered note in visible chat, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and never in thought. After the chat acknowledgement, record exactly those IDs with the helper's `ack` command; never blindly acknowledge all pending notes. A receipt means received, not implemented. If the preview fails, report it and ask how to continue; never silently restore ntfy. The historical transport is documented in the skill's migration reference.
 - NEVER merge the PR until authorized.
 - Merges MUST be fast-forward/rebase when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - On a collision between rules or any doubt, stop and ask with the question tool; NEVER improvise.
 - After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
-- NEVER edit this file nor the live steering skill (`skills/arena-live-steering` and any installed copy); only suggest amendments when an amendment is possible.
+- NEVER edit this file nor either preview skill (`arena-preview-steering`, `arena-preview-reporting`, including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
 - Upon any rule violation, ALWAYS suggest an amendment to the rule that failed or that should have prevented it.
 - Ask questions in labeled batches that state their total.
 
@@ -131,11 +131,11 @@
 - Reuse previous scopes, adding one only when none fits.
 - Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
-- Report and audit artifacts live in git-ignored dirs.
-- At the end of every turn, after that turn's real commits are pushed, commit them locally for the diff viewer with `git add -f reports && git commit --no-verify -m "chore(reports): hold the local records"`. NEVER push that commit.
-- Undo it at the start of the next turn, and keep one report file updated in place, marking each disposition.
-- A turn that wrote reports and left `git status` clean proves nothing, so print that commit's `git log --oneline -1` line in the closing summary.
-- A report that fits in chat is sent in chat; omit the report markdown file in that case, and skip the local reports commit.
+- Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
+- Publish longer reports through `arena-preview-reporting` in the shared preview; do not create local report commits for the native diff viewer.
+- Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
+- Verify the published report and offer its portable HTML export; a clean Git status does not prove delivery.
+- A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `gh pr edit` may fail on older repos (GraphQL projects-classic deprecation).
 - Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
@@ -154,8 +154,8 @@
 
 ## Deliverables
 
-- Save workspace files; open the main deliverable.
-- Markdown by default; other formats only when asked.
+- Save workspace deliverables and open the main one. For longer reports, use `arena-preview-reporting` and direct the user to its Reports tab and titled report; verify rendering rather than assuming the native viewer renders Markdown.
+- Keep report sources as Markdown; portable reports may be exported as self-contained HTML without additional approval. Other formats remain request-only. If preview delivery fails, report it and agree on a replacement; the former local-commit workaround remains historical, not an automatic fallback or a permanently forbidden option.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0.
 - Browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.

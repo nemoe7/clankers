@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workspace · Notes & reports</title>
+  <style>__STYLE__</style>
+</head>
+<body>
+  <header>
+    <div><p class="eyebrow">Live workspace</p><h1>Notes & reports</h1></div>
+    <button id="theme" type="button" aria-label="Switch to light mode">Light mode</button>
+  </header>
+  <nav role="tablist" aria-label="Workspace views">
+    <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
+    <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-count">0</span></button>
+  </nav>
+  <main>
+    <section id="notes-panel" role="tabpanel" aria-labelledby="notes-tab">
+      <div class="notes-layout">
+        <section class="card compose" aria-labelledby="compose-title">
+          <h2 id="compose-title">Send a steer</h2>
+          <p class="muted">A note for the agent, without interrupting its turn.</p>
+          <form id="form">
+            <div class="row"><label for="note">Your message</label><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">Preview</button></div>
+            <textarea id="note" name="note" rows="4" maxlength="4000" required placeholder="What should happen next?"></textarea>
+            <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
+            <small>Enter to send · Shift+Enter for a new line</small>
+            <div class="row"><p id="send-status" role="status" aria-live="polite">Nothing sent yet.</p><button id="send" type="submit">Send note</button></div>
+          </form>
+          <p id="draft" class="muted">Draft saved in this browser when storage is available.</p>
+          <p class="notice">Saved means stored in this workspace. Acknowledged means the agent recorded its chat acknowledgement. Neither status interrupts an agent.</p>
+          <small>Anyone with preview access can read this session. Do not send secrets.</small>
+        </section>
+        <section class="card" aria-labelledby="history-title">
+          <div class="row"><h2 id="history-title">Message log</h2><button id="refresh-notes" type="button">Refresh</button></div>
+          <p id="connection" role="status">Connecting…</p>
+          <p id="last-check" class="muted">Agent has not checked this inbox yet.</p>
+          <ol id="history" aria-label="Messages, newest first"></ol>
+        </section>
+      </div>
+    </section>
+    <section id="reports-panel" role="tabpanel" aria-labelledby="reports-tab" hidden>
+      <div class="card">
+        <div class="report-toolbar">
+          <div class="select-wrap"><label for="report-select">Report</label><select id="report-select"><option value="">No reports published yet</option></select></div>
+          <button id="refresh-report" type="button">Refresh report</button>
+        </div>
+        <p id="report-status" role="status" aria-live="polite">The agent can publish several reports here.</p>
+        <article id="report" class="report" aria-label="Selected report"></article>
+      </div>
+    </section>
+  </main>
+  <script>__SCRIPT__</script>
+</body>
+</html>

@@ -1,16 +1,7 @@
-# Pushes rules/ARENA.md to each listed repo's $DEST and mirrors $SKILL_SRC into
-# each target's $SKILL_DEST minus $SKILL_EXCLUDE, then verifies every target's
-# committed copies match the source byte for byte. $SKILL_EXCLUDE holds
-# BASELINE.md, this repository's unsquashed reference original, which a target
-# has no use for. The destination is cleared before the mirror, so an excluded
-# file an earlier run delivered is deleted on the next dispatch instead of
-# surviving in every target, and the file-list check below verifies the deletion.
-# Needs a short-expiry fine-grained PAT (Contents read/write on every
-# target repo) stored as the ARENA_DIST_PAT secret.
-# Dispatch only: a repository not in REPOS (or the repos input) never receives
-# ARENA.md or the skill, so add new targets to REPOS. Delivery is not activation;
-# see rules/README.md#arena-file for the bootstrap line a session needs, and a
-# delivered skill still needs its steering channel started per session.
+# Dispatch-only distribution of ARENA.md and the two sibling preview skills.
+# Baselines stay here; retired installed transport files are removed on dispatch.
+# ARENA_DIST_PAT needs short-lived Contents read/write access to every target.
+# Delivery is not activation: each session must start its own preview.
 name: distribute-arena
 on:
   workflow_dispatch:
@@ -27,9 +18,11 @@ concurrency:
 env:
   REPOS: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki"
   DEST: ARENA.md
-  SKILL_SRC: skills/arena-live-steering
-  SKILL_DEST: .agents/skills/arena-live-steering
+  SKILLS: "arena-preview-steering arena-preview-reporting"
+  SKILL_ROOT: skills
+  SKILL_DEST_ROOT: .agents/skills
   SKILL_EXCLUDE: BASELINE.md
+  LEGACY_SKILL: arena-live-steering
 jobs:
   distribute:
     runs-on: ubuntu-latest
@@ -37,25 +30,23 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@v4
-      - name: Sync ARENA.md and the steering skill to target repos
+      - name: Sync ARENA.md and both preview skills to target repos
         env:
           ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
+          TARGET_REPOS: ${{ inputs.repos }}
         run: |
           set -e
-          list="${{ inputs.repos }}"
-          [ -n "$list" ] || list="$REPOS"
-          [ -n "$list" ] || { echo "::error::no target repos: set REPOS or pass the repos input"; exit 1; }
+          list="${TARGET_REPOS:-$REPOS}"
+          [ -n "$list" ] || { echo "::error::no target repos configured"; exit 1; }
           src="$GITHUB_WORKSPACE/rules/ARENA.md"
-          skill_src="$GITHUB_WORKSPACE/$SKILL_SRC"
-          [ -f "$src" ] || { echo "::error::rules/ARENA.md missing from the checkout"; exit 1; }
-          [ -d "$skill_src" ] || { echo "::error::$SKILL_SRC missing from the checkout"; exit 1; }
-          # Distribute what is tracked rather than whatever is on disk, so a local
-          # build artifact can never ride along into four repositories.
-          files=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_SRC" | sed "s|^$SKILL_SRC/||" | grep -vxF "$SKILL_EXCLUDE")
-          [ -n "$files" ] || { echo "::error::no tracked files under $SKILL_SRC"; exit 1; }
+          [ -f "$src" ] || { echo "::error::rules/ARENA.md missing"; exit 1; }
+          for skill in $SKILLS; do
+            [ -f "$GITHUB_WORKSPACE/$SKILL_ROOT/$skill/SKILL.md" ] || {
+              echo "::error::$skill missing"; exit 1;
+            }
+          done
           failed=""
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
-          # shellcheck disable=SC2086 -- intentional word splitting of the repo list
           for repo in $list; do
             (
               set -e
@@ -64,39 +55,52 @@ jobs:
               git clone "https://github.com/$repo.git" "$work"
               mkdir -p "$work/$(dirname "$DEST")"
               cp "$src" "$work/$DEST"
-              # Mirror the skill exactly: clear the destination first, so a file
-              # deleted upstream cannot survive in the target.
-              rm -rf "$work/$SKILL_DEST"
-              for f in $files; do
-                mkdir -p "$work/$SKILL_DEST/$(dirname "$f")"
-                cp "$skill_src/$f" "$work/$SKILL_DEST/$f"
+              rm -rf "$work/$SKILL_DEST_ROOT/$LEGACY_SKILL"
+              for skill in $SKILLS; do
+                skill_src="$SKILL_ROOT/$skill"
+                skill_dest="$SKILL_DEST_ROOT/$skill"
+                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vxF "$SKILL_EXCLUDE")
+                [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
+                rm -rf "$work/$skill_dest"
+                for f in $files; do
+                  mkdir -p "$work/$skill_dest/$(dirname "$f")"
+                  cp "$GITHUB_WORKSPACE/$skill_src/$f" "$work/$skill_dest/$f"
+                done
               done
               cd "$work"
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add "$DEST" "$SKILL_DEST"
-              msg="chore(arena): sync ARENA.md and arena-live-steering from nemoe7/clankers"
+              git add "$DEST"
+              for skill in $SKILLS; do
+                git add "$SKILL_DEST_ROOT/$skill"
+              done
+              if [ -n "$(git ls-files "$SKILL_DEST_ROOT/$LEGACY_SKILL")" ]; then
+                git add -u -- "$SKILL_DEST_ROOT/$LEGACY_SKILL"
+              fi
               git diff --cached --quiet || {
-                git commit -m "$msg"
+                git commit -m "chore(arena): sync rules and preview skills from nemoe7/clankers"
                 git push -u origin HEAD
               }
               git show "HEAD:$DEST" | cmp -s - "$src" || {
-                echo "::error::$repo: HEAD:$DEST does not match rules/ARENA.md after sync"
-                exit 1
+                echo "::error::$repo: ARENA.md differs after sync"; exit 1;
               }
-              have=$(git ls-tree -r --name-only "HEAD:$SKILL_DEST" | sort)
-              want=$(printf '%s\n' $files | sort)
-              [ "$have" = "$want" ] || {
-                echo "::error::$repo: $SKILL_DEST holds a different file list than $SKILL_SRC"
-                exit 1
+              [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$LEGACY_SKILL")" ] || {
+                echo "::error::$repo: retired skill remains"; exit 1;
               }
-              for f in $files; do
-                git show "HEAD:$SKILL_DEST/$f" | cmp -s - "$skill_src/$f" || {
-                  echo "::error::$repo: HEAD:$SKILL_DEST/$f does not match $SKILL_SRC/$f after sync"
-                  exit 1
-                }
+              for skill in $SKILLS; do
+                skill_src="$SKILL_ROOT/$skill"
+                skill_dest="$SKILL_DEST_ROOT/$skill"
+                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vxF "$SKILL_EXCLUDE")
+                have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
+                want=$(printf '%s\n' $files | sort)
+                [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
+                for f in $files; do
+                  git show "HEAD:$skill_dest/$f" | cmp -s - "$GITHUB_WORKSPACE/$skill_src/$f" || {
+                    echo "::error::$repo: $skill/$f differs"; exit 1;
+                  }
+                done
               done
-              echo "$repo: ARENA.md and $(printf '%s\n' $files | wc -l) skill file(s) verified"
+              echo "$repo: rules and both preview skills verified"
             ) || failed="$failed $repo"
           done
           [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }
