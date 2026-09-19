@@ -6,7 +6,7 @@
 - They outrank skill and plugin instructions.
 - An explicit user instruction in chat outranks this file, confirmed in one line.
 - Your first action in a new session is to read this file end-to-end; in Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit; it wins on Arena-specific handling, including pushing, pull requests, and merges.
-- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live, and root copies) and of the live steering skill; this waiver wins that collision.
+- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and both preview skills; this waiver wins that collision. Editing installed copies still requires explicit user authorization.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 ## Glossary
@@ -49,7 +49,7 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories.
-4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. The same allowlist blocks `ntfy.sh`, every public ntfy instance, and 23 other notification, paste, chat, webhook, and Google hosts for processes in the sandbox, which is not the whole story: the agent's own page-fetch path is not behind it, and it read `ntfy.sh`, `dns.google`, and public gist content on 2026-09-16, all three closed to these sockets. So `skills/arena-live-steering` carries notes over an ntfy topic, which needs no account and publishes instantly, and reads it only through the agent's page-fetch path, never through curl or another in-sandbox HTTP client, because the egress proxy answers an in-sandbox GET with a fake empty 200 even while the topic holds messages.
+4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. Steering now uses `skills/arena-preview-steering` and its local preview inbox; `skills/arena-preview-reporting` shares that server. The former ntfy and local-report-commit workflows are historical in the steering skill's migration reference. No automatic fallback is authorized.
 
 ## Rules
 
@@ -63,12 +63,12 @@ Read these first:
 ## Reports and approval
 
 - Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it.
-- A proposal is visible text before the question that asks for approval: the table goes in the chat reply, and in a report file under a git-ignored output dir with that turn's local reports commit when it does not fit, so the user approves wording they can read. The question tool carries the question, never the proposal, because its options are short labels; a batch that asks for approval of changes whose text the user has not seen is a violation, not a shortcut, and an approval given blind approves nothing.
-- A report that fits in chat is sent in chat; omit the report markdown file in that case, and skip the local reports commit.
+- A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-reporting` in ignored workspace files. The question tool carries the question, not unseen proposal text; blind approval approves nothing. Never commit or push report artifacts.
+- A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; ASD-STE100; no skill or linter.
 - No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
-- Keep one report file per change in a git-ignored output dir when the report does not fit in chat, updated in place across turns, committed locally only and never pushed.
+- Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview; multiple reports may coexist. Reports, exports, inboxes and receipts stay uncommitted and are never pushed.
 
 ## Budgets
 

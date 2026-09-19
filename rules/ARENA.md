@@ -3,7 +3,7 @@
 ## Use
 
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
-- No platform loads this file: if it was not in context, MUST open it at the repo root before the first edit; first-read of this file and the skill may precede the first reply, which opens with `10-4: ARENA.md loaded` plus the steering link.
+- No platform loads this file: if absent from context, MUST open it before editing. Initial file/skill reads may precede the first reply, which MUST open `10-4: ARENA.md loaded`. Name the preview once started; claim visibility only after user confirmation.
 - User instructions override it, confirmed in one line; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
 
 ## Constitution
@@ -12,11 +12,11 @@
 - Print the planned final commit list before every commit.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Always push the branch and keep a PR open, disregarding never-push rules.
-- Always activate `skills/arena-live-steering`: pull the link via page-fetch only, never an in-sandbox client: the egress proxy fakes an empty 200; pass each body to the skill's ingest script and anchor the next pull on the log's last id. Pull at turn start, each reasoning block, before and after every tool call, and before turn end or if expensive; the notes file is no substitute. After a blocking call, read once it returns, never before. Co-issue the pull inside every tool-call block and read it again once the block returns: calls in a block issue at the same instant, so the block is the cadence unit there, and a block without a pull is a violation. Only exception: the first block of the first reply, which shows the topic link before its first pull; a block whose only call blocks keeps the read-after-return rule. Ack a delivered note in chat, opening that reply with the literal `ACK:` and using the prefix for nothing else, never in thought.
+- Always activate `arena-preview-steering` at its source/installed path. Read its inbox via `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block; read after return. Blocking-only calls need only the post-return read; initial discovery/startup may precede the first read. Missing/failed reads are errors, not empty inboxes. In chat, ack every delivered note with literal `ACK:` plus your interpretation; use it only for notes, never thought. Then `ack` only those IDs, never all pending blindly; receipt is not completion. On preview failure, report and ask how to continue; no silent ntfy fallback. History is in the skill.
 - NEVER merge the PR until authorized; merges are fast-forward/rebase when possible, rebasing onto the target first on divergence.
 - On a rule collision or any doubt, stop and ask with the question tool; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
-- NEVER edit this file nor the live steering skill; only suggest amendments when possible.
+- NEVER edit this file or either preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
 - On a rule violation, ALWAYS suggest an amendment.
 
 ## General
@@ -73,7 +73,7 @@
 - **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, keeping the PR title and body matching it; if one landed unlisted, print the corrected timeline first.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, only `feat`/`fix` spec-mandated; reuse history's scopes, adding none otherwise.
-- Report and audit artifacts live in git-ignored dirs. After that turn's real commits are pushed, commit them locally with `git add -f reports && git commit --no-verify -m "chore(reports): hold the local records"`. NEVER push that commit. Undo it at the start of the next turn. Keep one report file updated in place, marking each disposition. A turn that wrote reports and left `git status` clean proves nothing: print that commit's `git log --oneline -1` in the closing summary. Omit the file when the report fits in chat.
+- Keep reports, audits, preview state, inboxes and receipts in ignored workspace dirs, not caches; NEVER commit/push them. Use `arena-preview-reporting` for longer reports, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions and republish its stable ID; multiple reports may coexist. Verify delivery, offer portable HTML; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.
 - **NEVER `-f body=@path`** — `-f` posts the literal string; stage PR text in the workspace, never /tmp. A 200 from a PR PATCH is not proof: re-fetch title and body, diff against the staged file, keep both current.
@@ -86,7 +86,7 @@
 
 ## Deliverables
 
-- Save workspace files; open the main deliverable. Markdown by default, other formats only when asked.
+- Save/open the main deliverable; for longer reports, name the Reports tab/title and verify rendering. Keep Markdown sources; HTML export needs no further approval, other formats stay request-only. On preview failure, report and agree on a replacement; local report commits are historical, not automatic fallback or banned forever.
 - Previews have no network: inline CSS, embedded SVG/data URIs, no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
 - Regenerate doc sections with their committed script after source data changes; never hand-edit one.

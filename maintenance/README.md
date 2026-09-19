@@ -22,9 +22,9 @@ python3 maintenance/check.py --update
 python3 -m pip install markdown-it-py tiktoken
 ```
 
-The `--update` option refreshes the recorded README measurements before validation.
+The `--update` option regenerates the instruction-budget table from `EXPECTED_BUDGETS` before validation, including added and retired skill entries. Run `python3 maintenance/check_measurements.py` for its assert-based regression check.
 
-The script is maintenance tooling, not a runtime dependency, and is not installed into agent environments.
+The validator remains maintenance tooling. Separately, preview reporting uses `markdown-it-py` at runtime; steering itself uses only the Python standard library. The reporting skill documents its approved venv setup without adding dependencies to the consuming application.
 
 ## Offline token measurement
 
