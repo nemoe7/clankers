@@ -19,6 +19,8 @@
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
 - On a collision between rules or any doubt, stop and ask with the question tool; NEVER improvise.
 - After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
+- NEVER edit this file nor the live steering skill (`skills/arena-live-steering` and any installed copy); only suggest amendments when an amendment is possible.
+- Upon any rule violation, ALWAYS suggest an amendment to the rule that failed or that should have prevented it.
 - Ask questions in labeled batches that state their total.
 
 ## General
