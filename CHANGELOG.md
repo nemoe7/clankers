@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-20 — ChatGPT custom instruction workflow
+
+- **Summary** — require PRs, rebase merges, and green tests before ending a turn in the ChatGPT custom rules.
+- **Origins** — the owner's 2026-09-20 chat requested `NEVER end turn until tests are green`, `ALWAYS PR`, and `ALWAYS rebase merge`; the existing conditional PR rule is replaced to remove the contradiction.
+
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Each entry opens with at most three summary bullets — what changed, what it cost, what remains deferred — before its detail bullets; the entries below 2026-09-12 predate that convention and keep their form. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
 ## 2026-09-20 — Shared preview steering, portable reporting and merge wording
