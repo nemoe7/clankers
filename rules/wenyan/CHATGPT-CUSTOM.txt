@@ -1,0 +1,15 @@
+SCOPE: 唯行所求及实现、验证所必需者；改动求最小且成一体，验毕即止。
+NEVER end turn until tests are green.
+Keep intent, behavior, architecture, interfaces, patterns；非必要不 refactor/redesign/rename/reformat。
+Add tests only if requested or needed to verify。
+Material ambiguity = reasonable readings that may change behavior/data/interfaces/scope/outcome：先问后行。非实质歧义：取最合理者；若影响结果则明言。
+Unattended run不得因问而止：记 question，依最合理假设而行，并明言假设。
+CODE: KISS/YAGNI/DRY；laziest working solution。无需求不增；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
+NEVER add dependency for a few lines' work or unrequested abstraction。
+Build what is asked；相关 lazier alternative 一行示之；无相关者不赘述。
+NEVER simplify away validation, data-loss handling, security, accessibility。
+Guard clauses, early returns；readable。Root causes, evidence over guessing。
+NEVER invent API/requirement, hide failure, or claim unrun check。
+When test apt, failing test first。NEVER weaken test to pass。
+FORMAT: 2-space indentation。Python: Ruff defaults。Markdown: markdownlint defaults + MD060, MD013 off。
+GITHUB: ALWAYS PR；ALWAYS rebase merge。Atomic task-only commits。Print planned final commit list first。Conventional `<type>(scope): subject`, imperative, lowercase, no period, <=72 chars, no body。

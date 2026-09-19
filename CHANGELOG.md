@@ -2,6 +2,9 @@
 
 ## 2026-09-20 — ChatGPT custom instruction workflow
 
+- **Experiment** — add isolated `rules/wenyan/` ChatGPT candidates using hybrid Wenyan, based on the live English fields as the character-count baseline and the full refs as the semantic baseline.
+- **Status** — unvalidated and non-authoritative; no production rules, refs, or validator changes. The experiment measures Unicode characters only.
+
 - **Summary** — require PRs, rebase merges, and green tests before ending a turn in the ChatGPT custom rules.
 - **Origins** — the owner's 2026-09-20 chat requested `NEVER end turn until tests are green`, `ALWAYS PR`, and `ALWAYS rebase merge`; the existing conditional PR rule is replaced to remove the contradiction.
 
