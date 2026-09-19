@@ -1,6 +1,10 @@
 # Pushes rules/ARENA.md to each listed repo's $DEST and mirrors $SKILL_SRC into
-# each target's $SKILL_DEST, then verifies every target's committed copies match
-# the source byte for byte.
+# each target's $SKILL_DEST minus $SKILL_EXCLUDE, then verifies every target's
+# committed copies match the source byte for byte. $SKILL_EXCLUDE holds
+# BASELINE.md, this repository's unsquashed reference original, which a target
+# has no use for. The destination is cleared before the mirror, so an excluded
+# file an earlier run delivered is deleted on the next dispatch instead of
+# surviving in every target, and the file-list check below verifies the deletion.
 # Needs a short-expiry fine-grained PAT (Contents read/write on every
 # target repo) stored as the ARENA_DIST_PAT secret.
 # Dispatch only: a repository not in REPOS (or the repos input) never receives
@@ -25,6 +29,7 @@ env:
   DEST: ARENA.md
   SKILL_SRC: skills/arena-live-steering
   SKILL_DEST: .agents/skills/arena-live-steering
+  SKILL_EXCLUDE: BASELINE.md
 jobs:
   distribute:
     runs-on: ubuntu-latest
@@ -46,7 +51,7 @@ jobs:
           [ -d "$skill_src" ] || { echo "::error::$SKILL_SRC missing from the checkout"; exit 1; }
           # Distribute what is tracked rather than whatever is on disk, so a local
           # build artifact can never ride along into four repositories.
-          files=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_SRC" | sed "s|^$SKILL_SRC/||")
+          files=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_SRC" | sed "s|^$SKILL_SRC/||" | grep -vxF "$SKILL_EXCLUDE")
           [ -n "$files" ] || { echo "::error::no tracked files under $SKILL_SRC"; exit 1; }
           failed=""
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
