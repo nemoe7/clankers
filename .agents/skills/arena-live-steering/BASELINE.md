@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.7.0"
+  version: "1.8.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -60,10 +60,11 @@ CONTEXT: the user actually wants X
 
 Fetch only through the page-fetch tool, and always by pulling the link: every check is a read of `https://ntfy.sh/<topic>/json?poll=1&since=<lastmessage>`, never a look at `STEERING.md` on its own, because the notes file holds only what some earlier read delivered. Check at the start of every turn, after every reasoning block, before and after every tool call, and before the turn ends or anything expensive or hard to undo, such as a push, a rewrite, a delete, or a long build. No check is skipped because the last read came back empty or because the call looked short, and no read is spent on the notes file in place of a pull. Where the surface batches independent tool calls into one block, the pull is co-issued inside every block as one of its parallel calls, and read again once the block returns: the calls in a block are issued at the same instant, so nothing can run before each of them in sequence, and a block is therefore the unit of the cadence on such a surface. Batching is a reason to place the pull inside the block it brackets, never a reason to pull less often, and a surface that cannot batch keeps the per-call reading. After a blocking tool call such as a question, read right after it returns rather than before it, because nothing new can arrive while it blocks. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late. Anchor each read on the newest id the log recorded, which returns only what is new: that is what makes a read at every boundary affordable, and it is what ntfy's own docs tell a repeated poller to pass instead of re-fetching the whole cache. Activation is observable rather than inferred, and it leaves two marks: the topic named in the first reply, and the log the ingest script writes, which since the check line lands on every run holds an entry even when the channel delivered nothing. A session with no `STEERING_LOG.md` never ran the ingest, whatever rule file it read, and the first check line's timestamp says when the skill actually started.
 
-The agent pivots on what it finds. Two clauses are not optional, because the user cannot see any of this:
+The agent pivots on what it finds. Three clauses are not optional, because the user cannot see any of this:
 
-- **Acknowledge every note in chat, never in thought.** A reply that follows a delivered note opens with `STEER RECEIVED:` in the chat text the user reads, followed by one line saying what the note asked and what changed because of it. The acknowledgement is a message, not a step: an agent that registers the note in its reasoning, in a tool call, or in `STEERING.md` has read the note and told no one, which from the user's side is exactly a dropped note. Nothing the user cannot see counts as an acknowledgement, and they will send the note again.
+- **Acknowledge every note in chat, never in thought.** A reply that follows a delivered note opens with `10-4:` in the chat text the user reads, followed by one line saying what the note asked and what changed because of it. The acknowledgement is a message, not a step: an agent that registers the note in its reasoning, in a tool call, or in `STEERING.md` has read the note and told no one, which from the user's side is exactly a dropped note. Nothing the user cannot see counts as an acknowledgement, and they will send the note again.
 - **Disagree out loud.** A note is an instruction about what to do, not a fact about what is true. When a note contradicts a measurement, say which of the two is wrong and show the evidence, then do the thing that survives it. Reflexive agreement is the one failure mode this channel cannot absorb.
+- **Keep production clean of this skill.** Never name this skill, its directory, `SKILL.md`, or its scripts in production docs, code, or comments. Steering is an operational channel, not a product surface: a README, a changelog, or a code comment of the work the user asked for must not mention it. The skill's own files, the chat topic link, and `10-4:` acknowledgements are the exceptions.
 
 ```python
 from check_steering import check_steering
@@ -124,4 +125,4 @@ $ STEERING_NTFY_TOPIC=clankers-example STEERING_FILE=reports/STEERING.md \
 Next pull: https://ntfy.sh/clankers-example/json?poll=1&since=hwQ2YpKdmg
 ```
 
-The agent then reads `reports/STEERING.md`, opens its next reply with `STEER RECEIVED:` in the chat text the user reads rather than in its reasoning, and pivots, pulling the printed URL on its next check rather than `since=all`. An acknowledgement the user cannot see is not one: nothing in a thinking block, a tool call, or the notes file reaches them, so the reply carries the line or the note reads as dropped.
+The agent then reads `reports/STEERING.md`, opens its next reply with `10-4:` in the chat text the user reads rather than in its reasoning, and pivots, pulling the printed URL on its next check rather than `since=all`. An acknowledgement the user cannot see is not one: nothing in a thinking block, a tool call, or the notes file reaches them, so the reply carries the line or the note reads as dropped.
