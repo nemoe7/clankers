@@ -4,7 +4,8 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 | Skill | Purpose |
 | --- | --- |
-| [arena-live-steering](arena-live-steering/SKILL.md) | Steer a running Arena agent from an ntfy topic, mid-turn and without an interrupt |
+| [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox, with persistent history and receipts |
+| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Publish multiple Markdown reports and portable HTML through the same preview |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
@@ -18,7 +19,7 @@ Every skill must conform to the [Agent Skills specification](https://agentskills
 - Optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`, except that `license` is required on any skill recording `metadata.upstream`, which the validator enforces. No other top-level keys are allowed; anything else, including `argument-hint`, belongs under `metadata` as a string value.
 - Optional directories follow the convention `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` under 500 lines and move detail into `references/`, which agents load only when needed.
-- A skill may carry `BASELINE.md`, the unsquashed original of its `SKILL.md`. Amend the baseline first, then squash it into `SKILL.md` and re-measure that entry point against its budget; the baseline itself carries no budget. `squash` is the first skill to use one and `arena-live-steering` the second, each mirroring the way `rules/refs/` holds the rule originals. A baseline stays in this repository: [.github/workflows/distribute-arena.yml](../.github/workflows/distribute-arena.yml) excludes it through `$SKILL_EXCLUDE`, so a target receives `SKILL.md` and its resources only, and a baseline an earlier run delivered is deleted on the next dispatch rather than by hand in every repository.
+- A skill may carry `BASELINE.md`, the unsquashed original of its `SKILL.md`. Amend the baseline first, then squash it into `SKILL.md` and re-measure that entry point against its budget; the baseline itself carries no budget. `squash` and both preview skills use one, each mirroring the way `rules/refs/` holds the rule originals. A baseline stays in this repository: [.github/workflows/distribute-arena.yml](../.github/workflows/distribute-arena.yml) excludes it through `$SKILL_EXCLUDE`, so a target receives `SKILL.md` and its resources only, and a baseline an earlier run delivered is deleted on the next dispatch rather than by hand in every repository.
 
 ## Upstream sources
 
@@ -28,7 +29,7 @@ Skills adapted from elsewhere record their origin in `metadata.upstream`. Pull u
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
-The remaining skills are first-party and maintained here; `squash` marks `metadata.origin`, and `arena-live-steering` does not carry that marker yet. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
+The remaining skills are first-party and maintained here; `squash` and both preview skills mark `metadata.origin`. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
 
 ## Install
 
@@ -63,6 +64,7 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
-| [arena-live-steering](arena-live-steering/SKILL.md) | Arena sessions that need steering from outside the client, mid-turn and without an interrupt |
+| [arena-preview-steering](arena-preview-steering/SKILL.md) | Arena sessions needing mid-turn messages through the live preview |
+| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Longer rendered reports, multiple reports or portable HTML delivery in Arena |
 
-Skills are independent of the rule files in [rules/](../rules/) and usable on their own.
+Skills are independent of the rule files in [rules/](../rules/). The two preview skills are installed as siblings: reporting uses steering's shared runtime; steering alone needs no Markdown renderer. Their migration reference records the former ntfy and local-report-commit procedures as historical, not automatic fallback.

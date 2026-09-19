@@ -41,7 +41,8 @@ EXPECTED_BUDGETS = {
   "rules/kilo/debug.md": "cl100k_base",
   "rules/kilo/plan.md": "cl100k_base",
   "rules/COMMIT-SPEC.txt": "cl100k_base",
-  "skills/arena-live-steering/SKILL.md": "UTF-8 file size",
+  "skills/arena-preview-steering/SKILL.md": "UTF-8 file size",
+  "skills/arena-preview-reporting/SKILL.md": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",
@@ -336,95 +337,33 @@ def format_unit(kind: str) -> str:
 
 def update_readme_measurements() -> bool:
   text = README.read_text(encoding="utf-8")
-  budgets = read_budget_table()
-
-  missing = set(EXPECTED_BUDGETS) - set(budgets)
-
-  if missing:
-    raise RuntimeError(f"README budget table is missing entries: {sorted(missing)}")
-
-  unknown = set(budgets) - set(EXPECTED_BUDGETS)
-
-  if unknown:
-    raise RuntimeError(f"README budget table has unexpected entries: {sorted(unknown)}")
-
   lines = text.splitlines(keepends=True)
-  output: list[str] = []
-  in_table = False
-  changed = False
+  header = "| File | Measure | Current |\n"
+  if lines.count(header) != 1:
+    raise RuntimeError("README must contain exactly one instruction-budget table")
+  start = lines.index(header)
+  end = start + 1
+  while end < len(lines) and lines[end].lstrip().startswith("|"):
+    end += 1
 
-  for line in lines:
-    stripped = line.strip()
+  table = [header, "| --- | --- | --- |\n"]
+  for relative, kind in EXPECTED_BUDGETS.items():
+    path = ROOT / relative
+    if not path.is_file():
+      raise RuntimeError(f"README budget path missing: {relative}")
+    current = format_measurement(measure(path, kind))
+    table.append(f"| `{relative}` | `{kind}` | {current} `{format_unit(kind)}` |\n")
 
-    if stripped == "| File | Measure | Current |":
-      in_table = True
-      output.append(line)
-      continue
-
-    if in_table and not stripped.startswith("|"):
-      in_table = False
-
-    if in_table and stripped.startswith("|"):
-      cells = [cell.strip() for cell in stripped.split("|")]
-
-      if len(cells) == 5:
-        relative = cells[1]
-        kind = normalize_budget_kind(cells[2])
-
-        if relative.startswith("`") and relative.endswith("`"):
-          relative = relative[1:-1]
-
-        # Skip the separator row.
-        if relative == "---":
-          output.append(line)
-          continue
-
-        expected_kind = EXPECTED_BUDGETS.get(relative)
-
-        if expected_kind is None:
-          raise RuntimeError(f"README budget has unexpected entry: {relative}")
-
-        if kind.startswith("`") and "`" in kind[1:]:
-          end = kind.find("`", 1)
-          code = kind[1:end]
-          suffix = kind[end + 1 :].strip()
-          kind = f"{code} {suffix}".strip()
-
-        if kind != expected_kind:
-          raise RuntimeError(
-            f"README budget kind mismatch for {relative}: "
-            f"recorded={kind!r} expected={expected_kind!r}"
-          )
-
-        path = ROOT / relative
-
-        if not path.is_file():
-          raise RuntimeError(f"README budget path missing: {relative}")
-
-        current = format_measurement(measure(path, kind))
-        unit = format_unit(kind)
-
-        replacement = f"| `{relative}` | `{kind}` | {current} `{unit}` |\n"
-
-        if replacement != line:
-          changed = True
-
-        output.append(replacement)
-        continue
-
-    output.append(line)
-
-  updated = "".join(output)
-
-  if changed:
-    updated = re.sub(
-      r"Latest measurements as of \d{4}-\d{2}-\d{2}\.",
-      f"Latest measurements as of {datetime.now(timezone.utc).date().isoformat()}.",
-      updated,
-    )
-    README.write_text(updated, encoding="utf-8")
-
-  return changed
+  updated = "".join(lines[:start] + table + lines[end:])
+  if updated == text:
+    return False
+  updated = re.sub(
+    r"Latest measurements as of \d{4}-\d{2}-\d{2}\.",
+    f"Latest measurements as of {datetime.now(timezone.utc).date().isoformat()}.",
+    updated,
+  )
+  README.write_text(updated, encoding="utf-8")
+  return True
 
 
 def check_internal_links(
