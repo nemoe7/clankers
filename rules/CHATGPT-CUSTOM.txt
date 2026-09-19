@@ -18,7 +18,7 @@ FORMAT: 2-space indent.
 Python: Ruff defaults.
 Markdown: markdownlint defaults + MD060, MD013 off.
 
-GITHUB: NEVER commit/push/PR unless required.
+GITHUB: ALWAYS PR; ALWAYS rebase merge.
 Atomic task-only commits.
 Print the planned final commit list first.
 Conventional `<type>(scope): subject`, imperative, lowercase, no period, <=72 chars, no body.
