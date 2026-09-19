@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.5.0"
+  version: "1.6.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -31,7 +31,7 @@ Steer the Arena agent WITHOUT interrupting its turn, even when the Arena client 
 
 One channel. ntfy needs no account, no token, no zone, and no page of our own, since the user posts from ntfy's own web UI or phone app; publishing is instant, messages are append-only, and the server holds them for 12 hours. Only the agent's page-fetch path reads ntfy correctly: the sandbox egress proxy gives in-sandbox GETs a fake empty HTTP 200 even while a topic holds messages, so never read it with curl or any other in-sandbox HTTP client.
 
-1. **Send the channel in chat**: the moment this skill is read, generate a random topic and send its full clickable `https://ntfy.sh/<topic>` link in chat, as the first line of the agent's reply, before any tool call and before any other work. The link must be visible before the agent attempts to fetch, because a fetch fails until the user has sent something in the channel: the agent cannot publish to one (GET-only fetch, TLS-killed POSTs), and the page-fetch tool reports an empty topic as its own HTTP 500, so that first failure is expected, not a broken channel. Never defer the link to a summary or a later message, and never commit the topic, since ntfy has no sign-up and its docs call the topic essentially a password.
+1. **Send the channel in chat**: generate a random topic and put its full clickable `https://ntfy.sh/<topic>` link as the first line of the session's first chat reply, together with the ARENA.md confirmation. The first-read of `ARENA.md` and this skill may precede that reply; tool calls that open those files are not a violation. The link must still be in that first reply, and it must be visible before the agent attempts to fetch the topic, because a fetch fails until the user has sent something in the channel: the agent cannot publish to one (GET-only fetch, TLS-killed POSTs), and the page-fetch tool reports an empty topic as its own HTTP 500, so that first failure is expected, not a broken channel. Never defer the link to a summary or a later message, and never commit the topic, since ntfy has no sign-up and its docs call the topic essentially a password.
 2. **The user publishes outside the sandbox**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>` on their own machine; sandbox POSTs are TLS-killed.
 3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=<lastmessage>`, where `<lastmessage>` is the newest message id the log already holds and the first read uses `since=all` instead, fetched only through its page-fetch tool, never through curl or another in-sandbox HTTP client, then passes the returned body verbatim to `scripts/ntfy_steering.py`, which delivers each message once into the notes and log files, deduplicated by ntfy's message id, and prints the URL to pull next.
 
