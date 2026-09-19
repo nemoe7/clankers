@@ -10,7 +10,7 @@ Project history, newest first. One entry per pull request, not per feature or co
 - House order: `BASELINE.md` first, compressed mirror into `SKILL.md`, mechanics in `REFERENCE.md`, then `cp` to `.agents/skills/arena-live-steering`.
 - The production clause is the agent's product rule, not a rename of this repository's skill docs: CHANGELOG, skill files, and rule files that activate the skill still name it.
 - Ack prefix `STEER RECEIVED:` is replaced by `10-4:` everywhere the live skill, baseline, and reference state the acknowledgement wording; the line after it is the agent's own interpretation of the note.
-- Topic form is `<branch>-<secret>`: current branch name with characters outside `[A-Za-z0-9_-]` replaced by `-`, then a random token. JSON page-fetch may return one NDJSON line and strips HTML tags, so a full check walks `since=<id>` until empty 500 and reads the HTML topic page.
+- Topic form is `<branch>-<secret>`: current branch name with characters outside `[A-Za-z0-9_-]` replaced by `-`, then a random token. JSON page-fetch may return one NDJSON line and strips HTML tags, so a full check walks `since=<id>` until empty 500 and reads the HTML topic page. A truncated JSON body is a malformed pull: tell the user, then fall back to HTML instead of ingesting it.
 
 ## 2026-09-19 — Protect ARENA.md, waive it in the home repo, squash per clause, chat-short reports, first-read
 
