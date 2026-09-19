@@ -606,15 +606,9 @@ def check_skill_refs_parity(errors: list[str]) -> None:
       continue
 
     ref_files = {
-      path.relative_to(reference)
-      for path in reference.rglob("*")
-      if path.is_file()
+      path.relative_to(reference) for path in reference.rglob("*") if path.is_file()
     }
-    live_files = {
-      path.relative_to(live)
-      for path in live.rglob("*")
-      if path.is_file()
-    }
+    live_files = {path.relative_to(live) for path in live.rglob("*") if path.is_file()}
     ref_support = ref_files - {Path("SKILL.md")}
     live_support = live_files - {Path("SKILL.md")}
 
@@ -628,7 +622,6 @@ def check_skill_refs_parity(errors: list[str]) -> None:
     for relative in sorted(ref_support):
       if (reference / relative).read_bytes() != (live / relative).read_bytes():
         errors.append(f"skills/{name}/{relative}: refs/live files differ")
-
 
 
 def validate(errors: list[str]) -> None:
