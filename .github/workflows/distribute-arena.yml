@@ -1,5 +1,5 @@
 # Dispatch-only distribution of ARENA.md and the two sibling preview skills.
-# Baselines stay here; retired installed transport files are removed on dispatch.
+# Live skills only; retired installed transport files are removed on dispatch.
 # ARENA_DIST_PAT needs short-lived Contents read/write access to every target.
 # Delivery is not activation: each session must start its own preview.
 name: distribute-arena
@@ -21,7 +21,6 @@ env:
   SKILLS: "arena-preview-steering arena-preview-reporting"
   SKILL_ROOT: skills
   SKILL_DEST_ROOT: .agents/skills
-  SKILL_EXCLUDE: BASELINE.md
   LEGACY_SKILL: arena-live-steering
 jobs:
   distribute:
@@ -59,7 +58,7 @@ jobs:
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vxF "$SKILL_EXCLUDE")
+                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||")
                 [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
                 rm -rf "$work/$skill_dest"
                 for f in $files; do
@@ -90,7 +89,7 @@ jobs:
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vxF "$SKILL_EXCLUDE")
+                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||")
                 have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
                 want=$(printf '%s\n' $files | sort)
                 [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
