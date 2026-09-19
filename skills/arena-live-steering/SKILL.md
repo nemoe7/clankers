@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.9.0"
+  version: "1.10.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -58,9 +58,9 @@ Fetch only via page-fetch, always by pulling the link, since the notes file hold
 
 Three clauses are not optional, because the user cannot see any of this:
 
-- **Acknowledge every note in chat.** `10-4:` plus the agent's own interpretation of the note, never a restatement of the raw text, belong in the reply the user reads, never in reasoning, a tool call, or `STEERING.md`: an ack nobody can see is a dropped note, and they will send it again.
+- **Acknowledge every note in chat.** The reply opens with the literal `ACK:` as its first characters, never folded into a sentence or paraphrased, plus the agent's own interpretation of the note, never a restatement of the raw text, in the reply the user reads, never in reasoning, a tool call, or `STEERING.md`: an ack nobody can see is a dropped note, and they will send it again. The prefix marks a delivered note and nothing else — not a reply that acknowledges nothing, not a paragraph break, not a status line — and it is not `10-4:`, which belongs to the ARENA.md activation acknowledgement.
 - **Disagree out loud.** A note is an instruction about what to do, not a fact about what is true. When a note contradicts a measurement, say which of the two is wrong and show the evidence, then do the thing that survives it. Reflexive agreement is the one failure mode this channel cannot absorb.
-- **Keep production clean of this skill.** Never name this skill, its directory, `SKILL.md`, or its scripts in production docs, code, or comments. The skill's own files, the chat topic link, and `10-4:` are the exceptions.
+- **Keep production clean of this skill.** Never name this skill, its directory, `SKILL.md`, or its scripts in production docs, code, or comments. The skill's own files, the chat topic link, and `ACK:` are the exceptions.
 
 Read the notes file with the helper:
 
@@ -91,11 +91,12 @@ See [references/REFERENCE.md](references/REFERENCE.md) for the environment, beha
 - **The JSON renderer deletes HTML tags.** `<>` in a note vanish, so walk `since=` to the empty 500 and read the HTML topic page when checking all or when a note looks truncated. Escaped `\<` `\>` survive the JSON path. Document that escape in the skill. A truncated or tag-stripped JSON body is a malformed pull: tell the user in chat, in one line, and fall back to the HTML page instead of ingesting the truncated JSON.
 - **ntfy needs repeated active reads.** Pull the link at the cadence above, with the URL the script prints; there is no background capture.
 - **A quiet channel is not a mangled one.** No new messages is reported as it stands today and earns nothing in chat; a read the channel mangles - the fetch tool failing, answering with its own upstream error body, or returning something that is not the topic's JSON - is told to the user in one line naming the error, with the text passed to the ingest run as `STEERING_NTFY_ERROR` so the log's check line carries it.
+- **Read the body, not the status field.** A pull can report `"status": "success"` while the body is an upstream error rather than the topic's JSON, such as an object-store `SignatureDoesNotMatch` naming a key id and a string to sign. On the first one, move channels rather than pause: generate a fresh `<branch>-<secret>` topic, post its link in chat in one line naming the error, and continue on it with `STEERING_NTFY_TOPIC` reset and `since=all`, whose first empty failure is expected, not a second compromise. If the new topic also returns `SignatureDoesNotMatch`, stop polling for that turn and resume on the turn after the user's next, passing the error text to each ingest run as `STEERING_NTFY_ERROR` so the log carries the move and the pause; neither case is a quiet channel.
 
 ## Files
 
 - `SKILL.md` - this file (required)
-- `BASELINE.md` - the unsquashed original of this file
+- `BASELINE.md` - the unsquashed original of this file, kept in the home repository only: distribution excludes it, so a target holds this file and its resources
 - `scripts/steering_notes.py` - shared note writer
 - `scripts/check_steering.py` - agent helper
 - `scripts/ntfy_steering.py` - ntfy body ingester
@@ -114,4 +115,4 @@ $ STEERING_NTFY_TOPIC=clankers-example STEERING_FILE=reports/STEERING.md \
 Next pull: https://ntfy.sh/clankers-example/json?poll=1&since=hwQ2YpKdmg
 ```
 
-The agent then reads `reports/STEERING.md`, opens the next chat reply with `10-4:` plus its own interpretation of the note, in visible text, not a thought, and pivots.
+The agent then reads `reports/STEERING.md`, opens the next chat reply with `ACK:` plus its own interpretation of the note, in visible text, not a thought, and pivots.
