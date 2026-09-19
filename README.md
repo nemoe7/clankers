@@ -13,12 +13,12 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-18. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except `skills/arena-live-steering/SKILL.md`, which is measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including a skill's `BASELINE.md`, are not included.
+Latest measurements as of 2026-09-19. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except `skills/arena-live-steering/SKILL.md`, which is measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including a skill's `BASELINE.md`, are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,549 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 10,505 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 10,648 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,490 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,473 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
@@ -36,13 +36,13 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of the rules below. Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash that file back under budget; refs stay uncompressed as the baseline. Compression is editorial, not lossy: it removes words, never rules.
+Agent-facing rule files are compressed against the budgets above with the [`squash` skill](skills/squash/SKILL.md), which is an extraction of the rules below. Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline. Compression is editorial, not lossy: it removes words, never rules.
 
 1. Work in iterations. After each pass, re-measure and compare against the previous value; keep the pass only when the budget improves. Repeat until a pass yields nothing.
 2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.
 3. Merge related bullets, drop redundant qualifiers and restated clauses, and prefer the shorter of two equivalent phrasings. Do not invent new abbreviations or telegraphic syntax that changes how a rule reads.
 4. Keep the section headings and order the refs baseline already has; restructuring is an amendment, made in refs first.
-5. Adding a rule may exceed a budget; compress the rest of the file in the same change so the file lands at or below its prior measurement.
+5. New clause: squash only that new line. Amended clause: squash only the affected line. Deleted clause: attempt one squash and keep whichever budget is lower.
 6. Update the budgets table above and record notable reductions in [CHANGELOG.md](CHANGELOG.md).
 
 Two deliberate exceptions are recorded, both from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements were the two files' baselines, not deferred debt. Both have since been squashed back below them (`rules/ARENA.md` to 9,716 `B`, `rules/AGENTS.md` to 1,816 `tok`, funded inside the same changes that amended them), so item 5 applies to them again at the measurements in the table above.

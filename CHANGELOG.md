@@ -2,6 +2,16 @@
 
 Project history, newest first. One entry per pull request, not per feature or commit; extend the open entry while its pull request is unmerged. Each entry opens with at most three summary bullets — what changed, what it cost, what remains deferred — before its detail bullets; the entries below 2026-09-12 predate that convention and keep their form. Historical token tables are snapshots from their entries, using `cl100k_base` via `tiktoken 0.12.0`, not current deployment budgets. See [README.md](README.md#instruction-budgets) for current measurements.
 
+## 2026-09-19 — Protect ARENA.md, waive it in the home repo, squash per clause
+
+- **Summary** — `rules/ARENA.md` Constitution gains two clauses: NEVER edit this file nor the live steering skill, only suggest amendments when possible; on a rule violation, ALWAYS suggest an amendment. Root `AGENTS.md` waives that NEVER-edit clause here, covering refs, live, and root copies and the live steering skill, and the waiver wins that collision. House funding changes: a new clause is squashed only on that new line, an amended clause only on the affected line, and a deletion attempts one squash and keeps the lower budget, replacing rest-of-file funding.
+- **Cost** — `rules/ARENA.md` 10,505 → 10,648 `B` (+143) for the two new Constitution bullets, squashed only on those lines (`Upon` → `On` on the violation bullet). Root `AGENTS.md`, `README.md` Compression item 5, `rules/README.md` item 10 and Baselines, and `rules/refs/README.md` take the waiver and the per-clause squash rule; none of those files is budgeted except through the live ARENA copy. Residual vs the 10,129 `B` ARENA baseline grows 376 → 519 `B`, recorded under the new item 5 rather than funded by cutting other rules.
+- **Deferred** — the portable `skills/squash` "Adding to squashed text" line still says to compress the rest of the text; house `AGENTS.md` outranks it in this repository and was left as a skill-vs-house split rather than rewritten, because the skill is general-purpose.
+- House order: `rules/refs/ARENA.md` first (full wording, including `skills/arena-live-steering` and any installed copy, and suggesting an amendment to the rule that failed or that should have prevented it), compressed mirror into `rules/ARENA.md`, then `cp` to root `ARENA.md`.
+- The waiver sits in root `AGENTS.md` Use next to the ARENA pointer, because ARENA's Arena-handling-wins line would otherwise void it, and Q1 chose all copies: refs, live, root, and the skill.
+- Compression item 5 in the root README, the constitution in root `AGENTS.md`, maintenance item 10, and both Baselines paragraphs replace "compress the rest of the file so it lands at or below its prior measurement". Historical README exception notes that named the old item 5 stay as the record of those residuals.
+- New-line squash on the live ARENA bullets: the NEVER-edit line was already at floor; the violation line dropped `Upon` to `On` to match `On a rule collision` in the same section.
+
 ## 2026-09-18 — Ignore irrelevant files in CI triggers
 
 - **Summary** — `.github/workflows/validate.yml` adds `paths-ignore` on `push` and `pull_request` triggers for non-essential and unvalidated files: `.github/workflows/distribute-arena.yml`, `.gitignore`, `apply.bat`, `automations/**`, `CHANGELOG.md`, and `maintenance/README.md`.

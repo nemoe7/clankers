@@ -72,7 +72,7 @@ Install and selection are owned by [workflows/README.md](../workflows/README.md#
 7. Keep skill resources on demand and their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification with recorded provenance (see Skill rules).
 9. Keep this repository lightweight: no further CI workflows, dependency manifests, or test scaffolding unless explicitly requested. Review changes directly and never claim unperformed checks.
-10. Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash that file: full wording in refs, compressed form in `rules/` (see Baselines).
+10. Amend `rules/refs/` first, mirror the amendment into its live counterpart in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget: full wording in refs, compressed form in `rules/` (see Baselines).
 
 ### Arena file
 
@@ -96,7 +96,7 @@ Simpler scope requires approval before substitution. Testing guidance in the reu
 
 ### Baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first, in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Then mirror the amendment into its corresponding live file in compressed form and squash that file back under budget; copying a refs baseline verbatim would exceed every live budget, so the mirroring is where compression happens. Refs stay unsquashed as the baseline. Files equal their live counterparts where no compression was applied, so the original wording is always preserved in refs. `GUIDELINES.md` sits beside them as the writing standard these baselines are audited against; it is a reference, not a rule baseline, and has no live counterpart.
+`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents working without git history. Write every amendment here first, in complete sentences, preserving every negation, condition, command, number, threshold, filename, and caveat. Then mirror the amendment into its corresponding live file in compressed form and squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; copying a refs baseline verbatim would exceed every live budget, so the mirroring is where compression happens. Refs stay unsquashed as the baseline. Files equal their live counterparts where no compression was applied, so the original wording is always preserved in refs. `GUIDELINES.md` sits beside them as the writing standard these baselines are audited against; it is a reference, not a rule baseline, and has no live counterpart.
 
 ### Commit disciplines
 

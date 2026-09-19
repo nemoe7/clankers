@@ -6,6 +6,7 @@
 - They outrank skill and plugin instructions.
 - An explicit user instruction in chat outranks this file, confirmed in one line.
 - Your first action in a new session is to read this file end-to-end; in Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit; it wins on Arena-specific handling, including pushing, pull requests, and merges.
+- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live, and root copies) and of the live steering skill; this waiver wins that collision.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 Read these first:
@@ -23,7 +24,9 @@ Read these first:
 - Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
 - NEVER claim a check you did not run.
 - Compression removes words, never rules.
-- A new rule may exceed a budget only if the same change compresses the rest of the file.
+- New clause: squash only that new line.
+- Amended clause: squash only the affected line.
+- Deleted clause: attempt one squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files.
 - Keep one CHANGELOG entry per pull request, extending the open entry while that pull request is unmerged.
