@@ -4,12 +4,13 @@ Project history, newest first. One entry per pull request, not per feature or co
 
 ## 2026-09-19 — Never name the steering skill in production docs or code
 
-- **Summary** — `skills/arena-live-steering` 1.8.0 adds a third not-optional clause: never name this skill, its directory, `SKILL.md`, or its scripts in production docs, code, or comments. Exceptions: the skill's own files, the chat topic link, and `10-4:` acknowledgements. Chat acknowledgements of a delivered note open with `10-4:` rather than `STEER RECEIVED:`. `BASELINE.md` takes the full wording first; `SKILL.md` the squashed line; `references/REFERENCE.md` the mechanics. The tracked `.agents` copy stays byte-identical.
-- **Cost** — `skills/arena-live-steering/SKILL.md` 9,225 → 9,430 `B` (+205). New production clause, squashed on that line only, then `STEER RECEIVED:` to `10-4:` on the live wording. `BASELINE.md` and `REFERENCE.md` unbudgeted.
+- **Summary** — `skills/arena-live-steering` 1.8.0 adds a third not-optional clause: never name this skill, its directory, `SKILL.md`, or its scripts in production docs, code, or comments. Exceptions: the skill's own files, the chat topic link, and `10-4:` acknowledgements. Chat acknowledgements of a delivered note open with `10-4:` rather than `STEER RECEIVED:`. 1.9.0 then changes the topic form from `<repo>-<pr>-<random>` to `<branch>-<secret>`, requires the ack line to be the agent's own interpretation rather than a restatement, and records that the JSON renderer deletes `<>` so a full check walks `since=` and reads the HTML topic page. `BASELINE.md` takes the full wording first; `SKILL.md` the squashed line; `references/REFERENCE.md` the mechanics. The tracked `.agents` copy stays byte-identical.
+- **Cost** — `skills/arena-live-steering/SKILL.md` 9,225 → 9,430 `B` (+205) at 1.8.0, then 9,430 → 10,098 `B` (+668) at 1.9.0 for the naming scheme, interpretation ack, renderer clause, and malformed-pull notice. New clauses, squashed on those lines only. `BASELINE.md` and `REFERENCE.md` unbudgeted.
 - **Deferred** — none.
 - House order: `BASELINE.md` first, compressed mirror into `SKILL.md`, mechanics in `REFERENCE.md`, then `cp` to `.agents/skills/arena-live-steering`.
 - The production clause is the agent's product rule, not a rename of this repository's skill docs: CHANGELOG, skill files, and rule files that activate the skill still name it.
-- Ack prefix `STEER RECEIVED:` is replaced by `10-4:` everywhere the live skill, baseline, and reference state the acknowledgement wording.
+- Ack prefix `STEER RECEIVED:` is replaced by `10-4:` everywhere the live skill, baseline, and reference state the acknowledgement wording; the line after it is the agent's own interpretation of the note.
+- Topic form is `<branch>-<secret>`: current branch name with characters outside `[A-Za-z0-9_-]` replaced by `-`, then a random token. JSON page-fetch may return one NDJSON line and strips HTML tags, so a full check walks `since=<id>` until empty 500 and reads the HTML topic page.
 
 ## 2026-09-19 — Protect ARENA.md, waive it in the home repo, squash per clause, chat-short reports, first-read
 
