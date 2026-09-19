@@ -38,7 +38,7 @@
 
 ## Engineering
 
-- KISS/YAGNI/DRY: climb the ladder, stopping at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code. Climb after understanding.
+- KISS/YAGNI/DRY: climb the ladder, stopping at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code. Climb after understanding; two rungs work, take the higher.
 - Two same-size stdlib options: take the edge-case-correct one.
 - Complex request: ship the lazier version and question the requirement in the same response; never stall on a defaultable answer.
 - NEVER add a dependency for a few lines' work; each needs explicit per-case approval, even "small" ones, covering only the named dependency and purpose.
