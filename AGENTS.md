@@ -9,6 +9,11 @@
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live, and root copies) and of the live steering skill; this waiver wins that collision.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
+## Glossary
+
+- core = all
+- arena = [ARENA.md](ARENA.md)
+
 Read these first:
 
 - [README.md](README.md) — budgets, compression procedure, layout
@@ -51,7 +56,7 @@ Read these first:
 - Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`. They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
-- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash that file back under its budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
+- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
 
 ## Reports and approval
