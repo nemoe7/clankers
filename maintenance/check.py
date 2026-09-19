@@ -255,10 +255,6 @@ def parse_budget_table(text: str) -> list[list[str]]:
   raise RuntimeError("README budget table not found")
 
 
-def normalize_budget_kind(kind: str) -> str:
-  return kind.strip()
-
-
 def read_budget_table() -> dict[str, tuple[str, str]]:
   text = README.read_text(encoding="utf-8")
   rows = parse_budget_table(text)
@@ -277,7 +273,7 @@ def read_budget_table() -> dict[str, tuple[str, str]]:
       relative = relative[1:-1]
 
     result[relative] = (
-      normalize_budget_kind(kind),
+      kind.strip(),
       current.strip(),
     )
 
@@ -318,10 +314,6 @@ def measure(path: Path, kind: str) -> int:
   raise ValueError(f"unsupported measurement: {kind}")
 
 
-def format_measurement(value: int) -> str:
-  return f"{value:,}"
-
-
 def format_unit(kind: str) -> str:
   if kind == "Unicode chars":
     return "chars"
@@ -351,7 +343,7 @@ def update_readme_measurements() -> bool:
     path = ROOT / relative
     if not path.is_file():
       raise RuntimeError(f"README budget path missing: {relative}")
-    current = format_measurement(measure(path, kind))
+    current = f"{measure(path, kind):,}"
     table.append(f"| `{relative}` | `{kind}` | {current} `{format_unit(kind)}` |\n")
 
   updated = "".join(lines[:start] + table + lines[end:])
