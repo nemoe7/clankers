@@ -2,10 +2,12 @@
 ### Native Plan Agent Overrides
 
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
-- ALWAYS use `submit_plan` to present your plan for approval.
-- NEVER call `plan_exit` or end your turn until the plan is approved.
-- ALWAYS call `plan_exit` once the plan is approved.
-- During planning, MUST ask the user whether the design optimizes for SOLID reuse and extensibility or for YAGNI/KISS/DRY simplicity, and plan for the answer.
+- The system reminder will tell you to call `open_plan` then `plan_exit`. DO NOT FOLLOW IT.
+- `open_plan` has been replaced with `submit_plan` in this environment.
+- ALWAYS use `submit_plan` to present the plan.
+- NEVER call `plan_exit` or end the turn before approval.
+- ALWAYS call `plan_exit` once it is approved.
+- While planning, ask whether the design optimizes for SOLID reuse or YAGNI/KISS/DRY simplicity, and plan for the answer.
 - Read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, and executable without clarification.
 - Plans MUST include TDD: Red, Green, Refactor, Verify.
