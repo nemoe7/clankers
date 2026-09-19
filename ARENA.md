@@ -16,6 +16,8 @@
 - NEVER merge the PR until authorized; merges are fast-forward when possible, rebasing onto the target first on divergence.
 - On a rule collision or any doubt, stop and ask with the question tool; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
+- NEVER edit this file nor the live steering skill; only suggest amendments when possible.
+- On a rule violation, ALWAYS suggest an amendment.
 
 ## General
 
