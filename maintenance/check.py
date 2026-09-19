@@ -573,7 +573,6 @@ def check_root_copies(errors: list[str]) -> None:
       )
 
 
-
 def check_skill_refs_parity(errors: list[str]) -> None:
   skill_refs = SKILLS / "refs"
 
