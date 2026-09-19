@@ -8,12 +8,13 @@ Rules, skills, and workflows for AI agents.
 - [automations/](automations/DAILIES.md): prompts for recurring runs, currently the combined daily monitoring task, which runs as a ChatGPT scheduled monitoring task. Each prompt is a self-contained Markdown file executed in one pass, carrying its own state and evidence rules because the runtime keeps no reliable state.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
 - [rules/refs/](rules/refs/README.md): uncompressed rule originals and the AGENTS.md writing guidelines; amend here first, mirror the amendment into the live file in compressed form, then squash it.
+- [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines; amend here first, then squash the live `SKILL.md`.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-19. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except the two preview skills, which are measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including a skill's `BASELINE.md`, are not included.
+Latest measurements as of 2026-09-19. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except the two preview skills, which are measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including skill refs, are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |

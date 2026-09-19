@@ -40,7 +40,7 @@ Read these first:
 
 - A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
-- It validates skill metadata, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, skill licensing for adapted skills, the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
+- It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, skill licensing for adapted skills, the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
 - `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on every push and pull request.
 - On pushes it commits refreshed README measurements; it also runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
@@ -54,6 +54,7 @@ Read these first:
 ## Rules
 
 - Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
+- Baseline skill trees live in `skills/refs/`: amend them first, keep supporting files mirrored, then squash only the live `SKILL.md`; refs are not installed or distributed.
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`. They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
