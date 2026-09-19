@@ -131,10 +131,10 @@
 - Reuse previous scopes, adding one only when none fits.
 - Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
-- Report and audit artifacts live in git-ignored output dirs.
-- Always commit them locally at the end of the turn so they show in the diff viewer, and NEVER push them to the repository.
-- On the next turn, undo that local commit and continue from there.
-- Maintain a single report file and update it in place rather than adding new files, so diffs stay readable.
+- Report and audit artifacts live in git-ignored dirs.
+- At the end of every turn, after that turn's real commits are pushed, commit them locally for the diff viewer with `git add -f reports && git commit --no-verify -m "chore(reports): hold the local records"`. NEVER push that commit.
+- Undo it at the start of the next turn, and keep one report file updated in place, marking each disposition.
+- A turn that wrote reports and left `git status` clean proves nothing, so print that commit's `git log --oneline -1` line in the closing summary.
 - A report that fits in chat is sent in chat; omit the report markdown file in that case, and skip the local reports commit.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `gh pr edit` may fail on older repos (GraphQL projects-classic deprecation).
