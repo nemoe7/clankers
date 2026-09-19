@@ -57,11 +57,13 @@ Read these first:
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`. They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
+- Record every amendment's origin in the CHANGELOG entry that carries it: who proposed it — the chat task, a steering note, another session, or the agent's own violation report — the date, and the rule it changed, so a clause that arrived from outside this session is traceable to its proposer instead of reading as if the repository invented it. The CHANGELOG is the only ledger; no separate amendment file, because a second ledger drifts from the first and would need its own gate in `maintenance/check.py`. An amendment whose origin is not recorded is undocumented, whatever the diff shows.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
 
 ## Reports and approval
 
 - Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it.
+- A proposal is visible text before the question that asks for approval: the table goes in the chat reply, and in a report file under a git-ignored output dir with that turn's local reports commit when it does not fit, so the user approves wording they can read. The question tool carries the question, never the proposal, because its options are short labels; a batch that asks for approval of changes whose text the user has not seen is a violation, not a shortcut, and an approval given blind approves nothing.
 - A report that fits in chat is sent in chat; omit the report markdown file in that case, and skip the local reports commit.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; ASD-STE100; no skill or linter.
 - No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
@@ -71,7 +73,7 @@ Read these first:
 ## Budgets
 
 - Rule files, `SKILL.md` entry points, and workflow files have budgets tracked in [README.md](README.md#instruction-budgets).
-- Re-measure and update the table when changing them.
+- Re-measure and update the table when changing them, and record a growth accepted rather than funded in [BUDGET-EXCEPTIONS.md](BUDGET-EXCEPTIONS.md).
 
 ## Skills
 
