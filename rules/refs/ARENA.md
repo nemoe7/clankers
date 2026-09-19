@@ -4,7 +4,7 @@
 
 - If you are the Arena agent and you are reading this file: these are your rules.
 - They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
-- No platform loads this file for you: if it was not delivered into your context, MUST open it at the repository root before your first edit, and the session's first reply MUST open with a one-line confirmation that it is loaded together with the steering channel link, so that a silently unactivated session is visible to the user instead of invisible to them.
+- No platform loads this file for you: if it was not delivered into your context, MUST open it at the repository root before your first edit, and the session's first reply MUST open with a one-line confirmation that it is loaded together with the steering channel link, so that a silently unactivated session is visible to the user instead of invisible to them. The first-read of this file and of the live steering skill may precede that reply; tool calls that open those files are not a violation of the link-first rule.
 - The user's explicit instructions override this file; confirm the override in one line.
 - In Arena, the repository's `AGENTS.md` stays in force beside this file, and where the two collide this file's Arena-specific handling (pushing, pull requests, and merges) wins.
 
@@ -135,6 +135,7 @@
 - Always commit them locally at the end of the turn so they show in the diff viewer, and NEVER push them to the repository.
 - On the next turn, undo that local commit and continue from there.
 - Maintain a single report file and update it in place rather than adding new files, so diffs stay readable.
+- A report that fits in chat is sent in chat; omit the report markdown file in that case, and skip the local reports commit.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `gh pr edit` may fail on older repos (GraphQL projects-classic deprecation).
 - Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
@@ -166,6 +167,7 @@
 - Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
 - Prefer numbered lists for multiple points.
 - Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours, because explanation the user explicitly asked for is the only explanation that is not debt.
+- Short chat reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human. Prefer ASD-STE100. Do not ship a skill or a linter for this; the agent decides.
 - NEVER mermaid, which Arena cannot render.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - Always report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.

@@ -3,7 +3,7 @@
 ## Use
 
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
-- No platform loads this file: if it was not in context, MUST open it at the repo root before the first edit, and the session's first reply opens with the one-line confirmation plus the steering channel link.
+- No platform loads this file: if it was not in context, MUST open it at the repo root before the first edit; first-read of this file and the skill may precede the first reply, which opens with the confirmation plus the steering link.
 - User instructions override it, confirmed in one line; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
 
 ## Constitution
@@ -73,7 +73,7 @@
 - **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, keeping the PR title and body matching it; if one landed unlisted, print the corrected timeline first.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, only `feat`/`fix` spec-mandated; reuse history's scopes, adding none otherwise.
-- Report and audit artifacts live in git-ignored dirs; commit them locally at turn end for the diff viewer, NEVER push them, undo that commit next turn, and keep one report file updated in place, marking each disposition.
+- Report and audit artifacts live in git-ignored dirs; commit them locally at turn end for the diff viewer, NEVER push them, undo that commit next turn, and keep one report file updated in place, marking each disposition; omit the file when the report fits in chat.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.
 - **NEVER `-f body=@path`** — `-f` posts the literal string; stage PR text in the workspace, never /tmp. A 200 from a PR PATCH is not proof: re-fetch title and body, diff against the staged file, keep both current.
@@ -94,6 +94,7 @@
 ## Response
 
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
+- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; ASD-STE100; no skill or linter.
 - NEVER mermaid, which Arena cannot render.
 - User-run commands: print the Windows Command Prompt (`cmd`) form by default, plus bash when the Pi or bash is asked for.
 - Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
