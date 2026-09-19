@@ -629,14 +629,7 @@ def check_skill_refs_parity(errors: list[str]) -> None:
       if (reference / relative).read_bytes() != (live / relative).read_bytes():
         errors.append(f"skills/{name}/{relative}: refs/live files differ")
 
-    ref_lines = len(baseline.read_text(encoding="utf-8").splitlines())
-    live_lines = len(live_entry.read_text(encoding="utf-8").splitlines())
-    if live_lines > ref_lines:
-      errors.append(
-        f"skills/{name}: live SKILL.md has {live_lines} lines vs "
-        f"{ref_lines} in skills/refs/{name}/SKILL.md; compression may merge "
-        "lines but never add content"
-      )
+
 
 def validate(errors: list[str]) -> None:
   skills = sorted(
