@@ -57,9 +57,11 @@ Read these first:
 ## Reports and approval
 
 - Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it.
+- A report that fits in chat is sent in chat; omit the report markdown file in that case, and skip the local reports commit.
+- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; ASD-STE100; no skill or linter.
 - No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
-- Keep one report file per change in a git-ignored output dir, updated in place across turns, committed locally only and never pushed.
+- Keep one report file per change in a git-ignored output dir when the report does not fit in chat, updated in place across turns, committed locally only and never pushed.
 
 ## Budgets
 
