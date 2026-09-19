@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.6.0"
+  version: "1.7.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -27,7 +27,7 @@ Steer the Arena agent WITHOUT interrupting its turn, even when the Arena client 
 
 One channel. ntfy needs no account, no token, no zone, and no page of our own; publishing is instant, messages are append-only, and the server holds them for 12 hours. Only the agent's page-fetch path reads ntfy correctly: the egress proxy gives in-sandbox GETs a fake empty HTTP 200 even while a topic holds messages.
 
-1. **Send the channel in chat**: generate a random topic and send its clickable `https://ntfy.sh/<topic>` link as the first line of the first chat reply, with the ARENA.md confirmation. First-read of ARENA.md and this skill may precede that reply. It must be visible before the first topic fetch, because a fetch fails until the user has sent something in the channel: the agent cannot publish to one, and the page-fetch tool reports an empty topic as its own HTTP 500, so that first failure is expected, not a broken channel. Never defer it to a summary or a later message, and never commit the topic, since ntfy has no sign-up and its docs call the topic essentially a password.
+1. **Send the channel in chat**: generate a topic `<repo>-<pr>-<random>` (repo name, PR number or `0`, random token) and send its clickable `https://ntfy.sh/<topic>` link as the first line of the first chat reply, with the ARENA.md confirmation. First-read of ARENA.md and this skill may precede that reply. It must be visible before the first topic fetch, because a fetch fails until the user has sent something in the channel: the agent cannot publish to one, and the page-fetch tool reports an empty topic as its own HTTP 500, so that first failure is expected, not a broken channel. Never defer it to a summary or a later message, and never commit the topic, since ntfy has no sign-up and its docs call the topic essentially a password.
 2. **The user publishes outside the sandbox**: to `https://ntfy.sh/<topic>` from the web UI, the phone app, or `curl -d "note" ntfy.sh/<topic>` on their own machine; sandbox POSTs are TLS-killed.
 3. **The agent reads and ingests**: `https://ntfy.sh/<topic>/json?poll=1&since=<lastmessage>`, or `since=all` until the log holds an id, only through its page-fetch tool, never through curl or another in-sandbox HTTP client, then passes the returned body verbatim to `scripts/ntfy_steering.py`, which delivers each message once into the notes and log files, deduplicated by ntfy's message id, and prints the URL to pull next.
 
