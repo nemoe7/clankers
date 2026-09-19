@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode sessions only. Needs Python 3+ and an agent-side page-fetch path; the user's side is ntfy's web UI or app.
 metadata:
   author: arena-user
-  version: "1.7.0"
+  version: "1.8.0"
   external-channel: "ntfy"
   arena-only: "true"
   use-when: "arena"
@@ -56,10 +56,11 @@ CONTEXT: the user actually wants X
 
 Fetch only via page-fetch, always by pulling the link, since the notes file holds only what some earlier read delivered: at turn start, after every reasoning block, before and after every tool call, and before turn end or anything expensive or hard to undo, such as push, rewrite, delete, or long build. Skip no check because the last read came back empty or the call looked short. Where the surface batches independent tool calls into one block, co-issue the pull inside every block as one of its parallel calls and read it again once the block returns: calls in a block issue at the same instant, so none can run before each of them in sequence, and a block is the unit of the cadence there. Batching places the pull inside the block it brackets; it is never a reason to pull less often. Use the `since=<lastmessage>` URL the ingest script prints, which returns only what is new. After a blocking call such as a question, read right after it returns, not before, because nothing new can arrive while it blocks. The closing check is not optional: a note sent while the agent was working is otherwise read a turn late. Activation is observable, not inferred: the topic named in the first reply, and a `STEERING_LOG.md` whose first check line lands on the first ingest run, so a session with no log never ran the skill, whatever it read.
 
-Two clauses are not optional, because the user cannot see any of this:
+Three clauses are not optional, because the user cannot see any of this:
 
-- **Acknowledge every note in chat.** `STEER RECEIVED:` and the line saying what the note asked and what changed belong in the reply the user reads, never in reasoning, a tool call, or `STEERING.md`: an ack nobody can see is a dropped note, and they will send it again.
+- **Acknowledge every note in chat.** `10-4:` and the line saying what the note asked and what changed belong in the reply the user reads, never in reasoning, a tool call, or `STEERING.md`: an ack nobody can see is a dropped note, and they will send it again.
 - **Disagree out loud.** A note is an instruction about what to do, not a fact about what is true. When a note contradicts a measurement, say which of the two is wrong and show the evidence, then do the thing that survives it. Reflexive agreement is the one failure mode this channel cannot absorb.
+- **Keep production clean of this skill.** Never name this skill, its directory, `SKILL.md`, or its scripts in production docs, code, or comments. The skill's own files, the chat topic link, and `10-4:` are the exceptions.
 
 Read the notes file with the helper:
 
@@ -112,4 +113,4 @@ $ STEERING_NTFY_TOPIC=clankers-example STEERING_FILE=reports/STEERING.md \
 Next pull: https://ntfy.sh/clankers-example/json?poll=1&since=hwQ2YpKdmg
 ```
 
-The agent then reads `reports/STEERING.md`, opens the next chat reply with `STEER RECEIVED:` in visible text, not a thought, and pivots.
+The agent then reads `reports/STEERING.md`, opens the next chat reply with `10-4:` in visible text, not a thought, and pivots.
