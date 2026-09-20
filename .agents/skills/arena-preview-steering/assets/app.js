@@ -137,8 +137,8 @@ function showHistory(notes) {
     receiptId.textContent = item.id.slice(0, 7);
     receiptId.title = item.id;
     const receiptState = document.createElement('span');
-    // Sent until an acknowledgement lands, then Seen for a plain line and Said for a rendered reply.
-    const state = !item.acknowledged_at ? 'Sent' : item.ack_kind === 'reply' ? 'Said' : 'Seen';
+    // Sent until the agent reads it, Seen once a CLI read has stamped seen_at, Said once acknowledged.
+    const state = item.acknowledged_at ? 'Said' : item.seen_at ? 'Seen' : 'Sent';
     receiptState.textContent = ` · ${state} ${time(item.at)}`;
     receipt.replaceChildren(receiptId, receiptState);
     const answer = node.children[1];

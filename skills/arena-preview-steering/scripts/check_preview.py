@@ -133,6 +133,7 @@ with tempfile.TemporaryDirectory() as directory:
     served_note = json.loads(state_body)["notes"][0]
     assert "&lt;script&gt;" in served_note["html"]
     assert "ack_html" not in served_note and served_note["ack_text"] == "and rechecked"
+    assert served_note["seen_at"] is not None
     store.acknowledge(["message-1"], "reply", "<script>alert(1)</script> **safe**")
     status, _, state_body = request("GET", "/api/state")
     served_note = json.loads(state_body)["notes"][0]
@@ -431,7 +432,7 @@ with tempfile.TemporaryDirectory() as directory:
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, reports, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, seen-at-read, reports, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )
 
 with tempfile.TemporaryDirectory() as legacy_dir:
@@ -446,9 +447,28 @@ with tempfile.TemporaryDirectory() as legacy_dir:
   db.execute(
     "INSERT INTO notes (id, text, at) VALUES ('old', 'kept', '2026-01-01T00:00:00+00:00')"
   )
+  db.execute(
+    "INSERT INTO notes (id, text, at, acknowledged_at)"
+    " VALUES ('answered', 'kept', '2026-01-01T00:00:00+00:00', '2026-01-02T00:00:00+00:00')"
+  )
   db.commit()
   db.close()
   migrated = preview.Store(legacy, create=True)
-  assert [row["id"] for row in migrated.state()["notes"]] == ["old"]
+  assert [row["id"] for row in migrated.state()["notes"]] == ["old", "answered"]
+  assert migrated.state()["notes"][1]["seen_at"] == "2026-01-02T00:00:00+00:00"
   migrated.acknowledge(["old"], "note", "still here")
   assert migrated.state()["notes"][0]["ack_text"] == "still here"
+  assert migrated.state()["notes"][0]["seen_at"] is not None
+
+with tempfile.TemporaryDirectory() as seen_dir:
+  unread = preview.Store(seen_dir, create=True)
+  unread.note("s-1", "unread")
+  assert unread.state()["notes"][0]["seen_at"] is None
+  listing = unread.read()
+  stamped = unread.state()["notes"][0]["seen_at"]
+  assert [row["id"] for row in listing["pending"]] == ["s-1"]
+  assert listing["pending"][0]["seen_at"] == stamped is not None
+  unread.read()
+  assert unread.state()["notes"][0]["seen_at"] == stamped
+  unread.acknowledge(["s-1"], "reply", "read, then answered")
+  assert unread.state()["notes"][0]["seen_at"] == stamped
