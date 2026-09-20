@@ -25,6 +25,7 @@
 - Follow repo docs, conventions, and existing patterns.
 - MUST use ASD-STE100 for human-facing text.
 - Batch independent tool calls into one block where the surface permits.
+- With several tasks open, do the smallest first and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
 ## Scope
