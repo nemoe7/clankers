@@ -238,6 +238,15 @@ with tempfile.TemporaryDirectory() as directory:
     assert "border-color: var(--accent)" not in page
     assert "padding-bottom: 12px;" in page
     assert "#report-form { min-width: 0; margin-top: 24px; }" in page
+    assert (
+      ".message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px 8px 12px; border-left: 2px solid var(--accent); border-radius: 8px; color: var(--muted); }"
+      in page
+    )
+    assert ".answer.reply {" not in page
+    assert (
+      ".answer.note { font-size: 13px; color: var(--muted); white-space: pre-wrap; }"
+      in page
+    )
     assert ":not(pre) > code { background: var(--bubble)" in page
     assert ".report :not(pre) > code" not in page
     assert "background: none; padding: 0; }" in page
