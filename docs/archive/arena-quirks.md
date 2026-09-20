@@ -170,6 +170,9 @@ rather than assumed: `Store.note()` looks the ID up first, returns the stored re
 the same ID arrives with the same text, and refuses when the same ID arrives with different text. A
 duplicate carrying the same ID therefore costs nothing. A duplicate arriving with a fresh ID is a
 second note, and nothing in the agent's behaviour guards against answering it twice, so the guard is
-to look for an identical recent note in the log before answering one that reads like a repeat. No
-duplicate has been observed in this repository's inbox; the entry records the warning and the one
-defence that exists.
+to look for an identical recent note in the log before answering one that reads like a repeat.
+
+The owner then confirmed it from their side rather than leaving it a warning: Arena likes to repeat
+their messages, and each repeat queues another turn, so the duplication is observed behaviour and not
+a hypothesis. What it costs is visible in this session — the same ask arriving twice is answered
+twice unless the agent notices, and a repeated message can revive a turn that had ended.
