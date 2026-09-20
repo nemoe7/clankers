@@ -208,10 +208,6 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   const answer = get('#history').children[0].children[1];
   assert.equal(typeof documentEvents.click, 'function');
-  assert.equal(typeof context.boundedId, 'function');
-  assert.equal(context.boundedId('a66700e4-37f0-4182-b782-33c38a83728d'), 'a66700e-4-37f0-4182-b782-33c38a83728d');
-  assert.equal(context.boundedId('a66700e'), 'a66700e');
-  assert.equal(context.boundedId('one'), 'one');
   const copyButton = new Element();
   copyButton.className = 'copy-code';
   copyButton.dataset = { code: 'print(1)' };
@@ -370,5 +366,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
   await get('#refresh-notes').events.click();
   assert.match(get('#history').children.at(-1).children[2].textContent, /[A-Z][a-z]{2} \d{2} \d{2}, \d{2}:\d{2}/);
+  state = { notes: [{ id: 'a66700e4-37f0-4182-b782-33c38a83728d', text: 'long id', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
+  await get('#refresh-notes').events.click();
+  const longReceipt = get('#history').children.at(-1).children[2];
+  assert.equal(longReceipt.children[0].textContent, 'a66700e');
+  assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
+  assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
