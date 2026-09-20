@@ -264,6 +264,33 @@ function applyAnswers(root, answers) {
     for (const control of field.querySelectorAll('input')) control.checked = values.includes(control.value);
   }
 }
+async function copyCode(button) {
+  const code = button.dataset.code || '';
+  const flash = label => {
+    button.textContent = label;
+    setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+  };
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
+    await navigator.clipboard.writeText(code);
+    flash('Copied');
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = code;
+    area.setAttribute('readonly', '');
+    document.body.append(area);
+    area.select();
+    const copied = typeof document.execCommand === 'function' && document.execCommand('copy');
+    area.remove();
+    flash(copied ? 'Copied' : 'Select and copy');
+  }
+}
+document.addEventListener('click', event => {
+  const target = event.target;
+  if (!target || typeof target.className !== 'string') return;
+  if (!target.className.split(' ').includes('copy-code')) return;
+  copyCode(target);
+});
 function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }

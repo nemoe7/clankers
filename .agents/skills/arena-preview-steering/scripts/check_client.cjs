@@ -40,9 +40,15 @@ class Element {
   querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
   get lastElementChild() { return this.children.at(-1); }
   focus() { this.focused = true; }
+  select() { this.selected = true; }
+  remove() { this.removed = true; }
   requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
 }
 const elements = new Map();
+const documentEvents = {};
+const copied = [];
+let clipboardFails = false;
+let execCommandResult = true;
 const get = id => {
   if (!elements.has(id)) elements.set(id, new Element());
   return elements.get(id);
@@ -61,7 +67,8 @@ let reportFields = 0;
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
-  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {} } },
+  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
+  navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `note-${++counter}` },
   AbortController,
@@ -192,6 +199,31 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes[0].ack_html = '<p><strong>done</strong></p>';
   await get('#refresh-notes').events.click();
   const answer = get('#history').children[0].children[1];
+  assert.equal(typeof documentEvents.click, 'function');
+  const copyButton = new Element();
+  copyButton.className = 'copy-code';
+  copyButton.dataset = { code: 'print(1)' };
+  documentEvents.click({ target: copyButton });
+  await tick();
+  assert.deepEqual(copied, ['print(1)']);
+  assert.equal(copyButton.textContent, 'Copied');
+  documentEvents.click({ target: new Element() });
+  documentEvents.click({});
+  clipboardFails = true;
+  const fallback = new Element();
+  fallback.className = 'copy-code';
+  fallback.dataset = { code: 'second' };
+  documentEvents.click({ target: fallback });
+  await tick();
+  assert.equal(fallback.textContent, 'Copied');
+  execCommandResult = false;
+  const denied = new Element();
+  denied.className = 'copy-code';
+  denied.dataset = { code: 'third' };
+  documentEvents.click({ target: denied });
+  await tick();
+  assert.equal(denied.textContent, 'Select and copy');
+  clipboardFails = false;
   assert.equal(answer.innerHTML, '<p><strong>done</strong></p>');
   assert.match(answer.className, /answer reply report/);
   assert.equal(answer.hidden, false);
