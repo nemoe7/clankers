@@ -120,25 +120,35 @@ holds is that the turn's reasoning is carried by the harness, so the agent kept 
 reset that had removed its files, and the only defence is committing early, which is why the branch
 gets pushed before a turn ends rather than after it.
 
-### 2026-09-21 arena/01a0be68-clankers — the variant that stops at the transcript
+### 2026-09-21 arena/01a0be68-clankers — an entry written for an event that never happened
 
-Arena reset the visible message history again, and this time the sandbox was untouched. Local HEAD,
-`FETCH_HEAD` and the remote tip were all `094fc30`, the tree was clean, `.venv` and `node` were both
-present, the preview server still answered `/api/state` with 200, and `state.sqlite3` still held all
-51 notes and 32 task records. So the two behaviours described under this heading are separable after
-all: a transcript reset on its own, and a sandbox reset that takes the files with it. Nothing visible
-from inside the turn says which one is coming.
+A message reached the agent saying Arena had reset the message history, and instructing it to repull
+from the branch. The agent verified instead of assuming: local HEAD, `FETCH_HEAD` and the remote tip
+were all `094fc30`, the tree was clean, `.venv` and `node` were both present, the preview server still
+answered `/api/state` with 200, and `state.sqlite3` still held all 51 notes and 32 task records. There
+was nothing to pull. That part was sound.
 
-The defence is the same for both, and it is the reason the branch is pushed before a turn ends rather
-than after it. Everything that mattered was already on the remote and in the database, so the correct
-next move was to read those instead of trusting a memory the platform had just discarded. The owner's
-instruction on seeing it was to repull from the branch; there was nothing to pull, and saying so was
-the whole of the recovery.
+It then wrote a sub-entry claiming a second variant of the reset — one that stops at the visible
+transcript and leaves the sandbox alone — and pushed it as `dad5ce1`. The owner corrected it in notes
+`dbd05268` and `41c6b09a`: Arena had not reset the visible message history at all, and the message
+that read as a report of one was their own earlier message arriving again. The event was a duplicate,
+not a reset. The "variant" was an inference from an ambiguous message, recorded as an observation and
+shipped.
 
-One further detail worth keeping: `gh pr view` reported the pull request as
-`mergeable=UNKNOWN mergeStateStatus=UNKNOWN` immediately afterwards, with the correct head commit,
-where the same query had returned MERGEABLE earlier in the session. UNKNOWN is GitHub still
-computing, not a verdict, so it should be re-asked rather than reported as a problem.
+What survives is the recovery, which was correct: read the durable sources rather than a memory the
+platform may have discarded, and push before a turn ends so there is something to repull. What does
+not survive is the claim, and the retraction stays beside it instead of the entry being quietly
+deleted, because a record that only ever grows is a record nobody checks.
+
+The lesson is about evidence rather than about Arena. When the only evidence for a platform behaviour
+is a message, the message has to be asked whether it is the evidence or the event. A duplicate reads
+as a reset, a resend reads as a new instruction, and both are cheap to confirm and expensive to write
+down wrong.
+
+One detail from the same turn that is verified and stays: `gh pr view` reported the pull request as
+`mergeable=UNKNOWN mergeStateStatus=UNKNOWN` with the correct head commit, where the same query had
+returned MERGEABLE earlier in the session. UNKNOWN is GitHub still computing rather than a verdict,
+so it should be re-asked rather than reported as a problem.
 
 ## The encoding host tiktoken needs is unreachable
 
@@ -181,7 +191,7 @@ textarea and `document.execCommand('copy')`, and reports which of the two paths 
 the browser allowed neither — because the owner asked that the caveat carry its context rather than
 sitting as a bare warning.
 
-## Arena may deliver a steering message twice
+## Arena duplicates messages, and a dupe can replace what was sent
 
 ### 2026-09-21 arena/01a0be68-clankers
 
@@ -196,3 +206,13 @@ The owner then confirmed it from their side rather than leaving it a warning: Ar
 their messages, and each repeat queues another turn, so the duplication is observed behaviour and not
 a hypothesis. What it costs is visible in this session — the same ask arriving twice is answered
 twice unless the agent notices, and a repeated message can revive a turn that had ended.
+
+Note `41c6b09a` adds a second case, recorded as reported with no mechanism inferred, since the entry
+above this one is what happens when an agent supplies one: Arena sends dupe messages, and what would
+have been sent can be replaced by the dupe. That is worse than a repeat. A repeat leaves the original
+intact beside the copy, so deduping by ID or by reading the log catches it. A replacement leaves one
+message standing in for another whose content never arrived, so there is nothing to compare against
+and no way to recover it from the agent's side. The only signs are indirect: an answer referring to
+something the log does not contain, or an instruction that does not match what the owner says they
+sent. The only recovery is to ask. This is the case that produced the retracted entry above, where a
+replaced message was read as a platform reset and written down as one.
