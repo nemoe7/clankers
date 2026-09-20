@@ -35,6 +35,15 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          # There is no requirements file: the pins live in this workflow and in ruff.toml, so the
+          # workflow itself is the honest cache key and any dependency change busts it.
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/validate.yml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
       - name: Install maintenance dependencies
         run: python -m pip install tiktoken markdown-it-py
 
