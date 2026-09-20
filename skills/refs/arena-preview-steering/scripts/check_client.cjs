@@ -208,6 +208,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   const answer = get('#history').children[0].children[1];
   assert.equal(typeof documentEvents.click, 'function');
+  assert.equal(typeof context.boundedId, 'function');
+  assert.equal(context.boundedId('a66700e4-37f0-4182-b782-33c38a83728d'), 'a66700e-4-37f0-4182-b782-33c38a83728d');
+  assert.equal(context.boundedId('a66700e'), 'a66700e');
+  assert.equal(context.boundedId('one'), 'one');
   const copyButton = new Element();
   copyButton.className = 'copy-code';
   copyButton.dataset = { code: 'print(1)' };
