@@ -218,7 +218,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS notes (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
-          ack_kind TEXT, ack_text TEXT
+          ack_kind TEXT, ack_text TEXT, seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -227,14 +227,26 @@ class Store:
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
-          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT
+          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
-      for column in ("ack_kind", "ack_text"):
+      for column in ("ack_kind", "ack_text", "seen_at"):
         if column not in columns:
           db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
+      if "seen_at" not in columns:
+        db.execute(
+          "UPDATE notes SET seen_at = acknowledged_at"
+          " WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL"
+        )
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
+      if "seen_at" not in columns:
+        db.execute("ALTER TABLE submissions ADD COLUMN seen_at TEXT")
+        db.execute(
+          "UPDATE submissions SET seen_at = acknowledged_at"
+          " WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL"
+        )
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "seq" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seq INTEGER")
@@ -306,6 +318,13 @@ class Store:
 
   def read(self):
     with closing(self.connect()) as db, db:
+      stamp = now()
+      for table in ("notes", "submissions"):
+        db.execute(
+          f"UPDATE {table} SET seen_at = ?"
+          " WHERE acknowledged_at IS NULL AND seen_at IS NULL",
+          (stamp,),
+        )
       pending = [
         dict(row) | {"kind": "note"}
         for row in db.execute(
@@ -334,9 +353,10 @@ class Store:
         for table in ("notes", "submissions"):
           cursor = db.execute(
             f"""UPDATE {table} SET acknowledged_at = COALESCE(acknowledged_at, ?),
-               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text)
+               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text),
+               seen_at = COALESCE(seen_at, ?)
                WHERE id = ?""",
-            (stamp, kind, text, record_id),
+            (stamp, kind, text, stamp, record_id),
           )
           if cursor.rowcount:
             break

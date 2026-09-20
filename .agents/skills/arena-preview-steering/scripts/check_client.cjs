@@ -196,11 +196,14 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[1].hidden, true);
   assert.match(get('#history').children[0].children[1].className, /^answer/);
   assert.equal(get('#history').children[0].children[2].className, 'receipt');
+  state.notes[0].seen_at = new Date().toISOString();
+  await get('#refresh-notes').events.click();
+  assert.match(get('#history').children[0].children[2].textContent, /^one · Seen /);
   state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
   state.notes[0].acknowledged_at = new Date().toISOString();
   state.last_check = new Date().toISOString();
   await get('#refresh-notes').events.click();
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Seen /);
+  assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
   assert.match(get('#last-check').textContent, /^Last checked [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
   assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
   state.notes[0].ack_kind = 'reply';
@@ -249,7 +252,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(answer.textContent, 'rechecked');
   assert.match(answer.className, /answer note/);
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Seen /);
+  assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
   assert.equal(get('#note').value, 'new unsent draft');
   state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
   log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
