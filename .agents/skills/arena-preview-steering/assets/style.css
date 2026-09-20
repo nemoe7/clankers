@@ -154,5 +154,10 @@ a { color: var(--accent); text-underline-offset: 3px; }
 /* The Tasks tab is two divs the agent writes: finished above, upcoming below. */
 .tasks-layout { display: flex; flex-direction: column; gap: 18px; }
 .task-div { min-width: 0; overflow-wrap: anywhere; }
+.task-list { margin: 0; padding-left: 20px; }
+.task-title { font-weight: 600; }
+/* Details sit under the title in the muted face, one line each, and repeat in the row hover. */
+.task-details { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
+.task-detail { display: block; }
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid var(--accent); padding-left: 12px; }

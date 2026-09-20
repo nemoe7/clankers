@@ -192,40 +192,55 @@ def field_html(question):
   return f"{body}{group}</div></div>"
 
 
-TASK_HEADING = re.compile(r"^##\s+(finished|upcoming)\s*$", re.IGNORECASE)
-TASK_SECTIONS = ("finished", "upcoming")
+TASK_STATUSES = ("upcoming", "finished")
+TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+MAX_TASK_TITLE = 200
+MAX_TASK_DETAIL = 2000
+MAX_TASK_DETAILS = 40
+ECHO_DETAIL = 200
+TASK_COLUMNS = "id, title, details, status, position, updated_at"
 
 
-def task_sections(markdown):
-  """Split a task list into its two required sections, in either order."""
-  found = {}
-  current = None
-  for line in markdown.splitlines():
-    heading = TASK_HEADING.match(line)
-    if heading:
-      current = heading.group(1).lower()
-      found[current] = []
-      continue
-    if current:
-      found[current].append(line)
-  if set(found) != set(TASK_SECTIONS):
-    raise ValueError(
-      "A task list needs exactly two sections: ## Finished and ## Upcoming"
-    )
-  return {key: "\n".join(found[key]).strip() for key in TASK_SECTIONS}
-
-
-def task_state(meta):
-  """Return the stored task list for the state payload, or None before one is written."""
-  if "tasks_finished_html" not in meta:
-    return None
+def task_row(row):
+  """Shape one stored task for the state payload, keeping its details a list."""
   return {
-    "finished": meta.get("tasks_finished", ""),
-    "upcoming": meta.get("tasks_upcoming", ""),
-    "finished_html": meta["tasks_finished_html"],
-    "upcoming_html": meta["tasks_upcoming_html"],
-    "updated_at": meta.get("tasks_updated_at", ""),
+    "id": row[0],
+    "title": row[1],
+    "details": json.loads(row[2]),
+    "status": row[3],
+    "order": row[4],
+    "updated_at": row[5],
   }
+
+
+def echo_task(record):
+  """The confirmation an agent gets back: whole title, details cut to save tokens."""
+  return {
+    "id": record["id"],
+    "title": record["title"],
+    "status": record["status"],
+    "order": record["order"],
+    "details": [
+      detail[:ECHO_DETAIL] + ("\u2026" if len(detail) > ECHO_DETAIL else "")
+      for detail in record["details"]
+    ],
+  }
+
+
+def check_task(task_id, title, details):
+  """Validate one task's fields before anything is written."""
+  if not TASK_ID.match(task_id or ""):
+    raise ValueError(
+      "A task ID is 1-64 characters of lowercase letters, digits and hyphens,"
+      " and starts with a letter or digit"
+    )
+  if title is not None and len(title) > MAX_TASK_TITLE:
+    raise ValueError(f"A task title must be {MAX_TASK_TITLE} characters or fewer")
+  if len(details or ()) > MAX_TASK_DETAILS:
+    raise ValueError(f"A task carries at most {MAX_TASK_DETAILS} details")
+  for detail in details or ():
+    if len(detail) > MAX_TASK_DETAIL:
+      raise ValueError(f"A task detail must be {MAX_TASK_DETAIL} characters or fewer")
 
 
 def render_report(markdown):
@@ -266,6 +281,16 @@ class Store:
           acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS tasks (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          details TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL DEFAULT 'upcoming'
+            CHECK (status IN ('upcoming', 'finished')),
+          position INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
       for column in ("ack_kind", "ack_text", "seen_at"):
@@ -340,6 +365,7 @@ class Store:
       return [dict(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")]
 
   def state(self):
+    tasks = self.tasks()
     with closing(self.connect()) as db:
       meta = dict(db.execute("SELECT key, value FROM meta"))
       return {
@@ -350,31 +376,121 @@ class Store:
             "SELECT id, title, updated_at, seq FROM reports ORDER BY seq, id"
           )
         ],
-        "tasks": task_state(meta),
+        "tasks": tasks,
         "last_check": meta.get("last_check"),
       }
 
-  def write_tasks(self, source):
-    """Replace both task sections from one Markdown file, rendered once at write time."""
-    require_renderer()
-    source = Path(source)
-    if source.suffix.lower() != ".md":
-      raise ValueError("Publish a UTF-8 .md source file")
-    markdown = source.read_text(encoding="utf-8")
-    if len(markdown) > MAX_REPORT:
-      raise ValueError("A task list must be under 2 MB of UTF-8 Markdown")
-    sections = task_sections(markdown)
+  def tasks(self):
+    """Both divs as records in order, or None while nothing is stored."""
+    with closing(self.connect()) as db:
+      rows = db.execute(
+        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id"
+      ).fetchall()
+    records = [task_row(row) for row in rows]
+    if not records:
+      return None
+    return {
+      "finished": [item for item in records if item["status"] == "finished"],
+      "upcoming": [item for item in records if item["status"] == "upcoming"],
+      "updated_at": max(item["updated_at"] for item in records),
+    }
+
+  def list_tasks(self):
+    """Every task as stored, for an agent to read the list back."""
+    with closing(self.connect()) as db:
+      rows = db.execute(
+        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id"
+      ).fetchall()
+    return [task_row(row) for row in rows]
+
+  def write_task(self, task_id, title=None, details=None, status=None, order=None):
+    """Insert or update one task and return it as stored.
+
+    A title or details left out keep the stored ones, so moving a task between
+    the two divs is one short command rather than a rewrite of the whole list.
+    """
+    details = [str(item) for item in details if str(item).strip()] if details else None
+    check_task(task_id, title, details)
+    if status is not None and status not in TASK_STATUSES:
+      raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
     stamp = now()
     with closing(self.connect()) as db, db:
-      for key, value in (
-        ("tasks_finished", sections["finished"]),
-        ("tasks_upcoming", sections["upcoming"]),
-        ("tasks_finished_html", render(sections["finished"])),
-        ("tasks_upcoming_html", render(sections["upcoming"])),
-        ("tasks_updated_at", stamp),
-      ):
-        db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, value))
-    return stamp
+      row = db.execute(
+        f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
+      ).fetchone()
+      stored = task_row(row) if row else None
+      if stored is None and title is None:
+        raise ValueError("A new task needs a title")
+      title = title if title is not None else stored["title"]
+      if details is None:
+        details = stored["details"] if stored else []
+      status = status or (stored["status"] if stored else "upcoming")
+      siblings = [
+        task_row(item)
+        for item in db.execute(
+          f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ?"
+          " ORDER BY position, id",
+          (status, task_id),
+        ).fetchall()
+      ]
+      record = {
+        "id": task_id,
+        "title": title,
+        "details": details,
+        "status": status,
+        "order": len(siblings) + 1,
+        "updated_at": stamp,
+      }
+      if order is not None:
+        index = max(0, min(order - 1, len(siblings)))
+      elif stored and stored["status"] == status:
+        index = max(0, min(stored["order"] - 1, len(siblings)))
+      else:
+        index = len(siblings)
+      siblings.insert(index, record)
+      record["order"] = index + 1
+      db.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(id) DO UPDATE SET title = excluded.title,"
+        " details = excluded.details, status = excluded.status,"
+        " position = excluded.position, updated_at = excluded.updated_at",
+        (
+          task_id,
+          title,
+          json.dumps(details, ensure_ascii=False),
+          status,
+          index + 1,
+          stamp,
+          stamp,
+        ),
+      )
+      # Positions are written from the computed list, because the row just upserted can tie
+      # with a sibling it was inserted before, and a tie would reorder them by ID.
+      for position, item in enumerate(siblings, 1):
+        db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, item["id"]))
+      self.renumber(db)
+    return record
+
+  def remove_task(self, task_id):
+    """Delete one task and return what was stored, so the echo can confirm it."""
+    with closing(self.connect()) as db, db:
+      row = db.execute(
+        f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
+      ).fetchone()
+      if row is None:
+        raise ValueError(f"No task is stored under {task_id}")
+      db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+      self.renumber(db)
+    return task_row(row)
+
+  def renumber(self, db):
+    """Keep positions dense inside each div after a move, an insert or a removal."""
+    for status in TASK_STATUSES:
+      rows = db.execute(
+        "SELECT id FROM tasks WHERE status = ? ORDER BY position, id", (status,)
+      ).fetchall()
+      for position, row in enumerate(rows, 1):
+        db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, row[0]))
 
   def read(self):
     with closing(self.connect()) as db, db:
@@ -730,8 +846,24 @@ def main():
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
   publish.add_argument("--title", required=True)
-  tasks = commands.add_parser("tasks")
-  tasks.add_argument("source", type=Path)
+  task = commands.add_parser("task")
+  task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
+  task.add_argument("title_arg", nargs="?", metavar="TASK-TITLE")
+  task.add_argument("detail_arg", nargs="*", metavar="TASK-DETAIL")
+  task.add_argument("--task-id", help="The ID the first positional takes")
+  task.add_argument("--task-title", help="The title the second positional takes")
+  task.add_argument(
+    "--task-details",
+    action="append",
+    help="One detail line, repeatable; an empty string clears the list",
+  )
+  task.add_argument("--status", choices=TASK_STATUSES, default=None)
+  task.add_argument(
+    "--order", type=int, default=None, help="1-based place in its div, not the end"
+  )
+  task_remove = commands.add_parser("task-remove")
+  task_remove.add_argument("task_id")
+  commands.add_parser("task-list")
   legacy = commands.add_parser("import-notes")
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
@@ -756,9 +888,25 @@ def main():
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}; select it in the Reports tab")
-    elif args.command == "tasks":
-      stamp = store.write_tasks(args.source)
-      print(f"Task list updated {stamp}; both sections render in the Tasks tab")
+    elif args.command == "task":
+      task_id = args.task_id or args.id_arg
+      if not task_id:
+        raise ValueError("A task needs an ID")
+      details = args.task_details
+      if details is None and args.detail_arg:
+        details = args.detail_arg
+      record = store.write_task(
+        task_id,
+        args.task_title or args.title_arg,
+        details,
+        args.status,
+        args.order,
+      )
+      print(json.dumps(echo_task(record), ensure_ascii=False))
+    elif args.command == "task-remove":
+      print(json.dumps(echo_task(store.remove_task(args.task_id)), ensure_ascii=False))
+    elif args.command == "task-list":
+      print(json.dumps(store.list_tasks(), ensure_ascii=False))
     elif args.command == "import-notes":
       records = [
         json.loads(line)
