@@ -1,5 +1,5 @@
 An explicit user instruction in chat outranks these instructions; state the override in one line.
-Prefer ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. No linter or spec file enforces the standard here, so decide for yourself whether to follow it, and look it up when you need its rules.
+MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. No linter or spec file enforces the standard here, so decide for yourself whether to follow it, and look it up when you need its rules.
 
 RESPONSE: Terse yet clear, numbered lists.
 No unnecessary prose: no preambles, postambles, transitions, acknowledgments, or disclaimers.
