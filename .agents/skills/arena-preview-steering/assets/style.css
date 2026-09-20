@@ -47,7 +47,9 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #reports-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 .log-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-.compose { flex: 0 0 auto; max-height: 48%; overflow-y: auto; }
+.compose { flex: 0 0 auto; max-height: 48%; overflow-y: auto; padding: 14px 18px; }
+.compose .row { margin: 8px 0; }
+#preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
 body[data-composer="closed"] .compose { display: none; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
@@ -58,16 +60,17 @@ button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
 #send { border-color: var(--accent); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
-textarea { width: 100%; padding: 14px; line-height: 1.6; resize: vertical; min-height: 112px; }
+textarea { width: 100%; padding: 10px 12px; line-height: 1.6; resize: vertical; min-height: 72px; }
 textarea::placeholder { color: var(--muted); }
 select { max-width: 100%; min-height: 44px; padding: 8px; width: 100%; }
-small, .muted, #draft, #last-check { color: var(--muted); font-size: 13px; }
+small, .muted, #last-check { color: var(--muted); font-size: 13px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
-.notice { color: var(--muted); border-left: 2px solid var(--border); padding-left: 12px; font-size: 13px; }
 #send-status, #connection, #report-status { font-size: 14px; overflow-wrap: anywhere; }
 #connection, #last-check { margin-block: 0; padding-block: 0; }
 p.muted { margin-block: 4px; }
-.chevron { flex: none; min-width: 44px; padding: 6px 10px; line-height: 1; }
+.icon-button { flex: none; min-width: 40px; min-height: 0; padding: 5px 9px; line-height: 1; font-size: 14px; }
+body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
+body[data-chrome="closed"] .icon-button { padding: 2px 8px; font-size: 12px; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 0 14px; border-radius: 8px; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
