@@ -1,3 +1,11 @@
+## 2026-09-21 — Inline code gets a background chip
+
+- **Summary** — `.report :not(pre) > code` takes the bubble background with 1px by 5px of padding and a 4px radius, so inline code reads as a chip in published reports and in rendered log messages alike. That also fixes the reported bug: a fence closed on the line that opened it becomes an inline code span inside a paragraph, so it never reached the `pre` background and showed none. Code inside a `pre` keeps no background of its own, the block carrying it, and the receipt's monospaced ID sits outside any `.report` element, so it takes no chip.
+- **Cost** — per copy, `assets/style.css` 7,347 → 7,441 `B` and unbudgeted `references/REFERENCE.md` 18,313 → 18,939 `B`. `SKILL.md` is untouched at 9,772 `B`, so no budget moves and `BUDGET-EXCEPTIONS.md` is unchanged.
+- **Checks** — `render()` ran on three samples before the fix and gave the evidence the selector targets: a one-line fence produced `<p><code>text foo</code></p>`, plain inline code `<code>code</code>`, and a real block `<pre><code class="language-python">`. The served page carries the new rule. `check_client.cjs`, `check_preview.py`, `ruff check`/`ruff format`, `markdownlint-cli2` and `maintenance/check.py` green, the last with refs/live parity across all three trees.
+- **Limits** — one chip size for every inline span, so a long span wraps with padding on each fragment, and the bubble colour's contrast against the panel was read from the served page rather than measured. No harness renders CSS, so the chip is verified as present in the stylesheet, not as painted.
+- Origins: the owner's note 93f31d40 — a background for `code` elements by default, and the bug that a single-line fence had none.
+
 ## 2026-09-21 — Smallest task first becomes a rule
 
 - **Summary** — `rules/ARENA.md` gains one General rule: with several tasks open, do the smallest first and keep taking the smallest remaining, a user-stated priority outranking size, and re-sort whenever a task arrives so arrival order never decides. `rules/refs/ARENA.md` carries the full wording, which adds that a large task never blocks a small one. The root copy follows byte-identical, as `.github/workflows/distribute-arena.yml` expects.

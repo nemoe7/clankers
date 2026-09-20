@@ -100,6 +100,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .report th, .report td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
 .report pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .report code { font-family: ui-monospace, monospace; font-size: .9em; }
+.report :not(pre) > code { background: var(--bubble); padding: 1px 5px; border-radius: 4px; }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid var(--accent); }
 @media (max-width: 760px) {
   .topbar { padding: 10px 16px; }
