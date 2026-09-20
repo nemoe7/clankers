@@ -137,7 +137,9 @@ function showHistory(notes) {
     receiptId.textContent = item.id.slice(0, 7);
     receiptId.title = item.id;
     const receiptState = document.createElement('span');
-    receiptState.textContent = ` · ${item.acknowledged_at ? 'Seen' : 'Delivered'} ${time(item.at)}`;
+    // Sent until an acknowledgement lands, then Seen for a plain line and Said for a rendered reply.
+    const state = !item.acknowledged_at ? 'Sent' : item.ack_kind === 'reply' ? 'Said' : 'Seen';
+    receiptState.textContent = ` · ${state} ${time(item.at)}`;
     receipt.replaceChildren(receiptId, receiptState);
     const answer = node.children[1];
     if (item.ack_text && item.ack_kind === 'reply') {

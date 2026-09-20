@@ -184,8 +184,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
   await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Delivered /);
-  assert.doesNotMatch(get('#history').children[0].children[2].textContent, /Awaiting|ACK-ed|Saved| id /);
+  assert.match(get('#history').children[0].children[2].textContent, /^one · Sent /);
+  assert.doesNotMatch(get('#history').children[0].children[2].textContent,
+    /Awaiting|ACK-ed|Saved|Delivered| id /);
   assert.equal(get('#last-check').textContent, 'Not checked yet.');
   const stamp = get('#history').children[0].children[2].textContent;
   assert.match(stamp, /[A-Z][a-z]{2} \d{2}, \d{2}:\d{2}/);
@@ -207,6 +208,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes[0].ack_html = '<p><strong>done</strong></p>';
   await get('#refresh-notes').events.click();
   const answer = get('#history').children[0].children[1];
+  assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
   assert.equal(typeof documentEvents.click, 'function');
   const copyButton = new Element();
   copyButton.className = 'copy-code';
@@ -247,6 +249,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(answer.textContent, 'rechecked');
   assert.match(answer.className, /answer note/);
+  assert.match(get('#history').children[0].children[2].textContent, /^one · Seen /);
   assert.equal(get('#note').value, 'new unsent draft');
   state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
   log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
@@ -372,5 +375,6 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(longReceipt.children[0].textContent, 'a66700e');
   assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
+  assert.match(longReceipt.textContent, /^a66700e · Sent /);
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
