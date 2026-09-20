@@ -67,9 +67,9 @@ button:disabled { opacity: .55; cursor: wait; }
 textarea { width: 100%; padding: 10px 12px; line-height: 1.6; resize: vertical; min-height: 72px; }
 textarea::placeholder { color: var(--muted); }
 select { max-width: 100%; min-height: 44px; padding: 8px; width: 100%; }
-small, .muted, #last-check { color: var(--muted); font-size: 13px; }
+small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
-#send-status, #connection, #report-status { font-size: 14px; overflow-wrap: anywhere; }
+#send-status, #connection { font-size: 14px; overflow-wrap: anywhere; }
 #connection { display: flex; align-items: center; gap: 8px; }
 .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
 .dot[data-state="ok"] { background: #22c55e; }
@@ -92,6 +92,7 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; }
 #refresh-report { width: 44px; height: 44px; }
+#report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
 a { color: var(--accent); text-underline-offset: 3px; }
 .report { overflow-wrap: anywhere; overflow-x: auto; }
 .report :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }

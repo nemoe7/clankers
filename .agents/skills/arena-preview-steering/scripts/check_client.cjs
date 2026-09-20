@@ -257,8 +257,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   apiBox.checked = true;
   await get('#report-form').events.submit(event({}));
   assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'] });
-  assert.match(get('#report-status').textContent, /Saved/);
+  assert.match(get('#report-status').textContent, /^Answers sent /);
   assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'] });
+  await get('#refresh-report').events.click();
+  await tick();
+  assert.match(get('#report-status').textContent, /^Answers sent /);
+  assert.match(get('#report-status').textContent, /2 fields stay filled in/);
   reportFields = 0;
   await get('#refresh-report').events.click();
   await tick();

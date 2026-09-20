@@ -292,9 +292,11 @@ async function loadReport() {
       applyAnswers($('#report'), saved.answers);
       showReceipt(saved.at);
     }
-    $('#report-status').textContent = result.fields
-      ? `Report loaded with ${result.fields} field${result.fields === 1 ? '' : 's'}. Fill them in, then send; answers reach the agent inbox as one note.`
-      : 'Report loaded. Updates appear automatically.';
+    $('#report-status').textContent = saved && saved.answers
+      ? `Answers sent ${saved.at ? time(saved.at) : 'earlier'} · ${result.fields} field${result.fields === 1 ? '' : 's'} stay filled in; change them and send again to replace them.`
+      : result.fields
+        ? `Report loaded with ${result.fields} field${result.fields === 1 ? '' : 's'}. Fill them in, then send; answers reach the agent inbox as one note.`
+        : 'Report loaded. Updates appear automatically.';
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
   }
@@ -314,7 +316,7 @@ $('#report-form').addEventListener('submit', async event => {
       body: JSON.stringify({ id: crypto.randomUUID(), answers })
     })).json();
     if (save(`answers:${id}`, JSON.stringify({ answers, at: result.at }))) showReceipt(result.at);
-    $('#report-status').textContent = `Saved ${new Date(result.at).toLocaleTimeString()} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
+    $('#report-status').textContent = `Answers sent ${time(result.at)} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
   } catch (error) {
     $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
   } finally { button.disabled = false; }
