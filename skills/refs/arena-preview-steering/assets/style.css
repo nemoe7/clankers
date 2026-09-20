@@ -94,12 +94,11 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 #refresh-report { width: 44px; height: 44px; }
 a { color: var(--accent); text-underline-offset: 3px; }
 .report { overflow-wrap: anywhere; overflow-x: auto; }
-.report h1 { margin: 8px 0 12px; }
+.report :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }
 .report > :first-child { margin-top: 0; }
-.report h2 { margin: 14px 0 8px; }
 .report table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .report th, .report td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
-.report pre { padding: 16px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
+.report pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .report code { font-family: ui-monospace, monospace; font-size: .9em; }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid var(--accent); }
 @media (max-width: 760px) {
