@@ -1,3 +1,11 @@
+## 2026-09-21 — Notes are cited by their IDs, not their numbers
+
+- **Summary** — the steering skill's ack contract gains one rule: name a note by the first seven characters of its ID in every answer, report and document, never by its sequence number, that prefix being what the log receipt shows and enough to cite one, while `ack` itself takes the full ID that `read` prints. `references/REFERENCE.md` records the same convention and its one exception — reports keep the `1. Title` numbering asked for earlier, because a report is cited by title and the number only fixes publish order.
+- **Cost** — per copy, `SKILL.md` 9,772 → 10,080 `B` (+308), budgeted by UTF-8 size, and unbudgeted `references/REFERENCE.md` 18,939 → 19,380 `B`. `README.md` re-measured with `maintenance/check.py --update`; `BUDGET-EXCEPTIONS.md` records the growth.
+- **Checks** — `maintenance/check.py --update` then a clean re-run, with refs/live parity across all three trees and the README table at 10,080 `B`. Both harnesses green and unchanged, the rule governing the agent's prose rather than the code; `ruff check`/`ruff format` and `markdownlint-cli2` green.
+- **Limits** — nothing enforces the convention: no harness can read the agent's chat, so an agent that writes a sequence number still ships. Seven characters of a UUID collide only after some 16 million notes in one state file, and the full ID stays the key in `ack` and in storage.
+- Origins: the owner's notes e6ef532 and 62138e9 — refer to notes by their IDs rather than their numbers, IDs being preferred over switching the display to numbers, then the refinement that the citation form is the first seven characters.
+
 ## 2026-09-21 — Inline code gets a background chip
 
 - **Summary** — `.report :not(pre) > code` takes the bubble background with 1px by 5px of padding and a 4px radius, so inline code reads as a chip in published reports and in rendered log messages alike. That also fixes the reported bug: a fence closed on the line that opened it becomes an inline code span inside a paragraph, so it never reached the `pre` background and showed none. Code inside a `pre` keeps no background of its own, the block carrying it, and the receipt's monospaced ID sits outside any `.report` element, so it takes no chip.
