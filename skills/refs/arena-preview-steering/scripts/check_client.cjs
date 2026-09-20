@@ -13,6 +13,9 @@ class Element {
     this.children = [];
     this.attributes = {};
     this.events = {};
+    this.scrollTop = 0;
+    this.scrollHeight = 0;
+    this.clientHeight = 0;
   }
   setAttribute(name, value) { this.attributes[name] = value; }
   getAttribute(name) { return this.attributes[name]; }
@@ -47,7 +50,7 @@ let reportFields = 0;
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
-  document: { querySelector: get, createElement: () => new Element(), createTextNode: () => new Element(), documentElement: root },
+  document: { querySelector: get, createElement: () => new Element(), createTextNode: () => new Element(), documentElement: root, body: { dataset: {} } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `note-${++counter}` },
   AbortController,
@@ -80,6 +83,28 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#theme').events.click();
   assert.equal(root.dataset.theme, 'light');
   assert.equal(storage.get('arena-preview-v1:theme'), 'light');
+  const body = context.document.body;
+  const log = get('#history');
+  assert.equal(body.dataset.chrome, 'open');
+  assert.equal(get('#chrome').getAttribute('aria-expanded'), 'true');
+  assert.equal(get('#chrome').textContent, 'Close bar');
+  get('#chrome').events.click();
+  assert.equal(body.dataset.chrome, 'closed');
+  assert.equal(get('#chrome').getAttribute('aria-expanded'), 'false');
+  assert.equal(get('#chrome').textContent, 'Open bar');
+  assert.equal(storage.get('arena-preview-v1:chrome'), 'closed');
+  get('#chrome').events.click();
+  assert.equal(body.dataset.chrome, 'open');
+  assert.equal(get('#chrome').textContent, 'Close bar');
+  get('#composer-toggle').events.click();
+  assert.equal(body.dataset.composer, 'closed');
+  assert.equal(get('#composer-toggle').getAttribute('aria-expanded'), 'false');
+  assert.equal(get('#composer-toggle').textContent, 'Show composer');
+  assert.equal(storage.get('arena-preview-v1:composer'), 'closed');
+  log.scrollHeight = 500; log.clientHeight = 100; log.scrollTop = 0;
+  get('#composer-toggle').events.click();
+  assert.equal(body.dataset.composer, 'open');
+  assert.equal(log.scrollTop, 500);
   get('#note').value = '**draft**';
   await get('#preview-note').events.click();
   assert.equal(get('#note').hidden, true);
@@ -147,6 +172,16 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(answer.textContent, 'rechecked');
   assert.match(answer.className, /answer note/);
   assert.equal(get('#note').value, 'new unsent draft');
+  state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
+  log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
+  await get('#refresh-notes').events.click();
+  assert.deepEqual(log.children.map(item => item.children[1].textContent.slice(-6)), ['id one', 'id two']);
+  assert.equal(log.scrollTop, 400);
+  log.scrollTop = 0;
+  state.notes.push({ id: 'three', text: 'third', at: new Date().toISOString(), acknowledged_at: null });
+  await get('#refresh-notes').events.click();
+  assert.equal(log.scrollTop, 0);
+  assert.equal(log.children.at(-1).children[1].textContent.slice(-8), 'id three');
   state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
   reportFields = 2;
   storage.set('arena-preview-v1:answers:r1', JSON.stringify({ answers: { name: 'ada', areas: ['ui'] }, at: '2026-09-20T12:00:00.000Z' }));
@@ -193,5 +228,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
   assert.equal(get('#report-count').textContent, 1);
-  console.log('PASS: default theme, theme persistence, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the pinned bar and composer toggles with persistence, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
