@@ -72,7 +72,6 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .report pre { padding: 16px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .report code { font-family: ui-monospace, monospace; font-size: .9em; }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid var(--accent); }
-.export { max-width: 960px; }
 @media (max-width: 760px) {
   header { padding: 20px; }
   nav { padding-inline: 20px; }
@@ -94,3 +93,6 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
 #form-body button[type="submit"] { margin-top: 16px; border-color: var(--accent); }
 #form-status { font-size: 14px; overflow-wrap: anywhere; }
+#report-form { min-width: 0; }
+#report-submit { margin-top: 16px; border-color: var(--accent); }
+.report .question { border-left: 2px solid var(--accent); padding-left: 12px; }

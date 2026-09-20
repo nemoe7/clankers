@@ -113,14 +113,12 @@ with tempfile.TemporaryDirectory() as directory:
     assert status == 200
     assert "&lt;script&gt;" in json.loads(state_body)["notes"][0]["html"]
     status, _, rendered = request("GET", "/api/reports/first/html")
-    assert status == 200 and "<table>" in rendered and "<script>" not in rendered
-    assert 'href="javascript:' not in rendered
-    status, headers, exported = request("GET", "/api/reports/first/export")
-    assert status == 200 and "<!doctype html>" in exported and "<style>" in exported
-    assert (
-      "First &lt;report&gt;" in exported
-      and "attachment;" in headers["Content-Disposition"]
-    )
+    assert status == 200
+    rendered = json.loads(rendered)
+    assert rendered["fields"] == 0
+    assert "<table>" in rendered["html"] and "<script>" not in rendered["html"]
+    assert 'href="javascript:' not in rendered["html"]
+    assert request("GET", "/api/reports/first/export")[0] == 404
     assert request("GET", "/api/reports/first/source")[0] == 200
     for path in (
       "/.git/config",
@@ -156,6 +154,67 @@ with tempfile.TemporaryDirectory() as directory:
       store, "note", side_effect=sqlite3.OperationalError("disk failure")
     ):
       assert request("POST", "/api/notes", body, auth)[0] == 503
+    fielded = root / "fielded.md"
+    fielded.write_text(
+      "# Sign-off\n\nPick the areas:\n\n- [ ] ui\n- [x] api\n\nSeverity:\n\n"
+      "- ( ) low\n- (x) high\n\nName: ___\n\nNotes {#notes}\n\n___\n\n"
+      "```text\n- [ ] not a field\n```\n",
+      encoding="utf-8",
+    )
+    store.publish("fields", "Fielded", fielded)
+    blocks, questions = preview.parse_fields(fielded.read_text(encoding="utf-8"))
+    assert [question["type"] for question in questions] == [
+      "checkbox",
+      "choice",
+      "text",
+      "text",
+    ]
+    assert questions[0]["options"] == ["ui", "api"] and questions[0]["default"] == [
+      "api"
+    ]
+    assert questions[1]["prompt"] == "Severity" and questions[1]["default"] == ["high"]
+    assert questions[2]["prompt"] == "Name" and questions[3]["id"] == "notes"
+    assert len({question["id"] for question in questions}) == 4
+    assert sum(1 for kind, _ in blocks if kind == "field") == 4
+    status, _, served = request("GET", "/api/reports/fields/html")
+    served = json.loads(served)
+    assert status == 200 and served["fields"] == 4
+    assert served["html"].count("data-field=") == 4
+    assert 'type="radio"' in served["html"] and 'type="checkbox"' in served["html"]
+    assert "- [ ] not a field" in served["html"]
+    assert served["html"].count("checked") == 2
+    duplicate = root / "duplicate.md"
+    duplicate.write_text("Areas:\n\n- [ ] ui\n- [ ] ui\n", encoding="utf-8")
+    try:
+      preview.parse_fields(duplicate.read_text(encoding="utf-8"))
+      raise AssertionError("Duplicate options accepted")
+    except ValueError:
+      pass
+    assert (
+      request(
+        "POST",
+        "/api/reports/fields/submit",
+        json.dumps({"id": "r1", "answers": {"severity": "extreme"}}),
+        auth,
+      )[0]
+      == 400
+    )
+    assert (
+      request("POST", "/api/reports/first/submit", '{"id":"r2","answers":{}}', auth)[0]
+      == 400
+    )
+    report_answer = json.dumps(
+      {
+        "id": "report-sub-1",
+        "answers": {"pick-the-areas": ["ui"], "severity": "high", "name": "ada"},
+      }
+    )
+    assert request("POST", "/api/reports/fields/submit", report_answer, auth)[0] == 201
+    answered = next(
+      row for row in store.state()["notes"] if row["text"].startswith("REPORT fields")
+    )["text"]
+    assert "Fielded:" in answered and "name: ada" in answered
+    assert "severity: high" in answered and "notes: (skipped)" in answered
     form_source = root / "form.json"
     form_source.write_text(
       json.dumps(
@@ -265,5 +324,5 @@ with tempfile.TemporaryDirectory() as directory:
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, explicit receipts, reports, export, safe rendering, forms with inbox-answer submissions, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, explicit receipts, reports, Markdown fields, safe rendering, forms with inbox-answer submissions, errors and HTTP boundaries"
 )

@@ -24,6 +24,7 @@ class Element {
     }
   }
   replaceChildren(...children) { this.children = children; }
+  querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
   get lastElementChild() { return this.children.at(-1); }
   focus() { this.focused = true; }
   requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
@@ -43,6 +44,7 @@ const root = { dataset: {} };
 let counter = 0;
 let sendHandler;
 let state = { notes: [], reports: [], forms: [], last_check: null };
+let reportFields = 0;
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
@@ -69,7 +71,12 @@ const context = {
     if (url.startsWith('/api/forms/')) {
       return response({ id: 'f1', title: 'Smoke', questions: [{ id: 'q1', type: 'text', prompt: 'What?' }] });
     }
-    return { ok: true, text: async () => '<h1>Report</h1>' };
+    if (url.startsWith('/api/reports/') && url.endsWith('/submit')) {
+      const submission = JSON.parse(options.body);
+      sent.push(submission);
+      return response({ ...submission, at: new Date().toISOString() });
+    }
+    return response({ html: '<h1>Report</h1>', fields: reportFields });
   }
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -133,6 +140,32 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.match(get('#history').children[0].lastElementChild.textContent, /Acknowledged/);
   assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
   assert.equal(get('#note').value, 'new unsent draft');
+  state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
+  reportFields = 2;
+  get('#report-select').value = 'r1';
+  get('#reports-tab').events.click();
+  await tick();
+  await get('#refresh-report').events.click();
+  await tick();
+  assert.equal(get('#report').innerHTML, '<h1>Report</h1>');
+  assert.equal(get('#report-submit').hidden, false);
+  assert.match(get('#report-status').textContent, /2 fields/);
+  const text = new Element();
+  text.dataset = { field: 'name', type: 'text' };
+  text.querySelector = () => ({ value: 'ada' });
+  text.querySelectorAll = () => [];
+  const picks = new Element();
+  picks.dataset = { field: 'areas', type: 'checkbox' };
+  picks.querySelector = () => null;
+  picks.querySelectorAll = () => [{ value: 'ui' }];
+  get('#report').fields = [text, picks];
+  await get('#report-form').events.submit(event({}));
+  assert.deepEqual(sent.at(-1).answers, { name: 'ada', areas: ['ui'] });
+  assert.match(get('#report-status').textContent, /Saved/);
+  reportFields = 0;
+  await get('#refresh-report').events.click();
+  await tick();
+  assert.equal(get('#report-submit').hidden, true);
   get('#forms-tab').events.click();
   await tick();
   assert.equal(get('#forms-panel').hidden, false);
@@ -147,5 +180,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   assert.match(get('#form-status').textContent, /Saved/);
   assert.deepEqual(sent.at(-1).answers, { q1: 'an answer' });
-  console.log('PASS: default theme, theme persistence, tabs, draft retention, Enter/IME, retries, receipt display and form submission');
+  console.log('PASS: default theme, theme persistence, tabs, draft retention, Enter/IME, retries, receipt display, form submission and report fields');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -17,6 +17,11 @@ ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
 MAX_FORM = 256_000
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
+CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
+BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
+ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
 
 
 def now():
@@ -33,6 +38,130 @@ def note_text(text):
   if not isinstance(text, str) or not text.strip() or len(text) > 4000:
     raise ValueError("Enter a note of 1–4000 characters")
   return text
+
+
+def slug(text, used):
+  base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60] or "field"
+  candidate, suffix = base, 2
+  while candidate in used:
+    candidate = f"{base}-{suffix}"
+    suffix += 1
+  used.add(candidate)
+  return candidate
+
+
+def prompt_text(line):
+  text = re.sub(r"^\s*(?:[-*+]\s+|#+\s+|>\s+|\d+[.)]\s+)", "", line).strip()
+  return text.strip("*_` ").rstrip(":").strip()
+
+
+def parse_fields(markdown):
+  """Split Markdown into prose blocks and form fields written as list markers."""
+  lines = markdown.splitlines()
+  blocks, chunk, questions, used = [], [], [], set()
+  fence, prompt, anchor, index, position = None, "", None, 0, 0
+  while position < len(lines):
+    line = lines[position]
+    if fence is not None:
+      chunk.append(line)
+      if line.strip().startswith(fence):
+        fence = None
+      position += 1
+      continue
+    opening = FENCE.match(line)
+    if opening:
+      fence = opening.group(1)
+      chunk.append(line)
+      position += 1
+      continue
+    kind = (
+      "choice" if CHOICE.match(line) else "checkbox" if CHECKBOX.match(line) else None
+    )
+    blank = None if kind else BLANK.match(line)
+    if not kind and not blank:
+      chunk.append(line)
+      if line.strip():
+        prompt, anchor = prompt_text(ANCHOR.sub("", line)), None
+        found = ANCHOR.search(line)
+        if found:
+          anchor = found.group(1)
+          chunk[-1] = ANCHOR.sub("", line)
+      position += 1
+      continue
+    index += 1
+    if kind:
+      pattern = CHOICE if kind == "choice" else CHECKBOX
+      options, default = [], []
+      while position < len(lines):
+        item = pattern.match(lines[position])
+        if not item:
+          break
+        options.append(item.group(2))
+        if item.group(1).lower() == "x":
+          default.append(item.group(2))
+        position += 1
+      if len(set(options)) != len(options):
+        raise ValueError(
+          f"Field '{prompt or index}' repeats an option; make each unique"
+        )
+      question = {"type": kind, "options": options, "default": default}
+    else:
+      label = (blank.group(1) or "").strip()
+      question = {"type": "text", "default": []}
+      if label:
+        prompt, anchor = prompt_text(ANCHOR.sub("", label)), None
+        found = ANCHOR.search(label)
+        if found:
+          anchor = found.group(1)
+      position += 1
+    question["prompt"] = prompt or f"Field {index}"
+    question["id"] = (
+      anchor if anchor and anchor not in used else slug(question["prompt"], used)
+    )
+    used.add(question["id"])
+    anchor = None
+    blocks.append(("markdown", "\n".join(chunk)))
+    blocks.append(("field", question))
+    chunk = []
+    questions.append(question)
+  blocks.append(("markdown", "\n".join(chunk)))
+  if questions:
+    Store.validate_form({"questions": questions}, min_options=1)
+  return blocks, questions
+
+
+def field_html(question):
+  prompt = html.escape(question["prompt"], quote=True)
+  body = f'<div class="question" data-field="{html.escape(question["id"], quote=True)}"'
+  body += f' data-type="{question["type"]}">'
+  if question["type"] == "text":
+    return (
+      f'{body}<input type="text" maxlength="2000" placeholder="Answer" '
+      f'aria-label="{prompt}"></div>'
+    )
+  control = "radio" if question["type"] == "choice" else "checkbox"
+  group = f'<div class="options" role="group" aria-label="{prompt}">'
+  name = html.escape(question["id"], quote=True)
+  for option in question["options"]:
+    value = html.escape(option, quote=True)
+    checked = " checked" if option in question["default"] else ""
+    group += (
+      f'<label class="option"><input type="{control}" name="{name}" '
+      f'value="{value}"{checked}> {html.escape(option)}</label>'
+    )
+  return f"{body}{group}</div></div>"
+
+
+def render_report(markdown):
+  blocks, questions = parse_fields(markdown)
+  parts = []
+  for kind, item in blocks:
+    if kind == "markdown":
+      if item.strip():
+        parts.append(render(item))
+    else:
+      parts.append(field_html(item))
+  return "".join(parts), questions
 
 
 class Store:
@@ -150,7 +279,7 @@ class Store:
       return dict(row)
 
   @staticmethod
-  def validate_form(form):
+  def validate_form(form, min_options=2):
     if not isinstance(form, dict) or not isinstance(form.get("questions"), list):
       raise TypeError("A form is a JSON object with a questions list")
     questions = form["questions"]
@@ -178,7 +307,7 @@ class Store:
         options = question.get("options")
         if (
           not isinstance(options, list)
-          or not 2 <= len(options) <= 20
+          or not min_options <= len(options) <= 20
           or len({option for option in options if isinstance(option, str)})
           != len(options)
           or any(
@@ -188,7 +317,8 @@ class Store:
           )
         ):
           raise ValueError(
-            f"{question_type} questions take 2–20 unique options of 1–200 characters"
+            f"{question_type} questions take {min_options}–20 unique options "
+            "of 1–200 characters"
           )
 
   def publish_form(self, form_id, title, source):
@@ -222,16 +352,30 @@ class Store:
 
   def submit_form(self, form_id, note_id, answers):
     form = self.form(form_id)
+    return self.submit(
+      "FORM", form_id, form["title"], form["questions"], note_id, answers
+    )
+
+  def submit_report(self, report_id, note_id, answers):
+    report = self.report(report_id)
+    questions = parse_fields(report["markdown"])[1]
+    if not questions:
+      raise ValueError("This report has no fields to answer")
+    return self.submit(
+      "REPORT", report_id, report["title"], questions, note_id, answers
+    )
+
+  def submit(self, label, form_id, title, questions, note_id, answers):
     if not isinstance(answers, dict):
       raise TypeError("Answers is a JSON object keyed by question ID")
-    known = {question["id"] for question in form["questions"]}
+    known = {question["id"] for question in questions}
     unknown = set(answers) - known
     if unknown:
       raise ValueError(f"Unknown question IDs: {', '.join(sorted(unknown))}")
     lines = [
-      f"FORM {form_id} {form['title']}:",
+      f"{label} {form_id} {title}:",
     ]
-    for question in form["questions"]:
+    for question in questions:
       question_id = question["id"]
       value = answers.get(question_id)
       if question["type"] == "text":
@@ -283,21 +427,6 @@ def render(markdown):
   parser = MarkdownIt("commonmark", {"html": False}).enable("table")
   parser.add_render_rule("link_open", open_link)
   return parser.render(markdown)
-
-
-def export(report):
-  style = (ASSETS / "style.css").read_text(encoding="utf-8")
-  return (
-    '<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">'
-    '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
-    "style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'\">"
-    f"<title>{html.escape(report['title'])}</title><style>{style}</style></head>"
-    '<body><main class="export"><button type="button" onclick="'
-    "document.documentElement.dataset.theme = document.documentElement.dataset.theme "
-    "=== 'dark' ? 'light' : 'dark'\">Toggle dark / light</button><article class=\"report\">"
-    f"{render(report['markdown'])}</article></main></body></html>"
-  )
 
 
 def handler(store):
@@ -352,22 +481,20 @@ def handler(store):
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))
           return
-        match = re.fullmatch(
-          r"/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source|export)", path
-        )
+        match = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)", path)
         if match:
           report_id, kind = match.groups()
           report = store.report(report_id)
-          if kind == "source":
+          if kind == "html":
+            body, questions = render_report(report["markdown"])
             self.reply(
-              200, report["markdown"], "text/plain; charset=utf-8", f"{report_id}.md"
+              200,
+              json.dumps({"html": body, "fields": len(questions)}, ensure_ascii=False),
             )
-          elif kind == "export":
-            self.reply(
-              200, export(report), "text/html; charset=utf-8", f"{report_id}.html"
-            )
-          else:
-            self.reply(200, render(report["markdown"]), "text/html; charset=utf-8")
+            return
+          self.reply(
+            200, report["markdown"], "text/plain; charset=utf-8", f"{report_id}.md"
+          )
           return
         match = re.fullmatch(r"/api/forms/([a-zA-Z0-9_-]{1,80})", path)
         if match:
@@ -382,7 +509,10 @@ def handler(store):
     def do_POST(self):
       path = urlsplit(self.path).path
       form_submit = re.fullmatch(r"/api/forms/([a-zA-Z0-9_-]{1,80})/submit", path)
-      if path not in {"/api/notes", "/api/markdown"} and not form_submit:
+      report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
+      if path not in {"/api/notes", "/api/markdown"} and not (
+        form_submit or report_submit
+      ):
         self.problem(404, "Not found")
         return
       supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
@@ -406,9 +536,12 @@ def handler(store):
             200, render(note_text(payload.get("text"))), "text/html; charset=utf-8"
           )
           return
-        if form_submit:
-          note = store.submit_form(
-            form_submit.group(1), payload.get("id"), payload.get("answers")
+        if form_submit or report_submit:
+          submit = store.submit_form if form_submit else store.submit_report
+          note = submit(
+            (form_submit or report_submit).group(1),
+            payload.get("id"),
+            payload.get("answers"),
           )
           self.reply(201, json.dumps(note, ensure_ascii=False))
           return
@@ -440,9 +573,6 @@ def main():
   publish_form.add_argument("source", type=Path)
   publish_form.add_argument("--id", required=True)
   publish_form.add_argument("--title", required=True)
-  download = commands.add_parser("export")
-  download.add_argument("id")
-  download.add_argument("destination", type=Path)
   legacy = commands.add_parser("import-notes")
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
@@ -466,10 +596,6 @@ def main():
     elif args.command == "publish-form":
       store.publish_form(args.id, args.title, args.source)
       print(f"Published form {args.id}; open the Forms tab")
-    elif args.command == "export":
-      output = export(store.report(args.id))
-      args.destination.write_text(output, encoding="utf-8")
-      print(f"Exported {args.destination}")
     elif args.command == "import-notes":
       records = [
         json.loads(line)

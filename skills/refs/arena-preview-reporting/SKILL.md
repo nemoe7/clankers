@@ -4,7 +4,7 @@ This is the full-wording source of the entry point. It stays in the source repos
 
 ## Purpose
 
-Use only in Arena.ai Agent Mode for reports that need readable rendered Markdown, multiple report documents or a portable HTML deliverable. Short reports that fit in chat stay in chat; do not start a report pipeline for them. The companion arena-preview-steering skill must be present as a sibling and owns the shared Python server and interface. This skill adds a publishing procedure, not a second server or a duplicate runtime. Report missing installed skill files to the user instead of installing them without authorization.
+Use only in Arena.ai Agent Mode for reports that need readable rendered Markdown, multiple report documents or answerable fields inside a report. Short reports that fit in chat stay in chat; do not start a report pipeline for them. The companion arena-preview-steering skill must be present as a sibling and owns the shared Python server and interface. This skill adds a publishing procedure, not a second server or a duplicate runtime. Report missing installed skill files to the user instead of installing them without authorization.
 
 ## Runtime and dependencies
 
@@ -20,11 +20,15 @@ Publish with the shared runtime's publish command, giving the source path, a sta
 
 Use the clickable Reports tab and report selector. The selection stays stable when a report is updated. Notes, drafts and message history stay intact while switching views or refreshing a report. Publishing reports never acknowledges pending steering messages. Tell the user which report to select and verify its actual rendered endpoint, rather than claiming that a Markdown source in the file viewer was rendered.
 
-## Portable delivery and retention
+## Fields and answers
 
-The Reports tab renders reports but has no browser download/source controls: attachment responses returned HTTP 200 yet silently failed for the owner, so those controls were removed by explicit choice. The exact browser restriction is unconfirmed. The shared runtime's export command writes self-contained HTML to an ignored workspace file; keep the Markdown source separately. HTML contains its own stylesheet and a dark/light toggle; recipients need only a browser, not the server, repository, Python or markdown-it-py. Links may still require their destinations; offline portability does not package linked documents. If presenting the exported artifact, open that HTML file with the file-viewer tool, and report honestly if the viewer shows source text rather than rendering it; the HTML file can be opened in a browser. Do not restore the unreliable attachment links silently.
+A report source may contain form fields written as Markdown: a `- ( ) option` list becomes a radio group, a `- [ ] option` list becomes a checkbox group, and `Label: ___` or a bare `___` line becomes a text box. `(x)` and `[x]` preselect an option. The prompt is the label, else the nearest text line above the field, and `{#id}` at the end of that line fixes the field ID. Markers inside fenced code blocks stay literal. The Reports tab renders one Send answers button under the whole report, and the answers arrive in the steering inbox as one note headed `REPORT <id> <title>:`, which the agent reads and acknowledges like any note. Use this when a questionnaire needs explanation around it; use the steering skill's JSON forms for a bare questionnaire. Keep one report per subject: republishing replaces the rendered document, not the answers already delivered.
 
-Do not commit or push report sources, HTML exports, session databases, inboxes or receipts. Source reports and exports remain in ignored workspace files. This replaces the previous local-only report-commit workaround, which existed because Arena's native viewer exposed raw Markdown only after local commits. The historical workflow is documented in the companion's references/REFERENCE.md and the changelog. The current preview channel may change; failures require an explicit user decision, not silent fallback or a new permanent guarantee.
+## Delivery and retention
+
+Delivery is the live Reports tab only. Browser download/source controls and the former standalone HTML export are removed: attachment responses returned HTTP 200 yet the download never appeared in the Arena sandbox preview, and the exported artifact added a second copy that the file viewer did not render. Keep the Markdown source as the durable artifact and direct the user to the rendered report. Do not restore the unreliable attachment links or an export command silently.
+
+Do not commit or push report sources, session databases, inboxes or receipts. Report sources remain in ignored workspace files. This replaces the previous local-only report-commit workaround, which existed because Arena's native viewer exposed raw Markdown only after local commits. The historical workflow is documented in the companion's references/REFERENCE.md and the changelog. The current preview channel may change; failures require an explicit user decision, not silent fallback or a new permanent guarantee.
 
 Explicit user instructions and repository rules outrank skill defaults. Keep production code free of references to these skills; the skill's own files and setup chat are exceptions.
 
