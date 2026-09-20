@@ -52,6 +52,9 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
 body[data-composer="closed"] .compose { display: none; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; }
+.stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.stack h2, .stack p { margin: 0; }
+body[data-chrome="closed"] .topbar { justify-content: flex-end; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
 label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 8px; }
 button, select, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
@@ -99,7 +102,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
   nav button { min-width: 84px; }
 }
 
-#send-status { flex: 1; min-width: 140px; margin: 0; }
+#send-status { margin: 0; }
 .draft-preview { min-height: 112px; max-height: 240px; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
 
 .raw-message { white-space: pre-wrap; overflow-wrap: anywhere; }
