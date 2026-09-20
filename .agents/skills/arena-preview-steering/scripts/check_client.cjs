@@ -206,6 +206,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#copy-tasks').events.click();
   await tick();
   const records = JSON.parse(copied.at(-1));
+  assert.equal(copied.at(-1), `${JSON.stringify(records)}\n`, 'the task copy is minified');
   assert.equal(records.length, state.tasks.finished.length + state.tasks.upcoming.length);
   assert.equal(records[0].id, state.tasks.finished[0].id);
   assert.equal(records.at(-1).id, state.tasks.upcoming.at(-1).id);
