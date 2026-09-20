@@ -2,7 +2,7 @@
 
 ## Runtime contract
 
-The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering or exporting. The reporting skill is a separate entry point, installed beside steering, not an independent copy of the server.
+The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering. The reporting skill is a separate entry point, installed beside steering, not an independent copy of the server.
 
 The chosen `--state-dir` contains `state.sqlite3`. Normal SQLite transactions handle concurrent browser sends and CLI receipts; no message is marked acknowledged by a read. Writes are committed before the server returns success. Notes retain IDs, server timestamps, text and optional acknowledgement timestamps. Reports retain stable IDs, titles, Markdown snapshots and update timestamps. Forms retain stable IDs, titles, validated JSON snapshots and update timestamps. A form is a UTF-8 `.json` file of at most 256 KB holding a `questions` list of 1–50 objects, each with a unique identifier `id`, a `type` (`text`, `choice`, `checkbox`), a `prompt` of 1–500 characters, and for `choice`/`checkbox` an `options` list of 2–20 unique strings of 1–200 characters; `text` questions take no options. Keep this directory Git-ignored and outside transient cache/build directories.
 
@@ -14,18 +14,38 @@ The chosen `--state-dir` contains `state.sqlite3`. Normal SQLite transactions ha
 | `ack <id> [<id> ...]` | Record receipts after visible chat acknowledgement |
 | `publish <source.md> --id <id> --title <title>` | Add/update a report snapshot |
 | `publish-form <form.json> --id <id> --title <title>` | Add/update a validated form snapshot |
-| `export <id> <output.html>` | Write a self-contained rendered report |
 | `import-notes <notes.ndjson>` | Import the initial experiment's ID/text/time records without deduplicating by text or inventing receipts |
 
 All commands take `--state-dir` before the subcommand. Commands that read existing state fail if the database is missing; they do not create a misleading empty inbox. Import is idempotent by ID and rejects an existing ID with different text. It does not import ntfy messages or claim they were acknowledged.
 
 The UI sends the same client-generated ID on an unchanged retry. It distinguishes saving, confirmed storage and explicit agent acknowledgement; it never interprets an HTTP request or an inbox check as a chat acknowledgement. Errors preserve the draft. Switching views preserves the mounted composer. The user can send with Enter, use Shift+Enter for a newline, browse message history, answer forms in the Forms tab and switch dark/light themes. Form options render as text nodes; an unconfirmed submission keeps the user's input and says so. The default dark palette was supplied by the owner from Arena's UI.
 
+## Fields in a report
+
+The renderer splits a source into prose blocks and fields before rendering. A field is written as Markdown:
+
+| Marker | Control | Notes |
+| --- | --- | --- |
+| `- ( ) option` list | Radio group | `- (x)` preselects that option |
+| `- [ ] option` list | Checkbox group | `- [x]` preselects that option |
+| `Label: ___` or a bare `___` line | Text box | At most 2000 characters |
+
+Consecutive marker lines of the same kind form one group. The prompt is the label before `___`, else the nearest non-empty
+line above the group, stripped of list, heading, quote and emphasis markers and a trailing colon. The field ID is a slug of
+that prompt, deduplicated with a numeric suffix; `{#my-id}` at the end of the prompt line sets it explicitly and is removed
+from the rendered text. Markers inside fenced code blocks are literal text. Limits match a JSON form except that a group may
+hold a single option: 1–50 fields, prompts 1–500 characters, 1–20 unique options of 1–200 characters. A duplicate option in one
+group is an error, and the whole report then fails to render rather than silently dropping a choice.
+
+`GET /api/reports/<id>/html` returns JSON with `html` and the field count, not raw HTML. `POST /api/reports/<id>/submit`
+takes the same body as a form submission and writes one inbox note headed `REPORT <id> <title>:`. A report with no fields
+rejects a submission. Republishing a source does not change or delete answers already delivered.
+
 ## HTTP and trust boundary
 
-Only `/`, `/api/state`, `/api/notes`, `/api/markdown` and published report/form routes are exposed. `/api/markdown` accepts a bounded, token-protected draft and returns read-only HTML without writing any inbox record. It reuses the optional renderer; its absence must not prevent sending raw Markdown. The Write / Preview control is not a WYSIWYG editor. Confirmation stays beside Send, and the last sent text stays in the empty textarea's placeholder, without an extra message block. Published reports support `/api/reports/<id>/html`, `/source` and `/export`. Published forms support `/api/forms/<id>` and token-protected `/api/forms/<id>/submit`; a submission pairs a client-generated ID with per-question answers (text at most 2000 characters, `choice` one of its options, `checkbox` a unique subset of its options) and is stored as one inbox note headed `FORM <id> <title>:`, one indented line per question, `(skipped)` for absent or empty answers. Resending is a new answer, not an update, and there is no form export. No endpoint accepts arbitrary filesystem paths; only the agent's CLI can register a report or a form. The browser cannot acknowledge messages. POST requires JSON, a bounded body and a per-process token. This is CSRF resistance, not authentication: anyone with preview access can read the page and obtain that token.
+Only `/`, `/api/state`, `/api/notes`, `/api/markdown` and published report/form routes are exposed. `/api/markdown` accepts a bounded, token-protected draft and returns read-only HTML without writing any inbox record. It reuses the optional renderer; its absence must not prevent sending raw Markdown. The Write / Preview control is not a WYSIWYG editor. Confirmation stays beside Send, and the last sent text stays in the empty textarea's placeholder, without an extra message block. Published reports support `/api/reports/<id>/html`, `/source` and token-protected `/api/reports/<id>/submit`. Published forms support `/api/forms/<id>` and token-protected `/api/forms/<id>/submit`; a submission pairs a client-generated ID with per-question answers (text at most 2000 characters, `choice` one of its options, `checkbox` a unique subset of its options) and is stored as one inbox note headed `FORM <id> <title>:`, one indented line per question, `(skipped)` for absent or empty answers. Resending is a new answer, not an update. No endpoint accepts arbitrary filesystem paths; only the agent's CLI can register a report or a form. The browser cannot acknowledge messages. POST requires JSON, a bounded body and a per-process token. This is CSRF resistance, not authentication: anyone with preview access can read the page and obtain that token.
 
-Treat the preview URL as private session access. Do not publish secrets. Do not enable CORS, arbitrary file serving or remote assets. Raw HTML in Markdown is disabled; renderer URL validation and the content policy constrain active content. Report titles and messages are text, not HTML. Standalone exports embed styling and a theme toggle, not runtime API calls. The server accepts the Arena proxy host and does not block iframe embedding.
+Treat the preview URL as private session access. Do not publish secrets. Do not enable CORS, arbitrary file serving or remote assets. Raw HTML in Markdown is disabled; renderer URL validation and the content policy constrain active content. Report titles and messages are text, not HTML. The server accepts the Arena proxy host and does not block iframe embedding.
 
 ## Observed transition — 2026-09-20, Asia/Manila
 
@@ -42,10 +62,10 @@ The owner explicitly warned that the preview may not be permanent. If it fails, 
 - Preserve the ignored state directory and Markdown sources when restarting. Process IDs, venv packages and URLs are not durable; restore the approved renderer and restart the same state directory as needed.
 - Reload an old browser page after server restart to obtain the new submission token. Keep/copy an unsent draft first if browser storage is unavailable. Browser drafts are origin-local, not a cross-device backup.
 - If a port is occupied, identify its owner or select another port; never kill an unrelated service. A failed read or save must remain visible, not become an empty state.
-- Run `python <skill>/scripts/check_preview.py` with `markdown-it-py` available. It checks missing state, persistence, concurrent retry deduplication, receipt transactions, multiple reports, export, unsafe Markdown, absent-renderer behavior, validation and HTTP route boundaries.
-- Check `assets/app.js` with `node --check` and run `node scripts/check_client.cjs` where Node is available. The latter uses a minimal simulated DOM to check theme defaults/persistence, tabs, drafts, Enter/IME, retries and receipt display. These checks do not prove actual browser rendering, focus behavior, storage or iframe visibility; record manual browser observations separately.
+- Run `python <skill>/scripts/check_preview.py` with `markdown-it-py` available. It checks missing state, persistence, concurrent retry deduplication, receipt transactions, multiple reports, Markdown fields, unsafe Markdown, absent-renderer behavior, validation and HTTP route boundaries.
+- Check `assets/app.js` with `node --check` and run `node scripts/check_client.cjs` where Node is available. The latter uses a minimal simulated DOM to check theme defaults/persistence, tabs, drafts, Enter/IME, retries, receipt display and report-field answers. These checks do not prove actual browser rendering, focus behavior, storage or iframe visibility; record manual browser observations separately.
 - Migration of the first experiment: stop its server, import its final `notes.ndjson`, explicitly acknowledge only IDs already acknowledged in chat, and start this server with the new state directory. Keep the old file until verified; do not delete user messages to migrate.
 
-Browser attachment links returned HTTP 200 with attachment headers during this session, but the owner observed no download. The exact browser restriction was not identified. By explicit owner choice, the UI no longer offers download/source controls; keep the CLI HTML export and report sources, and never claim embedded downloads work.
+Browser attachment links returned HTTP 200 with attachment headers during this session, but the owner observed no download in the Arena sandbox preview. The exact browser restriction was not identified. By explicit owner choice, the UI offers no download/source controls, and the standalone HTML export was removed on 2026-09-20 because it never worked in that preview. The Markdown source and the live Reports tab are the delivery path; never claim embedded downloads work.
 
 The shared renderer opens non-fragment Markdown links in a new tab with `noopener noreferrer`, so report, draft and log links do not navigate the preview. Fragment links stay in place. Browser popup restrictions remain outside the server's control.

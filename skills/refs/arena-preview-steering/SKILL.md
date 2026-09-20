@@ -16,7 +16,7 @@ One server and inbox per session. Reporting shares this runtime; never start a s
 ## Setup
 
 1. Resolve this skill's actual path: source `skills/` and installed discovery paths differ. Report missing installed files; do not install or repair them without authorization.
-2. Choose a stable, persisted, Git-ignored state directory, default `reports/arena-preview`. Verify it with `git check-ignore`; ask before adding an ignore rule if needed. Never use cache/build folders or commit/push session state, notes, receipts, reports or exports.
+2. Choose a stable, persisted, Git-ignored state directory, default `reports/arena-preview`. Verify it with `git check-ignore`; ask before adding an ignore rule if needed. Never use cache/build folders or commit/push session state, notes, receipts or reports.
 3. Start with Arena's long-lived process tool, not a timed shell call:
 
    ```bash
@@ -54,6 +54,18 @@ python <skill>/scripts/preview.py --state-dir reports/arena-preview publish-form
 ```
 
 A form is a UTF-8 `.json` file of at most 256 KB: `{"questions": [...]}` with 1–50 questions; each has a unique identifier `id`, a `type` of `text`, `choice` or `checkbox`, a `prompt` of 1–500 characters, and `choice`/`checkbox` add `options` with 2–20 unique strings of 1–200 characters. The UI's Forms tab renders it. Answers POST to `/api/forms/<id>/submit` and land in the inbox as one note headed `FORM <id> <title>:`, one indented line per question, `(skipped)` for unanswered ones — read and `ACK:` it like any note. Resending is a new answer; invalid answers return an error and keep the user's input.
+
+## Fields in reports
+
+A published report may carry live inputs. The agent writes them as ordinary Markdown markers; the Reports tab renders them as controls under one Send answers button:
+
+| Marker | Control | Prompt |
+| --- | --- | --- |
+| `- ( ) option` lines | Radio group; `- (x)` preselects | The nearest text line above |
+| `- [ ] option` lines | Checkbox group; `- [x]` preselects | The nearest text line above |
+| `Label: ___` or a bare `___` line | Text box, at most 2000 characters | The label, else the line above |
+
+Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fix one. Markers inside fenced code blocks stay literal. Options must be unique in their group, 1–20 per group, prompts 1–500 characters, at most 50 fields per report. Answers POST to `/api/reports/<id>/submit` and land in the inbox as one note headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty ones — read and `ACK:` it like any note. Republishing the source does not erase answers already sent; each send is a new note.
 
 ## Persistence and limits
 

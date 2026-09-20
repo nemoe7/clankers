@@ -198,22 +198,58 @@ $('#preview-note').addEventListener('click', async () => {
     if (sequence === draftPreviewSequence) panel.textContent = `Preview unavailable: ${error.message}. Use Write to continue; sending still works.`;
   }
 });
+function collect(root) {
+  const answers = {};
+  for (const field of root.querySelectorAll('.question[data-field]')) {
+    const id = field.dataset.field;
+    if (field.dataset.type === 'text') {
+      const input = field.querySelector('input[type="text"]');
+      if (input && input.value.trim()) answers[id] = input.value;
+    } else {
+      const checked = [...field.querySelectorAll('input:checked')].map(control => control.value);
+      if (checked.length) answers[id] = field.dataset.type === 'choice' ? checked[0] : checked;
+    }
+  }
+  return answers;
+}
 async function loadReport() {
   const id = $('#report-select').value;
   const sequence = ++reportRequest;
   $('#report').replaceChildren();
+  $('#report-submit').hidden = true;
   if (!id) { $('#report-status').textContent = 'No report has been published yet.'; return; }
   save('report', id);
   $('#report-status').textContent = 'Loading report…';
   try {
-    const rendered = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).text();
+    const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
     if (sequence !== reportRequest) return;
-    $('#report').innerHTML = rendered;
-    $('#report-status').textContent = 'Report loaded. Updates appear automatically; the agent can export a standalone HTML file on request.';
+    $('#report').innerHTML = result.html;
+    $('#report-submit').hidden = !result.fields;
+    $('#report-status').textContent = result.fields
+      ? `Report loaded with ${result.fields} field${result.fields === 1 ? '' : 's'}. Fill them in, then send; answers reach the agent inbox as one note.`
+      : 'Report loaded. Updates appear automatically.';
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
   }
 }
+$('#report-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const id = $('#report-select').value;
+  if (!id) return;
+  const button = $('#report-submit');
+  button.disabled = true;
+  $('#report-status').textContent = 'Sending…';
+  try {
+    const result = await (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      body: JSON.stringify({ id: crypto.randomUUID(), answers: collect($('#report')) })
+    })).json();
+    $('#report-status').textContent = `Saved ${new Date(result.at).toLocaleTimeString()} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
+  } catch (error) {
+    $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
+  } finally { button.disabled = false; }
+});
 async function loadForm() {
   const id = $('#form-select').value;
   const sequence = ++formRequest;

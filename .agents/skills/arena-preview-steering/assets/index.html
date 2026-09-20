@@ -48,7 +48,10 @@
           <button id="refresh-report" type="button">Refresh report</button>
         </div>
         <p id="report-status" role="status" aria-live="polite">The agent can publish several reports here.</p>
-        <article id="report" class="report" aria-label="Selected report"></article>
+        <form id="report-form">
+          <article id="report" class="report" aria-label="Selected report"></article>
+          <button id="report-submit" type="submit" hidden>Send answers</button>
+        </form>
       </div>
     </section>
     <section id="forms-panel" role="tabpanel" aria-labelledby="forms-tab" hidden>
