@@ -1,4 +1,4 @@
-## 2026-09-20 — The receipt gets a deadline and a length
+## 2026-09-21 — The receipt gets a deadline and a length
 
 - **Summary** — the steering bullet in `rules/ARENA.md` gains two clauses beside the ack contract it already carries: the receipt leaves in the same tool block as the read that surfaced the note, before any implementation it announces, and work that outlives the block is receipted as in progress rather than held silent until it finishes; and the receipt runs one to three lines naming the change and its commit, with analysis belonging to a published report or to `CHANGELOG.md`. `rules/refs/ARENA.md` takes both in full wording. The root copy follows byte-identical.
 - **Cost** — `rules/ARENA.md` 12,389 → 12,661 `B` (+272), the live clauses written compressed from a 428 `B` refs amendment; `rules/refs/ARENA.md` 21,717 → 22,145 `B`, unbudgeted. The affected line was reviewed for a funding pass and kept as approved: its remaining wording is commands, filenames and caveats. `BUDGET-EXCEPTIONS.md` records the growth.
@@ -6,7 +6,7 @@
 - **Limits** — neither clause is gated: nothing measures when a receipt left or how long it ran, so the only check is the owner reading the log. A three-line cap admits a long line, and `--reply <markdown>` can still carry more than the cap if an agent writes it that way.
 - Origins: the owner's notes 16 and 19 — a violation filed for deferring acks until after the implementation they announced, and a second note that the acks carried too much prose with no violation, asking for an amendment instead, both answered by proposing wording rather than editing the protected file, and approved in chat with a squash recommended.
 
-## 2026-09-20 — The mid-turn GitHub token expiry becomes a rule
+## 2026-09-21 — The mid-turn GitHub token expiry becomes a rule
 
 - **Summary** — `rules/ARENA.md` gains one Git rule: `GH_TOKEN` can expire inside a turn with nothing in the repository changed, `gh auth status` calls it invalid, pushes fail and `gh auth setup-git` does not help; retry once, never loop, never ask for credentials, and end the turn, because the next one is issued a fresh token, then prove recovery with `git ls-remote origin <branch>` before pushing again. `rules/refs/ARENA.md` carries the full wording, with both literal failure strings, why the credential helper cannot fix a rejected token, and why a local commit is not a remote one. The root copy follows byte-identical, as `.github/workflows/distribute-arena.yml` expects.
 - **Cost** — `rules/ARENA.md` 12,073 → 12,389 `B` (+316), the live bullet written compressed from a 756 `B` refs amendment; `rules/refs/ARENA.md` 20,961 → 21,717 `B`, unbudgeted. `BUDGET-EXCEPTIONS.md` records the growth.
