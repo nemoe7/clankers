@@ -489,8 +489,8 @@ def add_copy_buttons(rendered):
     code = html.unescape(CODE_TAG.sub("", inner))
     payload = html.escape(code, quote=True).replace("\n", "&#10;")
     button = (
-      f'<button type="button" class="copy-code" aria-label="Copy code" '
-      f'data-code="{payload}">Copy</button>'
+      f'<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" '
+      f'data-code="{payload}">⧉</button>'
     )
     return f'<div class="code-block">{button}<pre>{inner}</pre></div>'
 

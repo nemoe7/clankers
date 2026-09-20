@@ -255,6 +255,7 @@ with tempfile.TemporaryDirectory() as directory:
       '<div class="code-block"><button type="button" class="copy-code"'
     )
     assert 'data-code="print(1)&#10;"' in block and "<pre><code" in block
+    assert 'title="Copy code"' in block and ">⧉</button>" in block
     assert (
       preview.add_copy_buttons(preview.render("no code here")).count("copy-code") == 0
     )
