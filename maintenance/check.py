@@ -565,56 +565,6 @@ def check_root_copies(errors: list[str]) -> None:
       )
 
 
-def check_skill_refs_parity(errors: list[str]) -> None:
-  skill_refs = SKILLS / "refs"
-
-  if not skill_refs.is_dir():
-    errors.append("skills/refs is missing")
-    return
-
-  refs = sorted(
-    path
-    for path in skill_refs.iterdir()
-    if path.is_dir() and not path.name.startswith(".")
-  )
-
-  for reference in refs:
-    name = reference.name
-    live = SKILLS / name
-    baseline = reference / "SKILL.md"
-
-    if not live.is_dir():
-      errors.append(f"skills/refs/{name}: live skill is missing")
-      continue
-
-    if not baseline.is_file():
-      errors.append(f"skills/refs/{name}: missing SKILL.md")
-      continue
-
-    live_entry = live / "SKILL.md"
-    if not live_entry.is_file():
-      errors.append(f"skills/{name}: missing SKILL.md")
-      continue
-
-    ref_files = {
-      path.relative_to(reference) for path in reference.rglob("*") if path.is_file()
-    }
-    live_files = {path.relative_to(live) for path in live.rglob("*") if path.is_file()}
-    ref_support = ref_files - {Path("SKILL.md")}
-    live_support = live_files - {Path("SKILL.md")}
-
-    if ref_support != live_support:
-      errors.append(
-        f"skills/{name}: refs/live supporting-file mismatch: "
-        f"refs={sorted(map(str, ref_support))} live={sorted(map(str, live_support))}"
-      )
-      continue
-
-    for relative in sorted(ref_support):
-      if (reference / relative).read_bytes() != (live / relative).read_bytes():
-        errors.append(f"skills/{name}/{relative}: refs/live files differ")
-
-
 def validate(errors: list[str]) -> None:
   skills = sorted(
     path
@@ -802,7 +752,6 @@ def validate(errors: list[str]) -> None:
 
   check_lint_scope(errors)
   check_refs_parity(errors)
-  check_skill_refs_parity(errors)
   check_root_copies(errors)
 
 

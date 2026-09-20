@@ -19,7 +19,7 @@ Every skill must conform to the [Agent Skills specification](https://agentskills
 - Optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`, except that `license` is required on any skill recording `metadata.upstream`, which the validator enforces. No other top-level keys are allowed; anything else, including `argument-hint`, belongs under `metadata` as a string value.
 - Optional directories follow the convention `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` under 500 lines and move detail into `references/`, which agents load only when needed.
-`skills/refs/<skill>/` holds the complete unsquashed source tree for skills with baselines. Amend the refs tree first, then squash its `SKILL.md` into the live `skills/<skill>/SKILL.md`; supporting files are copied unchanged into refs and live. Refs carry no budget and are not installed or distributed. `squash` and both preview skills have refs baselines; `web-interface-guidelines` has none.
+`skills/refs/<skill>/` holds the complete unsquashed source tree for skills with baselines. Amend the refs tree first, then squash its `SKILL.md` into the live `skills/<skill>/SKILL.md`; supporting files are unchanged in refs and compressed/minified to live. Refs carry no budget and are not installed or distributed. `squash` and both preview skills have refs baselines; `web-interface-guidelines` has none.
 
 ## Upstream sources
 
