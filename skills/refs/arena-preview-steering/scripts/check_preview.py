@@ -264,7 +264,15 @@ with tempfile.TemporaryDirectory() as directory:
     )
     assert 'code.note-id[data-copied="good"] { color: var(--dot-said); }' in page
     assert 'code.note-id[data-copied="bad"] { color: #ef4444; }' in page
-    assert "#clock { font-variant-numeric: tabular-nums; }" in page
+    assert "#clock { font-size: inherit; font-variant-numeric: tabular-nums; }" in page
+    assert '.icon-button[data-state="good"] { color: var(--dot-said);' in page
+    assert '.icon-button[data-state="bad"] { color: #ef4444;' in page
+    assert '<button id="copy-log" class="icon-button"' in page
+    assert '<button id="copy-report" class="icon-button"' in page
+    assert '<button id="copy-tasks" class="icon-button"' in page
+    assert page.index('id="copy-log"') < page.index('id="refresh-notes"')
+    assert page.index('id="copy-report"') < page.index('id="refresh-report"')
+    assert page.index('id="tasks-status"') < page.index('id="copy-tasks"')
     assert '<span id="clock" class="muted" title="Local time">--:--</span>' in page
     assert page.index('id="clock"') < page.index('id="theme"')
     assert ".report :not(pre) > code" not in page
