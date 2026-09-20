@@ -1,6 +1,6 @@
 # Budget exceptions
 
-Growths in a budgeted file that were accepted rather than funded, oldest first, each with its date, its numbers, and its reason. [README.md](README.md#instruction-budgets) holds the current measurements and the compression procedure whose item 6 records a growth here; a paragraph is added when a change is allowed to exceed a budget, and struck or superseded when a later pass pays the growth back.
+Growths in a budgeted file that were accepted rather than funded, oldest first, each with its date, its numbers, and its reason. [README.md](../../README.md#instruction-budgets) holds the current measurements and the compression procedure whose item 6 records a growth here; a paragraph is added when a change is allowed to exceed a budget, and struck or superseded when a later pass pays the growth back.
 
 Two deliberate exceptions are recorded, both from 2026-09-13: `rules/AGENTS.md` carries +87 `tok` (1,731 → 1,818) and `rules/ARENA.md` +636 `B` (9,205 → 9,841) for the seven-rung ladder and the three MUST upgrades voted in on request, accepted rather than squashed. Those measurements were the two files' baselines, not deferred debt. Both have since been squashed back below them (`rules/ARENA.md` to 9,716 `B`, `rules/AGENTS.md` to 1,816 `tok`, funded inside the same changes that amended them), so item 5 applies to them again at the measurements in the table above.
 

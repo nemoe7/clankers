@@ -45,6 +45,6 @@ Agent-facing rule files are compressed against the budgets above with the [`squa
 3. Merge related bullets, drop redundant qualifiers and restated clauses, and prefer the shorter of two equivalent phrasings. Do not invent new abbreviations or telegraphic syntax that changes how a rule reads.
 4. Keep the section headings and order the refs baseline already has; restructuring is an amendment, made in refs first.
 5. New clause: squash only that new line. Amended clause: squash only the affected line. Deleted clause: attempt one squash and keep whichever budget is lower.
-6. Update the budgets table above, record notable reductions in [CHANGELOG.md](CHANGELOG.md), and record a growth accepted rather than funded in [BUDGET-EXCEPTIONS.md](BUDGET-EXCEPTIONS.md).
+6. Update the budgets table above, record notable reductions in [CHANGELOG.md](CHANGELOG.md), and record a growth accepted rather than funded in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md).
 
-Recorded exceptions — every growth accepted rather than funded, with its date, its numbers, and its reason — live in [BUDGET-EXCEPTIONS.md](BUDGET-EXCEPTIONS.md), so this page keeps the procedure and the current measurements only.
+Recorded exceptions — every growth accepted rather than funded, with its date, its numbers, and its reason — live in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md), so this page keeps the procedure and the current measurements only.

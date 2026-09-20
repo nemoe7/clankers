@@ -75,7 +75,7 @@ A proposal is visible text before the question that asks for approval: put its t
 ## Budgets
 
 - Rule files, `SKILL.md` entry points, and workflow files have budgets tracked in [README.md](README.md#instruction-budgets).
-- Re-measure and update the table when changing them, and record a growth accepted rather than funded in [BUDGET-EXCEPTIONS.md](BUDGET-EXCEPTIONS.md).
+- Re-measure and update the table when changing them, and record a growth accepted rather than funded in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md).
 
 ## Skills
 
