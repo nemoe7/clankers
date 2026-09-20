@@ -80,8 +80,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
   await tick();
   assert.equal(root.dataset.theme, 'dark');
+  assert.equal(get('#theme').textContent, '☀');
+  assert.equal(get('#theme').getAttribute('aria-label'), 'Switch to light mode');
   get('#theme').events.click();
   assert.equal(root.dataset.theme, 'light');
+  assert.equal(get('#theme').textContent, '☾');
+  assert.equal(get('#theme').getAttribute('aria-label'), 'Switch to dark mode');
   assert.equal(storage.get('arena-preview-v1:theme'), 'light');
   const body = context.document.body;
   const log = get('#history');
@@ -153,6 +157,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
   assert.match(get('#history').children[0].children[1].textContent, /Awaiting ACK/);
   assert.match(get('#history').children[0].children[1].textContent, /id one$/);
+  assert.match(get('#history').children[0].children[1].textContent, /\d{2}:\d{2}:\d{2}/);
+  assert.doesNotMatch(get('#history').children[0].children[1].textContent, /[AP]M/);
   assert.equal(get('#history').children[0].children[2].hidden, true);
   state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
   state.notes[0].acknowledged_at = new Date().toISOString();
@@ -230,5 +236,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
   assert.equal(get('#report-count').textContent, 1);
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle and the composer toggle with persistence, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the composer toggle and the sun/moon theme button with persistence, 24-hour timestamps, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });

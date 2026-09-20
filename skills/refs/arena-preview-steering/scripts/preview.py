@@ -429,7 +429,7 @@ def require_renderer():
     )
 
 
-def render(markdown):
+def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
   except ImportError as error:
@@ -437,7 +437,7 @@ def render(markdown):
       "Markdown rendering needs markdown-it-py. Install it in the preview's venv "
       "and restart the server with that venv's Python; steering still works."
     ) from error
-  parser = MarkdownIt("commonmark", {"html": False}).enable("table")
+  parser = MarkdownIt("commonmark", {"html": False, "breaks": breaks}).enable("table")
   parser.add_render_rule("link_open", open_link)
   return parser.render(markdown)
 
@@ -489,9 +489,9 @@ def handler(store):
           state = store.state()
           try:
             for item in state["notes"]:
-              item["html"] = render(item["text"])
+              item["html"] = render(item["text"], breaks=True)
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
-                item["ack_html"] = render(item["ack_text"])
+                item["ack_html"] = render(item["ack_text"], breaks=True)
           except RuntimeError as error:
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))
@@ -541,7 +541,9 @@ def handler(store):
           return
         if path == "/api/markdown":
           self.reply(
-            200, render(note_text(payload.get("text"))), "text/html; charset=utf-8"
+            200,
+            render(note_text(payload.get("text")), breaks=True),
+            "text/html; charset=utf-8",
           )
           return
         if report_submit:

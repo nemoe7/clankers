@@ -21,10 +21,11 @@ function save(name, value) {
   catch { return false; }
 }
 function setTheme(theme) {
-  document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
-  const action = theme === 'light' ? 'Dark mode' : 'Light mode';
-  $('#theme').textContent = action;
-  $('#theme').setAttribute('aria-label', `Switch to ${action.toLowerCase()}`);
+  const light = theme === 'light';
+  document.documentElement.dataset.theme = light ? 'light' : 'dark';
+  const button = $('#theme');
+  button.textContent = light ? '☾' : '☀';
+  button.setAttribute('aria-label', `Switch to ${light ? 'dark' : 'light'} mode`);
 }
 setTheme(stored('theme'));
 $('#theme').addEventListener('click', () => {
@@ -64,8 +65,7 @@ note.value = stored('draft') || '';
 try { pending = JSON.parse(stored('pending') || 'null'); }
 catch { status.textContent = 'Stored retry data is invalid. Draft retained; check the log before resending.'; }
 note.addEventListener('input', () => {
-  $('#draft').textContent = save('draft', note.value)
-    ? 'Draft saved in this browser.' : 'Browser storage unavailable. Keep this page open.';
+  if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
 async function request(path, options = {}) {
@@ -83,7 +83,7 @@ async function request(path, options = {}) {
   } finally { clearTimeout(timer); }
 }
 function time(value) {
-  return new Date(value).toLocaleString();
+  return new Date(value).toLocaleString(undefined, { hour12: false });
 }
 function showHistory(notes) {
   const signature = JSON.stringify(notes);

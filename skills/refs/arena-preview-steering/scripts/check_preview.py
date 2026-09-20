@@ -34,6 +34,9 @@ with tempfile.TemporaryDirectory() as directory:
     "[PR](https://github.com/nemoe7/clankers/pull/26) [here](#here)"
   )
   assert linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
+  chat = preview.render("line one\nline two", breaks=True)
+  assert "<br" in chat and chat.count("<p>") == 1
+  assert "<br" not in preview.render("line one\nline two")
   store = preview.Store(root, create=True)
   source = root / "report.md"
   source.write_text(
