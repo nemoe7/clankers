@@ -504,6 +504,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   const logLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(Object.keys(logLines[0]), ['id', 'text', 'at']);
   assert.ok(logLines.length > 0);
+  // The copied timestamp stops at the seconds; the fixture's own is a full toISOString(),
+  // so a fraction or an offset surviving the copy fails the shape and the sweep below.
+  assert.match(logLines[0].at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+  assert.ok(logLines.every(line => !/\.\d|(?:Z|[+-]\d{2}:)/.test(line.at ?? '')),
+    'no copied timestamp keeps a fraction or an offset');
   assert.equal(get('#copy-log').dataset.state, 'good');
   // The report copies its Markdown source, fetched on the click rather than riding the poll.
   const selectBefore = get('#report-select').value;
