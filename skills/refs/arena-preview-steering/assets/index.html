@@ -8,7 +8,7 @@
 </head>
 <body data-chrome="open" data-composer="open">
   <header class="topbar">
-    <button id="chrome" type="button" aria-expanded="true" aria-controls="topbar-row">Close bar</button>
+    <button id="chrome" class="chevron" type="button" aria-expanded="true" aria-controls="topbar-row" aria-label="Collapse bar">▲</button>
     <div id="topbar-row" class="topbar-row">
       <nav role="tablist" aria-label="Workspace views">
         <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
@@ -43,7 +43,6 @@
           </form>
           <p id="draft" class="muted">Draft saved in this browser when storage is available.</p>
           <p class="notice">Saved means stored in this workspace. Acknowledged means the agent recorded its chat acknowledgement. Neither status interrupts an agent.</p>
-          <small>Anyone with preview access can read this session. Do not send secrets.</small>
         </section>
       </div>
     </section>

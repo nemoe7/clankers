@@ -35,7 +35,8 @@ $('#theme').addEventListener('click', () => {
 function setPanel(name, button, open, labels) {
   document.body.dataset[name] = open ? 'open' : 'closed';
   button.setAttribute('aria-expanded', open ? 'true' : 'false');
-  button.textContent = open ? labels[0] : labels[1];
+  button.textContent = open ? labels.text[0] : labels.text[1];
+  if (labels.name) button.setAttribute('aria-label', open ? labels.name[0] : labels.name[1]);
 }
 function scrollHistory(force) {
   const history = $('#history');
@@ -44,8 +45,8 @@ function scrollHistory(force) {
 }
 const chromeButton = $('#chrome');
 const composerButton = $('#composer-toggle');
-const chromeLabels = ['Close bar', 'Open bar'];
-const composerLabels = ['Hide composer', 'Show composer'];
+const chromeLabels = { text: ['▲', '▼'], name: ['Collapse bar', 'Expand bar'] };
+const composerLabels = { text: ['Hide composer', 'Show composer'] };
 setPanel('chrome', chromeButton, stored('chrome') !== 'closed', chromeLabels);
 setPanel('composer', composerButton, stored('composer') !== 'closed', composerLabels);
 chromeButton.addEventListener('click', () => {
