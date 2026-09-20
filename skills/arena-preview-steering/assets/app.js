@@ -89,7 +89,12 @@ async function request(path, options = {}) {
   } finally { clearTimeout(timer); }
 }
 function time(value) {
-  return new Date(value).toLocaleString(undefined, { hour12: false });
+  const date = new Date(value);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
+    month: 'short', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(date).map(part => [part.type, part.value]));
+  const year = date.getFullYear() === new Date().getFullYear() ? '' : ` ${parts.year}`;
+  return `${parts.month} ${parts.day}${year}, ${parts.hour}:${parts.minute}`;
 }
 function showHistory(notes) {
   const signature = JSON.stringify(notes);
