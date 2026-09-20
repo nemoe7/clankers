@@ -231,6 +231,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert ":not(pre) > code { background: var(--bubble)" in page
     assert ".report :not(pre) > code" not in page
     assert "background: none; padding: 0; }" in page
+    assert "#send { border-color: var(--accent); }" not in page
+    assert "#report-submit { margin-top: 16px; }" in page
+    assert page.count("#send {") == 0
 
     block = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
     assert block.startswith(
