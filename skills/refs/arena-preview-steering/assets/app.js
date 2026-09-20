@@ -39,6 +39,12 @@ function setPanel(name, button, open, labels) {
   button.textContent = open ? labels.text[0] : labels.text[1];
   if (labels.name) button.setAttribute('aria-label', open ? labels.name[0] : labels.name[1]);
 }
+function setConnection(state, text) {
+  const dot = $('#connection-dot');
+  dot.dataset.state = state;
+  dot.setAttribute('aria-label', state === 'ok' ? 'Connected' : 'Disconnected');
+  $('#connection-text').textContent = text;
+}
 function scrollHistory(force) {
   const history = $('#history');
   const near = history.scrollHeight - history.scrollTop - history.clientHeight < 80;
@@ -47,7 +53,7 @@ function scrollHistory(force) {
 const chromeButton = $('#chrome');
 const composerButton = $('#composer-toggle');
 const chromeLabels = { text: ['▲', '▼'], name: ['Collapse bar', 'Expand bar'] };
-const composerLabels = { text: ['Hide composer', 'Show composer'] };
+const composerLabels = { text: ['✎', '✎'], name: ['Hide composer', 'Show composer'] };
 setPanel('chrome', chromeButton, stored('chrome') !== 'closed', chromeLabels);
 setPanel('composer', composerButton, stored('composer') !== 'closed', composerLabels);
 chromeButton.addEventListener('click', () => {
@@ -135,8 +141,8 @@ async function refreshState() {
   stateBusy = true;
   try {
     const state = await (await request('/api/state')).json();
-    $('#connection').textContent = state.notes.length ? `${state.notes.length} messages saved · Connected` : 'Connected · No messages yet';
-    if (state.rendering_error) $('#connection').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+    setConnection('ok', state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet');
+    if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Agent last checked ${time(state.last_check)}` : 'Agent has not checked this inbox yet.';
     showHistory(state.notes);
     const signature = JSON.stringify(state.reports);
@@ -160,7 +166,7 @@ async function refreshState() {
       $('#report-count').textContent = state.reports.length;
       if (!$('#reports-panel').hidden) loadReport();
     }
-  } catch (error) { $('#connection').textContent = `Connection failed: ${error.message}. Draft kept; history may be stale.`; }
+  } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally { stateBusy = false; }
 }
 $('#form').addEventListener('submit', async event => {
@@ -200,7 +206,7 @@ function writeMode() {
   draftPreviewSequence++;
   note.hidden = false;
   $('#draft-preview').hidden = true;
-  $('#preview-note').textContent = 'Preview';
+  $('#preview-note').textContent = 'MD 👁';
   $('#preview-note').setAttribute('aria-pressed', 'false');
 }
 $('#preview-note').addEventListener('click', async () => {
@@ -211,7 +217,7 @@ $('#preview-note').addEventListener('click', async () => {
   const panel = $('#draft-preview');
   panel.hidden = false;
   panel.textContent = 'Rendering draft…';
-  $('#preview-note').textContent = 'Write';
+  $('#preview-note').textContent = 'MD 👁';
   $('#preview-note').setAttribute('aria-pressed', 'true');
   try {
     const rendered = await (await request('/api/markdown', {

@@ -437,7 +437,9 @@ def render(markdown, breaks=False):
       "Markdown rendering needs markdown-it-py. Install it in the preview's venv "
       "and restart the server with that venv's Python; steering still works."
     ) from error
-  parser = MarkdownIt("commonmark", {"html": False, "breaks": breaks}).enable("table")
+  parser = MarkdownIt("commonmark", {"html": False, "breaks": breaks}).enable(
+    ["table", "strikethrough"]
+  )
   parser.add_render_rule("link_open", open_link)
   return parser.render(markdown)
 
