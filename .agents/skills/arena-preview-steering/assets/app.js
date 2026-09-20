@@ -288,7 +288,7 @@ function applyAnswers(root, answers) {
       continue;
     }
     const values = Array.isArray(saved) ? saved : [saved];
-    for (const control of field.querySelectorAll('input')) {
+    for (const control of field.querySelectorAll('input, textarea')) {
       const label = control.dataset.label;
       const slot = control.dataset.custom;
       if (label === undefined && slot === undefined) {
@@ -297,7 +297,10 @@ function applyAnswers(root, answers) {
       }
       const typed = customValue(values, label === undefined ? slot : label);
       if (label !== undefined) control.checked = typed !== null;
-      if (slot !== undefined) control.value = typed === null ? '' : typed;
+      if (slot !== undefined) {
+        control.value = typed === null ? '' : typed;
+        growSlot(control);
+      }
     }
   }
 }
@@ -322,6 +325,20 @@ async function copyCode(button) {
     flash(copied ? 'Copied' : 'Select and copy');
   }
 }
+function growSlot(area) {
+  area.style.height = 'auto';
+  area.style.height = `${area.scrollHeight}px`;
+}
+document.addEventListener('input', event => {
+  const target = event.target;
+  if (!target || typeof target.className !== 'string') return;
+  if (!target.className.split(' ').includes('custom-text')) return;
+  growSlot(target);
+  // Typing in a slot is choosing it: the box checks itself, and blanking the text lets go again.
+  const label = (target.dataset.custom || '').replace(/"/g, '\\"');
+  const slot = target.parentElement && target.parentElement.querySelector(`[data-label="${label}"]`);
+  if (slot) slot.checked = Boolean(target.value.trim());
+});
 document.addEventListener('click', event => {
   const target = event.target;
   if (!target || typeof target.className !== 'string') return;

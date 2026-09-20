@@ -123,7 +123,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .question input[type="text"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
 .options { display: flex; flex-direction: column; gap: 4px; }
 .option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
-.option input[type="text"] { flex: 1; width: auto; min-width: 0; padding: 4px 8px; }
+.option textarea { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 4px 8px; }
 #report-submit { margin-top: 16px; }
 #report-form { min-width: 0; }
 .report .question { border-left: 2px solid var(--accent); padding-left: 12px; }
