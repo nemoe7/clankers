@@ -586,6 +586,79 @@ with tempfile.TemporaryDirectory() as tasks_dir:
     == "<img onerror=alert(1)>"
   )
 
+with tempfile.TemporaryDirectory() as amend_dir:
+  amend_store = preview.Store(amend_dir, create=True)
+  amend_store.write_task(
+    "docz-archive", "Move to docs/archive/", ["one", "two"], "upcoming", 1
+  )
+  amend_store.write_task("minify", "Minify the live build")
+  # A malformed ID is renamed rather than deleted and rewritten, and keeps everything else.
+  amend_store.amend_task("docz-archive", "docs-archive")
+  fixed = amend_store.write_task("docs-archive")
+  assert fixed["title"] == "Move to docs/archive/"
+  assert fixed["details"] == ["one", "two"] and fixed["order"] == 1
+  assert amend_store.neighbours("docs-archive") == (None, "minify")
+  assert amend_store.neighbours("minify") == ("docs-archive", None)
+  assert amend_store.neighbours("never-stored") == (None, None)
+  amend_rejections = (
+    (
+      lambda: amend_store.amend_task("docs-archive", "minify"),
+      "An amend onto a stored ID passed",
+    ),
+    (
+      lambda: amend_store.amend_task("never", "whatever"),
+      "An amend of a missing ID passed",
+    ),
+    (
+      lambda: amend_store.amend_task("docs-archive", "Bad ID"),
+      "An amend to a bad ID passed",
+    ),
+  )
+  for call, message in amend_rejections:
+    try:
+      call()
+      raise AssertionError(message)
+    except ValueError:
+      pass
+  echoed = preview.echo_task(fixed, None, "minify")
+  assert echoed["prev"] is None and echoed["next"] == "minify"
+  assert preview.echo_task(fixed)["next"] is None
+  # A copied list restores into an empty inbox, from an array or from one record per line.
+  backup = json.dumps(amend_store.list_tasks())
+  (Path(amend_dir) / "restored").mkdir()
+  fresh = preview.Store(Path(amend_dir) / "restored", create=True)
+  written = fresh.import_tasks(preview.parse_task_import(backup))
+  assert [item["id"] for item in written] == ["docs-archive", "minify"]
+  assert fresh.state()["tasks"]["upcoming"][0]["details"] == ["one", "two"]
+  lines = "\n".join(json.dumps(item) for item in amend_store.list_tasks())
+  (Path(amend_dir) / "lines").mkdir()
+  other = preview.Store(Path(amend_dir) / "lines", create=True)
+  assert len(other.import_tasks(preview.parse_task_import(lines))) == 2
+  other.write_task("extra", "Extra")
+  other.import_tasks(preview.parse_task_import(backup), replace=True)
+  assert [item["id"] for item in other.list_tasks()] == ["docs-archive", "minify"]
+  # One bare object is JSONL of a single record, so it parses and fails on the missing ID.
+  assert preview.parse_task_import('{"id": "solo", "title": "Solo"}') == [
+    {"id": "solo", "title": "Solo"}
+  ]
+  for call, message in (
+    (lambda: preview.parse_task_import("   "), "An empty import was accepted"),
+    (lambda: preview.parse_task_import("[1, 2]"), "A list of numbers was accepted"),
+    (
+      lambda: other.import_tasks([{"title": "no id"}]),
+      "A task with no ID was imported",
+    ),
+    (
+      lambda: other.import_tasks(preview.parse_task_import('{"title": "Solo"}')),
+      "A record with no ID was imported",
+    ),
+  ):
+    try:
+      call()
+      raise AssertionError(message)
+    except ValueError:
+      pass
+
 help_text = subprocess.run(
   [sys.executable, str(Path(preview.__file__)), "serve", "--help"],
   capture_output=True,

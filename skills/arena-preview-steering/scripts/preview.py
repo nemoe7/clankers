@@ -213,18 +213,37 @@ def task_row(row):
   }
 
 
-def echo_task(record):
-  """The confirmation an agent gets back: whole title, details cut to save tokens."""
+def echo_task(record, before=None, after=None):
+  """The confirmation an agent gets back: whole title, details cut, neighbours named."""
   return {
     "id": record["id"],
     "title": record["title"],
     "status": record["status"],
     "order": record["order"],
+    "prev": before,
+    "next": after,
     "details": [
       detail[:ECHO_DETAIL] + ("\u2026" if len(detail) > ECHO_DETAIL else "")
       for detail in record["details"]
     ],
   }
+
+
+def parse_task_import(text):
+  """Accept either a JSON array of tasks or one task per line."""
+  stripped = text.strip()
+  if not stripped:
+    raise ValueError("Nothing to import")
+  records = (
+    json.loads(stripped)
+    if stripped.startswith("[")
+    else [json.loads(line) for line in stripped.splitlines() if line.strip()]
+  )
+  if not isinstance(records, list) or not all(
+    isinstance(item, dict) for item in records
+  ):
+    raise ValueError("Import a JSON array of task objects, or one task object per line")
+  return records
 
 
 def check_task(task_id, title, details):
@@ -482,6 +501,69 @@ class Store:
       db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
       self.renumber(db)
     return task_row(row)
+
+  def neighbours(self, task_id):
+    """The IDs either side of one task inside its own div, or None at the ends."""
+    with closing(self.connect()) as db:
+      row = db.execute(
+        "SELECT status, position FROM tasks WHERE id = ?", (task_id,)
+      ).fetchone()
+      if row is None:
+        return None, None
+      status, position = row
+      before = db.execute(
+        "SELECT id FROM tasks WHERE status = ? AND position < ?"
+        " ORDER BY position DESC, id DESC LIMIT 1",
+        (status, position),
+      ).fetchone()
+      after = db.execute(
+        "SELECT id FROM tasks WHERE status = ? AND position > ?"
+        " ORDER BY position, id LIMIT 1",
+        (status, position),
+      ).fetchone()
+    return (before[0] if before else None, after[0] if after else None)
+
+  def amend_task(self, prev_id, task_id):
+    """Move a stored task to a new ID and keep the rest, so a typo costs no deletion."""
+    check_task(task_id, None, None)
+    stamp = now()
+    with closing(self.connect()) as db, db:
+      row = db.execute(
+        "SELECT id, title, details, status, position, created_at FROM tasks WHERE id = ?",
+        (prev_id,),
+      ).fetchone()
+      if row is None:
+        raise ValueError(f"No task is stored under {prev_id}")
+      if db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone():
+        raise ValueError(f"A task is already stored under {task_id}")
+      db.execute("DELETE FROM tasks WHERE id = ?", (prev_id,))
+      db.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (task_id, row[1], row[2], row[3], row[4], row[5], stamp),
+      )
+      self.renumber(db)
+
+  def import_tasks(self, records, replace=False):
+    """Rebuild a list from the JSON a copy button or task-list produced."""
+    if replace:
+      with closing(self.connect()) as db, db:
+        db.execute("DELETE FROM tasks")
+    if not isinstance(records, list):
+      # parse_task_import already refuses anything but a list of objects, so this only fires
+      # for a caller that skipped it, and a wrong type is not a value problem.
+      raise TypeError("Import a list of task objects")
+    written = []
+    for index, record in enumerate(records, 1):
+      written.append(
+        self.write_task(
+          record.get("id"),
+          record.get("title"),
+          record.get("details") or [],
+          record.get("status"),
+          record.get("order") or index,
+        )
+      )
+    return written
 
   def renumber(self, db):
     """Keep positions dense inside each div after a move, an insert or a removal."""
@@ -857,6 +939,11 @@ def main():
     action="append",
     help="One detail line, repeatable; an empty string clears the list",
   )
+  task.add_argument(
+    "--amend",
+    metavar="PREV-ID",
+    help="Rename the task stored under this ID to the one given",
+  )
   task.add_argument("--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
     "--order", type=int, default=None, help="1-based place in its div, not the end"
@@ -864,6 +951,16 @@ def main():
   task_remove = commands.add_parser("task-remove")
   task_remove.add_argument("task_id")
   commands.add_parser("task-list")
+  task_import = commands.add_parser("task-import")
+  task_import.add_argument(
+    "source",
+    nargs="?",
+    type=Path,
+    help="JSON array or one task per line; stdin if omitted",
+  )
+  task_import.add_argument(
+    "--replace", action="store_true", help="Clear the stored list before importing"
+  )
   legacy = commands.add_parser("import-notes")
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
@@ -895,6 +992,8 @@ def main():
       details = args.task_details
       if details is None and args.detail_arg:
         details = args.detail_arg
+      if args.amend:
+        store.amend_task(args.amend, task_id)
       record = store.write_task(
         task_id,
         args.task_title or args.title_arg,
@@ -902,11 +1001,27 @@ def main():
         args.status,
         args.order,
       )
-      print(json.dumps(echo_task(record), ensure_ascii=False))
+      before, after = store.neighbours(task_id)
+      print(json.dumps(echo_task(record, before, after), ensure_ascii=False))
     elif args.command == "task-remove":
       print(json.dumps(echo_task(store.remove_task(args.task_id)), ensure_ascii=False))
     elif args.command == "task-list":
       print(json.dumps(store.list_tasks(), ensure_ascii=False))
+    elif args.command == "task-import":
+      text = (
+        args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
+      )
+      written = store.import_tasks(parse_task_import(text), args.replace)
+      print(
+        json.dumps(
+          {
+            "imported": len(written),
+            "replaced": args.replace,
+            "ids": [item["id"] for item in written],
+          },
+          ensure_ascii=False,
+        )
+      )
     elif args.command == "import-notes":
       records = [
         json.loads(line)
