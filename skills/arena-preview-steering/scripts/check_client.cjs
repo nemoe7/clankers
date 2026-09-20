@@ -176,13 +176,27 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   // has to land: stateBusy swallows a refresh while another is still in flight.
   await new Promise(resolve => setTimeout(resolve, 0));
   state.tasks = {
-    finished: '- done', upcoming: '- next',
-    finished_html: '<ul><li>done</li></ul>', upcoming_html: '<ul><li>next</li></ul>',
+    finished: [{ id: 'shipped', title: 'Dots in the receipt', details: [], status: 'finished',
+      order: 1, updated_at: new Date().toISOString() }],
+    upcoming: [{ id: 'docs-archive', title: '<img onerror=alert(1)> dir',
+      details: ['move BUDGET-EXCEPTIONS.md', 'write arena-quirks.md'], status: 'upcoming',
+      order: 1, updated_at: new Date().toISOString() }],
     updated_at: new Date().toISOString()
   };
   await get('#refresh-notes').events.click();
-  assert.equal(get('#tasks-finished-body').innerHTML, '<ul><li>done</li></ul>');
-  assert.equal(get('#tasks-upcoming-body').innerHTML, '<ul><li>next</li></ul>');
+  const upcomingBody = get('#tasks-upcoming-body');
+  const finishedBody = get('#tasks-finished-body');
+  assert.equal(upcomingBody.children.length, 1);
+  assert.equal(upcomingBody.children[0].tagName, 'li');
+  // A hostile title is text, because a row is built with textContent rather than innerHTML.
+  assert.equal(upcomingBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
+  assert.equal(upcomingBody.children[0].children[0].className, 'task-title');
+  assert.equal(upcomingBody.children[0].children[1].children.length, 2);
+  assert.equal(upcomingBody.children[0].children[1].children[1].textContent, 'write arena-quirks.md');
+  assert.equal(upcomingBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
+  assert.equal(finishedBody.children.length, 1);
+  assert.equal(finishedBody.children[0].children.length, 1);
+  assert.equal(finishedBody.children[0].children[0].textContent, 'Dots in the receipt');
   assert.equal(get('#tasks-finished').hidden, false);
   assert.equal(get('#tasks-upcoming').hidden, false);
   assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);

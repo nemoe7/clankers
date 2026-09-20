@@ -11,7 +11,9 @@ The chosen `--state-dir` contains `state.sqlite3`. Normal SQLite transactions ha
 | `init` | Create state without starting HTTP |
 | `serve` | Start the shared interface on `0.0.0.0`, port 8000 unless `--port` says otherwise |
 | `read` | Print all unacknowledged messages; record check time |
-| `tasks <source.md>` | Replace both sections of the Tasks tab from one Markdown file |
+| `task ID TITLE [DETAIL ...]` | Add or update one task in the Tasks tab; `--status`, `--order`, or the `--task-*` flags |
+| `task-remove ID` | Delete one task and echo what was stored |
+| `task-list` | Print every task as JSON |
 | `ack <id> [<id> ...] --reply <markdown>` | Record receipts with a rendered answer in the log |
 | `ack <id> [<id> ...] --note <text>` | Record receipts with one plain answer line |
 | `publish <source.md> --id <id> --title <title>` | Add/update a report snapshot |
@@ -29,7 +31,17 @@ Notes, agent replies and the composer's draft preview render with `breaks=True`,
 
 ## The Tasks tab
 
-The owner asked for a live agent task list as its own tab rather than a report, in two divs: finished tasks above, upcoming below. `tasks <source.md>` replaces both from one Markdown file whose `## Finished` and `## Upcoming` headings are both required, in either order, and a file carrying only one is rejected rather than half-rendered. Both sections are rendered once, when they are written, and stored in the `meta` table beside `last_check`, so `/api/state` carries them and the tab refreshes on the poll the log already makes, with no endpoint of its own. Before the first write the panel says so in words instead of showing two empty divs. The tab takes no answers: it is the agent's status rather than a question, so nothing shown there arrives in the inbox, and rewriting the list replaces it whole rather than appending.
+The owner asked for a live agent task list as its own tab rather than a report, in two divs: finished tasks above, upcoming below. One task is one record, written by a command rather than formatted as Markdown, because the agent pays tokens for formatting:
+
+```
+preview.py task docs-archive "Move to new docs/archive/ dir" \
+  "move BUDGET-EXCEPTIONS.md to docs/archive/budget-exceptions.md" \
+  "write docs/archive/arena-quirks.md"
+```
+
+The first three positionals are the ID, the title and any number of detail lines, and the same three are available as `--task-id`, `--task-title` and a repeatable `--task-details`. A task ID is 1-64 characters of lowercase letters, digits and hyphens; a title is 200 characters at most; a task carries 40 details of 2000 characters each. Writing an ID that is already stored updates it, and a title or details left out keep their stored values, so `task docs-archive --status finished` moves a task between the divs without repeating it. `--order N` places a task at that 1-based position inside its div instead of at the end, positions stay dense after every insert, move and removal, and `--task-details ""` clears the detail list. `--status` is `upcoming`, the default, or `finished`. Each command prints JSON of what it stored, with every detail cut to 200 characters in the echo only, since the echo is a confirmation and the stored value stays whole. `task-remove ID` deletes one task and echoes it; `task-list` prints all of them.
+
+The records live in a `tasks` table, so `/api/state` carries them and the tab refreshes on the poll the log already makes, with no endpoint of its own. The browser builds each row from the record with `textContent`, which is why nothing here is rendered to HTML on the way in and a hostile title stays text. A row shows its title, its details one line each in the muted face below it, and the same details joined into the row's hover title. Before the first write the panel says so in words instead of showing two empty divs. The tab takes no answers: it is the agent's status rather than a question, so nothing shown there arrives in the inbox. Unlike a report, a task list needs no Markdown renderer, so `task` works even where `serve` would refuse to start.
 
 ## Fields in a report
 

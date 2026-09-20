@@ -439,6 +439,30 @@ $('#report-form').addEventListener('submit', async event => {
   } finally { button.disabled = false; }
 });
 // The Tasks tab is the agent's own status: two divs, written by the CLI, read on the same poll.
+// A row is built from the record with textContent, so a hostile title stays text.
+function taskRow(task) {
+  const item = document.createElement('li');
+  item.className = 'task';
+  item.title = task.details.join('\n');
+  const title = document.createElement('span');
+  title.className = 'task-title';
+  title.textContent = task.title;
+  const rows = [title];
+  if (task.details.length) {
+    const details = document.createElement('span');
+    details.className = 'task-details';
+    details.replaceChildren(...task.details.map(line => {
+      const detail = document.createElement('span');
+      detail.className = 'task-detail';
+      detail.textContent = line;
+      return detail;
+    }));
+    rows.push(details);
+  }
+  item.replaceChildren(...rows);
+  return item;
+}
+
 function renderTasks(tasks) {
   const status = $('#tasks-status');
   const finished = $('#tasks-finished');
@@ -450,8 +474,8 @@ function renderTasks(tasks) {
     return;
   }
   status.textContent = `Updated ${time(tasks.updated_at)} · written by the agent; it takes no answers.`;
-  $('#tasks-finished-body').innerHTML = tasks.finished_html;
-  $('#tasks-upcoming-body').innerHTML = tasks.upcoming_html;
+  $('#tasks-finished-body').replaceChildren(...tasks.finished.map(task => taskRow(task)));
+  $('#tasks-upcoming-body').replaceChildren(...tasks.upcoming.map(task => taskRow(task)));
   finished.hidden = false;
   upcoming.hidden = false;
 }

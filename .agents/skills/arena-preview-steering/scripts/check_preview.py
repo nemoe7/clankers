@@ -267,7 +267,14 @@ with tempfile.TemporaryDirectory() as directory:
     assert "resize: none;" in page and "resize: vertical" not in page
     assert "#notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }" in page
     assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
-    assert 'id="tasks-finished-body"' in page and 'id="tasks-upcoming-body"' in page
+    assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
+    assert '<ul id="tasks-upcoming-body" class="task-list"></ul>' in page
+    assert ".task-list { margin: 0; padding-left: 20px; }" in page
+    assert ".task-title { font-weight: 600; }" in page
+    assert (
+      ".task-details { display: block; margin-top: 2px; color: var(--muted);"
+      " font-size: 13px; }" in page
+    )
     assert ".tasks-layout { display: flex; flex-direction: column; gap: 18px; }" in page
     assert "max-height: 48%" not in page
     assert "min-height: 100%" not in page
@@ -507,31 +514,69 @@ with tempfile.TemporaryDirectory() as seen_dir:
 with tempfile.TemporaryDirectory() as tasks_dir:
   tasks_store = preview.Store(tasks_dir, create=True)
   assert tasks_store.state()["tasks"] is None
-  source = Path(tasks_dir) / "tasks.md"
-  source.write_text(
-    "## Upcoming\n\n- <script>alert(1)</script> next\n\n## Finished\n\n- done\n",
-    encoding="utf-8",
+  record = tasks_store.write_task(
+    "docs-archive",
+    "Move to new docs/archive/ dir",
+    ["move BUDGET-EXCEPTIONS.md", "write arena-quirks.md"],
   )
-  stamp = tasks_store.write_tasks(source)
-  written = tasks_store.state()["tasks"]
-  assert written["finished"] == "- done" and written["upcoming"].startswith("- ")
-  assert "<script>" not in written["upcoming_html"]
+  assert record["status"] == "upcoming" and record["order"] == 1
+  listed = tasks_store.state()["tasks"]
+  assert listed["upcoming"][0]["id"] == "docs-archive"
+  assert listed["upcoming"][0]["details"] == [
+    "move BUDGET-EXCEPTIONS.md",
+    "write arena-quirks.md",
+  ]
+  assert listed["finished"] == []
+  assert listed["updated_at"] == record["updated_at"]
+  # Moving a task between the divs keeps its title and details, so it stays one command.
+  moved = tasks_store.write_task("docs-archive", status="finished")
+  assert moved["title"] == "Move to new docs/archive/ dir"
+  assert len(moved["details"]) == 2 and moved["order"] == 1
+  assert tasks_store.state()["tasks"]["finished"][0]["id"] == "docs-archive"
+  assert tasks_store.state()["tasks"]["upcoming"] == []
+  tasks_store.write_task("task-a", "A")
+  tasks_store.write_task("task-b", "B")
+  tasks_store.write_task("task-c", "C", order=1)
+  upcoming = tasks_store.state()["tasks"]["upcoming"]
+  assert [item["id"] for item in upcoming] == ["task-c", "task-a", "task-b"]
+  assert [item["order"] for item in upcoming] == [1, 2, 3]
+  assert len(tasks_store.list_tasks()) == 4
+  removed = tasks_store.remove_task("task-a")
+  assert removed["title"] == "A"
+  upcoming = tasks_store.state()["tasks"]["upcoming"]
+  assert [item["id"] for item in upcoming] == ["task-c", "task-b"]
+  assert [item["order"] for item in upcoming] == [1, 2]
+  rejections = (
+    (lambda: tasks_store.write_task("Bad ID"), "A task ID with a space was accepted"),
+    (lambda: tasks_store.write_task("no-title"), "A new task without a title passed"),
+    (lambda: tasks_store.write_task("huge", "x" * 201), "An oversized title passed"),
+    (lambda: tasks_store.write_task("many", "M", ["d"] * 41), "41 details passed"),
+    (lambda: tasks_store.write_task("deep", "D", ["y" * 2001]), "A huge detail passed"),
+    (
+      lambda: tasks_store.write_task("docs-archive", status="open"),
+      "A third status passed",
+    ),
+    (lambda: tasks_store.remove_task("never-stored"), "A missing removal passed"),
+  )
+  for call, message in rejections:
+    try:
+      call()
+      raise AssertionError(message)
+    except ValueError:
+      pass
+  # The echo cuts a long detail to save the agent tokens; the stored row keeps it whole.
+  long_detail = "y" * 400
+  echoed = preview.echo_task(tasks_store.write_task("long", "Long", [long_detail]))
+  assert echoed["details"] == ["y" * 200 + "\u2026"]
+  assert tasks_store.state()["tasks"]["upcoming"][-1]["details"] == [long_detail]
+  # An empty detail clears the list rather than storing a blank line.
+  assert tasks_store.write_task("long", details=[""])["details"] == []
   assert (
-    "&lt;script&gt;" in written["upcoming_html"] and "<li>" in written["upcoming_html"]
+    preview.echo_task(tasks_store.write_task("hostile", "<img onerror=alert(1)>"))[
+      "title"
+    ]
+    == "<img onerror=alert(1)>"
   )
-  assert written["updated_at"] == stamp
-  one = Path(tasks_dir) / "one.md"
-  one.write_text("## Finished\n\n- done\n", encoding="utf-8")
-  try:
-    tasks_store.write_tasks(one)
-    raise AssertionError("A task list with one section was accepted")
-  except ValueError as error:
-    assert "two sections" in str(error)
-  try:
-    tasks_store.write_tasks(Path(tasks_dir) / "tasks.txt")
-    raise AssertionError("A task list outside Markdown was accepted")
-  except ValueError as error:
-    assert ".md" in str(error)
 
 help_text = subprocess.run(
   [sys.executable, str(Path(preview.__file__)), "serve", "--help"],
