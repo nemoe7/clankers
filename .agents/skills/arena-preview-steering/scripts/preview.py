@@ -429,6 +429,31 @@ def require_renderer():
     )
 
 
+CODE_BLOCK = re.compile(r"<pre>(.*?)</pre>", re.DOTALL)
+CODE_TAG = re.compile(r"<[^>]+>")
+
+
+def add_copy_buttons(rendered):
+  """Give every code block a copy button.
+
+  The button carries the code in `data-code`, because rendered HTML is assigned with
+  `innerHTML` and so cannot hold a listener of its own; the client copies from the attribute.
+  Newlines become `&#10;` to survive attribute parsing unchanged.
+  """
+
+  def replace(match):
+    inner = match.group(1)
+    code = html.unescape(CODE_TAG.sub("", inner))
+    payload = html.escape(code, quote=True).replace("\n", "&#10;")
+    button = (
+      f'<button type="button" class="copy-code" aria-label="Copy code" '
+      f'data-code="{payload}">Copy</button>'
+    )
+    return f'<div class="code-block">{button}<pre>{inner}</pre></div>'
+
+  return CODE_BLOCK.sub(replace, rendered)
+
+
 def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
@@ -441,7 +466,7 @@ def render(markdown, breaks=False):
     ["table", "strikethrough"]
   )
   parser.add_render_rule("link_open", open_link)
-  return parser.render(markdown)
+  return add_copy_buttons(parser.render(markdown))
 
 
 def handler(store):

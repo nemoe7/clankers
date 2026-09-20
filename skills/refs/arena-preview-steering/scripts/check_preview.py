@@ -226,6 +226,17 @@ with tempfile.TemporaryDirectory() as directory:
     assert ":not(pre) > code { background: var(--bubble)" in page
     assert ".report :not(pre) > code" not in page
     assert "background: none; padding: 0; }" in page
+
+    block = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
+    assert block.startswith(
+      '<div class="code-block"><button type="button" class="copy-code"'
+    )
+    assert 'data-code="print(1)&#10;"' in block and "<pre><code" in block
+    assert (
+      preview.add_copy_buttons(preview.render("no code here")).count("copy-code") == 0
+    )
+    escaped = preview.add_copy_buttons(preview.render('```text\n<a href="x">&\n```'))
+    assert "&lt;a href=&quot;x&quot;&gt;&amp;" in escaped and "<a href" not in escaped
     duplicate = root / "duplicate.md"
     duplicate.write_text("Areas:\n\n- [ ] ui\n- [ ] ui\n", encoding="utf-8")
     try:
