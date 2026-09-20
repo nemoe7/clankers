@@ -12,6 +12,9 @@
   /* Tabs sit on the panel, so their resting border is a step darker than --border. */
   --tab-border: #413d39;
   --chip: #4d4741;
+  --dot-sent: var(--muted);
+  --dot-seen: #7fa7d1;
+  --dot-said: #8dc07f;
   font-family: system-ui, sans-serif;
 }
 :root[data-theme="light"] {
@@ -27,6 +30,8 @@
   --focus: #8f5b13;
   --tab-border: var(--border);
   --chip: #e4ddd2;
+  --dot-seen: #3f6ea8;
+  --dot-said: #4a7c3a;
 }
 * { box-sizing: border-box; scrollbar-color: #302e2c var(--bg); scrollbar-width: thin; }
 *:hover { scrollbar-color: #666261 var(--bg); }
@@ -94,9 +99,14 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
 /* A receipt ID is text rather than a chip, so it opts out by class instead of by ancestry. */
 code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background: none; padding: 0; }
+/* Receipt state is a dot: gray until read, blue once read, green once answered. */
+.state-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--dot-sent); }
+.state-dot[data-state="seen"] { background: var(--dot-seen); }
+.state-dot[data-state="said"] { background: var(--dot-said); }
 .answer { margin-top: 8px; }
 /* Only the reply carries the bar and the muted colour; the message itself stays plain. */
-.answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); }
+/* Only the reply carries the bar, the muted colour and the smaller size: prose costs log space. */
+.answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
 #report-receipt { margin: 10px 0 0; }
 /* The rule under the toolbar sits 12px below it and 24px above #report-form. */

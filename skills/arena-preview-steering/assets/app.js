@@ -70,12 +70,22 @@ composerButton.addEventListener('click', () => {
     scrollHistory(true);
   }
 });
+// A placeholder is a hint rather than a draft: past three lines it keeps two and an ellipsis.
+function clipPlaceholder(text) {
+  const lines = String(text).split('\n');
+  return lines.length > 3 ? `${lines.slice(0, 2).join('\n')}\n\u2026` : lines.join('\n');
+}
+const STATE_WORDS = { sent: 'Sent', seen: 'Seen', said: 'Said' };
+
 function grow() {
   // The textarea grows with the draft instead of scrolling inside itself, so it expands upward and
   // the log gives way; when the pair no longer fits, the notes panel scrolls and the log stays
   // reachable by scrolling up. Setting height to auto first lets it shrink again after a send, and
   // the 2px are the border, which scrollHeight leaves out under box-sizing: border-box; without them
   // the box is set 2px short and answers with a scrollbar of its own.
+  // An empty field keeps the stylesheet's min-height: a placeholder must not hold the box open,
+  // or the composer stays expanded after a long send.
+  if (!note.value) { note.style.height = ''; return; }
   note.style.height = 'auto';
   note.style.height = `${note.scrollHeight + 2}px`;
 }
@@ -114,7 +124,7 @@ function showHistory(notes) {
   const signature = JSON.stringify(notes);
   if (signature === historySignature) return;
   historySignature = signature;
-  if (notes.length) note.placeholder = notes[notes.length - 1].text;
+  if (notes.length) note.placeholder = clipPlaceholder(notes[notes.length - 1].text);
   const history = $('#history');
   const pinned = !messageNodes.size
     || history.scrollHeight - history.scrollTop - history.clientHeight < 80;
@@ -137,11 +147,18 @@ function showHistory(notes) {
     receiptId.className = 'note-id';
     receiptId.textContent = item.id.slice(0, 7);
     receiptId.title = item.id;
+    // Sent until the agent reads it, Seen once a CLI read has stamped seen_at, Said once answered.
+    // The state is a coloured dot; the word lives in its title and aria-label instead of the line.
+    const state = item.acknowledged_at ? 'said' : item.seen_at ? 'seen' : 'sent';
+    const receiptDot = document.createElement('span');
+    receiptDot.className = 'state-dot';
+    receiptDot.dataset.state = state;
+    receiptDot.setAttribute('role', 'img');
+    receiptDot.setAttribute('aria-label', STATE_WORDS[state]);
+    receiptDot.title = STATE_WORDS[state];
     const receiptState = document.createElement('span');
-    // Sent until the agent reads it, Seen once a CLI read has stamped seen_at, Said once acknowledged.
-    const state = item.acknowledged_at ? 'Said' : item.seen_at ? 'Seen' : 'Sent';
-    receiptState.textContent = ` · ${state} ${time(item.at)}`;
-    receipt.replaceChildren(receiptId, receiptState);
+    receiptState.textContent = ` · ${time(item.at)}`;
+    receipt.replaceChildren(receiptId, receiptDot, receiptState);
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
     const answer = node.children[1];
@@ -210,7 +227,7 @@ $('#form').addEventListener('submit', async event => {
       headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
       body: JSON.stringify(pending)
     })).json();
-    note.placeholder = result.text;
+    note.placeholder = clipPlaceholder(result.text);
     status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.' : `Saved ${new Date(result.at).toLocaleTimeString()} · Message sent.`;
     pending = null;
     save('pending', 'null');
