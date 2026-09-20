@@ -243,11 +243,11 @@ with tempfile.TemporaryDirectory() as directory:
       in page
     )
     assert ".answer.reply {" not in page
-    assert (
-      ".answer.note { font-size: 13px; color: var(--muted); white-space: pre-wrap; }"
-      in page
-    )
-    assert ":not(pre) > code { background: var(--bubble)" in page
+    assert "--chip: #4d4741;" in page and "--chip: #e4ddd2;" in page
+    assert "code.note-id {" in page and ".receipt code" not in page
+    assert ".answer.note" not in page
+    assert ".answer > p:last-child { margin-bottom: 0; }" in page
+    assert ":not(pre) > code { background: var(--chip)" in page
     assert ".report :not(pre) > code" not in page
     assert "background: none; padding: 0; }" in page
     assert "#send { border-color: var(--accent); }" not in page
