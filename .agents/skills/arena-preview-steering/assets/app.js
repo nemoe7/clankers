@@ -73,9 +73,11 @@ composerButton.addEventListener('click', () => {
 function grow() {
   // The textarea grows with the draft instead of scrolling inside itself, so it expands upward and
   // the log gives way; when the pair no longer fits, the notes panel scrolls and the log stays
-  // reachable by scrolling up. Setting height to auto first lets it shrink again after a send.
+  // reachable by scrolling up. Setting height to auto first lets it shrink again after a send, and
+  // the 2px are the border, which scrollHeight leaves out under box-sizing: border-box; without them
+  // the box is set 2px short and answers with a scrollbar of its own.
   note.style.height = 'auto';
-  note.style.height = `${note.scrollHeight}px`;
+  note.style.height = `${note.scrollHeight + 2}px`;
 }
 note.value = stored('draft') || '';
 grow();
@@ -326,8 +328,9 @@ async function copyCode(button) {
   }
 }
 function growSlot(area) {
+  // The same 2px of border the composer adds; see grow().
   area.style.height = 'auto';
-  area.style.height = `${area.scrollHeight}px`;
+  area.style.height = `${area.scrollHeight + 2}px`;
 }
 document.addEventListener('input', event => {
   const target = event.target;

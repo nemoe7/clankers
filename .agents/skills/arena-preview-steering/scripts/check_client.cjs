@@ -132,7 +132,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#composer-toggle').events.click();
   assert.equal(body.dataset.composer, 'open');
   assert.equal(log.scrollTop, 500);
-  assert.equal(get('#note').style.height, '96px');
+  assert.equal(get('#note').style.height, '98px');
   get('#note').value = '**draft**';
   await get('#preview-note').events.click();
   assert.equal(get('#note').hidden, true);
@@ -143,11 +143,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#preview-note').events.click();
   assert.equal(get('#note').hidden, false);
   assert.equal(get('#note').value, '**draft**');
-  assert.equal(get('#note').style.height, '96px');
+  assert.equal(get('#note').style.height, '98px');
   get('#note').scrollHeight = 140;
   get('#note').value = 'keep draft';
   get('#note').events.input();
-  assert.equal(get('#note').style.height, '140px');
+  assert.equal(get('#note').style.height, '142px');
   get('#reports-tab').events.click();
   assert.equal(get('#notes-panel').hidden, true);
   assert.equal(get('#note').value, 'keep draft');
@@ -168,7 +168,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#form').events.submit(event({}));
   assert.equal(sent[0].id, sent[1].id);
   assert.equal(get('#note').value, '');
-  assert.equal(get('#note').style.height, '72px');
+  assert.equal(get('#note').style.height, '74px');
   assert.match(get('#send-status').textContent, /Saved/);
   assert.equal(get('#note').placeholder, 'keep draft');
   await tick();
@@ -305,12 +305,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(shipBox.checked, false);
   assert.equal(otherBox.checked, true);
   assert.equal(otherText.value, 'make it blue');
-  assert.equal(otherText.style.height, '40px');
+  assert.equal(otherText.style.height, '42px');
   otherText.value = 'typed in the slot';
   otherText.scrollHeight = 88;
   documentEvents.input({ target: otherText });
   assert.equal(otherBox.checked, true);
-  assert.equal(otherText.style.height, '88px');
+  assert.equal(otherText.style.height, '90px');
   documentEvents.input({ target: get('#note') });
   documentEvents.input({});
   otherText.value = '   ';
