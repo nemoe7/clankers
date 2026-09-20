@@ -120,6 +120,12 @@ with tempfile.TemporaryDirectory() as directory:
     assert len(preview.Store(root).state()["notes"]) == 1
     status, _, state_body = request("GET", "/api/state")
     assert status == 200
+    with patch.object(preview, "HAS_RENDERER", False):
+      try:
+        preview.require_renderer()
+        raise AssertionError("serve accepted a missing renderer")
+      except SystemExit as error:
+        assert "markdown-it-py" in str(error)
     served_note = json.loads(state_body)["notes"][0]
     assert "&lt;script&gt;" in served_note["html"]
     assert "ack_html" not in served_note and served_note["ack_text"] == "and rechecked"

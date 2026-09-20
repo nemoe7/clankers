@@ -13,6 +13,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+try:
+  import markdown_it  # noqa: F401
+
+  HAS_RENDERER = True
+except ImportError:
+  HAS_RENDERER = False
+
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
@@ -413,6 +420,15 @@ def open_link(renderer, tokens, index, options, env):
   return renderer.renderToken(tokens, index, options, env)
 
 
+def require_renderer():
+  if not HAS_RENDERER:
+    raise SystemExit(
+      "serve needs markdown-it-py: install it into the preview venv with "
+      "`python -m pip install markdown-it-py`, then start the server with that "
+      "venv's Python. read, ack and publish work without it."
+    )
+
+
 def render(markdown):
   try:
     from markdown_it import MarkdownIt
@@ -566,6 +582,7 @@ def main():
   try:
     store = Store(args.state_dir, create=args.command in {"serve", "init"})
     if args.command == "serve":
+      require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
         print(
           f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",
