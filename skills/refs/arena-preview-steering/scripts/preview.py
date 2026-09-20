@@ -61,6 +61,30 @@ def prompt_text(line):
   return text.strip("*_` ").rstrip(":").strip()
 
 
+def custom_label(option):
+  """The label of a free-text option, or None for a plain one.
+
+  `Label: ___` means free text whether it is a whole field or one option in a group, so the
+  same BLANK pattern decides both; a bare `___` option falls back to the label `Other`.
+  """
+  found = BLANK.match(option)
+  return None if not found else prompt_text(found.group(1) or "") or "Other"
+
+
+def custom_answer(field, value):
+  """True when `value` is typed text for one of this field's free-text options."""
+  if not isinstance(value, str):
+    return False
+  for option in field["options"]:
+    label = custom_label(option)
+    if label is None or not value.startswith(f"{label}: "):
+      continue
+    typed = value[len(label) + 2 :]
+    if typed.strip() and len(typed) <= 200:
+      return True
+  return False
+
+
 def parse_fields(markdown):
   """Split Markdown into prose blocks and answer fields written as list markers."""
   lines = markdown.splitlines()
@@ -151,9 +175,19 @@ def field_html(question):
   for option in question["options"]:
     value = html.escape(option, quote=True)
     checked = " checked" if option in question["default"] else ""
+    label = custom_label(option)
+    if label is None:
+      group += (
+        f'<label class="option"><input type="{control}" name="{name}" '
+        f'value="{value}"{checked}> {html.escape(option)}</label>'
+      )
+      continue
+    named = html.escape(label, quote=True)
     group += (
       f'<label class="option"><input type="{control}" name="{name}" '
-      f'value="{value}"{checked}> {html.escape(option)}</label>'
+      f'value="{value}"{checked} data-label="{named}"> {named}: '
+      f'<input type="text" class="custom-text" maxlength="200" data-custom="{named}" '
+      f'placeholder="your own answer" aria-label="{named}, your own answer"></label>'
     )
   return f"{body}{group}</div></div>"
 
@@ -365,6 +399,12 @@ class Store:
         raise ValueError(
           f"{field['type']} fields take 1–20 unique options of 1–200 characters"
         )
+      labels = [custom_label(option) for option in options]
+      labels = [label for label in labels if label is not None]
+      if len(set(labels)) != len(labels):
+        raise ValueError(
+          f"{field['type']} fields give each free-text option its own label"
+        )
 
   def submit_report(self, report_id, note_id, answers):
     report = self.report(report_id)
@@ -394,14 +434,17 @@ class Store:
       elif value is None:
         rendered = "(skipped)"
       elif field["type"] == "choice":
-        if value not in field["options"]:
+        if value not in field["options"] and not custom_answer(field, value):
           raise ValueError(f"{field_id}: choose one of " + ", ".join(field["options"]))
         rendered = value
       else:
         if (
           not isinstance(value, list)
           or len({item for item in value if isinstance(item, str)}) != len(value)
-          or any(item not in field["options"] for item in value)
+          or any(
+            item not in field["options"] and not custom_answer(field, item)
+            for item in value
+          )
         ):
           raise ValueError(
             f"{field_id}: pick options only: " + ", ".join(field["options"])

@@ -183,7 +183,8 @@ with tempfile.TemporaryDirectory() as directory:
       assert request("POST", "/api/notes", body, auth)[0] == 503
     fielded = root / "fielded.md"
     fielded.write_text(
-      "# Sign-off\n\nPick the areas:\n\n- [ ] ui\n- [x] api\n\nSeverity:\n\n"
+      "# Sign-off\n\nPick the areas:\n\n- [ ] ui\n- [x] api\n- [ ] Other: ___\n\n"
+      "Severity:\n\n"
       "- ( ) low\n- (x) high\n\nName: ___\n\nNotes {#notes}\n\n___\n\n"
       "```text\n- [ ] not a field\n```\n",
       encoding="utf-8",
@@ -204,9 +205,8 @@ with tempfile.TemporaryDirectory() as directory:
       "text",
       "text",
     ]
-    assert questions[0]["options"] == ["ui", "api"] and questions[0]["default"] == [
-      "api"
-    ]
+    assert questions[0]["options"] == ["ui", "api", "Other: ___"]
+    assert questions[0]["default"] == ["api"]
     assert questions[1]["prompt"] == "Severity" and questions[1]["default"] == ["high"]
     assert questions[2]["prompt"] == "Name" and questions[3]["id"] == "notes"
     assert len({question["id"] for question in questions}) == 4
@@ -218,6 +218,11 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'type="radio"' in served["html"] and 'type="checkbox"' in served["html"]
     assert "- [ ] not a field" in served["html"]
     assert served["html"].count("checked") == 2
+    assert 'data-label="Other"' in served["html"]
+    assert 'data-custom="Other"' in served["html"]
+    assert (
+      'class="custom-text"' in served["html"] and 'maxlength="200"' in served["html"]
+    )
     status, _, page = request("GET", "/")
     assert status == 200 and '#preview-note[aria-pressed="false"] {' in page
     assert '#preview-note[aria-pressed="true"]' not in page
@@ -359,6 +364,44 @@ with tempfile.TemporaryDirectory() as directory:
       )[0]
       == 400
     )
+    custom = root / "custom.md"
+    custom.write_text(
+      "Verdict {#verdict}\n\n- ( ) Ship it\n- ( ) Other: ___\n", encoding="utf-8"
+    )
+    verdict = preview.parse_fields(custom.read_text(encoding="utf-8"))[1][0]
+    assert verdict["options"] == ["Ship it", "Other: ___"]
+    markup = preview.field_html(verdict)
+    assert 'data-label="Other"' in markup and 'data-custom="Other"' in markup
+    assert " Other: " in markup and "> Ship it</label>" in markup
+    assert preview.custom_answer(verdict, "Other: make it blue")
+    assert not preview.custom_answer(verdict, "Other:   ")
+    assert not preview.custom_answer(verdict, "nonsense")
+    assert not preview.custom_answer(verdict, 7)
+    record = store.submit(
+      "custom",
+      "Custom",
+      [verdict],
+      "sub-custom",
+      {"verdict": "Other: make it blue"},
+    )
+    assert "verdict: Other: make it blue" in record["text"]
+    for bad in (
+      {"verdict": "Other: "},
+      {"verdict": "nope"},
+      {"verdict": ["Other: typed"]},
+    ):
+      try:
+        store.submit("custom", "Custom", [verdict], "sub-bad", bad)
+        raise AssertionError("An answer outside the free-text slot was accepted")
+      except ValueError:
+        pass
+    try:
+      preview.Store.validate_fields(
+        [dict(verdict, options=["Other: ___", "Other: ____"])]
+      )
+      raise AssertionError("Two free-text options shared one label")
+    except ValueError:
+      pass
   finally:
     app.shutdown()
     app.server_close()
