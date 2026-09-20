@@ -54,6 +54,14 @@ The renderer splits a source into prose blocks and fields before rendering. A fi
 | `- ( ) Label: ___` inside a group | Free-text slot | The typed text becomes the answer, as `Label: text` |
 | `Label: ___` or a bare `___` line | Text box | At most 2000 characters |
 
+A report may hold 1 to 50 fields, and each text answer is 2000 characters at most, so a fully
+answered report can legitimately carry far more than the 4000 characters a note is capped at. Its
+submission therefore has a bound of its own, 150,000 characters, checked before anything is stored,
+and it refuses with the limit named in the error rather than truncating an answer the owner typed.
+That bound was added after a review found the note cap being applied to the built `REPORT` message,
+which rejected a valid fully-answered report with a 400; a note keeps its own cap and its own
+wording.
+
 Consecutive marker lines of the same kind form one group. The prompt is the label before `___`, else the nearest non-empty
 line above the group, stripped of list, heading, quote and emphasis markers and a trailing colon. The field ID is a slug of
 that prompt, deduplicated with a numeric suffix; `{#my-id}` at the end of the prompt line sets it explicitly and is removed

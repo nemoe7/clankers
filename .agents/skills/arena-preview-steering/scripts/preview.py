@@ -23,6 +23,10 @@ except ImportError:
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
+# A report holds at most 50 fields of at most 2000 characters each, so its answers legitimately
+# reach past the 4000 a note is capped at. Submissions get their own bound, with room to spare
+# for the prompts and wrapper around them, and it refuses rather than truncating.
+MAX_SUBMISSION = 150_000
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
@@ -43,6 +47,18 @@ def identifier(value):
 def note_text(text):
   if not isinstance(text, str) or not text.strip() or len(text) > 4000:
     raise ValueError("Enter a note of 1–4000 characters")
+  return text
+
+
+def submission_text(text):
+  """Report answers are not notes, so they carry their own cap and their own wording."""
+  if not isinstance(text, str) or not text.strip():
+    raise ValueError("A report submission carries at least one answer")
+  if len(text) > MAX_SUBMISSION:
+    raise ValueError(
+      f"A report submission must be under {MAX_SUBMISSION:,} characters;"
+      " answer fewer fields or shorten them"
+    )
   return text
 
 
@@ -359,7 +375,7 @@ class Store:
     """Record report answers apart from user messages; the log never shows them."""
     identifier(submission_id)
     identifier(report_id)
-    note_text(text)
+    submission_text(text)
     with closing(self.connect()) as db, db:
       db.execute("BEGIN IMMEDIATE")
       existing = db.execute(

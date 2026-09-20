@@ -667,6 +667,50 @@ with tempfile.TemporaryDirectory() as amend_dir:
     except ValueError:
       pass
 
+with tempfile.TemporaryDirectory() as wide_dir:
+  wide_store = preview.Store(wide_dir, create=True)
+  # The widest report the field rules allow: 50 text fields, each answered in full.
+  wide = Path(wide_dir) / "wide.md"
+  wide.write_text(
+    "# Wide\n\n" + "\n".join(f"Question {index}: ___" for index in range(50)) + "\n",
+    encoding="utf-8",
+  )
+  wide_store.publish("wide", "Wide report", wide)
+  _, questions = preview.render_report(wide.read_text(encoding="utf-8"))
+  assert len(questions) == 50
+  answers = {question["id"]: "x" * 2000 for question in questions}
+  record = wide_store.submit_report("wide", "note-wide", answers)
+  # The combined answers pass the 4000 a note is capped at, and none of it is dropped.
+  assert len(record["text"]) > 4000
+  assert record["text"].count("x" * 2000) == 50
+  stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
+  assert stored and stored[0]["text"] == record["text"]
+  oversized = "z" * (preview.MAX_SUBMISSION + 1)
+  wide_rejections = (
+    (
+      lambda: preview.submission_text(oversized),
+      "An oversized submission was accepted",
+    ),
+    (
+      lambda: wide_store.submission("s-huge", "wide", oversized),
+      "An oversized one was stored",
+    ),
+    (lambda: preview.submission_text("   "), "An empty submission was accepted"),
+    (lambda: preview.submission_text(None), "A non-string submission was accepted"),
+  )
+  for call, message in wide_rejections:
+    try:
+      call()
+      raise AssertionError(message)
+    except ValueError as error:
+      assert "150,000" in str(error) or "at least one answer" in str(error)
+  # A note keeps its own, much smaller cap, and says so in its own words.
+  try:
+    preview.note_text("n" * 4001)
+    raise AssertionError("An oversized note was accepted")
+  except ValueError as error:
+    assert "4000" in str(error)
+
 help_text = subprocess.run(
   [sys.executable, str(Path(preview.__file__)), "serve", "--help"],
   capture_output=True,
