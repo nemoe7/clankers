@@ -20,6 +20,8 @@ All commands take `--state-dir` before the subcommand. Commands that read existi
 
 The UI sends the same client-generated ID on an unchanged retry. It distinguishes saving, confirmed storage and explicit agent acknowledgement; it never interprets an HTTP request or an inbox check as a chat acknowledgement. Errors preserve the draft. Switching views preserves the mounted composer. The user can send with Enter, use Shift+Enter for a newline, browse message history — each entry shows its ID and, once acknowledged, the agent's reply rendered like a user message or its plain note — pick a numbered report in send order, answer a fielded report in the Reports tab and switch dark/light themes. Field options render as text nodes; an unconfirmed submission keeps the user's input and says so. The default dark palette was supplied by the owner from Arena's UI.
 
+The page reads as a chat, by owner direction on 2026-09-20. It carries no `h1`; a pinned top bar holds the tabs, the theme button and a toggle that collapses the bar to that button alone. The message log sits above the composer, oldest first, fills the viewport between them and scrolls in place, holding its position when the user has scrolled up and pinning to the newest message otherwise. A second toggle hides the composer and gives the log the remaining height. Both toggles persist per browser like the theme, and reopening the composer pins the log to the newest message. Rendered reports keep their own headings, so the report `h1` and `h2` spacing is unaffected.
+
 ## Fields in a report
 
 The renderer splits a source into prose blocks and fields before rendering. A field is written as Markdown:

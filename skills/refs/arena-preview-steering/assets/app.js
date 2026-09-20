@@ -32,6 +32,33 @@ $('#theme').addEventListener('click', () => {
   setTheme(theme);
   save('theme', theme);
 });
+function setPanel(name, button, open, labels) {
+  document.body.dataset[name] = open ? 'open' : 'closed';
+  button.setAttribute('aria-expanded', open ? 'true' : 'false');
+  button.textContent = open ? labels[0] : labels[1];
+}
+function scrollHistory(force) {
+  const history = $('#history');
+  const near = history.scrollHeight - history.scrollTop - history.clientHeight < 80;
+  if (force || near) history.scrollTop = history.scrollHeight;
+}
+const chromeButton = $('#chrome');
+const composerButton = $('#composer-toggle');
+const chromeLabels = ['Close bar', 'Open bar'];
+const composerLabels = ['Hide composer', 'Show composer'];
+setPanel('chrome', chromeButton, stored('chrome') !== 'closed', chromeLabels);
+setPanel('composer', composerButton, stored('composer') !== 'closed', composerLabels);
+chromeButton.addEventListener('click', () => {
+  const open = document.body.dataset.chrome === 'closed';
+  setPanel('chrome', chromeButton, open, chromeLabels);
+  save('chrome', open ? 'open' : 'closed');
+});
+composerButton.addEventListener('click', () => {
+  const open = document.body.dataset.composer === 'closed';
+  setPanel('composer', composerButton, open, composerLabels);
+  save('composer', open ? 'open' : 'closed');
+  if (open) scrollHistory(true);
+});
 note.value = stored('draft') || '';
 try { pending = JSON.parse(stored('pending') || 'null'); }
 catch { status.textContent = 'Stored retry data is invalid. Draft retained; check the log before resending.'; }
@@ -63,7 +90,9 @@ function showHistory(notes) {
   historySignature = signature;
   if (notes.length) note.placeholder = notes[notes.length - 1].text;
   const history = $('#history');
-  for (const item of [...notes].reverse()) {
+  const pinned = !messageNodes.size
+    || history.scrollHeight - history.scrollTop - history.clientHeight < 80;
+  for (const item of notes) {
     let node = messageNodes.get(item.id);
     if (!node) {
       node = document.createElement('li');
@@ -98,6 +127,7 @@ function showHistory(notes) {
     }
     history.append(node);
   }
+  if (pinned) history.scrollTop = history.scrollHeight;
 }
 async function refreshState() {
   if (stateBusy) return;
