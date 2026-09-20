@@ -156,10 +156,114 @@ with tempfile.TemporaryDirectory() as directory:
       store, "note", side_effect=sqlite3.OperationalError("disk failure")
     ):
       assert request("POST", "/api/notes", body, auth)[0] == 503
+    form_source = root / "form.json"
+    form_source.write_text(
+      json.dumps(
+        {
+          "questions": [
+            {"id": "q1", "type": "text", "prompt": "What happened?"},
+            {
+              "id": "q2",
+              "type": "choice",
+              "prompt": "Severity",
+              "options": ["low", "high"],
+            },
+            {
+              "id": "q3",
+              "type": "checkbox",
+              "prompt": "Areas",
+              "options": ["ui", "api"],
+            },
+          ]
+        }
+      ),
+      encoding="utf-8",
+    )
+    store.publish_form("f1", "Smoke <test>", form_source)
+    assert len(store.state()["forms"]) == 1
+    for broken in (
+      {"questions": []},
+      {"questions": [{"id": "a", "type": "rating", "prompt": "x"}]},
+      {
+        "questions": [{"id": "a", "type": "choice", "prompt": "x", "options": ["only"]}]
+      },
+      {
+        "questions": [{"id": "a", "type": "text", "prompt": "x", "options": ["a", "b"]}]
+      },
+      {
+        "questions": [
+          {"id": "a", "type": "text", "prompt": "x"},
+          {"id": "a", "type": "text", "prompt": "y"},
+        ]
+      },
+    ):
+      try:
+        preview.Store.validate_form(broken)
+        raise AssertionError(f"Invalid form accepted: {broken}")
+      except ValueError:
+        pass
+    bad_source = root / "bad.json"
+    bad_source.write_text("not json", encoding="utf-8")
+    try:
+      store.publish_form("f2", "Bad", bad_source)
+      raise AssertionError("Non-JSON form accepted")
+    except ValueError:
+      pass
+    status, _, form_body = request("GET", "/api/forms/f1")
+    assert status == 200
+    served = json.loads(form_body)
+    assert served["title"] == "Smoke <test>" and len(served["questions"]) == 3
+    assert request("GET", "/api/forms/missing")[0] == 404
+    assert (
+      request("POST", "/api/forms/f1/submit", "{}", {"X-Preview-Token": token})[0]
+      == 415
+    )
+    assert (
+      request(
+        "POST", "/api/forms/f1/submit", json.dumps({"id": "s1", "answers": {"q1": "x"}})
+      )[0]
+      == 403
+    )
+    for bad in (
+      {"id": "s1", "answers": {"q1": "x", "q9": "nope"}},
+      {"id": "s1", "answers": {"q2": "severe"}},
+      {"id": "s1", "answers": {"q3": ["ui", "core"]}},
+      {"id": "s1", "answers": {"q1": "x" * 2001}},
+      {"id": "s1", "answers": "nope"},
+    ):
+      assert request("POST", "/api/forms/f1/submit", json.dumps(bad), auth)[0] == 400
+    answers = {"q1": "it broke", "q2": "high", "q3": ["ui"]}
+    submission = json.dumps({"id": "sub-1", "answers": answers})
+    assert request("POST", "/api/forms/f1/submit", submission, auth)[0] == 201
+    form_notes = [
+      row for row in store.read()["pending"] if row["text"].startswith("FORM f1")
+    ]
+    assert len(form_notes) == 1
+    form_text = form_notes[0]["text"]
+    assert (
+      "Smoke <test>:" in form_text
+      and "q1: it broke" in form_text
+      and "q2: high" in form_text
+      and "q3: ui" in form_text
+    )
+    assert request("POST", "/api/forms/f1/submit", submission, auth)[0] == 201
+    assert (
+      len([row for row in store.state()["notes"] if row["text"].startswith("FORM f1")])
+      == 1
+    )
+    assert (
+      request(
+        "POST",
+        "/api/forms/f1/submit",
+        json.dumps({"id": "sub-1", "answers": {"q1": "changed"}}),
+        auth,
+      )[0]
+      == 400
+    )
   finally:
     app.shutdown()
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, explicit receipts, reports, export, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, explicit receipts, reports, export, safe rendering, forms with inbox-answer submissions, errors and HTTP boundaries"
 )

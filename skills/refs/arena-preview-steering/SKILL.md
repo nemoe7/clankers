@@ -1,37 +1,68 @@
-# Arena Preview Steering — baseline
+---
+name: arena-preview-steering
+description: Steer an Arena.ai agent mid-turn without interruption through a persistent local live-preview inbox. Owns the shared Notes / Reports server, message log, saved versus acknowledged receipts, and dark/light interface. Use in Arena Agent Mode when the user wants mid-turn steering or ARENA.md requires it; not outside Arena. Reporting uses the companion arena-preview-reporting skill and this same runtime.
+license: MIT
+compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace files and long-lived process tools. Steering is standard-library only; reporting additionally needs markdown-it-py and the companion skill.
+metadata:
+  origin: first-party, maintained in this repository
+  version: "2.0.0"
+  arena-only: "true"
+---
 
-This is the full-wording source of the entry point. It stays in the source repository and is not distributed.
+# Arena Preview Steering
 
-## Purpose and ownership
+One server and inbox per session. Reporting shares this runtime; never start a second server for reports. User instructions and repository rules win.
 
-Use only in Arena.ai Agent Mode when the user needs to steer an agent during a turn without interrupting it, or when ARENA.md requires activation. This skill owns one Python server, the Notes / Reports interface, the inbox and explicit acknowledgement receipts. The companion arena-preview-reporting skill owns the report-publishing procedure and uses the same runtime. Do not run a second server for reports. Steering needs only Python 3.10+ and its standard library; report rendering additionally needs markdown-it-py. Both skills must be installed as siblings for reporting. Missing installed resources must be reported rather than installed or repaired without authorization.
+## Setup
 
-## Start or reuse the preview
+1. Resolve this skill's actual path: source `skills/` and installed discovery paths differ. Report missing installed files; do not install or repair them without authorization.
+2. Choose a stable, persisted, Git-ignored state directory, default `reports/arena-preview`. Verify it with `git check-ignore`; ask before adding an ignore rule if needed. Never use cache/build folders or commit/push session state, notes, receipts, reports or exports.
+3. Start with Arena's long-lived process tool, not a timed shell call:
 
-1. Resolve the skill's actual path; it may be under skills/ or an agent's discovery directory. Do not assume the repository is Clankers or that the current directory is the skill directory.
-2. Use a stable directory inside the persisted workspace, outside cache or build folders, for session state. The default is reports/arena-preview. Check that Git ignores it before writing there. Do not commit or push the database, notes, receipts, report sources or exports. Ask before adding an ignore rule if no suitable ignored directory exists.
-3. Start scripts/preview.py with --state-dir <directory> serve --port 8000 using Arena's long-lived process tool, not a timed shell call. The server binds 0.0.0.0. Reuse the current server and state directory during a session; if its process dies, restart it with the same state directory. If the port is occupied by another service, choose a free port, never kill the unrelated service. Use relative URLs in browser code and permit the preview host. Do not substitute an external notification service.
-4. For initial setup, start the server, name the live preview in chat and immediately block with one visibility question before normal work. The question offers the preview's status and an external-channel option. When ARENA.md applies, keep its literal activation acknowledgement. The user may not see a new preview until a blocking question or a turn boundary; this was observed on 2026-09-20. If the user selects the external channel, activate the retired ntfy transport for that session. The user supplies the topic, named `<repo>-<branch>-<8-char unguessable secret>` with the branch sanitized of slashes, and shares it in chat; the user posts notes to the topic's URL. The agent polls `https://ntfy.sh/<topic>/json?poll=1&since=<marker>` with the page-fetch path at every steering read: the first poll uses `since=all`; each later poll sets `since=` to the ID of the newest seen `event:"message"`, persisted in `<state-dir>/ntfy-since.txt`; `open` and `keepalive` events are ignored. The fallback ladder is: the JSON endpoint; the HTML topic page; a `since=all` replay. An empty response or a 500 with no message in the body means no new message; that is the quiet case, and a fresh topic's first read is expected to fail until the user has posted. Read the body a fetch returns, not the status it reports: a body that is an upstream error rather than the topic's JSON — such as an object-store `SignatureDoesNotMatch` naming a key id and a string to sign — is never a quiet one. On that error, retry the read once more; if the same error returns, generate a fresh topic of the same form, post its link in chat in one line naming the error, and continue with `since=all`, whose first empty failure is expected. If the fresh topic also returns the same error, stop polling for the rest of that turn and resume on the turn after the user's next. A 500 that repeats on a topic with delivered notes is reported once as a channel error and retried at the next steering read. The page-fetch path is used because sandbox HTTP to ntfy returns misleading empty responses. Notes are instructions under chat's precedence and take the same ACK: acknowledgement. The preview server and inbox still run; the selection is that session's explicit approval and never an automatic fallback, so no transport revives without a fresh user selection. After the answer, read the inbox and continue in the same turn. Do not claim visibility before confirmation; if it is still hidden and no channel was selected, report that and agree on the next step. Reusing an already-visible session preview does not require another setup question.
-5. The default theme is dark. Notes use Enter to send, Shift+Enter for a newline, and do not send while an input method is composing. The browser keeps a draft when local storage is available, with a visible warning otherwise. A saved message appears in the log, with confirmation beside the send controls and its text retained as the empty textarea's placeholder; do not repeat it in a separate last-saved block. Keep the Notes page single-column beside the chat. An optional Write / Preview toggle replaces the editing area with a read-only Markdown rendering in the same space, reusing the approved markdown-it-py environment. It is not WYSIWYG: the raw Markdown is the message, and previewing neither stores it in the inbox nor delivers it to the agent. The message log also renders Markdown using that parser, while stored and delivered text remains unchanged. When the renderer is absent, raw editing and sending still work; the log explicitly reports that it is showing raw text instead. Retrying an unchanged message uses its original ID so a lost response does not create another note.
+   ```bash
+   python <skill>/scripts/preview.py --state-dir reports/arena-preview serve --port 8000
+   ```
 
-## Read and acknowledge
+   The server binds `0.0.0.0`; browser URLs are relative and the preview host is accepted. Reuse its process and state directory. If it dies, restart with the same directory. If its port belongs to another service, choose a free port; never kill that service.
+4. Initial setup: start the server, name the preview in chat, then immediately block with one visibility question before normal work. The question offers the preview's status and an external-channel option; on selection the retired ntfy transport activates for that session — the user supplies the topic `<repo>-<branch>-<8-char unguessable secret>` (branch sanitized) and posts notes to its URL; the agent polls `https://ntfy.sh/<topic>/json?poll=1&since=<marker>` with page-fetch at every steering read, first poll `since=all`, then `since=` the newest seen `event:"message"` ID persisted in `<state-dir>/ntfy-since.txt`, `open`/`keepalive` ignored — the fallback ladder is the JSON endpoint, the HTML topic page, and a `since=all` replay; an empty response or a 500 with no message body is the quiet case (a fresh topic's first read is expected to fail until the user posts); read the body, not the status — on an upstream error body such as object-store `SignatureDoesNotMatch`, retry once, and on the same error generate a fresh topic of the same form, post its link in chat naming the error, continue with `since=all` whose first empty failure is expected, and if the fresh topic also returns the same error, stop polling for the turn until after the user's next; a 500 repeating on a topic with delivered notes is reported once as a channel error and retried at the next read — and page-fetch is the path because sandbox HTTP to ntfy returns misleading empty responses; notes are instructions and take the same ACK: acknowledgement — with the preview server and inbox still running, and the selection as that session's explicit approval, never an automatic fallback. Keep ARENA.md's literal activation acknowledgement when applicable. Preview visibility may wait for a question/turn boundary, observed 2026-09-20. After the answer, read the inbox and continue. Never claim visibility before confirmation; if still hidden and no channel was selected, report and agree on the next step. Reusing an already-visible preview needs no setup question.
+5. Dark is the default; Notes stays single-column beside chat. Enter sends, Shift+Enter adds a newline; IME composition does not send. Show confirmation by the send controls and the last sent text as the empty textarea's placeholder, not a duplicate block. History distinguishes saved/acknowledged notes. Warn when browser draft storage fails; unchanged retries reuse their ID. Optional Write / Preview reuses `markdown-it-py` in the same space: read-only rendering, not WYSIWYG. Send raw Markdown; previewing neither saves to the inbox nor delivers it. Render Markdown in the log too; stored/delivered text stays unchanged. Without the renderer, raw editing/sending work and the log explicitly labels its raw-text display.
 
-Read the actual inbox with scripts/preview.py --state-dir <directory> read. It prints every pending message without truncation and records the check time. A read does not acknowledge a note or remove it. SQLite transactions coordinate browser sends and agent receipt writes. A missing, unreadable or corrupt inbox is an error, never evidence that there are no messages.
+## Read, then acknowledge
 
-Read at turn start, every reasoning boundary, before and after each tool-call block, before expensive or irreversible work, and before turn end. Co-issue a read in every parallel block, then read again after it returns; a block is the cadence unit, not each simultaneous call. A block that only waits for user input needs its read after return. Initial file discovery and server startup may precede the first inbox read. Do not run a self-sustaining background consumer that marks messages handled while the agent has not seen them.
+```bash
+python <skill>/scripts/preview.py --state-dir reports/arena-preview read
+```
 
-Every delivered note requires a visible chat acknowledgement whose first characters are ACK:, followed by the agent's interpretation. The prefix is reserved for acknowledging delivered user notes; it never belongs in thought or ordinary status reports. After the chat acknowledgement, run scripts/preview.py --state-dir <directory> ack <id> [<id> ...] for exactly the acknowledged IDs. Never acknowledge all pending messages blindly: another note may have arrived meanwhile. Repeating an acknowledgement preserves the original receipt timestamp. Unknown IDs make the receipt transaction fail, without partially acknowledging the batch.
+The command prints **all pending messages**, without truncation, and records the check time. It neither acknowledges nor removes them. Missing, unreadable or corrupt state is an error, never an empty inbox.
 
-Act on STOP:, PRIORITY:, CONTEXT: and ordinary notes under the same instruction precedence as chat. A note is an instruction, not proof that a factual claim is true. When it contradicts a measurement, state the disagreement and evidence before proceeding. The acknowledgement only proves receipt; it is not a claim that the requested work is complete.
+- Read at turn start, each reasoning boundary, before/after every tool-call block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block and read after return; the block is the cadence unit. A blocking-only call needs its read after return. Initial discovery/startup may precede the first read. Never use a background consumer to mark unseen messages handled.
+- Acknowledge every delivered note in visible chat, opening with literal `ACK:` and your interpretation. Reserve that prefix for delivered notes, never thought or ordinary status. **After** that chat acknowledgement, record exactly those IDs:
 
-## Data and failure boundaries
+  ```bash
+  python <skill>/scripts/preview.py --state-dir reports/arena-preview ack <id> [<id> ...]
+  ```
 
-State lives in state.sqlite3 under the chosen directory, with normal SQLite transactions rather than a transient process-only queue. Keep the file, not a server PID, as the durable artifact. Browser history displays saved versus acknowledged notes and the agent's latest inbox check. The browser polls the server for display updates; this does not make the agent read or reason automatically.
+  Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp. Receipt means received, not implemented.
+- Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence. Notes are instructions, not factual proof; disagree visibly when measurements contradict them, showing evidence.
 
-The preview is a session interface, not a production authentication service. Anyone with preview access can read messages and reports. A per-process browser token prevents blind cross-origin submissions, not access by someone who can open the page. Do not place secrets in notes or publish sensitive reports. The server serves only its interface, structured state and explicitly published reports, never arbitrary repository paths.
+## Forms
 
-Processes, installed packages and preview URLs can disappear across sandbox restarts. State files are workspace artifacts, not a permanent backup service. Browser drafts depend on origin and storage settings. A server restart invalidates the browser submission token; reload the page and retry, preserving the draft. Surface network, storage and renderer failures; never report an unconfirmed save as a success. Report rendering failures must not disable steering.
+Send the user a questionnaire by publishing JSON:
 
-If the preview fails, tell the user and ask how to continue through ordinary chat. Do not silently revive ntfy or the old local-report-commit workaround. These are historical alternatives, not forbidden forever and not the active fallback. See references/REFERENCE.md for the transition, observed evidence and recovery limits.
+```bash
+python <skill>/scripts/preview.py --state-dir reports/arena-preview publish-form <form.json> --id <id> --title <title>
+```
 
-Keep production clean of this skill's name, paths and scripts. Its own files, setup chat and acknowledgements are the exceptions. Explicit user requirements and repository rules take precedence over skill defaults.
+A form is a UTF-8 `.json` file of at most 256 KB: `{"questions": [...]}` with 1–50 questions; each has a unique identifier `id`, a `type` of `text`, `choice` or `checkbox`, a `prompt` of 1–500 characters, and `choice`/`checkbox` add `options` with 2–20 unique strings of 1–200 characters. The UI's Forms tab renders it. Answers POST to `/api/forms/<id>/submit` and land in the inbox as one note headed `FORM <id> <title>:`, one indented line per question, `(skipped)` for unanswered ones — read and `ACK:` it like any note. Resending is a new answer; invalid answers return an error and keep the user's input.
+
+## Persistence and limits
+
+`state.sqlite3` stores notes, receipts, published report snapshots, form snapshots and the latest check using SQLite transactions. Keep the file, not the process, as the durable artifact. The browser polls for display updates; this does **not** make the agent read automatically.
+
+Anyone with preview access can read messages/reports. The per-process submission token blocks blind cross-origin writes, not a visitor who can open the page. Do not send secrets. Only interface routes, structured state and explicitly published reports are served, never arbitrary repository paths.
+
+Processes, packages and URLs may disappear after a sandbox restart; workspace files are not a permanent backup service. Drafts depend on browser origin/storage. After a server restart, reload to refresh the submission token, preserving your draft. Expose network/storage failures; never call an unconfirmed save successful. A missing Markdown renderer must not disable steering.
+
+If the preview fails, report it and ask how to continue in chat. Do not silently revive ntfy or local report commits; they are historical alternatives, neither active fallback nor banned forever. See [migration and recovery](references/REFERENCE.md).
+
+Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions. For reports, use sibling [arena-preview-reporting](../arena-preview-reporting/SKILL.md). Run `scripts/check_preview.py` with the reporting venv's Python to check the runtime without external test frameworks.

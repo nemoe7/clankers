@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
+MAX_FORM = 256_000
 
 
 def now():
@@ -52,6 +53,10 @@ class Store:
             id TEXT PRIMARY KEY, title TEXT NOT NULL,
             markdown TEXT NOT NULL, updated_at TEXT NOT NULL
           );
+          CREATE TABLE IF NOT EXISTS forms (
+            id TEXT PRIMARY KEY, title TEXT NOT NULL,
+            form TEXT NOT NULL, updated_at TEXT NOT NULL
+          );
           CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         """)
       self.path.chmod(0o600)
@@ -85,6 +90,12 @@ class Store:
           dict(row)
           for row in db.execute(
             "SELECT id, title, updated_at FROM reports ORDER BY title, id"
+          )
+        ],
+        "forms": [
+          dict(row)
+          for row in db.execute(
+            "SELECT id, title, updated_at FROM forms ORDER BY title, id"
           )
         ],
         "last_check": dict(db.execute("SELECT key, value FROM meta")).get("last_check"),
@@ -137,6 +148,119 @@ class Store:
       if row is None:
         raise FileNotFoundError("Report not found")
       return dict(row)
+
+  @staticmethod
+  def validate_form(form):
+    if not isinstance(form, dict) or not isinstance(form.get("questions"), list):
+      raise TypeError("A form is a JSON object with a questions list")
+    questions = form["questions"]
+    if not 1 <= len(questions) <= 50:
+      raise ValueError("A form holds 1–50 questions")
+    seen = set()
+    for question in questions:
+      if not isinstance(question, dict):
+        raise TypeError("Each question is a JSON object")
+      question_id = question.get("id")
+      identifier(question_id)
+      if question_id in seen:
+        raise ValueError(f"Duplicate question ID: {question_id}")
+      seen.add(question_id)
+      question_type = question.get("type")
+      if question_type not in {"text", "choice", "checkbox"}:
+        raise ValueError("Question type is text, choice or checkbox")
+      prompt = question.get("prompt")
+      if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 500:
+        raise ValueError("Each prompt is 1–500 characters")
+      if question_type == "text":
+        if "options" in question:
+          raise ValueError("Text questions take no options")
+      else:
+        options = question.get("options")
+        if (
+          not isinstance(options, list)
+          or not 2 <= len(options) <= 20
+          or len({option for option in options if isinstance(option, str)})
+          != len(options)
+          or any(
+            not option.strip() or len(option) > 200
+            for option in options
+            if isinstance(option, str)
+          )
+        ):
+          raise ValueError(
+            f"{question_type} questions take 2–20 unique options of 1–200 characters"
+          )
+
+  def publish_form(self, form_id, title, source):
+    identifier(form_id)
+    if not isinstance(title, str) or not title.strip() or len(title) > 200:
+      raise ValueError("Form title must contain 1–200 characters")
+    source = Path(source)
+    if source.suffix.lower() != ".json":
+      raise ValueError("Publish a UTF-8 .json form file")
+    with source.open("rb") as stream:
+      data = stream.read(MAX_FORM + 1)
+    if len(data) > MAX_FORM:
+      raise ValueError("Form exceeds the 256 KB limit; split it into forms")
+    form = json.loads(data.decode("utf-8"))
+    self.validate_form(form)
+    with closing(self.connect()) as db, db:
+      db.execute(
+        "INSERT OR REPLACE INTO forms VALUES (?, ?, ?, ?)",
+        (form_id, title, json.dumps(form, ensure_ascii=False), now()),
+      )
+
+  def form(self, form_id):
+    identifier(form_id)
+    with closing(self.connect()) as db:
+      row = db.execute("SELECT * FROM forms WHERE id = ?", (form_id,)).fetchone()
+      if row is None:
+        raise FileNotFoundError("Form not found")
+      result = dict(row)
+      result["questions"] = json.loads(result.pop("form"))["questions"]
+      return result
+
+  def submit_form(self, form_id, note_id, answers):
+    form = self.form(form_id)
+    if not isinstance(answers, dict):
+      raise TypeError("Answers is a JSON object keyed by question ID")
+    known = {question["id"] for question in form["questions"]}
+    unknown = set(answers) - known
+    if unknown:
+      raise ValueError(f"Unknown question IDs: {', '.join(sorted(unknown))}")
+    lines = [
+      f"FORM {form_id} {form['title']}:",
+    ]
+    for question in form["questions"]:
+      question_id = question["id"]
+      value = answers.get(question_id)
+      if question["type"] == "text":
+        if value is None:
+          rendered = "(skipped)"
+        elif not isinstance(value, str) or len(value) > 2000:
+          raise ValueError(f"{question_id}: text answers are 1–2000 characters")
+        else:
+          rendered = value if value.strip() else "(skipped)"
+      elif value is None:
+        rendered = "(skipped)"
+      elif question["type"] == "choice":
+        if value not in question["options"]:
+          raise ValueError(
+            f"{question_id}: choose one of " + ", ".join(question["options"])
+          )
+        rendered = value
+      else:
+        if (
+          not isinstance(value, list)
+          or len({item for item in value if isinstance(item, str)}) != len(value)
+          or any(item not in question["options"] for item in value)
+        ):
+          raise ValueError(
+            f"{question_id}: pick options only: " + ", ".join(question["options"])
+          )
+        rendered = ", ".join(value) if value else "(skipped)"
+      lines.append(f"  {question_id}: {rendered}")
+    return self.note(note_id, "\n".join(lines))
 
 
 def open_link(renderer, tokens, index, options, env):
@@ -245,6 +369,10 @@ def handler(store):
           else:
             self.reply(200, render(report["markdown"]), "text/html; charset=utf-8")
           return
+        match = re.fullmatch(r"/api/forms/([a-zA-Z0-9_-]{1,80})", path)
+        if match:
+          self.reply(200, json.dumps(store.form(match.group(1)), ensure_ascii=False))
+          return
         self.problem(404, "Not found")
       except FileNotFoundError as error:
         self.problem(404, error)
@@ -253,7 +381,8 @@ def handler(store):
 
     def do_POST(self):
       path = urlsplit(self.path).path
-      if path not in {"/api/notes", "/api/markdown"}:
+      form_submit = re.fullmatch(r"/api/forms/([a-zA-Z0-9_-]{1,80})/submit", path)
+      if path not in {"/api/notes", "/api/markdown"} and not form_submit:
         self.problem(404, "Not found")
         return
       supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
@@ -277,9 +406,15 @@ def handler(store):
             200, render(note_text(payload.get("text"))), "text/html; charset=utf-8"
           )
           return
+        if form_submit:
+          note = store.submit_form(
+            form_submit.group(1), payload.get("id"), payload.get("answers")
+          )
+          self.reply(201, json.dumps(note, ensure_ascii=False))
+          return
         note = store.note(payload.get("id"), payload.get("text"))
         self.reply(201, json.dumps(note, ensure_ascii=False))
-      except (ValueError, UnicodeDecodeError) as error:
+      except (ValueError, TypeError, UnicodeDecodeError) as error:
         self.problem(400, error)
       except (OSError, sqlite3.Error, RuntimeError) as error:
         self.problem(503, error)
@@ -301,6 +436,10 @@ def main():
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
   publish.add_argument("--title", required=True)
+  publish_form = commands.add_parser("publish-form")
+  publish_form.add_argument("source", type=Path)
+  publish_form.add_argument("--id", required=True)
+  publish_form.add_argument("--title", required=True)
   download = commands.add_parser("export")
   download.add_argument("id")
   download.add_argument("destination", type=Path)
@@ -324,6 +463,9 @@ def main():
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}; select it in the Reports tab")
+    elif args.command == "publish-form":
+      store.publish_form(args.id, args.title, args.source)
+      print(f"Published form {args.id}; open the Forms tab")
     elif args.command == "export":
       output = export(store.report(args.id))
       args.destination.write_text(output, encoding="utf-8")
@@ -339,7 +481,14 @@ def main():
       print(
         f"Imported {len(records)} notes; existing IDs are not duplicated; receipts unchanged"
       )
-  except (OSError, ValueError, KeyError, sqlite3.Error, RuntimeError) as error:
+  except (
+    OSError,
+    ValueError,
+    TypeError,
+    KeyError,
+    sqlite3.Error,
+    RuntimeError,
+  ) as error:
     print(f"Preview error: {error}", file=sys.stderr)
     return 1
   return 0
