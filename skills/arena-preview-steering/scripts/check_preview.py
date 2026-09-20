@@ -239,7 +239,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#notes-panel, #reports-panel { overflow-y: auto; }" in page
     assert "max-height: 48%" not in page
     assert "min-height: 100%" not in page
-    assert ".notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%;" in page
+    assert (
+      ".notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%;"
+      in page
+    )
     assert "resize: none; min-height: 72px; overflow: hidden; }" in page
     assert ".log-card { flex: 1 1 auto; min-height: 200px;" in page
     assert "h1 { letter-spacing: -.035em; margin: 4px 0; }" in page
