@@ -134,6 +134,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#composer-toggle').events.click();
   assert.equal(body.dataset.composer, 'open');
   assert.equal(log.scrollTop, 500);
+  // An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box open.
+  assert.equal(get('#note').style.height, '');
+  get('#note').value = 'a draft';
+  context.grow();
   assert.equal(get('#note').style.height, '98px');
   get('#note').value = '**draft**';
   await get('#preview-note').events.click();
@@ -201,7 +205,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#form').events.submit(event({}));
   assert.equal(sent[0].id, sent[1].id);
   assert.equal(get('#note').value, '');
-  assert.equal(get('#note').style.height, '74px');
+  // A cleared field collapses back to the stylesheet's min-height instead of keeping its grown size.
+  assert.equal(get('#note').style.height, '');
   assert.match(get('#send-status').textContent, /Saved/);
   assert.match(get('#send-status').textContent, /· Message sent\./);
   assert.doesNotMatch(get('#send-status').textContent, /awaiting acknowledgement/);
@@ -219,9 +224,20 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
   await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Sent /);
+  assert.match(get('#history').children[0].children[2].textContent, /^one · [A-Z][a-z]{2} /);
+  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'sent');
+  assert.equal(get('#history').children[0].children[2].children[1].title, 'Sent');
+  assert.equal(get('#history').children[0].children[2].children[1].attributes['aria-label'], 'Sent');
+  assert.equal(get('#history').children[0].children[2].children[1].attributes.role, 'img');
+  assert.equal(context.clipPlaceholder('one\ntwo\nthree'), 'one\ntwo\nthree');
+  assert.equal(context.clipPlaceholder('one\ntwo\nthree\nfour'), 'one\ntwo\n\u2026');
+  assert.equal(context.clipPlaceholder('one\ntwo\nthree\nfour\nfive'), 'one\ntwo\n\u2026');
+  const beforeGrow = get('#note').value;
+  get('#note').value = ''; get('#note').scrollHeight = 300; context.grow();
+  assert.equal(get('#note').style.height, '');
+  get('#note').value = beforeGrow; get('#note').scrollHeight = 96; context.grow();
   assert.doesNotMatch(get('#history').children[0].children[2].textContent,
-    /Awaiting|ACK-ed|Saved|Delivered| id /);
+    /Awaiting|ACK-ed|Saved|Delivered|Sent|Seen|Said| id /);
   assert.equal(get('#last-check').textContent, 'Not checked yet.');
   const stamp = get('#history').children[0].children[2].textContent;
   assert.match(stamp, /[A-Z][a-z]{2} \d{2}, \d{2}:\d{2}/);
@@ -233,12 +249,14 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[2].className, 'receipt');
   state.notes[0].seen_at = new Date().toISOString();
   await get('#refresh-notes').events.click();
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Seen /);
+  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'seen');
+  assert.equal(get('#history').children[0].children[2].children[1].title, 'Seen');
   state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
   state.notes[0].acknowledged_at = new Date().toISOString();
   state.last_check = new Date().toISOString();
   await get('#refresh-notes').events.click();
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
+  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'said');
+  assert.equal(get('#history').children[0].children[2].children[1].title, 'Said');
   assert.match(get('#last-check').textContent, /^Last checked [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
   assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
   state.notes[0].ack_kind = 'reply';
@@ -246,7 +264,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes[0].ack_html = '<p><strong>done</strong></p>';
   await get('#refresh-notes').events.click();
   const answer = get('#history').children[0].children[1];
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
+  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'said');
+  assert.equal(get('#history').children[0].children[2].children[1].title, 'Said');
   assert.equal(typeof documentEvents.click, 'function');
   const copyButton = new Element();
   copyButton.className = 'copy-code';
@@ -290,7 +309,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(answer.children[0].tagName, 'p');
   assert.match(answer.className, /answer reply/);
   assert.doesNotMatch(answer.className, /note/);
-  assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
+  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'said');
+  assert.equal(get('#history').children[0].children[2].children[1].title, 'Said');
   assert.equal(get('#note').value, 'new unsent draft');
   state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
   log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
@@ -421,6 +441,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
   assert.equal(longReceipt.children[0].className, 'note-id');
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
-  assert.match(longReceipt.textContent, /^a66700e · Sent /);
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  assert.match(longReceipt.textContent, /^a66700e · [A-Z][a-z]{2} /);
+  assert.equal(longReceipt.children[1].dataset.state, 'sent');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs and state dots, clipped placeholders, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
