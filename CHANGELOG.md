@@ -1,3 +1,11 @@
+## 2026-09-21 — Smallest task first becomes a rule
+
+- **Summary** — `rules/ARENA.md` gains one General rule: with several tasks open, do the smallest first and keep taking the smallest remaining, a user-stated priority outranking size, and re-sort whenever a task arrives so arrival order never decides. `rules/refs/ARENA.md` carries the full wording, which adds that a large task never blocks a small one. The root copy follows byte-identical, as `.github/workflows/distribute-arena.yml` expects.
+- **Cost** — `rules/ARENA.md` 12,661 → 12,853 `B` (+192), the live bullet written compressed from a 294 `B` refs amendment; `rules/refs/ARENA.md` 22,145 → 22,439 `B`, unbudgeted. `BUDGET-EXCEPTIONS.md` records the growth.
+- **Checks** — `maintenance/check.py --update` then a clean re-run: the root copy compares byte-identical, refs/live parity holds with the General section at six bullets in both, and the README table refreshes to 12,853 `B`. `ruff check`/`ruff format`, `markdownlint-cli2` and both preview harnesses green, no skill file having changed.
+- **Limits** — nothing measures a task's size, so smallest is the agent's judgement and the rule holds only while the queue is re-sorted on arrival. A stated priority is the owner's override and needs no reason, and the rule says nothing about finishing a task already in hand, which note 57 settled separately.
+- Origins: the owner's notes 57 and 62 — more tasks would arrive while they used the preview, so finish the task in hand and re-sort smallest to largest, always taking the smallest first; then the direction to amend `ARENA.md` with exactly that, unless the user states a priority.
+
 ## 2026-09-21 — Report headings share one margin and code blocks tighten
 
 - **Summary** — rendered Markdown in reports and in log messages keeps one heading rhythm: `.report :is(h1, h2, h3, h4, h5, h6)` takes 10px above and 6px below, replacing the separate `.report h1` and `.report h2` rules, while the report's first child stays flush to the top. `.report pre` padding drops from 16px to 10px. `h3` to `h6` were the worst offenders, because only `h1` and `h2` had been tightened before and the rest fell back to browser defaults of about 1em each side.
