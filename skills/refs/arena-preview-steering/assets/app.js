@@ -430,6 +430,7 @@ showClock();
 setInterval(showClock, 1000);
 // Each tab copies what restores or exports it: the log as the lines import-notes reads back,
 // the shown report as the Markdown publish takes, the tasks as the JSON task-import reads.
+// The JSON copies are minified on purpose: the agent parses them, and the whitespace only costs tokens.
 $('#copy-log').addEventListener('click', () => {
   const notes = lastState ? lastState.notes : [];
   copyFrom($('#copy-log'), notes.length ? `${notes.map(
@@ -449,7 +450,7 @@ $('#copy-report').addEventListener('click', async () => {
 $('#copy-tasks').addEventListener('click', () => {
   const tasks = lastState && lastState.tasks;
   const records = tasks ? [...tasks.finished, ...tasks.upcoming] : [];
-  copyFrom($('#copy-tasks'), records.length ? `${JSON.stringify(records, null, 2)}\n` : null,
+  copyFrom($('#copy-tasks'), records.length ? `${JSON.stringify(records)}\n` : null,
     'task list');
 });
 function savedAnswers(id) {
