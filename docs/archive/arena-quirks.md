@@ -216,3 +216,13 @@ and no way to recover it from the agent's side. The only signs are indirect: an 
 something the log does not contain, or an instruction that does not match what the owner says they
 sent. The only recovery is to ask. This is the case that produced the retracted entry above, where a
 replaced message was read as a platform reset and written down as one.
+
+It has now happened to an instruction rather than to a report. A message reading `continue tasks!`
+arrived, and work started on the strength of it: thirty-four lines went into `scripts/preview.py`
+before the owner stopped the turn and sent note `de6c0019`, saying the message was false. The lines
+were reverted with `git checkout` and nothing was committed, so the cost was a stopped turn rather
+than a bad commit. Worth being precise about why: there is no way to tell from inside the turn that
+an instruction was replaced, since it does not arrive marked as replaced — it arrives as an
+instruction, in the owner's register, asking for something plausible. What limited the damage was
+that the work was still uncommitted when the owner intervened, which is an argument for small commits
+and for pushing early rather than for any cleverness on the agent's part.
