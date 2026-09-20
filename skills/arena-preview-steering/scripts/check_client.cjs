@@ -22,6 +22,7 @@ class Element {
     this.children = [];
     this.attributes = {};
     this.dataset = {};
+    this.style = {};
     this.events = {};
     this.scrollTop = 0;
     this.scrollHeight = 0;
@@ -127,9 +128,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#composer-toggle').textContent, '✎');
   assert.equal(storage.get('arena-preview-v1:composer'), 'closed');
   log.scrollHeight = 500; log.clientHeight = 100; log.scrollTop = 0;
+  get('#note').scrollHeight = 96;
   get('#composer-toggle').events.click();
   assert.equal(body.dataset.composer, 'open');
   assert.equal(log.scrollTop, 500);
+  assert.equal(get('#note').style.height, '96px');
   get('#note').value = '**draft**';
   await get('#preview-note').events.click();
   assert.equal(get('#note').hidden, true);
@@ -140,8 +143,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#preview-note').events.click();
   assert.equal(get('#note').hidden, false);
   assert.equal(get('#note').value, '**draft**');
+  assert.equal(get('#note').style.height, '96px');
+  get('#note').scrollHeight = 140;
   get('#note').value = 'keep draft';
   get('#note').events.input();
+  assert.equal(get('#note').style.height, '140px');
   get('#reports-tab').events.click();
   assert.equal(get('#notes-panel').hidden, true);
   assert.equal(get('#note').value, 'keep draft');
@@ -158,9 +164,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#note').value, 'keep draft');
   assert.match(get('#send-status').textContent, /Save not confirmed/);
   sendHandler = async note => response({ ...note, at: new Date().toISOString() });
+  get('#note').scrollHeight = 72;
   await get('#form').events.submit(event({}));
   assert.equal(sent[0].id, sent[1].id);
   assert.equal(get('#note').value, '');
+  assert.equal(get('#note').style.height, '72px');
   assert.match(get('#send-status').textContent, /Saved/);
   assert.equal(get('#note').placeholder, 'keep draft');
   await tick();
