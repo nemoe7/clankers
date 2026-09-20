@@ -78,7 +78,7 @@ small, .muted, #last-check { color: var(--muted); font-size: 13px; }
 p.muted { margin-block: 4px; }
 .icon-button { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; line-height: 1; font-size: 19px; display: inline-flex; align-items: center; justify-content: center; }
 body[data-composer="closed"] #composer-toggle { color: var(--muted); opacity: .55; }
-#preview-note[aria-pressed="true"] { color: var(--muted); opacity: .55; }
+#preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
