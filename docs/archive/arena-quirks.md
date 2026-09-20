@@ -81,7 +81,18 @@ A restore also leaves the repository dirtier than it found it in one specific wa
 Python harness creates `__pycache__` inside the live skill copy, which makes a `diff -r` parity
 check report a difference that is not a difference in any tracked file.
 
-## A refresh reset Arena's message history while the turn continued
+### 2026-09-21 arena/01a0be68-clankers — restoring the inbox afterwards
+
+The owner pasted the lost history back in chunks and the agent imported it, then marked all
+twenty-eight restored notes as acknowledged on the reasoning that they had been answered before the
+wipe. Five of them had not: the paste was of the owner's unacknowledged messages, so the blanket
+acknowledgement reported five answers that never existed. The owner caught it and named it as an
+amendment to agent behaviour during a restore. What follows from it: a restore has to carry the
+acknowledgement state with the note, or leave it unset, and must never assume answered. A copy taken
+from the log carries only id, text and at, which omits exactly the state that decides whether a note
+still needs an answer, so such a copy cannot be imported as though it were complete.
+
+## A refresh can reset the sandbox, not just Arena's visible history
 
 ### 2026-09-21 arena/01a0be68-clankers
 
@@ -97,6 +108,17 @@ nothing uncommitted but two untracked handoff files that are deliberately not co
 
 The second half is the stranger one and it is recorded as observed, not explained: the turn survived
 the loss of the transcript that displays it.
+
+### 2026-09-21 arena/01a0be68-clankers — the owner's correction
+
+The owner corrected this entry: the refresh was what caused a working sandbox state reset, and it
+lost all uncommitted data including the message history. So the claim above, that a refresh reaches
+neither the filesystem nor the inbox, is false. It can reach both, and the two restores recorded
+under the previous heading are what that looked like from inside the turn. The visible-history reset
+and the sandbox reset are one event seen at two altitudes rather than two behaviours. What still
+holds is that the turn's reasoning is carried by the harness, so the agent kept working through a
+reset that had removed its files, and the only defence is committing early, which is why the branch
+gets pushed before a turn ends rather than after it.
 
 ## The encoding host tiktoken needs is unreachable
 
@@ -138,3 +160,16 @@ HTTP port forward it is not. The preview therefore tries the API first, falls ba
 textarea and `document.execCommand('copy')`, and reports which of the two paths it used — or that
 the browser allowed neither — because the owner asked that the caveat carry its context rather than
 sitting as a bare warning.
+
+## Arena may deliver a steering message twice
+
+### 2026-09-21 arena/01a0be68-clankers
+
+The owner warned that Arena might duplicate a message. What the store does with one is verified here
+rather than assumed: `Store.note()` looks the ID up first, returns the stored record unchanged when
+the same ID arrives with the same text, and refuses when the same ID arrives with different text. A
+duplicate carrying the same ID therefore costs nothing. A duplicate arriving with a fresh ID is a
+second note, and nothing in the agent's behaviour guards against answering it twice, so the guard is
+to look for an identical recent note in the log before answering one that reads like a repeat. No
+duplicate has been observed in this repository's inbox; the entry records the warning and the one
+defence that exists.

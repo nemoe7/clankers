@@ -268,6 +268,14 @@ with tempfile.TemporaryDirectory() as directory:
     assert '.icon-button[data-state="good"] { color: var(--dot-said);' in page
     assert '.icon-button[data-state="bad"] { color: #ef4444;' in page
     assert '<button id="copy-log" class="icon-button"' in page
+    # The log header is two rows tall, not three: the title stands alone and the
+    # connection and last-check lines stack to its right, on owner note ecf7d264.
+    assert '<h2 id="history-title">Message log</h2>' in page
+    assert page.index('id="history-title"') < page.index('class="stack"')
+    assert "#history-title { margin: 0; }" in page
+    # The composer's outer rows give up the space they face, on owner notes 778a276a and 27c65cba.
+    assert "#form > div:first-child { margin-top: 0; padding-top: 0; }" in page
+    assert "#form > div:last-child { margin-bottom: 0; padding-bottom: 0; }" in page
     assert '<button id="copy-report" class="icon-button"' in page
     assert '<button id="copy-tasks" class="icon-button"' in page
     assert page.index('id="copy-log"') < page.index('id="refresh-notes"')
