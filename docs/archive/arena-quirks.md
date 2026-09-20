@@ -120,6 +120,26 @@ holds is that the turn's reasoning is carried by the harness, so the agent kept 
 reset that had removed its files, and the only defence is committing early, which is why the branch
 gets pushed before a turn ends rather than after it.
 
+### 2026-09-21 arena/01a0be68-clankers — the variant that stops at the transcript
+
+Arena reset the visible message history again, and this time the sandbox was untouched. Local HEAD,
+`FETCH_HEAD` and the remote tip were all `094fc30`, the tree was clean, `.venv` and `node` were both
+present, the preview server still answered `/api/state` with 200, and `state.sqlite3` still held all
+51 notes and 32 task records. So the two behaviours described under this heading are separable after
+all: a transcript reset on its own, and a sandbox reset that takes the files with it. Nothing visible
+from inside the turn says which one is coming.
+
+The defence is the same for both, and it is the reason the branch is pushed before a turn ends rather
+than after it. Everything that mattered was already on the remote and in the database, so the correct
+next move was to read those instead of trusting a memory the platform had just discarded. The owner's
+instruction on seeing it was to repull from the branch; there was nothing to pull, and saying so was
+the whole of the recovery.
+
+One further detail worth keeping: `gh pr view` reported the pull request as
+`mergeable=UNKNOWN mergeStateStatus=UNKNOWN` immediately afterwards, with the correct head commit,
+where the same query had returned MERGEABLE earlier in the session. UNKNOWN is GitHub still
+computing, not a verdict, so it should be re-asked rather than reported as a problem.
+
 ## The encoding host tiktoken needs is unreachable
 
 ### 2026-09-21 arena/01a0be68-clankers
