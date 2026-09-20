@@ -240,10 +240,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert "max-height: 48%" not in page
     assert "min-height: 100%" in page
     assert ".log-card { flex: 1 1 auto; min-height: 200px;" in page
-    assert "h2 { font-size: 19px;" in page
-    assert "h3 { font-size: 17px; }" in page
-    assert "h4 { font-size: 16px; }" in page
-    assert "h5 { font-size: 15px; }" in page and "h6 { font-size: 14px; }" in page
+    assert "h1 { letter-spacing: -.035em; margin: 4px 0; }" in page
+    assert "h2 { margin: 0 0 8px; }" in page
+    for level in ("h1", "h2", "h3", "h4", "h5", "h6"):
+      assert f"{level} {{ font-size" not in page
 
     block = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
     assert block.startswith(
