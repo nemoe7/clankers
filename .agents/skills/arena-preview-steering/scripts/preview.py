@@ -16,7 +16,6 @@ from urllib.parse import urlsplit
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
-MAX_FORM = 256_000
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
@@ -56,7 +55,7 @@ def prompt_text(line):
 
 
 def parse_fields(markdown):
-  """Split Markdown into prose blocks and form fields written as list markers."""
+  """Split Markdown into prose blocks and answer fields written as list markers."""
   lines = markdown.splitlines()
   blocks, chunk, questions, used = [], [], [], set()
   fence, prompt, anchor, index, position = None, "", None, 0, 0
@@ -126,7 +125,7 @@ def parse_fields(markdown):
     questions.append(question)
   blocks.append(("markdown", "\n".join(chunk)))
   if questions:
-    Store.validate_form({"questions": questions}, min_options=1)
+    Store.validate_fields(questions)
   return blocks, questions
 
 
@@ -182,10 +181,6 @@ class Store:
             id TEXT PRIMARY KEY, title TEXT NOT NULL,
             markdown TEXT NOT NULL, updated_at TEXT NOT NULL
           );
-          CREATE TABLE IF NOT EXISTS forms (
-            id TEXT PRIMARY KEY, title TEXT NOT NULL,
-            form TEXT NOT NULL, updated_at TEXT NOT NULL
-          );
           CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         """)
       self.path.chmod(0o600)
@@ -219,12 +214,6 @@ class Store:
           dict(row)
           for row in db.execute(
             "SELECT id, title, updated_at FROM reports ORDER BY title, id"
-          )
-        ],
-        "forms": [
-          dict(row)
-          for row in db.execute(
-            "SELECT id, title, updated_at FROM forms ORDER BY title, id"
           )
         ],
         "last_check": dict(db.execute("SELECT key, value FROM meta")).get("last_check"),
@@ -279,131 +268,73 @@ class Store:
       return dict(row)
 
   @staticmethod
-  def validate_form(form, min_options=2):
-    if not isinstance(form, dict) or not isinstance(form.get("questions"), list):
-      raise TypeError("A form is a JSON object with a questions list")
-    questions = form["questions"]
-    if not 1 <= len(questions) <= 50:
-      raise ValueError("A form holds 1–50 questions")
+  def validate_fields(fields):
+    if not 1 <= len(fields) <= 50:
+      raise ValueError("A report holds 1–50 fields")
     seen = set()
-    for question in questions:
-      if not isinstance(question, dict):
-        raise TypeError("Each question is a JSON object")
-      question_id = question.get("id")
-      identifier(question_id)
-      if question_id in seen:
-        raise ValueError(f"Duplicate question ID: {question_id}")
-      seen.add(question_id)
-      question_type = question.get("type")
-      if question_type not in {"text", "choice", "checkbox"}:
-        raise ValueError("Question type is text, choice or checkbox")
-      prompt = question.get("prompt")
-      if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 500:
+    for field in fields:
+      field_id = field["id"]
+      identifier(field_id)
+      if field_id in seen:
+        raise ValueError(f"Duplicate field ID: {field_id}")
+      seen.add(field_id)
+      prompt = field["prompt"]
+      if not prompt.strip() or len(prompt) > 500:
         raise ValueError("Each prompt is 1–500 characters")
-      if question_type == "text":
-        if "options" in question:
-          raise ValueError("Text questions take no options")
-      else:
-        options = question.get("options")
-        if (
-          not isinstance(options, list)
-          or not min_options <= len(options) <= 20
-          or len({option for option in options if isinstance(option, str)})
-          != len(options)
-          or any(
-            not option.strip() or len(option) > 200
-            for option in options
-            if isinstance(option, str)
-          )
-        ):
-          raise ValueError(
-            f"{question_type} questions take {min_options}–20 unique options "
-            "of 1–200 characters"
-          )
-
-  def publish_form(self, form_id, title, source):
-    identifier(form_id)
-    if not isinstance(title, str) or not title.strip() or len(title) > 200:
-      raise ValueError("Form title must contain 1–200 characters")
-    source = Path(source)
-    if source.suffix.lower() != ".json":
-      raise ValueError("Publish a UTF-8 .json form file")
-    with source.open("rb") as stream:
-      data = stream.read(MAX_FORM + 1)
-    if len(data) > MAX_FORM:
-      raise ValueError("Form exceeds the 256 KB limit; split it into forms")
-    form = json.loads(data.decode("utf-8"))
-    self.validate_form(form)
-    with closing(self.connect()) as db, db:
-      db.execute(
-        "INSERT OR REPLACE INTO forms VALUES (?, ?, ?, ?)",
-        (form_id, title, json.dumps(form, ensure_ascii=False), now()),
-      )
-
-  def form(self, form_id):
-    identifier(form_id)
-    with closing(self.connect()) as db:
-      row = db.execute("SELECT * FROM forms WHERE id = ?", (form_id,)).fetchone()
-      if row is None:
-        raise FileNotFoundError("Form not found")
-      result = dict(row)
-      result["questions"] = json.loads(result.pop("form"))["questions"]
-      return result
-
-  def submit_form(self, form_id, note_id, answers):
-    form = self.form(form_id)
-    return self.submit(
-      "FORM", form_id, form["title"], form["questions"], note_id, answers
-    )
+      if field["type"] == "text":
+        continue
+      options = field["options"]
+      if (
+        not 1 <= len(options) <= 20
+        or len(set(options)) != len(options)
+        or any(not option.strip() or len(option) > 200 for option in options)
+      ):
+        raise ValueError(
+          f"{field['type']} fields take 1–20 unique options of 1–200 characters"
+        )
 
   def submit_report(self, report_id, note_id, answers):
     report = self.report(report_id)
-    questions = parse_fields(report["markdown"])[1]
-    if not questions:
+    fields = parse_fields(report["markdown"])[1]
+    if not fields:
       raise ValueError("This report has no fields to answer")
-    return self.submit(
-      "REPORT", report_id, report["title"], questions, note_id, answers
-    )
+    return self.submit(report_id, report["title"], fields, note_id, answers)
 
-  def submit(self, label, form_id, title, questions, note_id, answers):
+  def submit(self, report_id, title, fields, note_id, answers):
     if not isinstance(answers, dict):
-      raise TypeError("Answers is a JSON object keyed by question ID")
-    known = {question["id"] for question in questions}
+      raise TypeError("Answers is a JSON object keyed by field ID")
+    known = {field["id"] for field in fields}
     unknown = set(answers) - known
     if unknown:
-      raise ValueError(f"Unknown question IDs: {', '.join(sorted(unknown))}")
-    lines = [
-      f"{label} {form_id} {title}:",
-    ]
-    for question in questions:
-      question_id = question["id"]
-      value = answers.get(question_id)
-      if question["type"] == "text":
+      raise ValueError(f"Unknown field IDs: {', '.join(sorted(unknown))}")
+    lines = [f"REPORT {report_id} {title}:"]
+    for field in fields:
+      field_id = field["id"]
+      value = answers.get(field_id)
+      if field["type"] == "text":
         if value is None:
           rendered = "(skipped)"
         elif not isinstance(value, str) or len(value) > 2000:
-          raise ValueError(f"{question_id}: text answers are 1–2000 characters")
+          raise ValueError(f"{field_id}: text answers are 1–2000 characters")
         else:
           rendered = value if value.strip() else "(skipped)"
       elif value is None:
         rendered = "(skipped)"
-      elif question["type"] == "choice":
-        if value not in question["options"]:
-          raise ValueError(
-            f"{question_id}: choose one of " + ", ".join(question["options"])
-          )
+      elif field["type"] == "choice":
+        if value not in field["options"]:
+          raise ValueError(f"{field_id}: choose one of " + ", ".join(field["options"]))
         rendered = value
       else:
         if (
           not isinstance(value, list)
           or len({item for item in value if isinstance(item, str)}) != len(value)
-          or any(item not in question["options"] for item in value)
+          or any(item not in field["options"] for item in value)
         ):
           raise ValueError(
-            f"{question_id}: pick options only: " + ", ".join(question["options"])
+            f"{field_id}: pick options only: " + ", ".join(field["options"])
           )
         rendered = ", ".join(value) if value else "(skipped)"
-      lines.append(f"  {question_id}: {rendered}")
+      lines.append(f"  {field_id}: {rendered}")
     return self.note(note_id, "\n".join(lines))
 
 
@@ -496,10 +427,6 @@ def handler(store):
             200, report["markdown"], "text/plain; charset=utf-8", f"{report_id}.md"
           )
           return
-        match = re.fullmatch(r"/api/forms/([a-zA-Z0-9_-]{1,80})", path)
-        if match:
-          self.reply(200, json.dumps(store.form(match.group(1)), ensure_ascii=False))
-          return
         self.problem(404, "Not found")
       except FileNotFoundError as error:
         self.problem(404, error)
@@ -508,11 +435,8 @@ def handler(store):
 
     def do_POST(self):
       path = urlsplit(self.path).path
-      form_submit = re.fullmatch(r"/api/forms/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
-      if path not in {"/api/notes", "/api/markdown"} and not (
-        form_submit or report_submit
-      ):
+      if path not in {"/api/notes", "/api/markdown"} and not report_submit:
         self.problem(404, "Not found")
         return
       supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
@@ -536,12 +460,9 @@ def handler(store):
             200, render(note_text(payload.get("text"))), "text/html; charset=utf-8"
           )
           return
-        if form_submit or report_submit:
-          submit = store.submit_form if form_submit else store.submit_report
-          note = submit(
-            (form_submit or report_submit).group(1),
-            payload.get("id"),
-            payload.get("answers"),
+        if report_submit:
+          note = store.submit_report(
+            report_submit.group(1), payload.get("id"), payload.get("answers")
           )
           self.reply(201, json.dumps(note, ensure_ascii=False))
           return
@@ -569,10 +490,6 @@ def main():
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
   publish.add_argument("--title", required=True)
-  publish_form = commands.add_parser("publish-form")
-  publish_form.add_argument("source", type=Path)
-  publish_form.add_argument("--id", required=True)
-  publish_form.add_argument("--title", required=True)
   legacy = commands.add_parser("import-notes")
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
@@ -593,9 +510,6 @@ def main():
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}; select it in the Reports tab")
-    elif args.command == "publish-form":
-      store.publish_form(args.id, args.title, args.source)
-      print(f"Published form {args.id}; open the Forms tab")
     elif args.command == "import-notes":
       records = [
         json.loads(line)

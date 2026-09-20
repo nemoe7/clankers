@@ -18,17 +18,17 @@ Latest measurements as of 2026-09-20. ARENA.md is measured by uploaded file size
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,590 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 11,645 `B` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,591 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 11,625 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,484 `chars` |
-| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,473 `chars` |
+| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,475 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
 | `rules/KILO.md` | `cl100k_base` | 185 `tok` |
 | `rules/kilo/code.md` | `cl100k_base` | 232 `tok` |
 | `rules/kilo/debug.md` | `cl100k_base` | 288 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 251 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 9,555 `B` |
+| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 9,007 `B` |
 | `skills/arena-preview-reporting/SKILL.md` | `UTF-8 file size` | 5,482 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |

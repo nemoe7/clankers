@@ -36,14 +36,13 @@ const get = id => {
 };
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
-get('#forms-tab').setAttribute('aria-controls', 'forms-panel');
 get('#reports-panel').hidden = true;
-get('#forms-panel').hidden = true;
+get('#note').placeholder = 'What should happen next?';
 const storage = new Map();
 const root = { dataset: {} };
 let counter = 0;
 let sendHandler;
-let state = { notes: [], reports: [], forms: [], last_check: null };
+let state = { notes: [], reports: [], last_check: null };
 let reportFields = 0;
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
@@ -62,14 +61,6 @@ const context = {
       const note = JSON.parse(options.body);
       sent.push(note);
       return sendHandler(note);
-    }
-    if (url.startsWith('/api/forms/') && url.endsWith('/submit')) {
-      const submission = JSON.parse(options.body);
-      sent.push(submission);
-      return response({ ...submission, at: new Date().toISOString() });
-    }
-    if (url.startsWith('/api/forms/')) {
-      return response({ id: 'f1', title: 'Smoke', questions: [{ id: 'q1', type: 'text', prompt: 'What?' }] });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/submit')) {
       const submission = JSON.parse(options.body);
@@ -119,7 +110,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(sent[0].id, sent[1].id);
   assert.equal(get('#note').value, '');
   assert.match(get('#send-status').textContent, /Saved/);
-  assert.match(get('#note').placeholder, /keep draft/);
+  assert.equal(get('#note').placeholder, 'keep draft');
   await tick();
   get('#note').value = 'sent while typing';
   let release;
@@ -130,7 +121,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await sending;
   assert.equal(get('#note').value, 'new unsent draft');
   await tick();
-  state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], forms: [{ id: 'f1', title: 'Smoke', updated_at: new Date().toISOString() }], last_check: null };
+  state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
   await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
   assert.match(get('#history').children[0].lastElementChild.textContent, /Awaiting acknowledgement/);
@@ -142,6 +133,20 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#note').value, 'new unsent draft');
   state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
   reportFields = 2;
+  storage.set('arena-preview-v1:answers:r1', JSON.stringify({ answers: { name: 'ada', areas: ['ui'] }, at: '2026-09-20T12:00:00.000Z' }));
+  const textInput = { value: '' };
+  const text = new Element();
+  text.dataset = { field: 'name', type: 'text' };
+  text.querySelector = () => textInput;
+  text.querySelectorAll = () => [];
+  const uiBox = { value: 'ui', checked: false };
+  const apiBox = { value: 'api', checked: true };
+  const boxes = [uiBox, apiBox];
+  const picks = new Element();
+  picks.dataset = { field: 'areas', type: 'checkbox' };
+  picks.querySelector = () => null;
+  picks.querySelectorAll = selector => (selector === 'input:checked' ? boxes.filter(box => box.checked) : boxes);
+  get('#report').fields = [text, picks];
   get('#report-select').value = 'r1';
   get('#reports-tab').events.click();
   await tick();
@@ -150,35 +155,26 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report').innerHTML, '<h1>Report</h1>');
   assert.equal(get('#report-submit').hidden, false);
   assert.match(get('#report-status').textContent, /2 fields/);
-  const text = new Element();
-  text.dataset = { field: 'name', type: 'text' };
-  text.querySelector = () => ({ value: 'ada' });
-  text.querySelectorAll = () => [];
-  const picks = new Element();
-  picks.dataset = { field: 'areas', type: 'checkbox' };
-  picks.querySelector = () => null;
-  picks.querySelectorAll = () => [{ value: 'ui' }];
-  get('#report').fields = [text, picks];
+  assert.equal(textInput.value, 'ada');
+  assert.equal(uiBox.checked, true);
+  assert.equal(apiBox.checked, false);
+  assert.equal(get('#report-receipt').hidden, false);
+  assert.match(get('#report-receipt').textContent, /^✓ Sent /);
+  textInput.value = 'ada lovelace';
+  apiBox.checked = true;
   await get('#report-form').events.submit(event({}));
-  assert.deepEqual(sent.at(-1).answers, { name: 'ada', areas: ['ui'] });
+  assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'] });
   assert.match(get('#report-status').textContent, /Saved/);
+  assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'] });
   reportFields = 0;
   await get('#refresh-report').events.click();
   await tick();
   assert.equal(get('#report-submit').hidden, true);
-  get('#forms-tab').events.click();
-  await tick();
-  assert.equal(get('#forms-panel').hidden, false);
-  assert.equal(get('#forms-tab').attributes['aria-selected'], 'true');
-  assert.equal(get('#form-count').textContent, 1);
-  assert.equal(get('#form-select').children[0].value, 'f1');
-  assert.equal(get('#form-body').children.length, 2);
-  assert.equal(get('#form-body').children[0].children[0].textContent, 'What?');
-  assert.equal(get('#form-body').children[0].children[1].maxLength, 2000);
-  get('#form-body').children[0].children[1].value = 'an answer';
-  get('#form-body').events.submit(event({}));
-  await tick();
-  assert.match(get('#form-status').textContent, /Saved/);
-  assert.deepEqual(sent.at(-1).answers, { q1: 'an answer' });
-  console.log('PASS: default theme, theme persistence, tabs, draft retention, Enter/IME, retries, receipt display, form submission and report fields');
+  assert.equal(get('#report-receipt').hidden, true);
+  get('#notes-tab').events.keydown(event({ key: 'End' }));
+  assert.equal(get('#reports-panel').hidden, false);
+  assert.equal(get('#reports-tab').focused, true);
+  assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
+  assert.equal(get('#report-count').textContent, 1);
+  console.log('PASS: default theme, theme persistence, two-tab navigation, draft retention, Enter/IME, retries, receipt display, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
