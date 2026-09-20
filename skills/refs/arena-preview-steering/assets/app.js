@@ -117,14 +117,14 @@ function showHistory(notes) {
     text.className = item.html === undefined ? 'raw-message' : 'report';
     if (item.html === undefined) text.textContent = item.text;
     else text.innerHTML = item.html;
-    const receipt = node.children[1];
+    const receipt = node.children[2];
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
     receiptId.textContent = item.id.slice(0, 7);
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${item.acknowledged_at ? 'Seen' : 'Delivered'} ${time(item.at)}`;
     receipt.replaceChildren(receiptId, receiptState);
-    const answer = node.children[2];
+    const answer = node.children[1];
     if (item.ack_text && item.ack_kind === 'reply') {
       answer.className = 'answer reply report';
       answer.hidden = false;
