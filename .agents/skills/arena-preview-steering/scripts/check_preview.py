@@ -215,106 +215,99 @@ with tempfile.TemporaryDirectory() as directory:
     )["text"]
     assert "Fielded:" in answered and "name: ada" in answered
     assert "severity: high" in answered and "notes: (skipped)" in answered
-    form_source = root / "form.json"
-    form_source.write_text(
-      json.dumps(
-        {
-          "questions": [
-            {"id": "q1", "type": "text", "prompt": "What happened?"},
-            {
-              "id": "q2",
-              "type": "choice",
-              "prompt": "Severity",
-              "options": ["low", "high"],
-            },
-            {
-              "id": "q3",
-              "type": "checkbox",
-              "prompt": "Areas",
-              "options": ["ui", "api"],
-            },
-          ]
-        }
-      ),
-      encoding="utf-8",
-    )
-    store.publish_form("f1", "Smoke <test>", form_source)
-    assert len(store.state()["forms"]) == 1
     for broken in (
-      {"questions": []},
-      {"questions": [{"id": "a", "type": "rating", "prompt": "x"}]},
-      {
-        "questions": [{"id": "a", "type": "choice", "prompt": "x", "options": ["only"]}]
-      },
-      {
-        "questions": [{"id": "a", "type": "text", "prompt": "x", "options": ["a", "b"]}]
-      },
-      {
-        "questions": [
-          {"id": "a", "type": "text", "prompt": "x"},
-          {"id": "a", "type": "text", "prompt": "y"},
-        ]
-      },
+      [],
+      [{"id": "a", "type": "text", "prompt": "x"}] * 51,
+      [
+        {"id": "a", "type": "text", "prompt": "x"},
+        {"id": "a", "type": "text", "prompt": "y"},
+      ],
+      [{"id": "a b", "type": "text", "prompt": "x"}],
+      [{"id": "a", "type": "text", "prompt": ""}],
+      [{"id": "a", "type": "text", "prompt": "x" * 501}],
+      [{"id": "a", "type": "choice", "prompt": "x", "options": []}],
+      [{"id": "a", "type": "choice", "prompt": "x", "options": ["o"] * 21}],
+      [{"id": "a", "type": "checkbox", "prompt": "x", "options": ["ui", "ui"]}],
+      [{"id": "a", "type": "checkbox", "prompt": "x", "options": [" "]}],
+      [{"id": "a", "type": "checkbox", "prompt": "x", "options": ["o" * 201]}],
     ):
       try:
-        preview.Store.validate_form(broken)
-        raise AssertionError(f"Invalid form accepted: {broken}")
+        preview.Store.validate_fields(broken)
+        raise AssertionError(f"Invalid fields accepted: {broken}")
       except ValueError:
         pass
-    bad_source = root / "bad.json"
-    bad_source.write_text("not json", encoding="utf-8")
-    try:
-      store.publish_form("f2", "Bad", bad_source)
-      raise AssertionError("Non-JSON form accepted")
-    except ValueError:
-      pass
-    status, _, form_body = request("GET", "/api/forms/f1")
-    assert status == 200
-    served = json.loads(form_body)
-    assert served["title"] == "Smoke <test>" and len(served["questions"]) == 3
-    assert request("GET", "/api/forms/missing")[0] == 404
+    preview.Store.validate_fields(
+      [{"id": "a", "type": "choice", "prompt": "x", "options": ["only"]}]
+    )
+    assert request("GET", "/api/forms/f1")[0] == 404
     assert (
-      request("POST", "/api/forms/f1/submit", "{}", {"X-Preview-Token": token})[0]
+      request("POST", "/api/forms/f1/submit", '{"id":"s1","answers":{}}', auth)[0]
+      == 404
+    )
+    assert (
+      request("POST", "/api/reports/fields/submit", "{}", {"X-Preview-Token": token})[0]
       == 415
     )
     assert (
       request(
-        "POST", "/api/forms/f1/submit", json.dumps({"id": "s1", "answers": {"q1": "x"}})
+        "POST",
+        "/api/reports/fields/submit",
+        json.dumps({"id": "s1", "answers": {"name": "x"}}),
       )[0]
       == 403
     )
     for bad in (
-      {"id": "s1", "answers": {"q1": "x", "q9": "nope"}},
-      {"id": "s1", "answers": {"q2": "severe"}},
-      {"id": "s1", "answers": {"q3": ["ui", "core"]}},
-      {"id": "s1", "answers": {"q1": "x" * 2001}},
+      {"id": "s1", "answers": {"name": "x", "nope": "unknown"}},
+      {"id": "s1", "answers": {"severity": "extreme"}},
+      {"id": "s1", "answers": {"pick-the-areas": ["ui", "core"]}},
+      {"id": "s1", "answers": {"name": "x" * 2001}},
       {"id": "s1", "answers": "nope"},
     ):
-      assert request("POST", "/api/forms/f1/submit", json.dumps(bad), auth)[0] == 400
-    answers = {"q1": "it broke", "q2": "high", "q3": ["ui"]}
-    submission = json.dumps({"id": "sub-1", "answers": answers})
-    assert request("POST", "/api/forms/f1/submit", submission, auth)[0] == 201
-    form_notes = [
-      row for row in store.read()["pending"] if row["text"].startswith("FORM f1")
+      assert (
+        request("POST", "/api/reports/fields/submit", json.dumps(bad), auth)[0] == 400
+      )
+    sent = [
+      row for row in store.state()["notes"] if row["text"].startswith("REPORT fields")
     ]
-    assert len(form_notes) == 1
-    form_text = form_notes[0]["text"]
-    assert (
-      "Smoke <test>:" in form_text
-      and "q1: it broke" in form_text
-      and "q2: high" in form_text
-      and "q3: ui" in form_text
+    submission = json.dumps(
+      {
+        "id": "sub-1",
+        "answers": {
+          "name": "it broke",
+          "severity": "high",
+          "pick-the-areas": ["ui"],
+        },
+      }
     )
-    assert request("POST", "/api/forms/f1/submit", submission, auth)[0] == 201
+    assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
+    pending = [
+      row for row in store.read()["pending"] if row["text"].startswith("REPORT fields")
+    ]
+    assert len(pending) == len(sent) + 1
+    answered = pending[-1]["text"]
     assert (
-      len([row for row in store.state()["notes"] if row["text"].startswith("FORM f1")])
-      == 1
+      "Fielded:" in answered
+      and "name: it broke" in answered
+      and "severity: high" in answered
+      and "pick-the-areas: ui" in answered
+      and "notes: (skipped)" in answered
+    )
+    assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
+    assert (
+      len(
+        [
+          row
+          for row in store.state()["notes"]
+          if row["text"].startswith("REPORT fields")
+        ]
+      )
+      == len(sent) + 1
     )
     assert (
       request(
         "POST",
-        "/api/forms/f1/submit",
-        json.dumps({"id": "sub-1", "answers": {"q1": "changed"}}),
+        "/api/reports/fields/submit",
+        json.dumps({"id": "sub-1", "answers": {"name": "changed"}}),
         auth,
       )[0]
       == 400
@@ -324,5 +317,5 @@ with tempfile.TemporaryDirectory() as directory:
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, explicit receipts, reports, Markdown fields, safe rendering, forms with inbox-answer submissions, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, explicit receipts, reports, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )

@@ -7,8 +7,6 @@ const key = 'arena-preview-v1';
 let pending = null;
 let stateBusy = false;
 let reportRequest = 0;
-let formRequest = 0;
-let formControls = null;
 let listSignature = '';
 let historySignature = '';
 let draftPreviewSequence = 0;
@@ -63,7 +61,7 @@ function showHistory(notes) {
   const signature = JSON.stringify(notes);
   if (signature === historySignature) return;
   historySignature = signature;
-  if (notes.length) note.placeholder = `Last sent: ${notes[notes.length - 1].text}`;
+  if (notes.length) note.placeholder = notes[notes.length - 1].text;
   const history = $('#history');
   for (const item of [...notes].reverse()) {
     let node = messageNodes.get(item.id);
@@ -95,7 +93,7 @@ async function refreshState() {
     if (state.rendering_error) $('#connection').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Agent last checked ${time(state.last_check)}` : 'Agent has not checked this inbox yet.';
     showHistory(state.notes);
-    const signature = JSON.stringify([state.reports, state.forms]);
+    const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {
       listSignature = signature;
       const select = $('#report-select');
@@ -115,24 +113,6 @@ async function refreshState() {
       } else if (state.reports.some(report => report.id === selected)) select.value = selected;
       $('#report-count').textContent = state.reports.length;
       if (!$('#reports-panel').hidden) loadReport();
-      const formSelect = $('#form-select');
-      const selectedForm = formSelect.value || stored('formid');
-      formSelect.replaceChildren();
-      for (const item of state.forms) {
-        const option = document.createElement('option');
-        option.value = item.id;
-        option.textContent = item.title;
-        formSelect.append(option);
-      }
-      if (!state.forms.length) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'No forms published yet';
-        formSelect.append(option);
-      } else if (state.forms.some(item => item.id === selectedForm)) formSelect.value = selectedForm;
-      else if (state.forms.length) formSelect.value = state.forms[0].id;
-      $('#form-count').textContent = state.forms.length;
-      if (!$('#forms-panel').hidden) loadForm();
     }
   } catch (error) { $('#connection').textContent = `Connection failed: ${error.message}. Draft kept; history may be stale.`; }
   finally { stateBusy = false; }
@@ -151,7 +131,7 @@ $('#form').addEventListener('submit', async event => {
       headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
       body: JSON.stringify(pending)
     })).json();
-    note.placeholder = `Last sent: ${result.text}`;
+    note.placeholder = result.text;
     status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.' : `Saved ${new Date(result.at).toLocaleTimeString()} · awaiting acknowledgement.`;
     pending = null;
     save('pending', 'null');
@@ -212,11 +192,34 @@ function collect(root) {
   }
   return answers;
 }
+function applyAnswers(root, answers) {
+  for (const field of root.querySelectorAll('.question[data-field]')) {
+    const saved = answers[field.dataset.field];
+    if (saved === undefined) continue;
+    if (field.dataset.type === 'text') {
+      const input = field.querySelector('input[type="text"]');
+      if (input) input.value = saved;
+      continue;
+    }
+    const values = Array.isArray(saved) ? saved : [saved];
+    for (const control of field.querySelectorAll('input')) control.checked = values.includes(control.value);
+  }
+}
+function savedAnswers(id) {
+  try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
+  catch { return null; }
+}
+function showReceipt(at) {
+  const receipt = $('#report-receipt');
+  receipt.textContent = `✓ Sent ${time(at)} · your answers stay filled in; change them and send again.`;
+  receipt.hidden = false;
+}
 async function loadReport() {
   const id = $('#report-select').value;
   const sequence = ++reportRequest;
   $('#report').replaceChildren();
   $('#report-submit').hidden = true;
+  $('#report-receipt').hidden = true;
   if (!id) { $('#report-status').textContent = 'No report has been published yet.'; return; }
   save('report', id);
   $('#report-status').textContent = 'Loading report…';
@@ -225,6 +228,11 @@ async function loadReport() {
     if (sequence !== reportRequest) return;
     $('#report').innerHTML = result.html;
     $('#report-submit').hidden = !result.fields;
+    const saved = result.fields ? savedAnswers(id) : null;
+    if (saved && saved.answers) {
+      applyAnswers($('#report'), saved.answers);
+      showReceipt(saved.at);
+    }
     $('#report-status').textContent = result.fields
       ? `Report loaded with ${result.fields} field${result.fields === 1 ? '' : 's'}. Fill them in, then send; answers reach the agent inbox as one note.`
       : 'Report loaded. Updates appear automatically.';
@@ -237,106 +245,22 @@ $('#report-form').addEventListener('submit', async event => {
   const id = $('#report-select').value;
   if (!id) return;
   const button = $('#report-submit');
+  const answers = collect($('#report'));
   button.disabled = true;
   $('#report-status').textContent = 'Sending…';
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
-      body: JSON.stringify({ id: crypto.randomUUID(), answers: collect($('#report')) })
+      body: JSON.stringify({ id: crypto.randomUUID(), answers })
     })).json();
+    if (save(`answers:${id}`, JSON.stringify({ answers, at: result.at }))) showReceipt(result.at);
     $('#report-status').textContent = `Saved ${new Date(result.at).toLocaleTimeString()} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
   } catch (error) {
     $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
   } finally { button.disabled = false; }
 });
-async function loadForm() {
-  const id = $('#form-select').value;
-  const sequence = ++formRequest;
-  const body = $('#form-body');
-  body.replaceChildren();
-  formControls = null;
-  if (!id) { $('#form-status').textContent = 'No form has been published yet.'; return; }
-  save('formid', id);
-  $('#form-status').textContent = 'Loading form…';
-  try {
-    const form = await (await request(`/api/forms/${encodeURIComponent(id)}`)).json();
-    if (sequence !== formRequest) return;
-    const controls = new Map();
-    for (const question of form.questions) {
-      const wrap = document.createElement('div');
-      wrap.className = 'question';
-      const label = document.createElement('label');
-      label.textContent = question.prompt;
-      wrap.append(label);
-      if (question.type === 'text') {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.maxLength = 2000;
-        input.placeholder = 'Answer';
-        wrap.append(input);
-        controls.set(question.id, { type: 'text', control: input });
-      } else {
-        const group = document.createElement('div');
-        group.className = 'options';
-        const inputs = [];
-        for (const option of question.options) {
-          const box = document.createElement('label');
-          box.className = 'option';
-          const control = document.createElement('input');
-          control.type = question.type === 'choice' ? 'radio' : 'checkbox';
-          control.value = option;
-          box.append(control, document.createTextNode(option));
-          group.append(box);
-          inputs.push(control);
-        }
-        wrap.append(group);
-        controls.set(question.id, { type: question.type, controls: inputs });
-      }
-      body.append(wrap);
-    }
-    const submit = document.createElement('button');
-    submit.type = 'submit';
-    submit.textContent = 'Send answers';
-    body.append(submit);
-    formControls = controls;
-    $('#form-status').textContent = 'Answer, then send; your answers reach the agent inbox as one note.';
-  } catch (error) {
-    if (sequence === formRequest) $('#form-status').textContent = `Form unavailable: ${error.message}`;
-  }
-}
-$('#form-body').addEventListener('submit', async event => {
-  event.preventDefault();
-  const id = $('#form-select').value;
-  if (!id || !formControls) return;
-  const answers = {};
-  for (const [questionId, spec] of formControls) {
-    if (spec.type === 'text') {
-      if (spec.control.value.trim()) answers[questionId] = spec.control.value;
-    } else if (spec.type === 'choice') {
-      const checked = spec.controls.find(control => control.checked);
-      if (checked) answers[questionId] = checked.value;
-    } else {
-      const checked = spec.controls.filter(control => control.checked).map(control => control.value);
-      if (checked.length) answers[questionId] = checked;
-    }
-  }
-  $('#form-status').textContent = 'Sending…';
-  try {
-    const result = await (await request(`/api/forms/${encodeURIComponent(id)}/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
-      body: JSON.stringify({ id: crypto.randomUUID(), answers })
-    })).json();
-    for (const spec of formControls.values()) {
-      for (const control of spec.controls || [spec.control]) control.checked = false;
-    }
-    $('#form-status').textContent = `Saved ${new Date(result.at).toLocaleTimeString()} · the agent reads the inbox; awaiting acknowledgement.`;
-  } catch (error) {
-    $('#form-status').textContent = `Submission not confirmed: ${error.message}. Answers are kept; resending creates a new answer.`;
-  }
-});
-const tabs = [$('#notes-tab'), $('#reports-tab'), $('#forms-tab')];
+const tabs = [$('#notes-tab'), $('#reports-tab')];
 function showTab(tab) {
   for (const item of tabs) {
     const selected = tab === item;
@@ -345,7 +269,6 @@ function showTab(tab) {
     $('#' + item.getAttribute('aria-controls')).hidden = !selected;
   }
   if (tab === tabs[1]) { refreshState(); loadReport(); }
-  if (tab === tabs[2]) { refreshState(); loadForm(); }
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab));
@@ -359,8 +282,6 @@ for (const tab of tabs) {
 }
 $('#report-select').addEventListener('change', loadReport);
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(); });
-$('#form-select').addEventListener('change', loadForm);
-$('#refresh-form').addEventListener('click', () => { refreshState(); loadForm(); });
 $('#refresh-notes').addEventListener('click', refreshState);
 refreshState();
 setInterval(refreshState, 3000);
