@@ -306,16 +306,25 @@ function applyAnswers(root, answers) {
     }
   }
 }
+function rest(button) {
+  button.textContent = '⧉';
+  button.setAttribute('aria-label', 'Copy code');
+  button.title = 'Copy code';
+  button.dataset.state = '';
+}
 async function copyCode(button) {
   const code = button.dataset.code || '';
-  const flash = label => {
-    button.textContent = label;
-    setTimeout(() => { button.textContent = 'Copy'; }, 1500);
+  const flash = (glyph, words, state) => {
+    button.textContent = glyph;
+    button.setAttribute('aria-label', words);
+    button.title = words;
+    button.dataset.state = state;
+    setTimeout(() => rest(button), 1500);
   };
   try {
     if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
     await navigator.clipboard.writeText(code);
-    flash('Copied');
+    flash('✓', 'Copied through the clipboard API', 'good');
   } catch {
     const area = document.createElement('textarea');
     area.value = code;
@@ -324,7 +333,8 @@ async function copyCode(button) {
     area.select();
     const copied = typeof document.execCommand === 'function' && document.execCommand('copy');
     area.remove();
-    flash(copied ? 'Copied' : 'Select and copy');
+    if (copied) flash('✓', 'Copied through the selection fallback', 'good');
+    else flash('✗', 'Clipboard blocked; select the code and copy it', 'bad');
   }
 }
 function growSlot(area) {
