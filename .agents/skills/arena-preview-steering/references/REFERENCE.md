@@ -34,6 +34,7 @@ The renderer splits a source into prose blocks and fields before rendering. A fi
 | --- | --- | --- |
 | `- ( ) option` list | Radio group | `- (x)` preselects that option |
 | `- [ ] option` list | Checkbox group | `- [x]` preselects that option |
+| `- ( ) Label: ___` inside a group | Free-text slot | The typed text becomes the answer, as `Label: text` |
 | `Label: ___` or a bare `___` line | Text box | At most 2000 characters |
 
 Consecutive marker lines of the same kind form one group. The prompt is the label before `___`, else the nearest non-empty
@@ -41,12 +42,12 @@ line above the group, stripped of list, heading, quote and emphasis markers and 
 that prompt, deduplicated with a numeric suffix; `{#my-id}` at the end of the prompt line sets it explicitly and is removed
 from the rendered text. Markers inside fenced code blocks are literal text. Limits: 1–50 fields, prompts
 1–500 characters, and 1–20 unique options of 1–200 characters, where a group may hold a single option. A duplicate option in one
-group is an error, and the whole report then fails to render rather than silently dropping a choice.
+group is an error, and the whole report then fails to render rather than silently dropping a choice. An option written as a label followed by `___` — `Other: ___`, or a bare `___` — is a free-text slot rather than a fixed choice, the same shape that makes a whole line a text box: it renders its radio or checkbox beside a text input of at most 200 characters, labelled for screen readers, and the answer it carries is the label, a colon and what was typed, trimmed. A slot that is checked with nothing typed contributes no answer at all, so an empty slot never reaches the inbox as noise, and two slots in one group may not share a label or the report fails to render.
 
 `GET /api/reports/<id>/html` returns JSON with `html` and the field count, not raw HTML. `POST /api/reports/<id>/submit` pairs a
-client-generated ID with per-field answers (text at most 2000 characters, `choice` one of its options, `checkbox` a unique subset of
-its options) and writes one inbox note headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for absent or empty
-answers. Resending is a new answer, not an update. A successful send also stores `{answers, at}` in browser storage under `answers:<report id>`; loading that report again pre-fills its controls from that record and shows a `✓ Sent <time>` receipt beside the button, so the user can amend and resend. The status line carries the same fact and sits inside `.report-toolbar` in the muted 13px face, on owner direction that it should not be misread as part of the report: `Answers sent <time> · N fields stay filled in` once a record exists for the selected report, `Report loaded with N fields` before one does, and it takes its own row in the toolbar through `flex: 1 1 100%`. The send message shares the one timestamp formatter, so it no longer prints seconds or a 12-hour clock. The record is origin-local display state, never a server-side answer history: another browser shows the report's Markdown defaults. A report with no fields rejects a submission. Republishing a source does not change or delete answers already delivered.
+client-generated ID with per-field answers (text at most 2000 characters, `choice` one of its options or a free-text slot's
+`Label: text` with 1–200 characters typed, `checkbox` a unique subset of its options and slots) and writes one inbox note headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for absent or empty
+answers. Resending is a new answer, not an update. A successful send also stores `{answers, at}` in browser storage under `answers:<report id>`; loading that report again pre-fills its controls from that record — a free-text slot comes back with its box checked and its typed text in the input, and an answer that moved off the slot clears it — and shows a `✓ Sent <time>` receipt beside the button, so the user can amend and resend. The status line carries the same fact and sits inside `.report-toolbar` in the muted 13px face, on owner direction that it should not be misread as part of the report: `Answers sent <time> · N fields stay filled in` once a record exists for the selected report, `Report loaded with N fields` before one does, and it takes its own row in the toolbar through `flex: 1 1 100%`. The send message shares the one timestamp formatter, so it no longer prints seconds or a 12-hour clock. The record is origin-local display state, never a server-side answer history: another browser shows the report's Markdown defaults. A report with no fields rejects a submission. Republishing a source does not change or delete answers already delivered.
 
 ## HTTP and trust boundary
 

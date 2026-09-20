@@ -245,11 +245,25 @@ function collect(root) {
       const input = field.querySelector('input[type="text"]');
       if (input && input.value.trim()) answers[id] = input.value;
     } else {
-      const checked = [...field.querySelectorAll('input:checked')].map(control => control.value);
-      if (checked.length) answers[id] = field.dataset.type === 'choice' ? checked[0] : checked;
+      const values = [];
+      for (const control of field.querySelectorAll('input:checked')) {
+        const label = control.dataset.label;
+        if (label === undefined) { values.push(control.value); continue; }
+        const typed = field.querySelector(`[data-custom="${label.replace(/"/g, '\\"')}"]`);
+        if (typed && typed.value.trim()) values.push(`${label}: ${typed.value.trim()}`);
+      }
+      if (values.length) answers[id] = field.dataset.type === 'choice' ? values[0] : values;
     }
   }
   return answers;
+}
+function customValue(values, label) {
+  for (const value of values) {
+    if (typeof value !== 'string' || !value.startsWith(`${label}: `)) continue;
+    const typed = value.slice(label.length + 2).trim();
+    if (typed) return typed;
+  }
+  return null;
 }
 function applyAnswers(root, answers) {
   for (const field of root.querySelectorAll('.question[data-field]')) {
@@ -261,7 +275,17 @@ function applyAnswers(root, answers) {
       continue;
     }
     const values = Array.isArray(saved) ? saved : [saved];
-    for (const control of field.querySelectorAll('input')) control.checked = values.includes(control.value);
+    for (const control of field.querySelectorAll('input')) {
+      const label = control.dataset.label;
+      const slot = control.dataset.custom;
+      if (label === undefined && slot === undefined) {
+        control.checked = values.includes(control.value);
+        continue;
+      }
+      const typed = customValue(values, label === undefined ? slot : label);
+      if (label !== undefined) control.checked = typed !== null;
+      if (slot !== undefined) control.value = typed === null ? '' : typed;
+    }
   }
 }
 async function copyCode(button) {
