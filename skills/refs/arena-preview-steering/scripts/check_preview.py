@@ -221,6 +221,8 @@ with tempfile.TemporaryDirectory() as directory:
     status, _, page = request("GET", "/")
     assert status == 200 and '#preview-note[aria-pressed="false"] {' in page
     assert '#preview-note[aria-pressed="true"]' not in page
+    assert "--focus: #524d47;" in page and "#f4ca93" not in page
+    assert "--focus: #8f5b13;" in page
     duplicate = root / "duplicate.md"
     duplicate.write_text("Areas:\n\n- [ ] ui\n- [ ] ui\n", encoding="utf-8")
     try:
