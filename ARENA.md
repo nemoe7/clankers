@@ -23,7 +23,7 @@
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, and existing patterns.
-- Prefer ASD-STE100 for human-facing text.
+- MUST use ASD-STE100 for human-facing text.
 - Batch independent tool calls into one block where the surface permits.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
@@ -73,7 +73,7 @@
 - **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, keeping the PR title and body matching it; if one landed unlisted, print the corrected timeline first.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, only `feat`/`fix` spec-mandated; reuse history's scopes, adding none otherwise.
-- Keep reports, audits, preview state, inboxes and receipts in ignored workspace dirs, not caches; NEVER commit/push them. Use `arena-preview-reporting` for longer reports, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions and republish its stable ID; multiple reports may coexist. Verify delivery, offer portable HTML; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
+- Keep reports, audits, preview state, inboxes and receipts in ignored workspace dirs, not caches; NEVER commit/push them. Use `arena-preview-reporting` for longer reports, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions and republish its stable ID; multiple reports may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.
 - **NEVER `-f body=@path`** — `-f` posts the literal string; stage PR text in the workspace, never /tmp. A 200 from a PR PATCH is not proof: re-fetch title and body, diff against the staged file, keep both current.
@@ -86,7 +86,7 @@
 
 ## Deliverables
 
-- Save/open the main deliverable; for longer reports, name the Reports tab/title and verify rendering. Keep Markdown sources; HTML export needs no further approval, other formats stay request-only. On preview failure, report and agree on a replacement; local report commits are historical, not automatic fallback or banned forever.
+- Save/open the main deliverable; for longer reports, name the Reports tab/title and verify rendering. Keep Markdown sources; the Reports tab is the delivery, other formats stay request-only. On preview failure, report and agree on a replacement; local report commits are historical, not automatic fallback or banned forever.
 - Previews have no network: inline CSS, embedded SVG/data URIs, no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
 - Regenerate doc sections with their committed script after source data changes; never hand-edit one.
@@ -94,7 +94,7 @@
 ## Response
 
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
-- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; ASD-STE100; no skill or linter.
+- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
 - NEVER mermaid.
 - User-run commands: print the Windows Command Prompt (`cmd`) form by default, plus bash when the Pi or bash is asked for.
 - Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.

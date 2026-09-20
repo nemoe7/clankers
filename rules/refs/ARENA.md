@@ -27,7 +27,7 @@
 
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
-- Prefer ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
+- MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
 - Batch independent tool calls into one block whenever the surface permits.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
@@ -134,7 +134,7 @@
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
 - Publish longer reports through `arena-preview-reporting` in the shared preview; do not create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
-- Verify the published report and offer its portable HTML export; a clean Git status does not prove delivery.
+- Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `gh pr edit` may fail on older repos (GraphQL projects-classic deprecation).
@@ -155,7 +155,7 @@
 ## Deliverables
 
 - Save workspace deliverables and open the main one. For longer reports, use `arena-preview-reporting` and direct the user to its Reports tab and titled report; verify rendering rather than assuming the native viewer renders Markdown.
-- Keep report sources as Markdown; portable reports may be exported as self-contained HTML without additional approval. Other formats remain request-only. If preview delivery fails, report it and agree on a replacement; the former local-commit workaround remains historical, not an automatic fallback or a permanently forbidden option.
+- Keep report sources as Markdown; the live Reports tab is the delivery, since the standalone HTML export never worked in the Arena sandbox preview and was removed on 2026-09-20. Other formats remain request-only. If preview delivery fails, report it and agree on a replacement; the former local-commit workaround remains historical, not an automatic fallback or a permanently forbidden option.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0.
 - Browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
@@ -167,7 +167,7 @@
 - Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
 - Prefer numbered lists for multiple points.
 - Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours, because explanation the user explicitly asked for is the only explanation that is not debt.
-- Short chat reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human. Prefer ASD-STE100. Do not ship a skill or a linter for this; the agent decides.
+- Short chat reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human. MUST use ASD-STE100. Do not ship a skill or a linter for this; the agent decides.
 - NEVER mermaid, which Arena cannot render.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - Always report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.

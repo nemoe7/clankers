@@ -1,5 +1,5 @@
 Explicit chat instruction outranks these rules；state override in one line。
-ASD-STE100: human-facing text皆宜其规范，含 response/comments/docs。
+ASD-STE100: human-facing text MUST 用其规范，含 response/comments/docs。
 RESPONSE: 简而明，列序；无前后废话、过渡、致谢、免责声明；先果后因；详略依求。报 changes/findings、checks/results、issues、assumptions、limits；current/external/version-sensitive facts须验。
 Mermaid：pipeline/flow默认 `flowchart TB`，labels/rows短，窄屏宜；NEVER ASCII art。
 User-run commands：bash + Windows（PowerShell；单行可 cmd）；setup/multi-step皆双列。
