@@ -11,6 +11,7 @@
   --focus: #524d47;
   /* Tabs sit on the panel, so their resting border is a step darker than --border. */
   --tab-border: #413d39;
+  --chip: #4d4741;
   font-family: system-ui, sans-serif;
 }
 :root[data-theme="light"] {
@@ -25,6 +26,7 @@
   --accent: #795020;
   --focus: #8f5b13;
   --tab-border: var(--border);
+  --chip: #e4ddd2;
 }
 * { box-sizing: border-box; scrollbar-color: #302e2c var(--bg); scrollbar-width: thin; }
 *:hover { scrollbar-color: #666261 var(--bg); }
@@ -87,14 +89,15 @@ body[data-composer="closed"] #composer-toggle { color: var(--muted); opacity: .5
 #preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-/* Every log entry carries the bar .answer.reply had and the colour .answer.note had, so notes
-   and reports read alike; the 13px size stays on plain-note answers alone. */
+/* Every log entry carries the accent bar and the muted colour that answers once carried, so a
+   report and a note read alike; answers are one class now, and plain text goes in a paragraph. */
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px 8px 12px; border-left: 2px solid var(--accent); border-radius: 8px; color: var(--muted); }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
-.receipt code { font-family: ui-monospace, monospace; font-size: 1em; background: none; padding: 0; }
+/* A receipt ID is text rather than a chip, so it opts out by class instead of by ancestry. */
+code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background: none; padding: 0; }
 .answer { margin-top: 8px; }
-.answer.note { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+.answer > p:last-child { margin-bottom: 0; }
 #report-receipt { margin: 10px 0 0; }
 /* The rule under the toolbar sits 12px below it and 24px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
@@ -114,7 +117,9 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .copy-code:hover { color: var(--text); border-color: var(--focus); }
 .copy-code[data-state="bad"] { color: #ef4444; }
 .report code { font-family: ui-monospace, monospace; font-size: .9em; }
-:not(pre) > code { background: var(--bubble); padding: 1px 5px; border-radius: 4px; }
+/* Inline code needs its own tone: --bubble is also the message background, so a chip in a log
+   entry was invisible there. */
+:not(pre) > code { background: var(--chip); padding: 1px 5px; border-radius: 4px; }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid var(--accent); }
 @media (max-width: 760px) {
   .topbar { padding: 10px 16px; }

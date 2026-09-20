@@ -253,7 +253,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   delete state.notes[0].ack_html;
   await get('#refresh-notes').events.click();
   assert.equal(answer.textContent, 'rechecked');
-  assert.match(answer.className, /answer note/);
+  assert.equal(answer.children.length, 1);
+  assert.equal(answer.children[0].tagName, 'p');
+  assert.match(answer.className, /answer reply/);
+  assert.doesNotMatch(answer.className, /note/);
   assert.match(get('#history').children[0].children[2].textContent, /^one · Said /);
   assert.equal(get('#note').value, 'new unsent draft');
   state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
@@ -379,6 +382,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   const longReceipt = get('#history').children.at(-1).children[2];
   assert.equal(longReceipt.children[0].textContent, 'a66700e');
   assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
+  assert.equal(longReceipt.children[0].className, 'note-id');
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
   assert.match(longReceipt.textContent, /^a66700e · Sent /);
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');

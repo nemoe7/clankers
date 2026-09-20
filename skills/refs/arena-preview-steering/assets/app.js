@@ -134,6 +134,7 @@ function showHistory(notes) {
     const receipt = node.children[2];
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
+    receiptId.className = 'note-id';
     receiptId.textContent = item.id.slice(0, 7);
     receiptId.title = item.id;
     const receiptState = document.createElement('span');
@@ -141,20 +142,21 @@ function showHistory(notes) {
     const state = item.acknowledged_at ? 'Said' : item.seen_at ? 'Seen' : 'Sent';
     receiptState.textContent = ` · ${state} ${time(item.at)}`;
     receipt.replaceChildren(receiptId, receiptState);
+    // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
+    // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
     const answer = node.children[1];
-    if (item.ack_text && item.ack_kind === 'reply') {
-      answer.className = 'answer reply report';
+    if (item.ack_text) {
+      answer.className = item.ack_kind === 'reply' ? 'answer reply report' : 'answer reply';
       answer.hidden = false;
-      if (item.ack_html === undefined) answer.textContent = item.ack_text;
-      else answer.innerHTML = item.ack_html;
-    } else if (item.ack_text) {
-      answer.className = 'answer note';
-      answer.hidden = false;
-      answer.textContent = item.ack_text;
+      if (item.ack_html === undefined) {
+        const plain = document.createElement('p');
+        plain.textContent = item.ack_text;
+        answer.replaceChildren(plain);
+      } else answer.innerHTML = item.ack_html;
     } else {
       answer.className = 'answer';
       answer.hidden = true;
-      answer.textContent = '';
+      answer.replaceChildren();
     }
     history.append(node);
   }
