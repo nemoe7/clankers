@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-20 — Root AGENTS.md essay-line compression
+
+- **Summary** — Compress the three multi-sentence rule lines of the root `AGENTS.md` per `rules/refs/GUIDELINES.md` (one rule per line, no essays, no embedded rationale): the L61 amendment-origin rule drops both rationales; the L67 report-artifact hard rule moves to its own line and takes the file's standard `NEVER` capitalization; the L95 DAILIES "must not depend" rule leaves its "so" clause and the git-gate "because" is compressed. Every rule, negation, and fact is preserved.
+- **Cost** — root `AGENTS.md` 11,007 → 10,732 `B` (-275); the root file has no budget row.
+- **Limits** — root file only; `rules/` and its refs are untouched.
+- Origins: the owner's 2026-09-20 chat audit flagged L61/L67/L95 as essay-grade against the GUIDELINES spec; the Current/Amended/Reason table was approved per-amendment via the question tool in the same session.
+
 ## 2026-09-20 — ChatGPT custom instruction workflow
 
 - **Experiment** — add isolated `rules/wenyan/` ChatGPT candidates using hybrid Wenyan, based on the live English fields as the character-count baseline and the full refs as the semantic baseline.

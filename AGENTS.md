@@ -58,13 +58,14 @@ Read these first:
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`. They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
-- Record every amendment's origin in the CHANGELOG entry that carries it: who proposed it — the chat task, a steering note, another session, or the agent's own violation report — the date, and the rule it changed, so a clause that arrived from outside this session is traceable to its proposer instead of reading as if the repository invented it. The CHANGELOG is the only ledger; no separate amendment file, because a second ledger drifts from the first and would need its own gate in `maintenance/check.py`. An amendment whose origin is not recorded is undocumented, whatever the diff shows.
+- Record every amendment's origin in the CHANGELOG entry that carries it: who proposed it — the chat task, a steering note, another session, or the agent's own violation report — the date, and the rule it changed; the CHANGELOG is the only ledger, with no separate amendment file; an amendment whose origin is not recorded is undocumented, whatever the diff shows.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
 
 ## Reports and approval
 
 - Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it.
-- A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-reporting` in ignored workspace files. The question tool carries the question, not unseen proposal text; blind approval approves nothing. Never commit or push report artifacts.
+A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-reporting` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
+- NEVER commit or push report artifacts.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; ASD-STE100; no skill or linter.
 - No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
@@ -92,7 +93,7 @@ Read these first:
 ## Automations
 
 - Automation prompts live in `automations/`: self-contained text pasted into an external scheduler, not rules an agent loads.
-- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request: web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them, so a prompt must not depend on them. The connector can read and write in this repository, and the prompts repeat no git rule, because pushes, branches, and pull requests are already gated by the git rules in [rules/CHATGPT-CUSTOM.txt](rules/CHATGPT-CUSTOM.txt), which that account loads on every request including a scheduled one. Reports go to the chat response and nothing is persisted.
+- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request: web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt must not depend on them. The connector can read and write in this repository; the prompts repeat no git rule, because [rules/CHATGPT-CUSTOM.txt](rules/CHATGPT-CUSTOM.txt) gates pushes, branches, and pull requests on every request of that account, including scheduled ones. Reports go to the chat response and nothing is persisted.
 - Prompts carry no budget row and no validator gate, both declined on request rather than deferred, because the scheduler owns its own copy and edits the embedded datetime between runs; CI must not depend on their contents.
 - Amend one here, then re-paste it into the task: an edit in the repo never reaches a running automation.
 
