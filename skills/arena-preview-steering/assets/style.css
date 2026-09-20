@@ -100,7 +100,12 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 /* A click copies the whole ID; the colour is the confirmation, and it clears after a moment. */
 code.note-id[data-copied="good"] { color: var(--dot-said); }
 code.note-id[data-copied="bad"] { color: #ef4444; }
-#clock { font-variant-numeric: tabular-nums; }
+/* The clock takes the tab size rather than the muted 13px, and tabular numerals keep the
+   seconds from nudging the theme button once a second. */
+#clock { font-size: inherit; font-variant-numeric: tabular-nums; }
+/* The tab copy buttons flash their outcome the way a code block's button does. */
+.icon-button[data-state="good"] { color: var(--dot-said); border-color: var(--dot-said); }
+.icon-button[data-state="bad"] { color: #ef4444; border-color: #ef4444; }
 /* Receipt state is a dot: gray until read, blue once read, green once answered. */
 .state-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--dot-sent); }
 .state-dot[data-state="seen"] { background: var(--dot-seen); }

@@ -8,6 +8,7 @@ let pending = null;
 let stateBusy = false;
 let reportRequest = 0;
 let listSignature = '';
+let lastState = null;
 let historySignature = '';
 let draftPreviewSequence = 0;
 const messageNodes = new Map();
@@ -185,6 +186,7 @@ async function refreshState() {
   stateBusy = true;
   try {
     const state = await (await request('/api/state')).json();
+    lastState = state;
     setConnection('ok', state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet');
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
@@ -365,14 +367,32 @@ async function copyCode(button) {
 }
 // A receipt's ID is the handle the owner quotes back, so a click copies the whole of it
 // rather than the seven characters on show, and says which clipboard path it took.
-async function copyNoteId(code) {
+// A plain click copies the seven characters on show; a shift-click copies the whole ID.
+async function copyNoteId(code, shift) {
   const full = code.dataset.full || code.textContent;
-  const words = await copyText(full);
+  const text = shift ? full : code.textContent;
+  const words = await copyText(text);
   code.dataset.copied = words ? 'good' : 'bad';
-  code.title = words ? `${words}: ${full}` : `Clipboard blocked; the ID is ${full}`;
+  code.title = words ? `${words}: ${text}` : `Clipboard blocked; the ID is ${text}`;
   setTimeout(() => {
     delete code.dataset.copied;
     code.title = full;
+  }, 1500);
+}
+// The three tab buttons share one confirmation, and null text means there was nothing to copy.
+async function copyFrom(button, text, what) {
+  const words = text === null ? null : await copyText(text);
+  const message = words || (text === null ? `There is no ${what} to copy`
+    : `Clipboard blocked; select the ${what} and copy it`);
+  button.textContent = words ? '✓' : '✗';
+  button.setAttribute('aria-label', message);
+  button.title = message;
+  button.dataset.state = words ? 'good' : 'bad';
+  setTimeout(() => {
+    button.textContent = '⧉';
+    button.setAttribute('aria-label', `Copy the ${what}`);
+    button.title = `Copy the ${what}`;
+    button.dataset.state = '';
   }, 1500);
 }
 function growSlot(area) {
@@ -395,19 +415,43 @@ document.addEventListener('click', event => {
   if (!target || typeof target.className !== 'string') return;
   const classes = target.className.split(' ');
   if (classes.includes('copy-code')) copyCode(target);
-  else if (classes.includes('note-id')) copyNoteId(target);
+  else if (classes.includes('note-id')) copyNoteId(target, event.shiftKey);
 });
-// The header clock shows the hour and minute the log shows, so the two never disagree.
+// The header clock is the log's own face with seconds appended, so the two never disagree.
 function showClock() {
   const now = new Date();
   const clock = $('#clock');
-  clock.textContent = time(now.toISOString()).split(', ')[1];
+  clock.textContent = `${time(now.toISOString())}:${String(now.getSeconds()).padStart(2, '0')}`;
   clock.title = now.toLocaleDateString(undefined, {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });
 }
 showClock();
-setInterval(showClock, 15000);
+setInterval(showClock, 1000);
+// Each tab copies what restores or exports it: the log as the lines import-notes reads back,
+// the shown report as the Markdown publish takes, the tasks as the JSON task-import reads.
+$('#copy-log').addEventListener('click', () => {
+  const notes = lastState ? lastState.notes : [];
+  copyFrom($('#copy-log'), notes.length ? `${notes.map(
+    note => JSON.stringify({ id: note.id, text: note.text, at: note.at })
+  ).join('\n')}\n` : null, 'message log');
+});
+$('#copy-report').addEventListener('click', async () => {
+  const id = $('#report-select').value;
+  if (!id) return copyFrom($('#copy-report'), null, 'report');
+  try {
+    const source = await (await request(`/api/reports/${encodeURIComponent(id)}/source`)).text();
+    copyFrom($('#copy-report'), source, 'report');
+  } catch {
+    copyFrom($('#copy-report'), null, 'report');
+  }
+});
+$('#copy-tasks').addEventListener('click', () => {
+  const tasks = lastState && lastState.tasks;
+  const records = tasks ? [...tasks.finished, ...tasks.upcoming] : [];
+  copyFrom($('#copy-tasks'), records.length ? `${JSON.stringify(records, null, 2)}\n` : null,
+    'task list');
+});
 function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }

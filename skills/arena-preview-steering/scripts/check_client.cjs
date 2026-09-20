@@ -91,6 +91,7 @@ const context = {
       sent.push(submission);
       return response({ ...submission, at: new Date().toISOString() });
     }
+    if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
     return response({ html: '<h1>Report</h1>', fields: reportFields });
   }
 };
@@ -200,9 +201,23 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#tasks-finished').hidden, false);
   assert.equal(get('#tasks-upcoming').hidden, false);
   assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);
+  // The tasks copy sits here because the fixture's task list only exists inside this block;
+  // the log and report buttons are exercised later, once the fixtures hold notes.
+  get('#copy-tasks').events.click();
+  await tick();
+  const records = JSON.parse(copied.at(-1));
+  assert.equal(records.length, state.tasks.finished.length + state.tasks.upcoming.length);
+  assert.equal(records[0].id, state.tasks.finished[0].id);
+  assert.equal(records.at(-1).id, state.tasks.upcoming.at(-1).id);
+  assert.deepEqual(Object.keys(records[0]).sort(),
+    ['details', 'id', 'order', 'status', 'title', 'updated_at']);
   delete state.tasks;
   await get('#refresh-notes').events.click();
   assert.equal(get('#tasks-finished').hidden, true);
+  get('#copy-tasks').events.click();
+  await tick();
+  assert.equal(get('#copy-tasks').title, 'There is no task list to copy');
+
   assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
   assert.equal(get('#notes-tab').focused, true);
   get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: false }));
@@ -286,7 +301,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   copyButton.dataset = { code: 'print(1)' };
   documentEvents.click({ target: copyButton });
   await tick();
-  assert.deepEqual(copied, ['print(1)']);
+  assert.equal(copied.at(-1), 'print(1)');
   assert.equal(copyButton.textContent, '✓');
   assert.equal(copyButton.title, 'Copied through the clipboard API');
   assert.equal(copyButton.getAttribute('aria-label'), 'Copied through the clipboard API');
@@ -311,18 +326,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(denied.title, 'Clipboard blocked; select the code and copy it');
   assert.equal(denied.dataset.state, 'bad');
   clipboardFails = false;
-  // The header clock shows the hour and minute the log shows, in the same 24-hour face.
-  assert.match(get('#clock').textContent, /^\d{2}:\d{2}$/);
+  // The header clock is the log's own face with seconds, so the two cannot disagree.
+  assert.match(get('#clock').textContent, /^[A-Z][a-z]{2} \d{2}( \d{2})?, \d{2}:\d{2}:\d{2}$/);
   assert.ok(get('#clock').title.length > 3);
-  // A receipt ID copies whole on a click, and says which clipboard path it took.
+  // A receipt ID copies on a click, and a blocked clipboard says so on the ID itself.
   const idCode = get('#history').children[0].children[2].children[0];
   assert.equal(idCode.className, 'note-id');
-  assert.ok(idCode.dataset.full.startsWith('one'));
-  documentEvents.click({ target: idCode });
-  await tick();
-  assert.equal(copied.at(-1), idCode.dataset.full);
-  assert.equal(idCode.dataset.copied, 'good');
-  assert.match(idCode.title, /^Copied through the clipboard API: one/);
   clipboardFails = true;
   execCommandResult = false;
   documentEvents.click({ target: idCode });
@@ -477,5 +486,36 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
   assert.match(longReceipt.textContent, /^a66700e · [A-Z][a-z]{2} /);
   assert.equal(longReceipt.children[1].dataset.state, 'sent');
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the whole ID, clipped placeholders, the header clock, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  // A plain click copies the seven characters on show; a shift-click copies the whole ID.
+  const longId = longReceipt.children[0];
+  assert.notEqual(longId.textContent, longId.dataset.full);
+  documentEvents.click({ target: longId });
+  await tick();
+  assert.equal(copied.at(-1), longId.textContent);
+  assert.equal(longId.dataset.copied, 'good');
+  documentEvents.click({ target: longId, shiftKey: true });
+  await tick();
+  assert.equal(copied.at(-1), longId.dataset.full);
+  assert.match(longId.title, /^Copied through the clipboard API: /);
+  // The log copies as the JSON lines import-notes reads back, so a wipe costs one paste.
+  get('#copy-log').events.click();
+  await tick();
+  const logLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(Object.keys(logLines[0]), ['id', 'text', 'at']);
+  assert.ok(logLines.length > 0);
+  assert.equal(get('#copy-log').dataset.state, 'good');
+  // The report copies its Markdown source, fetched on the click rather than riding the poll.
+  const selectBefore = get('#report-select').value;
+  get('#report-select').value = 'p1';
+  get('#copy-report').events.click();
+  await tick();
+  assert.equal(copied.at(-1), '# Report source\n');
+  assert.equal(get('#copy-report').dataset.state, 'good');
+  get('#report-select').value = '';
+  get('#copy-report').events.click();
+  await tick();
+  assert.equal(get('#copy-report').dataset.state, 'bad');
+  assert.equal(get('#copy-report').title, 'There is no report to copy');
+  get('#report-select').value = selectBefore;
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
