@@ -218,6 +218,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'type="radio"' in served["html"] and 'type="checkbox"' in served["html"]
     assert "- [ ] not a field" in served["html"]
     assert served["html"].count("checked") == 2
+    status, _, page = request("GET", "/")
+    assert status == 200 and '#preview-note[aria-pressed="false"] {' in page
+    assert '#preview-note[aria-pressed="true"]' not in page
     duplicate = root / "duplicate.md"
     duplicate.write_text("Areas:\n\n- [ ] ui\n- [ ] ui\n", encoding="utf-8")
     try:
