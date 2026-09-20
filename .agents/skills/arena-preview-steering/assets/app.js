@@ -147,6 +147,7 @@ function showHistory(notes) {
     receiptId.className = 'note-id';
     receiptId.textContent = item.id.slice(0, 7);
     receiptId.title = item.id;
+    receiptId.dataset.full = item.id;
     // Sent until the agent reads it, Seen once a CLI read has stamped seen_at, Said once answered.
     // The state is a coloured dot; the word lives in its title and aria-label instead of the line.
     const state = item.acknowledged_at ? 'said' : item.seen_at ? 'seen' : 'sent';
@@ -335,30 +336,44 @@ function rest(button) {
   button.title = 'Copy code';
   button.dataset.state = '';
 }
-async function copyCode(button) {
-  const code = button.dataset.code || '';
-  const flash = (glyph, words, state) => {
-    button.textContent = glyph;
-    button.setAttribute('aria-label', words);
-    button.title = words;
-    button.dataset.state = state;
-    setTimeout(() => rest(button), 1500);
-  };
+// One clipboard path for every copy in the UI: the API first, the selection fallback second,
+// and null when the browser allowed neither.
+async function copyText(text) {
   try {
     if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error('clipboard unavailable');
-    await navigator.clipboard.writeText(code);
-    flash('✓', 'Copied through the clipboard API', 'good');
+    await navigator.clipboard.writeText(text);
+    return 'Copied through the clipboard API';
   } catch {
     const area = document.createElement('textarea');
-    area.value = code;
+    area.value = text;
     area.setAttribute('readonly', '');
     document.body.append(area);
     area.select();
     const copied = typeof document.execCommand === 'function' && document.execCommand('copy');
     area.remove();
-    if (copied) flash('✓', 'Copied through the selection fallback', 'good');
-    else flash('✗', 'Clipboard blocked; select the code and copy it', 'bad');
+    return copied ? 'Copied through the selection fallback' : null;
   }
+}
+async function copyCode(button) {
+  const words = await copyText(button.dataset.code || '');
+  const blocked = 'Clipboard blocked; select the code and copy it';
+  button.textContent = words ? '✓' : '✗';
+  button.setAttribute('aria-label', words || blocked);
+  button.title = words || blocked;
+  button.dataset.state = words ? 'good' : 'bad';
+  setTimeout(() => rest(button), 1500);
+}
+// A receipt's ID is the handle the owner quotes back, so a click copies the whole of it
+// rather than the seven characters on show, and says which clipboard path it took.
+async function copyNoteId(code) {
+  const full = code.dataset.full || code.textContent;
+  const words = await copyText(full);
+  code.dataset.copied = words ? 'good' : 'bad';
+  code.title = words ? `${words}: ${full}` : `Clipboard blocked; the ID is ${full}`;
+  setTimeout(() => {
+    delete code.dataset.copied;
+    code.title = full;
+  }, 1500);
 }
 function growSlot(area) {
   // The same 2px of border the composer adds; see grow().
@@ -378,9 +393,21 @@ document.addEventListener('input', event => {
 document.addEventListener('click', event => {
   const target = event.target;
   if (!target || typeof target.className !== 'string') return;
-  if (!target.className.split(' ').includes('copy-code')) return;
-  copyCode(target);
+  const classes = target.className.split(' ');
+  if (classes.includes('copy-code')) copyCode(target);
+  else if (classes.includes('note-id')) copyNoteId(target);
 });
+// The header clock shows the hour and minute the log shows, so the two never disagree.
+function showClock() {
+  const now = new Date();
+  const clock = $('#clock');
+  clock.textContent = time(now.toISOString()).split(', ')[1];
+  clock.title = now.toLocaleDateString(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+}
+showClock();
+setInterval(showClock, 15000);
 function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }

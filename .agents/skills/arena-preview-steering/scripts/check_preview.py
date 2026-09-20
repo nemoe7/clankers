@@ -254,13 +254,21 @@ with tempfile.TemporaryDirectory() as directory:
     assert "--dot-said: #8dc07f;" in page and "--dot-said: #4a7c3a;" in page
     assert "--dot-sent: var(--muted);" in page
     assert '.state-dot[data-state="said"] { background: var(--dot-said); }' in page
-    assert "--chip: #4d4741;" in page and "--chip: #e4ddd2;" in page
+    assert "--chip" not in page
     assert "code.note-id {" in page and ".receipt code" not in page
     assert ".answer.note" not in page
     assert ".answer > p:last-child { margin-bottom: 0; }" in page
-    assert ":not(pre) > code { background: var(--chip)" in page
+    assert (
+      ":not(pre) > code { background: var(--bubble); padding: 1px 5px; border-radius: 4px; }"
+      in page
+    )
+    assert 'code.note-id[data-copied="good"] { color: var(--dot-said); }' in page
+    assert 'code.note-id[data-copied="bad"] { color: #ef4444; }' in page
+    assert "#clock { font-variant-numeric: tabular-nums; }" in page
+    assert '<span id="clock" class="muted" title="Local time">--:--</span>' in page
+    assert page.index('id="clock"') < page.index('id="theme"')
     assert ".report :not(pre) > code" not in page
-    assert "background: none; padding: 0; }" in page
+    assert "background: none; padding: 0; cursor: pointer; }" in page
     assert "#send { border-color: var(--accent); }" not in page
     assert "#report-submit { margin-top: 16px; }" in page
     assert page.count("#send {") == 0

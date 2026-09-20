@@ -311,6 +311,26 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(denied.title, 'Clipboard blocked; select the code and copy it');
   assert.equal(denied.dataset.state, 'bad');
   clipboardFails = false;
+  // The header clock shows the hour and minute the log shows, in the same 24-hour face.
+  assert.match(get('#clock').textContent, /^\d{2}:\d{2}$/);
+  assert.ok(get('#clock').title.length > 3);
+  // A receipt ID copies whole on a click, and says which clipboard path it took.
+  const idCode = get('#history').children[0].children[2].children[0];
+  assert.equal(idCode.className, 'note-id');
+  assert.ok(idCode.dataset.full.startsWith('one'));
+  documentEvents.click({ target: idCode });
+  await tick();
+  assert.equal(copied.at(-1), idCode.dataset.full);
+  assert.equal(idCode.dataset.copied, 'good');
+  assert.match(idCode.title, /^Copied through the clipboard API: one/);
+  clipboardFails = true;
+  execCommandResult = false;
+  documentEvents.click({ target: idCode });
+  await tick();
+  assert.equal(idCode.dataset.copied, 'bad');
+  assert.match(idCode.title, /^Clipboard blocked; the ID is /);
+  clipboardFails = false;
+  execCommandResult = true;
   assert.equal(answer.innerHTML, '<p><strong>done</strong></p>');
   assert.match(answer.className, /answer reply report/);
   assert.equal(answer.hidden, false);
@@ -457,5 +477,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
   assert.match(longReceipt.textContent, /^a66700e · [A-Z][a-z]{2} /);
   assert.equal(longReceipt.children[1].dataset.state, 'sent');
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs and state dots, clipped placeholders, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the whole ID, clipped placeholders, the header clock, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
