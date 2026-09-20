@@ -5,6 +5,8 @@ import http.client
 import json
 import re
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -230,6 +232,12 @@ with tempfile.TemporaryDirectory() as directory:
     assert '#preview-note[aria-pressed="true"]' not in page
     assert "--focus: #524d47;" in page and "#f4ca93" not in page
     assert "--focus: #8f5b13;" in page
+    assert "--tab-border: #413d39;" in page
+    assert "--tab-border: var(--border);" in page
+    assert "nav button:focus-visible { border-color: var(--focus); }" in page
+    assert "border-color: var(--accent)" not in page
+    assert "padding-bottom: 12px;" in page
+    assert "#report-form { min-width: 0; margin-top: 24px; }" in page
     assert ":not(pre) > code { background: var(--bubble)" in page
     assert ".report :not(pre) > code" not in page
     assert "background: none; padding: 0; }" in page
@@ -472,3 +480,11 @@ with tempfile.TemporaryDirectory() as seen_dir:
   assert unread.state()["notes"][0]["seen_at"] == stamped
   unread.acknowledge(["s-1"], "reply", "read, then answered")
   assert unread.state()["notes"][0]["seen_at"] == stamped
+
+help_text = subprocess.run(
+  [sys.executable, str(Path(preview.__file__)), "serve", "--help"],
+  capture_output=True,
+  text=True,
+  check=True,
+).stdout
+assert "default: 8000" in help_text and "--port PORT" in help_text

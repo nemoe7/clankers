@@ -9,6 +9,8 @@
   --border: #56504a;
   --accent: #e5bb8b;
   --focus: #524d47;
+  /* Tabs sit on the panel, so their resting border is a step darker than --border. */
+  --tab-border: #413d39;
   font-family: system-ui, sans-serif;
 }
 :root[data-theme="light"] {
@@ -22,6 +24,7 @@
   --border: #c2b9ac;
   --accent: #795020;
   --focus: #8f5b13;
+  --tab-border: var(--border);
 }
 * { box-sizing: border-box; scrollbar-color: #302e2c var(--bg); scrollbar-width: thin; }
 *:hover { scrollbar-color: #666261 var(--bg); }
@@ -41,8 +44,10 @@ p, li { line-height: 1.6; }
 .topbar-row { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 body[data-chrome="closed"] .topbar-row { display: none; }
 nav { display: flex; gap: 8px; }
-nav button { min-width: 100px; }
-nav [aria-selected="true"] { background: var(--bubble); border-color: var(--accent); }
+nav button { min-width: 100px; border-color: var(--tab-border); }
+/* nav button outranks the global :focus-visible, so focus needs its own rule here. */
+nav button:focus-visible { border-color: var(--focus); }
+nav [aria-selected="true"] { background: var(--bubble); }
 #report-count { padding-left: 8px; color: var(--muted); }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
@@ -90,7 +95,8 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 .answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; }
 .answer.note { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
 #report-receipt { margin: 10px 0 0; }
-.report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+/* The rule under the toolbar sits 12px below it and 24px above #report-form. */
+.report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; }
 #refresh-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
@@ -128,5 +134,5 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
 .option textarea { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 4px 8px; }
 #report-submit { margin-top: 16px; }
-#report-form { min-width: 0; }
+#report-form { min-width: 0; margin-top: 24px; }
 .report .question { border-left: 2px solid var(--accent); padding-left: 12px; }

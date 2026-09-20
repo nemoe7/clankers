@@ -170,6 +170,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#note').value, '');
   assert.equal(get('#note').style.height, '74px');
   assert.match(get('#send-status').textContent, /Saved/);
+  assert.match(get('#send-status').textContent, /· Message sent\./);
+  assert.doesNotMatch(get('#send-status').textContent, /awaiting acknowledgement/);
   assert.equal(get('#note').placeholder, 'keep draft');
   await tick();
   get('#note').value = 'sent while typing';

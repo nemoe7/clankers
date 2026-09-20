@@ -9,7 +9,7 @@ The chosen `--state-dir` contains `state.sqlite3`. Normal SQLite transactions ha
 | Command | Purpose |
 | --- | --- |
 | `init` | Create state without starting HTTP |
-| `serve --port 8000` | Start the shared interface on `0.0.0.0` |
+| `serve` | Start the shared interface on `0.0.0.0`, port 8000 unless `--port` says otherwise |
 | `read` | Print all unacknowledged messages; record check time |
 | `ack <id> [<id> ...] --reply <markdown>` | Record receipts with a rendered answer in the log |
 | `ack <id> [<id> ...] --note <text>` | Record receipts with one plain answer line |
