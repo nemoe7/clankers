@@ -5,9 +5,18 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 class Element {
+  // textContent reads through to children, the way a browser does, so a receipt built from
+  // two elements still asserts as one string; setting it clears the children, as in a browser.
+  get textContent() {
+    return this.children.length ? this.children.map(child => child.textContent).join('') : this.text;
+  }
+  set textContent(value) {
+    this.text = value;
+    this.children = [];
+  }
   constructor() {
     this.value = '';
-    this.textContent = '';
+    this.text = '';
     this.hidden = false;
     this.disabled = false;
     this.children = [];
@@ -52,7 +61,7 @@ let reportFields = 0;
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
-  document: { querySelector: get, createElement: () => new Element(), createTextNode: () => new Element(), documentElement: root, body: { dataset: {} } },
+  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {} } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `note-${++counter}` },
   AbortController,
@@ -160,8 +169,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
   await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
-  assert.match(get('#history').children[0].children[1].textContent, /Awaiting ACK/);
-  assert.match(get('#history').children[0].children[1].textContent, /id one$/);
+  assert.match(get('#history').children[0].children[1].textContent, /^one · Delivered /);
+  assert.doesNotMatch(get('#history').children[0].children[1].textContent, /Awaiting|ACK-ed|Saved| id /);
+  assert.equal(get('#last-check').textContent, 'Not checked yet.');
   const stamp = get('#history').children[0].children[1].textContent;
   assert.match(stamp, /[A-Z][a-z]{2} \d{2}, \d{2}:\d{2}/);
   assert.doesNotMatch(stamp, /\d{2}:\d{2}:\d{2}/);
@@ -170,8 +180,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[2].hidden, true);
   state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
   state.notes[0].acknowledged_at = new Date().toISOString();
+  state.last_check = new Date().toISOString();
   await get('#refresh-notes').events.click();
-  assert.match(get('#history').children[0].children[1].textContent, /ACK-ed/);
+  assert.match(get('#history').children[0].children[1].textContent, /^one · Seen /);
+  assert.match(get('#last-check').textContent, /^Last checked [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
   assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
   state.notes[0].ack_kind = 'reply';
   state.notes[0].ack_text = '**done**';
@@ -191,13 +203,15 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
   log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
   await get('#refresh-notes').events.click();
-  assert.deepEqual(log.children.map(item => item.children[1].textContent.slice(-6)), ['id one', 'id two']);
+  assert.deepEqual(log.children.map(item => item.children[1].children[0].textContent), ['one', 'two']);
+  assert.deepEqual(log.children.map(item => item.children[1].children[0].tagName), ['code', 'code']);
+  assert.deepEqual(log.children.map(item => item.children[1].children[1].tagName), ['span', 'span']);
   assert.equal(log.scrollTop, 400);
   log.scrollTop = 0;
   state.notes.push({ id: 'three', text: 'third', at: new Date().toISOString(), acknowledged_at: null });
   await get('#refresh-notes').events.click();
   assert.equal(log.scrollTop, 0);
-  assert.equal(log.children.at(-1).children[1].textContent.slice(-8), 'id three');
+  assert.equal(log.children.at(-1).children[1].children[0].textContent, 'three');
   assert.equal(get('#connection-dot').dataset.state, 'ok');
   assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
   assert.equal(get('#connection-text').textContent, '3 messages saved');

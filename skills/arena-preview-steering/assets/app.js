@@ -119,9 +119,11 @@ function showHistory(notes) {
     else text.innerHTML = item.html;
     const receipt = node.children[1];
     receipt.className = 'receipt';
-    receipt.textContent = `${item.acknowledged_at
-      ? `ACK-ed ${time(item.acknowledged_at)} · Saved ${time(item.at)}`
-      : `Saved ${time(item.at)} · Awaiting ACK`} · id ${item.id.slice(0, 7)}`;
+    const receiptId = document.createElement('code');
+    receiptId.textContent = item.id.slice(0, 7);
+    const receiptState = document.createElement('span');
+    receiptState.textContent = ` · ${item.acknowledged_at ? 'Seen' : 'Delivered'} ${time(item.at)}`;
+    receipt.replaceChildren(receiptId, receiptState);
     const answer = node.children[2];
     if (item.ack_text && item.ack_kind === 'reply') {
       answer.className = 'answer reply report';
@@ -148,7 +150,7 @@ async function refreshState() {
     const state = await (await request('/api/state')).json();
     setConnection('ok', state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet');
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
-    $('#last-check').textContent = state.last_check ? `Agent last checked ${time(state.last_check)}` : 'Agent has not checked this inbox yet.';
+    $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
     const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {
