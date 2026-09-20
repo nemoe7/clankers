@@ -65,12 +65,24 @@ composerButton.addEventListener('click', () => {
   const open = document.body.dataset.composer === 'closed';
   setPanel('composer', composerButton, open, composerLabels);
   save('composer', open ? 'open' : 'closed');
-  if (open) scrollHistory(true);
+  if (open) {
+    grow();
+    scrollHistory(true);
+  }
 });
+function grow() {
+  // The textarea grows with the draft instead of scrolling inside itself, so it expands upward and
+  // the log gives way; when the pair no longer fits, the notes panel scrolls and the log stays
+  // reachable by scrolling up. Setting height to auto first lets it shrink again after a send.
+  note.style.height = 'auto';
+  note.style.height = `${note.scrollHeight}px`;
+}
 note.value = stored('draft') || '';
+grow();
 try { pending = JSON.parse(stored('pending') || 'null'); }
 catch { status.textContent = 'Stored retry data is invalid. Draft retained; check the log before resending.'; }
 note.addEventListener('input', () => {
+  grow();
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
@@ -212,6 +224,7 @@ note.addEventListener('keydown', event => {
 function writeMode() {
   draftPreviewSequence++;
   note.hidden = false;
+  grow();
   $('#draft-preview').hidden = true;
   $('#preview-note').textContent = 'MD 👁';
   $('#preview-note').setAttribute('aria-pressed', 'false');

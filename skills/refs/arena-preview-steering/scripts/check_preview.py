@@ -234,6 +234,11 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#send { border-color: var(--accent); }" not in page
     assert "#report-submit { margin-top: 16px; }" in page
     assert page.count("#send {") == 0
+    assert "resize: none;" in page and "resize: vertical" not in page
+    assert "#notes-panel, #reports-panel { overflow-y: auto; }" in page
+    assert "max-height: 48%" not in page
+    assert "min-height: 100%" in page
+    assert ".log-card { flex: 1 1 auto; min-height: 200px;" in page
 
     block = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
     assert block.startswith(
