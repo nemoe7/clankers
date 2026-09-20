@@ -428,13 +428,20 @@ function showClock() {
 }
 showClock();
 setInterval(showClock, 1000);
+// A copied timestamp stops at the seconds: the fraction and the offset cost characters on every
+// line of a backup and carry nothing a restore needs. The store itself keeps full precision, so
+// this is a property of the copy and not of the record.
+function stamp(value) {
+  return typeof value === 'string'
+    ? value.replace(/\.\d+/, '').replace(/(?:Z|[+-]\d{2}:?\d{2})$/, '') : value;
+}
 // Each tab copies what restores or exports it: the log as the lines import-notes reads back,
 // the shown report as the Markdown publish takes, the tasks as the JSON task-import reads.
 // The JSON copies are minified on purpose: the agent parses them, and the whitespace only costs tokens.
 $('#copy-log').addEventListener('click', () => {
   const notes = lastState ? lastState.notes : [];
   copyFrom($('#copy-log'), notes.length ? `${notes.map(
-    note => JSON.stringify({ id: note.id, text: note.text, at: note.at })
+    note => JSON.stringify({ id: note.id, text: note.text, at: stamp(note.at) })
   ).join('\n')}\n` : null, 'message log');
 });
 $('#copy-report').addEventListener('click', async () => {
