@@ -257,7 +257,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#report-submit { margin-top: 16px; }" in page
     assert page.count("#send {") == 0
     assert "resize: none;" in page and "resize: vertical" not in page
-    assert "#notes-panel, #reports-panel { overflow-y: auto; }" in page
+    assert "#notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }" in page
+    assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
+    assert 'id="tasks-finished-body"' in page and 'id="tasks-upcoming-body"' in page
+    assert ".tasks-layout { display: flex; flex-direction: column; gap: 18px; }" in page
     assert "max-height: 48%" not in page
     assert "min-height: 100%" not in page
     assert (
@@ -492,6 +495,35 @@ with tempfile.TemporaryDirectory() as seen_dir:
   assert unread.state()["notes"][0]["seen_at"] == stamped
   unread.acknowledge(["s-1"], "reply", "read, then answered")
   assert unread.state()["notes"][0]["seen_at"] == stamped
+
+with tempfile.TemporaryDirectory() as tasks_dir:
+  tasks_store = preview.Store(tasks_dir, create=True)
+  assert tasks_store.state()["tasks"] is None
+  source = Path(tasks_dir) / "tasks.md"
+  source.write_text(
+    "## Upcoming\n\n- <script>alert(1)</script> next\n\n## Finished\n\n- done\n",
+    encoding="utf-8",
+  )
+  stamp = tasks_store.write_tasks(source)
+  written = tasks_store.state()["tasks"]
+  assert written["finished"] == "- done" and written["upcoming"].startswith("- ")
+  assert "<script>" not in written["upcoming_html"]
+  assert (
+    "&lt;script&gt;" in written["upcoming_html"] and "<li>" in written["upcoming_html"]
+  )
+  assert written["updated_at"] == stamp
+  one = Path(tasks_dir) / "one.md"
+  one.write_text("## Finished\n\n- done\n", encoding="utf-8")
+  try:
+    tasks_store.write_tasks(one)
+    raise AssertionError("A task list with one section was accepted")
+  except ValueError as error:
+    assert "two sections" in str(error)
+  try:
+    tasks_store.write_tasks(Path(tasks_dir) / "tasks.txt")
+    raise AssertionError("A task list outside Markdown was accepted")
+  except ValueError as error:
+    assert ".md" in str(error)
 
 help_text = subprocess.run(
   [sys.executable, str(Path(preview.__file__)), "serve", "--help"],

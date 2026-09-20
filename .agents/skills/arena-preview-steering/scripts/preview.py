@@ -192,6 +192,42 @@ def field_html(question):
   return f"{body}{group}</div></div>"
 
 
+TASK_HEADING = re.compile(r"^##\s+(finished|upcoming)\s*$", re.IGNORECASE)
+TASK_SECTIONS = ("finished", "upcoming")
+
+
+def task_sections(markdown):
+  """Split a task list into its two required sections, in either order."""
+  found = {}
+  current = None
+  for line in markdown.splitlines():
+    heading = TASK_HEADING.match(line)
+    if heading:
+      current = heading.group(1).lower()
+      found[current] = []
+      continue
+    if current:
+      found[current].append(line)
+  if set(found) != set(TASK_SECTIONS):
+    raise ValueError(
+      "A task list needs exactly two sections: ## Finished and ## Upcoming"
+    )
+  return {key: "\n".join(found[key]).strip() for key in TASK_SECTIONS}
+
+
+def task_state(meta):
+  """Return the stored task list for the state payload, or None before one is written."""
+  if "tasks_finished_html" not in meta:
+    return None
+  return {
+    "finished": meta.get("tasks_finished", ""),
+    "upcoming": meta.get("tasks_upcoming", ""),
+    "finished_html": meta["tasks_finished_html"],
+    "upcoming_html": meta["tasks_upcoming_html"],
+    "updated_at": meta.get("tasks_updated_at", ""),
+  }
+
+
 def render_report(markdown):
   blocks, questions = parse_fields(markdown)
   parts = []
@@ -305,6 +341,7 @@ class Store:
 
   def state(self):
     with closing(self.connect()) as db:
+      meta = dict(db.execute("SELECT key, value FROM meta"))
       return {
         "notes": [dict(row) for row in db.execute("SELECT * FROM notes ORDER BY seq")],
         "reports": [
@@ -313,8 +350,31 @@ class Store:
             "SELECT id, title, updated_at, seq FROM reports ORDER BY seq, id"
           )
         ],
-        "last_check": dict(db.execute("SELECT key, value FROM meta")).get("last_check"),
+        "tasks": task_state(meta),
+        "last_check": meta.get("last_check"),
       }
+
+  def write_tasks(self, source):
+    """Replace both task sections from one Markdown file, rendered once at write time."""
+    require_renderer()
+    source = Path(source)
+    if source.suffix.lower() != ".md":
+      raise ValueError("Publish a UTF-8 .md source file")
+    markdown = source.read_text(encoding="utf-8")
+    if len(markdown) > MAX_REPORT:
+      raise ValueError("A task list must be under 2 MB of UTF-8 Markdown")
+    sections = task_sections(markdown)
+    stamp = now()
+    with closing(self.connect()) as db, db:
+      for key, value in (
+        ("tasks_finished", sections["finished"]),
+        ("tasks_upcoming", sections["upcoming"]),
+        ("tasks_finished_html", render(sections["finished"])),
+        ("tasks_upcoming_html", render(sections["upcoming"])),
+        ("tasks_updated_at", stamp),
+      ):
+        db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, value))
+    return stamp
 
   def read(self):
     with closing(self.connect()) as db, db:
@@ -670,6 +730,8 @@ def main():
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
   publish.add_argument("--title", required=True)
+  tasks = commands.add_parser("tasks")
+  tasks.add_argument("source", type=Path)
   legacy = commands.add_parser("import-notes")
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
@@ -694,6 +756,9 @@ def main():
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}; select it in the Reports tab")
+    elif args.command == "tasks":
+      stamp = store.write_tasks(args.source)
+      print(f"Task list updated {stamp}; both sections render in the Tasks tab")
     elif args.command == "import-notes":
       records = [
         json.loads(line)

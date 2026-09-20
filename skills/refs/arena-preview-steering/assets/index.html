@@ -12,6 +12,7 @@
       <nav role="tablist" aria-label="Workspace views">
         <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
         <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-count">0</span></button>
+        <button type="button" role="tab" id="tasks-tab" aria-controls="tasks-panel" aria-selected="false" tabindex="-1">Tasks</button>
       </nav>
       <button id="theme" class="icon-button" type="button" aria-label="Switch to light mode">☀</button>
     </div>
@@ -63,6 +64,19 @@
           <p id="report-receipt" class="receipt" role="status" hidden></p>
         </form>
         <small>Answers are sent to the agent inbox as one note and acknowledged like any note. Resending creates a new answer.</small>
+      </div>
+    </section>
+    <section id="tasks-panel" role="tabpanel" aria-labelledby="tasks-tab" hidden>
+      <div class="card tasks-layout">
+        <p id="tasks-status" class="muted" role="status">The agent has not written a task list yet.</p>
+        <div id="tasks-finished" class="task-div report" hidden>
+          <h2 id="tasks-finished-title">Finished</h2>
+          <div id="tasks-finished-body"></div>
+        </div>
+        <div id="tasks-upcoming" class="task-div report" hidden>
+          <h2 id="tasks-upcoming-title">Upcoming</h2>
+          <div id="tasks-upcoming-body"></div>
+        </div>
       </div>
     </section>
   </main>

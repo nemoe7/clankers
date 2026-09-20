@@ -56,7 +56,9 @@ const get = id => {
 };
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
+get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
 get('#reports-panel').hidden = true;
+get('#tasks-panel').hidden = true;
 get('#note').placeholder = 'What should happen next?';
 const storage = new Map();
 const root = { dataset: {} };
@@ -153,6 +155,37 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#note').value, 'keep draft');
   get('#reports-tab').events.keydown(event({ key: 'ArrowLeft' }));
   assert.equal(get('#notes-panel').hidden, false);
+  assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
+  assert.equal(get('#tasks-finished').hidden, true);
+  get('#notes-tab').events.keydown(event({ key: 'ArrowRight' }));
+  assert.equal(get('#reports-panel').hidden, false);
+  get('#reports-tab').events.keydown(event({ key: 'ArrowRight' }));
+  assert.equal(get('#tasks-panel').hidden, false);
+  assert.equal(get('#reports-panel').hidden, true);
+  get('#tasks-tab').events.keydown(event({ key: 'ArrowRight' }));
+  assert.equal(get('#notes-panel').hidden, false);
+  get('#notes-tab').events.keydown(event({ key: 'End' }));
+  assert.equal(get('#tasks-panel').hidden, false);
+  get('#tasks-tab').events.keydown(event({ key: 'Home' }));
+  assert.equal(get('#notes-panel').hidden, false);
+  // Switching tabs fires an unawaited refreshState, so flush the queue before a click that
+  // has to land: stateBusy swallows a refresh while another is still in flight.
+  await new Promise(resolve => setTimeout(resolve, 0));
+  state.tasks = {
+    finished: '- done', upcoming: '- next',
+    finished_html: '<ul><li>done</li></ul>', upcoming_html: '<ul><li>next</li></ul>',
+    updated_at: new Date().toISOString()
+  };
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#tasks-finished-body').innerHTML, '<ul><li>done</li></ul>');
+  assert.equal(get('#tasks-upcoming-body').innerHTML, '<ul><li>next</li></ul>');
+  assert.equal(get('#tasks-finished').hidden, false);
+  assert.equal(get('#tasks-upcoming').hidden, false);
+  assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);
+  delete state.tasks;
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#tasks-finished').hidden, true);
+  assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
   assert.equal(get('#notes-tab').focused, true);
   get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: false }));
   assert.equal(get('#form').submissions, 1);
@@ -369,6 +402,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-submit').hidden, true);
   assert.equal(get('#report-receipt').hidden, true);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
+  assert.equal(get('#tasks-panel').hidden, false);
+  assert.equal(get('#tasks-tab').focused, true);
+  assert.equal(get('#tasks-tab').attributes['aria-selected'], 'true');
+  get('#tasks-tab').events.keydown(event({ key: 'ArrowLeft' }));
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
@@ -385,5 +422,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(longReceipt.children[0].className, 'note-id');
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
   assert.match(longReceipt.textContent, /^a66700e · Sent /);
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });

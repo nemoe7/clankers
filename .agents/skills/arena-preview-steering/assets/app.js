@@ -171,6 +171,7 @@ async function refreshState() {
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
+    renderTasks(state.tasks);
     const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {
       listSignature = signature;
@@ -420,7 +421,24 @@ $('#report-form').addEventListener('submit', async event => {
     $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
   } finally { button.disabled = false; }
 });
-const tabs = [$('#notes-tab'), $('#reports-tab')];
+// The Tasks tab is the agent's own status: two divs, written by the CLI, read on the same poll.
+function renderTasks(tasks) {
+  const status = $('#tasks-status');
+  const finished = $('#tasks-finished');
+  const upcoming = $('#tasks-upcoming');
+  if (!tasks) {
+    status.textContent = 'The agent has not written a task list yet.';
+    finished.hidden = true;
+    upcoming.hidden = true;
+    return;
+  }
+  status.textContent = `Updated ${time(tasks.updated_at)} · written by the agent; it takes no answers.`;
+  $('#tasks-finished-body').innerHTML = tasks.finished_html;
+  $('#tasks-upcoming-body').innerHTML = tasks.upcoming_html;
+  finished.hidden = false;
+  upcoming.hidden = false;
+}
+const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab')];
 function showTab(tab) {
   for (const item of tabs) {
     const selected = tab === item;
@@ -435,7 +453,10 @@ for (const tab of tabs) {
   tab.addEventListener('keydown', event => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const next = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs[1] : tabs[1 - tabs.indexOf(tab)];
+    const step = event.key === 'ArrowRight' ? 1 : -1;
+    const next = event.key === 'Home' ? tabs[0]
+      : event.key === 'End' ? tabs[tabs.length - 1]
+        : tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length];
     showTab(next);
     next.focus();
   });
