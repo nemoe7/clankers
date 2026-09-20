@@ -34,6 +34,12 @@ html, body { height: 100%; }
 body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 h1 { font-size: clamp(25px, 4vw, 34px); letter-spacing: -.035em; margin: 4px 0; }
 h2 { font-size: 19px; margin: 0 0 8px; }
+/* h3 to h6 take explicit sizes: unstyled they compute to 1.17em, 1em, .83em and .67em, which put
+   h3 within 0.28px of h2 and h4 at body size, on the owner's bug report. */
+h3 { font-size: 17px; }
+h4 { font-size: 16px; }
+h5 { font-size: 15px; }
+h6 { font-size: 14px; }
 p, li { line-height: 1.6; }
 .topbar { flex: none; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
 .topbar-row { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
