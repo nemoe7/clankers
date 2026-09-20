@@ -239,10 +239,13 @@ with tempfile.TemporaryDirectory() as directory:
     assert "padding-bottom: 12px;" in page
     assert "#report-form { min-width: 0; margin-top: 24px; }" in page
     assert (
-      ".message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px 8px 12px; border-left: 2px solid var(--accent); border-radius: 8px; color: var(--muted); }"
+      ".message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }"
       in page
     )
-    assert ".answer.reply {" not in page
+    assert (
+      ".answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); }"
+      in page
+    )
     assert "--chip: #4d4741;" in page and "--chip: #e4ddd2;" in page
     assert "code.note-id {" in page and ".receipt code" not in page
     assert ".answer.note" not in page
