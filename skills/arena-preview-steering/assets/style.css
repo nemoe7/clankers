@@ -86,6 +86,9 @@ small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13p
 .dot[data-state="ok"] { background: #22c55e; }
 .dot[data-state="down"] { background: #ef4444; }
 #connection, #last-check { margin-block: 0; padding-block: 0; }
+#history-title { margin: 0; }
+#form > div:first-child { margin-top: 0; padding-top: 0; }
+#form > div:last-child { margin-bottom: 0; padding-bottom: 0; }
 p.muted { margin-block: 4px; }
 .icon-button { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; line-height: 1; font-size: 19px; display: inline-flex; align-items: center; justify-content: center; }
 body[data-composer="closed"] #composer-toggle { color: var(--muted); opacity: .55; }
