@@ -220,9 +220,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert served["html"].count("checked") == 2
     assert 'data-label="Other"' in served["html"]
     assert 'data-custom="Other"' in served["html"]
-    assert (
-      'class="custom-text"' in served["html"] and 'maxlength="200"' in served["html"]
-    )
+    assert 'class="custom-text"' in served["html"]
+    assert 'maxlength="2000"' in served["html"]
+    assert "<textarea" in served["html"] and 'placeholder="Other:"' in served["html"]
+    assert "> Other: <" not in served["html"]
     status, _, page = request("GET", "/")
     assert status == 200 and '#preview-note[aria-pressed="false"] {' in page
     assert '#preview-note[aria-pressed="true"]' not in page
@@ -380,9 +381,14 @@ with tempfile.TemporaryDirectory() as directory:
     assert verdict["options"] == ["Ship it", "Other: ___"]
     markup = preview.field_html(verdict)
     assert 'data-label="Other"' in markup and 'data-custom="Other"' in markup
-    assert " Other: " in markup and "> Ship it</label>" in markup
+    assert "> Ship it</label>" in markup and 'placeholder="Other:"' in markup
+    assert " Other: " not in markup and "<textarea" in markup
+    assert 'aria-label="Other"' in markup
+    assert 'aria-label="Other, your own answer"' in markup
     assert preview.custom_answer(verdict, "Other: make it blue")
     assert not preview.custom_answer(verdict, "Other:   ")
+    assert preview.custom_answer(verdict, "Other: " + "x" * 2000)
+    assert not preview.custom_answer(verdict, "Other: " + "x" * 2001)
     assert not preview.custom_answer(verdict, "nonsense")
     assert not preview.custom_answer(verdict, 7)
     record = store.submit(

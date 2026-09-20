@@ -80,7 +80,7 @@ def custom_answer(field, value):
     if label is None or not value.startswith(f"{label}: "):
       continue
     typed = value[len(label) + 2 :]
-    if typed.strip() and len(typed) <= 200:
+    if typed.strip() and len(typed) <= 2000:
       return True
   return False
 
@@ -185,9 +185,9 @@ def field_html(question):
     named = html.escape(label, quote=True)
     group += (
       f'<label class="option"><input type="{control}" name="{name}" '
-      f'value="{value}"{checked} data-label="{named}"> {named}: '
-      f'<input type="text" class="custom-text" maxlength="200" data-custom="{named}" '
-      f'placeholder="your own answer" aria-label="{named}, your own answer"></label>'
+      f'value="{value}"{checked} data-label="{named}" aria-label="{named}">'
+      f'<textarea class="custom-text" rows="1" maxlength="2000" data-custom="{named}" '
+      f'placeholder="{named}:" aria-label="{named}, your own answer"></textarea></label>'
     )
   return f"{body}{group}</div></div>"
 
