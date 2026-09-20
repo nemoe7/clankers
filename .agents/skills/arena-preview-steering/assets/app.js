@@ -134,7 +134,7 @@ function showHistory(notes) {
     const receipt = node.children[2];
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
-    receiptId.textContent = item.id.slice(0, 7);
+    receiptId.textContent = boundedId(item.id);
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${item.acknowledged_at ? 'Seen' : 'Delivered'} ${time(item.at)}`;
     receipt.replaceChildren(receiptId, receiptState);
@@ -348,6 +348,11 @@ document.addEventListener('click', event => {
   if (!target.className.split(' ').includes('copy-code')) return;
   copyCode(target);
 });
+function boundedId(id) {
+  // Citations name the first seven characters, so the receipt marks that boundary and still shows
+  // the whole ID. Shorter IDs stay unbroken rather than growing a trailing hyphen.
+  return id.length > 7 ? `${id.slice(0, 7)}-${id.slice(7)}` : id;
+}
 function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }
