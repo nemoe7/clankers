@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Workspace · Notes & reports</title>
+  <title>Workspace · Notes, reports & forms</title>
   <style>__STYLE__</style>
 </head>
 <body>
   <header>
-    <div><p class="eyebrow">Live workspace</p><h1>Notes & reports</h1></div>
+    <div><p class="eyebrow">Live workspace</p><h1>Notes, reports & forms</h1></div>
     <button id="theme" type="button" aria-label="Switch to light mode">Light mode</button>
   </header>
   <nav role="tablist" aria-label="Workspace views">
     <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
     <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-count">0</span></button>
+    <button type="button" role="tab" id="forms-tab" aria-controls="forms-panel" aria-selected="false" tabindex="-1">Forms <span id="form-count">0</span></button>
   </nav>
   <main>
     <section id="notes-panel" role="tabpanel" aria-labelledby="notes-tab">
@@ -48,6 +49,17 @@
         </div>
         <p id="report-status" role="status" aria-live="polite">The agent can publish several reports here.</p>
         <article id="report" class="report" aria-label="Selected report"></article>
+      </div>
+    </section>
+    <section id="forms-panel" role="tabpanel" aria-labelledby="forms-tab" hidden>
+      <div class="card">
+        <div class="report-toolbar">
+          <div class="select-wrap"><label for="form-select">Form</label><select id="form-select"><option value="">No forms published yet</option></select></div>
+          <button id="refresh-form" type="button">Refresh form</button>
+        </div>
+        <p id="form-status" role="status" aria-live="polite">The agent can publish questionnaires here.</p>
+        <form id="form-body"></form>
+        <small>Answers are sent to the agent inbox as one note and acknowledged like any note. Resending creates a new answer.</small>
       </div>
     </section>
   </main>
