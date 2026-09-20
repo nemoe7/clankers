@@ -35,16 +35,18 @@ const get = id => {
 };
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
+get('#forms-tab').setAttribute('aria-controls', 'forms-panel');
 get('#reports-panel').hidden = true;
+get('#forms-panel').hidden = true;
 const storage = new Map();
 const root = { dataset: {} };
 let counter = 0;
 let sendHandler;
-let state = { notes: [], reports: [], last_check: null };
+let state = { notes: [], reports: [], forms: [], last_check: null };
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
-  document: { querySelector: get, createElement: () => new Element(), documentElement: root },
+  document: { querySelector: get, createElement: () => new Element(), createTextNode: () => new Element(), documentElement: root },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `note-${++counter}` },
   AbortController,
@@ -58,6 +60,14 @@ const context = {
       const note = JSON.parse(options.body);
       sent.push(note);
       return sendHandler(note);
+    }
+    if (url.startsWith('/api/forms/') && url.endsWith('/submit')) {
+      const submission = JSON.parse(options.body);
+      sent.push(submission);
+      return response({ ...submission, at: new Date().toISOString() });
+    }
+    if (url.startsWith('/api/forms/')) {
+      return response({ id: 'f1', title: 'Smoke', questions: [{ id: 'q1', type: 'text', prompt: 'What?' }] });
     }
     return { ok: true, text: async () => '<h1>Report</h1>' };
   }
@@ -113,7 +123,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await sending;
   assert.equal(get('#note').value, 'new unsent draft');
   await tick();
-  state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
+  state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], forms: [{ id: 'f1', title: 'Smoke', updated_at: new Date().toISOString() }], last_check: null };
   await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
   assert.match(get('#history').children[0].lastElementChild.textContent, /Awaiting acknowledgement/);
@@ -123,5 +133,19 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.match(get('#history').children[0].lastElementChild.textContent, /Acknowledged/);
   assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
   assert.equal(get('#note').value, 'new unsent draft');
-  console.log('PASS: default theme, theme persistence, tabs, draft retention, Enter/IME, retries and receipt display');
+  get('#forms-tab').events.click();
+  await tick();
+  assert.equal(get('#forms-panel').hidden, false);
+  assert.equal(get('#forms-tab').attributes['aria-selected'], 'true');
+  assert.equal(get('#form-count').textContent, 1);
+  assert.equal(get('#form-select').children[0].value, 'f1');
+  assert.equal(get('#form-body').children.length, 2);
+  assert.equal(get('#form-body').children[0].children[0].textContent, 'What?');
+  assert.equal(get('#form-body').children[0].children[1].maxLength, 2000);
+  get('#form-body').children[0].children[1].value = 'an answer';
+  get('#form-body').events.submit(event({}));
+  await tick();
+  assert.match(get('#form-status').textContent, /Saved/);
+  assert.deepEqual(sent.at(-1).answers, { q1: 'an answer' });
+  console.log('PASS: default theme, theme persistence, tabs, draft retention, Enter/IME, retries, receipt display and form submission');
 })().catch(error => { console.error(error); process.exitCode = 1; });
