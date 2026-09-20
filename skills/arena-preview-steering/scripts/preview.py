@@ -657,7 +657,9 @@ def main():
   parser.add_argument("--state-dir", default="reports/arena-preview")
   commands = parser.add_subparsers(dest="command", required=True)
   serve = commands.add_parser("serve")
-  serve.add_argument("--port", type=int, default=8000)
+  serve.add_argument(
+    "--port", type=int, default=8000, help="Port to bind (default: 8000)"
+  )
   commands.add_parser("init")
   commands.add_parser("read")
   ack = commands.add_parser("ack")
