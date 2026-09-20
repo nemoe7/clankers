@@ -1,0 +1,140 @@
+# Arena quirks
+
+Behaviours of the Arena.ai hosting environment that cost work, recorded as observed rather than as
+documented anywhere upstream. Each entry is a platform behaviour and not a repository defect. Where
+a rule already carries the operational instruction, this file links to the rule instead of repeating
+it, because the rule is the authoritative copy.
+
+Each entry holds dated observations, newest last, in the form `### YYYY-MM-DD branch`. A date is the
+day the observation was made inside the sandbox; where the day was not recorded at the time, the
+entry says so rather than guessing. Everything here is traceable to something that happened in a
+session: a command that failed, a payload that came back, a file that was missing. Nothing is
+inferred from a single reading and presented as a pattern.
+
+The steering inbox that these observations were reported through has itself been wiped twice, so the
+notes that first carried them are gone. The durable record of what was changed in response lives in
+[CHANGELOG.md](../../CHANGELOG.md), whose Origins lines name the notes by ID.
+
+## GitHub token expiry mid-turn
+
+[rules/ARENA.md](../../rules/ARENA.md) carries the rule: `GH_TOKEN` can die mid-turn with nothing in
+the repository changed, `gh auth status` calls it invalid, pushes fail, and `gh auth setup-git` does
+not help.
+
+### 2026-09-21 arena/01a0be68-clankers
+
+A push failed after a commit that had changed nothing about authentication. Three consecutive
+`git push` attempts returned `fatal: could not read Username for 'https://github.com': terminal
+prompts disabled`, and `gh auth status` reported `X github.com: authentication failed — The
+github.com token in GH_TOKEN is no longer valid.` The fourth attempt, roughly a minute later and
+with nothing done in between but send two acknowledgements through the local preview, succeeded and
+pushed the commit.
+
+That contradicts the premise behind the rule's "retry once, then end the turn", which assumes the
+next turn is what brings a fresh token. In-turn revival is real, and the number of failures before
+it is not fixed: earlier observations on this branch include a turn where the first retry did not
+revive it and the push only landed after the turn ended. Both readings are recorded here because
+they point at different guidance, and choosing between them is the owner's call rather than mine —
+amending `rules/ARENA.md` is not something this file may do.
+
+## The question tool returns skipped at token death
+
+### 2026-09-21 arena/01a0be68-clankers
+
+With the token dead, a question block sent to the owner returned `{"answers": [], "skipped": true}`:
+no answers, no error, and no visible sign to the agent of why. The owner's standing instruction is
+to attempt the question tool at token death precisely so this could be measured, and this is the
+fourth attempt recorded. Every one has come back skipped.
+
+A question block that is actually answered while the token is dead therefore remains untested, and
+the experiment stays open. What the four readings do establish is that a skipped block is silent: it
+does not end the turn, does not raise, and does not tell the agent whether the owner saw anything.
+
+## Mid-turn sandbox restore
+
+A restore resets the workspace to an earlier snapshot while the turn is still running. The branch
+HEAD goes back to the branch base, every gitignored directory is deleted, background processes are
+killed, and the preview's SQLite state is removed. File content that the snapshot holds is
+preserved, so work that was committed and pushed survives intact on the remote; work that was only
+in the working tree survives as uncommitted differences against the base commit.
+
+### 2026-09-21 arena/01a0be68-clankers — first restore
+
+The reset deleted `.venv`, killed the preview server and wiped `reports/arena-preview/state.sqlite3`,
+taking 111 steering notes and their receipts with it. Recovery was `git fetch -q origin <branch>`
+followed by `git reset --mixed FETCH_HEAD`, which restored HEAD to the pushed tip and left the
+working tree alone. The notes were not recoverable, and the CHANGELOG Origins lines are the only
+surviving record of them.
+
+### 2026-09-21 arena/01a0be68-clankers — second restore
+
+The same shape, roughly two hours later, with the branch pushed and therefore the code safe: HEAD
+was at the base commit `c3c11b3`, `.venv` and the state directory were gone, the server was dead,
+and the steering inbox held nothing. Recovery took five steps — fetch and mixed reset to the remote
+tip, rebuild the venv and install the pinned `ruff` from `ruff.toml` alongside `markdown-it-py`,
+restart the preview server, rebuild the whole task list from what the session still held, and write
+the JSON backup that `task-import` reads. The second restore is the reason that backup exists: the
+feature had shipped minutes earlier and had not yet been used, so the first wipe of the task list
+had to be reconstructed by hand.
+
+A restore also leaves the repository dirtier than it found it in one specific way: running the
+Python harness creates `__pycache__` inside the live skill copy, which makes a `diff -r` parity
+check report a difference that is not a difference in any tracked file.
+
+## A refresh reset Arena's message history while the turn continued
+
+### 2026-09-21 arena/01a0be68-clankers
+
+The owner reported that a browser refresh made Arena reset the visible message history, that it was
+unclear whether the agent still held the context of what had been done, and that a later refresh let
+the same turn carry on rather than ending it.
+
+The agent's working state does not live in the page. It is the sandbox filesystem plus the preview's
+SQLite inbox, and the reasoning the turn runs on is carried by the harness rather than by the
+transcript on display, so a refresh that clears the visible history reaches neither. What was
+verified at the time rather than assumed: local HEAD and the remote tip were the same commit, with
+nothing uncommitted but two untracked handoff files that are deliberately not committed.
+
+The second half is the stranger one and it is recorded as observed, not explained: the turn survived
+the loss of the transcript that displays it.
+
+## The encoding host tiktoken needs is unreachable
+
+### 2026-09-21 arena/01a0be68-clankers
+
+After the first restore, `maintenance/check.py` could not run: fetching its encoding from
+`openaipublic.blob.core.windows.net` failed with an `SSLZeroReturnError`, and retrying did not help.
+PyPI stayed reachable, so rebuilding the venv worked while the encoding host did not.
+
+The consequence is that the instruction-budget gate cannot be run in this sandbox, and every
+CHANGELOG Checks line since says so rather than implying the gate passed. What covers the gap is
+`maintenance/check_measurements.py`, which measures the files without tiktoken, plus a `diff -r`
+across the three skill copies for parity.
+
+## `gh pr edit --body-file` fails
+
+### 2026-09 arena/01a0be68-clankers, day not recorded
+
+Editing a pull request body from a file failed, and patching through the API worked instead:
+`gh api -X PATCH` with the body in the request. Recorded because the two commands look
+interchangeable and only one of them runs here.
+
+## `git am` does not carry work across sessions
+
+### 2026-09 arena/01a0be68-clankers, day not recorded
+
+The owner tried patch files as a way to move uncommitted work from one session to the next and found
+`git am` useless for it. What does carry work across a session boundary is a pushed branch, which is
+why the standing instruction is to try a push before ending a turn, and why an uncommitted handoff
+file is treated as a last resort rather than a plan.
+
+## Clipboard writes depend on the page being a secure context
+
+### 2026-09-21 arena/01a0be68-clankers
+
+`navigator.clipboard.writeText` is only available to a page in a secure context, so a copy button
+cannot rely on it: over the proxied preview host, which is HTTPS, it is available, and over a plain
+HTTP port forward it is not. The preview therefore tries the API first, falls back to a hidden
+textarea and `document.execCommand('copy')`, and reports which of the two paths it used — or that
+the browser allowed neither — because the owner asked that the caveat carry its context rather than
+sitting as a bare warning.
