@@ -90,6 +90,7 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 #report-receipt { margin: 10px 0 0; }
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; }
+#refresh-report { width: 44px; height: 44px; }
 a { color: var(--accent); text-underline-offset: 3px; }
 .report { overflow-wrap: anywhere; overflow-x: auto; }
 .report h1 { margin: 8px 0 12px; }
