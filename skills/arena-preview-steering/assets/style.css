@@ -60,7 +60,10 @@ small, .muted, #draft, #last-check { color: var(--muted); font-size: 13px; }
 #history { list-style: none; padding: 0; margin: 20px 0 0; max-height: 65vh; overflow-y: auto; scrollbar-gutter: stable; }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 14px; border-radius: 8px; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
-.receipt { font-size: 12px; color: var(--muted); }
+.receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.answer { margin-top: 10px; }
+.answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; }
+.answer.note { font-size: 13px; color: var(--muted); white-space: pre-wrap; }
 #report-receipt { margin: 10px 0 0; }
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; }

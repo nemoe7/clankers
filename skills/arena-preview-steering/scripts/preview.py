@@ -167,22 +167,38 @@ class Store:
   def __init__(self, directory, create=False):
     directory = Path(directory).resolve()
     self.path = directory / "state.sqlite3"
-    if not create and not self.path.is_file():
+    existed = self.path.is_file()
+    if not create and not existed:
       raise FileNotFoundError(f"Inbox missing: {self.path}; start the preview first")
-    if create:
+    if create and not existed:
       directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-      with closing(self.connect()) as db, db:
-        db.executescript("""
-          CREATE TABLE IF NOT EXISTS notes (
-            seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
-            text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT
-          );
-          CREATE TABLE IF NOT EXISTS reports (
-            id TEXT PRIMARY KEY, title TEXT NOT NULL,
-            markdown TEXT NOT NULL, updated_at TEXT NOT NULL
-          );
-          CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-        """)
+    with closing(self.connect()) as db, db:
+      db.executescript("""
+        CREATE TABLE IF NOT EXISTS notes (
+          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
+          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
+          ack_kind TEXT, ack_text TEXT
+        );
+        CREATE TABLE IF NOT EXISTS reports (
+          id TEXT PRIMARY KEY, title TEXT NOT NULL,
+          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS submissions (
+          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
+          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
+          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT
+        );
+        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      """)
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
+      for column in ("ack_kind", "ack_text"):
+        if column not in columns:
+          db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
+      if "seq" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN seq INTEGER")
+        db.execute("UPDATE reports SET seq = rowid WHERE seq IS NULL")
+    if not existed:
       self.path.chmod(0o600)
 
   def connect(self):
@@ -206,6 +222,34 @@ class Store:
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
+  def submission(self, submission_id, report_id, text, at=None):
+    """Record report answers apart from user messages; the log never shows them."""
+    identifier(submission_id)
+    identifier(report_id)
+    note_text(text)
+    with closing(self.connect()) as db, db:
+      db.execute("BEGIN IMMEDIATE")
+      existing = db.execute(
+        "SELECT * FROM submissions WHERE id = ?", (submission_id,)
+      ).fetchone()
+      if existing:
+        if existing["text"] != text:
+          raise ValueError("This message ID already belongs to different text")
+        return dict(existing)
+      db.execute(
+        "INSERT INTO submissions (id, report_id, text, at) VALUES (?, ?, ?, ?)",
+        (submission_id, report_id, text, at or now()),
+      )
+      return dict(
+        db.execute(
+          "SELECT * FROM submissions WHERE id = ?", (submission_id,)
+        ).fetchone()
+      )
+
+  def submissions(self):
+    with closing(self.connect()) as db:
+      return [dict(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")]
+
   def state(self):
     with closing(self.connect()) as db:
       return {
@@ -213,7 +257,7 @@ class Store:
         "reports": [
           dict(row)
           for row in db.execute(
-            "SELECT id, title, updated_at FROM reports ORDER BY title, id"
+            "SELECT id, title, updated_at, seq FROM reports ORDER BY seq, id"
           )
         ],
         "last_check": dict(db.execute("SELECT key, value FROM meta")).get("last_check"),
@@ -222,24 +266,41 @@ class Store:
   def read(self):
     with closing(self.connect()) as db, db:
       pending = [
-        dict(row)
+        dict(row) | {"kind": "note"}
         for row in db.execute(
           "SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq"
         )
       ]
+      pending += [
+        dict(row) | {"kind": "report"}
+        for row in db.execute(
+          "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq"
+        )
+      ]
+      pending.sort(key=lambda item: item["at"])
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
       return {"checked_at": checked, "pending": pending}
 
-  def acknowledge(self, ids):
+  def acknowledge(self, ids, kind, text):
+    if kind not in {"note", "reply"}:
+      raise ValueError("Every acknowledgement is a note or a reply, with its text")
+    text = note_text(text)
+    stamp = now()
     with closing(self.connect()) as db, db:
-      for note_id in ids:
-        cursor = db.execute(
-          "UPDATE notes SET acknowledged_at = COALESCE(acknowledged_at, ?) WHERE id = ?",
-          (now(), identifier(note_id)),
-        )
-        if not cursor.rowcount:
-          raise ValueError(f"Unknown note: {note_id}; no receipts written")
+      for record_id in ids:
+        identifier(record_id)
+        for table in ("notes", "submissions"):
+          cursor = db.execute(
+            f"""UPDATE {table} SET acknowledged_at = COALESCE(acknowledged_at, ?),
+               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text)
+               WHERE id = ?""",
+            (stamp, kind, text, record_id),
+          )
+          if cursor.rowcount:
+            break
+        else:
+          raise ValueError(f"Unknown note: {record_id}; no receipts written")
 
   def publish(self, report_id, title, source):
     identifier(report_id)
@@ -254,9 +315,14 @@ class Store:
       raise ValueError("Report exceeds the 2 MB limit; split it into reports")
     text = data.decode("utf-8")
     with closing(self.connect()) as db, db:
+      highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
-        "INSERT OR REPLACE INTO reports VALUES (?, ?, ?, ?)",
-        (report_id, title, text, now()),
+        """INSERT INTO reports (id, title, markdown, updated_at, seq)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET title = excluded.title,
+             markdown = excluded.markdown, updated_at = excluded.updated_at,
+             seq = COALESCE(reports.seq, excluded.seq)""",
+        (report_id, title, text, now(), highest + 1),
       )
 
   def report(self, report_id):
@@ -335,7 +401,7 @@ class Store:
           )
         rendered = ", ".join(value) if value else "(skipped)"
       lines.append(f"  {field_id}: {rendered}")
-    return self.note(note_id, "\n".join(lines))
+    return self.submission(note_id, report_id, "\n".join(lines))
 
 
 def open_link(renderer, tokens, index, options, env):
@@ -408,6 +474,8 @@ def handler(store):
           try:
             for item in state["notes"]:
               item["html"] = render(item["text"])
+              if item.get("ack_kind") == "reply" and item.get("ack_text"):
+                item["ack_html"] = render(item["ack_text"])
           except RuntimeError as error:
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))
@@ -486,6 +554,8 @@ def main():
   commands.add_parser("read")
   ack = commands.add_parser("ack")
   ack.add_argument("ids", nargs="+")
+  ack.add_argument("--reply", help="Markdown answer shown in the message log")
+  ack.add_argument("--note", help="Short plain answer shown in the message log")
   publish = commands.add_parser("publish")
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
@@ -505,7 +575,10 @@ def main():
     elif args.command == "read":
       print(json.dumps(store.read(), ensure_ascii=False, indent=2))
     elif args.command == "ack":
-      store.acknowledge(args.ids)
+      if bool(args.reply) == bool(args.note):
+        raise ValueError("Choose exactly one of --reply or --note")
+      kind = "reply" if args.reply else "note"
+      store.acknowledge(args.ids, kind, args.reply or args.note)
       print("Acknowledged: " + ", ".join(args.ids))
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)

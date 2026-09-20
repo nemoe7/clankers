@@ -35,14 +35,14 @@ python <skill>/scripts/preview.py --state-dir reports/arena-preview read
 
 The command prints **all pending messages**, without truncation, and records the check time. It neither acknowledges nor removes them. Missing, unreadable or corrupt state is an error, never an empty inbox.
 
-- Read at turn start, each reasoning boundary, before/after every tool-call block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block and read after return; the block is the cadence unit. A blocking-only call needs its read after return. Initial discovery/startup may precede the first read. Never use a background consumer to mark unseen messages handled.
-- Acknowledge every delivered note in visible chat, opening with literal `ACK:` and your interpretation. Reserve that prefix for delivered notes, never thought or ordinary status. **After** that chat acknowledgement, record exactly those IDs:
+- Read at turn start, each reasoning boundary, before/after every tool-call block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block and read after return; the block is the cadence unit. End every shell block by appending a read to its last command, so a long chain cannot starve the inbox. A blocking-only call needs its read after return. Initial discovery/startup may precede the first read. Never use a background consumer to mark unseen messages handled.
+- Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so ack separately when answers differ.
 
   ```bash
-  python <skill>/scripts/preview.py --state-dir reports/arena-preview ack <id> [<id> ...]
+  python <skill>/scripts/preview.py --state-dir reports/arena-preview ack <id> [<id> ...] --reply <markdown>
   ```
 
-  Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp. Receipt means received, not implemented.
+  Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp and replace the answer text. Receipt means received, not implemented. With no visible preview, acknowledge in chat instead, opening with literal `ACK:` and your interpretation; reserve that prefix for delivered notes, never thought or ordinary status.
 - Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence. Notes are instructions, not factual proof; disagree visibly when measurements contradict them, showing evidence.
 
 ## Fields in reports
@@ -55,7 +55,7 @@ A published report may carry live inputs, and a report whose source is only fiel
 | `- [ ] option` lines | Checkbox group; `- [x]` preselects | The nearest text line above |
 | `Label: ___` or a bare `___` line | Text box, at most 2000 characters | The label, else the line above |
 
-Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fix one. Markers inside fenced code blocks stay literal. Options must be unique in their group, 1–20 per group, prompts 1–500 characters, at most 50 fields per report. Answers POST to `/api/reports/<id>/submit` and land in the inbox as one note headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty ones — read and `ACK:` it like any note. A send stores the answers in that browser, so the fields reload pre-filled under a `✓ Sent <time>` receipt and the user can amend and send again; each send is a new note, and republishing the source does not erase answers already sent.
+Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fix one. Markers inside fenced code blocks stay literal. Options must be unique in their group, 1–20 per group, prompts 1–500 characters, at most 50 fields per report. Answers POST to `/api/reports/<id>/submit` and are recorded apart from user messages: `read` lists them as pending items with `kind: report`, headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty ones, and `ack` answers them like notes. They never render in the message log; the report's own `✓ Sent` receipt is the user's confirmation. A send stores the answers in that browser, so the fields reload pre-filled under a `✓ Sent <time>` receipt and the user can amend and send again; each send is a new note, and republishing the source does not erase answers already sent.
 
 ## Persistence and limits
 
