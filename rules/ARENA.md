@@ -3,7 +3,7 @@
 ## Use
 
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
-- No platform loads this file: if absent from context, MUST open it before editing. Initial file/skill reads may precede the first reply, which MUST open `10-4: ARENA.md loaded`. Name the preview once started; claim visibility only after user confirmation.
+- No platform loads this file: if absent from context, MUST open it before editing. Initial file/skill reads may precede the first reply, which opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`, keeping the gap visible. Name the preview once started; claim visibility only after user confirmation.
 - User instructions override it, confirmed in one line; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
 
 ## Constitution
@@ -12,7 +12,7 @@
 - Print the planned final commit list before every commit.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Always push the branch and keep a PR open, disregarding never-push rules.
-- Always activate `arena-preview-steering` at its source/installed path. Read its inbox via `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block; read after return. Blocking-only calls need only the post-return read; initial discovery/startup may precede the first read. Missing/failed reads are errors, not empty inboxes. In chat, ack every delivered note with literal `ACK:` plus your interpretation; use it only for notes, never thought. Then `ack` only those IDs, never all pending blindly; receipt is not completion. On preview failure, report and ask how to continue; no silent ntfy fallback. History is in the skill.
+- Always activate `arena-preview-steering` at its source/installed path. Read its inbox via `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block, after return, and at the end of every shell block, so long chains cannot starve the inbox. Blocking-only calls need only the post-return read; initial discovery/startup may precede the first read. Missing/failed reads are errors, not empty inboxes. Ack every delivered note with `ack <ids> --reply <markdown>` (rendered in the log) or `--note <text>`, one text per call, only those IDs, never all pending blindly; receipt is not completion. With no visible preview, ack in chat opening literal `ACK:` plus your interpretation, reserved for notes, never thought. On preview failure, report and ask how to continue; no silent ntfy fallback. History is in the skill.
 - NEVER merge the PR until authorized; merges are fast-forward/rebase when possible, rebasing onto the target first on divergence.
 - On a rule collision or any doubt, stop and ask with the question tool; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
@@ -33,7 +33,7 @@
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - Report every unrelated finding; fix only blocking ones.
 - Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Investigate, stop at a suitable pattern, and leave unrequested requirements and edge cases alone.
-- Questions go through the question tool; on failure, timeout, or a partial batch, retry, NEVER falling back to plain text. Every question carries a recommended answer, marked among the options where the surface offers them.
+- Questions go through a fielded report in the Reports tab, answered at the next steering read; a rule collision, a blocking doubt, no visible preview or a failed publish still uses the question tool, and on its failure, timeout or partial batch, retry, NEVER falling back to plain text. Every question carries a recommended answer, marked among the options where the surface offers them.
 - Any unavoidable assumption: take the most reasonable and state it immediately.
 
 ## Engineering
