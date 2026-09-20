@@ -69,18 +69,33 @@ function showHistory(notes) {
       node = document.createElement('li');
       node.className = 'message';
       const text = document.createElement('div');
-      node.append(text, document.createElement('div'));
+      node.append(text, document.createElement('div'), document.createElement('div'));
       messageNodes.set(item.id, node);
     }
     const text = node.children[0];
     text.className = item.html === undefined ? 'raw-message' : 'report';
     if (item.html === undefined) text.textContent = item.text;
     else text.innerHTML = item.html;
-    const receipt = node.lastElementChild;
+    const receipt = node.children[1];
     receipt.className = 'receipt';
-    receipt.textContent = item.acknowledged_at
-      ? `Acknowledged ${time(item.acknowledged_at)} · Saved ${time(item.at)}`
-      : `Saved ${time(item.at)} · Awaiting acknowledgement`;
+    receipt.textContent = `${item.acknowledged_at
+      ? `ACK-ed ${time(item.acknowledged_at)} · Saved ${time(item.at)}`
+      : `Saved ${time(item.at)} · Awaiting ACK`} · id ${item.id.slice(0, 7)}`;
+    const answer = node.children[2];
+    if (item.ack_text && item.ack_kind === 'reply') {
+      answer.className = 'answer reply report';
+      answer.hidden = false;
+      if (item.ack_html === undefined) answer.textContent = item.ack_text;
+      else answer.innerHTML = item.ack_html;
+    } else if (item.ack_text) {
+      answer.className = 'answer note';
+      answer.hidden = false;
+      answer.textContent = item.ack_text;
+    } else {
+      answer.className = 'answer';
+      answer.hidden = true;
+      answer.textContent = '';
+    }
     history.append(node);
   }
 }
@@ -99,12 +114,12 @@ async function refreshState() {
       const select = $('#report-select');
       const selected = select.value || stored('report');
       select.replaceChildren();
-      for (const report of state.reports) {
+      state.reports.forEach((report, position) => {
         const option = document.createElement('option');
         option.value = report.id;
-        option.textContent = report.title;
+        option.textContent = `${position + 1}. ${report.title}`;
         select.append(option);
-      }
+      });
       if (!state.reports.length) {
         const option = document.createElement('option');
         option.value = '';

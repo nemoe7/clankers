@@ -98,20 +98,37 @@ with tempfile.TemporaryDirectory() as directory:
       request("POST", "/api/notes", '{"id":"message-1","text":"changed"}', auth)[0]
       == 400
     )
-    try:
-      store.acknowledge(["message-1", "unknown"])
-      raise AssertionError("Unknown receipt accepted")
-    except ValueError:
-      assert store.read()["pending"]
-    store.acknowledge(["message-1"])
+    for broken in (
+      (["message-1", "unknown"], "reply", "done"),
+      (["message-1"], "shout", "done"),
+      (["message-1"], "reply", ""),
+      (["message-1"], "reply", "x" * 4001),
+    ):
+      try:
+        store.acknowledge(*broken)
+        raise AssertionError(f"Invalid receipt accepted: {broken}")
+      except ValueError:
+        assert store.read()["pending"]
+    store.acknowledge(["message-1"], "reply", "Fixed in `preview.py`.")
     stamp = store.state()["notes"][0]["acknowledged_at"]
-    store.acknowledge(["message-1"])
-    assert store.state()["notes"][0]["acknowledged_at"] == stamp
+    assert store.state()["notes"][0]["ack_text"] == "Fixed in `preview.py`."
+    store.acknowledge(["message-1"], "note", "and rechecked")
+    row = store.state()["notes"][0]
+    assert row["acknowledged_at"] == stamp
+    assert row["ack_kind"] == "note" and row["ack_text"] == "and rechecked"
     assert preview.Store(root).read()["pending"] == []
     assert len(preview.Store(root).state()["notes"]) == 1
     status, _, state_body = request("GET", "/api/state")
     assert status == 200
-    assert "&lt;script&gt;" in json.loads(state_body)["notes"][0]["html"]
+    served_note = json.loads(state_body)["notes"][0]
+    assert "&lt;script&gt;" in served_note["html"]
+    assert "ack_html" not in served_note and served_note["ack_text"] == "and rechecked"
+    store.acknowledge(["message-1"], "reply", "<script>alert(1)</script> **safe**")
+    status, _, state_body = request("GET", "/api/state")
+    served_note = json.loads(state_body)["notes"][0]
+    assert "&lt;script&gt;" in served_note["ack_html"]
+    assert "<strong>safe</strong>" in served_note["ack_html"]
+    assert "<script>" not in served_note["ack_html"]
     status, _, rendered = request("GET", "/api/reports/first/html")
     assert status == 200
     rendered = json.loads(rendered)
@@ -162,6 +179,14 @@ with tempfile.TemporaryDirectory() as directory:
       encoding="utf-8",
     )
     store.publish("fields", "Fielded", fielded)
+    assert [row["id"] for row in store.state()["reports"]] == [
+      "first",
+      "second",
+      "fields",
+    ]
+    assert [row["seq"] for row in store.state()["reports"]] == [1, 2, 3]
+    store.publish("first", "First <report>", source)
+    assert [row["seq"] for row in store.state()["reports"]] == [1, 2, 3]
     blocks, questions = preview.parse_fields(fielded.read_text(encoding="utf-8"))
     assert [question["type"] for question in questions] == [
       "checkbox",
@@ -210,9 +235,10 @@ with tempfile.TemporaryDirectory() as directory:
       }
     )
     assert request("POST", "/api/reports/fields/submit", report_answer, auth)[0] == 201
-    answered = next(
-      row for row in store.state()["notes"] if row["text"].startswith("REPORT fields")
-    )["text"]
+    assert not [
+      row for row in store.state()["notes"] if row["text"].startswith("REPORT")
+    ]
+    answered = store.submissions()[-1]["text"]
     assert "Fielded:" in answered and "name: ada" in answered
     assert "severity: high" in answered and "notes: (skipped)" in answered
     for broken in (
@@ -266,9 +292,7 @@ with tempfile.TemporaryDirectory() as directory:
       assert (
         request("POST", "/api/reports/fields/submit", json.dumps(bad), auth)[0] == 400
       )
-    sent = [
-      row for row in store.state()["notes"] if row["text"].startswith("REPORT fields")
-    ]
+    sent = store.submissions()
     submission = json.dumps(
       {
         "id": "sub-1",
@@ -284,6 +308,7 @@ with tempfile.TemporaryDirectory() as directory:
       row for row in store.read()["pending"] if row["text"].startswith("REPORT fields")
     ]
     assert len(pending) == len(sent) + 1
+    assert pending[-1]["kind"] == "report"
     answered = pending[-1]["text"]
     assert (
       "Fielded:" in answered
@@ -293,16 +318,9 @@ with tempfile.TemporaryDirectory() as directory:
       and "notes: (skipped)" in answered
     )
     assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
-    assert (
-      len(
-        [
-          row
-          for row in store.state()["notes"]
-          if row["text"].startswith("REPORT fields")
-        ]
-      )
-      == len(sent) + 1
-    )
+    assert len(store.submissions()) == len(sent) + 1
+    store.acknowledge([pending[-1]["id"]], "note", "read")
+    assert pending[-1]["id"] not in {row["id"] for row in store.read()["pending"]}
     assert (
       request(
         "POST",
@@ -317,5 +335,24 @@ with tempfile.TemporaryDirectory() as directory:
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, explicit receipts, reports, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, reports, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )
+
+with tempfile.TemporaryDirectory() as legacy_dir:
+  legacy = Path(legacy_dir)
+  db = sqlite3.connect(legacy / "state.sqlite3")
+  db.execute(
+    """CREATE TABLE notes (
+      seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
+      text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT
+    )"""
+  )
+  db.execute(
+    "INSERT INTO notes (id, text, at) VALUES ('old', 'kept', '2026-01-01T00:00:00+00:00')"
+  )
+  db.commit()
+  db.close()
+  migrated = preview.Store(legacy, create=True)
+  assert [row["id"] for row in migrated.state()["notes"]] == ["old"]
+  migrated.acknowledge(["old"], "note", "still here")
+  assert migrated.state()["notes"][0]["ack_text"] == "still here"
