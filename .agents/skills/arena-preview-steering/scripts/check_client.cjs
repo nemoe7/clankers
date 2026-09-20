@@ -87,15 +87,17 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   const log = get('#history');
   assert.equal(body.dataset.chrome, 'open');
   assert.equal(get('#chrome').getAttribute('aria-expanded'), 'true');
-  assert.equal(get('#chrome').textContent, 'Close bar');
+  assert.equal(get('#chrome').getAttribute('aria-label'), 'Collapse bar');
+  assert.equal(get('#chrome').textContent, '▲');
   get('#chrome').events.click();
   assert.equal(body.dataset.chrome, 'closed');
   assert.equal(get('#chrome').getAttribute('aria-expanded'), 'false');
-  assert.equal(get('#chrome').textContent, 'Open bar');
+  assert.equal(get('#chrome').getAttribute('aria-label'), 'Expand bar');
+  assert.equal(get('#chrome').textContent, '▼');
   assert.equal(storage.get('arena-preview-v1:chrome'), 'closed');
   get('#chrome').events.click();
   assert.equal(body.dataset.chrome, 'open');
-  assert.equal(get('#chrome').textContent, 'Close bar');
+  assert.equal(get('#chrome').textContent, '▲');
   get('#composer-toggle').events.click();
   assert.equal(body.dataset.composer, 'closed');
   assert.equal(get('#composer-toggle').getAttribute('aria-expanded'), 'false');
@@ -228,5 +230,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
   assert.equal(get('#report-count').textContent, 1);
-  console.log('PASS: default theme, theme persistence, the pinned bar and composer toggles with persistence, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle and the composer toggle with persistence, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });

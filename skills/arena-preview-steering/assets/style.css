@@ -66,6 +66,8 @@ small, .muted, #draft, #last-check { color: var(--muted); font-size: 13px; }
 .notice { color: var(--muted); border-left: 2px solid var(--border); padding-left: 12px; font-size: 13px; }
 #send-status, #connection, #report-status { font-size: 14px; overflow-wrap: anywhere; }
 #connection, #last-check { margin-block: 0; padding-block: 0; }
+p.muted { margin-block: 4px; }
+.chevron { flex: none; min-width: 44px; padding: 6px 10px; line-height: 1; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 0 14px; border-radius: 8px; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
