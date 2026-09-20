@@ -223,6 +223,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert '#preview-note[aria-pressed="true"]' not in page
     assert "--focus: #524d47;" in page and "#f4ca93" not in page
     assert "--focus: #8f5b13;" in page
+    assert ":not(pre) > code { background: var(--bubble)" in page
+    assert ".report :not(pre) > code" not in page
+    assert "background: none; padding: 0; }" in page
     duplicate = root / "duplicate.md"
     duplicate.write_text("Areas:\n\n- [ ] ui\n- [ ] ui\n", encoding="utf-8")
     try:
