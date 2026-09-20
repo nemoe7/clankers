@@ -8,7 +8,7 @@
   --muted: #b9b4ac;
   --border: #56504a;
   --accent: #e5bb8b;
-  --focus: #f4ca93;
+  --focus: #524d47;
   font-family: system-ui, sans-serif;
 }
 :root[data-theme="light"] {
