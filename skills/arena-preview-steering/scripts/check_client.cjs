@@ -12,6 +12,7 @@ class Element {
     this.disabled = false;
     this.children = [];
     this.attributes = {};
+    this.dataset = {};
     this.events = {};
     this.scrollTop = 0;
     this.scrollHeight = 0;
@@ -46,6 +47,7 @@ const root = { dataset: {} };
 let counter = 0;
 let sendHandler;
 let state = { notes: [], reports: [], last_check: null };
+let stateFails = false;
 let reportFields = 0;
 const sent = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
@@ -58,7 +60,7 @@ const context = {
   clearTimeout,
   setInterval: () => {},
   fetch: async (url, options) => {
-    if (url === '/api/state') return response(state);
+    if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response(state);
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
       const note = JSON.parse(options.body);
@@ -105,7 +107,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#composer-toggle').events.click();
   assert.equal(body.dataset.composer, 'closed');
   assert.equal(get('#composer-toggle').getAttribute('aria-expanded'), 'false');
-  assert.equal(get('#composer-toggle').textContent, 'Show composer');
+  assert.equal(get('#composer-toggle').getAttribute('aria-label'), 'Show composer');
+  assert.equal(get('#composer-toggle').textContent, '✎');
   assert.equal(storage.get('arena-preview-v1:composer'), 'closed');
   log.scrollHeight = 500; log.clientHeight = 100; log.scrollTop = 0;
   get('#composer-toggle').events.click();
@@ -114,6 +117,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#note').value = '**draft**';
   await get('#preview-note').events.click();
   assert.equal(get('#note').hidden, true);
+  assert.equal(get('#preview-note').getAttribute('aria-pressed'), 'true');
+  assert.equal(get('#preview-note').textContent, 'MD 👁');
   assert.equal(get('#draft-preview').innerHTML, '<strong>draft</strong>');
   assert.equal(sent.length, 0);
   await get('#preview-note').events.click();
@@ -190,6 +195,17 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(log.scrollTop, 0);
   assert.equal(log.children.at(-1).children[1].textContent.slice(-8), 'id three');
+  assert.equal(get('#connection-dot').dataset.state, 'ok');
+  assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
+  assert.equal(get('#connection-text').textContent, '3 messages saved');
+  stateFails = true;
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#connection-dot').dataset.state, 'down');
+  assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Disconnected');
+  assert.match(get('#connection-text').textContent, /Connection failed: server gone/);
+  stateFails = false;
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#connection-dot').dataset.state, 'ok');
   state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
   reportFields = 2;
   storage.set('arena-preview-v1:answers:r1', JSON.stringify({ answers: { name: 'ada', areas: ['ui'] }, at: '2026-09-20T12:00:00.000Z' }));
@@ -236,5 +252,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
   assert.equal(get('#report-count').textContent, 1);
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the composer toggle and the sun/moon theme button with persistence, 24-hour timestamps, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -24,19 +24,19 @@
           <div class="row">
             <div class="stack">
               <h2 id="history-title">Message log</h2>
-              <p id="connection" role="status">Connecting…</p>
+              <p id="connection" role="status"><span id="connection-dot" class="dot" role="img" aria-label="Connecting"></span><span id="connection-text">Connecting…</span></p>
               <p id="last-check" class="muted">Agent has not checked this inbox yet.</p>
             </div>
             <span class="row tight">
               <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages">↻</button>
-              <button id="composer-toggle" type="button" aria-expanded="true" aria-controls="compose">Hide composer</button>
+              <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer">✎</button>
             </span>
           </div>
           <ol id="history" aria-label="Messages, oldest first"></ol>
         </section>
         <section class="card compose" id="compose" aria-label="Send a steer">
           <form id="form">
-            <div class="row"><label for="note">Your message</label><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">Preview</button></div>
+            <div class="row"><label for="note">Your message</label><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">MD 👁</button></div>
             <textarea id="note" name="note" rows="3" maxlength="4000" required placeholder="What should happen next?"></textarea>
             <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
             <div class="row">
