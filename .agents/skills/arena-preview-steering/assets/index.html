@@ -8,7 +8,6 @@
 </head>
 <body data-chrome="open" data-composer="open">
   <header class="topbar">
-    <button id="chrome" class="icon-button" type="button" aria-expanded="true" aria-controls="topbar-row" aria-label="Collapse bar">▲</button>
     <div id="topbar-row" class="topbar-row">
       <nav role="tablist" aria-label="Workspace views">
         <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
@@ -16,20 +15,23 @@
       </nav>
       <button id="theme" class="icon-button" type="button" aria-label="Switch to light mode">☀</button>
     </div>
+    <button id="chrome" class="icon-button" type="button" aria-expanded="true" aria-controls="topbar-row" aria-label="Collapse bar">▲</button>
   </header>
   <main>
     <section id="notes-panel" role="tabpanel" aria-labelledby="notes-tab">
       <div class="notes-layout">
         <section class="card log-card" aria-labelledby="history-title">
           <div class="row">
-            <h2 id="history-title">Message log</h2>
+            <div class="stack">
+              <h2 id="history-title">Message log</h2>
+              <p id="connection" role="status">Connecting…</p>
+              <p id="last-check" class="muted">Agent has not checked this inbox yet.</p>
+            </div>
             <span class="row tight">
-              <button id="refresh-notes" type="button">Refresh</button>
+              <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages">↻</button>
               <button id="composer-toggle" type="button" aria-expanded="true" aria-controls="compose">Hide composer</button>
             </span>
           </div>
-          <p id="connection" role="status">Connecting…</p>
-          <p id="last-check" class="muted">Agent has not checked this inbox yet.</p>
           <ol id="history" aria-label="Messages, oldest first"></ol>
         </section>
         <section class="card compose" id="compose" aria-label="Send a steer">
@@ -37,8 +39,13 @@
             <div class="row"><label for="note">Your message</label><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">Preview</button></div>
             <textarea id="note" name="note" rows="3" maxlength="4000" required placeholder="What should happen next?"></textarea>
             <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
-            <small>Enter to send · Shift+Enter for a new line</small>
-            <div class="row"><p id="send-status" role="status" aria-live="polite">Nothing sent yet.</p><button id="send" type="submit">Send note</button></div>
+            <div class="row">
+              <div class="stack">
+                <small>Enter to send · Shift+Enter for a new line</small>
+                <p id="send-status" role="status" aria-live="polite">Nothing sent yet.</p>
+              </div>
+              <button id="send" type="submit">Send note</button>
+            </div>
           </form>
         </section>
       </div>
