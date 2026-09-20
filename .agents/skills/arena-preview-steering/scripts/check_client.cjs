@@ -162,8 +162,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
   assert.match(get('#history').children[0].children[1].textContent, /Awaiting ACK/);
   assert.match(get('#history').children[0].children[1].textContent, /id one$/);
-  assert.match(get('#history').children[0].children[1].textContent, /\d{2}:\d{2}:\d{2}/);
-  assert.doesNotMatch(get('#history').children[0].children[1].textContent, /[AP]M/);
+  const stamp = get('#history').children[0].children[1].textContent;
+  assert.match(stamp, /[A-Z][a-z]{2} \d{2}, \d{2}:\d{2}/);
+  assert.doesNotMatch(stamp, /\d{2}:\d{2}:\d{2}/);
+  assert.doesNotMatch(stamp, /\b\d{4}\b/);
+  assert.doesNotMatch(stamp, /[AP]M/);
   assert.equal(get('#history').children[0].children[2].hidden, true);
   state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
   state.notes[0].acknowledged_at = new Date().toISOString();
@@ -252,5 +255,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
   assert.equal(get('#report-count').textContent, 1);
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  await tick();
+  state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
+  await get('#refresh-notes').events.click();
+  assert.match(get('#history').children.at(-1).children[1].textContent, /[A-Z][a-z]{2} \d{2} \d{2}, \d{2}:\d{2}/);
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, two-tab navigation, draft retention, Enter/IME, retries, receipts with visible note IDs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });
