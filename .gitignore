@@ -1,3 +1,6 @@
 __pycache__/
 .venv/
-reports/
+reports/*
+!reports/arena-preview/
+reports/arena-preview/*
+!reports/arena-preview/handoff.md
