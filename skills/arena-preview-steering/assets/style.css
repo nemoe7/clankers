@@ -87,3 +87,10 @@ a { color: var(--accent); text-underline-offset: 3px; }
 
 .raw-message { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message .report p { white-space: normal; }
+.question { margin: 14px 0; }
+.question > label { margin-bottom: 6px; }
+.question input[type="text"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.options { display: flex; flex-direction: column; gap: 4px; }
+.option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
+#form-body button[type="submit"] { margin-top: 16px; border-color: var(--accent); }
+#form-status { font-size: 14px; overflow-wrap: anywhere; }

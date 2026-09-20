@@ -45,9 +45,19 @@ The command prints **all pending messages**, without truncation, and records the
   Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp. Receipt means received, not implemented.
 - Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence. Notes are instructions, not factual proof; disagree visibly when measurements contradict them, showing evidence.
 
+## Forms
+
+Send the user a questionnaire by publishing JSON:
+
+```bash
+python <skill>/scripts/preview.py --state-dir reports/arena-preview publish-form <form.json> --id <id> --title <title>
+```
+
+A form is a UTF-8 `.json` file of at most 256 KB: `{"questions": [...]}` with 1–50 questions; each has a unique identifier `id`, a `type` of `text`, `choice` or `checkbox`, a `prompt` of 1–500 characters, and `choice`/`checkbox` add `options` with 2–20 unique strings of 1–200 characters. The UI's Forms tab renders it. Answers POST to `/api/forms/<id>/submit` and land in the inbox as one note headed `FORM <id> <title>:`, one indented line per question, `(skipped)` for unanswered ones — read and `ACK:` it like any note. Resending is a new answer; invalid answers return an error and keep the user's input.
+
 ## Persistence and limits
 
-`state.sqlite3` stores notes, receipts, published report snapshots and the latest check using SQLite transactions. Keep the file, not the process, as the durable artifact. The browser polls for display updates; this does **not** make the agent read automatically.
+`state.sqlite3` stores notes, receipts, published report snapshots, form snapshots and the latest check using SQLite transactions. Keep the file, not the process, as the durable artifact. The browser polls for display updates; this does **not** make the agent read automatically.
 
 Anyone with preview access can read messages/reports. The per-process submission token blocks blind cross-origin writes, not a visitor who can open the page. Do not send secrets. Only interface routes, structured state and explicitly published reports are served, never arbitrary repository paths.
 
