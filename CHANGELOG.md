@@ -1,3 +1,13 @@
+## 2026-09-21 — The report-panel scroll check stops passing unexercised
+
+**Date:** 2026-09-21
+
+The client harness modelled the browser's scroll clamp on `#report`, but its stub elements never received an
+`id`, so the clamp could not fire: the two assertions around the report panel passed because the code restores
+the position, not because the test would have noticed it missing. A stub now takes the id it is looked up by.
+Checked the way the fix should have been checked the first time: with the restore removed, the harness fails on
+`a report update keeps the panel where the owner left it`; with it back, the suite is green.
+
 ## 2026-09-21 — The task list returns, and the save file is proven readable
 
 **Date:** 2026-09-21

@@ -61,7 +61,13 @@ const copied = [];
 let clipboardFails = false;
 let execCommandResult = true;
 const get = id => {
-  if (!elements.has(id)) elements.set(id, new Element());
+  if (!elements.has(id)) {
+    const element = new Element();
+    // A stub element knows its own id, so the parts of the browser a stub has to model can key on it:
+    // the scroll clamp below fires for `#report` and nothing else (owner note 60cdef88).
+    if (id.startsWith('#')) element.id = id.slice(1);
+    elements.set(id, element);
+  }
   return elements.get(id);
 };
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
