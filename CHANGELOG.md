@@ -1,3 +1,11 @@
+## 2026-09-21 — Kilo uses PowerShell
+
+**Origin** — the owner’s chat task on 2026-09-21, `amend(kilo): inform using pwsh not bash`, and approval of the proposal in Q2.
+
+**Change** — add the shell rule under Tools in `rules/refs/KILO.md`, then compress it in `rules/KILO.md`: run shell commands in PowerShell (`pwsh`), not Bash. No mode override or installed rule changes.
+
+**Cost** — the live rule grows from 185 to 199 `cl100k_base` tokens. Two passes reduce the new line from 20 to 15 to 14 tokens; no further safe reduction was found. The README measurement and budget exception record the accepted 14-token growth.
+
 ## 2026-09-21 — The log and the tasks give up their copy buttons
 
 **Date:** 2026-09-21
