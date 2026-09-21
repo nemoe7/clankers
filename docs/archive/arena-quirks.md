@@ -146,8 +146,7 @@ answered `/api/state` with 200, and `state.sqlite3` still held all 51 notes and 
 There was nothing to pull. That part was sound.
 
 It then wrote a sub-entry claiming a second variant of the reset, one that stops at the visible
-transcript and leaves the sandbox alone, and pushed it as `dad5ce1`. The owner fixed it in notes
-`dbd05268` and `41c6b09a`: Arena had not reset the visible message history at all, and the message
+transcript and leaves the sandbox alone, and pushed it as `dad5ce1`. The owner fixed it: Arena had not reset the visible message history at all, and the message
 that read as a report of one was the owner's own earlier message arriving again. The event was a
 duplicate, not a reset. The "variant" was an inference from an ambiguous message, recorded as an
 observation and shipped.
@@ -249,7 +248,7 @@ replaced message read as a platform reset and the agent recorded it as one.
 
 It then happened to an instruction rather than to a report. A message reading `continue tasks!`
 arrived, and work started on the strength of it: thirty-four lines went into `scripts/preview.py`
-before the owner stopped the turn and sent note `de6c0019`, saying the message was false. The lines
+before the owner stopped the turn and said the message was false. The lines
 came out again with `git checkout` and no commit followed, so the cost was a stopped turn rather than
 a bad commit. Precision matters here: the agent cannot tell from inside the turn that
 an instruction changed, since the replacement does not arrive marked as one. It arrives as an
