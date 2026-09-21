@@ -210,9 +210,10 @@ async function refreshState() {
         option.textContent = 'No reports published yet';
         select.append(option);
       } else if (state.reports.some(report => report.id === selected)) select.value = selected;
-      $('#report-count').textContent = state.reports.length;
       if (!$('#reports-panel').hidden) loadReport();
     }
+    // The pip follows every poll: a report can grow newer than the last visit without the list changing.
+    updateReportPip(state.reports);
   } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally { stateBusy = false; }
 }
@@ -610,6 +611,18 @@ function renderTasks(tasks) {
   upcoming.hidden = false;
 }
 const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab')];
+// The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
+// something there is unread, not how many reports exist. A report is unread while its update time
+// is newer than the last time the tab was opened, and that marker lives in browser storage rather
+// than in a column, because reports carry no seen_at and adding one is a separate task.
+function updateReportPip(reports) {
+  const pip = $('#report-pip');
+  const readAt = stored('reports-read-at');
+  const unread = reports.some(report => !readAt || (report.updated_at || '') > readAt);
+  pip.hidden = !unread;
+  pip.title = unread ? 'A report has not been read' : 'No unread report';
+  pip.setAttribute('aria-label', unread ? 'Unread report' : 'No unread report');
+}
 function showTab(tab) {
   for (const item of tabs) {
     const selected = tab === item;
@@ -617,7 +630,13 @@ function showTab(tab) {
     item.tabIndex = selected ? 0 : -1;
     $('#' + item.getAttribute('aria-controls')).hidden = !selected;
   }
-  if (tab === tabs[1]) { refreshState(); loadReport(); }
+  if (tab === tabs[1]) {
+    // Opening the tab is reading it, so the marker is written before the poll that recomputes the
+    // pip: it goes out on this visit rather than surviving until the next one.
+    save('reports-read-at', new Date().toISOString());
+    refreshState();
+    loadReport();
+  }
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab));

@@ -57,7 +57,9 @@ nav button { min-width: 100px; border-color: var(--tab-border); }
 /* nav button outranks the global :focus-visible, so focus needs its own rule here. */
 nav button:focus-visible { border-color: var(--focus); }
 nav [aria-selected="true"] { background: var(--bubble); }
-#report-count { padding-left: 8px; color: var(--muted); }
+/* The pip is the tab's unread mark. `[hidden] { display: none !important; }` above is what keeps
+   it hidden against the inline-block that gives it a shape. */
+#report-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }

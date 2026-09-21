@@ -505,7 +505,36 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
-  assert.equal(get('#report-count').textContent, 1);
+  // The tab carries a pip rather than a count: visible while a report is newer than the last visit,
+  // and opening the tab is the visit that clears it. Stamps are set explicitly, because a marker
+  // written "now" against a report stamped in the future would never clear and would pass for the
+  // wrong reason.
+  const pip = get('#report-pip');
+  const readKey = [...storage.keys()].find(item => item.endsWith(':reports-read-at'));
+  assert.ok(readKey, 'opening the Reports tab records when it was read');
+  const atOffset = offset => new Date(Date.now() + offset).toISOString();
+  state.reports = [{ id: 'r1', title: 'Fielded', updated_at: atOffset(-60000) }];
+  storage.set(readKey, atOffset(0));
+  // A tab switch fires an unawaited refreshState, so flush before a click that has to land.
+  await tick();
+  await get('#refresh-notes').events.click();
+  assert.equal(pip.hidden, true, 'a report older than the visit is not unread');
+  storage.set(readKey, atOffset(-120000));
+  await get('#refresh-notes').events.click();
+  assert.equal(pip.hidden, false, 'a report published since the visit is unread');
+  assert.equal(pip.title, 'A report has not been read');
+  assert.equal(pip.attributes['aria-label'], 'Unread report');
+  get('#reports-tab').events.click();
+  await tick();
+  assert.equal(pip.hidden, true, 'opening the tab clears the pip');
+  assert.equal(pip.title, 'No unread report');
+  assert.equal(pip.attributes['aria-label'], 'No unread report');
+  storage.delete(readKey);
+  await get('#refresh-notes').events.click();
+  assert.equal(pip.hidden, false, 'a browser that never opened the tab has not read it');
+  state.reports = [];
+  await get('#refresh-notes').events.click();
+  assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
   await tick();
   state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
   await get('#refresh-notes').events.click();

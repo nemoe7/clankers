@@ -1,3 +1,16 @@
+## 2026-09-21 — The Reports tab shows whether a report has been read
+
+The Reports tab carried a number badge, `#report-count`, showing how many reports
+exist. A count says nothing about whether the agent has read them. The badge is now a
+pip, `#report-pip`, shown while the newest report is newer than the last time the tab
+was opened, and opening the tab is the visit that clears it. The marker lives in
+browser storage as `reports-read-at`, so it is per browser and needs no schema change;
+the pip is hidden with the `hidden` attribute, which the sheet's `[hidden]` rule keeps
+effective against the dot's own `display`. `check_client.cjs` sets the marker to explicit
+stamps rather than "now", and flushes the tab switch's unawaited refresh, so each case
+decides on its own terms; `check_preview.py` asserts the served page carries the pip and
+no trace of the count.
+
 ## 2026-09-21 — An unrenderable report answers instead of dropping the connection
 
 - **Summary** — the half of the owner's review `8716584a` that was still open, both halves having been approved in the report `resume-tasks`, and a defect found the turn before by walking into it: publishing a report with one option over the 200-character limit made `validate_fields` raise inside `/api/reports/<id>/html`, and because `do_GET` catches `FileNotFoundError`, `OSError`, `sqlite3.Error` and `RuntimeError` but not the `ValueError` that validation raises, the exception escaped the handler and the connection closed with no response at all — curl exit 52, no status code, and a Reports tab with nothing to explain itself. Two changes. `publish` now parses the source and refuses a report whose fields fail validation, so an unrenderable report cannot be stored in the first place; a report with no fields is unaffected, because `parse_fields` validates only when it found some, which is why the handoff publishes exactly as it always did. And the html route is guarded: a render failure answers 500 with a JSON `error` naming the problem, while `/source` keeps serving the Markdown so the agent can read what the browser could not render.
@@ -5,6 +18,7 @@
 - **Checks** — nine gates on their own exit statuses, and then the running server, because a harness in a temporary directory is not the process the owner looks at. The server was restarted on the new code — `preview.py` is loaded once at startup, so editing it changes nothing until it is — and probed live: an unrenderable report inserted into the state database answered `/html` with **500 and `{"error": "This report cannot be rendered: choice fields take 1–20 unique options of 1–200 characters"}`**, its `/source` answered 200, and once the row was deleted the route answered 404 with the reports list back to its two real entries and `/api/state` still 200. The harness covers the same ground where it is safe to: `publish` refuses an over-long option and stores nothing, a report stored before the guard existed answers 500 with a JSON error rather than an empty reply, and its source still serves. `publish` was also run for real against the live state directory, exiting 1 with `Preview error: choice fields take 1–20 unique options of 1–200 characters` and leaving the reports table holding only the two real reports.
 - **Limits** — 500 was chosen over the `/api/state` route's 200-with-`rendering_error` shape because this route's entire payload is the render, so there is no partial answer worth handing back; the client already catches a thrown response and writes `Report unavailable: <message>` into the report status, so no `app.js` change was needed and none was made. The guard catches `ValueError`, which is what field validation raises, and not every conceivable rendering failure, so the honest claim is that the known failure mode is covered rather than that the route cannot fail. The live probe wrote to the owner's own state database — one inserted row, deleted in the same script and verified gone by a 404 and by the reports list — where a temporary copy would have been safer and is what the harness uses. And restarting the server cost a few seconds of preview; the first attempt at stopping it killed the shell as well, because `pkill -f <pattern>` matches the command line of the shell that is running the pattern.
 - Origins: the owner's review `8716584a`; the approval of both halves in the report `resume-tasks`; and the empty reply that gave the defect away while that report was being published.
+
 
 ## 2026-09-21 — The tasks panel reads Current, Upcoming, Finished
 
