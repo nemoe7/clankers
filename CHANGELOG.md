@@ -1,3 +1,10 @@
+## 2026-09-21 — The ponytail audit skill is vendored
+
+`DietrichGebert/ponytail` at `e3ba2aa` (MIT) is copied verbatim into `.agents/skills/ponytail/`: its six skills
+under upstream's own `skills/` directory and the licence beside them, so a later release diffs against the copy.
+It lives under `.agents/skills/` only, on owner note `c78e583b` — it audits this repository rather than belonging
+to it, so it takes no `skills/` counterpart, no refs baseline and no part in the parity gates. The audit tool is
+`.agents/skills/ponytail/skills/ponytail-audit/SKILL.md`.
 ## 2026-09-21 — The jump bar fits its label
 
 The newest-message bar is as wide as its own text and centred over the log, rather than spanning the pane, on
