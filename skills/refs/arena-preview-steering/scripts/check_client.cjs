@@ -293,7 +293,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
   assert.equal(upcomingBody.children[0].children[1].open, true);
   // The log and the tasks lost their own copy buttons on owner note 586d52f7. The save button
-  // copies the state it posts, as JSON, on a shift-click, and the reports tab keeps its button.
+  // copies, on a shift-click, the note and task lines a restore reads back, minified, and the
+  // reports tab keeps its button. Nothing derived rides the copy: no rendered html, token,
+  // seq, reports, uploads or last check, and the stamps arrive from the poll already cut to
+  // seconds, which is all a restore needs (notes 11a220c and 5b4599e).
   const cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
   assert.ok(cacheKeyHere, 'every poll caches the state the shift-click copies');
   copied.length = 0;
@@ -301,8 +304,21 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   const copy = JSON.parse(copied.at(-1));
   assert.equal(copied.at(-1), `${JSON.stringify(copy)}\n`, 'the state copies as minified JSON');
-  assert.deepEqual(copy, JSON.parse(storage.get(cacheKeyHere)),
-    'the copy is the state the button posts, so a wipe costs one paste');
+  const cachedHere = JSON.parse(storage.get(cacheKeyHere));
+  const projectHere = (record, keys) => {
+    const line = {};
+    for (const key of keys) line[key] = record[key] ?? null;
+    return line;
+  };
+  const noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'origin', 'task_id'];
+  const taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
+  assert.deepEqual(copy, {
+    notes: cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
+    tasks: {
+      upcoming: (cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
+      finished: (cachedHere.tasks.finished || []).map(task => projectHere(task, taskKeysHere)),
+    },
+  }, 'the copy carries the note and task lines a restore reads, and nothing derived');
   assert.equal(copy.notes.length, 0);
   assert.equal(copy.tasks.finished.length, state.tasks.finished.length);
   assert.equal(get('#save-state').dataset.state, 'good', 'the shift-click reports through the button');
