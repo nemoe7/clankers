@@ -562,15 +562,23 @@ function renderTasksIfChanged(tasks) {
 
 function renderTasks(tasks) {
   const status = $('#tasks-status');
+  const current = $('#tasks-current');
   const finished = $('#tasks-finished');
   const upcoming = $('#tasks-upcoming');
   if (!tasks) {
     status.textContent = 'The agent has not written a task list yet.';
+    current.hidden = true;
     finished.hidden = true;
     upcoming.hidden = true;
     return;
   }
   status.textContent = `Updated ${time(tasks.updated_at)} · written by the agent; it takes no answers.`;
+  // The head of the queue gets a div of its own so what the agent is on next is visible without
+  // reading down a list. It stays in Upcoming as well: removing it would leave a hole in the
+  // authoritative order, and the copy button hands both stored sections over as they are.
+  const head = tasks.upcoming[0];
+  $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
+  current.hidden = !head;
   $('#tasks-finished-body').replaceChildren(...tasks.finished.map(task => taskRow(task)));
   $('#tasks-upcoming-body').replaceChildren(...tasks.upcoming.map(task => taskRow(task)));
   finished.hidden = false;
