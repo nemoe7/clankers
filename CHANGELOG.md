@@ -1,3 +1,15 @@
+## 2026-09-21 — Use sections slim down; the state copy restores less
+
+**Origin** — another session, relayed by the owner in chat on 2026-09-21, plus preview inbox notes 523e50b, 369f4f1, 9c922c4, 16564e2, 11a220c and 5b4599e: the `Use` sections of `rules/CLINE.md` and `rules/KILO.md` and the description line of `rules/AGENTS.md` state what loaders already handle, `KILO.md`'s `Modes` and `When in doubt` sections restate the core, the `squash` bar becomes terse but unambiguous, the reply bar takes a named colour, and the state copy keeps only what a restore reads.
+
+**Rule change** — `rules/AGENTS.md` keeps its `Use` heading and its three rules and loses only the "Generic core ruleset" description line, per owner note 369f4f1; `rules/CLINE.md` loses its whole `Use` section; `rules/KILO.md` keeps only `Tools`. The refs baselines mirror each in full wording; `rules/refs/AGENTS.md` is untouched because it never carried the description line. The spec sentences in `rules/README.md` and `rules/refs/README.md` that described the old shape are amended with them.
+
+**Skill change** — the register line of `skills/squash/SKILL.md` and its refs baseline now reads "Terse, but unambiguous"; the +2 `tok` growth is recorded in the budget exception, because the line is the directive rather than a restatement, so no pass can fund it.
+
+**Preview change** — `assets/style.css` (refs, then the minified build): `.answer.reply` takes a `rgb(199, 194, 188)` left bar, and `.message-text blockquote` takes the reply's bar and padding with the message's font size (note 523e50b). `scripts/preview.py` cuts every stamp on the state surface to seconds, and `assets/app.js` makes the shift-click copy carry only the note and task lines the save file writes, in the same keys: the rendered html, the token, `seq`, reports, uploads and the last check stay out (notes 11a220c, 5b4599e). Red on the save button means the clipboard write was blocked or nothing was cached (16564e2), and `origin` stays in the copy because a restore writes it as given, so the agent tag survives (11a220c, 5b4599e). `check_preview.py` and `check_client.cjs` pin the new shape, and the refs reference records the copy's contract.
+
+**Cost** — `rules/AGENTS.md` 1,591 → 1,571 `tok`, `rules/CLINE.md` 572 → 517, `rules/KILO.md` 199 → 72. `skills/squash/SKILL.md` 1,263 → 1,265 `tok` (exception). Minified assets: `style.css` 9,898 → 9,997 `B`, `app.js` 23,710 → 24,243, `preview.py` 50,095 → 51,324, `check_preview.py` 41,393 → 41,626, `check_client.cjs` 41,149 → 41,510 `B`.
+
 ## 2026-09-21 — Kilo uses PowerShell; preview scripts and guidance shrink
 
 **Origin** — the owner’s chat task on 2026-09-21, `amend(kilo): inform using pwsh not bash`, and approval of the proposal in Q2.

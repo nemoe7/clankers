@@ -52,6 +52,11 @@ def now():
   return datetime.now(timezone.utc).isoformat()
 
 
+def clip_stamp(value):
+  """Cut an ISO stamp to seconds; a restore needs no milliseconds or offset."""
+  return value[:19] if value else value
+
+
 def identifier(value):
   if not isinstance(value, str) or not IDENTIFIER.fullmatch(value):
     raise ValueError("ID must contain 1–80 letters, digits, underscores or hyphens")
@@ -596,20 +601,37 @@ class Store:
       return [dict(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")]
 
   def state(self):
+    """The page's state, with every stamp cut to seconds.
+
+    The shift-click copy and the save file restore from this shape, and a restore
+    needs no milliseconds or offset, so the state surface carries second stamps
+    while the database keeps what it was given.
+    """
     tasks = self.tasks()
     with closing(self.connect()) as db:
       meta = dict(db.execute("SELECT key, value FROM meta"))
+      notes = [dict(row) for row in db.execute("SELECT * FROM notes ORDER BY seq")]
+      reports = [
+        dict(row)
+        for row in db.execute(
+          "SELECT id, title, updated_at, seq, seen_at FROM reports ORDER BY seq, id"
+        )
+      ]
+      uploads = self.uploads()
+      for item in notes + reports + uploads:
+        for key in ("at", "acknowledged_at", "seen_at", "updated_at"):
+          if key in item:
+            item[key] = clip_stamp(item[key])
+      if tasks is not None:
+        for item in tasks["finished"] + tasks["upcoming"]:
+          item["updated_at"] = clip_stamp(item["updated_at"])
+        tasks["updated_at"] = clip_stamp(tasks["updated_at"])
       return {
-        "notes": [dict(row) for row in db.execute("SELECT * FROM notes ORDER BY seq")],
-        "reports": [
-          dict(row)
-          for row in db.execute(
-            "SELECT id, title, updated_at, seq, seen_at FROM reports ORDER BY seq, id"
-          )
-        ],
+        "notes": notes,
+        "reports": reports,
         "tasks": tasks,
-        "uploads": self.uploads(),
-        "last_check": meta.get("last_check"),
+        "uploads": uploads,
+        "last_check": clip_stamp(meta.get("last_check")),
       }
 
   def tasks(self):
@@ -941,10 +963,13 @@ class Store:
           "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq"
         )
       ]
+      for item in pending:
+        for key in ("at", "acknowledged_at", "seen_at"):
+          item[key] = clip_stamp(item[key])
       pending.sort(key=lambda item: item["at"])
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
-      return {"checked_at": checked, "pending": pending}
+      return {"checked_at": clip_stamp(checked), "pending": pending}
 
   def mark_task(self, record_id, task_id, shared=None):
     """Record that a message has a task, on whichever table holds that message.
@@ -1387,6 +1412,7 @@ def handler(store):
           # stored exactly as they arrived, and the record carries the type, size and hash.
           name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
           record = store.save_upload(name, self.headers.get("Content-Type", ""), data)
+          record["at"] = clip_stamp(record["at"])
           self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         payload = json.loads(data)
@@ -1405,15 +1431,21 @@ def handler(store):
           return
         if report_seen:
           report = store.mark_report_seen(report_seen.group(1))
+          for key in ("updated_at", "seen_at"):
+            report[key] = clip_stamp(report[key])
           self.reply(200, json.dumps(report, ensure_ascii=False))
           return
         if report_submit:
           note = store.submit_report(
             report_submit.group(1), payload.get("id"), payload.get("answers")
           )
+          for key in ("at", "acknowledged_at", "seen_at"):
+            note[key] = clip_stamp(note[key])
           self.reply(201, json.dumps(note, ensure_ascii=False))
           return
         note = store.note(payload.get("id"), payload.get("text"))
+        for key in ("at", "acknowledged_at", "seen_at"):
+          note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))
       except FileNotFoundError as error:
         self.problem(404, error)

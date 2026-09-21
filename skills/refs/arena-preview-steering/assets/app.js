@@ -605,12 +605,34 @@ function stamp(value) {
 // reason a restore no longer needs the owner to paste anything: the browser is the surviving copy.
 // The log's copy and the tasks' copy are gone, and this button carries the copy on a shift-click
 // as JSON, on the owner's note 586d52f7; the reports tab keeps its own button.
+// The shift-click copy carries only what a restore reads back: the note and task lines the
+// save file writes, in the same keys. Nothing derived rides it: the server renders html for
+// display and a restore re-renders from text, the token dies with its server, seq orders one
+// display only, and reports, uploads and the last check have no importer. The stamps arrive
+// from the state poll already cut to seconds, which is all a restore needs.
+const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'origin', 'task_id'];
+const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
+function restoreLine(record, keys) {
+  const line = {};
+  for (const key of keys) line[key] = record[key] ?? null;
+  return line;
+}
+function restoreCopy(cached) {
+  return {
+    notes: cached.notes.map(note => restoreLine(note, NOTE_LINE_KEYS)),
+    tasks: {
+      upcoming: (cached.tasks.upcoming || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
+      finished: (cached.tasks.finished || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
+    },
+  };
+}
 $('#save-state').addEventListener('click', async (event) => {
   const button = $('#save-state');
   if (event && event.shiftKey) {
-    let copy = null;
-    try { copy = JSON.parse(stored('state-cache') || 'null'); } catch { copy = null; }
-    return copyFrom(button, copy ? `${JSON.stringify(copy)}\n` : null, 'state', '⤓');
+    let cached = null;
+    try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
+    const usable = cached && Array.isArray(cached.notes) && cached.tasks;
+    return copyFrom(button, usable ? `${JSON.stringify(restoreCopy(cached))}\n` : null, 'state', '⤓');
   }
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }

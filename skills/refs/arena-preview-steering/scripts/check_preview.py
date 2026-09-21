@@ -182,6 +182,7 @@ with tempfile.TemporaryDirectory() as directory:
         assert store.read()["pending"]
     store.acknowledge(["message-1"], "reply", "Fixed in `preview.py`.")
     stamp = store.state()["notes"][0]["acknowledged_at"]
+    assert len(stamp) == 19, "the state surface carries second stamps, no ms or offset"
     assert store.state()["notes"][0]["ack_text"] == "Fixed in `preview.py`."
     store.acknowledge(["message-1"], "note", "and rechecked")
     row = store.state()["notes"][0]
@@ -308,7 +309,11 @@ with tempfile.TemporaryDirectory() as directory:
       in page
     )
     assert (
-      ".answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); font-size: 13px; }"
+      ".answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }"
+      in page
+    )
+    assert (
+      ".message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }"
       in page
     )
     assert (
@@ -892,7 +897,7 @@ with tempfile.TemporaryDirectory() as legacy_dir:
   db.close()
   migrated = preview.Store(legacy, create=True)
   assert [row["id"] for row in migrated.state()["notes"]] == ["old", "answered"]
-  assert migrated.state()["notes"][1]["seen_at"] == "2026-01-02T00:00:00+00:00"
+  assert migrated.state()["notes"][1]["seen_at"] == "2026-01-02T00:00:00"
   migrated.acknowledge(["old"], "note", "still here")
   assert migrated.state()["notes"][0]["ack_text"] == "still here"
   assert migrated.state()["notes"][0]["seen_at"] is not None
@@ -926,7 +931,7 @@ with tempfile.TemporaryDirectory() as tasks_dir:
     "write arena-quirks.md",
   ]
   assert listed["finished"] == []
-  assert listed["updated_at"] == record["updated_at"]
+  assert listed["updated_at"] == record["updated_at"][:19]
   # Moving a task between the divs keeps its title and details, so it stays one command.
   moved = tasks_store.write_task("docs-archive", status="finished")
   assert moved["title"] == "Move to new docs/archive/ dir"
@@ -1300,8 +1305,9 @@ with tempfile.TemporaryDirectory() as restore_dir:
   ).stdout
   assert "Imported 3 notes, 1 with a receipt restored verbatim" in imported
   rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
-  # The receipt comes back as it was written: the original stamp, not the time of the import.
-  assert rows["carried"]["acknowledged_at"] == "2026-09-20T22:05:11.982172+00:00"
+  # The receipt comes back as it was written: the original stamp, not the time of the import,
+  # and the state surface shows it cut to seconds.
+  assert rows["carried"]["acknowledged_at"] == "2026-09-20T22:05:11.982172+00:00"[:19]
   assert rows["carried"]["ack_kind"] == "reply"
   assert rows["carried"]["ack_text"] == "Fixed in `preview.py`."
   assert rows["carried"]["at"] == "2026-09-20T22:00:47"
