@@ -1,3 +1,14 @@
+## 2026-09-21 — The quirks archive passes the linter
+
+**Date:** 2026-09-21
+
+`docs/archive/arena-quirks.md` now reports zero linter violations and joined the gate step, which stands at
+seven clean files. The rewrite is editorial: detached passives name the actor, sentences over 25 words split,
+semicolons become full stops, one verb carries each action, and the observation lists become plain sentences.
+Every date, commit, note ID, literal string and reading stays as it was. The file also records the fourth
+sandbox restore and what it cost: the state directory, the published reports and the task backup, with the
+task list rebuilt from the commit history.
+
 ## 2026-09-21 — The vendored-skills index passes the linter
 
 **Date:** 2026-09-21
