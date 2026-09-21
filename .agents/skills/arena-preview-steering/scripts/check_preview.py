@@ -69,6 +69,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'id="log-newest"' in page and 'class="log-scroll"' in page
     # The bar hugs its label rather than spanning the pane, on owner note edbdfcae.
     assert "translateX(-50%)" in page
+    # The filter sits in the button row immediately left of copy-log, on owner notes 1006cb38 and
+    # 7f52e5fe: a button added between them moves the filter without anyone noticing.
+    assert page.index('id="save-state"') < page.index('id="log-filter"') < page.index('id="copy-log"')
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]

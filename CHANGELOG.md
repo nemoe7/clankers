@@ -1,3 +1,9 @@
+## 2026-09-21 — The filter keeps its place in the button row
+
+The save button landed between the log filter and the copy button, and the owner asked for the filter that
+`1006cb38` placed directly left of copy-log, so the save button steps in front of both and the filter returns to
+that place, on owner note `7f52e5fe`. The row no longer wraps inside itself, so the select cannot drop below the
+buttons on a narrow pane, and a served-page pin holds the order `save-state`, `log-filter`, `copy-log`.
 ## 2026-09-21 — The ponytail audit skill is vendored
 
 `DietrichGebert/ponytail` at `e3ba2aa` (MIT) is copied verbatim into `.agents/skills/ponytail/`: its six skills
