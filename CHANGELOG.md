@@ -1,3 +1,17 @@
+## 2026-09-21 — check.py stops reading root AGENTS.md
+
+The documented markdownlint file count had two carriers, `rules/README.md` and root
+`AGENTS.md`, and `LINT_COUNT_CLAIMS` cross-checked both against the files markdownlint actually
+covers. The root entry is gone, on the owner's note a5f1f179, which keeps this script off
+agent-facing files and follows the note that kept it off `.agents/skills/`.
+
+What stays is the gate that protects the count: `rules/README.md` still has to match the real
+number, and `EXPECTED_LINTED` still fails when the scope itself moves. What goes is the second
+copy of that claim, so the "— 10 files," wording in root `AGENTS.md` is now wording nothing
+checks, and an amendment that changes the covered count has to remember it by hand. Root
+`AGENTS.md` was never in the token budget table, so nothing was removed there. Validation still
+passes.
+
 ## 2026-09-21 — A restored receipt keeps the time it was written
 
 The message log copied three keys per line — id, text and at — so a restore through the

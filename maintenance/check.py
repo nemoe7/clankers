@@ -72,11 +72,10 @@ EXPECTED_LINTED = (
   "rules/refs/README.md",
 )
 
-# Where the documented markdownlint file count lives, and how to find it.
-LINT_COUNT_CLAIMS = (
-  (RULES / "README.md", r"(\d+) files in all"),
-  (ROOT / "AGENTS.md", r"— (\d+) files,"),
-)
+# Where the documented markdownlint file count lives, and how to find it. Root AGENTS.md
+# carries the same claim in its own words and is deliberately left out of the check: it is an
+# agent-facing file, and the owner's note a5f1f179 keeps this script off those.
+LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 
 # Rule refs baselines hold full wording; live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
