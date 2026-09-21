@@ -150,6 +150,18 @@ One detail from the same turn that is verified and stays: `gh pr view` reported 
 returned MERGEABLE earlier in the session. UNKNOWN is GitHub still computing rather than a verdict,
 so it should be re-asked rather than reported as a problem.
 
+## The encoding host tiktoken needs is unreachable — and the workaround works
+
+The resolution is recorded first because it is the useful half: `maintenance/README.md` carries a
+verified seeding command. `gh api -H "Accept: application/vnd.github.raw"
+repos/niieani/gpt-tokenizer/contents/data/cl100k_base.tiktoken`, written to
+`$TIKTOKEN_CACHE_DIR/<sha1 of the blob URL>`, makes `maintenance/check.py` pass. Verified on
+2026-09-21: 1,681,126 bytes fetched, and the validator went from unrunnable-for-a-session to green in
+one step, because tiktoken checks the hash itself and accepted the mirror. The raw accept header is
+not optional — the file is over the 1 MB limit at which the contents API stops returning base64.
+`.tiktoken-cache/` is gitignored, so a restore deletes it and re-seeding belongs in the same list as
+rebuilding the venv.
+
 ## The encoding host tiktoken needs is unreachable
 
 ### 2026-09-21 arena/01a0be68-clankers
