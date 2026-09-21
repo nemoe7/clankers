@@ -127,7 +127,11 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 #report-receipt { margin: 10px 0 0; }
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-.select-wrap { flex: 1 1 240px; max-width: 500px; }
+".select-wrap { flex: 1 1 240px; max-width: 500px; }
+/* The log filter is a control in a header row, not a form field: it takes the icon row's height and
+   only the width its four words need, so it costs the log no vertical space. The label is gone on
+   owner direction and an aria-label carries the name instead. */
+#log-filter { flex: 0 0 auto; width: auto; max-width: 8em; min-height: 34px; padding: 4px 6px; }
 #copy-report, #refresh-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
 a { color: var(--accent); text-underline-offset: 3px; }
