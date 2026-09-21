@@ -313,7 +313,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
     assert '<ul id="tasks-upcoming-body" class="task-list"></ul>' in page
     # Current leads the panel: what the agent is on next is the first thing the owner reads.
-    assert page.index('id="tasks-current"') < page.index('id="tasks-finished"')
+    # Current leads the panel and Upcoming follows it, with the finished record last: what the
+    # agent is on next and what is coming are the owner's questions, and what is done is the log.
+    assert page.index('id="tasks-current"') < page.index('id="tasks-upcoming"')
+    assert page.index('id="tasks-upcoming"') < page.index('id="tasks-finished"')
     assert ".task-list { margin: 0; padding-left: 20px; }" in page
     assert ".task-title { font-weight: 600; }" in page
     assert (
