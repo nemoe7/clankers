@@ -95,7 +95,7 @@ Keep each pass small enough to review. Several modest passes beat one aggressive
 
 Keep the structure: headings, section order, list versus prose, tables, code blocks. Squashing shortens, never reorganizes; reorganizing is a separate request.
 
-Keep the register and audience. Do not turn prose into telegraphic notes, invent abbreviations, or drop articles until the text reads as a different document. Terse is fine; cryptic is a failed pass.
+Keep the register and audience. Do not turn prose into telegraphic notes, invent abbreviations, or drop articles until the text reads as a different document. Terse, but unambiguous: cryptic is a failed pass.
 
 Keep verbatim spans verbatim: quotations, code, commands, error strings, identifiers, anything the reader must copy exactly.
 
