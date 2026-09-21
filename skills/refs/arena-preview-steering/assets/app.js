@@ -533,6 +533,9 @@ function quoteNoteId(code) {
 }
 // The three tab buttons share one confirmation, and null text means there was nothing to copy.
 async function copyFrom(button, text, what, glyph = '⧉') {
+  // The label a copy came in with is the label it leaves behind: the save button copies the state on
+  // a shift-click and saves on a plain click, so a restored `Copy the state` would name the wrong job.
+  const before = button.title;
   const words = text === null ? null : await copyText(text);
   const message = words || (text === null ? `There is no ${what} to copy`
     : `Clipboard blocked; select the ${what} and copy it`);
@@ -542,8 +545,8 @@ async function copyFrom(button, text, what, glyph = '⧉') {
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => {
     button.textContent = glyph;
-    label(button, `Copy the ${what}`);
-    button.title = `Copy the ${what}`;
+    label(button, before);
+    button.title = before;
     button.dataset.state = '';
   }, 1500);
 }

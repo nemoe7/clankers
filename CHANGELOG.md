@@ -8,14 +8,16 @@ minified JSON, the same object the button posts, on the direction that made the 
 minified. The reports tab keeps its own copy, which exports the report source. No path and no file are
 exposed by the copy, and the file the button writes stays the restore path.
 
-**Cost** — `assets/app.js` 45,071 → 44,706 `B` readable and 24,158 → 23,728 `B` minified, mostly the
-removed `logLine()` helper and the two removed listeners; `assets/index.html` 7,630 → 7,344 `B`
-readable and 6,688 → 6,426 `B` minified; `scripts/check_client.cjs` and `scripts/check_preview.py`
-change with it, and the README budget rows refresh.
+**Cost** — `assets/app.js` 45,071 → 44,919 `B` readable and 24,158 → 23,710 `B` minified, mostly the
+removed `logLine()` helper and the two removed listeners; `assets/index.html` 7,630 → 7,404 `B`
+readable and 6,688 → 6,486 `B` minified, the growth being the button name that carries the gesture;
+`scripts/check_client.cjs` and `scripts/check_preview.py` change with it, and the README budget rows
+refresh.
 
 **Checks** — the client harness shift-clicks the save button, asserts the copy is the cached state as
 minified JSON, that the button reports through the same green receipt, that an empty cache answers
-`There is no state to copy`, and that a filter matching nothing does not shrink the copy.
+`There is no state to copy`, and that a filter matching nothing does not shrink the copy. A copy
+restores the name it came in with, so the save button still says what a plain click does.
 `check_preview.py` asserts the page carries neither `copy-log` nor `copy-tasks`, keeps the reports
 copy before its refresh button, and shows the shift-click in the save button's name. The
 refs/live parity check, `maintenance/minify.py`, `check.py --update` then a clean re-run, `ruff`,

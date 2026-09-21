@@ -107,7 +107,7 @@ with tempfile.TemporaryDirectory() as directory:
     )
     assert page.index('id="log-filter"') < page.index('id="refresh-notes"')
     assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
-    assert "shift-click" in page
+    assert "shift-click copies the state" in page
     # Every icon button carries a title that repeats its accessible name, on owner note bef51970.
     for control in (
       "save-state",
