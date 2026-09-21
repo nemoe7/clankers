@@ -1,3 +1,9 @@
+## 2026-09-21 — The jump bar fits its label
+
+The newest-message bar is as wide as its own text and centred over the log, rather than spanning the pane, on
+owner note `edbdfcae`; a strip that spans a pane reads as furniture, and this one is a control. Nothing else
+about it moved: it still shows only while the log is scrolled away from its end, and a click still lands on the
+newest message.
 ## 2026-09-21 — The CLI minifies the JSON the agent reads
 
 Every JSON this CLI prints — `read`, `task-list`, the task echo, the import summary — is minified now, because
