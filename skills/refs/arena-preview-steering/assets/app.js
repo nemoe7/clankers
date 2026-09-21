@@ -469,7 +469,8 @@ function logLine(note) {
     at: stamp(note.at),
     acknowledged_at: note.acknowledged_at ?? null,
     ack_kind: note.ack_kind ?? null,
-    ack_text: note.ack_text ?? null
+    ack_text: note.ack_text ?? null,
+    seen_at: note.seen_at ?? null
   });
 }
 $('#copy-log').addEventListener('click', () => {

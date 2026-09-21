@@ -882,6 +882,7 @@ with tempfile.TemporaryDirectory() as restore_dir:
         "acknowledged_at": "2026-09-20T22:05:11.982172+00:00",
         "ack_kind": "reply",
         "ack_text": "Fixed in `preview.py`.",
+        "seen_at": "2026-09-20T22:00:52",
       }
     )
     + "\n"
@@ -893,6 +894,19 @@ with tempfile.TemporaryDirectory() as restore_dir:
         "acknowledged_at": None,
         "ack_kind": None,
         "ack_text": None,
+        "seen_at": None,
+      }
+    )
+    + "\n"
+    + json.dumps(
+      {
+        "id": "read",
+        "text": "read but not answered",
+        "at": "2026-09-20T22:01:10",
+        "acknowledged_at": None,
+        "ack_kind": None,
+        "ack_text": None,
+        "seen_at": "2026-09-20T22:01:30",
       }
     )
     + "\n",
@@ -904,7 +918,7 @@ with tempfile.TemporaryDirectory() as restore_dir:
     text=True,
     check=True,
   ).stdout
-  assert "Imported 2 notes, 1 with a receipt restored verbatim" in imported
+  assert "Imported 3 notes, 1 with a receipt restored verbatim" in imported
   rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
   # The receipt comes back as it was written: the original stamp, not the time of the import.
   assert rows["carried"]["acknowledged_at"] == "2026-09-20T22:05:11.982172+00:00"
@@ -916,6 +930,13 @@ with tempfile.TemporaryDirectory() as restore_dir:
   assert rows["plain"]["ack_kind"] is None
   assert rows["plain"]["ack_text"] is None
   assert rows["plain"]["seen_at"] is None
+  # Read state is restored for its own sake: a line seen but never answered comes back seen
+  # and unacknowledged, because a restore that drops it re-lights the whole log.
+  assert rows["carried"]["seen_at"] == "2026-09-20T22:00:52"
+  assert rows["read"]["seen_at"] == "2026-09-20T22:01:30"
+  assert rows["read"]["acknowledged_at"] is None
+  assert rows["read"]["ack_kind"] is None
+  assert rows["read"]["ack_text"] is None
   # A partial receipt is refused rather than filled in, and the refusal stores nothing.
   partial = restore / "partial.jsonl"
   partial.write_text(
@@ -940,6 +961,11 @@ with tempfile.TemporaryDirectory() as restore_dir:
   assert refused.returncode == 1
   assert "stamp, kind and text" in refused.stderr
   assert "half" not in {row["id"] for row in preview.Store(restore).state()["notes"]}
+  assert {row["id"] for row in preview.Store(restore).state()["notes"]} == {
+    "carried",
+    "plain",
+    "read",
+  }
   # Importing the same log again changes nothing: a stored ID keeps the record it has.
   again = subprocess.run(
     [sys.executable, script, "--state-dir", str(restore), "import-notes", str(log)],
@@ -948,4 +974,5 @@ with tempfile.TemporaryDirectory() as restore_dir:
     check=True,
   ).stdout
   assert "existing IDs are not duplicated" in again
-  assert len(preview.Store(restore).state()["notes"]) == 2
+  # Three restored notes, and a re-import adds none of them twice.
+  assert len(preview.Store(restore).state()["notes"]) == 3

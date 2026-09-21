@@ -1,3 +1,12 @@
+## 2026-09-21 — A restored line remembers it was read
+
+The log copy carried a note's receipt but not its read stamp, so a restore re-lit every line the
+owner had already seen. The copy now emits seven keys, `seen_at` last and null where absent, and
+`import-notes` writes that stamp verbatim alongside the receipt. Read state and a receipt stay
+independent: a line seen but never answered comes back seen and unacknowledged, and a read stamp is
+never mistaken for an answer. The restoration tests cover both directions, and the refusal of a
+partial receipt is unchanged, so a line that carries a stamp and half an answer still stores nothing.
+
 ## 2026-09-21 — check.py stops reading root AGENTS.md
 
 The documented markdownlint file count had two carriers, `rules/README.md` and root
@@ -11,6 +20,8 @@ copy of that claim, so the "— 10 files," wording in root `AGENTS.md` is now wo
 checks, and an amendment that changes the covered count has to remember it by hand. Root
 `AGENTS.md` was never in the token budget table, so nothing was removed there. Validation still
 passes.
+
+
 
 ## 2026-09-21 — A restored receipt keeps the time it was written
 

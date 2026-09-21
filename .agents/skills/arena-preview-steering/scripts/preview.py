@@ -390,17 +390,27 @@ class Store:
     return db
 
   def note(
-    self, note_id, text, at=None, acknowledged_at=None, ack_kind=None, ack_text=None
+    self,
+    note_id,
+    text,
+    at=None,
+    acknowledged_at=None,
+    ack_kind=None,
+    ack_text=None,
+    seen_at=None,
   ):
     """Record an owner message; a restore carries its receipt and it is written as given.
 
     Nothing here stamps a receipt with now(), because a restored acknowledgement has to
-    say when it was actually written. An ID that is already stored keeps the record it
-    has, so importing the same log twice changes nothing.
+    say when it was actually written. Read state rides along on the same terms and answers
+    to nobody, so a line seen but never answered comes back seen and unacknowledged. An ID
+    that is already stored keeps the record it has, so importing the same log twice
+    changes nothing.
     """
     identifier(note_id)
     note_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text)
+    seen = when(seen_at) if seen_at is not None else None
     with closing(self.connect()) as db, db:
       db.execute("BEGIN IMMEDIATE")
       existing = db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
@@ -409,9 +419,10 @@ class Store:
           raise ValueError("This message ID already belongs to different text")
         return dict(existing)
       db.execute(
-        "INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
-        (note_id, text, at or now(), *receipt),
+        "INSERT INTO notes"
+        " (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (note_id, text, at or now(), *receipt, seen),
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
@@ -1151,6 +1162,7 @@ def main():
           acknowledged_at=record.get("acknowledged_at"),
           ack_kind=record.get("ack_kind"),
           ack_text=record.get("ack_text"),
+          seen_at=record.get("seen_at"),
         )
       receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(
