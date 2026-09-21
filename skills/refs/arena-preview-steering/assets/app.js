@@ -459,11 +459,22 @@ function stamp(value) {
 // Each tab copies what restores or exports it: the log as the lines import-notes reads back,
 // the shown report as the Markdown publish takes, the tasks as the JSON task-import reads.
 // The JSON copies are minified on purpose: the agent parses them, and the whitespace only costs tokens.
+// A copied line carries its receipt too, so a restore keeps the time the acknowledgement was
+// actually written instead of the time the restore ran. Every key is present on every line,
+// null where absent, because import-notes refuses a partial receipt rather than filling it in.
+function logLine(note) {
+  return JSON.stringify({
+    id: note.id,
+    text: note.text,
+    at: stamp(note.at),
+    acknowledged_at: note.acknowledged_at ?? null,
+    ack_kind: note.ack_kind ?? null,
+    ack_text: note.ack_text ?? null
+  });
+}
 $('#copy-log').addEventListener('click', () => {
   const notes = lastState ? lastState.notes : [];
-  copyFrom($('#copy-log'), notes.length ? `${notes.map(
-    note => JSON.stringify({ id: note.id, text: note.text, at: stamp(note.at) })
-  ).join('\n')}\n` : null, 'message log');
+  copyFrom($('#copy-log'), notes.length ? `${notes.map(logLine).join('\n')}\n` : null, 'message log');
 });
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
