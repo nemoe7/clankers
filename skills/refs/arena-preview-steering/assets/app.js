@@ -201,7 +201,7 @@ async function refreshState() {
       state.reports.forEach((report, position) => {
         const option = document.createElement('option');
         option.value = report.id;
-        option.textContent = `${position + 1}. ${report.title}`;
+        option.textContent = `${position + 1}.${report.seen_at ? '' : ' *'} ${report.title}`;
         select.append(option);
       });
       if (!state.reports.length) {
@@ -526,6 +526,7 @@ async function loadReport() {
       : result.fields
         ? `Report loaded with ${result.fields} field${result.fields === 1 ? '' : 's'}. Fill them in, then send; answers reach the agent inbox as one note.`
         : 'Report loaded. Updates appear automatically.';
+    checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
   }
@@ -624,17 +625,62 @@ function renderTasks(tasks) {
 }
 const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab')];
 // The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
-// something there is unread, not how many reports exist. A report is unread while its update time
-// is newer than the last time the tab was opened, and that marker lives in browser storage rather
-// than in a column, because reports carry no seen_at and adding one is a separate task.
+// something there is unread, not how many reports exist. A report is unread until the owner has
+// been shown it, and that reading is stamped on the report itself rather than kept in browser
+// storage, so it survives a cleared browser, holds across browsers, and tells the agent the
+// report was read instead of leaving it to infer one.
 function updateReportPip(reports) {
   const pip = $('#report-pip');
-  const readAt = stored('reports-read-at');
-  const unread = reports.some(report => !readAt || (report.updated_at || '') > readAt);
-  pip.hidden = !unread;
-  pip.title = unread ? 'A report has not been read' : 'No unread report';
-  pip.setAttribute('aria-label', unread ? 'Unread report' : 'No unread report');
+  const unseen = reports.filter(report => !report.seen_at);
+  pip.hidden = unseen.length === 0;
+  pip.title = unseen.length ? 'A report has not been read' : 'No unread report';
+  pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread report');
 }
+// A report counts as read when the browser has shown it: scrolled to its end, or, for a report
+// that fits the panel with nothing to scroll, held in view for five seconds on owner direction,
+// so a flick past it stamps nothing. Republishing clears the stamp, so changed text is unread.
+const REPORT_READ_DWELL = 5000;
+let readPending = null;
+function clearReadTimer() {
+  if (readPending) { clearTimeout(readPending.timer); readPending = null; }
+}
+function unseenReportId() {
+  const reports = (lastState && lastState.reports) || [];
+  const report = reports.find(item => item.id === $('#report-select').value);
+  return report && !report.seen_at ? report.id : null;
+}
+async function markReportRead(id) {
+  clearReadTimer();
+  try {
+    await request(`/api/reports/${encodeURIComponent(id)}/seen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      body: '{}'
+    });
+  } catch (error) {
+    // A stamp that fails costs the owner nothing they have to act on, and the next look retries.
+    return;
+  }
+  refreshState();
+}
+function checkReportRead() {
+  const panel = $('#reports-panel');
+  const id = panel.hidden ? null : unseenReportId();
+  const viewport = panel.clientHeight;
+  // A panel with no height yet has no report in it to read, and a report still being fetched is
+  // not one either: reading is what this stamps, so it waits until there is something to look at.
+  if (!id || !viewport || !panel.scrollHeight) { clearReadTimer(); return; }
+  if (panel.scrollHeight > viewport + 1) {
+    // There is more report than panel, so reaching the end is the gesture that reads it.
+    if (panel.scrollTop + viewport >= panel.scrollHeight - 2) markReportRead(id);
+    else clearReadTimer();
+    return;
+  }
+  if (readPending && readPending.id === id) return;
+  clearReadTimer();
+  readPending = { id, timer: setTimeout(() => markReportRead(id), REPORT_READ_DWELL) };
+}
+$('#reports-panel').addEventListener('scroll', checkReportRead);
 function showTab(tab) {
   for (const item of tabs) {
     const selected = tab === item;
@@ -645,10 +691,9 @@ function showTab(tab) {
   if (tab === tabs[1]) {
     // Opening the tab is reading it, so the marker is written before the poll that recomputes the
     // pip: it goes out on this visit rather than surviving until the next one.
-    save('reports-read-at', new Date().toISOString());
     refreshState();
     loadReport();
-  }
+  } else clearReadTimer();
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab));

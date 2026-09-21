@@ -601,12 +601,31 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
     # Notes keep the small limit; only report answers were widened.
     assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
+    # The read stamp belongs to the report rather than to one browser's storage, so the browser
+    # writes it through a route of its own, and only the first look sets it.
+    store.publish("seen", "Seen report", source)
+    assert store.state()["reports"][-1]["seen_at"] is None
+    assert request("POST", "/api/reports/seen/seen", "{}")[0] == 403
+    assert request("POST", "/api/reports/missing/seen", "{}", auth)[0] == 404
+    assert request("GET", "/api/reports/seen/seen")[0] == 404
+    status, _, stamped = request("POST", "/api/reports/seen/seen", "{}", auth)
+    first = json.loads(stamped)["seen_at"]
+    assert status == 200 and first
+    assert store.state()["reports"][-1]["seen_at"] == first
+    # A later look does not move it: the stamp records when the report was read, and only a
+    # republish, which changes the text, clears it.
+    assert (
+      json.loads(request("POST", "/api/reports/seen/seen", "{}", auth)[2])["seen_at"]
+      == first
+    )
+    store.publish("seen", "Seen report revised", source)
+    assert store.state()["reports"][-1]["seen_at"] is None
   finally:
     app.shutdown()
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, seen-at-read, reports, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, seen-at-read, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )
 
 with tempfile.TemporaryDirectory() as legacy_dir:
