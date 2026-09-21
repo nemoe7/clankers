@@ -598,8 +598,8 @@ function logLine(note) {
     task_id: note.task_id ?? null
   });
 }
-// The save button posts the cached copy to the server, which writes it beside the database as one
-// file both importers read. It is the only action that puts the page's data on disk, and it is the
+// The save button posts the cached copy to the server, which writes one file at the repository
+// root for the importers to read; the report answers come from the server's own records. It is the only action that puts the page's data on disk, and it is the
 // reason a restore no longer needs the owner to paste anything: the browser is the surviving copy.
 $('#save-state').addEventListener('click', async () => {
   const button = $('#save-state');
@@ -619,7 +619,9 @@ $('#save-state').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
       body: JSON.stringify(cached)
     })).json();
-    status.textContent = `Saved ${result.notes} messages and ${result.tasks} tasks to ${result.path}.`;
+    status.textContent =
+      `Saved ${result.notes} messages, ${result.answers} report answers and ` +
+      `${result.tasks} tasks to ${result.path}.`;
     button.dataset.state = 'good';
   } catch (error) {
     status.textContent = `Not saved: ${error.message}. The cache is kept; press the button again.`;

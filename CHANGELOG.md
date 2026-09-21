@@ -1,3 +1,25 @@
+## 2026-09-21 — The save file outlives the restore, and the answers ride with it
+
+**Date:** 2026-09-21
+
+**Summary** — `saved-state.ndjson` moves out of the state directory to the repository root, untracked,
+on the owner's later answer to the save-state report (submission `c0fcfad9`), so the copy outlives the
+directory a restore drops; `--save-path` selects another path. The file carries the owner's report
+answers as a third kind of line (note `120fe358`), written from the database rather than from the page,
+so `import-notes` brings a sent answer back with its receipt, read stamp and task marker. A note line
+now carries `task_id` as well, so the receipt's `Task added` marker survives a restore too.
+
+**Cost** — `scripts/preview.py` and `scripts/check_client.cjs` grow; `assets/app.js` grows by two lines,
+and the README budget row refreshes with it. `.gitignore` gains the file, and the save button's title
+names the report answers.
+
+**Checks** — `check_preview.py` asserts the written path is outside the state directory, that the file
+holds the page's note and task lines followed by one answer line per stored answer, that a note line
+keeps its `task_id`, and that `import-notes` restores the answer with its receipt, read stamp and marker.
+The mixed one-file test now carries an answer line and shows both importers split three kinds of line.
+The client harness reads the new counts in the save receipt. The refs/live parity check,
+`maintenance/minify.py`, `ruff`, `markdownlint-cli2` and the STE gate are green.
+
 ## 2026-09-21 — A receipt reads in parts, and a message can say it became a task
 
 **Date:** 2026-09-21

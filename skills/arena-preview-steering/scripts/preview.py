@@ -256,9 +256,13 @@ MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
 ECHO_DETAIL = 200
 TASK_COLUMNS = "id, title, details, status, position, updated_at"
-# The save button writes one file that both importers read: a note line carries `text`, a task line
-# carries `title`, and each importer skips the other's lines. Keys are named here so the writer and
-# the two readers cannot drift apart.
+# The save button writes one file the importers read: a note line carries `text`, a task line
+# carries `title`, an answer line carries `report_id`, and each importer takes its own lines and
+# skips the rest. Keys are named here so the writer and the readers cannot drift apart.
+#
+# The file sits untracked at the repository root, on the owner's answer to the save-state report
+# (report submission c0fcfad9): a restore keeps the repository, so the copy survives the event it
+# exists for, and only explicit paths are staged, so it stays out of every commit.
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
   "id",
@@ -269,8 +273,20 @@ NOTE_LINE_KEYS = (
   "ack_text",
   "seen_at",
   "origin",
+  "task_id",
 )
 TASK_LINE_KEYS = ("id", "title", "details", "status", "order")
+SUBMISSION_LINE_KEYS = (
+  "id",
+  "report_id",
+  "text",
+  "at",
+  "acknowledged_at",
+  "ack_kind",
+  "ack_text",
+  "seen_at",
+  "task_id",
+)
 
 
 def task_row(row):
@@ -306,6 +322,13 @@ def saved_note_line(record):
   if not isinstance(record, dict):
     raise TypeError("Every saved note is an object")
   return {key: record.get(key) for key in NOTE_LINE_KEYS}
+
+
+def saved_answer_line(record):
+  """Return the keys a saved report answer line carries, so a restore keeps the answer."""
+  if not isinstance(record, dict):
+    raise TypeError("Every saved answer is an object")
+  return {key: record.get(key) for key in SUBMISSION_LINE_KEYS}
 
 
 def saved_task_line(record):
@@ -395,9 +418,12 @@ def render_report(markdown):
 
 
 class Store:
-  def __init__(self, directory, create=False):
+  def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
     self.path = directory / "state.sqlite3"
+    # The save file is not the database: it outlives a restore, so by default it is written
+    # where the agent runs the command, which is the repository root (report c0fcfad9).
+    self.save_path = Path(save_path) if save_path else Path(SAVED_STATE)
     existed = self.path.is_file()
     if not create and not existed:
       raise FileNotFoundError(f"Inbox missing: {self.path}; start the preview first")
@@ -514,8 +540,25 @@ class Store:
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
-  def submission(self, submission_id, report_id, text, at=None):
-    """Record report answers apart from user messages; the log never shows them."""
+  def submission(
+    self,
+    submission_id,
+    report_id,
+    text,
+    at=None,
+    acknowledged_at=None,
+    ack_kind=None,
+    ack_text=None,
+    seen_at=None,
+    task_id=None,
+  ):
+    """Record report answers apart from user messages; the log never shows them.
+
+    `import-notes` restores a saved answer through here too, receipt and all, for the same
+    reason a note keeps its own: the save file exists so a restore returns what the owner
+    sent, and an answer that comes back unread was read when the agent read it (report
+    submission c0fcfad9, note 120fe358). An ID already stored keeps its record.
+    """
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
@@ -529,8 +572,18 @@ class Store:
           raise ValueError("This message ID already belongs to different text")
         return dict(existing)
       db.execute(
-        "INSERT INTO submissions (id, report_id, text, at) VALUES (?, ?, ?, ?)",
-        (submission_id, report_id, text, at or now()),
+        "INSERT INTO submissions"
+        " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, task_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+          submission_id,
+          report_id,
+          text,
+          at or now(),
+          *restore_receipt(acknowledged_at, ack_kind, ack_text),
+          when(seen_at) if seen_at is not None else None,
+          task_id,
+        ),
       )
       return dict(
         db.execute(
@@ -720,12 +773,17 @@ class Store:
       self.renumber(db)
 
   def save_state(self, payload):
-    """Write the page's cached state to the state directory, in the shape the importers read.
+    """Write the page's cached state to the save file, in the shape the importers read.
 
     The browser cannot write the sandbox filesystem, so it posts what it holds and this writes it.
-    Note lines keep their receipts and read stamps, because a restore that drops either is the
-    failure this exists to prevent; task lines keep their status and order, so the queue comes back
-    in the same shape. One file, two readers.
+    Note lines keep their receipts, read stamps and task markers, because a restore that drops any
+    of them is the failure this exists to prevent; task lines keep their status and order, so the
+    queue comes back in the same shape. Answer lines come from the database rather than from the
+    page, because the owner's report answers are stored here the moment they are sent, and an
+    answer that a restore drops is an answer the owner has to type again (note 120fe358).
+
+    The file lands at the repository root and stays untracked (report submission c0fcfad9): a
+    restore keeps the checkout, so the copy outlives the database beside it.
     """
     if not isinstance(payload, dict):
       raise TypeError("Save a state object")
@@ -737,12 +795,21 @@ class Store:
     for status in TASK_STATUSES:
       for record in tasks.get(status) or []:
         lines.append(saved_task_line(record))
-    path = self.path.parent / SAVED_STATE
+    answers = [saved_answer_line(record) for record in self.submissions()]
+    lines.extend(answers)
+    path = self.save_path
+    if path.parent != Path("."):
+      path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
       "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines),
       encoding="utf-8",
     )
-    return {"path": str(path), "notes": len(notes), "tasks": len(lines) - len(notes)}
+    return {
+      "path": str(path),
+      "notes": len(notes),
+      "tasks": len(lines) - len(notes) - len(answers),
+      "answers": len(answers),
+    }
 
   def uploads(self):
     """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
@@ -1322,6 +1389,11 @@ def main():
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--state-dir", default="reports/arena-preview")
   parser.add_argument(
+    "--save-path",
+    default=SAVED_STATE,
+    help="Where the save button writes its file; untracked, and at the repository root by default",
+  )
+  parser.add_argument(
     "--pretty",
     action="store_true",
     help="Indent the JSON this CLI prints; agent-facing output is minified by default",
@@ -1382,7 +1454,9 @@ def main():
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
   try:
-    store = Store(args.state_dir, create=args.command in {"serve", "init"})
+    store = Store(
+      args.state_dir, create=args.command in {"serve", "init"}, save_path=args.save_path
+    )
     if args.command == "serve":
       require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
@@ -1468,18 +1542,38 @@ def main():
         )
       )
     elif args.command == "import-notes":
+      saved = [
+        json.loads(line)
+        for line in args.source.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+      ]
+      # A save file holds three kinds of line, and one reader takes two of them. A task carries a
+      # title and no text; a note carries text and no report ID; the owner's report answers carry
+      # a report ID. Each line is then validated by the writer it belongs to, so a restore cannot
+      # store a shape the preview itself would refuse.
+      answers = [
+        record for record in saved if isinstance(record, dict) and "report_id" in record
+      ]
       records = [
         record
-        for record in (
-          json.loads(line)
-          for line in args.source.read_text(encoding="utf-8").splitlines()
-          if line.strip()
+        for record in saved
+        if not (
+          isinstance(record, dict)
+          and (("title" in record and "text" not in record) or "report_id" in record)
         )
-        # A save file holds the tasks as well, and those lines are not notes: they carry a title
-        # and no text. Skipping them is the whole of the split; anything else stays a note and is
-        # validated as before.
-        if not (isinstance(record, dict) and "title" in record and "text" not in record)
       ]
+      for record in answers:
+        store.submission(
+          record["id"],
+          record["report_id"],
+          record["text"],
+          record.get("at"),
+          acknowledged_at=record.get("acknowledged_at"),
+          ack_kind=record.get("ack_kind"),
+          ack_text=record.get("ack_text"),
+          seen_at=record.get("seen_at"),
+          task_id=record.get("task_id"),
+        )
       for record in records:
         store.note(
           record["id"],
@@ -1494,7 +1588,8 @@ def main():
         )
       receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(
-        f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim;"
+        f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim,"
+        f" {len(answers)} report answers;"
         " existing IDs are not duplicated and keep the receipt they have"
       )
   except (

@@ -144,7 +144,7 @@ const context = {
         return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
       }
       saveCalls.push(JSON.parse(options.body));
-      return response({ path: '/tmp/state/saved-state.ndjson', notes: 2, tasks: 1 });
+      return response({ path: 'saved-state.ndjson', notes: 2, answers: 1, tasks: 1 });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
@@ -786,7 +786,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   assert.equal(saveCalls.length, 1, 'the button posts the cache');
   assert.ok(saveCalls[0].notes.length > 0 && saveCalls[0].tasks, 'the cache carries notes and tasks');
-  assert.match(get('#send-status').textContent, /Saved 2 messages and 1 tasks to/);
+  assert.match(get('#send-status').textContent, /Saved 2 messages, 1 report answers and 1 tasks to saved-state.ndjson/);
   assert.equal(saveButton.dataset.state, 'good');
   storage.delete(cacheKey);
   saveButton.events.click();
@@ -809,7 +809,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(saveCalls.length, savesBefore + 1, 'the write lands on the retry');
   assert.equal(writeTokens.at(-1), 'token-two', 'the retry carries the token the new server accepts');
   assert.equal(saveButton.dataset.state, 'good');
-  assert.match(get('#send-status').textContent, /Saved 2 messages and 1 tasks to/);
+  assert.match(get('#send-status').textContent, /Saved 2 messages, 1 report answers and 1 tasks to saved-state.ndjson/);
   staleToken = false;
   // The fixture above is this test's own; later tests read the state that was live before it.
   state = priorState;
