@@ -36,7 +36,7 @@ MAX_SUBMISSION = 150_000
 # since nothing about them is allowed to be that large.
 MAX_BODY = 32_768
 MAX_SUBMISSION_BODY = 1_000_000
-# An upload is the size of a report submission, on the owner's answer in report submission c27a4dd5.
+# An upload is the size of a report submission, on the owner's answer.
 MAX_UPLOAD = 1_000_000
 # Bytes land beside the database, never inside it, and the record carries the file name under this
 # directory rather than an absolute path, so a state directory that moves still resolves.
@@ -266,7 +266,7 @@ TASK_COLUMNS = "id, title, details, status, position, updated_at"
 # skips the rest. Keys are named here so the writer and the readers cannot drift apart.
 #
 # The file sits untracked at the repository root, on the owner's answer to the save-state report
-# (report submission c0fcfad9): a restore keeps the repository, so the copy survives the event it
+#: a restore keeps the repository, so the copy survives the event it
 # exists for, and only explicit paths are staged, so it stays out of every commit.
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
@@ -802,9 +802,9 @@ class Store:
     of them is the failure this exists to prevent; task lines keep their status and order, so the
     queue comes back in the same shape. Answer lines come from the database rather than from the
     page, because the owner's report answers are stored here the moment they are sent, and an
-    answer that a restore drops is an answer the owner has to type again (note 120fe358).
+    answer that a restore drops is an answer the owner has to type again.
 
-    The file lands at the repository root and stays untracked (report submission c0fcfad9): a
+    The file lands at the repository root and stays untracked: a
     restore keeps the checkout, so the copy outlives the database beside it.
     """
     if not isinstance(payload, dict):
@@ -849,7 +849,7 @@ class Store:
   def save_upload(self, name, content_type, data):
     """Write the bytes under the state directory and keep the record in the database.
 
-    Disk first, on the owner's answer in report submission `c27a4dd5`: the bytes never pass through the
+    Disk first, on the owner's answer: the bytes never pass through the
     database, and the row carries the file name, the size, the hash and the content type. A record
     outlives its file by design, because a restore deletes what is under the state directory, so
     `present` reports that instead of an entry that silently opens nothing. Any bytes are accepted,
@@ -974,7 +974,7 @@ class Store:
   def mark_task(self, record_id, task_id, shared=None):
     """Record that a message has a task, on whichever table holds that message.
 
-    The receipt then says so in the log, which is what the owner asked for (note fe00a32d):
+    The receipt then says so in the log, which is what the owner asked for:
     a line without a marker leaves the reader unable to tell whether it was read and dropped
     or read and queued. An unknown message ID raises, and a caller's transaction takes the
     task with it, so a mistyped ID costs no half-written task.
@@ -1200,7 +1200,7 @@ def unescape_fences(source):
 
   A backslash before a line-leading fence makes markdown-it read a literal ``` inside a
   paragraph, so the block never reaches the rule that carries the code background. The owner
-  reported exactly that (note 850de5a1): the fence was meant as a block, and the marker is
+  reported exactly that: the fence was meant as a block, and the marker is
   unescaped here so it opens one. A tilde fence is a fence too, so the run takes either marker. An escape anywhere else is left alone, because inline
   backticks are the other thing an escape can mean.
   """
@@ -1215,7 +1215,7 @@ PARAGRAPH_BREAK = re.compile(r"<br\s*/?>")
 
 
 def drop_paragraph_breaks(rendered):
-  """Take the `<br>` out of a paragraph, on the owner's suggestion in note 0d1d1123.
+  """Take the `<br>` out of a paragraph, on the owner's suggestion.
 
   With breaks on, markdown-it turns each newline into a `<br>` and the owner found the result too
   airy next to the message log, where a line breaks through `white-space: pre-wrap` and needs no
@@ -1288,14 +1288,14 @@ def handler(store):
         if path == "/api/state":
           state = store.state()
           # The page keeps its write token fresh from the poll, so a save pressed after a server
-          # restart lands without a browser refresh (owner note 2647459f). The token is CSRF
+          # restart lands without a browser refresh. The token is CSRF
           # resistance rather than authentication, and this page already carries it.
           state["token"] = token
           try:
             for item in state["notes"]:
               # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source
               # carries is the line break. A `<br>` beside it doubled every gap, which is what
-              # the owner saw and removed by hand in the browser (note 0d1d1123).
+              # the owner saw and removed by hand in the browser.
               item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
                 item["ack_html"] = render(item["ack_text"])

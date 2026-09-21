@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory() as directory:
   )
   assert linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
   assert "<s>" in preview.render("~~gone~~")
-  # A paragraph carries no `<br>` at all, on the owner's suggestion in note 0d1d1123: markdown-it
+  # A paragraph carries no `<br>` at all, on the owner's suggestion: markdown-it
   # turns a newline into one when breaks are on, and the owner read the result as too airy beside
   # the message log, where a line breaks through `white-space: pre-wrap` and needs no tag.
   chat = preview.render("line one\nline two", breaks=True)
@@ -52,11 +52,11 @@ with tempfile.TemporaryDirectory() as directory:
   assert "<br" in preview.render("- a\n  b", breaks=True)
   # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline
   # the source carries is the line break and a `<br>` beside it doubled every gap. That doubling
-  # is what the owner removed by hand in the browser (note 0d1d1123).
+  # is what the owner removed by hand in the browser.
   logged = preview.render("line one\nline two")
   assert "<br" not in logged and "\n" in logged and logged.count("<p>") == 1
   # A fence the owner escaped still opens a block: the line-leading escape is dropped before the
-  # render, so the marker reaches the rule that carries the background (owner note 850de5a1).
+  # render, so the marker reaches the rule that carries the background.
   escaped = preview.render("before\n\\```\ncode\n\\```\nafter")
   assert escaped.count('class="code-block"') == 1
   assert "<p>before</p>" in escaped and "<p>after</p>" in escaped
@@ -93,12 +93,12 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'id="log-filter"' in page and 'id="log-empty"' in page
     # The log's jump bar ships in the page, inside the wrapper that positions it over the scroll area.
     assert 'id="log-newest"' in page and 'class="log-scroll"' in page
-    # The bar hugs its label rather than spanning the pane, on owner note edbdfcae.
+    # The bar hugs its label rather than spanning the pane.
     assert "translateX(-50%)" in page
     # The save button sits in the top bar after the theme button rather than in the log's own row, on
     # owner note 0f27a2b6; the log's row keeps the filter immediately left of copy-log, on owner notes
     # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught. The log's own
-    # copy and the tasks' copy are gone, on owner note 586d52f7, and the save button carries the copy
+    # copy and the tasks' copy are gone, and the save button carries the copy
     # of the state it posts on a shift-click.
     assert (
       page.index('id="theme"')
@@ -108,7 +108,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert page.index('id="log-filter"') < page.index('id="refresh-notes"')
     assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
     assert "shift-click copies the state" in page
-    # Every icon button carries a title that repeats its accessible name, on owner note bef51970.
+    # Every icon button carries a title that repeats its accessible name.
     for control in (
       "save-state",
       "refresh-notes",
@@ -119,7 +119,7 @@ with tempfile.TemporaryDirectory() as directory:
       block = page[page.index(f'id="{control}"') :]
       assert "title=" in block[: block.index(">")]
     # The Uploads tab carries the file input and its list, and says what a restore leaves behind, on
-    # the owner's answers in report submission c27a4dd5.
+    # the owner's answers.
     assert 'id="uploads-tab"' in page and 'id="uploads-panel"' in page
     assert 'id="upload-file"' in page and 'id="uploads-list"' in page
     assert (
@@ -343,13 +343,13 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#clock { font-size: inherit; font-variant-numeric: tabular-nums; }" in page
     assert '.icon-button[data-state="good"] { color: var(--dot-said);' in page
     assert '.icon-button[data-state="bad"] { color: #ef4444;' in page
-    assert 'id="copy-log"' not in page, "the log lost its copy button (note 586d52f7)"
+    assert 'id="copy-log"' not in page, "the log lost its copy button"
     # The log header is two rows tall, not three: the title stands alone and the
-    # connection and last-check lines stack to its right, on owner note ecf7d264.
+    # connection and last-check lines stack to its right.
     assert '<h2 id="history-title">Message log</h2>' in page
     assert page.index('id="history-title"') < page.index('class="stack"')
     assert "#history-title { margin: 0; }" in page
-    # The composer's outer rows give up the space they face, on owner notes 778a276a and 27c65cba.
+    # The composer's outer rows give up the space they face.
     assert "#form > div:first-child { margin-top: 0; padding-top: 0; }" in page
     assert "#form > div:last-child { margin-bottom: 0; padding-bottom: 0; }" in page
     assert '<button id="copy-report" class="icon-button"' in page
@@ -365,9 +365,7 @@ with tempfile.TemporaryDirectory() as directory:
       ".task-details > summary { cursor: pointer; list-style-position: inside; }"
       in page
     )
-    assert 'id="copy-tasks"' not in page, (
-      "the tasks lost their copy button (note 586d52f7)"
-    )
+    assert 'id="copy-tasks"' not in page, "the tasks lost their copy button"
     # The Reports tab carries an unread pip rather than a count of the reports that exist.
     assert 'id="report-pip"' in page
     assert "report-count" not in page
@@ -386,13 +384,13 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#send { border-color: var(--accent); }" not in page
     assert "#report-submit { margin-top: 16px; }" in page
     # A code block carries its background wherever markdown renders, not in a report alone: the
-    # owner read a fence in a message as having no background (notes 850de5a1 and 4b57f95a).
+    # owner read a fence in a message as having no background.
     assert (
       "pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }"
       in page
     )
     # The log filter draws its own box like the icon buttons beside it, after a second owner note
-    # that the heights still differed (note 6da88604).
+    # that the heights still differed.
     assert "appearance: none" in page and "#log-filter" in page
     assert page.count("#send {") == 0
     assert "resize: none;" in page and "resize: vertical" not in page
@@ -696,7 +694,7 @@ with tempfile.TemporaryDirectory() as directory:
 
     # A report answer the owner sent is stored here, and the save file carries it: the answers
     # come from the database rather than from the page, so a restore returns what the owner
-    # typed instead of asking for it twice (note 120fe358).
+    # typed instead of asking for it twice.
     store.submission(
       "saved-answer",
       "first",
@@ -1311,7 +1309,7 @@ with tempfile.TemporaryDirectory() as restore_dir:
   assert rows["carried"]["ack_kind"] == "reply"
   assert rows["carried"]["ack_text"] == "Fixed in `preview.py`."
   assert rows["carried"]["at"] == "2026-09-20T22:00:47"
-  # A message that became a task comes back marked, so a restore keeps the link (note fe00a32d).
+  # A message that became a task comes back marked, so a restore keeps the link.
   assert rows["carried"]["task_id"] == "carried-task"
   assert rows["plain"]["task_id"] is None
 
