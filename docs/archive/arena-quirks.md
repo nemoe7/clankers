@@ -277,6 +277,22 @@ Both answers were substantive. The agent fixes the P1 seen bug by giving itself 
 poll and exposing reading nowhere else. And the handoff stays out of Git, which means a restore keeps
 deleting it.
 
+### 2026-09-22 arena/01a0c5a8-clankers
+
+The session that recovered the stranded work adds two observations.
+
+A retry inside the same turn does not bring a dead token back. The documented retry tells the agent
+that the push failed, and it does not clear the failure. The token comes back with the next turn, so
+the only reliable recovery is to leave the turn. Blocking with the question tool leaves it in a way
+that tells the owner what failed. That is why `rules/ARENA.md` now names the tool instead of a silent
+end.
+
+Context exhaustion is a second failure, and it is worse. The previous session ended with the message
+`This conversation is too long for this model. Please start a new chat.` It refused to leave the turn
+the documented way, and it lost every commit that it had not pushed. A sandbox does not outlive the
+conversation that created it. An unpushed commit is therefore not a saved commit, and the agent must
+push after each one.
+
 ## `Something went wrong. Please try again.` arrives as a message, three times
 
 The owner reported on 2026-09-21 that Arena answered with `Something went wrong. Please try again.`
