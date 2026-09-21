@@ -92,7 +92,8 @@ jobs:
             README.md \
             docs/archive/budget-exceptions.md \
             workflows/README.md \
-            .agents/skills/README.md
+            .agents/skills/README.md \
+            docs/archive/arena-quirks.md
 
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
