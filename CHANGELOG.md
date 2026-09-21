@@ -5,8 +5,8 @@
 **Summary** — a fence the owner wrote with a backslash before each marker now opens a real block
 (owner note `850de5a1`). `render()` drops a line-leading escape before the backtick run, because
 markdown-it otherwise reads a literal ``` inside a paragraph and the rule that carries the code
-background never reaches it. An escape anywhere else is left alone, so inline text keeps its
-literal backticks.
+background never reaches it, on either fence marker, backtick or tilde. An escape anywhere else is
+left alone, so inline text keeps its literal backticks.
 
 **Cost** — `scripts/preview.py` grows by one regular expression and one pre-pass.
 
