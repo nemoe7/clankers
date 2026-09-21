@@ -14,7 +14,7 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-20. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except the two preview skills, which are measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including skill refs, are not included.
+Latest measurements as of 2026-09-21. ARENA.md is measured by uploaded file size and the two ChatGPT files by their custom-instruction character limits; the remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens, except the two preview skills, which are measured by UTF-8 file size, since a byte count needs no tokenizer and so survives a sandbox where the `tiktoken` cache cannot be seeded. Supporting files loaded on demand, including skill refs, are not included.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ Latest measurements as of 2026-09-20. ARENA.md is measured by uploaded file size
 | `rules/kilo/debug.md` | `cl100k_base` | 288 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 251 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 10,080 `B` |
+| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 10,689 `B` |
 | `skills/arena-preview-reporting/SKILL.md` | `UTF-8 file size` | 5,482 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
