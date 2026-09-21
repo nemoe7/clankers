@@ -599,7 +599,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   const logLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(Object.keys(logLines[0]),
-    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text']);
+    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at']);
   assert.ok(logLines.length > 0);
   // The copied timestamp stops at the seconds; the fixture's own is a full toISOString(),
   // so a fraction or an offset surviving the copy fails the shape and the sweep below.
@@ -613,7 +613,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     { id: 'carried', text: 'answered before the wipe', at: new Date().toISOString(),
       acknowledged_at: '2026-09-20T22:05:11.982172+00:00', ack_kind: 'reply',
       ack_text: 'Fixed in `preview.py`.' },
-    { id: 'plain', text: 'never answered', at: new Date().toISOString(), acknowledged_at: null }
+    { id: 'plain', text: 'never answered', at: new Date().toISOString(), acknowledged_at: null },
+    { id: 'read', text: 'read but not answered', at: new Date().toISOString(),
+      acknowledged_at: null, ack_kind: null, ack_text: null, seen_at: '2026-09-20T22:01:30' }
   ];
   await tick();
   await get('#refresh-notes').events.click();
@@ -621,7 +623,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   const receiptLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(Object.keys(receiptLines[0]),
-    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text']);
+    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at']);
   assert.equal(receiptLines[0].acknowledged_at, '2026-09-20T22:05:11.982172+00:00',
     'a restored receipt keeps the stamp it was written with, fraction and offset intact');
   assert.equal(receiptLines[0].ack_kind, 'reply');
@@ -629,6 +631,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.deepEqual(
     [receiptLines[1].acknowledged_at, receiptLines[1].ack_kind, receiptLines[1].ack_text],
     [null, null, null], 'an unanswered note copies three nulls, not three missing keys');
+  assert.equal(receiptLines[2].seen_at, '2026-09-20T22:01:30',
+    'a note that was read but never answered copies the read stamp it has');
+  assert.deepEqual(
+    [receiptLines[2].acknowledged_at, receiptLines[2].ack_kind, receiptLines[2].ack_text],
+    [null, null, null], 'a read stamp is not a receipt and never stands in for one');
   // The report copies its Markdown source, fetched on the click rather than riding the poll.
   const selectBefore = get('#report-select').value;
   get('#report-select').value = 'p1';
