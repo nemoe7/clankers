@@ -71,7 +71,11 @@ with tempfile.TemporaryDirectory() as directory:
     assert "translateX(-50%)" in page
     # The filter sits in the button row immediately left of copy-log, on owner notes 1006cb38 and
     # 7f52e5fe: a button added between them moves the filter without anyone noticing.
-    assert page.index('id="save-state"') < page.index('id="log-filter"') < page.index('id="copy-log"')
+    assert (
+      page.index('id="save-state"')
+      < page.index('id="log-filter"')
+      < page.index('id="copy-log"')
+    )
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]
@@ -612,6 +616,19 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
     # Notes keep the small limit; only report answers were widened.
     assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
+    # A message records who wrote it: the owner's carry no origin, the agent's carry `agent`, and a
+    # stored database that predates the column gains it by migration.
+    owner_note = store.note("owner-note", "from the owner")
+    agent_note = store.note("agent-note", "from the agent", origin="agent")
+    assert owner_note["origin"] is None and agent_note["origin"] == "agent"
+    assert store.state()["notes"][-1]["origin"] == "agent"
+    try:
+      store.note("third-party-note", "from nobody", origin="robot")
+    except ValueError:
+      pass
+    else:
+      raise AssertionError("a third kind of author is refused")
+
     # The save route writes what the page posts, in one file both importers can read.
     saved_status, _, saved = request(
       "POST",

@@ -143,7 +143,7 @@ function showHistory(notes) {
       messageNodes.set(item.id, node);
     }
     const text = node.children[0];
-    text.className = item.html === undefined ? 'raw-message' : 'report';
+    text.className = item.html === undefined ? 'raw-message' : 'message-text';
     if (item.html === undefined) text.textContent = item.text;
     else text.innerHTML = item.html;
     const receipt = node.children[2];
@@ -165,12 +165,20 @@ function showHistory(notes) {
     receiptDot.title = STATE_WORDS[state];
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}`;
-    receipt.replaceChildren(receiptId, receiptDot, receiptState);
+    // A message the agent wrote through its own CLI says so, because the owner could not tell it from
+    // one of theirs and asked who sent a line (note d6fcfc2a). Nothing else changes the receipt.
+    const receiptWho = document.createElement('span');
+    receiptWho.className = 'who';
+    receiptWho.textContent = 'agent';
+    receiptWho.title = 'Written by the agent, not the owner';
+    receipt.replaceChildren(
+      receiptId, ...(item.origin === 'agent' ? [receiptWho] : []), receiptDot, receiptState
+    );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
     const answer = node.children[1];
     if (item.ack_text) {
-      answer.className = item.ack_kind === 'reply' ? 'answer reply report' : 'answer reply';
+      answer.className = item.ack_kind === 'reply' ? 'answer reply message-text' : 'answer reply';
       answer.hidden = false;
       if (item.ack_html === undefined) {
         const plain = document.createElement('p');

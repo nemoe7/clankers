@@ -1,3 +1,10 @@
+## 2026-09-21 — A message says whether the agent wrote it
+
+The owner could not tell an agent message from one of their own and asked who sent a line, so a note written
+through the CLI's new `note` command records `origin`, gains the column by migration where the database predates
+it, keeps it through a save and restore, and renders a small uppercase `agent` tag in its receipt; the owner's own
+messages carry no tag. The same report showed the rendered text wrapper borrowing the `report` class, which is now
+`message-text` on both a message and a rendered answer, with the stylesheet following.
 ## 2026-09-21 — The filter keeps its place in the button row
 
 The save button landed between the log filter and the copy button, and the owner asked for the filter that
