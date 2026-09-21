@@ -1,3 +1,12 @@
+## 2026-09-21 — The linter is a rule, named in root AGENTS.md
+
+Root `AGENTS.md` names the vendored ASD-STE100 linter and says what it covers, on the owner's answer in report
+submission `ce3a6fc9`: `docs/` and every `README.md`, and nothing else. The clause is a MUST for text written or
+edited in those files, so compliance binds from here. Prose that predates the rule keeps its wording until someone
+touches it, because every candidate file still carries violations of its own — 13 hard in `README.md`, 7 and 56 in
+the two archive documents, 11 in `skills/README.md`, 6 in `maintenance/README.md` and 68 in `rules/README.md`. Rules,
+skills and agent-facing files stay outside the linter's scope, which leaves the 46-word sentence in this file out of
+it as well.
 ## 2026-09-21 — The jump bar says Latest message
 
 The bar over the bottom of the log reads `Latest message` rather than `Newest message`, on owner note
