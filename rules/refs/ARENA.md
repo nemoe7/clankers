@@ -134,6 +134,7 @@
 - Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
+- NEVER reference a session-local note ID in a durable file, because it does not persist between sessions; cite the durable record instead.
 - Publish longer reports through `arena-preview-reporting` in the shared preview; do not create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
 - Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.

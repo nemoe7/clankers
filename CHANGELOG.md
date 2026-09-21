@@ -1,3 +1,13 @@
+## 2026-09-21 — ARENA.md bans the session-local note ID
+
+**Origin** — the owner's ban relayed through the preview inbox: a note ID is session-local and does not persist between sessions, so a durable file must not cite it.
+
+**Change** — the Git section of `rules/refs/ARENA.md` gains one bullet in full wording after the artifact bullet, and `rules/ARENA.md` mirrors it compressed; the root `ARENA.md` takes the live bytes verbatim. The growth lands in `docs/archive/budget-exceptions.md` with the unfunded wording.
+
+**Cost** — `rules/ARENA.md` 13,026 → 13,158 `B`, `rules/refs/ARENA.md` 22,719 → 22,859 `B`, no budget on refs.
+
+**Checks** — `maintenance/check.py --update` passes with the root copy byte-identical to the live file.
+
 ## 2026-09-21 — web-interface-guidelines gains its refs baseline
 
 **Origin** — the standing instruction that every rule and skill carries a refs baseline: a missing one is created as a copy of the current live content. `web-interface-guidelines` was the last skill without one.
