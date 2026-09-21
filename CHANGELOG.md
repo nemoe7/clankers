@@ -1,3 +1,11 @@
+## 2026-09-21 — The workflows README passes the linter
+
+**Date:** 2026-09-21
+
+`workflows/README.md` now reports zero linter violations, so the validation workflow runs the linter over it.
+One sentence loses its semicolon and names the actor: the root README tracks a workflow file's budget, and the
+maintainer measures the file again after a change. The rule it states is unchanged.
+
 ## 2026-09-21 — The budget exceptions pass the linter
 
 **Date:** 2026-09-21
