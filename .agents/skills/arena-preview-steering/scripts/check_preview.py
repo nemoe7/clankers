@@ -607,6 +607,48 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
     # Notes keep the small limit; only report answers were widened.
     assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
+    # The save route writes what the page posts, in one file both importers can read.
+    saved_status, _, saved = request(
+      "POST",
+      "/api/save-state",
+      json.dumps(
+        {
+          "notes": [
+            {
+              "id": "saved-note",
+              "text": "from the browser",
+              "at": "2026-09-21T09:00:00",
+              "acknowledged_at": "2026-09-21T09:05:00",
+              "ack_kind": "reply",
+              "ack_text": "answered",
+              "seen_at": "2026-09-21T09:01:00",
+            }
+          ],
+          "tasks": {
+            "upcoming": [
+              {
+                "id": "saved-task",
+                "title": "From the browser",
+                "details": ["one"],
+                "order": 1,
+              }
+            ],
+            "finished": [],
+          },
+        }
+      ),
+      auth,
+    )
+    assert saved_status == 200
+    written = json.loads(saved)
+    assert written["notes"] == 1 and written["tasks"] == 1
+    saved_lines = [
+      json.loads(line)
+      for line in Path(written["path"]).read_text(encoding="utf-8").splitlines()
+    ]
+    assert [line["id"] for line in saved_lines] == ["saved-note", "saved-task"]
+    assert request("POST", "/api/save-state", "{}", auth)[0] == 400
+    assert request("POST", "/api/save-state", "{}")[0] == 403
     # The read stamp belongs to the report rather than to one browser's storage, so the browser
     # writes it through a route of its own, and only the first look sets it.
     store.publish("seen", "Seen report", source)
@@ -883,6 +925,63 @@ with tempfile.TemporaryDirectory() as wide_dir:
     raise AssertionError("An oversized note was accepted")
   except ValueError as error:
     assert "4000" in str(error)
+
+# One file, two readers: the same saved-state file feeds both importers, each skipping the other's
+# lines, which is what makes one path enough for the owner's restore.
+with tempfile.TemporaryDirectory() as mixed_dir:
+  mixed_root = Path(mixed_dir)
+  preview.Store(mixed_root, create=True)
+  mixed = mixed_root / "saved-state.ndjson"
+  mixed.write_text(
+    json.dumps(
+      {
+        "id": "saved-note",
+        "text": "from the browser",
+        "at": "2026-09-21T09:00:00",
+        "acknowledged_at": "2026-09-21T09:05:00",
+        "ack_kind": "reply",
+        "ack_text": "answered",
+        "seen_at": "2026-09-21T09:01:00",
+      }
+    )
+    + "\n"
+    + json.dumps(
+      {
+        "id": "saved-task",
+        "title": "From the browser",
+        "details": ["one"],
+        "status": "upcoming",
+        "order": 1,
+      }
+    )
+    + "\n",
+    encoding="utf-8",
+  )
+  script = str(Path(preview.__file__))
+  notes_out = subprocess.run(
+    [
+      sys.executable,
+      script,
+      "--state-dir",
+      str(mixed_root),
+      "import-notes",
+      str(mixed),
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  assert "Imported 1 notes" in notes_out
+  tasks_out = subprocess.run(
+    [sys.executable, script, "--state-dir", str(mixed_root), "task-import", str(mixed)],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  assert json.loads(tasks_out)["imported"] == 1
+  restored = preview.Store(mixed_root)
+  assert [row["id"] for row in restored.state()["notes"]] == ["saved-note"]
+  assert [task["id"] for task in restored.tasks()["upcoming"]] == ["saved-task"]
 
 help_text = subprocess.run(
   [sys.executable, str(Path(preview.__file__)), "serve", "--help"],
