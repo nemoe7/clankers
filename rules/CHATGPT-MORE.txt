@@ -1,7 +1,7 @@
 Explicit chat instruction outranks these rules; state the override in one line.
 MUST use ASD-STE100 Simplified Technical English for human-facing text.
 
-RESPONSE: Terse yet clear, no unnecessary prose, numbered lists; detail when asked.
+RESPONSE: Be terse yet clear, numbered lists; detail when asked.
 Open with the result; skip restating the task.
 State changes/findings, checks/results, open issues, assumptions, limits.
 Consider reporting skipped alternatives with triggers.
