@@ -4,7 +4,7 @@ const note = $('#note');
 const send = $('#send');
 const status = $('#send-status');
 const key = 'arena-preview-v1';
-// The ceiling matches MAX_UPLOAD in preview.py, on the owner's answer in report submission c27a4dd5.
+// The ceiling matches MAX_UPLOAD in preview.py, on the owner's answer.
 const MAX_UPLOAD = 1_000_000;
 let pending = null;
 let stateBusy = false;
@@ -13,7 +13,7 @@ let listSignature = '';
 let lastState = null;
 // The write token starts as the one baked into this page and is refreshed from every poll, so a save
 // pressed after a server restart lands without a browser refresh. The owner pressed save state
-// several times after a sandbox reset and nothing arrived until a manual refresh (note 2647459f),
+// several times after a sandbox reset and nothing arrived until a manual refresh,
 // and the retry that re-read the page for a token could not read the shipped minified page.
 const pageToken = () => (document.body.dataset || {}).token || '__TOKEN__';
 let writeToken = pageToken();
@@ -134,7 +134,7 @@ async function attempt(path, options) {
 // A page outlives the server it came from. A sandbox reset starts the server with a new write token,
 // so the copy baked into this page is refused and every write needs a manual refresh first: the
 // owner pressed save state several times after a reset and nothing landed until they reloaded and
-// pasted the log by hand (note 2647459f). A refused write now takes the token from a fresh page and
+// pasted the log by hand. A refused write now takes the token from a fresh page and
 // tries once more, and a write that never reached a server waits a second and tries again.
 async function request(path, options = {}) {
   let response;
@@ -214,13 +214,13 @@ function showHistory(notes) {
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}`;
     // A message the agent wrote through its own CLI says so, because the owner could not tell it from
-    // one of theirs and asked who sent a line (note d6fcfc2a). Nothing else changes the receipt.
+    // one of theirs and asked who sent a line. Nothing else changes the receipt.
     const receiptWho = document.createElement('span');
     receiptWho.className = 'who';
     receiptWho.textContent = 'agent';
     receiptWho.title = 'Written by the agent, not the owner';
     // The line reads as parts separated by the same ASCII dot: ID · who · state · time · task.
-    // The owner asked for the dot after the ID by name (notes 69dcf681 and 7b183104).
+    // The owner asked for the dot after the ID by name.
     const separator = document.createElement('span');
     separator.className = 'receipt-sep';
     separator.textContent = ' · ';
@@ -604,7 +604,7 @@ function stamp(value) {
 // root for the importers to read; the report answers come from the server's own records. It is the only action that puts the page's data on disk, and it is the
 // reason a restore no longer needs the owner to paste anything: the browser is the surviving copy.
 // The log's copy and the tasks' copy are gone, and this button carries the copy on a shift-click
-// as JSON, on the owner's note 586d52f7; the reports tab keeps its own button.
+// as JSON; the reports tab keeps its own button.
 // The shift-click copy carries only what a restore reads back: the note and task lines the
 // save file writes, in the same keys. Nothing derived rides it: the server renders html for
 // display and a restore re-renders from text, the token dies with its server, seq orders one
@@ -690,7 +690,7 @@ async function loadReport() {
   // The reports panel is the element that scrolls, and replacing the report collapses its content, so
   // the browser clamps the panel to the top before the new HTML arrives. An update to the report being
   // read keeps the owner's place; a report the owner switched to starts at its own top. Owner's bug
-  // report on note 60cdef88, the same class as the seen stamp on note d9b8ce39.
+  // report, the same class as the seen stamp.
   const panel = $('#reports-panel');
   const place = panel.scrollTop;
   const updating = $('#report').dataset.reportId === id;
@@ -755,7 +755,7 @@ function taskRow(task) {
   if (task.details.length) {
     // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
     // and the whole list stays scannable. Native element: no script, and keyboard reachable.
-    // The details inside it are a real <ul>, on the owner's note 11a35a0f, so each carries its own
+    // The details inside it are a real <ul>, so each carries its own
     // marker and reads as a list of separate statements rather than lines inside one block.
     const details = document.createElement('details');
     details.className = 'task-details';
@@ -784,7 +784,7 @@ function taskRow(task) {
 let taskSignature = Symbol('tasks not yet rendered');
 
 // An upload keeps its bytes beside the preview database and its record inside it, on the owner's
-// answers in report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling, and a record that
+// answers: any bytes, a 1,000,000-byte ceiling, and a record that
 // outlives them. The row says which of the two is gone, because a restore removes the bytes and
 // leaves the record, and a download link on a file that is not there would open nothing.
 function uploadRow(item) {
