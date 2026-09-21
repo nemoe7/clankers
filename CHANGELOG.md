@@ -1,3 +1,13 @@
+## 2026-09-21 — The covered documentation passes the STE gate
+
+**Origin** — the documentation lint step in the validate workflow runs the ASD-STE100 skill's linter over the covered documents, and the baseline carries five violations in three of them. Left in place, the step fails on any branch it runs.
+
+**Change** — four sentences split on their semicolons (one in `docs/archive/budget-exceptions.md`, two in `rules/README.md`, one in `rules/refs/README.md`) and the 28-word sentence in `rules/refs/README.md` splits into three lines.
+
+**Cost** — no budget moves: the touched files carry no token budget.
+
+**Checks** — the STE pass over the nine covered documents reports zero violations.
+
 ## 2026-09-21 — ARENA.md bans the session-local note ID
 
 **Origin** — the owner's ban relayed through the preview inbox: a note ID is session-local and does not persist between sessions, so a durable file must not cite it.
