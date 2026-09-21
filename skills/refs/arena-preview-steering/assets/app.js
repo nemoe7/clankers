@@ -191,7 +191,7 @@ async function refreshState() {
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
-    renderTasks(state.tasks);
+    renderTasksIfChanged(state.tasks);
     const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {
       listSignature = signature;
@@ -528,9 +528,13 @@ function taskRow(task) {
   title.textContent = task.title;
   const rows = [title];
   if (task.details.length) {
-    const details = document.createElement('span');
+    // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
+    // and the whole list stays scannable. Native element: no script, and keyboard reachable.
+    const details = document.createElement('details');
     details.className = 'task-details';
-    details.replaceChildren(...task.details.map(line => {
+    const summary = document.createElement('summary');
+    summary.textContent = `${task.details.length} detail${task.details.length === 1 ? '' : 's'}`;
+    details.replaceChildren(summary, ...task.details.map(line => {
       const detail = document.createElement('span');
       detail.className = 'task-detail';
       detail.textContent = line;
@@ -540,6 +544,20 @@ function taskRow(task) {
   }
   item.replaceChildren(...rows);
   return item;
+}
+
+// Tasks re-render only when the payload changed, the way the report list already guards on its own
+// signature. Without this every poll rebuilds the rows and snaps an opened <details> shut, which
+// would make the collapse below useless three seconds after the owner clicked it.
+// A symbol rather than null: JSON.stringify of a missing task list is undefined, and undefined
+// normalised to null would equal a null sentinel and skip the first render entirely.
+let taskSignature = Symbol('tasks not yet rendered');
+
+function renderTasksIfChanged(tasks) {
+  const signature = JSON.stringify(tasks);
+  if (signature === taskSignature) return;
+  taskSignature = signature;
+  renderTasks(tasks);
 }
 
 function renderTasks(tasks) {
