@@ -194,10 +194,18 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(upcomingBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
   assert.equal(upcomingBody.children[0].children[0].className, 'task-title');
   assert.equal(upcomingBody.children[0].children[1].tagName, 'details');
-  assert.equal(upcomingBody.children[0].children[1].children.length, 3);
+  assert.equal(upcomingBody.children[0].children[1].children.length, 2, 'a summary and one list');
   assert.equal(upcomingBody.children[0].children[1].children[0].tagName, 'summary');
   assert.equal(upcomingBody.children[0].children[1].children[0].textContent, '2 details');
-  assert.equal(upcomingBody.children[0].children[1].children[2].textContent, 'write arena-quirks.md');
+  // The details are a real list, so each carries its own marker rather than being a line in a span.
+  const detailList = upcomingBody.children[0].children[1].children[1];
+  assert.equal(detailList.tagName, 'ul');
+  assert.equal(detailList.className, 'task-detail-list');
+  assert.equal(detailList.children.length, 2);
+  assert.equal(detailList.children[0].tagName, 'li');
+  assert.equal(detailList.children[0].className, 'task-detail');
+  assert.equal(detailList.children[0].textContent, 'move BUDGET-EXCEPTIONS.md');
+  assert.equal(detailList.children[1].textContent, 'write arena-quirks.md');
   assert.equal(upcomingBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
   assert.equal(finishedBody.children.length, 1);
   assert.equal(finishedBody.children[0].children.length, 1);
