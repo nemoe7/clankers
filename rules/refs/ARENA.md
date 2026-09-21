@@ -30,6 +30,7 @@
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, do the smallest one first and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order never decides it and a large task never blocks a small one.
+- Keep working while budget and tasks remain. End the turn only when the token budget is exhausted or your attention is strictly required, and say in one line which of the two it was: a report waiting on the user never justifies a stop, and a queued task is never a finished one.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
