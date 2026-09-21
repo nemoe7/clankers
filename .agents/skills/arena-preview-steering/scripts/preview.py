@@ -1139,9 +1139,12 @@ def handler(store):
           state = store.state()
           try:
             for item in state["notes"]:
-              item["html"] = render(item["text"], breaks=True)
+              # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source
+              # carries is the line break. A `<br>` beside it doubled every gap, which is what
+              # the owner saw and removed by hand in the browser (note 0d1d1123).
+              item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
-                item["ack_html"] = render(item["ack_text"], breaks=True)
+                item["ack_html"] = render(item["ack_text"])
           except RuntimeError as error:
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))

@@ -59,8 +59,12 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
     check=False,
   )
 
-  if result.returncode:
-    raise RuntimeError(f"{binary} failed on {source.name}:\n{result.stderr.strip()}")
+  if result.returncode or result.stderr.strip():
+    # A warning is a failure here. clean-css reported an unterminated string once by dropping every
+    # rule it swallowed, which a size budget cannot see and a browser may hide (commit 99b126e).
+    raise RuntimeError(
+      f"{binary} on {source.name}:\n{result.stderr.strip() or 'failed'}"
+    )
 
   return result.stdout.rstrip("\n") + "\n"
 

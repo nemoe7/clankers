@@ -1,3 +1,29 @@
+## 2026-09-21 — The log stops double-spacing, and a dead filter rule comes back
+
+**Date:** 2026-09-21
+
+**Summary** — three owner notes and one report answer land here. The log renders notes and answers
+without `breaks`, because their paragraphs already carry `white-space: pre-wrap` and the `<br>` beside the
+source newline doubled every gap; the draft preview keeps `breaks=True`, since its paragraphs are
+`white-space: normal`. A stray `"` in `assets/style.css`, introduced by `99b126e`, left a rule unterminated:
+clean-css dropped every rule it swallowed — `.select-wrap`, `#log-filter` and more — with a warning, exit 0 and
+a smaller file. That is why the log filter kept a height of its own (owner notes `37b4069f` and `6da88604`), and
+why the shipped stylesheet was missing every rule after it; `maintenance/minify.py` now refuses any minifier
+warning, and the stylesheet parses with none. The client takes the write token from a fresh page and retries once
+when a write is refused, and waits a second and retries when a write never reached a server, so a sandbox reset
+no longer needs a manual refresh before the save lands (owner note `2647459f`).
+
+**Cost** — `assets/app.js` 42,516 → 43,658 `B` readable and 23,486 → 23,844 `B` minified; `assets/style.css`
+minified 6,099 → 9,615 `B`, which corrects a number that was small because rules were missing. Three README
+budget rows refresh.
+
+**Checks** — the client harness gains the stale-token case and fails without the retry, proven by reverting it:
+`AssertionError: a refused write re-reads the page for its token`. `check_preview.py` asserts the log's rendering
+carries no `<br>` and keeps the newline. `maintenance/minify.py` builds both copies warning-free, `check.py
+--update` then a clean re-run, the refs `check_preview.py`, `node --check`, the client harness against the
+shipped minified build, `ruff`, `markdownlint-cli2` and the nine-file STE gate are green; CI passed on `7e04182`
+and runs again on this commit.
+
 ## 2026-09-21 — The distributed assets ship minified
 
 **Date:** 2026-09-21
@@ -16,7 +42,9 @@ braces, and markup that loses an id or a visible word.
 
 **Checks** — `maintenance/minify.py` reports both copies matching the refs sources; `node --check` passes on the
 minified JavaScript; the client harness passes against the shipped minified build, which is the proof that the
-build behaves, and CI now runs it there on purpose. CI runs the string-pinning `check_preview.py` from the refs
+build behaves, and CI now runs it there on purpose. A smoke run of the live skill served its page at 36,395 `B`
+with both assets inlined, against roughly 65,000 `B` had the readable assets been inlined, with every element id
+and both tab labels intact. CI runs the string-pinning `check_preview.py` from the refs
 baseline instead, because its pins describe readable text. `maintenance/check.py --update` then a clean re-run,
 `ruff`, `ruff format`, `markdownlint-cli2` and the nine-file STE gate are green.
 
