@@ -3,3 +3,4 @@ __pycache__/
 .tiktoken-cache/
 reports/
 node_modules/
+saved-state.ndjson

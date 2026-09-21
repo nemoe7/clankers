@@ -29,7 +29,10 @@ def request(method, path, body=None, headers=None, raw=False):
 
 
 with tempfile.TemporaryDirectory() as directory:
-  root = Path(directory)
+  # The state directory and the save file are siblings, the way they are in the repository: the
+  # save file is written at the root, so a restore that drops the state directory keeps it.
+  root = Path(directory) / "arena-preview"
+  save_file = Path(directory) / "saved-state.ndjson"
   try:
     preview.Store(root)
     raise AssertionError("Missing inbox was treated as empty")
@@ -47,7 +50,7 @@ with tempfile.TemporaryDirectory() as directory:
   # is what the owner removed by hand in the browser (note 0d1d1123).
   logged = preview.render("line one\nline two")
   assert "<br" not in logged and "\n" in logged and logged.count("<p>") == 1
-  store = preview.Store(root, create=True)
+  store = preview.Store(root, create=True, save_path=save_file)
   source = root / "report.md"
   source.write_text(
     "# First\n\n| A | B |\n| --- | --- |\n| C | D |\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))",
@@ -658,6 +661,20 @@ with tempfile.TemporaryDirectory() as directory:
     else:
       raise AssertionError("a third kind of author is refused")
 
+    # A report answer the owner sent is stored here, and the save file carries it: the answers
+    # come from the database rather than from the page, so a restore returns what the owner
+    # typed instead of asking for it twice (note 120fe358).
+    store.submission(
+      "saved-answer",
+      "first",
+      "REPORT first First:\n  a: yes",
+      "2026-09-21T09:02:00",
+      acknowledged_at="2026-09-21T09:06:00",
+      ack_kind="note",
+      ack_text="read it",
+      seen_at="2026-09-21T09:03:00",
+      task_id="saved-task",
+    )
     # The save route writes what the page posts, in one file both importers can read.
     saved_status, _, saved = request(
       "POST",
@@ -673,6 +690,7 @@ with tempfile.TemporaryDirectory() as directory:
               "ack_kind": "reply",
               "ack_text": "answered",
               "seen_at": "2026-09-21T09:01:00",
+              "task_id": "saved-task",
             }
           ],
           "tasks": {
@@ -697,7 +715,53 @@ with tempfile.TemporaryDirectory() as directory:
       json.loads(line)
       for line in Path(written["path"]).read_text(encoding="utf-8").splitlines()
     ]
-    assert [line["id"] for line in saved_lines] == ["saved-note", "saved-task"]
+    lines_by_id = {line["id"]: line for line in saved_lines}
+    # The page's own lines come first, in the order the button posts them; the answers come after
+    # them, from the store, because the page never holds an answer it did not just send.
+    assert [line["id"] for line in saved_lines][:2] == ["saved-note", "saved-task"]
+    assert written["answers"] == len(
+      [line for line in saved_lines if "report_id" in line]
+    )
+    assert written["answers"] >= 1 and saved_lines[-1]["id"] == "saved-answer"
+    # The file is not in the state directory, which is the whole point of moving it (report
+    # submission c0fcfad9): a restore drops that directory and keeps this file.
+    assert written["path"] == str(save_file)
+    assert save_file.is_file() and save_file.parent != root
+    answer_line = lines_by_id["saved-answer"]
+    assert answer_line["report_id"] == "first"
+    assert (
+      answer_line["ack_text"] == "read it"
+      and answer_line["seen_at"] == "2026-09-21T09:03:00"
+    )
+    assert answer_line["task_id"] == "saved-task"
+    # A note line keeps its task marker too, so the marker the receipt shows survives a restore.
+    assert lines_by_id["saved-note"]["task_id"] == "saved-task"
+    # One file, one reader for both kinds: `import-notes` restores the note and the answer, and
+    # the answer keeps its receipt, its read stamp and its task marker.
+    round_trip = Path(directory) / "round-trip"
+    preview.Store(round_trip, create=True)
+    imported = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "--state-dir",
+        str(round_trip),
+        "import-notes",
+        str(save_file),
+      ],
+      capture_output=True,
+      text=True,
+      check=True,
+    ).stdout
+    assert "1 notes" in imported
+    assert f"{written['answers']} report answers" in imported
+    restored_store = preview.Store(round_trip)
+    answers = {row["id"]: row for row in restored_store.submissions()}
+    assert answers["saved-answer"]["text"] == "REPORT first First:\n  a: yes"
+    assert answers["saved-answer"]["ack_text"] == "read it"
+    assert answers["saved-answer"]["seen_at"] == "2026-09-21T09:03:00"
+    assert answers["saved-answer"]["task_id"] == "saved-task"
+    assert restored_store.state()["notes"][0]["task_id"] == "saved-task"
     assert request("POST", "/api/save-state", "{}", auth)[0] == 400
     assert request("POST", "/api/save-state", "{}")[0] == 403
     # An upload stores its bytes beside the database and its record inside it, on the owner's answers in
@@ -1058,6 +1122,21 @@ with tempfile.TemporaryDirectory() as mixed_dir:
         "order": 1,
       }
     )
+    + "\n"
+    # An answer line rides the same file: the notes reader restores it, and the task reader
+    # skips it the way the notes reader skips a task line.
+    + json.dumps(
+      {
+        "id": "saved-answer",
+        "report_id": "first",
+        "text": "REPORT first First:\n  a: yes",
+        "at": "2026-09-21T09:02:00",
+        "acknowledged_at": "2026-09-21T09:06:00",
+        "ack_kind": "note",
+        "ack_text": "read it",
+        "seen_at": "2026-09-21T09:03:00",
+      }
+    )
     + "\n",
     encoding="utf-8",
   )
@@ -1075,7 +1154,7 @@ with tempfile.TemporaryDirectory() as mixed_dir:
     text=True,
     check=True,
   ).stdout
-  assert "Imported 1 notes" in notes_out
+  assert "Imported 1 notes" in notes_out and "1 report answers" in notes_out
   tasks_out = subprocess.run(
     [sys.executable, script, "--state-dir", str(mixed_root), "task-import", str(mixed)],
     capture_output=True,
@@ -1128,6 +1207,7 @@ with tempfile.TemporaryDirectory() as mixed_dir:
   assert "\n" in pretty_out, "--pretty is the human escape hatch"
   restored = preview.Store(mixed_root)
   assert [row["id"] for row in restored.state()["notes"]] == ["saved-note"]
+  assert [row["id"] for row in restored.submissions()] == ["saved-answer"]
   assert [task["id"] for task in restored.tasks()["upcoming"]] == ["saved-task"]
 
 help_text = subprocess.run(
