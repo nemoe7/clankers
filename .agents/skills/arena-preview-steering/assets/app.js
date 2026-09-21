@@ -550,16 +550,21 @@ function taskRow(task) {
   if (task.details.length) {
     // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
     // and the whole list stays scannable. Native element: no script, and keyboard reachable.
+    // The details inside it are a real <ul>, on the owner's note 11a35a0f, so each carries its own
+    // marker and reads as a list of separate statements rather than lines inside one block.
     const details = document.createElement('details');
     details.className = 'task-details';
     const summary = document.createElement('summary');
     summary.textContent = `${task.details.length} detail${task.details.length === 1 ? '' : 's'}`;
-    details.replaceChildren(summary, ...task.details.map(line => {
-      const detail = document.createElement('span');
+    const list = document.createElement('ul');
+    list.className = 'task-detail-list';
+    list.replaceChildren(...task.details.map(line => {
+      const detail = document.createElement('li');
       detail.className = 'task-detail';
       detail.textContent = line;
       return detail;
     }));
+    details.replaceChildren(summary, list);
     rows.push(details);
   }
   item.replaceChildren(...rows);

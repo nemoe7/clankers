@@ -320,6 +320,9 @@ with tempfile.TemporaryDirectory() as directory:
       ".task-details { display: block; margin-top: 2px; color: var(--muted);"
       " font-size: 13px; }" in page
     )
+    # The details are a real list, so a marker comes from the element rather than a span's rule.
+    assert ".task-detail-list { margin: 2px 0 0; padding-left: 18px; }" in page
+    assert ".task-detail { display: block; }" not in page
     assert ".tasks-layout { display: flex; flex-direction: column; gap: 18px; }" in page
     assert "max-height: 48%" not in page
     assert "min-height: 100%" not in page
