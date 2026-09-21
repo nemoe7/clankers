@@ -6,6 +6,8 @@
 
 **Rule change** — `rules/refs/ARENA.md` first, then the squashed `rules/ARENA.md` and its byte-identical root copy. When `GH_TOKEN` dies in the middle of a turn, the agent blocks with the question tool instead of ending the turn in silence. A question puts the failure in front of the owner, and the answer arrives as a new turn that carries a fresh token, so the push lands on the next attempt. The question asks how to proceed, never for a credential. The owner asked for this after a session ended in silence and stranded four approved commits.
 
+**ChatGPT change** — `rules/refs/CHATGPT-CUSTOM.txt` takes the owner's think-longer clause in full wording, and the squashed live file takes its compressed form, funded by dropping the lazier-alternative line. The live file lands at 1,494 of its 1,500 `chars`, and the residual 10 is recorded in the budget exceptions.
+
 **Evidence** — `docs/archive/arena-quirks.md` takes two observations from this session. A retry inside the same turn does not bring a dead token back, and the token returns with the next turn. Context exhaustion is worse, because it loses every unpushed commit; that is why this branch pushes after each commit.
 
 **Cost** — `assets/app.js` 24,243 → 24,242 `B` in both distributed copies. `rules/ARENA.md` grows 48 `B`, 13,026 → 13,074 `B`, and the budget exceptions record it; the refs baseline carries no budget. The README budget table is regenerated, which also records the nine rows the previous pull request left stale.

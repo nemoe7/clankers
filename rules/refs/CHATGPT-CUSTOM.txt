@@ -1,4 +1,5 @@
 SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
+ALWAYS think longer before answering; for non-trivial work, show the steps you took.
 NEVER end turn until tests are green.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when the task requires it.
@@ -19,7 +20,6 @@ Rung 7 - only then, the minimum code that works.
 NEVER add a dependency for a few lines' work.
 NEVER add an unrequested abstraction.
 Build what is asked.
-When a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies.
 NEVER simplify away validation, data-loss handling, security, or accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.
