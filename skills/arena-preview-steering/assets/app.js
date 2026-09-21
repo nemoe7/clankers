@@ -247,6 +247,10 @@ async function refreshState() {
   try {
     const state = await (await request('/api/state')).json();
     lastState = state;
+    // The page keeps its own copy of what the poll delivered, so the save button still has something
+    // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
+    // from their sources, and the button writes what the two importers can read back.
+    save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     setConnection('ok', state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet');
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
@@ -533,6 +537,37 @@ function logLine(note) {
     seen_at: note.seen_at ?? null
   });
 }
+// The save button posts the cached copy to the server, which writes it beside the database as one
+// file both importers read. It is the only action that puts the page's data on disk, and it is the
+// reason a restore no longer needs the owner to paste anything: the browser is the surviving copy.
+$('#save-state').addEventListener('click', async () => {
+  const button = $('#save-state');
+  let cached = null;
+  try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
+  if (!cached || !Array.isArray(cached.notes) || !cached.tasks) {
+    status.textContent = 'Nothing cached to save yet; the page caches its copy on every poll.';
+    button.dataset.state = 'bad';
+    setTimeout(() => delete button.dataset.state, 1500);
+    return;
+  }
+  button.disabled = true;
+  status.textContent = 'Saving the log and the tasks…';
+  try {
+    const result = await (await request('/api/save-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      body: JSON.stringify(cached)
+    })).json();
+    status.textContent = `Saved ${result.notes} messages and ${result.tasks} tasks to ${result.path}.`;
+    button.dataset.state = 'good';
+  } catch (error) {
+    status.textContent = `Not saved: ${error.message}. The cache is kept; press the button again.`;
+    button.dataset.state = 'bad';
+  } finally {
+    button.disabled = false;
+    setTimeout(() => delete button.dataset.state, 1500);
+  }
+});
 $('#copy-log').addEventListener('click', () => {
   const notes = lastState ? lastState.notes : [];
   copyFrom($('#copy-log'), notes.length ? `${notes.map(logLine).join('\n')}\n` : null, 'message log');

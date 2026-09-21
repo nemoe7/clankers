@@ -249,6 +249,20 @@ MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
 ECHO_DETAIL = 200
 TASK_COLUMNS = "id, title, details, status, position, updated_at"
+# The save button writes one file that both importers read: a note line carries `text`, a task line
+# carries `title`, and each importer skips the other's lines. Keys are named here so the writer and
+# the two readers cannot drift apart.
+SAVED_STATE = "saved-state.ndjson"
+NOTE_LINE_KEYS = (
+  "id",
+  "text",
+  "at",
+  "acknowledged_at",
+  "ack_kind",
+  "ack_text",
+  "seen_at",
+)
+TASK_LINE_KEYS = ("id", "title", "details", "status", "order")
 
 
 def task_row(row):
@@ -277,6 +291,22 @@ def echo_task(record, before=None, after=None):
       for detail in record["details"]
     ],
   }
+
+
+def saved_note_line(record):
+  """Return the keys a saved note line carries, and nothing else."""
+  if not isinstance(record, dict):
+    raise TypeError("Every saved note is an object")
+  return {key: record.get(key) for key in NOTE_LINE_KEYS}
+
+
+def saved_task_line(record):
+  """Return the keys a saved task line carries; details keep their list shape."""
+  if not isinstance(record, dict):
+    raise TypeError("Every saved task is an object")
+  line = {key: record.get(key) for key in TASK_LINE_KEYS}
+  line["details"] = [str(item) for item in record.get("details") or []]
+  return line
 
 
 def parse_task_import(text):
@@ -632,6 +662,31 @@ class Store:
         (task_id, row[1], row[2], row[3], row[4], row[5], stamp),
       )
       self.renumber(db)
+
+  def save_state(self, payload):
+    """Write the page's cached state to the state directory, in the shape the importers read.
+
+    The browser cannot write the sandbox filesystem, so it posts what it holds and this writes it.
+    Note lines keep their receipts and read stamps, because a restore that drops either is the
+    failure this exists to prevent; task lines keep their status and order, so the queue comes back
+    in the same shape. One file, two readers.
+    """
+    if not isinstance(payload, dict):
+      raise TypeError("Save a state object")
+    notes = payload.get("notes")
+    tasks = payload.get("tasks")
+    if not isinstance(notes, list) or not isinstance(tasks, dict):
+      raise TypeError("Save a state object with notes and tasks")
+    lines = [saved_note_line(record) for record in notes]
+    for status in TASK_STATUSES:
+      for record in tasks.get(status) or []:
+        lines.append(saved_task_line(record))
+    path = self.path.parent / SAVED_STATE
+    path.write_text(
+      "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines),
+      encoding="utf-8",
+    )
+    return {"path": str(path), "notes": len(notes), "tasks": len(lines) - len(notes)}
 
   def import_tasks(self, records, replace=False):
     """Rebuild a list from the JSON a copy button or task-list produced.
@@ -1016,10 +1071,12 @@ def handler(store):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
+      save_state = path == "/api/save-state"
       if (
         path not in {"/api/notes", "/api/markdown"}
         and not report_submit
         and not report_seen
+        and not save_state
       ):
         self.problem(404, "Not found")
         return
@@ -1032,7 +1089,7 @@ def handler(store):
         return
       try:
         length = int(self.headers.get("Content-Length", "0"))
-        limit = MAX_SUBMISSION_BODY if report_submit else MAX_BODY
+        limit = MAX_BODY if not (report_submit or save_state) else MAX_SUBMISSION_BODY
         if not 0 < length <= limit:
           subject = "Report answers are" if report_submit else "Note body is"
           # The refusal has to reach the client. Answering before the body is read is what keeps a
@@ -1058,6 +1115,9 @@ def handler(store):
             render(note_text(payload.get("text")), breaks=True),
             "text/html; charset=utf-8",
           )
+          return
+        if save_state:
+          self.reply(200, json.dumps(store.save_state(payload), ensure_ascii=False))
           return
         if report_seen:
           report = store.mark_report_seen(report_seen.group(1))
@@ -1182,7 +1242,18 @@ def main():
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
-      written = store.import_tasks(parse_task_import(text), args.replace)
+      written = store.import_tasks(
+        [
+          record
+          for record in parse_task_import(text)
+          # The same file the log writes carries notes as well; a task line has a title, and a note
+          # line is skipped here the way a task line is skipped by the importer above.
+          if not (
+            isinstance(record, dict) and "text" in record and "title" not in record
+          )
+        ],
+        args.replace,
+      )
       print(
         json.dumps(
           {
@@ -1195,9 +1266,16 @@ def main():
       )
     elif args.command == "import-notes":
       records = [
-        json.loads(line)
-        for line in args.source.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        record
+        for record in (
+          json.loads(line)
+          for line in args.source.read_text(encoding="utf-8").splitlines()
+          if line.strip()
+        )
+        # A save file holds the tasks as well, and those lines are not notes: they carry a title
+        # and no text. Skipping them is the whole of the split; anything else stays a note and is
+        # validated as before.
+        if not (isinstance(record, dict) and "title" in record and "text" not in record)
       ]
       for record in records:
         store.note(

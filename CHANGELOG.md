@@ -1,3 +1,12 @@
+## 2026-09-21 — Save the log and the tasks to the server
+
+The header now carries a save button, `⤓`. It posts the page's cached copy of the log and the tasks to
+`POST /api/save-state`, which writes them as one `<state-dir>/saved-state.ndjson` beside the database: note
+lines keep their receipts and read stamps, and task lines keep their status and order, because a restore that
+drops either is the failure this exists to prevent. The cache is refreshed on every successful poll, so the
+button still has something to write after a wipe has emptied the server, and its receipt names both counts and
+the path. Both importers read that one file and each skips the other's lines, so `import-notes` and
+`task-import` bring a save back without the owner separating anything first.
 ## 2026-09-21 — A long log carries a jump bar
 
 Note `d8e11b8c` answered the design question its own bug report raised. The log's scroll area now holds a

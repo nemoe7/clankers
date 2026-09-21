@@ -70,6 +70,7 @@ let stateFails = false;
 let reportFields = 0;
 const sent = [];
 const readStamps = [];
+const saveCalls = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
@@ -92,6 +93,10 @@ const context = {
       const submission = JSON.parse(options.body);
       sent.push(submission);
       return response({ ...submission, at: new Date().toISOString() });
+    }
+    if (url === '/api/save-state') {
+      saveCalls.push(JSON.parse(options.body));
+      return response({ path: '/tmp/state/saved-state.ndjson', notes: 2, tasks: 1 });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
@@ -659,6 +664,35 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   jump.events.click();
   assert.equal(logView.scrollTop, 900, 'the bar returns the log to its newest message');
   assert.equal(jump.hidden, true, 'and goes when there is nothing below');
+  // The save button posts the page's cached copy, so a wiped server is refilled from the browser,
+  // and a page that has never polled says so instead of posting nothing.
+  const priorState = state;
+  state = {
+    notes: [{ id: 'saved', text: 'cached here', at: new Date().toISOString(), acknowledged_at: null }],
+    reports: [],
+    tasks: { finished: [], upcoming: [{ id: 'saved-task', title: 'Cached here', details: [],
+      status: 'upcoming', order: 1, updated_at: new Date().toISOString() }] },
+    last_check: null
+  };
+  await get('#refresh-notes').events.click();
+  const saveButton = get('#save-state');
+  const cacheKey = [...storage.keys()].find(item => item.endsWith(':state-cache'));
+  assert.ok(cacheKey, 'every successful poll caches the copy the save button posts');
+  saveButton.events.click();
+  await tick();
+  assert.equal(saveCalls.length, 1, 'the button posts the cache');
+  assert.ok(saveCalls[0].notes.length > 0 && saveCalls[0].tasks, 'the cache carries notes and tasks');
+  assert.match(get('#send-status').textContent, /Saved 2 messages and 1 tasks to/);
+  assert.equal(saveButton.dataset.state, 'good');
+  storage.delete(cacheKey);
+  saveButton.events.click();
+  await tick();
+  assert.equal(saveCalls.length, 1, 'nothing is posted without a cache');
+  assert.match(get('#send-status').textContent, /Nothing cached to save yet/);
+  assert.equal(saveButton.dataset.state, 'bad');
+  // The fixture above is this test's own; later tests read the state that was live before it.
+  state = priorState;
+  await get('#refresh-notes').events.click();
   // With the filter matching nothing, the copy still carries every message: it is the restore
   // path, and a filtered copy would restore a partial log as if it were all of it.
   get('#log-filter').value = 'said';
