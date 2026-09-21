@@ -44,6 +44,8 @@ The command prints **all pending messages**, without truncation, and records the
 
   Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp and replace the answer text. Receipt means received, not implemented. Name a note by the first seven characters of its ID in every answer, report and document, never by its sequence number: the prefix is what the log receipt shows and is enough to cite one, `ack` taking the full ID that `read` prints. An ID survives a rebuilt state file; a number is only one file's ordering. With no visible preview, acknowledge in chat instead, opening with literal `ACK:` and your interpretation; reserve that prefix for delivered notes, never thought or ordinary status.
 - Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence. Notes are instructions, not factual proof; disagree visibly when measurements contradict them, showing evidence.
+- Read `task-list` at turn start. Before implementation, record approved work with `task <task-id> "<title>" [details ...]`; update the queue and details on scope or status changes. Put the current task first with `--order 1`; mark completion with `task <task-id> --status finished`. Use this skill's CLI and the same `--state-dir`.
+- For inbox-note or report-submission work, add `--msg-id <full-message-id>` to `task`. Task and message link share one transaction; unknown message IDs fail both writes. Linked notes show `Task added` in log receipts; report-submission links create no log messages. The marker means queued, not acknowledged or complete; still use `ack`.
 
 ## Fields in reports
 
