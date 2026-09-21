@@ -696,6 +696,11 @@ class Store:
     if len(data) > MAX_REPORT:
       raise ValueError("Report exceeds the 2 MB limit; split it into reports")
     text = data.decode("utf-8")
+    # A report whose fields fail validation used to publish happily and then break its own html
+    # route at render time, so the owner could never open it. Refusing here costs the agent one
+    # command and names the offending field; refusing there cost the report and, until the guard
+    # below existed, the HTTP connection with it.
+    parse_fields(text)
     with closing(self.connect()) as db, db:
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
@@ -912,7 +917,15 @@ def handler(store):
           report_id, kind = match.groups()
           report = store.report(report_id)
           if kind == "html":
-            body, questions = render_report(report["markdown"])
+            try:
+              body, questions = render_report(report["markdown"])
+            except ValueError as error:
+              # A report stored before publish validated its fields can still be unrenderable.
+              # do_GET catches OSError, sqlite3.Error and RuntimeError but not ValueError, so
+              # this used to escape the handler and close the connection with no response at
+              # all: the browser saw a failed fetch and the tab had nothing to explain it with.
+              self.problem(500, f"This report cannot be rendered: {error}")
+              return
             self.reply(
               200,
               json.dumps({"html": body, "fields": len(questions)}, ensure_ascii=False),

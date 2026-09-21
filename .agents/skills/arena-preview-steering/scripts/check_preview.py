@@ -516,6 +516,40 @@ with tempfile.TemporaryDirectory() as directory:
       raise AssertionError("Two free-text options shared one label")
     except ValueError:
       pass
+    # A report whose fields fail validation is refused at publish, so it can never be stored in a
+    # shape that cannot be rendered; before this it published and then broke its own html route.
+    broken = root / "broken.md"
+    broken.write_text(
+      "# Broken\n\nPick one:\n\n- ( ) " + "x" * 201 + "\n", encoding="utf-8"
+    )
+    try:
+      store.publish("broken", "Broken report", broken)
+      raise AssertionError("A report with an over-long option was published")
+    except ValueError:
+      pass
+    assert "broken" not in {item["id"] for item in store.state()["reports"]}
+    # A report stored before that guard existed is still unrenderable, so the route answers with a
+    # JSON error rather than closing the connection, which is what an uncaught ValueError did.
+    stale = sqlite3.connect(root / "state.sqlite3")
+    stale.execute(
+      "INSERT INTO reports (id, title, markdown, updated_at, seq) VALUES (?, ?, ?, ?, ?)",
+      (
+        "stale",
+        "Stale report",
+        broken.read_text(encoding="utf-8"),
+        "2026-09-21T00:00:00+00:00",
+        999,
+      ),
+    )
+    stale.commit()
+    stale.close()
+    status, _, body = request("GET", "/api/reports/stale/html")
+    assert status == 500, (
+      "an unrenderable report answered something other than an error"
+    )
+    assert "cannot be rendered" in json.loads(body)["error"]
+    # Its source still serves, so the agent can read what the browser could not render.
+    assert request("GET", "/api/reports/stale/source")[0] == 200
     # A submission is limited in characters and its request body in bytes, and the byte limit has
     # to sit above the character one or the documented maximum stays unreachable over HTTP, which
     # is what one 32 KiB limit for every POST did. That maximum is 50 fields of 2,000 characters,
