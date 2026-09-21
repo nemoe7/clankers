@@ -81,6 +81,14 @@ jobs:
           node --check skills/arena-preview-steering/assets/app.js
           node skills/arena-preview-steering/scripts/check_client.cjs
 
+      # The AGENTS.md clause on Simplified Technical English: text you add or change in docs/ and the
+      # README files must pass the vendored linter, and each covered file joins this step as it is
+      # cleaned. Add a path only when the linter reports 0 violations for it.
+      - name: Lint the covered documentation
+        run: |
+          python .agents/skills/asd-ste100/scripts/ste-lint.py \
+            maintenance/README.md
+
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
 

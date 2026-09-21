@@ -1,3 +1,10 @@
+## 2026-09-21 — The linter gate starts with one clean file
+
+The owner chose per-file promotion in report submission `185eeb51`: the Simplified Technical English clause binds
+new and edited text now, and each covered file joins the gate as it is cleaned. The promotion path is real from the
+first member — `maintenance/README.md` went from 10 violations to 0, and the validation workflow now runs the
+vendored linter over a file list that grows one clean file at a time. The remaining five stay report-only until their
+own pass: `README.md` 13 hard, both archive documents 7 and 56, `skills/README.md` 11 and `rules/README.md` 68.
 ## 2026-09-21 — The agent writes no messages of its own
 
 The owner asked whether the agent should write into the log at all and answered reply only in report submission
