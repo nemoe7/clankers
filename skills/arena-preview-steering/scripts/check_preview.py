@@ -265,6 +265,9 @@ with tempfile.TemporaryDirectory() as directory:
     # Inline code sits darker than the page in dark mode; the light theme keeps its bubble.
     assert "--code-bg: #1b1a19;" in page
     assert "--code-bg: var(--bubble);" in page
+    # The composer's hint is half as prominent as the muted face, so what is being typed and what
+    # was sent stay distinguishable from a placeholder that is neither.
+    assert "textarea::placeholder { color: var(--muted); opacity: 0.5; }" in page
     assert 'code.note-id[data-copied="good"] { color: var(--dot-said); }' in page
     assert 'code.note-id[data-copied="bad"] { color: #ef4444; }' in page
     assert "#clock { font-size: inherit; font-variant-numeric: tabular-nums; }" in page

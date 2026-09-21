@@ -80,7 +80,7 @@ button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
 :focus-visible { outline: none; border-color: var(--focus); }
 textarea { width: 100%; padding: 10px 12px; line-height: 1.6; resize: none; min-height: 72px; overflow: hidden; }
-textarea::placeholder { color: var(--muted); }
+textarea::placeholder { color: var(--muted); opacity: 0.5; }
 select { max-width: 100%; min-height: 44px; padding: 8px; width: 100%; }
 small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
