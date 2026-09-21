@@ -12,7 +12,7 @@
 
 **Origin** — the owner's amendment relayed in chat on 2026-09-21: the phrase that activates ChatGPT's reasoning must stand in the Custom Instructions file itself, so every run thinks longer without the chat repeating it.
 
-**Change** — `rules/refs/CHATGPT-CUSTOM.txt` gains the clause "Always think longer; show the steps for non-trivial work." at the end of the SCOPE block and loses the line that names a lazier alternative in one line; `rules/CHATGPT-CUSTOM.txt` mirrors both changes compressed.
+**Change** — `rules/refs/CHATGPT-CUSTOM.txt` gains the clause "ALWAYS think longer; show the steps for non-trivial work." at the end of the SCOPE block and loses the line that names a lazier alternative in one line; `rules/CHATGPT-CUSTOM.txt` mirrors both changes compressed.
 
 **Cost** — `rules/CHATGPT-CUSTOM.txt` 1,484 → 1,494 chars against the 1,500-char field cap, funded by the dropped line. The refs baseline carries no budget.
 
