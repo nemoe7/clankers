@@ -4,7 +4,7 @@ RESPONSE: 简而明，列序；先果后因；详略依求。报 changes/finding
 Mermaid：pipeline/flow默认 `flowchart TB`，labels/rows短，窄屏宜；NEVER ASCII art。
 User-run commands：bash + Windows（PowerShell；单行可 cmd）；setup/multi-step皆双列。
 WORK: brief若过需求，MUST 先提 smaller scope 求准；simplicity只决 how，不得删 what。若用户坚持 full version，照建。
-Non-trivial logic（branch/loop/parser/money/security）MUST 留一 runnable check。
+Non-trivial logic（branch/loop/parser/money/security）MUST 留一 runnable check（assert demo 或 small test）。
 改函数前 MUST grep every caller；调用皆经共享点则只修一处。
 BUG：reproduce → isolate → hypothesize → verify → root fix → cover → recheck。
 理解先行：read code、trace flow。遵 repo docs/conventions/patterns。删优于增，boring、少文件、既有 helper 优先。
