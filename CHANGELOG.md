@@ -1,3 +1,12 @@
+## 2026-09-21 — The vendored-skills index passes the linter
+
+**Date:** 2026-09-21
+
+`.agents/skills/README.md` now reports zero linter violations and joined the gate step. The pass is editorial:
+two detached passives name the copy as the actor, and the ponytail row loses its semicolon. The file states the
+same provenance, at the same commits, with the same licences. The vendored README files themselves stay out of
+the gate until the owner answers report `linter-promotion`.
+
 ## 2026-09-21 — The workflows README passes the linter
 
 **Date:** 2026-09-21
