@@ -2,7 +2,12 @@ required-version = "0.16.6"
 indent-width = 2
 
 # Vendored third-party code is copied verbatim, so it is not ours to reformat or lint.
-extend-exclude = [".agents/skills"]
+# Generated Python is checked by minify.py; lint and format its readable refs instead.
+extend-exclude = [
+  ".agents/skills",
+  "skills/arena-preview-steering/scripts/preview.py",
+  "skills/arena-preview-steering/scripts/check_preview.py",
+]
 
 [lint]
 ignore = ["BLE001", "S110"]

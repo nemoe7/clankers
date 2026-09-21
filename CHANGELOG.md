@@ -1,10 +1,18 @@
-## 2026-09-21 — Kilo uses PowerShell
+## 2026-09-21 — Kilo uses PowerShell and preview scripts ship compact
 
 **Origin** — the owner’s chat task on 2026-09-21, `amend(kilo): inform using pwsh not bash`, and approval of the proposal in Q2.
 
 **Change** — add the shell rule under Tools in `rules/refs/KILO.md`, then compress it in `rules/KILO.md`: run shell commands in PowerShell (`pwsh`), not Bash. No mode override or installed rule changes.
 
 **Cost** — the live rule grows from 185 to 199 `cl100k_base` tokens. Two passes reduce the new line from 20 to 15 to 14 tokens; no further safe reduction was found. The README measurement and budget exception record the accepted 14-token growth.
+
+**Script origin** — the owner’s initial chat task, Q3 selecting script minification, and approval of report `preview-build` in submission `fb51379` and chat “approve all”, on 2026-09-21. Note `aac6907` also asks to strip comments from live scripts. The approval includes the installed mirror and the build-only dependency `python-minifier==3.3.0`.
+
+**Script change** — `maintenance/minify.py` now builds all three scripts as well as the assets. Terser handles CommonJS; Python minification removes ordinary comments and excess whitespace with all AST transforms off. Names, annotations, docstrings, assertions, positional-only arguments and shebangs survive. A Python 3.10 grammar check, parsed-tree equality and compilation gate the Python outputs before any writes. Readable refs remain the edit source. CI pins Python 3.11 for build stability, checks build drift and the generated runtime, and keeps Ruff on refs rather than generated Python. The shipped server needs no minifier dependency. Compact traceback line numbers are less useful; this is an accepted trade-off.
+
+**Script cost** — `preview.py` 64,799 → 50,095 bytes; `check_preview.py` 59,618 → 41,393 bytes; `check_client.cjs` 56,767 → 41,149 bytes. The combined scripts shrink from 181,184 to 132,637 bytes (26.8%). Each gets a README byte budget; both distributed copies match. Browser assets do not change.
+
+**Checks** — the new assert-based `maintenance/check_minify.py` failed first on the missing Python build function, then passed after implementation. It checks comment removal, preserved shebangs and parsed trees, rejected tree changes and Python 3.11-only syntax, the package pin, both copies, drift without writes, update/idempotence, generated Python against the full integration check using readable assets, and page assembly with shipped assets. The original readable-runtime integration check and the minified client harness pass. Build drift, measurement regression, README validation, Ruff lint/format, Markdown lint, changed documentation STE, YAML/TOML parsing and diff whitespace pass. Python 3.10 itself was not available or run; the compatibility check is syntactic, not a claim of execution on that interpreter.
 
 ## 2026-09-21 — The log and the tasks give up their copy buttons
 
