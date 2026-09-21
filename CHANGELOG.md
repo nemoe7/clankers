@@ -1,3 +1,13 @@
+## 2026-09-21 — ChatGPT thinks longer by default
+
+**Origin** — the owner's amendment relayed in chat on 2026-09-21: the phrase that activates ChatGPT's reasoning must stand in the Custom Instructions file itself, so every run thinks longer without the chat repeating it.
+
+**Change** — `rules/refs/CHATGPT-CUSTOM.txt` gains the clause "Always think longer; show the steps for non-trivial work." at the end of the SCOPE block and loses the line that names a lazier alternative in one line; `rules/CHATGPT-CUSTOM.txt` mirrors both changes compressed.
+
+**Cost** — `rules/CHATGPT-CUSTOM.txt` 1,484 → 1,494 chars against the 1,500-char field cap, funded by the dropped line. The refs baseline carries no budget.
+
+**Checks** — the refs/live pair keeps its line parity, the field stays under its cap, and `maintenance/check.py --update` passes.
+
 ## 2026-09-21 — Use sections slim down; the state copy restores less
 
 **Origin** — another session, relayed by the owner in chat on 2026-09-21, plus preview inbox notes 523e50b, 369f4f1, 9c922c4, 16564e2, 11a220c and 5b4599e: the `Use` sections of `rules/CLINE.md` and `rules/KILO.md` and the description line of `rules/AGENTS.md` state what loaders already handle, `KILO.md`'s `Modes` and `When in doubt` sections restate the core, the `squash` bar becomes terse but unambiguous, the reply bar takes a named colour, and the state copy keeps only what a restore reads.

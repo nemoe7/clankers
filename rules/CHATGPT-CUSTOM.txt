@@ -3,11 +3,11 @@ Keep intent/behavior/architecture/interfaces/patterns: refactor/redesign/rename/
 Add tests only when requested/needed to verify.
 Material ambiguity = reasonable readings that could change behavior/data/interfaces/scope/outcome: ask only then, before acting; never block an unattended run — note the question, assume, state it.
 Else assume the most reasonable, stated when it materially affects the result.
+Always think longer; show the steps for non-trivial work.
 
 CODE: KISS/YAGNI/DRY, laziest that works — stop at the first rung that holds: 1 needed at all; 2 already here, look first; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
 NEVER add a dependency for a few lines' work or an unrequested abstraction.
 Build what is asked.
-Name a relevant lazier alternative in one line.
 NEVER simplify away validation/data-loss handling/security/accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.

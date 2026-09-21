@@ -7,6 +7,7 @@ Material ambiguity means different reasonable interpretations could materially c
 For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 Ask before implementing rather than after, when the answer would change scope, data, interfaces, or outcome.
 NEVER block an unattended run on a question: a scheduled task or automation agent records the question in its output and proceeds on the most reasonable assumption, stated as such.
+Always think longer; show the steps for non-trivial work.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
 Rung 1 - does this need to exist at all? Skip speculative additions, not explicit requirements.
@@ -19,7 +20,6 @@ Rung 7 - only then, the minimum code that works.
 NEVER add a dependency for a few lines' work.
 NEVER add an unrequested abstraction.
 Build what is asked.
-When a lazier alternative is relevant, name it in one line and the user picks, with no commentary when none applies.
 NEVER simplify away validation, data-loss handling, security, or accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.
