@@ -106,7 +106,9 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
    say what it does. It appears only while the log is scrolled away from its end. */
 .log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .log-newest {
-  position: absolute; left: 12px; right: 22px; bottom: 8px;
+  /* Fit to the label, centred over the log, on owner note edbdfcae: a strip that spans the pane
+     is a bar the eye reads as furniture, and this one is a control. */
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); white-space: nowrap;
   min-height: 0; padding: 5px 12px; font-size: 13px; border-radius: 999px;
   background: var(--panel); color: var(--text); box-shadow: 0 2px 10px rgb(0 0 0 / 35%);
 }
