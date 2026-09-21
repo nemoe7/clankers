@@ -1,3 +1,16 @@
+## 2026-09-21 — The task list returns, and the save file is proven readable
+
+**Date:** 2026-09-21
+
+Two restores in one turn cost the state database, the published reports and the task backup. The owner pasted
+the log back and it imported as 51 notes, 48 of them with their receipts verbatim; the task list came back to
+54 records, one per ask in that log, and every ask now maps to a task. One ask was genuinely unfulfilled and is
+now a task: the `c5bc497` turn rule never reached `ARENA.md`, and report `turn-rule` carries the wording for
+approval. A file the owner uploaded through the new tab was verified byte for byte against its record. The
+owner's own save-state press then produced `saved-state.ndjson` with 64 notes and 54 tasks, and that file was
+imported into a fresh state directory as a test: every note came back with its receipt and every task with its
+status, so the backup path works.
+
 ## 2026-09-21 — Every covered file now passes the linter
 
 **Date:** 2026-09-21
