@@ -10,17 +10,17 @@ The chosen `--state-dir` contains `state.sqlite3`. Normal SQLite transactions ha
 | --- | --- |
 | `init` | Create state without starting HTTP |
 | `serve` | Start the shared interface on `0.0.0.0`, port 8000 unless `--port` says otherwise |
-| `read` | Print all unacknowledged messages; record check time; stamp `seen_at` |
+| `read` | Print all unacknowledged messages; record check time; stamp `seen_at`; minified JSON |
 | `task ID TITLE [DETAIL ...]` | Add or update one task in the Tasks tab; `--status`, `--order`, or the `--task-*` flags |
 | `task-remove ID` | Delete one task and echo what was stored |
 | `task-import [FILE]` | Rebuild the list from JSON, a file or stdin; `--replace` clears first; note lines are skipped |
-| `task-list` | Print every task as JSON |
+| `task-list` | Print every task as minified JSON, in the shape `task-import` reads back |
 | `ack <id> [<id> ...] --reply <markdown>` | Record receipts with a rendered answer in the log |
 | `ack <id> [<id> ...] --note <text>` | Record receipts with one plain answer line |
 | `publish <source.md> --id <id> --title <title>` | Add/update a report snapshot |
 | `import-notes <notes.ndjson>` | Import ID/text/time records, plus the receipt a line carries and its read stamp, written verbatim; task lines are skipped; a partial receipt is refused and none is invented |
 
-All commands take `--state-dir` before the subcommand. Commands that read existing state fail if the database is missing; they do not create a misleading empty inbox. Import is idempotent by ID and rejects an existing ID with different text. It does not import ntfy messages or claim they were acknowledged.
+All commands take `--state-dir` before the subcommand, and JSON printed by this CLI is minified because the agent pays for the whitespace it reads. `--pretty`, also before the subcommand, indents that JSON for a human eye. Commands that read existing state fail if the database is missing; they do not create a misleading empty inbox. Import is idempotent by ID and rejects an existing ID with different text. It does not import ntfy messages or claim they were acknowledged.
 
 The UI sends the same client-generated ID on an unchanged retry. It distinguishes saving, confirmed storage and explicit agent acknowledgement; it never interprets an HTTP request or an inbox check as a chat acknowledgement. Errors preserve the draft. Switching views preserves the mounted composer. The user can send with Enter, use Shift+Enter for a newline, browse message history — each entry shows its ID and, once acknowledged, the agent's reply rendered like a user message or its plain note — pick a numbered report in send order, answer a fielded report in the Reports tab and switch dark/light themes. Field options render as text nodes; an unconfirmed submission keeps the user's input and says so. The default dark palette was supplied by the owner from Arena's UI.
 

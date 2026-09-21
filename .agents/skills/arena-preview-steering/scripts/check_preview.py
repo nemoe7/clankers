@@ -979,6 +979,49 @@ with tempfile.TemporaryDirectory() as mixed_dir:
     check=True,
   ).stdout
   assert json.loads(tasks_out)["imported"] == 1
+  # Writer and reader move together: what `task-list` prints is what `task-import` reads back, so
+  # minifying the output cannot strand the importer.
+  script_again = str(Path(preview.__file__))
+  listed = subprocess.run(
+    [sys.executable, script_again, "--state-dir", str(mixed_root), "task-list"],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout.strip()
+  assert "\n" not in listed, "agent-facing JSON is one line"
+  assert json.loads(listed)[0]["id"] == "saved-task"
+  reimport = subprocess.run(
+    [
+      sys.executable,
+      script_again,
+      "--state-dir",
+      str(mixed_root),
+      "task-import",
+      "--replace",
+    ],
+    input=listed,
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout.strip()
+  assert json.loads(reimport)["imported"] == 1
+  read_out = subprocess.run(
+    [sys.executable, script_again, "--state-dir", str(mixed_root), "read"],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout.strip()
+  assert "\n" not in read_out, "read prints one line"
+  # The imported note carries its receipt, so `read` has nothing pending; the receipt is what
+  # makes it read, and `read` is the only path that stamps one.
+  assert json.loads(read_out)["pending"] == []
+  pretty_out = subprocess.run(
+    [sys.executable, script_again, "--state-dir", str(mixed_root), "--pretty", "read"],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout.strip()
+  assert "\n" in pretty_out, "--pretty is the human escape hatch"
   restored = preview.Store(mixed_root)
   assert [row["id"] for row in restored.state()["notes"]] == ["saved-note"]
   assert [task["id"] for task in restored.tasks()["upcoming"]] == ["saved-task"]

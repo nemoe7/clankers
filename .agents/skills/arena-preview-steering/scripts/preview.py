@@ -309,6 +309,16 @@ def saved_task_line(record):
   return line
 
 
+def cli_json(value, pretty=False):
+  """Print agent-facing JSON minified; the agent pays for every space it reads.
+
+  `--pretty` is the human escape hatch: indentation costs tokens, and the tokens are the point.
+  """
+  if pretty:
+    return json.dumps(value, ensure_ascii=False, indent=2)
+  return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 def parse_task_import(text):
   """Accept either a JSON array of tasks or one task per line."""
   stripped = text.strip()
@@ -1144,6 +1154,11 @@ def handler(store):
 def main():
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--state-dir", default="reports/arena-preview")
+  parser.add_argument(
+    "--pretty",
+    action="store_true",
+    help="Indent the JSON this CLI prints; agent-facing output is minified by default",
+  )
   commands = parser.add_subparsers(dest="command", required=True)
   serve = commands.add_parser("serve")
   serve.add_argument(
@@ -1206,7 +1221,7 @@ def main():
         )
         server.serve_forever()
     elif args.command == "read":
-      print(json.dumps(store.read(), ensure_ascii=False, indent=2))
+      print(cli_json(store.read(), args.pretty))
     elif args.command == "ack":
       if bool(args.reply) == bool(args.note):
         raise ValueError("Choose exactly one of --reply or --note")
@@ -1233,11 +1248,11 @@ def main():
         args.order,
       )
       before, after = store.neighbours(task_id)
-      print(json.dumps(echo_task(record, before, after), ensure_ascii=False))
+      print(cli_json(echo_task(record, before, after), args.pretty))
     elif args.command == "task-remove":
-      print(json.dumps(echo_task(store.remove_task(args.task_id)), ensure_ascii=False))
+      print(cli_json(echo_task(store.remove_task(args.task_id)), args.pretty))
     elif args.command == "task-list":
-      print(json.dumps(store.list_tasks(), ensure_ascii=False))
+      print(cli_json(store.list_tasks(), args.pretty))
     elif args.command == "task-import":
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
@@ -1255,13 +1270,13 @@ def main():
         args.replace,
       )
       print(
-        json.dumps(
+        cli_json(
           {
             "imported": len(written),
             "replaced": args.replace,
             "ids": [item["id"] for item in written],
           },
-          ensure_ascii=False,
+          args.pretty,
         )
       )
     elif args.command == "import-notes":
