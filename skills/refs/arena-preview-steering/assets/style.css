@@ -136,7 +136,7 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 .answer { margin-top: 8px; }
 /* Only the reply carries the bar and the muted colour; the message itself stays plain. */
 /* Only the reply carries the bar, the muted colour and the smaller size: prose costs log space. */
-.answer.reply { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); font-size: 13px; }
+.answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
 #report-receipt { margin: 10px 0 0; }
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
@@ -164,6 +164,8 @@ a { color: var(--accent); text-underline-offset: 3px; }
 /* Paragraph gaps were the browser default 16px while the headings had been tightened; the owner
    called the paragraphs too far apart (note 9454e0b1), so they take the heading's 6px rhythm at 8. */
 .report p, .message-text p { margin: 8px 0; }
+/* Message blockquotes take the reply's bar and padding but keep the message's font size (note 523e50b). */
+.message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }
 .report table, .message-text table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .report th, .report td, .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
 /* Rendered message text used to borrow the report class, which said the wrong thing about a note. */
