@@ -6,6 +6,8 @@
 
 **Rule change** — `rules/refs/ARENA.md` first, then the squashed `rules/ARENA.md` and its byte-identical root copy. When `GH_TOKEN` dies in the middle of a turn, the agent blocks with the question tool instead of ending the turn in silence. A question puts the failure in front of the owner, and the answer arrives as a new turn that carries a fresh token, so the push lands on the next attempt. The question asks how to proceed, never for a credential. The owner asked for this after a session ended in silence and stranded four approved commits.
 
+The same three files take a second rule: NEVER cite a session-local note ID in a repository file, because the ID is minted per session and does not survive it. The citation goes to the durable record instead, which is the CHANGELOG entry, the report source, or the commit. The rule sits in the Git section beside the rule that keeps receipts out of the repository.
+
 **ChatGPT change** — `rules/refs/CHATGPT-CUSTOM.txt` takes the owner's think-longer clause in full wording, and the squashed live file takes its compressed form, funded by dropping the lazier-alternative line. The live file lands at 1,494 of its 1,500 `chars`, and the residual 10 is recorded in the budget exceptions.
 
 **Evidence** — `docs/archive/arena-quirks.md` takes two observations from this session. A retry inside the same turn does not bring a dead token back, and the token returns with the next turn. Context exhaustion is worse, because it loses every unpushed commit; that is why this branch pushes after each commit.
