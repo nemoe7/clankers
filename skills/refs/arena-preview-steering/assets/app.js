@@ -114,19 +114,42 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
-async function request(path, options = {}) {
+// One attempt, with the abort timer every write has always carried.
+async function attempt(path, options) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10000);
   try {
-    const response = await fetch(path, { ...options, cache: 'no-store', signal: controller.signal });
-    if (!response.ok) {
-      const message = await response.text();
-      let error;
-      try { error = JSON.parse(message).error; } catch { error = message; }
-      throw new Error(error || `HTTP ${response.status}`);
-    }
-    return response;
+    return await fetch(path, { ...options, cache: 'no-store', signal: controller.signal });
   } finally { clearTimeout(timer); }
+}
+// A page outlives the server it came from. A sandbox reset starts the server with a new write token,
+// so the copy baked into this page is refused and every write needs a manual refresh first: the
+// owner pressed save state several times after a reset and nothing landed until they reloaded and
+// pasted the log by hand (note 2647459f). A refused write now takes the token from a fresh page and
+// tries once more, and a write that never reached a server waits a second and tries again.
+async function request(path, options = {}) {
+  let response;
+  try {
+    response = await attempt(path, options);
+  } catch {
+    await new Promise((done) => setTimeout(done, 1000));
+    response = await attempt(path, options);
+  }
+  if (response.status === 401 || response.status === 403) {
+    const page = await (await fetch('/', { cache: 'no-store' })).text();
+    const token = (page.match(/X-Preview-Token':\s*'([^']+)'/) || [])[1];
+    if (token) {
+      const headers = { ...(options.headers || {}), 'X-Preview-Token': token };
+      response = await attempt(path, { ...options, headers });
+    }
+  }
+  if (!response.ok) {
+    const message = await response.text();
+    let error;
+    try { error = JSON.parse(message).error; } catch { error = message; }
+    throw new Error(error || `HTTP ${response.status}`);
+  }
+  return response;
 }
 function bytes(value) {
   if (value < 1000) return `${value} B`;

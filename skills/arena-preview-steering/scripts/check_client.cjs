@@ -91,6 +91,10 @@ const readStamps = [];
 const saveCalls = [];
 const uploadCalls = [];
 let uploadFails = false;
+let staleToken = false;
+let servedToken = 'token-one';
+let pageFetches = 0;
+const writeTokens = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
@@ -128,7 +132,17 @@ const context = {
       state.uploads = [...(state.uploads || []), record];
       return response(record);
     }
+    if (url === '/') {
+      // A fresh page carries the token the restarted server accepts, so the retry has one to take.
+      pageFetches += 1;
+      servedToken = 'token-two';
+      return { ok: true, status: 200, text: async () => `headers: { 'X-Preview-Token': '${servedToken}' }` };
+    }
     if (url === '/api/save-state') {
+      writeTokens.push(options.headers['X-Preview-Token']);
+      if (staleToken && options.headers['X-Preview-Token'] !== servedToken) {
+        return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
+      }
       saveCalls.push(JSON.parse(options.body));
       return response({ path: '/tmp/state/saved-state.ndjson', notes: 2, tasks: 1 });
     }
@@ -764,6 +778,23 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(saveCalls.length, 1, 'nothing is posted without a cache');
   assert.match(get('#send-status').textContent, /Nothing cached to save yet/);
   assert.equal(saveButton.dataset.state, 'bad');
+  // A page outlives the server that served it. After a sandbox reset the token baked into the
+  // page is refused, so the save takes the token from a fresh page and tries once more instead
+  // of waiting for a manual refresh; the owner pressed save state several times after a reset
+  // and nothing landed (note 2647459f).
+  staleToken = true;
+  storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
+  const savesBefore = saveCalls.length;
+  const fetchesBefore = pageFetches;
+  saveButton.events.click();
+  await tick();
+  await tick();
+  assert.equal(pageFetches, fetchesBefore + 1, 'a refused write re-reads the page for its token');
+  assert.equal(saveCalls.length, savesBefore + 1, 'the write lands on the retry');
+  assert.equal(writeTokens.at(-1), 'token-two', 'the retry carries the token the new server accepts');
+  assert.equal(saveButton.dataset.state, 'good');
+  assert.match(get('#send-status').textContent, /Saved 2 messages and 1 tasks to/);
+  staleToken = false;
   // The fixture above is this test's own; later tests read the state that was live before it.
   state = priorState;
   await get('#refresh-notes').events.click();

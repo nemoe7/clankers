@@ -42,7 +42,11 @@ with tempfile.TemporaryDirectory() as directory:
   assert "<s>" in preview.render("~~gone~~")
   chat = preview.render("line one\nline two", breaks=True)
   assert "<br" in chat and chat.count("<p>") == 1
-  assert "<br" not in preview.render("line one\nline two")
+  # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline
+  # the source carries is the line break and a `<br>` beside it doubled every gap. That doubling
+  # is what the owner removed by hand in the browser (note 0d1d1123).
+  logged = preview.render("line one\nline two")
+  assert "<br" not in logged and "\n" in logged and logged.count("<p>") == 1
   store = preview.Store(root, create=True)
   source = root / "report.md"
   source.write_text(
