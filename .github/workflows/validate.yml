@@ -87,7 +87,9 @@ jobs:
       - name: Lint the covered documentation
         run: |
           python .agents/skills/asd-ste100/scripts/ste-lint.py \
-            maintenance/README.md
+            maintenance/README.md \
+            skills/README.md \
+            README.md
 
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
