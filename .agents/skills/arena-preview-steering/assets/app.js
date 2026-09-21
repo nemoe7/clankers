@@ -26,7 +26,7 @@ function setTheme(theme) {
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
   const button = $('#theme');
   button.textContent = light ? '☾' : '☀';
-  button.setAttribute('aria-label', `Switch to ${light ? 'dark' : 'light'} mode`);
+  label(button, `Switch to ${light ? 'dark' : 'light'} mode`);
 }
 setTheme(stored('theme'));
 $('#theme').addEventListener('click', () => {
@@ -38,8 +38,15 @@ function setPanel(name, button, open, labels) {
   document.body.dataset[name] = open ? 'open' : 'closed';
   button.setAttribute('aria-expanded', open ? 'true' : 'false');
   button.textContent = open ? labels.text[0] : labels.text[1];
-  if (labels.name) button.setAttribute('aria-label', open ? labels.name[0] : labels.name[1]);
+  if (labels.name) label(button, open ? labels.name[0] : labels.name[1]);
 }
+// The accessible name and the hover text say the same thing, so a button that explains itself to a
+// screen reader also explains itself to a mouse; owner note bef51970.
+function label(button, text) {
+  button.setAttribute('aria-label', text);
+  button.title = text;
+}
+
 function setConnection(state, text) {
   const dot = $('#connection-dot');
   dot.dataset.state = state;
@@ -407,7 +414,7 @@ function applyAnswers(root, answers) {
 }
 function rest(button) {
   button.textContent = '⧉';
-  button.setAttribute('aria-label', 'Copy code');
+  label(button, 'Copy code');
   button.title = 'Copy code';
   button.dataset.state = '';
 }
@@ -433,7 +440,7 @@ async function copyCode(button) {
   const words = await copyText(button.dataset.code || '');
   const blocked = 'Clipboard blocked; select the code and copy it';
   button.textContent = words ? '✓' : '✗';
-  button.setAttribute('aria-label', words || blocked);
+  label(button, words || blocked);
   button.title = words || blocked;
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => rest(button), 1500);
@@ -474,12 +481,12 @@ async function copyFrom(button, text, what) {
   const message = words || (text === null ? `There is no ${what} to copy`
     : `Clipboard blocked; select the ${what} and copy it`);
   button.textContent = words ? '✓' : '✗';
-  button.setAttribute('aria-label', message);
+  label(button, message);
   button.title = message;
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => {
     button.textContent = '⧉';
-    button.setAttribute('aria-label', `Copy the ${what}`);
+    label(button, `Copy the ${what}`);
     button.title = `Copy the ${what}`;
     button.dataset.state = '';
   }, 1500);

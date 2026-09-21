@@ -1,3 +1,11 @@
+## 2026-09-21 — The log's controls line up and the save button moves up
+
+Three notes from the owner in one pass. The save button leaves the log's row for the top bar, after the theme
+button in the same span, on note `0f27a2b6`; the log's row returns to filter, copy, refresh and composer. The filter
+takes the height of the buttons beside it, on note `37b4069f`, so the row reads as one line rather than two boxes of
+different sizes. Every icon button carries a hover title that repeats its accessible name, on note `bef51970`, and one
+helper sets both so they cannot drift apart. The served-page pins name the new arrangement: the save button between
+the theme button and the panels, the filter before the copy button, and a title on each icon button.
 ## 2026-09-21 — A report update keeps the panel's place
 
 Republishing a report replaces the report inside the element that scrolls, the reports panel, and the browser

@@ -16,10 +16,11 @@
       </nav>
       <span class="row tight">
         <span id="clock" class="muted" title="Local time">--:--</span>
-        <button id="theme" class="icon-button" type="button" aria-label="Switch to light mode">☀</button>
+        <button id="theme" class="icon-button" type="button" aria-label="Switch to light mode" title="Switch to light mode">☀</button>
+        <button id="save-state" class="icon-button" type="button" aria-label="Save the log and the tasks to the server" title="Save the log and the tasks to the server">⤓</button>
       </span>
     </div>
-    <button id="chrome" class="icon-button" type="button" aria-expanded="true" aria-controls="topbar-row" aria-label="Collapse bar">▲</button>
+    <button id="chrome" class="icon-button" type="button" aria-expanded="true" aria-controls="topbar-row" aria-label="Collapse bar" title="Collapse bar">▲</button>
   </header>
   <main>
     <section id="notes-panel" role="tabpanel" aria-labelledby="notes-tab">
@@ -32,11 +33,10 @@
               <p id="last-check" class="muted">Not checked yet.</p>
             </div>
             <span class="row tight">
-              <button id="save-state" class="icon-button" type="button" aria-label="Save the log and the tasks to the server">⤓</button>
               <select id="log-filter" aria-label="Filter the message log by state"><option value="all">All</option><option value="sent">Sent</option><option value="seen">Seen</option><option value="said">Said</option></select>
-              <button id="copy-log" class="icon-button" type="button" aria-label="Copy the message log">⧉</button>
-              <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages">↻</button>
-              <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer">✎</button>
+              <button id="copy-log" class="icon-button" type="button" aria-label="Copy the message log" title="Copy the message log">⧉</button>
+              <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages" title="Refresh messages">↻</button>
+              <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer" title="Hide composer">✎</button>
             </span>
           </div>
           <div class="log-scroll">
@@ -65,8 +65,8 @@
       <div class="card">
         <div class="report-toolbar">
           <div class="select-wrap"><label for="report-select">Report</label><select id="report-select"><option value="">No reports published yet</option></select></div>
-          <button id="copy-report" class="icon-button" type="button" aria-label="Copy this report">⧉</button>
-          <button id="refresh-report" class="icon-button" type="button" aria-label="Refresh report">↻</button>
+          <button id="copy-report" class="icon-button" type="button" aria-label="Copy this report" title="Copy this report">⧉</button>
+          <button id="refresh-report" class="icon-button" type="button" aria-label="Refresh report" title="Refresh report">↻</button>
           <p id="report-status" role="status" aria-live="polite">The agent can publish several reports here.</p>
         </div>
         <form id="report-form">
@@ -81,7 +81,7 @@
       <div class="card tasks-layout">
         <div class="row tight">
           <p id="tasks-status" class="muted" role="status">The agent has not written a task list yet.</p>
-          <button id="copy-tasks" class="icon-button" type="button" aria-label="Copy the task list">⧉</button>
+          <button id="copy-tasks" class="icon-button" type="button" aria-label="Copy the task list" title="Copy the task list">⧉</button>
         </div>
         <div id="tasks-current" class="task-div report" hidden>
           <h2 id="tasks-current-title">Current</h2>
