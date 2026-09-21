@@ -97,22 +97,24 @@ with tempfile.TemporaryDirectory() as directory:
     assert "translateX(-50%)" in page
     # The save button sits in the top bar after the theme button rather than in the log's own row, on
     # owner note 0f27a2b6; the log's row keeps the filter immediately left of copy-log, on owner notes
-    # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught.
+    # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught. The log's own
+    # copy and the tasks' copy are gone, on owner note 586d52f7, and the save button carries the copy
+    # of the state it posts on a shift-click.
     assert (
       page.index('id="theme"')
       < page.index('id="save-state"')
       < page.index('id="notes-panel"')
     )
-    assert page.index('id="log-filter"') < page.index('id="copy-log"')
+    assert page.index('id="log-filter"') < page.index('id="refresh-notes"')
+    assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
+    assert "shift-click" in page
     # Every icon button carries a title that repeats its accessible name, on owner note bef51970.
     for control in (
       "save-state",
-      "copy-log",
       "refresh-notes",
       "upload-send",
       "copy-report",
       "refresh-report",
-      "copy-tasks",
     ):
       block = page[page.index(f'id="{control}"') :]
       assert "title=" in block[: block.index(">")]
@@ -336,7 +338,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#clock { font-size: inherit; font-variant-numeric: tabular-nums; }" in page
     assert '.icon-button[data-state="good"] { color: var(--dot-said);' in page
     assert '.icon-button[data-state="bad"] { color: #ef4444;' in page
-    assert '<button id="copy-log" class="icon-button"' in page
+    assert 'id="copy-log"' not in page, "the log lost its copy button (note 586d52f7)"
     # The log header is two rows tall, not three: the title stands alone and the
     # connection and last-check lines stack to its right, on owner note ecf7d264.
     assert '<h2 id="history-title">Message log</h2>' in page
@@ -358,7 +360,9 @@ with tempfile.TemporaryDirectory() as directory:
       ".task-details > summary { cursor: pointer; list-style-position: inside; }"
       in page
     )
-    assert '<button id="copy-tasks" class="icon-button"' in page
+    assert 'id="copy-tasks"' not in page, (
+      "the tasks lost their copy button (note 586d52f7)"
+    )
     # The Reports tab carries an unread pip rather than a count of the reports that exist.
     assert 'id="report-pip"' in page
     assert "report-count" not in page
@@ -369,9 +373,7 @@ with tempfile.TemporaryDirectory() as directory:
     )
     # The pip is given a shape by a display rule, so the sheet's blanket rule is what hides it.
     assert "[hidden] { display: none !important; }" in page
-    assert page.index('id="copy-log"') < page.index('id="refresh-notes"')
     assert page.index('id="copy-report"') < page.index('id="refresh-report"')
-    assert page.index('id="tasks-status"') < page.index('id="copy-tasks"')
     assert '<span id="clock" class="muted" title="Local time">--:--</span>' in page
     assert page.index('id="clock"') < page.index('id="theme"')
     assert ".report :not(pre) > code" not in page

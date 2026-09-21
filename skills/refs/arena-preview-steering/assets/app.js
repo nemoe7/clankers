@@ -532,7 +532,7 @@ function quoteNoteId(code) {
   code.title = `Quoted in the composer: RE: ${short}`;
 }
 // The three tab buttons share one confirmation, and null text means there was nothing to copy.
-async function copyFrom(button, text, what) {
+async function copyFrom(button, text, what, glyph = '⧉') {
   const words = text === null ? null : await copyText(text);
   const message = words || (text === null ? `There is no ${what} to copy`
     : `Clipboard blocked; select the ${what} and copy it`);
@@ -541,7 +541,7 @@ async function copyFrom(button, text, what) {
   button.title = message;
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => {
-    button.textContent = '⧉';
+    button.textContent = glyph;
     label(button, `Copy the ${what}`);
     button.title = `Copy the ${what}`;
     button.dataset.state = '';
@@ -597,23 +597,18 @@ function stamp(value) {
 // A copied line carries its receipt too, so a restore keeps the time the acknowledgement was
 // actually written instead of the time the restore ran. Every key is present on every line,
 // null where absent, because import-notes refuses a partial receipt rather than filling it in.
-function logLine(note) {
-  return JSON.stringify({
-    id: note.id,
-    text: note.text,
-    at: stamp(note.at),
-    acknowledged_at: note.acknowledged_at ?? null,
-    ack_kind: note.ack_kind ?? null,
-    ack_text: note.ack_text ?? null,
-    seen_at: note.seen_at ?? null,
-    task_id: note.task_id ?? null
-  });
-}
 // The save button posts the cached copy to the server, which writes one file at the repository
 // root for the importers to read; the report answers come from the server's own records. It is the only action that puts the page's data on disk, and it is the
 // reason a restore no longer needs the owner to paste anything: the browser is the surviving copy.
-$('#save-state').addEventListener('click', async () => {
+// The log's copy and the tasks' copy are gone, and this button carries the copy on a shift-click
+// as JSON, on the owner's note 586d52f7; the reports tab keeps its own button.
+$('#save-state').addEventListener('click', async (event) => {
   const button = $('#save-state');
+  if (event && event.shiftKey) {
+    let copy = null;
+    try { copy = JSON.parse(stored('state-cache') || 'null'); } catch { copy = null; }
+    return copyFrom(button, copy ? `${JSON.stringify(copy)}\n` : null, 'state', '⤓');
+  }
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
   if (!cached || !Array.isArray(cached.notes) || !cached.tasks) {
@@ -642,10 +637,6 @@ $('#save-state').addEventListener('click', async () => {
     setTimeout(() => delete button.dataset.state, 1500);
   }
 });
-$('#copy-log').addEventListener('click', () => {
-  const notes = lastState ? lastState.notes : [];
-  copyFrom($('#copy-log'), notes.length ? `${notes.map(logLine).join('\n')}\n` : null, 'message log');
-});
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
   if (!id) return copyFrom($('#copy-report'), null, 'report');
@@ -655,12 +646,6 @@ $('#copy-report').addEventListener('click', async () => {
   } catch {
     copyFrom($('#copy-report'), null, 'report');
   }
-});
-$('#copy-tasks').addEventListener('click', () => {
-  const tasks = lastState && lastState.tasks;
-  const records = tasks ? [...tasks.finished, ...tasks.upcoming] : [];
-  copyFrom($('#copy-tasks'), records.length ? `${JSON.stringify(records)}\n` : null,
-    'task list');
 });
 function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
