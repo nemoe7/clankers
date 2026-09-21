@@ -14,7 +14,7 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-21. `maintenance/check.py` measures ARENA.md by uploaded file size. It measures the two ChatGPT files by their custom-instruction character limits. The remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. The two preview skills are the exception. The check measures them by UTF-8 file size instead. A byte count needs no tokenizer, so it survives a sandbox where the `tiktoken` cache cannot be seeded. This table excludes supporting files loaded on demand, including skill refs. The three `assets/` rows are the minified build that the preview skill ships. Their recorded size is their budget, and `maintenance/minify.py` rebuilds them from the readable refs sources.
+Latest measurements as of 2026-09-21. `maintenance/check.py` measures ARENA.md by uploaded file size. It measures the two ChatGPT files by their custom-instruction character limits. The remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. The two preview skills are the exception. The check measures them by UTF-8 file size instead. A byte count needs no tokenizer, so it survives a sandbox where the `tiktoken` cache cannot be seeded. This table excludes supporting files loaded on demand, including skill refs. The three `assets/` rows and three `scripts/` rows are the minified build that the preview skill ships. Their recorded size is their budget, and `maintenance/minify.py` rebuilds them from the readable refs sources.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -33,6 +33,9 @@ Latest measurements as of 2026-09-21. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 23,710 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 6,486 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 9,898 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 50,095 `B` |
+| `skills/arena-preview-steering/scripts/check_preview.py` | `UTF-8 file size` | 41,393 `B` |
+| `skills/arena-preview-steering/scripts/check_client.cjs` | `UTF-8 file size` | 41,149 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |

@@ -35,19 +35,20 @@ The `--update` option regenerates the instruction-budget table from `EXPECTED_BU
 
 The checker stays maintenance tooling. Separately, preview reporting uses `markdown-it-py` at runtime, and steering itself uses only the Python standard library. The reporting skill documents its approved venv setup and adds no dependency to the consuming application.
 
-## Minified browser assets
+## Minified assets and scripts
 
-The preview skill ships minified JavaScript, CSS and HTML. The readable baselines stay in `skills/refs/arena-preview-steering/assets/`. The two distributed copies carry the build. Python and Markdown stay readable, because an agent reads them and a traceback names real lines.
+The preview skill ships minified JavaScript, CSS, HTML and Python. The readable baselines stay in `skills/refs/arena-preview-steering/`. The two distributed copies carry the build, including all three files in `scripts/`. Edit the refs sources, not the generated copies. Markdown compression stays outside this build. Compact Python has less useful traceback line numbers.
 
 ```bash
-npm install
+npm ci
+python3 -m pip install python-minifier==3.3.0
 python3 maintenance/minify.py            # report drift, write nothing
 python3 maintenance/minify.py --update   # write both distributed copies
 ```
 
-`package.json` pins the minifiers: `terser` for JavaScript, `clean-css-cli` for CSS, and `html-minifier-terser` for HTML. The script refuses a build that Node cannot parse, a stylesheet with unbalanced braces, and markup that loses an id or a visible word.
+`package.json` pins `terser` for JavaScript and CommonJS, `clean-css-cli` for CSS, and `html-minifier-terser` for HTML. The build and CI pin `python-minifier==3.3.0` for Python. It is a build dependency, not a server dependency. CI uses Python 3.11 to keep the output stable. The script refuses JavaScript that Node cannot parse, unbalanced CSS braces, and markup that loses an id or a visible word. Python output must compile, retain the same parsed tree, and meet the Python 3.10 syntax limit. Names, annotations, docstrings, assertions and shebangs stay. Ordinary comments do not.
 
-`check.py` gates each live asset through the README budget table. The recorded size is the budget. Any growth fails the check until you update the table on purpose. Run `minify.py` after every change to a refs asset, because the budget cannot see a stale copy.
+`check.py` gates each live asset and script through the README budget table. The recorded size is the budget. Any growth fails the check until you update the table on purpose. Run `minify.py` after each change to a refs asset or script, because the budget cannot detect a stale copy. Run `python3 maintenance/check_minify.py` to check copy equality, drift, Python tree equality, the syntax limit and the generated runtime. The runtime check uses readable assets for exact page assertions, then checks page assembly with the shipped assets. Ruff checks the readable Python refs, not the generated copies.
 
 ## Offline token measurement
 
