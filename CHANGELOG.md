@@ -1,3 +1,25 @@
+## 2026-09-21 — The log and a report stay where the owner left them
+
+Two bugs, both mine, both from the last two features (notes `352a7d89` and `d9b8ce39`).
+
+The filter's scroll: changing the filter while the log was at its end left the view at the first
+message. A shorter filtered view makes the browser clamp the scroll and nothing put it back, so the
+next filter that showed rows again left the owner at the top. The log's place is remembered now: at
+its end it returns there when rows come back, and scrolled away from it the owner keeps the position
+they chose.
+
+The report stamp: reading a report to its end refreshed the whole reports view, which rebuilt the
+select and re-fetched the report, sending the panel back to the top. The stamp is folded into the
+page's state instead, using the stamp the server returned, with the reports signature moved with it,
+so the next poll renders nothing, the panel does not move, and the asterisk leaves that one select
+label at once.
+
+Both are asserted in `check_client.cjs` — the log returning to its end after a shorter filter, staying
+put when scrolled away, a stamp leaving `panel.scrollTop` untouched, clearing the pip in place and
+dropping the star — and `REFERENCE.md` carries both behaviours. Costs: 35,451 B for `app.js`, 44,480 B
+for `check_client.cjs`, 38,727 B for `REFERENCE.md`, nine files across the three copies, none of them
+budgeted.
+
 ## 2026-09-21 — The log filter stops taking a line of its own
 
 The filter arrived as a labelled form field, which gave the log header a full-width select and a

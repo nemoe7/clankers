@@ -570,6 +570,23 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(readStamps.length, 0, 'a report left before its dwell ends is not stamped');
   get('#reports-tab').events.click();
   await tick();
+  // Marking a report read folds the stamp into the state instead of re-rendering: the panel keeps
+  // its place and that report's label loses its asterisk at once, which is the bug the owner hit
+  // when reading a report threw the page back to the top.
+  state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
+  await get('#refresh-notes').events.click();
+  await tick();
+  assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+    '1. * Long', 'an unseen report is starred before the stamp lands');
+  readStamps.length = 0;
+  panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 600;
+  panel.events.scroll();
+  await tick();
+  assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'reaching the end stamps the report');
+  assert.equal(panel.scrollTop, 600, 'the stamp does not move the panel');
+  assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+    '1. Long', 'the asterisk goes as soon as the stamp lands');
+  assert.equal(pip.hidden, true, 'the pip clears in place');
   // The log filter selects over the dots the log already draws, adds no new notion, and leaves the
   // copy alone: that is the restore path, and a filtered copy would restore a partial log.
   const logStamp = new Date().toISOString();
@@ -608,10 +625,36 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(messageRow('n1').hidden, true);
   assert.equal(get('#log-empty').hidden, false, 'a filter with no match explains itself');
   assert.match(get('#log-empty').textContent, /Nothing here is Said yet/);
+  // The filter keeps the log's place: at its end, the log returns there when rows come back,
+  // because the browser clamps the scroll while the view is short and never puts it back.
+  const logView = get('#history');
+  state.notes = [
+    { id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null },
+    { id: 'n2', text: 'read', at: logStamp, seen_at: logStamp, acknowledged_at: null }
+  ];
+  await get('#refresh-notes').events.click();
+  await tick();
+  logView.scrollHeight = 900; logView.clientHeight = 300; logView.scrollTop = 600;
+  logView.events.scroll();
+  get('#log-filter').value = 'sent';
+  get('#log-filter').events.change();
+  assert.equal(logView.scrollTop, 900, 'a filtered view with one row sits at its end');
+  get('#log-filter').value = 'all';
+  get('#log-filter').events.change();
+  assert.equal(logView.scrollTop, 900, 'the log returns to its end when the rows come back');
+  logView.scrollTop = 0;
+  logView.events.scroll();
+  get('#log-filter').value = 'seen';
+  get('#log-filter').events.change();
+  assert.equal(logView.scrollTop, 0, 'a log the owner scrolled away from stays where they left it');
+  // With the filter matching nothing, the copy still carries every message: it is the restore
+  // path, and a filtered copy would restore a partial log as if it were all of it.
+  get('#log-filter').value = 'said';
+  get('#log-filter').events.change();
   copied.length = 0;
   get('#copy-log').events.click();
   await tick();
-  assert.equal(copied.at(-1).trim().split('\n').length, 1,
+  assert.equal(copied.at(-1).trim().split('\n').length, 2,
     'the copy carries the log, not the filtered view of it');
   get('#log-filter').value = 'all';
   get('#log-filter').events.change();
