@@ -1,3 +1,7 @@
+## 2026-09-21 — The jump bar says Latest message
+
+The bar over the bottom of the log reads `Latest message` rather than `Newest message`, on owner note
+`5de32f28`. Nothing else about it moved.
 ## 2026-09-21 — A message says whether the agent wrote it
 
 The owner could not tell an agent message from one of their own and asked who sent a line, so a note written
