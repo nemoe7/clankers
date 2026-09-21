@@ -84,7 +84,7 @@ EXPECTED_LINTED = (
 
 # Where the documented markdownlint file count lives, and how to find it. Root AGENTS.md
 # carries the same claim in its own words and is deliberately left out of the check: it is an
-# agent-facing file, and the owner's note a5f1f179 keeps this script off those.
+# agent-facing file, and a steering note from the owner keeps this script off those.
 LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 
 # Rule refs baselines hold full wording; live files compress it. Compression may

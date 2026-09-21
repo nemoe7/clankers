@@ -12,8 +12,8 @@ command that failed, a payload that came back, a file that was missing. Nothing 
 reading presented as a pattern.
 
 Restores wiped the steering inbox four times, so the notes that first carried these observations are
-gone. The durable record of the response lives in [CHANGELOG.md](../../CHANGELOG.md), whose Origins
-lines name the notes by ID.
+gone. The durable record of the response lives in [CHANGELOG.md](../../CHANGELOG.md), whose Origins lines carry the notes' content rather than their
+IDs.
 
 ## GitHub token expiry mid-turn
 
@@ -146,8 +146,7 @@ answered `/api/state` with 200, and `state.sqlite3` still held all 51 notes and 
 There was nothing to pull. That part was sound.
 
 It then wrote a sub-entry claiming a second variant of the reset, one that stops at the visible
-transcript and leaves the sandbox alone, and pushed it as `dad5ce1`. The owner fixed it in notes
-`dbd05268` and `41c6b09a`: Arena had not reset the visible message history at all, and the message
+transcript and leaves the sandbox alone, and pushed it as `dad5ce1`. The owner fixed it in two follow-up notes: Arena had not reset the visible message history at all, and the message
 that read as a report of one was the owner's own earlier message arriving again. The event was a
 duplicate, not a reset. The "variant" was an inference from an ambiguous message, recorded as an
 observation and shipped.
@@ -237,7 +236,7 @@ messages, and each repeat queues another turn, so the duplication counts as obse
 and not as a hypothesis. The cost is visible in this session: the agent answers the same ask twice
 unless it notices, and a repeated message can revive a turn that ended.
 
-Note `41c6b09a` adds a second case and records it as reported with no mechanism inferred, since the
+A follow-up note adds a second case and records it as reported with no mechanism inferred, since the
 entry above this one is what happens when an agent supplies one: Arena sends dupe messages, and the
 dupe can replace the message the owner sends. That is worse than a repeat. A repeat leaves the
 original intact beside the copy, so deduping by ID or by a read of the log catches it. A replacement
@@ -249,7 +248,7 @@ replaced message read as a platform reset and the agent recorded it as one.
 
 It then happened to an instruction rather than to a report. A message reading `continue tasks!`
 arrived, and work started on the strength of it: thirty-four lines went into `scripts/preview.py`
-before the owner stopped the turn and sent note `de6c0019`, saying the message was false. The lines
+before the owner stopped the turn and said in a note that the message was false. The lines
 came out again with `git checkout` and no commit followed, so the cost was a stopped turn rather than
 a bad commit. Precision matters here: the agent cannot tell from inside the turn that
 an instruction changed, since the replacement does not arrive marked as one. It arrives as an
