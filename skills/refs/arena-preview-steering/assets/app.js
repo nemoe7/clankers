@@ -132,8 +132,7 @@ function showHistory(notes) {
   historySignature = signature;
   if (notes.length) note.placeholder = clipPlaceholder(notes[notes.length - 1].text);
   const history = $('#history');
-  const pinned = !messageNodes.size
-    || history.scrollHeight - history.scrollTop - history.clientHeight < 80;
+  if (messageNodes.size) logPinned = historyAtEnd(history);
   for (const item of notes) {
     let node = messageNodes.get(item.id);
     if (!node) {
@@ -191,8 +190,18 @@ function showHistory(notes) {
   for (const id of [...messageNodes.keys()]) if (!current.has(id)) messageNodes.delete(id);
   history.replaceChildren(...notes.map(item => messageNodes.get(item.id)));
   applyLogFilter();
-  if (pinned) history.scrollTop = history.scrollHeight;
+  if (logPinned) history.scrollTop = history.scrollHeight;
 }
+// The log's own place: a filter change can make the view shorter, and the browser clamps the
+// scroll without putting it back, so the next filter that shows rows again would leave the owner
+// at the very first message. Being at the end is remembered and restored; scrolled away from it,
+// the owner keeps the position they chose.
+let logPinned = true;
+const historyAtEnd = history =>
+  history.scrollHeight - history.scrollTop - history.clientHeight < 80;
+$('#history').addEventListener('scroll', () => {
+  logPinned = historyAtEnd($('#history'));
+});
 function applyLogFilter() {
   const filter = $('#log-filter').value;
   let shown = 0;
@@ -209,6 +218,7 @@ function applyLogFilter() {
   empty.hidden = shown > 0 || total === 0;
   empty.textContent = `Nothing here is ${LOG_FILTERS[filter]} yet; ${total} message`
     + `${total === 1 ? '' : 's'} saved, and the copy button still carries all of them.`;
+  if (logPinned) $('#history').scrollTop = $('#history').scrollHeight;
 }
 const savedLogFilter = stored('log-filter');
 $('#log-filter').value = LOG_FILTERS[savedLogFilter] ? savedLogFilter : 'all';
@@ -236,7 +246,7 @@ async function refreshState() {
       state.reports.forEach((report, position) => {
         const option = document.createElement('option');
         option.value = report.id;
-        option.textContent = `${position + 1}.${report.seen_at ? '' : ' *'} ${report.title}`;
+        option.textContent = reportLabel(report, position);
         select.append(option);
       });
       if (!state.reports.length) {
@@ -664,6 +674,9 @@ const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab')];
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
 // storage, so it survives a cleared browser, holds across browsers, and tells the agent the
 // report was read instead of leaving it to infer one.
+function reportLabel(report, position) {
+  return `${position + 1}.${report.seen_at ? '' : ' *'} ${report.title}`;
+}
 function updateReportPip(reports) {
   const pip = $('#report-pip');
   const unseen = reports.filter(report => !report.seen_at);
@@ -686,17 +699,29 @@ function unseenReportId() {
 }
 async function markReportRead(id) {
   clearReadTimer();
+  let stamped;
   try {
-    await request(`/api/reports/${encodeURIComponent(id)}/seen`, {
+    stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/seen`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
       body: '{}'
-    });
+    })).json();
   } catch (error) {
     // A stamp that fails costs the owner nothing they have to act on, and the next look retries.
     return;
   }
-  refreshState();
+  // The stamp is folded into the state rather than fetched again. A poll after it would see a
+  // changed reports signature, rebuild the select and re-fetch the report, which loses the
+  // owner's place in a long report. The server's own stamp is stored and the signature is moved
+  // with it, so the next poll matches this state and renders nothing.
+  const reports = (lastState && lastState.reports) || [];
+  const report = reports.find(item => item.id === id);
+  if (!report) return;
+  report.seen_at = stamped.seen_at || new Date().toISOString();
+  listSignature = JSON.stringify(reports);
+  updateReportPip(reports);
+  const option = [...$('#report-select').children].find(item => item.value === id);
+  if (option) option.textContent = reportLabel(report, reports.indexOf(report));
 }
 function checkReportRead() {
   const panel = $('#reports-panel');
