@@ -1,3 +1,24 @@
+## 2026-09-21 — A receipt reads in parts, and a message can say it became a task
+
+**Date:** 2026-09-21
+
+**Summary** — the receipt line gains the ASCII dot the owner asked for after the ID (notes `69dcf681` and
+`7b183104`), so it reads `7b18310 · ● · Sep 21, 18:51`, and a message that became a task says ` · Task added`
+with the task ID in the marker's title (note `fe00a32d`). The `task` command takes `--msg-id <message id>`; the
+task and the marker land in one transaction, so a message ID that matches nothing is refused with no task left
+behind. The marker rides the log copy, `import-notes` restores it, and `notes` and `submissions` each gained a
+`task_id` column through the existing in-place migration.
+
+**Cost** — `scripts/preview.py` and `scripts/check_client.cjs` grow; `assets/app.js` 43,658 → 44,532 `B`
+readable and 23,844 → 24,116 `B` minified, and the README budget row refreshes to 24,116 `B`.
+
+**Checks** — the client harness asserts the separator, the marker, the marker's title and the copy's `task_id`
+key, and fails when the marker is removed, proven by reverting it. `check_preview.py` asserts the marker survives
+an import, that `--msg-id` links a task to a message, and that an unknown message ID is refused with no orphan
+task; that harness also caught a swapped parameter order in the new `note()` insert before this shipped.
+`maintenance/minify.py`, `check.py --update` then a clean re-run, `ruff`, `markdownlint-cli2` and the nine-file
+STE gate are green.
+
 ## 2026-09-21 — The log stops double-spacing, and a dead filter rule comes back
 
 **Date:** 2026-09-21
