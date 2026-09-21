@@ -1,3 +1,12 @@
+## 2026-09-21 — Paragraph gaps take the heading rhythm
+
+**Date:** 2026-09-21
+
+The owner reported that paragraphs sat too far apart, and they did: the headings had been tightened while a
+paragraph still took the browser's 16px above and below. `.report p` and `.message-text p` now take 8px, which
+covers a published report, a rendered message and the draft preview, since the preview carries the same class.
+`check_preview.py` pins the rule so a later edit cannot quietly put the gap back.
+
 ## 2026-09-21 — The recovery recipe is written down where the next agent reads it
 
 **Date:** 2026-09-21

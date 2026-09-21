@@ -386,6 +386,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert ".log-card { flex: 1 1 auto; min-height: 200px;" in page
     assert "h1 { letter-spacing: -.035em; margin: 4px 0; }" in page
     assert "h2 { margin: 0 0 8px; }" in page
+    assert ".report p, .message-text p { margin: 8px 0; }" in page
     for level in ("h1", "h2", "h3", "h4", "h5", "h6"):
       assert f"{level} {{ font-size" not in page
 

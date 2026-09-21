@@ -154,6 +154,9 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .report, .message-text { overflow-wrap: anywhere; overflow-x: auto; }
 .report :is(h1, h2, h3, h4, h5, h6), .message-text :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }
 .report > :first-child, .message-text > :first-child { margin-top: 0; }
+/* Paragraph gaps were the browser default 16px while the headings had been tightened; the owner
+   called the paragraphs too far apart (note 9454e0b1), so they take the heading's 6px rhythm at 8. */
+.report p, .message-text p { margin: 8px 0; }
 .report table, .message-text table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .report th, .report td, .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
 /* Rendered message text used to borrow the report class, which said the wrong thing about a note. */
