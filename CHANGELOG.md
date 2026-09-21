@@ -1,3 +1,9 @@
+## 2026-09-21 — Long rule bullets wrap onto sub-bullets
+
+Fifteen bullets longer than 220 characters — five in `rules/refs/AGENTS.md` and ten in root `AGENTS.md` — now
+lead with their rule and carry the rest as sub-bullets. Approved in report submission `9c28bddc`, which also
+declined section renames and ceiling markers, so only the wrapping changed: no rule gained, lost or moved
+meaning, and the compressed live mirror `rules/AGENTS.md` is untouched, so refs/live parity still holds.
 ## 2026-09-21 — Save the log and the tasks to the server
 
 The header now carries a save button, `⤓`. It posts the page's cached copy of the log and the tasks to

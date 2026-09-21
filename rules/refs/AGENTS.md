@@ -31,7 +31,9 @@
 - Report every unrelated finding; fix only the ones that block the work.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
 - Ask every question with the question tool when the surface provides one; NEVER ask in plain text.
-- Every question carries a recommended answer: the one you would take if the user never replied, stated as a recommendation rather than as a neutral list, and where the surface offers options, marked among them in the option's own text, because that is the only place a user comparing options can see it. A question with no recommendation hands the user back the work you were asked to do, and a batch of neutral options reads as a shrug.
+- Every question carries a recommended answer: the one you would take if the user never replied, stated as a recommendation rather than as a neutral list.
+  - Where the surface offers options, mark it in the option's own text, because that is the only place a user comparing options can see it.
+  - A question with no recommendation hands the user back the work you were asked to do, and a batch of neutral options reads as a shrug.
 - If an assumption is unavoidable, make the most reasonable one and state it immediately.
 
 ## Engineering
@@ -44,7 +46,9 @@
 - Rung 5 — Already-installed dependency solves it? Use it, and never add a new one for what a few lines can do.
 - Rung 6 — Can it be one line? One line.
 - Rung 7 — Only then, the minimum code that works.
-- The ladder is a reflex, not a research project, and it runs after you understand the problem rather than instead of it: read the task and the code it touches, trace the real flow end to end, then climb; when two rungs work, take the higher one and move on.
+- The ladder is a reflex, not a research project, and it runs after you understand the problem rather than instead of it.
+  - Read the task and the code it touches, trace the real flow end to end, then climb.
+  - When two rungs work, take the higher one and move on.
 - Two stdlib options of the same size: take the one that is correct on edge cases, because less code is not the same as a flimsier algorithm.
 - For a complex request, ship the lazier version and question the requirement in the same response; never stall on an answer you can default.
 - NEVER add a dependency for a few lines' work.
@@ -66,7 +70,8 @@
 - New behavior, fixes, refactors: when a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck.
 - Test public interfaces and integration boundaries.
 - Reuse the project's existing frameworks, fixtures, helpers, and conventions.
-- MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks. No frameworks, no fixtures, no per-function suites beyond it.
+- MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file.
+  - It is the smallest thing that fails if the logic breaks; no frameworks, no fixtures, no per-function suites beyond it.
 - Mechanical-only changes: proportional verification.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
@@ -99,7 +104,8 @@
 - Follow the project's commit-message convention when the project states one.
 - When the project states none, use Conventional Commits: one per completed feature, in the form `<type>[optional scope]: <description>`, with `!` before the colon to mark a breaking change.
 - Write the subject imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body.
-- Types: `feat fix refactor perf style docs test build chore`; the specification at <https://www.conventionalcommits.org/en/v1.0.0/> mandates only `feat` and `fix`, and the rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
+- Types: `feat fix refactor perf style docs test build chore`; the specification at <https://www.conventionalcommits.org/en/v1.0.0/> mandates only `feat` and `fix`.
+  - The rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
 - Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
@@ -112,7 +118,8 @@
 - Code first, then at most three short lines: what was skipped and when to add it. No essays and no feature tours; explanation the user explicitly asked for is the only explanation that is not debt.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - A command the agent ran itself is reported as run, in the form it was run in.
-- Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it; fit a narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no unnecessarily wide rows.
+- Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it.
+  - Fit a narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no unnecessarily wide rows.
 
 ## When in doubt
 

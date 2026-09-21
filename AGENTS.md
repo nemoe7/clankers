@@ -5,8 +5,11 @@
 - Guide for agents working in this repository: these rules apply to every task and session here, whether or not a prompt repeats them.
 - They outrank skill and plugin instructions.
 - An explicit user instruction in chat outranks this file, confirmed in one line.
-- Your first action in a new session is to read this file end-to-end; in Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit; it wins on Arena-specific handling, including pushing, pull requests, and merges.
-- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and both preview skills; this waiver wins that collision. Editing installed copies still requires explicit user authorization.
+- Your first action in a new session is to read this file end-to-end.
+  - In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit.
+  - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
+- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and both preview skills.
+  - This waiver wins that collision; editing installed copies still requires explicit user authorization.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 ## Glossary
@@ -40,7 +43,8 @@ Read these first:
 
 - A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
-- It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, skill licensing for adapted skills, the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
+- It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
+  - It also checks the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
 - `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on every push and pull request.
 - On pushes it commits refreshed README measurements; it also runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
@@ -55,10 +59,14 @@ Read these first:
 
 - Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
 - Baseline skill trees live in `skills/refs/`: amend them first, keep supporting files mirrored, then squash only the live `SKILL.md`; refs are not installed or distributed.
-- Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`. They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
+- Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`.
+  - They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
-- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line; on a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
-- Record every amendment's origin in the CHANGELOG entry that carries it: who proposed it — the chat task, a steering note, another session, or the agent's own violation report — the date, and the rule it changed; the CHANGELOG is the only ledger, with no separate amendment file; an amendment whose origin is not recorded is undocumented, whatever the diff shows.
+- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line.
+  - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
+- Record every amendment's origin in the CHANGELOG entry that carries it: who proposed it — the chat task, a steering note, another session, or the agent's own violation report — the date, and the rule it changed.
+  - The CHANGELOG is the only ledger, with no separate amendment file.
+  - An amendment whose origin is not recorded is undocumented, whatever the diff shows.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
 
 ## Reports and approval
@@ -70,7 +78,8 @@ A proposal is visible text before the question that asks for approval: put its t
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
 - No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
-- Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview; multiple reports may coexist. Reports, inboxes and receipts stay uncommitted and are never pushed.
+- Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
+  - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are never pushed.
 
 ## Budgets
 
@@ -93,15 +102,21 @@ A proposal is visible text before the question that asks for approval: put its t
 ## Automations
 
 - Automation prompts live in `automations/`: self-contained text pasted into an external scheduler, not rules an agent loads.
-- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request: web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt must not depend on them. The connector can read and write in this repository; the prompts repeat no git rule, because [rules/CHATGPT-CUSTOM.txt](rules/CHATGPT-CUSTOM.txt) gates pushes, branches, and pull requests on every request of that account, including scheduled ones. Reports go to the chat response and nothing is persisted.
-- Prompts carry no budget row and no validator gate, both declined on request rather than deferred, because the scheduler owns its own copy and edits the embedded datetime between runs; CI must not depend on their contents.
+- [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request.
+  - Web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt must not depend on them.
+  - The connector can read and write in this repository; the prompts repeat no git rule.
+  - [rules/CHATGPT-CUSTOM.txt](rules/CHATGPT-CUSTOM.txt) gates pushes, branches, and pull requests on every request of that account, including scheduled ones.
+  - Reports go to the chat response and nothing is persisted.
+- Prompts carry no budget row and no validator gate, both declined on request rather than deferred.
+  - The scheduler owns its own copy and edits the embedded datetime between runs; CI must not depend on their contents.
 - Amend one here, then re-paste it into the task: an edit in the repo never reaches a running automation.
 
 ## Style
 
 - 2-space indentation, overriding formatter defaults.
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
-- markdownlint covers `rules/**/*.md` — 10 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`; **MD060 enabled**, **MD013 disabled**.
+- markdownlint covers `rules/**/*.md` — 10 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
+  - **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
 
 ## Git
