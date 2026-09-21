@@ -1035,6 +1035,17 @@ def handler(store):
         limit = MAX_SUBMISSION_BODY if report_submit else MAX_BODY
         if not 0 < length <= limit:
           subject = "Report answers are" if report_submit else "Note body is"
+          # The refusal has to reach the client. Answering before the body is read is what keeps a
+          # wide body from being buffered, but a client still writing into a socket this side is
+          # about to close sees a broken pipe instead of the answer, which is how this test failed
+          # once in a way that looked like flakiness. Discarding what it sends, in bounded chunks
+          # that are never kept or parsed, delivers the refusal and costs nothing.
+          remaining = length if 0 < length <= MAX_SUBMISSION_BODY + 1 else 0
+          while remaining > 0:
+            chunk = self.rfile.read(min(65536, remaining))
+            if not chunk:
+              break
+            remaining -= len(chunk)
           self.problem(413, f"{subject} empty or too large")
           return
         payload = json.loads(self.rfile.read(length))

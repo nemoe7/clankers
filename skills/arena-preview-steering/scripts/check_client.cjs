@@ -570,6 +570,51 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(readStamps.length, 0, 'a report left before its dwell ends is not stamped');
   get('#reports-tab').events.click();
   await tick();
+  // The log filter selects over the dots the log already draws, adds no new notion, and leaves the
+  // copy alone: that is the restore path, and a filtered copy would restore a partial log.
+  const logStamp = new Date().toISOString();
+  state.notes = [
+    { id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null },
+    { id: 'n2', text: 'read', at: logStamp, seen_at: logStamp, acknowledged_at: null },
+    { id: 'n3', text: 'answered', at: logStamp, seen_at: logStamp, acknowledged_at: logStamp,
+      ack_kind: 'note', ack_text: 'ok' }
+  ];
+  await tick();
+  await get('#refresh-notes').events.click();
+  await tick();
+  assert.equal(get('#log-filter').value, 'all', 'the log opens unfiltered');
+  const messageRow = id => get('#history').children.find(node =>
+    node.children[2].children[0].textContent === id);
+  const visibleRows = () => ['n1', 'n2', 'n3'].filter(id => !messageRow(id).hidden);
+  assert.deepEqual(visibleRows(), ['n1', 'n2', 'n3'], 'every message shows under All');
+  assert.equal(get('#log-empty').hidden, true, 'nothing to explain while the filter matches');
+  assert.equal(messageRow('n1').dataset.state, 'sent');
+  assert.equal(messageRow('n2').dataset.state, 'seen');
+  assert.equal(messageRow('n3').dataset.state, 'said');
+  for (const [filter, expected] of [['sent', ['n1']], ['seen', ['n2']], ['said', ['n3']]]) {
+    get('#log-filter').value = filter;
+    get('#log-filter').events.change();
+    assert.deepEqual(visibleRows(), expected, `the ${filter} filter shows its own state only`);
+    assert.equal(get('#log-empty').hidden, true);
+  }
+  assert.equal([...storage.keys()].some(key => key.endsWith(':log-filter')), true,
+    'the chosen filter is remembered');
+  // A filter that matches nothing says so and counts what it is holding back.
+  state.notes = [{ id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null }];
+  await get('#refresh-notes').events.click();
+  await tick();
+  get('#log-filter').value = 'said';
+  get('#log-filter').events.change();
+  assert.equal(messageRow('n1').hidden, true);
+  assert.equal(get('#log-empty').hidden, false, 'a filter with no match explains itself');
+  assert.match(get('#log-empty').textContent, /Nothing here is Said yet/);
+  copied.length = 0;
+  get('#copy-log').events.click();
+  await tick();
+  assert.equal(copied.at(-1).trim().split('\n').length, 1,
+    'the copy carries the log, not the filtered view of it');
+  get('#log-filter').value = 'all';
+  get('#log-filter').events.change();
   await tick();
   state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
   await get('#refresh-notes').events.click();
@@ -684,5 +729,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').dataset.state, 'bad');
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });
