@@ -1,6 +1,7 @@
 """Assert-based integration check; run with the reporting venv's Python."""
 
 import builtins
+import hashlib
 import http.client
 import json
 import re
@@ -16,11 +17,13 @@ from unittest.mock import patch
 import preview
 
 
-def request(method, path, body=None, headers=None):
+def request(method, path, body=None, headers=None, raw=False):
   client = http.client.HTTPConnection("127.0.0.1", app.server_port, timeout=5)
   client.request(method, path, body, headers or {})
   response = client.getresponse()
-  result = response.status, dict(response.getheaders()), response.read().decode()
+  data = response.read()
+  # An upload comes back as the bytes it stored, so a caller can ask for those instead of text.
+  result = response.status, dict(response.getheaders()), data if raw else data.decode()
   client.close()
   return result
 
@@ -69,12 +72,33 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'id="log-newest"' in page and 'class="log-scroll"' in page
     # The bar hugs its label rather than spanning the pane, on owner note edbdfcae.
     assert "translateX(-50%)" in page
-    # The filter sits in the button row immediately left of copy-log, on owner notes 1006cb38 and
-    # 7f52e5fe: a button added between them moves the filter without anyone noticing.
+    # The save button sits in the top bar after the theme button rather than in the log's own row, on
+    # owner note 0f27a2b6; the log's row keeps the filter immediately left of copy-log, on owner notes
+    # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught.
     assert (
-      page.index('id="save-state"')
-      < page.index('id="log-filter"')
-      < page.index('id="copy-log"')
+      page.index('id="theme"')
+      < page.index('id="save-state"')
+      < page.index('id="notes-panel"')
+    )
+    assert page.index('id="log-filter"') < page.index('id="copy-log"')
+    # Every icon button carries a title that repeats its accessible name, on owner note bef51970.
+    for control in (
+      "save-state",
+      "copy-log",
+      "refresh-notes",
+      "upload-send",
+      "copy-report",
+      "refresh-report",
+      "copy-tasks",
+    ):
+      block = page[page.index(f'id="{control}"') :]
+      assert "title=" in block[: block.index(">")]
+    # The Uploads tab carries the file input and its list, and says what a restore leaves behind, on
+    # the owner's answers in report submission c27a4dd5.
+    assert 'id="uploads-tab"' in page and 'id="uploads-panel"' in page
+    assert 'id="upload-file"' in page and 'id="uploads-list"' in page
+    assert (
+      "A record survives a restore of the preview state, and its bytes do not" in page
     )
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
@@ -671,6 +695,59 @@ with tempfile.TemporaryDirectory() as directory:
     assert [line["id"] for line in saved_lines] == ["saved-note", "saved-task"]
     assert request("POST", "/api/save-state", "{}", auth)[0] == 400
     assert request("POST", "/api/save-state", "{}")[0] == 403
+    # An upload stores its bytes beside the database and its record inside it, on the owner's answers in
+    # report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling, and a record that outlives them.
+    blob = bytes(range(256)) * 4
+    status, _, created = request(
+      "POST",
+      "/api/uploads?name=shot%2Fmy%20file.png",
+      blob,
+      {**auth, "Content-Type": "image/png"},
+    )
+    assert status == 201
+    record = json.loads(created)
+    assert record["name"] == "my file.png" and record["size"] == len(blob)
+    assert record["sha256"] == hashlib.sha256(blob).hexdigest() and record["present"]
+    assert Path(record["path"]).read_bytes() == blob
+    assert Path(record["path"]).parent.name == "uploads"
+    assert (
+      request(
+        "POST",
+        "/api/uploads?name=x",
+        blob,
+        {"Content-Type": "application/octet-stream"},
+      )[0]
+      == 403
+    )
+    assert (
+      request(
+        "POST",
+        "/api/uploads?name=big.bin",
+        b"0" * (1_000_001),
+        {**auth, "Content-Type": "application/octet-stream"},
+      )[0]
+      == 413
+    )
+    assert (
+      request(
+        "POST",
+        "/api/uploads?name=empty.bin",
+        b"",
+        {**auth, "Content-Type": "application/octet-stream"},
+      )[0]
+      == 413
+    )
+    status, headers, served = request("GET", f"/api/uploads/{record['id']}", raw=True)
+    assert status == 200 and served == blob and headers["Content-Type"] == "image/png"
+    assert "attachment" in headers["Content-Disposition"]
+    assert request("GET", "/api/uploads/no-such-upload")[0] == 404
+    # The record survives a restore and the bytes do not: the tab is told which is which rather than
+    # shown an entry that opens nothing.
+    Path(record["path"]).unlink()
+    assert request("GET", f"/api/uploads/{record['id']}")[0] == 404
+    assert store.upload(record["id"])["present"] is False
+    assert [item["id"] for item in store.uploads()] == [record["id"]]
+
     # The read stamp belongs to the report rather than to one browser's storage, so the browser
     # writes it through a route of its own, and only the first look sets it.
     store.publish("seen", "Seen report", source)

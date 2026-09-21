@@ -67,8 +67,11 @@ const get = id => {
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
 get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
+get('#uploads-tab').setAttribute('aria-controls', 'uploads-panel');
 get('#reports-panel').hidden = true;
 get('#tasks-panel').hidden = true;
+get('#uploads-panel').hidden = true;
+get('#upload-file').files = [];
 get('#note').placeholder = 'What should happen next?';
 const storage = new Map();
 const root = { dataset: {} };
@@ -80,6 +83,8 @@ let reportFields = 0;
 const sent = [];
 const readStamps = [];
 const saveCalls = [];
+const uploadCalls = [];
+let uploadFails = false;
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
@@ -102,6 +107,20 @@ const context = {
       const submission = JSON.parse(options.body);
       sent.push(submission);
       return response({ ...submission, at: new Date().toISOString() });
+    }
+    if (url.startsWith('/api/uploads')) {
+      // The client sends the file itself, so the body is the bytes and the name rides the query string.
+      uploadCalls.push({ url, body: options.body, type: options.headers['Content-Type'], token: options.headers['X-Preview-Token'] });
+      if (uploadFails) return response({ error: 'An upload must be 1,000,000 bytes or fewer' }, false);
+      const name = decodeURIComponent((url.split('?name=')[1] || 'file'));
+      const record = {
+        id: `upload-${uploadCalls.length}`, name, type: options.headers['Content-Type'],
+        size: options.body.size, sha256: String(uploadCalls.length).repeat(64),
+        file: `upload-${uploadCalls.length}${name.includes('.') ? name.slice(name.lastIndexOf('.')) : ''}`,
+        at: '2026-09-21T00:00:00+00:00', present: true
+      };
+      state.uploads = [...(state.uploads || []), record];
+      return response(record);
     }
     if (url === '/api/save-state') {
       saveCalls.push(JSON.parse(options.body));
@@ -188,9 +207,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#tasks-panel').hidden, false);
   assert.equal(get('#reports-panel').hidden, true);
   get('#tasks-tab').events.keydown(event({ key: 'ArrowRight' }));
+  assert.equal(get('#uploads-panel').hidden, false);
+  assert.equal(get('#tasks-panel').hidden, true);
+  get('#uploads-tab').events.keydown(event({ key: 'ArrowRight' }));
   assert.equal(get('#notes-panel').hidden, false);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#tasks-panel').hidden, false);
+  assert.equal(get('#uploads-panel').hidden, false);
   get('#tasks-tab').events.keydown(event({ key: 'Home' }));
   assert.equal(get('#notes-panel').hidden, false);
   // Switching tabs fires an unawaited refreshState, so flush the queue before a click that
@@ -541,9 +563,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-submit').hidden, true);
   assert.equal(get('#report-receipt').hidden, true);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#tasks-panel').hidden, false);
-  assert.equal(get('#tasks-tab').focused, true);
-  assert.equal(get('#tasks-tab').attributes['aria-selected'], 'true');
+  assert.equal(get('#uploads-panel').hidden, false);
+  assert.equal(get('#uploads-tab').focused, true);
+  assert.equal(get('#uploads-tab').attributes['aria-selected'], 'true');
   get('#tasks-tab').events.keydown(event({ key: 'ArrowLeft' }));
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
@@ -864,5 +886,53 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').dataset.state, 'bad');
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
+  // The Uploads tab sends the file itself rather than a JSON envelope, and lists what the server
+  // holds, on the owner's answers in report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling,
+  // and a record that outlives them.
+  state.uploads = [
+    { id: 'kept', name: 'shot.png', type: 'image/png', size: 2048, sha256: 'a'.repeat(64), file: 'kept.png', at: '2026-09-21T00:00:00+00:00', present: true },
+    { id: 'gone', name: 'notes.zip', type: 'application/zip', size: 3000, sha256: 'b'.repeat(64), file: 'gone.zip', at: '2026-09-21T00:00:00+00:00', present: false }
+  ];
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#uploads-count').textContent, '2 files saved.');
+  const kept = get('#uploads-list').children[0];
+  assert.equal(kept.children[0].textContent, 'shot.png');
+  assert.match(kept.children[1].textContent, /^2 kB · image\/png · .* · aaaaaaaaaaaa$/);
+  assert.equal(kept.children[2].textContent, 'uploads/kept.png');
+  // A record outlives its bytes, so a row whose file is gone says so rather than opening nothing.
+  const gone = get('#uploads-list').children[1];
+  assert.equal(gone.children[2].textContent, 'the bytes are gone; the record survived a restore');
+  assert.equal(gone.children[2].className, 'upload-gone');
+  await get('#upload-send').events.click();
+  assert.equal(get('#upload-status').textContent, 'Choose a file first.');
+  assert.equal(uploadCalls.length, 0);
+  get('#upload-file').files = [{ name: 'empty.bin', size: 0, type: '' }];
+  await get('#upload-send').events.click();
+  assert.equal(get('#upload-status').textContent, 'That file is empty.');
+  assert.equal(uploadCalls.length, 0);
+  get('#upload-file').files = [{ name: 'big.bin', size: 1_000_001, type: 'application/octet-stream' }];
+  await get('#upload-send').events.click();
+  assert.equal(get('#upload-status').textContent, 'That file is 1,000,001 bytes; the ceiling is 1,000,000.');
+  assert.equal(uploadCalls.length, 0, 'an oversize file never leaves the page');
+  const file = { name: 'report card.pdf', size: 12, type: 'application/pdf' };
+  get('#upload-file').files = [file];
+  await get('#upload-send').events.click();
+  assert.equal(uploadCalls.length, 1);
+  assert.equal(uploadCalls[0].url, '/api/uploads?name=report%20card.pdf');
+  assert.equal(uploadCalls[0].body, file, 'the body is the bytes themselves');
+  assert.equal(uploadCalls[0].type, 'application/pdf');
+  assert.equal(uploadCalls[0].token, '__TOKEN__');
+  assert.equal(get('#upload-status').textContent, 'Saved report card.pdf · 12 B · 111111111111');
+  assert.equal(get('#upload-file').value, '');
+  assert.equal(get('#uploads-list').children.length, 3, 'the new record joins the list');
+  assert.equal(get('#uploads-list').children[2].children[2].textContent, 'uploads/upload-1.pdf');
+  assert.equal(get('#uploads-list').children[2].children[0].textContent, 'report card.pdf');
+  // A file the browser has no type for still goes: the server stores any bytes as they arrived.
+  uploadFails = true;
+  get('#upload-file').files = [{ name: 'blob', size: 9, type: '' }];
+  await get('#upload-send').events.click();
+  assert.equal(uploadCalls[1].type, 'application/octet-stream');
+  assert.equal(get('#upload-status').textContent, 'Upload failed: An upload must be 1,000,000 bytes or fewer');
+  uploadFails = false;
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });

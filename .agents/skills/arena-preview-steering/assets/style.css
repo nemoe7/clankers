@@ -201,3 +201,14 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .task-detail-list { margin: 2px 0 0; padding-left: 18px; }
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid var(--accent); padding-left: 12px; }
+/* The Uploads tab shows what the server holds: the file as stored, and a record that outlives it. */
+.uploads-layout { display: flex; flex-direction: column; gap: 12px; }
+.uploads-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.uploads-layout > .row.tight > .row.tight { align-items: center; }
+#uploads-count, #upload-status, #uploads-note { margin: 0; }
+#upload-file { max-width: 16em; font-size: 13px; color: var(--muted); }
+.upload-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.upload-name { font-weight: 600; }
+.upload-meta, .upload-where, .upload-gone { color: var(--muted); font-size: 13px; }
+.upload-where { font-family: ui-monospace, monospace; }
+.upload-gone { font-style: italic; }

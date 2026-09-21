@@ -1,17 +1,19 @@
 """Shared preview runtime. Steering uses only Python's standard library."""
 
 import argparse
+import hashlib
 import html
 import json
 import re
 import secrets
 import sqlite3
 import sys
+import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 try:
   import markdown_it  # noqa: F401
@@ -34,6 +36,11 @@ MAX_SUBMISSION = 150_000
 # since nothing about them is allowed to be that large.
 MAX_BODY = 32_768
 MAX_SUBMISSION_BODY = 1_000_000
+# An upload is the size of a report submission, on the owner's answer in report submission c27a4dd5.
+MAX_UPLOAD = 1_000_000
+# Bytes land beside the database, never inside it, and the record carries the file name under this
+# directory rather than an absolute path, so a state directory that moves still resolves.
+UPLOAD_DIR = "uploads"
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
@@ -310,6 +317,28 @@ def saved_task_line(record):
   return line
 
 
+def upload_name(name):
+  """The owner's file name, kept for display and for the download header."""
+  cleaned = Path(str(name or "")).name.strip()
+  if not cleaned:
+    raise ValueError("An upload needs a file name")
+  if len(cleaned) > 200:
+    raise ValueError("A file name must be 200 characters or fewer")
+  return cleaned
+
+
+def upload_type(content_type):
+  """The content type the browser sent, or a neutral one; it never decides how the bytes are read."""
+  cleaned = str(content_type or "").split(";")[0].strip()[:120]
+  return cleaned or "application/octet-stream"
+
+
+def upload_row(row, directory):
+  """A stored upload, plus the two things the row cannot say: where the bytes are and whether they are there."""
+  path = directory / UPLOAD_DIR / row["file"]
+  return dict(row) | {"path": str(path), "present": path.exists()}
+
+
 def cli_json(value, pretty=False):
   """Print agent-facing JSON minified; the agent pays for every space it reads.
 
@@ -389,6 +418,11 @@ class Store:
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
           acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS uploads (
+          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,
+          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS tasks (
@@ -518,6 +552,7 @@ class Store:
           )
         ],
         "tasks": tasks,
+        "uploads": self.uploads(),
         "last_check": meta.get("last_check"),
       }
 
@@ -705,6 +740,60 @@ class Store:
       encoding="utf-8",
     )
     return {"path": str(path), "notes": len(notes), "tasks": len(lines) - len(notes)}
+
+  def uploads(self):
+    """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
+    with closing(self.connect()) as db:
+      rows = db.execute("SELECT * FROM uploads ORDER BY seq").fetchall()
+    return [upload_row(row, self.path.parent) for row in rows]
+
+  def upload(self, upload_id):
+    """One upload by ID, or None; the bytes are read separately so a missing file is a 404."""
+    identifier(upload_id)
+    with closing(self.connect()) as db:
+      row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    return None if row is None else upload_row(row, self.path.parent)
+
+  def save_upload(self, name, content_type, data):
+    """Write the bytes under the state directory and keep the record in the database.
+
+    Disk first, on the owner's answer in report submission `c27a4dd5`: the bytes never pass through the
+    database, and the row carries the file name, the size, the hash and the content type. A record
+    outlives its file by design, because a restore deletes what is under the state directory, so
+    `present` reports that instead of an entry that silently opens nothing. Any bytes are accepted,
+    so a screenshot and an archive arrive as themselves.
+    """
+    if not isinstance(data, (bytes, bytearray)):
+      raise TypeError("An upload is bytes")
+    if not data:
+      raise ValueError("An upload must not be empty")
+    if len(data) > MAX_UPLOAD:
+      raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
+    cleaned = upload_name(name)
+    upload_id = str(uuid.uuid4())
+    directory = self.path.parent / UPLOAD_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    # The id names the file on disk and the owner's name only reaches the record, so no path the owner
+    # types can escape the uploads directory.
+    target = directory / f"{upload_id}{Path(cleaned).suffix[:16]}"
+    target.write_bytes(bytes(data))
+    stamp = now()
+    with closing(self.connect()) as db, db:
+      db.execute(
+        "INSERT INTO uploads (id, name, type, size, sha256, file, at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+          upload_id,
+          cleaned,
+          upload_type(content_type),
+          len(data),
+          hashlib.sha256(bytes(data)).hexdigest(),
+          target.name,
+          stamp,
+        ),
+      )
+      row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    return upload_row(row, self.path.parent)
 
   def import_tasks(self, records, replace=False):
     """Rebuild a list from the JSON a copy button or task-list produced.
@@ -1013,7 +1102,8 @@ def handler(store):
     def reply(
       self, status, body, content_type="application/json; charset=utf-8", filename=None
     ):
-      data = body.encode("utf-8")
+      # An upload answers with the bytes it stored, so this takes bytes as well as text.
+      data = body if isinstance(body, (bytes, bytearray)) else body.encode("utf-8")
       self.send_response(status)
       self.send_header("Content-Type", content_type)
       self.send_header("Content-Length", str(len(data)))
@@ -1056,6 +1146,25 @@ def handler(store):
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))
           return
+        upload = re.fullmatch(r"/api/uploads/([a-zA-Z0-9_-]{1,80})", path)
+        if upload:
+          record = store.upload(upload.group(1))
+          if record is None:
+            self.problem(404, "No upload with that ID")
+            return
+          try:
+            data = Path(record["path"]).read_bytes()
+          except OSError:
+            # The record outlives the bytes by design on the owner's answer in report submission
+            # c27a4dd5: a restore deletes what is under the state directory, and the tab shows that
+            # row as one whose file is gone rather than as an entry that opens nothing.
+            self.problem(
+              404, "This upload's bytes are gone; the record survived a restore"
+            )
+            return
+          # An attachment with nosniff, so an uploaded page cannot run in this origin.
+          self.reply(200, data, record["type"], record["name"])
+          return
         match = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)", path)
         if match:
           report_id, kind = match.groups()
@@ -1090,11 +1199,13 @@ def handler(store):
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
       save_state = path == "/api/save-state"
+      upload_post = path == "/api/uploads"
       if (
         path not in {"/api/notes", "/api/markdown"}
         and not report_submit
         and not report_seen
         and not save_state
+        and not upload_post
       ):
         self.problem(404, "Not found")
         return
@@ -1102,20 +1213,35 @@ def handler(store):
       if not secrets.compare_digest(supplied, token.encode("ascii")):
         self.problem(403, "Reload the preview, then retry; your draft is kept")
         return
-      if self.headers.get("Content-Type") != "application/json":
+      # An upload carries the file itself, so its content type is the browser's and any type is legal;
+      # every other route takes a JSON object.
+      if self.headers.get("Content-Type") != "application/json" and not upload_post:
         self.problem(415, "Expected application/json")
         return
       try:
         length = int(self.headers.get("Content-Length", "0"))
-        limit = MAX_BODY if not (report_submit or save_state) else MAX_SUBMISSION_BODY
+        limit = (
+          MAX_UPLOAD
+          if upload_post
+          else MAX_BODY
+          if not (report_submit or save_state)
+          else MAX_SUBMISSION_BODY
+        )
         if not 0 < length <= limit:
-          subject = "Report answers are" if report_submit else "Note body is"
+          subject = (
+            "An upload is"
+            if upload_post
+            else "Report answers are"
+            if report_submit
+            else "Note body is"
+          )
           # The refusal has to reach the client. Answering before the body is read is what keeps a
           # wide body from being buffered, but a client still writing into a socket this side is
           # about to close sees a broken pipe instead of the answer, which is how this test failed
           # once in a way that looked like flakiness. Discarding what it sends, in bounded chunks
           # that are never kept or parsed, delivers the refusal and costs nothing.
-          remaining = length if 0 < length <= MAX_SUBMISSION_BODY + 1 else 0
+          bound = MAX_UPLOAD + 1 if upload_post else MAX_SUBMISSION_BODY + 1
+          remaining = length if 0 < length <= bound else 0
           while remaining > 0:
             chunk = self.rfile.read(min(65536, remaining))
             if not chunk:
@@ -1123,7 +1249,15 @@ def handler(store):
             remaining -= len(chunk)
           self.problem(413, f"{subject} empty or too large")
           return
-        payload = json.loads(self.rfile.read(length))
+        data = self.rfile.read(length)
+        if upload_post:
+          # The file name rides the query string because the body is the file itself. The bytes are
+          # stored exactly as they arrived, and the record carries the type, size and hash.
+          name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+          record = store.save_upload(name, self.headers.get("Content-Type", ""), data)
+          self.reply(201, json.dumps(record, ensure_ascii=False))
+          return
+        payload = json.loads(data)
         if not isinstance(payload, dict):
           self.problem(400, "Expected a JSON object")
           return

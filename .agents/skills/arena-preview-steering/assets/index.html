@@ -13,6 +13,7 @@
         <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
         <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-pip" role="img" aria-label="No unread report" title="No unread report" hidden></span></button>
         <button type="button" role="tab" id="tasks-tab" aria-controls="tasks-panel" aria-selected="false" tabindex="-1">Tasks</button>
+        <button type="button" role="tab" id="uploads-tab" aria-controls="uploads-panel" aria-selected="false" tabindex="-1">Uploads</button>
       </nav>
       <span class="row tight">
         <span id="clock" class="muted" title="Local time">--:--</span>
@@ -95,6 +96,20 @@
           <h2 id="tasks-finished-title">Finished</h2>
           <ul id="tasks-finished-body" class="task-list"></ul>
         </div>
+      </div>
+    </section>
+    <section id="uploads-panel" role="tabpanel" aria-labelledby="uploads-tab" hidden>
+      <div class="card uploads-layout">
+        <div class="row tight">
+          <p id="uploads-count" class="muted" role="status">No files uploaded yet.</p>
+          <span class="row tight">
+            <input id="upload-file" type="file" aria-label="File to upload">
+            <button id="upload-send" class="icon-button" type="button" aria-label="Upload the chosen file" title="Upload the chosen file">↑</button>
+          </span>
+        </div>
+        <p id="upload-status" class="muted" role="status"></p>
+        <p id="uploads-note" class="muted">Each file goes beside the preview database as it is, up to 1,000,000 bytes; the record keeps the name, the type, the size and the hash. A record survives a restore of the preview state, and its bytes do not: a row whose file is gone says so instead of opening nothing.</p>
+        <ul id="uploads-list" class="task-list"></ul>
       </div>
     </section>
   </main>
