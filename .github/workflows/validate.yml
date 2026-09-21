@@ -91,7 +91,8 @@ jobs:
             skills/README.md \
             README.md \
             docs/archive/budget-exceptions.md \
-            workflows/README.md
+            workflows/README.md \
+            .agents/skills/README.md
 
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
