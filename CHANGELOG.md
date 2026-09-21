@@ -1,3 +1,13 @@
+## 2026-09-21 — The state copy works while the server stores no tasks
+
+**Origin** — the client harness went red at the baseline: its mock server, like the real one, sends no `tasks` while it stores none, and the shift-click copy gate refused the notes-only cache, so the restore copy carried nothing and the harness's filtered-copy test could not read a clipboard write.
+
+**Change** — the shift-click copy in `skills/refs/arena-preview-steering/assets/app.js` treats a notes-only cache as usable, and `restoreCopy` maps a missing or null `tasks` to empty sections. The plain save keeps its gate: the server's `save_state` refuses a payload without a `tasks` dict, so only the copy path forgives the missing key. The live and installed copies rebuild from the refs.
+
+**Cost** — no budget moves: the preview assets carry no token budget.
+
+**Checks** — the client harness passes end to end, including the filtered state copy; the minify drift check, `node --check`, the page check and the full local gate set are green.
+
 ## 2026-09-21 — The covered documentation passes the STE gate
 
 **Origin** — the documentation lint step in the validate workflow runs the ASD-STE100 skill's linter over the covered documents, and the baseline carries five violations in three of them. Left in place, the step fails on any branch it runs.

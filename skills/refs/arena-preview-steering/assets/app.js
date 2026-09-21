@@ -618,11 +618,12 @@ function restoreLine(record, keys) {
   return line;
 }
 function restoreCopy(cached) {
+  const tasks = cached.tasks || {};
   return {
     notes: cached.notes.map(note => restoreLine(note, NOTE_LINE_KEYS)),
     tasks: {
-      upcoming: (cached.tasks.upcoming || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
-      finished: (cached.tasks.finished || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
+      upcoming: (tasks.upcoming || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
+      finished: (tasks.finished || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
     },
   };
 }
@@ -631,7 +632,10 @@ $('#save-state').addEventListener('click', async (event) => {
   if (event && event.shiftKey) {
     let cached = null;
     try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
-    const usable = cached && Array.isArray(cached.notes) && cached.tasks;
+    // The server sends no tasks at all while it stores none, so a cache of notes alone is still a
+    // restore: the copy carries the notes and empty task sections. A plain save still needs the
+    // server's tasks dict, so only the copy path forgives the missing key.
+    const usable = cached && Array.isArray(cached.notes);
     return copyFrom(button, usable ? `${JSON.stringify(restoreCopy(cached))}\n` : null, 'state', '⤓');
   }
   let cached = null;
