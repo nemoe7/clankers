@@ -1,3 +1,25 @@
+## 2026-09-21 — The distributed assets ship minified
+
+**Date:** 2026-09-21
+
+**Summary** — the owner's answers to report `minification-scope` (note `ba5a1eb2`) are in: JavaScript, CSS and
+HTML only; a pinned third-party minifier per language; and a size budget per file in the README table. A new
+`maintenance/minify.py` builds `assets/app.js`, `assets/style.css` and `assets/index.html` from the readable
+`skills/refs/` baselines into `skills/arena-preview-steering/` and `.agents/skills/arena-preview-steering/`.
+`package.json` and `package-lock.json` pin `terser`, `clean-css-cli`, `html-minifier-terser` and the
+`markdownlint-cli2` this repository already used, and `rules/README.md` item 9 records that manifest as the
+owner-approved exception. The build refuses JavaScript that Node cannot parse, a stylesheet with unbalanced
+braces, and markup that loses an id or a visible word.
+
+**Cost** — `app.js` 42,516 → 23,486 `B` (45% smaller), `style.css` 14,580 → 6,099 `B` (58%), `index.html`
+7,567 → 6,625 `B` (12%). Three rows join the README budget table, and their recorded size is the budget.
+
+**Checks** — `maintenance/minify.py` reports both copies matching the refs sources; `node --check` passes on the
+minified JavaScript; the client harness passes against the shipped minified build, which is the proof that the
+build behaves, and CI now runs it there on purpose. CI runs the string-pinning `check_preview.py` from the refs
+baseline instead, because its pins describe readable text. `maintenance/check.py --update` then a clean re-run,
+`ruff`, `ruff format`, `markdownlint-cli2` and the nine-file STE gate are green.
+
 ## 2026-09-21 — The turn keeps working until the budget is gone
 
 **Date:** 2026-09-21

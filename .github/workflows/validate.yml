@@ -77,7 +77,9 @@ jobs:
       - name: Check shared preview runtime and client
         run: |
           python maintenance/check_measurements.py
-          python skills/arena-preview-steering/scripts/check_preview.py
+          # The pinned page strings describe the readable refs baseline; the line below it runs
+          # the shipped, minified client harness against the live tree.
+          python skills/refs/arena-preview-steering/scripts/check_preview.py
           node --check skills/arena-preview-steering/assets/app.js
           node skills/arena-preview-steering/scripts/check_client.cjs
 
