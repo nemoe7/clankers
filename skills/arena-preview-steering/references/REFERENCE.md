@@ -43,6 +43,35 @@ The first three positionals are the ID, the title and any number of detail lines
 
 The records live in a `tasks` table, so `/api/state` carries them and the tab refreshes on the poll the log already makes, with no endpoint of its own. The browser builds each row from the record with `textContent`, which is why nothing here is rendered to HTML on the way in and a hostile title stays text. A row shows its title and, in the muted face below it inside the collapsible block, its details as a real `<ul>` — the owner's note `11a35a0f` — so each detail carries its own marker and reads as a separate statement rather than a line inside one span; the same details are still joined into the row's hover title. Before the first write the panel says so in words instead of showing three empty divs. The tab takes no answers: it is the agent's status rather than a question, so nothing shown there arrives in the inbox. Unlike a report, a task list needs no Markdown renderer, so `task` works even where `serve` would refuse to start.
 
+## The Uploads tab
+
+A fourth tab carries files into the sandbox, and the owner answered its four open questions in report
+submission `c27a4dd5`, so it is built to those: the bytes go to `uploads/` beside the database rather
+than into it, one file is 1,000,000 bytes at most, any bytes are accepted while the content type, the
+size and the SHA-256 hash are recorded, and a record outlives its bytes because a restore removes what
+is under the state directory. The tab says that last part in words rather than leaving a row that opens
+nothing: `present` rides `/api/state` and a row whose file is gone reads `the bytes are gone; the record
+survived a restore` in place of its path.
+
+`POST /api/uploads?name=<file name>` carries the file itself as the request body, so the name rides the
+query string and the content type is the browser's; the route is token-protected like every other write
+and is the one write exempt from `application/json`, since the body is the file. `MAX_UPLOAD` is
+1,000,000 bytes, the same ceiling the report importer uses, and a longer body is answered `413` before
+it is read. The bytes never enter the database: `Store.save_upload` writes the file first and then the
+row, the row keeps the file name under `UPLOAD_DIR` rather than an absolute path so a state directory
+that moves still resolves, and the stored file is named after the upload's own UUID with the owner's
+extension kept, so no name the owner types can escape that directory. A file the browser gives no type
+for goes as `application/octet-stream`.
+
+The row shows the name, the size in bytes, the type, the time, the first twelve characters of the hash,
+and the stored file under `uploads/` — a path rather than a download link, because the preview offers no
+download controls on the standing owner choice recorded above, and what an upload is for is handing
+bytes to the agent that can read them from the state directory. The client refuses an empty file and one
+over the ceiling before anything leaves the page, clears the input after a successful send, and prints
+the server's own refusal when a send fails. `check_preview.py` pins the tab, its input and its list in
+the served page, and the sentence the tab shows about a restore, and the harness covers the ceiling, the
+byte-exact body and the record whose bytes are gone.
+
 ## Fields in a report
 
 The renderer splits a source into prose blocks and fields before rendering. A field is written as Markdown:

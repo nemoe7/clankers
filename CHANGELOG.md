@@ -1,3 +1,14 @@
+## 2026-09-21 — An Uploads tab carries files beside the database
+
+A fourth tab takes files into the sandbox, on the four answers in report submission `c27a4dd5`: the bytes go to
+`uploads/` beside the database, one file is 1,000,000 bytes at most, any bytes are accepted while the type, size
+and hash are recorded, and a record outlives its bytes because a restore removes them. The tab lists what the
+server holds and says which rows are records alone. `POST /api/uploads?name=<file>` carries the file as the body,
+so the name rides the query string; the route is token-protected and the one write exempt from `application/json`.
+The bytes never enter the database, and the row keeps the file name rather than an absolute path so a state
+directory that moves still resolves. A row shows the stored file under `uploads/` instead of a download link,
+matching the standing owner choice that the preview offers no download controls; the harness covers the ceiling,
+the byte-exact body and the record whose bytes are gone, and the served page pins the tab and its restore note.
 ## 2026-09-21 — The log's controls line up and the save button moves up
 
 Three notes from the owner in one pass. The save button leaves the log's row for the top bar, after the theme

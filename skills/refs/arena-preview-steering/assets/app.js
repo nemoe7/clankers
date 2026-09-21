@@ -4,6 +4,8 @@ const note = $('#note');
 const send = $('#send');
 const status = $('#send-status');
 const key = 'arena-preview-v1';
+// The ceiling matches MAX_UPLOAD in preview.py, on the owner's answer in report submission c27a4dd5.
+const MAX_UPLOAD = 1_000_000;
 let pending = null;
 let stateBusy = false;
 let reportRequest = 0;
@@ -11,6 +13,7 @@ let listSignature = '';
 let lastState = null;
 let historySignature = '';
 let draftPreviewSequence = 0;
+let uploadSignature = '';
 const messageNodes = new Map();
 
 function stored(name) {
@@ -124,6 +127,11 @@ async function request(path, options = {}) {
     }
     return response;
   } finally { clearTimeout(timer); }
+}
+function bytes(value) {
+  if (value < 1000) return `${value} B`;
+  if (value < 1000000) return `${Math.round(value / 1000)} kB`;
+  return `${(value / 1000000).toFixed(2)} MB`;
 }
 function time(value) {
   const date = new Date(value);
@@ -271,6 +279,7 @@ async function refreshState() {
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
+    renderUploadsIfChanged(state.uploads);
     const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {
       listSignature = signature;
@@ -711,6 +720,39 @@ function taskRow(task) {
 // normalised to null would equal a null sentinel and skip the first render entirely.
 let taskSignature = Symbol('tasks not yet rendered');
 
+// An upload keeps its bytes beside the preview database and its record inside it, on the owner's
+// answers in report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling, and a record that
+// outlives them. The row says which of the two is gone, because a restore removes the bytes and
+// leaves the record, and a download link on a file that is not there would open nothing.
+function uploadRow(item) {
+  const row = document.createElement('li');
+  row.className = 'upload-row';
+  const name = document.createElement('span');
+  name.className = 'upload-name';
+  name.textContent = item.name;
+  const meta = document.createElement('span');
+  meta.className = 'upload-meta';
+  meta.textContent = `${bytes(item.size)} · ${item.type} · ${time(item.at)} · ${item.sha256.slice(0, 12)}`;
+  row.append(name, meta);
+  const where = document.createElement('span');
+  where.className = 'upload-where';
+  // The path rather than a download link: the preview offers no download controls, on the standing
+  // owner choice, so the row says which file on disk the bytes are in for a terminal to read.
+  where.textContent = item.present ? `uploads/${item.file}` : 'the bytes are gone; the record survived a restore';
+  if (!item.present) where.className = 'upload-gone';
+  row.append(where);
+  return row;
+}
+function renderUploadsIfChanged(uploads) {
+  const signature = JSON.stringify(uploads || []);
+  if (signature === uploadSignature) return;
+  uploadSignature = signature;
+  const rows = uploads || [];
+  $('#uploads-list').replaceChildren(...rows.map(item => uploadRow(item)));
+  $('#uploads-count').textContent = rows.length
+    ? `${rows.length} file${rows.length === 1 ? '' : 's'} saved.`
+    : 'No files uploaded yet.';
+}
 function renderTasksIfChanged(tasks) {
   const signature = JSON.stringify(tasks);
   if (signature === taskSignature) return;
@@ -742,7 +784,7 @@ function renderTasks(tasks) {
   finished.hidden = false;
   upcoming.hidden = false;
 }
-const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab')];
+const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#uploads-tab')];
 // The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
 // something there is unread, not how many reports exist. A report is unread until the owner has
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
@@ -842,6 +884,32 @@ for (const tab of tabs) {
     next.focus();
   });
 }
+// An upload sends the file itself rather than a JSON envelope, so the body is the bytes and the name
+// rides the query string; the content type is the browser's, since the server stores any bytes as they
+// arrived and records what they were.
+$('#upload-send').addEventListener('click', async () => {
+  const input = $('#upload-file');
+  const line = $('#upload-status');
+  const file = input.files && input.files[0];
+  if (!file) { line.textContent = 'Choose a file first.'; return; }
+  if (!file.size) { line.textContent = 'That file is empty.'; return; }
+  if (file.size > MAX_UPLOAD) {
+    line.textContent = `That file is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
+    return;
+  }
+  line.textContent = `Uploading ${file.name}…`;
+  try {
+    const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Preview-Token': '__TOKEN__' },
+      body: file
+    });
+    const record = await response.json();
+    line.textContent = `Saved ${record.name} · ${bytes(record.size)} · ${record.sha256.slice(0, 12)}`;
+    input.value = '';
+    await refreshState();
+  } catch (error) { line.textContent = `Upload failed: ${error.message}`; }
+});
 $('#report-select').addEventListener('change', loadReport);
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(); });
 $('#refresh-notes').addEventListener('click', refreshState);
