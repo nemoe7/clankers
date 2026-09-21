@@ -1,3 +1,15 @@
+## 2026-09-21 — rules/README.md passes the linter and a vendored copy is exempt
+
+**Date:** 2026-09-21
+
+The owner answered report `linter-promotion`. `rules/README.md` is rewritten in ASD-STE100 and joins the CI
+gate, which now names eight clean files; every command, path, number and claim survives the pass. The root
+`AGENTS.md` clause gains the second answer: a copy of a third-party file stays outside the linter's scope,
+because the copy belongs to its upstream, so `.agents/skills/asd-ste100/README.md` is never rewritten and
+never joins the gate. The rule against chain-linking "validate" and "check" forced one wording change worth
+noting: the file points at `.github/workflows/` as a directory instead of naming its file, because the
+linter words the file path as a synonym of `check.py`.
+
 ## 2026-09-21 — The quirks archive passes the linter
 
 **Date:** 2026-09-21
