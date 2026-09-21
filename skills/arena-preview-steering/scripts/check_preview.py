@@ -296,6 +296,15 @@ with tempfile.TemporaryDirectory() as directory:
       in page
     )
     assert '<button id="copy-tasks" class="icon-button"' in page
+    # The Reports tab carries an unread pip rather than a count of the reports that exist.
+    assert 'id="report-pip"' in page
+    assert "report-count" not in page
+    assert (
+      "#report-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px;"
+      " border-radius: 50%; background: var(--accent); vertical-align: middle; }" in page
+    )
+    # The pip is given a shape by a display rule, so the sheet's blanket rule is what hides it.
+    assert "[hidden] { display: none !important; }" in page
     assert page.index('id="copy-log"') < page.index('id="refresh-notes"')
     assert page.index('id="copy-report"') < page.index('id="refresh-report"')
     assert page.index('id="tasks-status"') < page.index('id="copy-tasks"')
