@@ -70,7 +70,9 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .compose .row { margin: 6px 0; }
 #preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
 body[data-composer="closed"] .compose { display: none; }
-.row.tight { gap: 8px; margin: 0; flex: 0 0 auto; }
+.row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
+/* The filter keeps the row of buttons on every width, on owner note 7f52e5fe: a wrap inside this
+   span would drop the select under the buttons and read as a row of its own. */
 .stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .stack h2, .stack p { margin: 0; }
 body[data-chrome="closed"] .topbar { justify-content: flex-end; }
