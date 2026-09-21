@@ -237,7 +237,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert "nav button:focus-visible { border-color: var(--focus); }" in page
     assert "border-color: var(--accent)" not in page
     assert "padding-bottom: 12px;" in page
-    assert "#report-form { min-width: 0; margin-top: 24px; }" in page
+    assert "#report-form { min-width: 0; margin-top: 12px; }" in page
     assert (
       ".message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }"
       in page
