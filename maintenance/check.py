@@ -16,6 +16,9 @@ from markdown_it import MarkdownIt
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 SKILLS = ROOT / "skills"
+# Vendored agent-facing skills live only under `.agents/skills/`, which this script
+# deliberately never reads: they are not owner skills, so they are neither validated
+# here nor listed in `skills/README.md`.
 RULES = ROOT / "rules"
 WORKFLOWS = ROOT / "workflows"
 

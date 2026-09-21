@@ -1,3 +1,13 @@
+## 2026-09-21 — check.py records that it never reads .agents/skills/
+
+The steering inbox asked for `maintenance/check.py` to stop reading `.agents/skills/`.
+It never did. The script enumerates `skills/` alone, skipping dot-prefixed directories
+and `refs`, so a vendored skill that lives only under `.agents/skills/` is invisible to
+every gate here, and the parity concern raised while settling that home was unfounded.
+A copy under `skills/` would not be invisible: it would need valid SKILL.md frontmatter
+and a line in `skills/README.md`, which is a further reason the vendored audit and
+ASD-STE100 skills stay out of it. The exclusion is now stated where the skills directory
+is defined, so it reads as a decision rather than an oversight. Validation still passes.
 ## 2026-09-21 — The Reports tab shows whether a report has been read
 
 The Reports tab carried a number badge, `#report-count`, showing how many reports
