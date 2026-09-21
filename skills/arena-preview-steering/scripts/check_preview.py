@@ -259,9 +259,12 @@ with tempfile.TemporaryDirectory() as directory:
     assert ".answer.note" not in page
     assert ".answer > p:last-child { margin-bottom: 0; }" in page
     assert (
-      ":not(pre) > code { background: var(--bubble); padding: 1px 5px; border-radius: 4px; }"
+      ":not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }"
       in page
     )
+    # Inline code sits darker than the page in dark mode; the light theme keeps its bubble.
+    assert "--code-bg: #1b1a19;" in page
+    assert "--code-bg: var(--bubble);" in page
     assert 'code.note-id[data-copied="good"] { color: var(--dot-said); }' in page
     assert 'code.note-id[data-copied="bad"] { color: #ef4444; }' in page
     assert "#clock { font-size: inherit; font-variant-numeric: tabular-nums; }" in page
