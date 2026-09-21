@@ -1,3 +1,13 @@
+## 2026-09-21 — web-interface-guidelines gains its refs baseline
+
+**Origin** — the standing instruction that every rule and skill carries a refs baseline: a missing one is created as a copy of the current live content. `web-interface-guidelines` was the last skill without one.
+
+**Change** — `skills/refs/web-interface-guidelines/` is created as a byte-identical copy of the live skill (`SKILL.md` and `LICENSE.txt`, the upstream Vercel Labs text under the MIT license). The Format sentence in `skills/README.md` that named it as carrying no baseline now lists it with the rest.
+
+**Cost** — no budget moves: refs carry no budget, and the live skill is untouched.
+
+**Checks** — the copy matches the live skill byte for byte, and `maintenance/check.py --update` passes.
+
 ## 2026-09-21 — The repo files stop citing note IDs
 
 **Origin** — the owner's instruction, relayed through the preview inbox and chat on 2026-09-21: a note ID is session-local, it changes with every session, and it does not persist unless imported, so a durable file must cite the durable record the note pointed at instead. The instruction covers the remaining citations retroactively.

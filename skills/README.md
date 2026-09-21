@@ -20,7 +20,7 @@ Every skill must obey the [Agent Skills specification](https://agentskills.io/sp
 - The optional directories are `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` below 500 lines. Move the detail into `references/`, which the agent loads only when necessary.
 
-`skills/refs/<skill>/` holds the full unsquashed source tree for a skill with a baseline. Change the refs tree first. Then squash its `SKILL.md` into the live `skills/<skill>/SKILL.md`. The supporting files stay unsquashed in refs and become compressed or minified in live. Refs carry no budget. No install or distribution includes them. `squash` and the two preview skills have refs baselines. `web-interface-guidelines` has none.
+`skills/refs/<skill>/` holds the full unsquashed source tree for a skill with a baseline. Change the refs tree first. Then squash its `SKILL.md` into the live `skills/<skill>/SKILL.md`. The supporting files stay unsquashed in refs and become compressed or minified in live. Refs carry no budget. No install or distribution includes them. `squash`, the two preview skills and `web-interface-guidelines` have refs baselines.
 
 ## Upstream sources
 
