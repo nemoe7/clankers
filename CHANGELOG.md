@@ -1,3 +1,22 @@
+## 2026-09-21 — The turn keeps working until the budget is gone
+
+**Date:** 2026-09-21
+
+**Summary** — `rules/ARENA.md` gains one General rule, on owner note `c5bc497` and the owner's answer to report
+`turn-rule`: keep working while budget and tasks remain, end the turn only when the token budget is exhausted or
+the owner's attention is strictly required, and say in one line which it was. `rules/refs/ARENA.md` carries the
+full wording, which adds why a waiting report never justifies a stop and why a queued task is never a finished
+one. The root copy follows byte-identical.
+
+**Cost** — `rules/ARENA.md` 12,853 → 13,026 `B` (+173), the live bullet written compressed from a 280 `B` refs
+amendment; `rules/refs/ARENA.md` 22,439 → 22,719 `B`, unbudgeted. The report's option line measured that bullet
+at 148 `B`; the delivered one is 173 `B`, and the wording is unchanged. `docs/archive/budget-exceptions.md`
+records the growth.
+
+**Checks** — `maintenance/check.py --update` then a clean re-run: refs/live parity holds with General at seven
+bullets in both, the root copy compares byte-identical, and the README table refreshes to 13,026 `B`. Both
+preview harnesses, `ruff`, `markdownlint-cli2` and the nine-file STE gate green.
+
 ## 2026-09-21 — Paragraph gaps take the heading rhythm
 
 **Date:** 2026-09-21
