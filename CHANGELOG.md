@@ -1,3 +1,12 @@
+## 2026-09-21 — The budget exceptions pass the linter
+
+**Date:** 2026-09-21
+
+`docs/archive/budget-exceptions.md` now reports zero linter violations, so the validation workflow runs
+the linter over it beside the other three clean files. The rewrite is editorial and loses no number: every
+date, byte count and token count stays, while detached passives name their actor, sentences over 25 words
+split, semicolons become full stops, and the file uses one verb for the act of cutting wording.
+
 ## 2026-09-21 — The linter gate takes two more files
 
 `skills/README.md` and the root `README.md` now report zero linter violations, so the validation workflow
