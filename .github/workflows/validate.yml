@@ -94,7 +94,8 @@ jobs:
             workflows/README.md \
             .agents/skills/README.md \
             docs/archive/arena-quirks.md \
-            rules/README.md
+            rules/README.md \
+            rules/refs/README.md
 
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
