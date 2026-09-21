@@ -226,3 +226,23 @@ an instruction was replaced, since it does not arrive marked as replaced — it 
 instruction, in the owner's register, asking for something plausible. What limited the damage was
 that the work was still uncommitted when the owner intervened, which is an argument for small commits
 and for pushing early rather than for any cleverness on the agent's part.
+
+## The question tool answered at token death
+
+### 2026-09-21 arena/01a0be68-clankers
+
+The entry above records the question tool coming back `skipped: true` at token death, four times
+running. This is the counter-observation. At the end of a turn, with the budget effectively spent and
+a real decision blocking a confirmed P1 bug, the tool was attempted again on the standing instruction
+that it must be — and it returned `skipped: false`, with both questions answered, one by a chosen
+option and one by free text.
+
+Nothing about this attempt was controlled against the earlier ones. The remaining budget was not
+measured, the shape of the question differed, and two questions were asked rather than one. So the
+honest statement is that the tool sometimes works at token death and sometimes does not, and that the
+sample is one against four. What follows for behaviour is unchanged and was already the rule: ask
+rather than assume, because the attempt costs one call and a wrong assumption costs a turn.
+
+Both answers were substantive. The P1 seen bug is to be fixed by giving the agent one CLI command to
+poll and exposing reading nowhere else. And the handoff stays out of git, which means a restore will
+keep deleting it.
