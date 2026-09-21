@@ -155,6 +155,8 @@ const context = {
   }
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
+// Receipts are built from named parts, so a test reads the part it means instead of counting.
+const part = (node, cls) => node.children.find(child => (child.className || '') === cls);
 const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
 
 (async () => {
@@ -347,8 +349,21 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
   await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
-  assert.match(get('#history').children[0].children[2].textContent, /^one · [A-Z][a-z]{2} /);
-  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'sent');
+  assert.match(get('#history').children[0].children[2].textContent, /^one ·  · [A-Z][a-z]{2} /);
+  // The line reads ID · who · state · time, and the dot after the ID is the ASCII separator the
+  // owner asked for by name (notes 69dcf681 and 7b183104); the state stays a coloured dot.
+  assert.equal(part(get('#history').children[0].children[2], 'receipt-sep').textContent, ' · ');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'sent');
+  // A message that became a task says so, so a line that was read is never mistaken for one that
+  // was dropped (owner note fe00a32d); the task ID rides in the marker's title.
+  state.notes[0].task_id = 'dots-in-receipt';
+  await get('#refresh-notes').events.click();
+  assert.match(get('#history').children[0].children[2].textContent, / · Task added$/);
+  assert.equal(part(get('#history').children[0].children[2], 'receipt-task').title, 'Task dots-in-receipt');
+  delete state.notes[0].task_id;
+  await get('#refresh-notes').events.click();
+  assert.equal(part(get('#history').children[0].children[2], 'receipt-task'), undefined,
+    'a message with no task carries no marker');
   // A message the agent wrote says so, and the rendered text wrapper is named for what it is rather
   // than borrowing the report class; owner note d6fcfc2a.
   assert.equal(get('#history').children[0].children[0].className, 'raw-message',
@@ -363,18 +378,19 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   });
   await get('#refresh-notes').events.click();
   const agentReceipt = get('#history').children.at(-1).children[2];
-  assert.equal(agentReceipt.children[1].className, 'who');
-  assert.equal(agentReceipt.children[1].textContent, 'agent');
-  assert.equal(agentReceipt.children[1].title, 'Written by the agent, not the owner');
-  assert.equal(agentReceipt.children[2].className, 'state-dot', 'the tag sits before the state dot');
+  assert.deepEqual(agentReceipt.children.map(child => child.className).filter(Boolean),
+    ['note-id', 'receipt-sep', 'who', 'receipt-sep', 'state-dot'],
+    'ID, separator, writer, separator, state, so every part reads apart from the next');
+  assert.equal(part(agentReceipt, 'who').textContent, 'agent');
+  assert.equal(part(agentReceipt, 'who').title, 'Written by the agent, not the owner');
   assert.equal(get('#history').children.at(-1).children[0].className, 'message-text',
     'rendered message text is named for what it is, not for a report');
   // The fixture note is this block's own; the tests after it read the log that was there before.
   state.notes.pop();
   await get('#refresh-notes').events.click();
-  assert.equal(get('#history').children[0].children[2].children[1].title, 'Sent');
-  assert.equal(get('#history').children[0].children[2].children[1].attributes['aria-label'], 'Sent');
-  assert.equal(get('#history').children[0].children[2].children[1].attributes.role, 'img');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Sent');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').attributes['aria-label'], 'Sent');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').attributes.role, 'img');
   assert.equal(context.clipPlaceholder('one\ntwo\nthree'), 'one\ntwo\nthree');
   assert.equal(context.clipPlaceholder('one\ntwo\nthree\nfour'), 'one\ntwo\n\u2026');
   assert.equal(context.clipPlaceholder('one\ntwo\nthree\nfour\nfive'), 'one\ntwo\n\u2026');
@@ -395,14 +411,14 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[2].className, 'receipt');
   state.notes[0].seen_at = new Date().toISOString();
   await get('#refresh-notes').events.click();
-  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'seen');
-  assert.equal(get('#history').children[0].children[2].children[1].title, 'Seen');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'seen');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Seen');
   state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
   state.notes[0].acknowledged_at = new Date().toISOString();
   state.last_check = new Date().toISOString();
   await get('#refresh-notes').events.click();
-  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'said');
-  assert.equal(get('#history').children[0].children[2].children[1].title, 'Said');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
   assert.match(get('#last-check').textContent, /^Last checked [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
   assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
   state.notes[0].ack_kind = 'reply';
@@ -410,8 +426,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes[0].ack_html = '<p><strong>done</strong></p>';
   await get('#refresh-notes').events.click();
   const answer = get('#history').children[0].children[1];
-  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'said');
-  assert.equal(get('#history').children[0].children[2].children[1].title, 'Said');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
   assert.equal(typeof documentEvents.click, 'function');
   const copyButton = new Element();
   copyButton.className = 'copy-code';
@@ -469,15 +485,15 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(answer.children[0].tagName, 'p');
   assert.match(answer.className, /answer reply/);
   assert.doesNotMatch(answer.className, /note/);
-  assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'said');
-  assert.equal(get('#history').children[0].children[2].children[1].title, 'Said');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
+  assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
   assert.equal(get('#note').value, 'new unsent draft');
   state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
   log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
   await get('#refresh-notes').events.click();
   assert.deepEqual(log.children.map(item => item.children[2].children[0].textContent), ['one', 'two']);
   assert.deepEqual(log.children.map(item => item.children[2].children[0].tagName), ['code', 'code']);
-  assert.deepEqual(log.children.map(item => item.children[2].children[1].tagName), ['span', 'span']);
+  assert.deepEqual(log.children.map(item => part(item.children[2], 'receipt-sep').tagName), ['span', 'span']);
   assert.equal(log.scrollTop, 400);
   log.scrollTop = 0;
   state.notes.push({ id: 'three', text: 'third', at: new Date().toISOString(), acknowledged_at: null });
@@ -820,8 +836,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
   assert.equal(longReceipt.children[0].className, 'note-id');
   assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
-  assert.match(longReceipt.textContent, /^a66700e · [A-Z][a-z]{2} /);
-  assert.equal(longReceipt.children[1].dataset.state, 'sent');
+  assert.match(longReceipt.textContent, /^a66700e ·  · [A-Z][a-z]{2} /);
+  assert.equal(part(longReceipt, 'state-dot').dataset.state, 'sent');
   // A plain click copies the seven characters on show; a shift-click copies the whole ID.
   const longId = longReceipt.children[0];
   assert.notEqual(longId.textContent, longId.dataset.full);
@@ -873,7 +889,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   const logLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(Object.keys(logLines[0]),
-    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at']);
+    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id']);
   assert.ok(logLines.length > 0);
   // The copied timestamp stops at the seconds; the fixture's own is a full toISOString(),
   // so a fraction or an offset surviving the copy fails the shape and the sweep below.
@@ -897,7 +913,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   const receiptLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
   assert.deepEqual(Object.keys(receiptLines[0]),
-    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at']);
+    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id']);
   assert.equal(receiptLines[0].acknowledged_at, '2026-09-20T22:05:11.982172+00:00',
     'a restored receipt keeps the stamp it was written with, fraction and offset intact');
   assert.equal(receiptLines[0].ack_kind, 'reply');

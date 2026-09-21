@@ -437,7 +437,7 @@ class Store:
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
-      for column in ("ack_kind", "ack_text", "seen_at", "origin"):
+      for column in ("ack_kind", "ack_text", "seen_at", "origin", "task_id"):
         if column not in columns:
           db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
       if "seen_at" not in columns:
@@ -448,6 +448,8 @@ class Store:
       columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
       if "seen_at" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN seen_at TEXT")
+      if "task_id" not in columns:
+        db.execute("ALTER TABLE submissions ADD COLUMN task_id TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "seen_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seen_at TEXT")
@@ -477,6 +479,7 @@ class Store:
     ack_text=None,
     seen_at=None,
     origin=None,
+    task_id=None,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -505,9 +508,9 @@ class Store:
         return dict(existing)
       db.execute(
         "INSERT INTO notes"
-        " (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, origin)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (note_id, text, at or now(), *receipt, seen, origin),
+        " (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, origin, task_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (note_id, text, at or now(), *receipt, seen, origin, task_id),
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
@@ -875,6 +878,25 @@ class Store:
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
       return {"checked_at": checked, "pending": pending}
+
+  def mark_task(self, record_id, task_id, shared=None):
+    """Record that a message has a task, on whichever table holds that message.
+
+    The receipt then says so in the log, which is what the owner asked for (note fe00a32d):
+    a line without a marker leaves the reader unable to tell whether it was read and dropped
+    or read and queued. An unknown message ID raises, and a caller's transaction takes the
+    task with it, so a mistyped ID costs no half-written task.
+    """
+    identifier(record_id)
+    identifier(task_id)
+    with self.transaction(shared) as db:
+      for table in ("notes", "submissions"):
+        cursor = db.execute(
+          f"UPDATE {table} SET task_id = ? WHERE id = ?", (task_id, record_id)
+        )
+        if cursor.rowcount:
+          return
+    raise ValueError(f"Unknown note: {record_id}; no task marker written")
 
   def acknowledge(self, ids, kind, text):
     if kind not in {"note", "reply"}:
@@ -1331,6 +1353,10 @@ def main():
     help="One detail line, repeatable; an empty string clears the list",
   )
   task.add_argument(
+    "--msg-id",
+    help="Message this task answers; marks that message as having a task",
+  )
+  task.add_argument(
     "--amend",
     metavar="PREV-ID",
     help="Rename the task stored under this ID to the one given",
@@ -1385,15 +1411,32 @@ def main():
         details = args.detail_arg
       if args.amend:
         store.amend_task(args.amend, task_id)
-      record = store.write_task(
-        task_id,
-        args.task_title or args.title_arg,
-        details,
-        args.status,
-        args.order,
-      )
+      if args.msg_id:
+        # One transaction: a message ID that matches nothing takes the task with it, rather than
+        # leaving a task whose marker never landed.
+        with store.transaction() as shared:
+          record = store.write_task(
+            task_id,
+            args.task_title or args.title_arg,
+            details,
+            args.status,
+            args.order,
+            shared=shared,
+          )
+          store.mark_task(args.msg_id, task_id, shared=shared)
+      else:
+        record = store.write_task(
+          task_id,
+          args.task_title or args.title_arg,
+          details,
+          args.status,
+          args.order,
+        )
       before, after = store.neighbours(task_id)
-      print(cli_json(echo_task(record, before, after), args.pretty))
+      echo = echo_task(record, before, after)
+      if args.msg_id:
+        echo["msg_id"] = args.msg_id
+      print(cli_json(echo, args.pretty))
     elif args.command == "task-remove":
       print(cli_json(echo_task(store.remove_task(args.task_id)), args.pretty))
     elif args.command == "task-list":
@@ -1447,6 +1490,7 @@ def main():
           ack_kind=record.get("ack_kind"),
           ack_text=record.get("ack_text"),
           seen_at=record.get("seen_at"),
+          task_id=record.get("task_id"),
         )
       receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(

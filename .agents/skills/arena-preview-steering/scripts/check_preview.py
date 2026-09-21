@@ -1154,6 +1154,7 @@ with tempfile.TemporaryDirectory() as restore_dir:
         "ack_kind": "reply",
         "ack_text": "Fixed in `preview.py`.",
         "seen_at": "2026-09-20T22:00:52",
+        "task_id": "carried-task",
       }
     )
     + "\n"
@@ -1196,6 +1197,50 @@ with tempfile.TemporaryDirectory() as restore_dir:
   assert rows["carried"]["ack_kind"] == "reply"
   assert rows["carried"]["ack_text"] == "Fixed in `preview.py`."
   assert rows["carried"]["at"] == "2026-09-20T22:00:47"
+  # A message that became a task comes back marked, so a restore keeps the link (note fe00a32d).
+  assert rows["carried"]["task_id"] == "carried-task"
+  assert rows["plain"]["task_id"] is None
+
+  # A task names the message it answers, and that message then says so; a mistyped message ID is
+  # refused with no task left behind, because the task and the marker land in one transaction.
+  linked = subprocess.run(
+    [
+      sys.executable,
+      script,
+      "--state-dir",
+      str(restore),
+      "task",
+      "from-note",
+      "Answer the note",
+      "--msg-id",
+      "plain",
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  assert json.loads(linked)["msg_id"] == "plain"
+  assert {row["id"]: row["task_id"] for row in preview.Store(restore).state()["notes"]}[
+    "plain"
+  ] == "from-note"
+  refused = subprocess.run(
+    [
+      sys.executable,
+      script,
+      "--state-dir",
+      str(restore),
+      "task",
+      "orphan",
+      "No message",
+      "--msg-id",
+      "0f0f0f0f-0000-4000-8000-000000000000",
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert refused.returncode != 0 and "Unknown note" in refused.stderr
+  assert "orphan" not in {item["id"] for item in preview.Store(restore).list_tasks()}
   # A line carrying no receipt stays unacknowledged, and nothing infers an answer for it.
   assert rows["plain"]["acknowledged_at"] is None
   assert rows["plain"]["ack_kind"] is None

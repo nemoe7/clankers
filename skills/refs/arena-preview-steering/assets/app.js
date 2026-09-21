@@ -209,8 +209,21 @@ function showHistory(notes) {
     receiptWho.className = 'who';
     receiptWho.textContent = 'agent';
     receiptWho.title = 'Written by the agent, not the owner';
+    // The line reads as parts separated by the same ASCII dot: ID · who · state · time · task.
+    // The owner asked for the dot after the ID by name (notes 69dcf681 and 7b183104).
+    const separator = document.createElement('span');
+    separator.className = 'receipt-sep';
+    separator.textContent = ' · ';
+    // A message that became a task says so, so a line that was read is never mistaken for a line
+    // that was dropped. The task ID rides in the title; the owner asked for the marker on note
+    // fe00a32d and named it `Task added`.
+    const receiptTask = document.createElement('span');
+    receiptTask.className = 'receipt-task';
+    receiptTask.textContent = ' · Task added';
+    receiptTask.title = item.task_id ? `Task ${item.task_id}` : '';
     receipt.replaceChildren(
-      receiptId, ...(item.origin === 'agent' ? [receiptWho] : []), receiptDot, receiptState
+      receiptId, separator, ...(item.origin === 'agent' ? [receiptWho, separator] : []),
+      receiptDot, receiptState, ...(item.task_id ? [receiptTask] : [])
     );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
@@ -581,7 +594,8 @@ function logLine(note) {
     acknowledged_at: note.acknowledged_at ?? null,
     ack_kind: note.ack_kind ?? null,
     ack_text: note.ack_text ?? null,
-    seen_at: note.seen_at ?? null
+    seen_at: note.seen_at ?? null,
+    task_id: note.task_id ?? null
   });
 }
 // The save button posts the cached copy to the server, which writes it beside the database as one
