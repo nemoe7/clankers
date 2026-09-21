@@ -1,3 +1,27 @@
+## 2026-09-21 — A save lands after a reset, and a paragraph keeps no stray break
+
+**Date:** 2026-09-21
+
+**Summary** — four owner notes land together. `/api/state` hands the page its write token, so the
+save button lands after a sandbox reset with no browser refresh, and the retry's page reader accepts
+either quote style (note `2647459f`; the shipped page is minified, so the single-quote reader found
+nothing). The log filter drops the native dropdown chrome so its box is built like the buttons beside
+it (note `6da88604`). The token also rides the page as an HTML attribute, so a reader of the page text finds it in the shipped minified build. A code block carries its background wherever markdown renders, not in a report
+alone (notes `850de5a1`, `4b57f95a`). A paragraph carries no `<br>`, on the owner's suggestion in
+note `0d1d1123`; a break inside a list item stays.
+
+**Cost** — `assets/app.js` 43,658 → 45,071 `B` readable and 23,844 → 24,158 `B` minified;
+`assets/style.css` 14,508 → 15,354 `B` readable and 9,615 → 9,898 `B` minified; `assets/index.html`
+7,567 → 7,630 `B` readable and 6,625 → 6,688 `B` minified. `scripts/preview.py`,
+`scripts/check_client.cjs` and `scripts/check_preview.py` grow, and the README budget rows refresh.
+
+**Checks** — the client harness reads a token from a poll and saves with no page fetch, then reads one
+from a minified-shaped page on the retry, so the old single-quote reader cannot come back unnoticed.
+`check_preview.py` pins the unscoped `pre` background rule, the filter's `appearance: none`, and a
+paragraph with no `<br>` beside a list item that keeps one. `maintenance/minify.py`,
+`check.py --update` then a clean re-run, `ruff`, `markdownlint-cli2`, the nine-file STE gate and the
+client harness against the shipped minified build are green.
+
 ## 2026-09-21 — An escaped fence keeps its background
 
 **Date:** 2026-09-21
