@@ -1165,16 +1165,18 @@ def add_copy_buttons(rendered):
   return CODE_BLOCK.sub(replace, rendered)
 
 
-ESCAPED_FENCE = re.compile(r"^(?P<indent>[ \t]*)\\(?P<fence>`{3,})", re.MULTILINE)
+ESCAPED_FENCE = re.compile(
+  r"^(?P<indent>[ \t]*)\\(?P<fence>(?:`{3,}|~{3,}))", re.MULTILINE
+)
 
 
 def unescape_fences(source):
   """Give a fence back the backslash that hid it.
 
-  A backslash before a line-leading backtick run makes markdown-it read a literal ``` inside a
+  A backslash before a line-leading fence makes markdown-it read a literal ``` inside a
   paragraph, so the block never reaches the rule that carries the code background. The owner
   reported exactly that (note 850de5a1): the fence was meant as a block, and the marker is
-  unescaped here so it opens one. An escape anywhere else is left alone, because inline
+  unescaped here so it opens one. A tilde fence is a fence too, so the run takes either marker. An escape anywhere else is left alone, because inline
   backticks are the other thing an escape can mean.
   """
   return ESCAPED_FENCE.sub(

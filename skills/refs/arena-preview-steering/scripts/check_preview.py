@@ -56,6 +56,8 @@ with tempfile.TemporaryDirectory() as directory:
   assert escaped.count('class="code-block"') == 1
   assert "<p>before</p>" in escaped and "<p>after</p>" in escaped
   assert "<pre><code>code" in escaped
+  # A tilde fence is a fence too.
+  assert "<pre" in preview.render("\\~~~\ncode\n\\~~~")
   # An escape that is not a fence stays markdown-it's own, so inline text keeps its literal
   # backticks rather than turning into a code block.
   assert "<pre" not in preview.render("a \\`code\\` b")
