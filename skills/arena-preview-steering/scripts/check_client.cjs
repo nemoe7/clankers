@@ -106,7 +106,7 @@ const context = {
   clearTimeout,
   setInterval: () => {},
   fetch: async (url, options) => {
-    if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response(state);
+    if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
       const note = JSON.parse(options.body);
@@ -134,9 +134,11 @@ const context = {
     }
     if (url === '/') {
       // A fresh page carries the token the restarted server accepts, so the retry has one to take.
+      // The token rides an HTML attribute, the way the served page carries it; a reader that looked
+      // for it inside the script text found nothing once the script shipped minified, which is why
+      // the owner's save presses after a reset never landed (note 2647459f).
       pageFetches += 1;
-      servedToken = 'token-two';
-      return { ok: true, status: 200, text: async () => `headers: { 'X-Preview-Token': '${servedToken}' }` };
+      return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
     }
     if (url === '/api/save-state') {
       writeTokens.push(options.headers['X-Preview-Token']);
@@ -795,22 +797,37 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.match(get('#send-status').textContent, /Nothing cached to save yet/);
   assert.equal(saveButton.dataset.state, 'bad');
   // A page outlives the server that served it. After a sandbox reset the token baked into the
-  // page is refused, so the save takes the token from a fresh page and tries once more instead
-  // of waiting for a manual refresh; the owner pressed save state several times after a reset
-  // and nothing landed (note 2647459f).
+  // page is refused, so the page takes a fresh token, from the poll or from a fresh page, and
+  // tries once more instead of waiting for a manual refresh; the owner pressed save state several
+  // times after a reset and nothing landed (note 2647459f).
   staleToken = true;
   storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
+  // First net: the poll hands the page the token the restarted server accepts, so the save lands
+  // with no page fetch and no refresh, which is what the owner needed (note 2647459f).
+  servedToken = 'token-two';
   const savesBefore = saveCalls.length;
   const fetchesBefore = pageFetches;
+  await get('#refresh-notes').events.click();
+  saveButton.events.click();
+  await tick();
+  assert.equal(pageFetches, fetchesBefore, 'the poll already refreshed the token');
+  assert.equal(saveCalls.length, savesBefore + 1, 'the save lands on the token from the poll');
+  assert.equal(writeTokens.at(-1), 'token-two', 'the save carries the token the new server accepts');
+  // Second net: a write refused before any poll re-reads the page for its token and tries once more.
+  servedToken = 'token-three';
   saveButton.events.click();
   await tick();
   await tick();
   assert.equal(pageFetches, fetchesBefore + 1, 'a refused write re-reads the page for its token');
-  assert.equal(saveCalls.length, savesBefore + 1, 'the write lands on the retry');
-  assert.equal(writeTokens.at(-1), 'token-two', 'the retry carries the token the new server accepts');
+  assert.equal(saveCalls.length, savesBefore + 2, 'the write lands on the retry');
+  assert.equal(writeTokens.at(-1), 'token-three', 'the retry carries the token the new server accepts');
   assert.equal(saveButton.dataset.state, 'good');
   assert.match(get('#send-status').textContent, /Saved 2 messages, 1 report answers and 1 tasks to saved-state.ndjson/);
   staleToken = false;
+  // Give the page back the token its own page carried, so a later test that writes does not
+  // inherit this one's stand-in token; the poll is what hands it over.
+  servedToken = '__TOKEN__';
+  await get('#refresh-notes').events.click();
   // The fixture above is this test's own; later tests read the state that was live before it.
   state = priorState;
   await get('#refresh-notes').events.click();

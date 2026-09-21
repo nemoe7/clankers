@@ -43,8 +43,13 @@ with tempfile.TemporaryDirectory() as directory:
   )
   assert linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
   assert "<s>" in preview.render("~~gone~~")
+  # A paragraph carries no `<br>` at all, on the owner's suggestion in note 0d1d1123: markdown-it
+  # turns a newline into one when breaks are on, and the owner read the result as too airy beside
+  # the message log, where a line breaks through `white-space: pre-wrap` and needs no tag.
   chat = preview.render("line one\nline two", breaks=True)
-  assert "<br" in chat and chat.count("<p>") == 1
+  assert "<br" not in chat and "\n" in chat and chat.count("<p>") == 1
+  # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
+  assert "<br" in preview.render("- a\n  b", breaks=True)
   # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline
   # the source carries is the line break and a `<br>` beside it doubled every gap. That doubling
   # is what the owner removed by hand in the browser (note 0d1d1123).
@@ -121,7 +126,8 @@ with tempfile.TemporaryDirectory() as directory:
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]
-    token = re.search(r"'X-Preview-Token': '([^']+)'", page)[1]
+    # The token rides the page as an HTML attribute, so it survives the shipped minified build.
+    token = re.search(r'data-token="([^"]+)"', page)[1]
     auth = {"Content-Type": "application/json", "X-Preview-Token": token}
     status, _, draft = request(
       "POST",
@@ -372,6 +378,15 @@ with tempfile.TemporaryDirectory() as directory:
     assert "background: none; padding: 0; cursor: pointer; }" in page
     assert "#send { border-color: var(--accent); }" not in page
     assert "#report-submit { margin-top: 16px; }" in page
+    # A code block carries its background wherever markdown renders, not in a report alone: the
+    # owner read a fence in a message as having no background (notes 850de5a1 and 4b57f95a).
+    assert (
+      "pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }"
+      in page
+    )
+    # The log filter draws its own box like the icon buttons beside it, after a second owner note
+    # that the heights still differed (note 6da88604).
+    assert "appearance: none" in page and "#log-filter" in page
     assert page.count("#send {") == 0
     assert "resize: none;" in page and "resize: vertical" not in page
     assert "#notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }" in page

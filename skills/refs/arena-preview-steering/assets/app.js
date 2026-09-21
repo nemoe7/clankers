@@ -11,6 +11,15 @@ let stateBusy = false;
 let reportRequest = 0;
 let listSignature = '';
 let lastState = null;
+// The write token starts as the one baked into this page and is refreshed from every poll, so a save
+// pressed after a server restart lands without a browser refresh. The owner pressed save state
+// several times after a sandbox reset and nothing arrived until a manual refresh (note 2647459f),
+// and the retry that re-read the page for a token could not read the shipped minified page.
+const pageToken = () => (document.body.dataset || {}).token || '__TOKEN__';
+let writeToken = pageToken();
+function writeHeaders(type) {
+  return { 'Content-Type': type, 'X-Preview-Token': writeToken };
+}
 let historySignature = '';
 let draftPreviewSequence = 0;
 let uploadSignature = '';
@@ -137,8 +146,9 @@ async function request(path, options = {}) {
   }
   if (response.status === 401 || response.status === 403) {
     const page = await (await fetch('/', { cache: 'no-store' })).text();
-    const token = (page.match(/X-Preview-Token':\s*'([^']+)'/) || [])[1];
+    const token = (page.match(/data-token="([^"]+)"/) || [])[1];
     if (token) {
+      writeToken = token;
       const headers = { ...(options.headers || {}), 'X-Preview-Token': token };
       response = await attempt(path, { ...options, headers });
     }
@@ -306,6 +316,7 @@ async function refreshState() {
   try {
     const state = await (await request('/api/state')).json();
     lastState = state;
+    if (state.token) writeToken = state.token;
     // The page keeps its own copy of what the poll delivered, so the save button still has something
     // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
     // from their sources, and the button writes what the two importers can read back.
@@ -352,7 +363,7 @@ $('#form').addEventListener('submit', async event => {
   try {
     const result = await (await request('/api/notes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      headers: writeHeaders('application/json'),
       body: JSON.stringify(pending)
     })).json();
     note.placeholder = clipPlaceholder(result.text);
@@ -395,7 +406,7 @@ $('#preview-note').addEventListener('click', async () => {
   try {
     const rendered = await (await request('/api/markdown', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      headers: writeHeaders('application/json'),
       body: JSON.stringify({ text: note.value })
     })).text();
     if (sequence === draftPreviewSequence) panel.innerHTML = rendered;
@@ -616,7 +627,7 @@ $('#save-state').addEventListener('click', async () => {
   try {
     const result = await (await request('/api/save-state', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      headers: writeHeaders('application/json'),
       body: JSON.stringify(cached)
     })).json();
     status.textContent =
@@ -709,7 +720,7 @@ $('#report-form').addEventListener('submit', async event => {
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      headers: writeHeaders('application/json'),
       body: JSON.stringify({ id: crypto.randomUUID(), answers })
     })).json();
     if (save(`answers:${id}`, JSON.stringify({ answers, at: result.at }))) showReceipt(result.at);
@@ -858,7 +869,7 @@ async function markReportRead(id) {
   try {
     stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/seen`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Preview-Token': '__TOKEN__' },
+      headers: writeHeaders('application/json'),
       body: '{}'
     })).json();
   } catch (error) {
@@ -940,7 +951,7 @@ $('#upload-send').addEventListener('click', async () => {
   try {
     const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
       method: 'POST',
-      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Preview-Token': '__TOKEN__' },
+      headers: writeHeaders(file.type || 'application/octet-stream'),
       body: file
     });
     const record = await response.json();

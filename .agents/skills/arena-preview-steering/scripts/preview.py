@@ -1184,6 +1184,22 @@ def unescape_fences(source):
   )
 
 
+PARAGRAPH = re.compile(r"<p>.*?</p>", re.DOTALL)
+# Only the tag goes: the newline beside it stays, so a pre-wrap paragraph keeps its line break
+PARAGRAPH_BREAK = re.compile(r"<br\s*/?>")
+
+
+def drop_paragraph_breaks(rendered):
+  """Take the `<br>` out of a paragraph, on the owner's suggestion in note 0d1d1123.
+
+  With breaks on, markdown-it turns each newline into a `<br>` and the owner found the result too
+  airy next to the message log, where a line breaks through `white-space: pre-wrap` and needs no
+  tag. A paragraph now keeps its source newlines and no break; a `<br>` inside any other element,
+  a list item for one, stays as it was.
+  """
+  return PARAGRAPH.sub(lambda match: PARAGRAPH_BREAK.sub("", match.group(0)), rendered)
+
+
 def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
@@ -1196,7 +1212,8 @@ def render(markdown, breaks=False):
     ["table", "strikethrough"]
   )
   parser.add_render_rule("link_open", open_link)
-  return add_copy_buttons(parser.render(unescape_fences(markdown)))
+  rendered = drop_paragraph_breaks(parser.render(unescape_fences(markdown)))
+  return add_copy_buttons(rendered)
 
 
 def handler(store):
@@ -1245,6 +1262,10 @@ def handler(store):
           return
         if path == "/api/state":
           state = store.state()
+          # The page keeps its write token fresh from the poll, so a save pressed after a server
+          # restart lands without a browser refresh (owner note 2647459f). The token is CSRF
+          # resistance rather than authentication, and this page already carries it.
+          state["token"] = token
           try:
             for item in state["notes"]:
               # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source
