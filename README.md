@@ -18,25 +18,25 @@ Latest measurements as of 2026-09-21. `maintenance/check.py` measures ARENA.md b
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,591 `tok` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,571 `tok` |
 | `rules/ARENA.md` | `UTF-8 file size` | 13,026 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,484 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,475 `chars` |
-| `rules/CLINE.md` | `cl100k_base` | 572 `tok` |
-| `rules/KILO.md` | `cl100k_base` | 199 `tok` |
+| `rules/CLINE.md` | `cl100k_base` | 517 `tok` |
+| `rules/KILO.md` | `cl100k_base` | 72 `tok` |
 | `rules/kilo/code.md` | `cl100k_base` | 232 `tok` |
 | `rules/kilo/debug.md` | `cl100k_base` | 288 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 251 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
 | `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 11,361 `B` |
 | `skills/arena-preview-reporting/SKILL.md` | `UTF-8 file size` | 5,482 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 23,710 `B` |
+| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 24,242 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 6,486 `B` |
-| `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 9,898 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 50,095 `B` |
-| `skills/arena-preview-steering/scripts/check_preview.py` | `UTF-8 file size` | 41,393 `B` |
-| `skills/arena-preview-steering/scripts/check_client.cjs` | `UTF-8 file size` | 41,149 `B` |
-| `skills/squash/SKILL.md` | `cl100k_base` | 1,263 `tok` |
+| `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 9,997 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 51,324 `B` |
+| `skills/arena-preview-steering/scripts/check_preview.py` | `UTF-8 file size` | 41,626 `B` |
+| `skills/arena-preview-steering/scripts/check_client.cjs` | `UTF-8 file size` | 41,510 `B` |
+| `skills/squash/SKILL.md` | `cl100k_base` | 1,265 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
 

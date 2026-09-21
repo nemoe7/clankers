@@ -1,3 +1,13 @@
+## 2026-09-22 — The state copy survives an empty queue
+
+**Origin** — the owner's chat task on 2026-09-22 to recover work that a dead token stranded on an unpushed branch, and the owner's answers to the recovery proposal in the same session: the pull request targets `main`, the id sweep keeps commit SHAs and upstream pins, and it reaches every entry in this file.
+
+**Preview change** — `assets/app.js` (refs, then the minified build). `Store.tasks()` returns `None` while no task is stored, so `/api/state` sends `"tasks": null` on a session that holds notes but has written no task yet. The page cached that value, the shift-click guard required a truthy `tasks`, and the state copy silently wrote nothing to the clipboard. `restoreCopy` now defaults the queue to two empty divs, and the guard asks only for notes, so the copy carries the log again. The client harness mocked the empty queue faithfully, so it was the harness that crashed on the empty clipboard, and that crash was the red gate on the branch this one descends from.
+
+**Cost** — `assets/app.js` 24,243 → 24,242 `B` in both distributed copies. The README budget table is regenerated, which also records the nine rows the previous pull request left stale.
+
+**Checks** — the client harness failed before this change and passes after it, in refs and in both minified copies. `maintenance/minify.py` reports no drift, and `check.py`, `check_minify.py`, `check_measurements.py`, `check_preview.py`, Ruff, markdownlint and the STE lint on the changed README pass.
+
 ## 2026-09-21 — Use sections slim down; the state copy restores less
 
 **Origin** — another session, relayed by the owner in chat on 2026-09-21, plus preview inbox notes 523e50b, 369f4f1, 9c922c4, 16564e2, 11a220c and 5b4599e: the `Use` sections of `rules/CLINE.md` and `rules/KILO.md` and the description line of `rules/AGENTS.md` state what loaders already handle, `KILO.md`'s `Modes` and `When in doubt` sections restate the core, the `squash` bar becomes terse but unambiguous, the reply bar takes a named colour, and the state copy keeps only what a restore reads.
