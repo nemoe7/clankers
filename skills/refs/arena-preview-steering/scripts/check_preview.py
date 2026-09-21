@@ -63,6 +63,10 @@ with tempfile.TemporaryDirectory() as directory:
     )
     assert status == 200 and "__STYLE__" not in page and "__SCRIPT__" not in page
     assert 'data-theme="dark"' in page and 'role="tab"' in page
+    # The log filter ships in the page with its three states and its empty line.
+    assert 'id="log-filter"' in page and 'id="log-empty"' in page
+    for value in ("all", "sent", "seen", "said"):
+      assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]
     token = re.search(r"'X-Preview-Token': '([^']+)'", page)[1]
     auth = {"Content-Type": "application/json", "X-Preview-Token": token}

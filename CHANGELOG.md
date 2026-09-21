@@ -1,3 +1,14 @@
+## 2026-09-21 — The message log can be read by state
+
+The log's dots already say where each message stands — gray Sent, blue Seen, green Said — so the
+filter selects over that rather than adding a notion of its own: one select in the log header, the
+choice kept in browser storage, and a line that says so and counts what it is holding back when a
+filter matches nothing. The copy button stays whole-log, because it is the restore path and a
+filtered copy would restore a partial log as if it were all of it. Two fixes rode along: the log
+drops rows for messages the state no longer carries, which the filter's counts read, and a POST
+refused for its size is drained before the refusal, so a client still writing a wide body reads the
+413 rather than a broken pipe.
+
 ## 2026-09-21 — The Reports tab knows what you have read
 
 Reports had no read state of their own, so the tab's pip measured a browser marker against update

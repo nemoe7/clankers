@@ -32,12 +32,14 @@
               <p id="last-check" class="muted">Not checked yet.</p>
             </div>
             <span class="row tight">
+              <div class="select-wrap"><label for="log-filter">Show</label><select id="log-filter"><option value="all">All</option><option value="sent">Sent</option><option value="seen">Seen</option><option value="said">Said</option></select></div>
               <button id="copy-log" class="icon-button" type="button" aria-label="Copy the message log">⧉</button>
               <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages">↻</button>
               <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer">✎</button>
             </span>
           </div>
           <ol id="history" aria-label="Messages, oldest first"></ol>
+          <p id="log-empty" class="receipt" role="status" hidden></p>
         </section>
         <section class="card compose" id="compose" aria-label="Send a steer">
           <form id="form">

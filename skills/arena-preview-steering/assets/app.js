@@ -77,6 +77,11 @@ function clipPlaceholder(text) {
   return lines.length > 3 ? `${lines.slice(0, 2).join('\n')}\n\u2026` : lines.join('\n');
 }
 const STATE_WORDS = { sent: 'Sent', seen: 'Seen', said: 'Said' };
+// The log's dots already say where each message stands, so the filter selects over that and adds no
+// new notion: Sent is unread and unanswered, Seen is read by the agent's poll but unanswered, Said
+// is answered. The copy button stays whole-log, because it is the restore path and a filtered copy
+// would restore a partial log as if it were all of it.
+const LOG_FILTERS = { all: 'All messages', sent: 'Sent', seen: 'Seen', said: 'Said' };
 
 function grow() {
   // The textarea grows with the draft instead of scrolling inside itself, so it expands upward and
@@ -152,6 +157,7 @@ function showHistory(notes) {
     // Sent until the agent reads it, Seen once a CLI read has stamped seen_at, Said once answered.
     // The state is a coloured dot; the word lives in its title and aria-label instead of the line.
     const state = item.acknowledged_at ? 'said' : item.seen_at ? 'seen' : 'sent';
+    node.dataset.state = state;
     const receiptDot = document.createElement('span');
     receiptDot.className = 'state-dot';
     receiptDot.dataset.state = state;
@@ -177,10 +183,39 @@ function showHistory(notes) {
       answer.hidden = true;
       answer.replaceChildren();
     }
-    history.append(node);
   }
+  // The log renders from the notes the poll carries, so a node the state no longer holds goes with
+  // it; the filter's counts read the same map, and a stale row would answer a filter for a message
+  // that is not there any more.
+  const current = new Set(notes.map(item => item.id));
+  for (const id of [...messageNodes.keys()]) if (!current.has(id)) messageNodes.delete(id);
+  history.replaceChildren(...notes.map(item => messageNodes.get(item.id)));
+  applyLogFilter();
   if (pinned) history.scrollTop = history.scrollHeight;
 }
+function applyLogFilter() {
+  const filter = $('#log-filter').value;
+  let shown = 0;
+  for (const node of messageNodes.values()) {
+    const visible = filter === 'all' || node.dataset.state === filter;
+    node.hidden = !visible;
+    if (visible) shown += 1;
+  }
+  const total = messageNodes.size;
+  $('#history').setAttribute('aria-label', filter === 'all'
+    ? 'Messages, oldest first'
+    : `Messages, oldest first, ${LOG_FILTERS[filter]} only`);
+  const empty = $('#log-empty');
+  empty.hidden = shown > 0 || total === 0;
+  empty.textContent = `Nothing here is ${LOG_FILTERS[filter]} yet; ${total} message`
+    + `${total === 1 ? '' : 's'} saved, and the copy button still carries all of them.`;
+}
+const savedLogFilter = stored('log-filter');
+$('#log-filter').value = LOG_FILTERS[savedLogFilter] ? savedLogFilter : 'all';
+$('#log-filter').addEventListener('change', () => {
+  save('log-filter', $('#log-filter').value);
+  applyLogFilter();
+});
 async function refreshState() {
   if (stateBusy) return;
   stateBusy = true;
