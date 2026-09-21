@@ -35,6 +35,20 @@ The `--update` option regenerates the instruction-budget table from `EXPECTED_BU
 
 The checker stays maintenance tooling. Separately, preview reporting uses `markdown-it-py` at runtime, and steering itself uses only the Python standard library. The reporting skill documents its approved venv setup and adds no dependency to the consuming application.
 
+## Minified browser assets
+
+The preview skill ships minified JavaScript, CSS and HTML. The readable baselines stay in `skills/refs/arena-preview-steering/assets/`. The two distributed copies carry the build. Python and Markdown stay readable, because an agent reads them and a traceback names real lines.
+
+```bash
+npm install
+python3 maintenance/minify.py            # report drift, write nothing
+python3 maintenance/minify.py --update   # write both distributed copies
+```
+
+`package.json` pins the minifiers: `terser` for JavaScript, `clean-css-cli` for CSS, and `html-minifier-terser` for HTML. The script refuses a build that Node cannot parse, a stylesheet with unbalanced braces, and markup that loses an id or a visible word.
+
+`check.py` gates each live asset through the README budget table. The recorded size is the budget. Any growth fails the check until you update the table on purpose. Run `minify.py` after every change to a refs asset, because the budget cannot see a stale copy.
+
 ## Offline token measurement
 
 `tiktoken` downloads its `cl100k_base` encoding on first use. Where that host is unreachable, seed the cache from any byte-identical mirror. `tiktoken` verifies the hash itself, so a bad mirror fails loudly rather than silently.

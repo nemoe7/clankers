@@ -46,6 +46,13 @@ EXPECTED_BUDGETS = {
   "rules/COMMIT-SPEC.txt": "cl100k_base",
   "skills/arena-preview-steering/SKILL.md": "UTF-8 file size",
   "skills/arena-preview-reporting/SKILL.md": "UTF-8 file size",
+  # The distributed browser assets carry the minified build from `maintenance/minify.py`.
+  # Their recorded size is their budget: any growth fails this check until the table is
+  # updated on purpose. The `.agents/skills/` twins are byte-identical by construction, and
+  # this script never reads that tree.
+  "skills/arena-preview-steering/assets/app.js": "UTF-8 file size",
+  "skills/arena-preview-steering/assets/index.html": "UTF-8 file size",
+  "skills/arena-preview-steering/assets/style.css": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",
