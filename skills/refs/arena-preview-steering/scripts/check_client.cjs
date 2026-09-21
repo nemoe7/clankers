@@ -203,6 +203,14 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(finishedBody.children[0].children[0].textContent, 'Dots in the receipt');
   assert.equal(get('#tasks-finished').hidden, false);
   assert.equal(get('#tasks-upcoming').hidden, false);
+  // The head of the queue is duplicated into a div of its own and stays in Upcoming as well.
+  const currentBody = get('#tasks-current-body');
+  assert.equal(get('#tasks-current').hidden, false);
+  assert.equal(currentBody.children.length, 1);
+  assert.equal(currentBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
+  assert.equal(currentBody.children[0].children[0].className, 'task-title');
+  assert.equal(currentBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
+  assert.equal(upcomingBody.children.length, 1, 'the head is not removed from Upcoming');
   assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);
   // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
   const opened = upcomingBody.children[0].children[1];
@@ -221,9 +229,15 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(records.at(-1).id, state.tasks.upcoming.at(-1).id);
   assert.deepEqual(Object.keys(records[0]).sort(),
     ['details', 'id', 'order', 'status', 'title', 'updated_at']);
+  state.tasks.upcoming = [];
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
+  assert.equal(currentBody.children.length, 0);
+  assert.equal(get('#tasks-upcoming').hidden, false, 'the section still renders, empty');
   delete state.tasks;
   await get('#refresh-notes').events.click();
   assert.equal(get('#tasks-finished').hidden, true);
+  assert.equal(get('#tasks-current').hidden, true, 'no task list, no current div');
   get('#copy-tasks').events.click();
   await tick();
   assert.equal(get('#copy-tasks').title, 'There is no task list to copy');
@@ -532,5 +546,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').dataset.state, 'bad');
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });

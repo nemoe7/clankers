@@ -306,8 +306,11 @@ with tempfile.TemporaryDirectory() as directory:
     assert "resize: none;" in page and "resize: vertical" not in page
     assert "#notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }" in page
     assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
+    assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
     assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
     assert '<ul id="tasks-upcoming-body" class="task-list"></ul>' in page
+    # Current leads the panel: what the agent is on next is the first thing the owner reads.
+    assert page.index('id="tasks-current"') < page.index('id="tasks-finished"')
     assert ".task-list { margin: 0; padding-left: 20px; }" in page
     assert ".task-title { font-weight: 600; }" in page
     assert (
