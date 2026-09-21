@@ -1,3 +1,10 @@
+## 2026-09-21 — A report update keeps the panel's place
+
+Republishing a report replaces the report inside the element that scrolls, the reports panel, and the browser
+clamps a scroll container when its content collapses — which threw the owner to the top of the report on note
+`60cdef88`. The panel now keeps the place the owner was reading at when the same report updates, and a report the
+owner switches to starts at its own top. The client harness models the clamp, so a missing restore fails the test
+rather than passing unseen.
 ## 2026-09-21 — The linter gate starts with one clean file
 
 The owner chose per-file promotion in report submission `185eeb51`: the Simplified Technical English clause binds

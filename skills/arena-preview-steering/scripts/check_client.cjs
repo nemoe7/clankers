@@ -38,6 +38,15 @@ class Element {
     }
   }
   replaceChildren(...children) { this.children = children; }
+  // A browser clamps a scroll container when the content inside it collapses, and replacing the report
+  // is the case the owner hit: the harness does the same, so a missing restore shows up as a jump to
+  // the top here exactly as it does on screen (owner note 60cdef88).
+  set innerHTML(value) {
+    this.inner = value;
+    const panel = elements.get('#reports-panel');
+    if (this.id === 'report' && panel) panel.scrollTop = 0;
+  }
+  get innerHTML() { return this.inner; }
   querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
   get lastElementChild() { return this.children.at(-1); }
   focus() { this.focused = true; }
@@ -615,6 +624,20 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
     '1. Long', 'the asterisk goes as soon as the stamp lands');
   assert.equal(pip.hidden, true, 'the pip clears in place');
+  // An update to the report being read keeps the panel where the owner left it, and a report the owner
+  // switches to starts at its top, because the panel is the scroller and the report is replaced.
+  panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 450;
+  state.reports = [
+    { id: 'r1', title: 'Long', updated_at: new Date(Date.now() + 1000).toISOString(), seen_at: new Date().toISOString() },
+    { id: 'r2', title: 'Other', updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }
+  ];
+  await get('#refresh-notes').events.click();
+  await tick(); await tick();
+  assert.equal(panel.scrollTop, 450, 'a report update keeps the panel where the owner left it');
+  get('#report-select').value = 'r2';
+  get('#report-select').events.change();
+  await tick(); await tick();
+  assert.equal(panel.scrollTop, 0, 'a report the owner switched to starts at its top');
   // The log filter selects over the dots the log already draws, adds no new notion, and leaves the
   // copy alone: that is the restore path, and a filtered copy would restore a partial log.
   const logStamp = new Date().toISOString();
