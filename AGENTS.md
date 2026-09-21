@@ -64,9 +64,7 @@ Read these first:
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
-- Record every amendment's origin in the CHANGELOG entry that carries it: who proposed it — the chat task, a steering note, another session, or the agent's own violation report — the date, and the rule it changed.
-  - The CHANGELOG is the only ledger, with no separate amendment file.
-  - An amendment whose origin is not recorded is undocumented, whatever the diff shows.
+- The CHANGELOG is the only ledger, with no separate amendment file.
 - Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
 
 ## Reports and approval
