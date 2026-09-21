@@ -7,7 +7,7 @@ import re
 import secrets
 import sqlite3
 import sys
-from contextlib import closing
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,6 +27,13 @@ MAX_REPORT = 2_000_000
 # reach past the 4000 a note is capped at. Submissions get their own bound, with room to spare
 # for the prompts and wrapper around them, and it refuses rather than truncating.
 MAX_SUBMISSION = 150_000
+# A submission is limited in characters and its request body in bytes, and the two are not the
+# same size: 150,000 characters can be 900,000 bytes once each one is escaped as \uXXXX, so a
+# body limit below that makes the documented maximum unreachable over HTTP, which is what a
+# single 32 KiB limit for every POST did. Notes and rendered Markdown keep the small limit,
+# since nothing about them is allowed to be that large.
+MAX_BODY = 32_768
+MAX_SUBMISSION_BODY = 1_000_000
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
@@ -438,18 +445,34 @@ class Store:
       ).fetchall()
     return [task_row(row) for row in rows]
 
-  def write_task(self, task_id, title=None, details=None, status=None, order=None):
+  @contextmanager
+  def transaction(self, db=None):
+    """One commit for this call's work, or a caller's open transaction when it passes one.
+
+    An import needs the second form: a delete and several writes that all land or none do.
+    """
+    if db is not None:
+      yield db
+      return
+    with closing(self.connect()) as own, own:
+      yield own
+
+  def write_task(
+    self, task_id, title=None, details=None, status=None, order=None, shared=None
+  ):
     """Insert or update one task and return it as stored.
 
     A title or details left out keep the stored ones, so moving a task between
     the two divs is one short command rather than a rewrite of the whole list.
+    A transaction passed in is written into rather than committed separately,
+    which is what lets an import be one atomic replacement.
     """
     details = [str(item) for item in details if str(item).strip()] if details else None
     check_task(task_id, title, details)
     if status is not None and status not in TASK_STATUSES:
       raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
     stamp = now()
-    with closing(self.connect()) as db, db:
+    with self.transaction(shared) as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
       ).fetchone()
@@ -560,25 +583,49 @@ class Store:
       self.renumber(db)
 
   def import_tasks(self, records, replace=False):
-    """Rebuild a list from the JSON a copy button or task-list produced."""
-    if replace:
-      with closing(self.connect()) as db, db:
-        db.execute("DELETE FROM tasks")
+    """Rebuild a list from the JSON a copy button or task-list produced.
+
+    Every record is validated before anything is written, and the whole import is one
+    transaction, so an invalid record costs nothing. Deleting first, as this did, meant a
+    bad record later in the list took the existing list with it and left the replacement
+    half applied, which is data loss rather than an error.
+    """
     if not isinstance(records, list):
       # parse_task_import already refuses anything but a list of objects, so this only fires
       # for a caller that skipped it, and a wrong type is not a value problem.
       raise TypeError("Import a list of task objects")
-    written = []
+    prepared = []
     for index, record in enumerate(records, 1):
-      written.append(
-        self.write_task(
+      if not isinstance(record, dict):
+        raise TypeError("Import a list of task objects")
+      details = [str(item) for item in record.get("details") or [] if str(item).strip()]
+      status = record.get("status")
+      # The checks write_task applies, run over every record up front: an import that can
+      # only fail on its fortieth record should fail before it touches the first.
+      check_task(record.get("id"), record.get("title"), details)
+      if status is not None and status not in TASK_STATUSES:
+        raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
+      prepared.append(
+        (
           record.get("id"),
           record.get("title"),
-          record.get("details") or [],
-          record.get("status"),
+          details,
+          status,
           record.get("order") or index,
         )
       )
+    with self.transaction() as db:
+      if replace:
+        # A replacement makes every record new, so a title cannot be inherited from a stored
+        # row. Refusing before the delete names the offending record; refusing after it would
+        # still roll back, but the error would arrive with the table emptied inside the
+        # transaction and the record that caused it already written.
+        for task_id, title, _, _, _ in prepared:
+          stored = db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
+          if title is None and not stored:
+            raise ValueError(f"A new task needs a title: {task_id}")
+        db.execute("DELETE FROM tasks")
+      written = [self.write_task(*item, shared=db) for item in prepared]
     return written
 
   def renumber(self, db):
@@ -896,8 +943,10 @@ def handler(store):
         return
       try:
         length = int(self.headers.get("Content-Length", "0"))
-        if not 0 < length <= 32768:
-          self.problem(413, "Note body is empty or too large")
+        limit = MAX_SUBMISSION_BODY if report_submit else MAX_BODY
+        if not 0 < length <= limit:
+          subject = "Report answers are" if report_submit else "Note body is"
+          self.problem(413, f"{subject} empty or too large")
           return
         payload = json.loads(self.rfile.read(length))
         if not isinstance(payload, dict):

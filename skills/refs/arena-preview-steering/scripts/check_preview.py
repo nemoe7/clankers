@@ -513,6 +513,47 @@ with tempfile.TemporaryDirectory() as directory:
       raise AssertionError("Two free-text options shared one label")
     except ValueError:
       pass
+    # A submission is limited in characters and its request body in bytes, and the byte limit has
+    # to sit above the character one or the documented maximum stays unreachable over HTTP, which
+    # is what one 32 KiB limit for every POST did. That maximum is 50 fields of 2,000 characters,
+    # and no single answer reaches it because a text answer is capped at 2,000, so it takes a whole
+    # wide report. The Store layer already covers the submission; this covers the HTTP path.
+    wide = root / "wide-http.md"
+    wide.write_text(
+      "# Wide\n\n" + "\n".join(f"Question {index}: ___" for index in range(50)) + "\n",
+      encoding="utf-8",
+    )
+    store.publish("wide", "Wide report", wide)
+    _, wide_questions = preview.render_report(wide.read_text(encoding="utf-8"))
+    assert len(wide_questions) == 50
+    full = json.dumps(
+      {"id": "sub-wide", "answers": {q["id"]: "x" * 2000 for q in wide_questions}}
+    )
+    assert len(full) > preview.MAX_BODY, (
+      "the case has to exceed the limit it is testing"
+    )
+    assert len(full) < preview.MAX_SUBMISSION_BODY, (
+      "and stay inside the one that replaced it"
+    )
+    assert request("POST", "/api/reports/wide/submit", full, auth)[0] == 201
+    # The application limit is untouched: an answer over the 2,000 a text field takes is still a
+    # 400 from the validator, not something the wider body limit waves through.
+    assert (
+      request(
+        "POST",
+        "/api/reports/wide/submit",
+        json.dumps(
+          {"id": "sub-over", "answers": {wide_questions[0]["id"]: "x" * 2001}}
+        ),
+        auth,
+      )[0]
+      == 400
+    )
+    # Past the body limit, so HTTP refuses it before the answers are parsed at all.
+    over_body = "x" * (preview.MAX_SUBMISSION_BODY + 1)
+    assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
+    # Notes keep the small limit; only report answers were widened.
+    assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
   finally:
     app.shutdown()
     app.server_close()
@@ -677,6 +718,34 @@ with tempfile.TemporaryDirectory() as amend_dir:
   other.write_task("extra", "Extra")
   other.import_tasks(preview.parse_task_import(backup), replace=True)
   assert [item["id"] for item in other.list_tasks()] == ["docs-archive", "minify"]
+  # A --replace that meets an invalid record must cost nothing. The delete and the writes are one
+  # transaction, so the list that was there is still there afterwards and nothing is half applied;
+  # deleting first, as this did, lost the whole list to a bad record further down.
+  before = other.list_tasks()
+  for bad, flaw in (
+    ([{"id": "good", "title": "Good"}, {"id": "BAD ID", "title": "Bad"}], "invalid ID"),
+    ([{"id": "good", "title": "Good"}, {"id": "no-title"}], "missing title"),
+    (
+      [{"id": "good", "title": "Good"}, {"id": "late", "status": "sideways"}],
+      "bad status",
+    ),
+    ([{"id": "good", "title": "Good"}, 7], "record that is not an object"),
+  ):
+    try:
+      other.import_tasks(bad, replace=True)
+      raise AssertionError(f"A replacement carrying an {flaw} was applied")
+    except (ValueError, TypeError):
+      pass
+    assert other.list_tasks() == before, f"an {flaw} cost the existing task list"
+  # A valid replacement still replaces, and still lands in the order asked for.
+  other.import_tasks(
+    [
+      {"id": "second", "title": "Second", "order": 2},
+      {"id": "first", "title": "First", "order": 1},
+    ],
+    replace=True,
+  )
+  assert [item["id"] for item in other.list_tasks()] == ["first", "second"]
   # One bare object is JSONL of a single record, so it parses and fails on the missing ID.
   assert preview.parse_task_import('{"id": "solo", "title": "Solo"}') == [
     {"id": "solo", "title": "Solo"}
