@@ -57,6 +57,33 @@ def note_text(text):
   return text
 
 
+def when(value):
+  """Return a timestamp a restore carried exactly as it arrived, once it parses."""
+  try:
+    datetime.fromisoformat(str(value))
+  except ValueError as error:
+    raise ValueError(f"Not a timestamp: {value!r}") from error
+  return str(value)
+
+
+def restore_receipt(acknowledged_at, ack_kind, ack_text):
+  """Validate the receipt a restored line carries: all three fields, or none of them.
+
+  A partial receipt is refused rather than filled in, because supplying the missing half
+  is how a note comes back answered when nobody answered it.
+  """
+  carried = (acknowledged_at, ack_kind, ack_text)
+  if all(value is None for value in carried):
+    return (None, None, None)
+  if any(value is None for value in carried):
+    raise ValueError(
+      "A restored receipt carries its stamp, kind and text, or none of them"
+    )
+  if ack_kind not in {"note", "reply"}:
+    raise ValueError("Every acknowledgement is a note or a reply, with its text")
+  return (when(acknowledged_at), ack_kind, note_text(ack_text))
+
+
 def submission_text(text):
   """Report answers are not notes, so they carry their own cap and their own wording."""
   if not isinstance(text, str) or not text.strip():
@@ -362,9 +389,18 @@ class Store:
     db.row_factory = sqlite3.Row
     return db
 
-  def note(self, note_id, text, at=None):
+  def note(
+    self, note_id, text, at=None, acknowledged_at=None, ack_kind=None, ack_text=None
+  ):
+    """Record an owner message; a restore carries its receipt and it is written as given.
+
+    Nothing here stamps a receipt with now(), because a restored acknowledgement has to
+    say when it was actually written. An ID that is already stored keeps the record it
+    has, so importing the same log twice changes nothing.
+    """
     identifier(note_id)
     note_text(text)
+    receipt = restore_receipt(acknowledged_at, ack_kind, ack_text)
     with closing(self.connect()) as db, db:
       db.execute("BEGIN IMMEDIATE")
       existing = db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
@@ -373,8 +409,9 @@ class Store:
           raise ValueError("This message ID already belongs to different text")
         return dict(existing)
       db.execute(
-        "INSERT INTO notes (id, text, at) VALUES (?, ?, ?)",
-        (note_id, text, at or now()),
+        "INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (note_id, text, at or now(), *receipt),
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
@@ -1107,9 +1144,18 @@ def main():
         if line.strip()
       ]
       for record in records:
-        store.note(record["id"], record["text"], record.get("at"))
+        store.note(
+          record["id"],
+          record["text"],
+          record.get("at"),
+          acknowledged_at=record.get("acknowledged_at"),
+          ack_kind=record.get("ack_kind"),
+          ack_text=record.get("ack_text"),
+        )
+      receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(
-        f"Imported {len(records)} notes; existing IDs are not duplicated; receipts unchanged"
+        f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim;"
+        " existing IDs are not duplicated and keep the receipt they have"
       )
   except (
     OSError,

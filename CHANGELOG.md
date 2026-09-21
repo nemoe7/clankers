@@ -1,3 +1,30 @@
+## 2026-09-21 — A restored receipt keeps the time it was written
+
+The message log copied three keys per line — id, text and at — so a restore through the
+clipboard brought the messages back and lost every receipt: `import-notes` stored each note
+unacknowledged, and `Store.acknowledge()` could only stamp the moment of the restore, which
+made a recovered acknowledgement claim a time nobody wrote it.
+
+The copy now carries `acknowledged_at`, `ack_kind` and `ack_text` on every line, null where
+absent, and `import-notes` writes them as given. `Store.note()` takes the three as optional
+arguments and hands them to `restore_receipt()`, which insists on all three or none: a line
+carrying a timestamp without a kind or a text is refused, exit 1, with nothing stored, because
+supplying the missing half is how a note comes back answered when nobody answered it. The
+stamp is checked for parsing and then stored untouched, so a restored receipt says when it was
+actually written. An ID already stored keeps the record it has, so importing one log twice
+changes nothing, and the summary line now counts the receipts it restored.
+
+`seen_at` does not ride along, which costs a restored log its read state and re-lights the
+blue dot on messages that were already read. Whether it should is report `restore-seen-at`,
+published with a recommendation and awaiting the owner; the key set is one line in `logLine()`
+and one in `restore_receipt()` if the answer is yes.
+
+The cost is six keys per copied line instead of three, in a payload only this tooling reads.
+`check_client.cjs` asserts the key set, that a receipt survives the copy with its fraction and
+offset intact, and that an unanswered note copies three nulls rather than three absent keys;
+`check_preview.py` drives `import-notes` through the CLI both ways, then the refusal and a
+re-import.
+
 ## 2026-09-21 — check.py records that it never reads .agents/skills/
 
 The steering inbox asked for `maintenance/check.py` to stop reading `.agents/skills/`.

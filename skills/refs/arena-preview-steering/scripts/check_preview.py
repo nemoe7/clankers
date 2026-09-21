@@ -301,7 +301,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert "report-count" not in page
     assert (
       "#report-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px;"
-      " border-radius: 50%; background: var(--accent); vertical-align: middle; }" in page
+      " border-radius: 50%; background: var(--accent); vertical-align: middle; }"
+      in page
     )
     # The pip is given a shape by a display rule, so the sheet's blanket rule is what hides it.
     assert "[hidden] { display: none !important; }" in page
@@ -865,3 +866,86 @@ help_text = subprocess.run(
   check=True,
 ).stdout
 assert "default: 8000" in help_text and "--port PORT" in help_text
+
+with tempfile.TemporaryDirectory() as restore_dir:
+  restore = Path(restore_dir)
+  script = str(Path(preview.__file__))
+  # import-notes does not create a state directory, so the restore target exists first.
+  preview.Store(restore, create=True)
+  log = restore / "log.jsonl"
+  log.write_text(
+    json.dumps(
+      {
+        "id": "carried",
+        "text": "answered before the wipe",
+        "at": "2026-09-20T22:00:47",
+        "acknowledged_at": "2026-09-20T22:05:11.982172+00:00",
+        "ack_kind": "reply",
+        "ack_text": "Fixed in `preview.py`.",
+      }
+    )
+    + "\n"
+    + json.dumps(
+      {
+        "id": "plain",
+        "text": "never answered",
+        "at": "2026-09-20T22:01:00",
+        "acknowledged_at": None,
+        "ack_kind": None,
+        "ack_text": None,
+      }
+    )
+    + "\n",
+    encoding="utf-8",
+  )
+  imported = subprocess.run(
+    [sys.executable, script, "--state-dir", str(restore), "import-notes", str(log)],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  assert "Imported 2 notes, 1 with a receipt restored verbatim" in imported
+  rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
+  # The receipt comes back as it was written: the original stamp, not the time of the import.
+  assert rows["carried"]["acknowledged_at"] == "2026-09-20T22:05:11.982172+00:00"
+  assert rows["carried"]["ack_kind"] == "reply"
+  assert rows["carried"]["ack_text"] == "Fixed in `preview.py`."
+  assert rows["carried"]["at"] == "2026-09-20T22:00:47"
+  # A line carrying no receipt stays unacknowledged, and nothing infers an answer for it.
+  assert rows["plain"]["acknowledged_at"] is None
+  assert rows["plain"]["ack_kind"] is None
+  assert rows["plain"]["ack_text"] is None
+  assert rows["plain"]["seen_at"] is None
+  # A partial receipt is refused rather than filled in, and the refusal stores nothing.
+  partial = restore / "partial.jsonl"
+  partial.write_text(
+    json.dumps(
+      {
+        "id": "half",
+        "text": "half a receipt",
+        "acknowledged_at": "2026-09-20T22:05:11+00:00",
+        "ack_kind": None,
+        "ack_text": None,
+      }
+    )
+    + "\n",
+    encoding="utf-8",
+  )
+  refused = subprocess.run(
+    [sys.executable, script, "--state-dir", str(restore), "import-notes", str(partial)],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert refused.returncode == 1
+  assert "stamp, kind and text" in refused.stderr
+  assert "half" not in {row["id"] for row in preview.Store(restore).state()["notes"]}
+  # Importing the same log again changes nothing: a stored ID keeps the record it has.
+  again = subprocess.run(
+    [sys.executable, script, "--state-dir", str(restore), "import-notes", str(log)],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  assert "existing IDs are not duplicated" in again
+  assert len(preview.Store(restore).state()["notes"]) == 2

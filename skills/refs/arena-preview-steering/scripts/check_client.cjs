@@ -598,7 +598,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#copy-log').events.click();
   await tick();
   const logLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(Object.keys(logLines[0]), ['id', 'text', 'at']);
+  assert.deepEqual(Object.keys(logLines[0]),
+    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text']);
   assert.ok(logLines.length > 0);
   // The copied timestamp stops at the seconds; the fixture's own is a full toISOString(),
   // so a fraction or an offset surviving the copy fails the shape and the sweep below.
@@ -606,6 +607,28 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.ok(logLines.every(line => !/\.\d|(?:Z|[+-]\d{2}:)/.test(line.at ?? '')),
     'no copied timestamp keeps a fraction or an offset');
   assert.equal(get('#copy-log').dataset.state, 'good');
+  // The receipt rides along verbatim, and a note nobody answered carries three nulls rather
+  // than three absent keys, so import-notes can tell "no receipt" from "half a receipt".
+  state.notes = [
+    { id: 'carried', text: 'answered before the wipe', at: new Date().toISOString(),
+      acknowledged_at: '2026-09-20T22:05:11.982172+00:00', ack_kind: 'reply',
+      ack_text: 'Fixed in `preview.py`.' },
+    { id: 'plain', text: 'never answered', at: new Date().toISOString(), acknowledged_at: null }
+  ];
+  await tick();
+  await get('#refresh-notes').events.click();
+  get('#copy-log').events.click();
+  await tick();
+  const receiptLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(Object.keys(receiptLines[0]),
+    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text']);
+  assert.equal(receiptLines[0].acknowledged_at, '2026-09-20T22:05:11.982172+00:00',
+    'a restored receipt keeps the stamp it was written with, fraction and offset intact');
+  assert.equal(receiptLines[0].ack_kind, 'reply');
+  assert.equal(receiptLines[0].ack_text, 'Fixed in `preview.py`.');
+  assert.deepEqual(
+    [receiptLines[1].acknowledged_at, receiptLines[1].ack_kind, receiptLines[1].ack_text],
+    [null, null, null], 'an unanswered note copies three nulls, not three missing keys');
   // The report copies its Markdown source, fetched on the click rather than riding the poll.
   const selectBefore = get('#report-select').value;
   get('#report-select').value = 'p1';
