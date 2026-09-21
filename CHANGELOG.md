@@ -1,3 +1,10 @@
+## 2026-09-21 — The agent writes no messages of its own
+
+The owner asked whether the agent should write into the log at all and answered reply only in report submission
+`e43d42a8`: the agent answers the owner's notes and starts none, and a receipt with no note behind it goes to the chat
+or a report. The `note` command added an hour earlier has no caller under that rule, so it is removed, along with its
+reference row. The `origin` column and the `agent` tag stay: they mark the messages written before the rule and they
+would mark any written after a future change of mind.
 ## 2026-09-21 — The linter is a rule, named in root AGENTS.md
 
 Root `AGENTS.md` names the vendored ASD-STE100 linter and says what it covers, on the owner's answer in report

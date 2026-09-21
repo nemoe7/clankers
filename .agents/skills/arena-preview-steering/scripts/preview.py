@@ -7,7 +7,6 @@ import re
 import secrets
 import sqlite3
 import sys
-import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -1175,11 +1174,6 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
-  note = commands.add_parser("note", help="Write one message into the log as the agent")
-  note.add_argument("text", help="The message text")
-  note.add_argument(
-    "--note-id", help="The ID to store it under; a fresh UUID by default"
-  )
   ack = commands.add_parser("ack")
   ack.add_argument("ids", nargs="+")
   ack.add_argument("--reply", help="Markdown answer shown in the message log")
@@ -1234,9 +1228,6 @@ def main():
           flush=True,
         )
         server.serve_forever()
-    elif args.command == "note":
-      record = store.note(args.note_id or str(uuid.uuid4()), args.text, origin="agent")
-      print(cli_json(record, args.pretty))
     elif args.command == "read":
       print(cli_json(store.read(), args.pretty))
     elif args.command == "ack":
