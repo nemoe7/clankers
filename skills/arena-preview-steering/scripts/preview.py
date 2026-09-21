@@ -342,7 +342,7 @@ class Store:
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
-          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER
+          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
@@ -373,6 +373,9 @@ class Store:
       columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
       if "seen_at" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN seen_at TEXT")
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
+      if "seen_at" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN seen_at TEXT")
         db.execute(
           "UPDATE submissions SET seen_at = acknowledged_at"
           " WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL"
@@ -463,7 +466,7 @@ class Store:
         "reports": [
           dict(row)
           for row in db.execute(
-            "SELECT id, title, updated_at, seq FROM reports ORDER BY seq, id"
+            "SELECT id, title, updated_at, seq, seen_at FROM reports ORDER BY seq, id"
           )
         ],
         "tasks": tasks,
@@ -756,8 +759,28 @@ class Store:
            VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title,
              markdown = excluded.markdown, updated_at = excluded.updated_at,
-             seq = COALESCE(reports.seq, excluded.seq)""",
+             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL""",
         (report_id, title, text, now(), highest + 1),
+      )
+
+  def mark_report_seen(self, report_id):
+    """Stamp the moment the owner reached the end of a report, and only the first one.
+
+    The stamp records when the report was actually read, so reopening it in another browser
+    keeps that moment instead of moving it. Republishing clears it, which is what makes a
+    changed report unread in fact rather than unread by a comparison the client has to get right.
+    """
+    identifier(report_id)
+    with closing(self.connect()) as db, db:
+      row = db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+      if row is None:
+        raise FileNotFoundError("Report not found")
+      db.execute(
+        "UPDATE reports SET seen_at = COALESCE(seen_at, ?) WHERE id = ?",
+        (now(), report_id),
+      )
+      return dict(
+        db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       )
 
   def report(self, report_id):
@@ -992,7 +1015,12 @@ def handler(store):
     def do_POST(self):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
-      if path not in {"/api/notes", "/api/markdown"} and not report_submit:
+      report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
+      if (
+        path not in {"/api/notes", "/api/markdown"}
+        and not report_submit
+        and not report_seen
+      ):
         self.problem(404, "Not found")
         return
       supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
@@ -1020,6 +1048,10 @@ def handler(store):
             "text/html; charset=utf-8",
           )
           return
+        if report_seen:
+          report = store.mark_report_seen(report_seen.group(1))
+          self.reply(200, json.dumps(report, ensure_ascii=False))
+          return
         if report_submit:
           note = store.submit_report(
             report_submit.group(1), payload.get("id"), payload.get("answers")
@@ -1028,6 +1060,8 @@ def handler(store):
           return
         note = store.note(payload.get("id"), payload.get("text"))
         self.reply(201, json.dumps(note, ensure_ascii=False))
+      except FileNotFoundError as error:
+        self.problem(404, error)
       except (ValueError, TypeError, UnicodeDecodeError) as error:
         self.problem(400, error)
       except (OSError, sqlite3.Error, RuntimeError) as error:

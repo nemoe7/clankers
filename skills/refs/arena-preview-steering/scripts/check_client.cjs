@@ -69,6 +69,7 @@ let state = { notes: [], reports: [], last_check: null };
 let stateFails = false;
 let reportFields = 0;
 const sent = [];
+const readStamps = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
@@ -91,6 +92,10 @@ const context = {
       const submission = JSON.parse(options.body);
       sent.push(submission);
       return response({ ...submission, at: new Date().toISOString() });
+    }
+    if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
+      readStamps.push(url);
+      return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
     }
     if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
     return response({ html: '<h1>Report</h1>', fields: reportFields });
@@ -442,7 +447,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-report').events.click();
   await tick();
   assert.equal(get('#report').innerHTML, '<h1>Report</h1>');
-  assert.equal(get('#report-select').children[0].textContent, '1. Fielded');
+  assert.equal(get('#report-select').children[0].textContent, '1. * Fielded',
+    'a report with no read stamp carries the asterisk in the select');
   assert.equal(get('#report-submit').hidden, false);
   assert.match(get('#report-status').textContent, /3 fields/);
   assert.equal(textInput.value, 'ada');
@@ -505,36 +511,65 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
   assert.equal(get('#reports-tab').attributes['aria-selected'], 'true');
-  // The tab carries a pip rather than a count: visible while a report is newer than the last visit,
-  // and opening the tab is the visit that clears it. Stamps are set explicitly, because a marker
-  // written "now" against a report stamped in the future would never clear and would pass for the
-  // wrong reason.
+  // The tab carries a pip rather than a count: visible while a report carries no read stamp of its
+  // own. The stamp lives on the report, so a cleared browser cannot make a read report unread.
   const pip = get('#report-pip');
-  const readKey = [...storage.keys()].find(item => item.endsWith(':reports-read-at'));
-  assert.ok(readKey, 'opening the Reports tab records when it was read');
-  const atOffset = offset => new Date(Date.now() + offset).toISOString();
-  state.reports = [{ id: 'r1', title: 'Fielded', updated_at: atOffset(-60000) }];
-  storage.set(readKey, atOffset(0));
-  // A tab switch fires an unawaited refreshState, so flush before a click that has to land.
+  state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
+    seen_at: '2026-09-20T22:00:00' }];
   await tick();
   await get('#refresh-notes').events.click();
-  assert.equal(pip.hidden, true, 'a report older than the visit is not unread');
-  storage.set(readKey, atOffset(-120000));
+  assert.equal(pip.hidden, true, 'a report carrying a read stamp is not unread');
+  assert.equal(pip.title, 'No unread report');
+  assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+    '1. Fielded', 'a report already read is not starred in the select');
+  state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(), seen_at: null }];
   await get('#refresh-notes').events.click();
-  assert.equal(pip.hidden, false, 'a report published since the visit is unread');
+  assert.equal(pip.hidden, false, 'a report with no read stamp is unread');
   assert.equal(pip.title, 'A report has not been read');
   assert.equal(pip.attributes['aria-label'], 'Unread report');
-  get('#reports-tab').events.click();
-  await tick();
-  assert.equal(pip.hidden, true, 'opening the tab clears the pip');
-  assert.equal(pip.title, 'No unread report');
-  assert.equal(pip.attributes['aria-label'], 'No unread report');
-  storage.delete(readKey);
-  await get('#refresh-notes').events.click();
-  assert.equal(pip.hidden, false, 'a browser that never opened the tab has not read it');
+  assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+    '1. * Fielded', 'an unseen report is starred in the select');
+  assert.equal([...storage.keys()].filter(item => item.endsWith(':reports-read-at')).length, 0,
+    'the tab writes no browser marker now that the stamp lives on the report');
   state.reports = [];
   await get('#refresh-notes').events.click();
   assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
+  // What stamps a report is the browser showing it: five seconds in view for one that fits the
+  // panel with nothing to scroll, and the moment its end is reached for one that does not.
+  const panel = get('#reports-panel');
+  const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+  state.reports = [{ id: 'r1', title: 'Fits', updated_at: new Date().toISOString(), seen_at: null }];
+  readStamps.length = 0;
+  panel.scrollHeight = 400; panel.clientHeight = 400; panel.scrollTop = 0;
+  get('#reports-tab').events.click();
+  await tick(); await tick();
+  assert.equal(readStamps.length, 0, 'a report that fits is not stamped on sight');
+  await wait(5200);
+  assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'five seconds in view stamps it');
+  // A report longer than the panel is not stamped while its end is out of reach, and the panel is
+  // the element that scrolls, so its own position is what counts.
+  state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
+  readStamps.length = 0;
+  panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
+  get('#reports-tab').events.click();
+  await tick(); await tick();
+  assert.equal(readStamps.length, 0, 'an unscrolled long report is not stamped');
+  panel.scrollTop = 600;
+  panel.events.scroll();
+  await tick();
+  assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'reaching the end stamps it at once');
+  // Leaving the tab before the dwell is over stamps nothing, so a flick past a short report does
+  // not count as reading it.
+  readStamps.length = 0;
+  panel.scrollHeight = 400; panel.clientHeight = 400; panel.scrollTop = 0;
+  get('#reports-tab').events.click();
+  await tick(); await tick();
+  get('#notes-tab').events.click();
+  await tick();
+  await wait(5200);
+  assert.equal(readStamps.length, 0, 'a report left before its dwell ends is not stamped');
+  get('#reports-tab').events.click();
+  await tick();
   await tick();
   state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
   await get('#refresh-notes').events.click();

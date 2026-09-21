@@ -1,3 +1,14 @@
+## 2026-09-21 — The Reports tab knows what you have read
+
+Reports had no read state of their own, so the tab's pip measured a browser marker against update
+times: a report read in one browser stayed unread in another, and clearing storage lit the pip for
+text the owner had already read. The stamp now lives on the report itself. The browser writes it
+through `POST /api/reports/<id>/seen`, reaching the end of the panel marks a report read at once,
+and a report that fits the panel with nothing to scroll waits five seconds in view, on the owner's
+answer, so a flick past a short report stamps nothing. The pip reads that stamp and the select stars
+a report that carries none. `publish` clears the stamp, so a changed report is unread in fact rather
+than unread by a comparison the client has to get right.
+
 ## 2026-09-21 — A restored line remembers it was read
 
 The log copy carried a note's receipt but not its read stamp, so a restore re-lit every line the
