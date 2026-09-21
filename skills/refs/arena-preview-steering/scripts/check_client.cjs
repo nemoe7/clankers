@@ -40,7 +40,7 @@ class Element {
   replaceChildren(...children) { this.children = children; }
   // A browser clamps a scroll container when the content inside it collapses, and replacing the report
   // is the case the owner hit: the harness does the same, so a missing restore shows up as a jump to
-  // the top here exactly as it does on screen (owner note 60cdef88).
+  // the top here exactly as it does on screen.
   set innerHTML(value) {
     this.inner = value;
     const panel = elements.get('#reports-panel');
@@ -64,7 +64,7 @@ const get = id => {
   if (!elements.has(id)) {
     const element = new Element();
     // A stub element knows its own id, so the parts of the browser a stub has to model can key on it:
-    // the scroll clamp below fires for `#report` and nothing else (owner note 60cdef88).
+    // the scroll clamp below fires for `#report` and nothing else.
     if (id.startsWith('#')) element.id = id.slice(1);
     elements.set(id, element);
   }
@@ -136,7 +136,7 @@ const context = {
       // A fresh page carries the token the restarted server accepts, so the retry has one to take.
       // The token rides an HTML attribute, the way the served page carries it; a reader that looked
       // for it inside the script text found nothing once the script shipped minified, which is why
-      // the owner's save presses after a reset never landed (note 2647459f).
+      // the owner's save presses after a reset never landed.
       pageFetches += 1;
       return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
     }
@@ -292,11 +292,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
   assert.equal(upcomingBody.children[0].children[1].open, true);
-  // The log and the tasks lost their own copy buttons on owner note 586d52f7. The save button
+  // The log and the tasks lost their own copy buttons. The save button
   // copies, on a shift-click, the note and task lines a restore reads back, minified, and the
   // reports tab keeps its button. Nothing derived rides the copy: no rendered html, token,
   // seq, reports, uploads or last check, and the stamps arrive from the poll already cut to
-  // seconds, which is all a restore needs (notes 11a220c and 5b4599e).
+  // seconds, which is all a restore needs.
   const cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
   assert.ok(cacheKeyHere, 'every poll caches the state the shift-click copies');
   copied.length = 0;
@@ -373,11 +373,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
   assert.match(get('#history').children[0].children[2].textContent, /^one ·  · [A-Z][a-z]{2} /);
   // The line reads ID · who · state · time, and the dot after the ID is the ASCII separator the
-  // owner asked for by name (notes 69dcf681 and 7b183104); the state stays a coloured dot.
+  // owner asked for by name; the state stays a coloured dot.
   assert.equal(part(get('#history').children[0].children[2], 'receipt-sep').textContent, ' · ');
   assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'sent');
   // A message that became a task says so, so a line that was read is never mistaken for one that
-  // was dropped (owner note fe00a32d); the task ID rides in the marker's title.
+  // was dropped; the task ID rides in the marker's title.
   state.notes[0].task_id = 'dots-in-receipt';
   await get('#refresh-notes').events.click();
   assert.match(get('#history').children[0].children[2].textContent, / · Task added$/);
@@ -819,11 +819,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   // A page outlives the server that served it. After a sandbox reset the token baked into the
   // page is refused, so the page takes a fresh token, from the poll or from a fresh page, and
   // tries once more instead of waiting for a manual refresh; the owner pressed save state several
-  // times after a reset and nothing landed (note 2647459f).
+  // times after a reset and nothing landed.
   staleToken = true;
   storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
   // First net: the poll hands the page the token the restarted server accepts, so the save lands
-  // with no page fetch and no refresh, which is what the owner needed (note 2647459f).
+  // with no page fetch and no refresh, which is what the owner needed.
   servedToken = 'token-two';
   const savesBefore = saveCalls.length;
   const fetchesBefore = pageFetches;
@@ -937,7 +937,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
   // The Uploads tab sends the file itself rather than a JSON envelope, and lists what the server
-  // holds, on the owner's answers in report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling,
+  // holds, on the owner's answers: any bytes, a 1,000,000-byte ceiling,
   // and a record that outlives them.
   state.uploads = [
     { id: 'kept', name: 'shot.png', type: 'image/png', size: 2048, sha256: 'a'.repeat(64), file: 'kept.png', at: '2026-09-21T00:00:00+00:00', present: true },

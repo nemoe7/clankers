@@ -3,7 +3,7 @@
   --bg: #252523;
   --panel: #2c2b28;
   --bubble: #413c3a;
-  /* Inline code sits darker than the page rather than raised on the bubble, on owner note c0bd80d4. */
+  /* Inline code sits darker than the page rather than raised on the bubble. */
   --code-bg: #1b1a19;
   --hover: #413c3a;
   --text: #f0ede8;
@@ -71,7 +71,7 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
 body[data-composer="closed"] .compose { display: none; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
-/* The filter keeps the row of buttons on every width, on owner note 7f52e5fe: a wrap inside this
+/* The filter keeps the row of buttons on every width: a wrap inside this
    span would drop the select under the buttons and read as a row of its own. */
 .stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .stack h2, .stack p { margin: 0; }
@@ -108,7 +108,7 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
    say what it does. It appears only while the log is scrolled away from its end. */
 .log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .log-newest {
-  /* Fit to the label, centred over the log, on owner note edbdfcae: a strip that spans the pane
+  /* Fit to the label, centred over the log: a strip that spans the pane
      is a bar the eye reads as furniture, and this one is a control. */
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); white-space: nowrap;
   min-height: 0; padding: 5px 12px; font-size: 13px; border-radius: 999px;
@@ -148,7 +148,7 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
    instead of a visible label, on owner direction. */
 /* The native dropdown chrome is dropped so this control is built the way the icon buttons beside
    it are — one 34px border box, one border, one radius — and a drawn caret replaces the platform
-   arrow, because the owner read the two heights as different twice (notes 37b4069f, 6da88604). */
+   arrow, because the owner read the two heights as different twice. */
 #log-filter {
   flex: 0 0 auto; width: auto; max-width: 8em; height: 34px; min-height: 0;
   padding: 0 20px 0 6px; line-height: 32px; appearance: none;
@@ -162,9 +162,9 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .report :is(h1, h2, h3, h4, h5, h6), .message-text :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }
 .report > :first-child, .message-text > :first-child { margin-top: 0; }
 /* Paragraph gaps were the browser default 16px while the headings had been tightened; the owner
-   called the paragraphs too far apart (note 9454e0b1), so they take the heading's 6px rhythm at 8. */
+   called the paragraphs too far apart, so they take the heading's 6px rhythm at 8. */
 .report p, .message-text p { margin: 8px 0; }
-/* Message blockquotes take the reply's bar and padding but keep the message's font size (note 523e50b). */
+/* Message blockquotes take the reply's bar and padding but keep the message's font size. */
 .message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }
 .report table, .message-text table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .report th, .report td, .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
@@ -172,7 +172,7 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .who { margin-left: 6px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
 /* The background belongs to the block wherever markdown renders, not to a report alone: a fence
    in a message or in the draft preview is the same block, and the owner read a missing background
-   as the bug (notes 850de5a1 and 4b57f95a). */
+   as the bug. */
 pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .code-block { position: relative; }
 .code-block pre { padding-right: 40px; }
