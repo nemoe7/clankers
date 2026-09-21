@@ -1,6 +1,9 @@
 required-version = "0.16.6"
 indent-width = 2
 
+# Vendored third-party code is copied verbatim, so it is not ours to reformat or lint.
+extend-exclude = [".agents/skills"]
+
 [lint]
 ignore = ["BLE001", "S110"]
 extend-safe-fixes = ["C408", "PERF102", "RUF059"]

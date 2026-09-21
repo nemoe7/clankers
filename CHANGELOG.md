@@ -1,3 +1,14 @@
+## 2026-09-21 — The ASD-STE100 skill is vendored for auditing
+
+`danyuchn/asd-ste100-skill` at `7d4a135` is copied verbatim into `.agents/skills/asd-ste100/` under
+its MIT licence, with its provenance recorded in `.agents/skills/README.md` beside the reason the
+directory exists: third-party tools that audit this repository, never owner skills, never mirrored
+into `skills/`, and never read by `check.py`. `ruff.toml` excludes the directory, because vendored
+code is copied verbatim and is not ours to reformat, and markdownlint's scope already stops at
+`rules/**/*.md`. The linter runs report-only, per the owner's answer on scope: its first run flags a
+46-word sentence in the root `AGENTS.md`, a 33-word one in `rules/AGENTS.md` and a 43-word one in the
+upstream skill's own `SKILL.md`, and nothing is changed for any of them.
+
 ## 2026-09-21 — The message log can be read by state
 
 The log's dots already say where each message stands — gray Sent, blue Seen, green Said — so the
