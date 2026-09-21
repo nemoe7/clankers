@@ -7,6 +7,7 @@ import re
 import secrets
 import sqlite3
 import sys
+import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -261,6 +262,7 @@ NOTE_LINE_KEYS = (
   "ack_kind",
   "ack_text",
   "seen_at",
+  "origin",
 )
 TASK_LINE_KEYS = ("id", "title", "details", "status", "order")
 
@@ -378,7 +380,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS notes (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
-          ack_kind TEXT, ack_text TEXT, seen_at TEXT
+          ack_kind TEXT, ack_text TEXT, seen_at TEXT, origin TEXT
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -402,7 +404,7 @@ class Store:
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
-      for column in ("ack_kind", "ack_text", "seen_at"):
+      for column in ("ack_kind", "ack_text", "seen_at", "origin"):
         if column not in columns:
           db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
       if "seen_at" not in columns:
@@ -441,8 +443,13 @@ class Store:
     ack_kind=None,
     ack_text=None,
     seen_at=None,
+    origin=None,
   ):
-    """Record an owner message; a restore carries its receipt and it is written as given.
+    """Record a message; a restore carries its receipt and it is written as given.
+
+    `origin` is `agent` for a message the agent wrote through the CLI and None for the owner's,
+    which is what lets the log say who wrote a line instead of showing every message in the
+    owner's voice. Anything else is refused rather than stored as a third kind of author.
 
     Nothing here stamps a receipt with now(), because a restored acknowledgement has to
     say when it was actually written. Read state rides along on the same terms and answers
@@ -452,6 +459,8 @@ class Store:
     """
     identifier(note_id)
     note_text(text)
+    if origin not in (None, "agent"):
+      raise ValueError("A message is the owner's or the agent's")
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text)
     seen = when(seen_at) if seen_at is not None else None
     with closing(self.connect()) as db, db:
@@ -463,9 +472,9 @@ class Store:
         return dict(existing)
       db.execute(
         "INSERT INTO notes"
-        " (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (note_id, text, at or now(), *receipt, seen),
+        " (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, origin)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (note_id, text, at or now(), *receipt, seen, origin),
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
@@ -1166,6 +1175,11 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  note = commands.add_parser("note", help="Write one message into the log as the agent")
+  note.add_argument("text", help="The message text")
+  note.add_argument(
+    "--note-id", help="The ID to store it under; a fresh UUID by default"
+  )
   ack = commands.add_parser("ack")
   ack.add_argument("ids", nargs="+")
   ack.add_argument("--reply", help="Markdown answer shown in the message log")
@@ -1220,6 +1234,9 @@ def main():
           flush=True,
         )
         server.serve_forever()
+    elif args.command == "note":
+      record = store.note(args.note_id or str(uuid.uuid4()), args.text, origin="agent")
+      print(cli_json(record, args.pretty))
     elif args.command == "read":
       print(cli_json(store.read(), args.pretty))
     elif args.command == "ack":
@@ -1297,6 +1314,7 @@ def main():
           record["id"],
           record["text"],
           record.get("at"),
+          origin=record.get("origin"),
           acknowledged_at=record.get("acknowledged_at"),
           ack_kind=record.get("ack_kind"),
           ack_text=record.get("ack_text"),

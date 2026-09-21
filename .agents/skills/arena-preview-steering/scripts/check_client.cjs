@@ -298,6 +298,29 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
   assert.match(get('#history').children[0].children[2].textContent, /^one · [A-Z][a-z]{2} /);
   assert.equal(get('#history').children[0].children[2].children[1].dataset.state, 'sent');
+  // A message the agent wrote says so, and the rendered text wrapper is named for what it is rather
+  // than borrowing the report class; owner note d6fcfc2a.
+  assert.equal(get('#history').children[0].children[0].className, 'raw-message',
+    'a message the server sent without rendered HTML keeps the raw class');
+  state.notes.push({
+    id: 'from-agent',
+    text: 'written by the agent',
+    html: '<p>written by the agent</p>',
+    at: new Date().toISOString(),
+    acknowledged_at: null,
+    origin: 'agent'
+  });
+  await get('#refresh-notes').events.click();
+  const agentReceipt = get('#history').children.at(-1).children[2];
+  assert.equal(agentReceipt.children[1].className, 'who');
+  assert.equal(agentReceipt.children[1].textContent, 'agent');
+  assert.equal(agentReceipt.children[1].title, 'Written by the agent, not the owner');
+  assert.equal(agentReceipt.children[2].className, 'state-dot', 'the tag sits before the state dot');
+  assert.equal(get('#history').children.at(-1).children[0].className, 'message-text',
+    'rendered message text is named for what it is, not for a report');
+  // The fixture note is this block's own; the tests after it read the log that was there before.
+  state.notes.pop();
+  await get('#refresh-notes').events.click();
   assert.equal(get('#history').children[0].children[2].children[1].title, 'Sent');
   assert.equal(get('#history').children[0].children[2].children[1].attributes['aria-label'], 'Sent');
   assert.equal(get('#history').children[0].children[2].children[1].attributes.role, 'img');
@@ -384,7 +407,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   clipboardFails = false;
   execCommandResult = true;
   assert.equal(answer.innerHTML, '<p><strong>done</strong></p>');
-  assert.match(answer.className, /answer reply report/);
+  assert.match(answer.className, /answer reply message-text/);
   assert.equal(answer.hidden, false);
   state.notes[0].ack_kind = 'note';
   state.notes[0].ack_text = 'rechecked';
