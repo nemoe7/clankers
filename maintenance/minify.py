@@ -1,45 +1,55 @@
-"""Build the minified browser assets of the preview skill from their refs sources.
+"""Build compact preview assets and scripts from their readable refs sources.
 
-The readable baselines live in `skills/refs/arena-preview-steering/assets/`. The two distributed
-copies carry minified JavaScript, CSS and HTML, on the owner's answers to report
-`minification-scope`: those three types only, a pinned third-party minifier per language, and a
-size budget per file in the README table. Python and Markdown stay readable.
+The readable sources live in `skills/refs/arena-preview-steering/`. Both distributed
+copies carry minified JavaScript, CSS, HTML and Python, each budgeted in README.md.
+Markdown compression is editorial, never part of this build.
 
-The minifiers come from this repository's `package.json`. Install them once with `npm install`.
+Install the pinned npm tools with `npm ci` and the build-only Python dependency with
+`python -m pip install python-minifier==3.3.0`. CI builds with Python 3.11; generated
+Python must retain its parsed tree and parse as Python 3.10 before any output is written.
 
 Usage:
   python maintenance/minify.py            # build in memory, report drift, write nothing
   python maintenance/minify.py --update   # write the minified copies
 
 `check.py` gates each live file's size through the README table. This script reports drift,
-which the budget cannot see; run it after any change to a refs asset.
+which the budget cannot see; run it after any change to a refs asset or script.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import subprocess
 import sys
 import tempfile
+from importlib.metadata import version
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "skills/refs/arena-preview-steering/assets"
+SOURCE = ROOT / "skills/refs/arena-preview-steering"
 TARGETS = (
-  ROOT / "skills/arena-preview-steering/assets",
-  ROOT / ".agents/skills/arena-preview-steering/assets",
+  ROOT / "skills/arena-preview-steering",
+  ROOT / ".agents/skills/arena-preview-steering",
 )
 BIN = ROOT / "node_modules/.bin"
+PYTHON_MINIFIER_VERSION = "3.3.0"
+PYTHON_SCRIPTS = ("scripts/preview.py", "scripts/check_preview.py")
 
-# One job per asset: the file name, the pinned minifier, and the flags that produce the build.
+# One job per npm build: the file name, the pinned minifier, and the flags that produce the build.
 JOBS = (
-  ("app.js", "terser", ("--compress", "--mangle")),
-  ("style.css", "cleancss", ("-O2",)),
+  ("assets/app.js", "terser", ("--compress", "--mangle")),
+  ("assets/style.css", "cleancss", ("-O2",)),
   (
-    "index.html",
+    "assets/index.html",
     "html-minifier-terser",
     ("--collapse-whitespace", "--remove-comments", "--conservative-collapse"),
+  ),
+  (
+    "scripts/check_client.cjs",
+    "terser",
+    ("--compress", "--mangle", "--comments", "false"),
   ),
 )
 
@@ -69,10 +79,52 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
   return result.stdout.rstrip("\n") + "\n"
 
 
-def check_javascript(text: str) -> None:
+def check_python(source: str, built: str, filename: str) -> None:
+  """Keep the Python 3.10 syntax floor and every parsed statement, name and annotation."""
+  before = ast.parse(source, filename, feature_version=(3, 10), type_comments=True)
+  after = ast.parse(built, filename, feature_version=(3, 10), type_comments=True)
+  if ast.dump(before) != ast.dump(after):
+    raise RuntimeError(f"minified Python changed the parsed tree: {filename}")
+  compile(built, filename, "exec")
+
+
+def minify_python(source: str, filename: str) -> str:
+  """Remove comments and excess whitespace, not behavior or introspection data."""
+  if version("python-minifier") != PYTHON_MINIFIER_VERSION:
+    raise RuntimeError(f"install python-minifier=={PYTHON_MINIFIER_VERSION}")
+  import python_minifier
+
+  built = (
+    python_minifier.minify(
+      source,
+      filename=filename,
+      remove_annotations=False,
+      remove_pass=False,
+      remove_literal_statements=False,
+      combine_imports=False,
+      hoist_literals=False,
+      rename_locals=False,
+      rename_globals=False,
+      remove_object_base=False,
+      convert_posargs_to_args=False,
+      preserve_shebang=True,
+      remove_asserts=False,
+      remove_debug=False,
+      remove_explicit_return_none=False,
+      remove_builtin_exception_brackets=False,
+      constant_folding=False,
+      remove_dead_branches=False,
+    )
+    + "\n"
+  )
+  check_python(source, built, filename)
+  return built
+
+
+def check_javascript(text: str, suffix: str = ".js") -> None:
   """Refuse a build that Node cannot parse, so a broken copy never reaches a tree."""
   with tempfile.TemporaryDirectory() as directory:
-    candidate = Path(directory) / "app.js"
+    candidate = Path(directory) / f"candidate{suffix}"
     candidate.write_text(text, encoding="utf-8")
     result = subprocess.run(
       ["node", "--check", str(candidate)],
@@ -119,6 +171,31 @@ def check_stylesheet(built: str) -> None:
     raise RuntimeError("minified CSS is empty")
 
 
+def build() -> dict[str, tuple[str, str]]:
+  """Build and validate all outputs before the first write."""
+  sources = {}
+
+  for name, binary, flags in JOBS:
+    path = SOURCE / name
+
+    if not path.is_file():
+      raise RuntimeError(f"missing source file: {path.relative_to(ROOT)}")
+
+    built = minify(path, binary, flags)
+    sources[name] = (path.read_text(encoding="utf-8"), built)
+
+  for name in PYTHON_SCRIPTS:
+    path = SOURCE / name
+    source = path.read_text(encoding="utf-8")
+    sources[name] = (source, minify_python(source, name))
+
+  check_javascript(sources["assets/app.js"][1])
+  check_javascript(sources["scripts/check_client.cjs"][1], ".cjs")
+  check_stylesheet(sources["assets/style.css"][1])
+  check_markup(*sources["assets/index.html"])
+  return sources
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument(
@@ -128,20 +205,7 @@ def main() -> int:
   )
   arguments = parser.parse_args()
 
-  sources = {}
-
-  for name, binary, flags in JOBS:
-    path = SOURCE / name
-
-    if not path.is_file():
-      raise RuntimeError(f"missing source asset: {path.relative_to(ROOT)}")
-
-    built = minify(path, binary, flags)
-    sources[name] = (path.read_text(encoding="utf-8"), built)
-
-  check_javascript(sources["app.js"][1])
-  check_stylesheet(sources["style.css"][1])
-  check_markup(*sources["index.html"])
+  sources = build()
 
   drift = []
 
@@ -163,6 +227,7 @@ def main() -> int:
       relative = path.relative_to(ROOT)
 
       if arguments.update:
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(built, encoding="utf-8")
         print(f"wrote {relative}")
       else:
