@@ -192,8 +192,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   // A hostile title is text, because a row is built with textContent rather than innerHTML.
   assert.equal(upcomingBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
   assert.equal(upcomingBody.children[0].children[0].className, 'task-title');
-  assert.equal(upcomingBody.children[0].children[1].children.length, 2);
-  assert.equal(upcomingBody.children[0].children[1].children[1].textContent, 'write arena-quirks.md');
+  assert.equal(upcomingBody.children[0].children[1].tagName, 'details');
+  assert.equal(upcomingBody.children[0].children[1].children.length, 3);
+  assert.equal(upcomingBody.children[0].children[1].children[0].tagName, 'summary');
+  assert.equal(upcomingBody.children[0].children[1].children[0].textContent, '2 details');
+  assert.equal(upcomingBody.children[0].children[1].children[2].textContent, 'write arena-quirks.md');
   assert.equal(upcomingBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
   assert.equal(finishedBody.children.length, 1);
   assert.equal(finishedBody.children[0].children.length, 1);
@@ -201,6 +204,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#tasks-finished').hidden, false);
   assert.equal(get('#tasks-upcoming').hidden, false);
   assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);
+  // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
+  const opened = upcomingBody.children[0].children[1];
+  opened.open = true;
+  await get('#refresh-notes').events.click();
+  assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
+  assert.equal(upcomingBody.children[0].children[1].open, true);
   // The tasks copy sits here because the fixture's task list only exists inside this block;
   // the log and report buttons are exercised later, once the fixtures hold notes.
   get('#copy-tasks').events.click();

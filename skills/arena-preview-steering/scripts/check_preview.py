@@ -277,6 +277,18 @@ with tempfile.TemporaryDirectory() as directory:
     assert "#form > div:first-child { margin-top: 0; padding-top: 0; }" in page
     assert "#form > div:last-child { margin-bottom: 0; padding-bottom: 0; }" in page
     assert '<button id="copy-report" class="icon-button"' in page
+    # The report copy button matches the refresh button beside it; it was 34px against 44px.
+    # No negative assertion here: the combined rule contains the old single-selector text.
+    assert "#copy-report, #refresh-report { width: 44px; height: 44px; }" in page
+    # A rule separates the tasks toolbar from the finished div, and details collapse.
+    assert (
+      ".tasks-layout > .row.tight { border-bottom: 1px solid var(--border);"
+      " padding-bottom: 12px; }" in page
+    )
+    assert (
+      ".task-details > summary { cursor: pointer; list-style-position: inside; }"
+      in page
+    )
     assert '<button id="copy-tasks" class="icon-button"' in page
     assert page.index('id="copy-log"') < page.index('id="refresh-notes"')
     assert page.index('id="copy-report"') < page.index('id="refresh-report"')
