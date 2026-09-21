@@ -22,7 +22,7 @@
 ## General
 
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
-- Follow repo docs, conventions, and existing patterns.
+- Follow repo docs, conventions, and patterns.
 - MUST use ASD-STE100 for human-facing text.
 - Batch independent tool calls into one block where the surface permits.
 - With several tasks open, do the smallest first and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
