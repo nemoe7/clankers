@@ -191,6 +191,7 @@ function showHistory(notes) {
   history.replaceChildren(...notes.map(item => messageNodes.get(item.id)));
   applyLogFilter();
   if (logPinned) history.scrollTop = history.scrollHeight;
+  updateLogJump();
 }
 // The log's own place: a filter change can make the view shorter, and the browser clamps the
 // scroll without putting it back, so the next filter that shows rows again would leave the owner
@@ -201,6 +202,19 @@ const historyAtEnd = history =>
   history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 $('#history').addEventListener('scroll', () => {
   logPinned = historyAtEnd($('#history'));
+  updateLogJump();
+});
+// The jump bar is the remedy for a log that is longer than its panel: it appears only while the
+// log is scrolled away from its end, and it takes the log back there. An empty log has nothing to
+// jump to, so it stays hidden then as well.
+function updateLogJump() {
+  $('#log-newest').hidden = logPinned || !messageNodes.size;
+}
+$('#log-newest').addEventListener('click', () => {
+  const history = $('#history');
+  history.scrollTop = history.scrollHeight;
+  logPinned = true;
+  updateLogJump();
 });
 function applyLogFilter() {
   const filter = $('#log-filter').value;
@@ -219,6 +233,7 @@ function applyLogFilter() {
   empty.textContent = `Nothing here is ${LOG_FILTERS[filter]} yet; ${total} message`
     + `${total === 1 ? '' : 's'} saved, and the copy button still carries all of them.`;
   if (logPinned) $('#history').scrollTop = $('#history').scrollHeight;
+  updateLogJump();
 }
 const savedLogFilter = stored('log-filter');
 $('#log-filter').value = LOG_FILTERS[savedLogFilter] ? savedLogFilter : 'all';

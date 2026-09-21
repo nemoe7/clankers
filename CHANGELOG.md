@@ -1,3 +1,17 @@
+## 2026-09-21 — A long log carries a jump bar
+
+Note `d8e11b8c` answered the design question its own bug report raised. The log's scroll area now holds a
+bar over its bottom edge: a strip rather than a round button, on owner direction, thin enough to cost no
+vertical space and wide enough to say what it does. It appears only while the log is scrolled away from
+its end, hides while there is nothing below, and takes the log back to the newest message when it is used.
+
+The list moved inside a positioned `.log-scroll` wrapper so the bar can sit over the scroll area's own
+bottom edge rather than in the header row, which would have cost the log a line of height.
+
+Costs, all measured after the change: `index.html` 6,041 B, `style.css` 12,642 B, `app.js` 36,010 B,
+`check_client.cjs` 45,163 B, `check_preview.py` 43,672 B, `REFERENCE.md` 38,979 B, eighteen files across
+the three copies, none of them budgeted.
+
 ## 2026-09-21 — The log and a report stay where the owner left them
 
 Two bugs, both mine, both from the last two features (notes `352a7d89` and `d9b8ce39`).

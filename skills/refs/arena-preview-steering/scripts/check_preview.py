@@ -65,6 +65,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'data-theme="dark"' in page and 'role="tab"' in page
     # The log filter ships in the page with its three states and its empty line.
     assert 'id="log-filter"' in page and 'id="log-empty"' in page
+    # The log's jump bar ships in the page, inside the wrapper that positions it over the scroll area.
+    assert 'id="log-newest"' in page and 'class="log-scroll"' in page
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]

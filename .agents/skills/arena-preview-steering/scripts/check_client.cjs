@@ -647,6 +647,18 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#log-filter').value = 'seen';
   get('#log-filter').events.change();
   assert.equal(logView.scrollTop, 0, 'a log the owner scrolled away from stays where they left it');
+  // The jump bar is the remedy for a long log: hidden at the end, shown once the log is scrolled
+  // away from it, and taking the log back to the newest message when it is used.
+  const jump = get('#log-newest');
+  logView.scrollTop = 900;
+  logView.events.scroll();
+  assert.equal(jump.hidden, true, 'no bar while the log sits at its end');
+  logView.scrollTop = 120;
+  logView.events.scroll();
+  assert.equal(jump.hidden, false, 'the bar appears once the log is scrolled away from its end');
+  jump.events.click();
+  assert.equal(logView.scrollTop, 900, 'the bar returns the log to its newest message');
+  assert.equal(jump.hidden, true, 'and goes when there is nothing below');
   // With the filter matching nothing, the copy still carries every message: it is the restore
   // path, and a filtered copy would restore a partial log as if it were all of it.
   get('#log-filter').value = 'said';

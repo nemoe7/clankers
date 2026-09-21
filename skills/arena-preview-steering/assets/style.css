@@ -101,6 +101,16 @@ body[data-composer="closed"] #composer-toggle { color: var(--muted); opacity: .5
 #preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+/* The log's scroll area wraps the list so a jump bar can sit over its bottom edge: a strip rather
+   than a round button, on owner direction, thin enough to cost no vertical space and wide enough to
+   say what it does. It appears only while the log is scrolled away from its end. */
+.log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.log-newest {
+  position: absolute; left: 12px; right: 22px; bottom: 8px;
+  min-height: 0; padding: 5px 12px; font-size: 13px; border-radius: 999px;
+  background: var(--panel); color: var(--text); box-shadow: 0 2px 10px rgb(0 0 0 / 35%);
+}
+.log-newest:hover { border-color: var(--muted); }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }

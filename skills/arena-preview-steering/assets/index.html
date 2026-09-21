@@ -38,7 +38,10 @@
               <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer">✎</button>
             </span>
           </div>
-          <ol id="history" aria-label="Messages, oldest first"></ol>
+          <div class="log-scroll">
+            <ol id="history" aria-label="Messages, oldest first"></ol>
+            <button id="log-newest" class="log-newest" type="button" hidden>↓ Newest message</button>
+          </div>
           <p id="log-empty" class="receipt" role="status" hidden></p>
         </section>
         <section class="card compose" id="compose" aria-label="Send a steer">
