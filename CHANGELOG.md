@@ -1,3 +1,13 @@
+## 2026-09-21 — Every covered file now passes the linter
+
+**Date:** 2026-09-21
+
+`rules/refs/README.md` is the ninth file in the CI gate and the last covered file that the agent can clean, so
+every `README.md` and everything under `docs/` now reports zero violations, except the vendored
+`.agents/skills/asd-ste100/README.md`, which the owner exempted in report `linter-promotion` and this repository
+never rewrites. The refs index loses three semicolons and two sentences over the cap, and it keeps every
+filename, commit, section number and platform note.
+
 ## 2026-09-21 — rules/README.md passes the linter and a vendored copy is exempt
 
 **Date:** 2026-09-21
