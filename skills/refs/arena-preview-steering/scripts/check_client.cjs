@@ -42,6 +42,7 @@ class Element {
   get lastElementChild() { return this.children.at(-1); }
   focus() { this.focused = true; }
   select() { this.selected = true; }
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
   remove() { this.removed = true; }
   requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
 }
@@ -521,6 +522,41 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   assert.equal(copied.at(-1), longId.dataset.full);
   assert.match(longId.title, /^Copied through the clipboard API: /);
+  // A ctrl-click quotes instead of copying: the composer takes a `RE: <shortid>` line, the caret
+  // lands after it, and a hidden composer is opened first. A draft already written is kept below
+  // a blank line rather than lost.
+  const noteBox = get('#note');
+  noteBox.value = 'a draft already written';
+  noteBox.hidden = true;
+  const copiedBefore = copied.length;
+  documentEvents.click({ target: longId, ctrlKey: true });
+  assert.equal(copied.length, copiedBefore, 'a ctrl-click leaves the clipboard alone');
+  assert.equal(noteBox.value, `RE: ${longId.textContent}\n\na draft already written`);
+  assert.equal(noteBox.hidden, false, 'quoting opens a hidden composer');
+  assert.equal(noteBox.focused, true);
+  assert.equal(noteBox.selectionStart, 12, 'the caret sits after the quote line');
+  assert.equal(noteBox.selectionEnd, 12);
+  assert.equal(longId.title, `Quoted in the composer: RE: ${longId.textContent}`);
+  assert.equal(storage.get([...storage.keys()].find(item => item.endsWith(':draft'))), noteBox.value,
+    'the quote is kept as the draft');
+  // An empty composer gets exactly the line that was asked for, and quoting a second note
+  // retargets the prefix rather than stacking two of them.
+  noteBox.value = '';
+  const firstId = get('#history').children[0].children[2].children[0];
+  documentEvents.click({ target: firstId, ctrlKey: true });
+  assert.equal(noteBox.value, `RE: ${firstId.textContent}\n`);
+  noteBox.value = `RE: ${firstId.textContent}\nsomething typed after it`;
+  documentEvents.click({ target: longId, ctrlKey: true });
+  assert.equal(noteBox.value, `RE: ${longId.textContent}\n\nsomething typed after it`);
+  // Meta is the same gesture on a Mac, and a plain click still copies rather than quotes.
+  noteBox.value = '';
+  documentEvents.click({ target: longId, metaKey: true });
+  assert.equal(noteBox.value, `RE: ${longId.textContent}\n`);
+  noteBox.value = '';
+  documentEvents.click({ target: longId });
+  await tick();
+  assert.equal(copied.at(-1), longId.textContent, 'a plain click still copies');
+  assert.equal(noteBox.value, '', 'and does not fill the composer');
   // The log copies as the JSON lines import-notes reads back, so a wipe costs one paste.
   get('#copy-log').events.click();
   await tick();
@@ -546,5 +582,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').dataset.state, 'bad');
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, three-tab navigation wrapping both ways with Home and End, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt');
 })().catch(error => { console.error(error); process.exitCode = 1; });

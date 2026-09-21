@@ -379,6 +379,22 @@ async function copyNoteId(code, shift) {
     code.title = full;
   }, 1500);
 }
+// A ctrl-click quotes the note back instead of copying it: the composer takes a `RE: <shortid>`
+// line and the caret lands after it. A draft already written is kept below a blank line rather
+// than lost, and a first line that is already a quote is retargeted, so quoting a second note
+// replaces the prefix instead of stacking two. Meta is taken with ctrl, since that is the same
+// gesture on a Mac.
+function quoteNoteId(code) {
+  const short = (code.dataset.full || code.textContent).slice(0, 7);
+  const rest = note.value.replace(/^RE: \S+\n/, '');
+  note.value = `RE: ${short}\n${rest ? `\n${rest}` : ''}`;
+  if (note.hidden) writeMode();
+  note.focus();
+  const caret = short.length + 5;
+  note.setSelectionRange(caret, caret);
+  save('draft', note.value);
+  code.title = `Quoted in the composer: RE: ${short}`;
+}
 // The three tab buttons share one confirmation, and null text means there was nothing to copy.
 async function copyFrom(button, text, what) {
   const words = text === null ? null : await copyText(text);
@@ -415,7 +431,11 @@ document.addEventListener('click', event => {
   if (!target || typeof target.className !== 'string') return;
   const classes = target.className.split(' ');
   if (classes.includes('copy-code')) copyCode(target);
-  else if (classes.includes('note-id')) copyNoteId(target, event.shiftKey);
+  else if (classes.includes('note-id')) {
+    // Three modifiers on one element: plain copies the short ID, shift the whole one, ctrl quotes.
+    if (event.ctrlKey || event.metaKey) quoteNoteId(target);
+    else copyNoteId(target, event.shiftKey);
+  }
 });
 // The header clock is the log's own face with seconds appended, so the two never disagree.
 function showClock() {
