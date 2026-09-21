@@ -258,3 +258,26 @@ rather than assume, because the attempt costs one call and a wrong assumption co
 Both answers were substantive. The P1 seen bug is to be fixed by giving the agent one CLI command to
 poll and exposing reading nowhere else. And the handoff stays out of git, which means a restore will
 keep deleting it.
+
+## `Something went wrong. Please try again.` arrives as a message, three times
+
+The owner reported on 2026-09-21 that Arena answered with `Something went wrong. Please try again.`
+where a turn should have been, and that pasting that string back in to continue the agent turn sent it
+three times and continued the turn without interrupting the agent. Both halves of that are the owner's
+report and not an inference, which is the standard this file holds itself to since the retracted entry
+above.
+
+A message whose whole text is that error string is not an instruction. It is the owner nudging a
+stalled turn with the only text the platform handed them, and it carries no content about the work.
+Reading it as a direction — to retry something, to stop, to redo a task — is the same mistake as the
+false `continue tasks!` recorded above, which cost a stopped turn and thirty-four reverted lines. The
+response that fits is to keep working the standing instructions and to say in the receipt that the
+message was read as a nudge, so the owner can correct that reading if it was wrong.
+
+The three deliveries are the duplicate behaviour recorded above arriving in a new place. Whether they
+land as three notes or one is not something to assume: read the inbox and ack what is actually
+pending, since an unacked duplicate stays in the log as an unanswered message. The owner's own
+expectation, stated in the same note, is that skipped question tools and a few messages of exactly
+this shape are normal from here. So `skipped: true` from the question tool is not evidence the tool is
+broken, and an error-string message is not evidence of a complaint; both are the platform failing and
+the owner working around it by hand.
