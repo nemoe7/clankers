@@ -1,4 +1,4 @@
-SCOPE: MUST do only requested work plus what implementing/verifying needs; smallest coherent change; stop when verified.
+SCOPE: MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
 ALWAYS think longer; show steps for non-trivial work.
 Keep intent/behavior/architecture/interfaces/patterns: refactor/redesign/rename/reformat only when required.
 Add tests only when requested/needed to verify.
