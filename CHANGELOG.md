@@ -1,3 +1,10 @@
+## 2026-09-21 — The CLI minifies the JSON the agent reads
+
+Every JSON this CLI prints — `read`, `task-list`, the task echo, the import summary — is minified now, because
+the agent pays for every space it reads; `--pretty`, before the subcommand like `--state-dir`, indents it again
+for a human eye. The writer and the reader moved together rather than one at a time: `task-import` already accepts
+the single-line array `task-list` prints, and a test pins that round trip, so minifying the output cannot strand
+the importer.
 ## 2026-09-21 — Long rule bullets wrap onto sub-bullets
 
 Fifteen bullets longer than 220 characters — five in `rules/refs/AGENTS.md` and ten in root `AGENTS.md` — now
