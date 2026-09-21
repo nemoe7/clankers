@@ -1,10 +1,5 @@
 # CLINE.md
 
-## Use
-
-- Cline-specific rules, loaded alongside the global AGENTS.md, which Cline reads; the generic rules are not repeated here.
-- AGENTS.md carries scope, precedence, and the user-override rule for both files; this file only specializes Cline behavior.
-
 ## Command discipline
 
 - MUST run exactly the command the user gave.
