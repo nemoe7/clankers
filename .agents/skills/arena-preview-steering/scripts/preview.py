@@ -1165,6 +1165,23 @@ def add_copy_buttons(rendered):
   return CODE_BLOCK.sub(replace, rendered)
 
 
+ESCAPED_FENCE = re.compile(r"^(?P<indent>[ \t]*)\\(?P<fence>`{3,})", re.MULTILINE)
+
+
+def unescape_fences(source):
+  """Give a fence back the backslash that hid it.
+
+  A backslash before a line-leading backtick run makes markdown-it read a literal ``` inside a
+  paragraph, so the block never reaches the rule that carries the code background. The owner
+  reported exactly that (note 850de5a1): the fence was meant as a block, and the marker is
+  unescaped here so it opens one. An escape anywhere else is left alone, because inline
+  backticks are the other thing an escape can mean.
+  """
+  return ESCAPED_FENCE.sub(
+    lambda match: match.group("indent") + match.group("fence"), source
+  )
+
+
 def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
@@ -1177,7 +1194,7 @@ def render(markdown, breaks=False):
     ["table", "strikethrough"]
   )
   parser.add_render_rule("link_open", open_link)
-  return add_copy_buttons(parser.render(markdown))
+  return add_copy_buttons(parser.render(unescape_fences(markdown)))
 
 
 def handler(store):

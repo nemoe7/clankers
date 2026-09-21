@@ -50,6 +50,15 @@ with tempfile.TemporaryDirectory() as directory:
   # is what the owner removed by hand in the browser (note 0d1d1123).
   logged = preview.render("line one\nline two")
   assert "<br" not in logged and "\n" in logged and logged.count("<p>") == 1
+  # A fence the owner escaped still opens a block: the line-leading escape is dropped before the
+  # render, so the marker reaches the rule that carries the background (owner note 850de5a1).
+  escaped = preview.render("before\n\\```\ncode\n\\```\nafter")
+  assert escaped.count('class="code-block"') == 1
+  assert "<p>before</p>" in escaped and "<p>after</p>" in escaped
+  assert "<pre><code>code" in escaped
+  # An escape that is not a fence stays markdown-it's own, so inline text keeps its literal
+  # backticks rather than turning into a code block.
+  assert "<pre" not in preview.render("a \\`code\\` b")
   store = preview.Store(root, create=True, save_path=save_file)
   source = root / "report.md"
   source.write_text(

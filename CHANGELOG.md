@@ -1,3 +1,19 @@
+## 2026-09-21 — An escaped fence keeps its background
+
+**Date:** 2026-09-21
+
+**Summary** — a fence the owner wrote with a backslash before each marker now opens a real block
+(owner note `850de5a1`). `render()` drops a line-leading escape before the backtick run, because
+markdown-it otherwise reads a literal ``` inside a paragraph and the rule that carries the code
+background never reaches it. An escape anywhere else is left alone, so inline text keeps its
+literal backticks.
+
+**Cost** — `scripts/preview.py` grows by one regular expression and one pre-pass.
+
+**Checks** — `check_preview.py` asserts an escaped fence renders one `.code-block` with the text
+around it left as paragraphs, and that an inline escape renders no `pre` at all. `ruff`, the refs
+parity check and `maintenance/minify.py` are green.
+
 ## 2026-09-21 — The save file outlives the restore, and the answers ride with it
 
 **Date:** 2026-09-21
