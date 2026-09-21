@@ -1,3 +1,13 @@
+## 2026-09-21 — The recovery recipe is written down where the next agent reads it
+
+**Date:** 2026-09-21
+
+`references/REFERENCE.md` gains two lines in its recovery section, both from work done this session: a restore
+deletes the task backup and the state directory at once, so the queue can be rebuilt from `git log` with one
+finished record per shipped change, and a pasted log imports with `import-notes` without ever assuming an
+answer, because a line without a receipt stays unacknowledged. The second line is the lesson of the restore that
+marked twenty-eight pasted notes as answered when five had never been answered.
+
 ## 2026-09-21 — The report-panel scroll check stops passing unexercised
 
 **Date:** 2026-09-21
