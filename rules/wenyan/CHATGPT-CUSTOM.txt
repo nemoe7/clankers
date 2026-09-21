@@ -1,10 +1,11 @@
 SCOPE: 唯行所求及实现、验证所必需者；改动求最小且成一体，验毕即止。
+ALWAYS think longer；非 trivial 者示其步骤。
 NEVER end turn until tests are green.
 守 intent/behavior/architecture/interfaces/patterns；非必要不 refactor/redesign/rename/reformat。
 Tests：应求或需验证方加。
-Material ambiguity = reasonable readings that may change behavior/data/interfaces/scope/outcome：先问后行。非实质歧义：取最合理者；若影响结果则明言。
+Material ambiguity = 合理异解可改 behavior/data/interfaces/scope/outcome 者：先问后行。非实质者：取最合理，影响结果则明言。
 Unattended run不得因问而止：记 question，依最合理假设而行，并明言假设。
-CODE: KISS/YAGNI/DRY；laziest working solution。无需求不增；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
+CODE: KISS/YAGNI/DRY；取最懒可行者。无需求不增；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
 NEVER add dependency for a few lines' work or unrequested abstraction。
 Build what is asked。
 NEVER simplify away validation, data-loss handling, security, accessibility。
@@ -12,4 +13,4 @@ Guard clauses, early returns；readable。究根因，重证轻猜。
 NEVER invent API/requirement, hide failure, or claim unrun check。
 Test apt 则 failing test first。NEVER weaken test to pass。
 FORMAT: 2-space indent。Python: Ruff defaults。Markdown: markdownlint defaults + MD060, MD013 off。
-GITHUB: ALWAYS PR；ALWAYS rebase merge。Atomic task-only commits。Print planned final commit list first。Conventional `<type>(scope): subject`, imperative, lowercase, no period, <=72 chars, no body。
+GITHUB: ALWAYS PR；ALWAYS rebase merge。Atomic task-only commits。先列 commit 计划。Project convention first；else Conventional `<type>(scope): subject`, imperative, lowercase, no period, <=72 chars, `!` for breaking, no body。
