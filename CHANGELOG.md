@@ -1,4 +1,4 @@
-## 2026-09-21 — Kilo uses PowerShell and preview scripts ship compact
+## 2026-09-21 — Kilo uses PowerShell; preview scripts and guidance shrink
 
 **Origin** — the owner’s chat task on 2026-09-21, `amend(kilo): inform using pwsh not bash`, and approval of the proposal in Q2.
 
@@ -13,6 +13,12 @@
 **Script cost** — `preview.py` 64,799 → 50,095 bytes; `check_preview.py` 59,618 → 41,393 bytes; `check_client.cjs` 56,767 → 41,149 bytes. The combined scripts shrink from 181,184 to 132,637 bytes (26.8%). Each gets a README byte budget; both distributed copies match. Browser assets do not change.
 
 **Checks** — the new assert-based `maintenance/check_minify.py` failed first on the missing Python build function, then passed after implementation. It checks comment removal, preserved shebangs and parsed trees, rejected tree changes and Python 3.11-only syntax, the package pin, both copies, drift without writes, update/idempotence, generated Python against the full integration check using readable assets, and page assembly with shipped assets. The original readable-runtime integration check and the minified client harness pass. Build drift, measurement regression, README validation, Ruff lint/format, Markdown lint, changed documentation STE, YAML/TOML parsing and diff whitespace pass. Python 3.10 itself was not available or run; the compatibility check is syntactic, not a claim of execution on that interpreter.
+
+**Reference origin and scope** — owner note `36da049` requested a lossless squash, approved in `fb51379`. A draft reduced 11,275 → 8,455 → 8,434 `cl100k_base` tokens while retaining headings, command/field tables, fenced examples, distinct inline code spans and numeric values. That draft did not ship: note `336fa03` questioned the UI-history content, and `52b701a` then explicitly limited both live references to CLI operations and recovery. This is an approved scope reduction, not a claim that the final guide preserves every historical detail. Full UI, HTTP implementation and migration history remains in the uncompressed refs file, whose build-policy paragraph records the scope change.
+
+**Reference change and cost** — replace the distributed reference with invocation/state, read/ack, task commands and message links, report publishing and recovery. Verify `--msg-id` against the CLI and `Store.mark_task`: task/link writes share a transaction; an unknown message ID fails both writes. The linked note shows `Task added`, while report submissions stay outside the message log. Note `1b570c4` asked to document this and to propose a rule after the agent missed queue updates. The CLI documentation is delivered; the separate mandatory queue-rule proposal remains unapproved. The reference drops from 50,331 to 8,654 bytes and from 11,275 to 1,914 tokens (83.0% fewer tokens). Both delivered copies match. The three steering entry points now label the link “operation and recovery”; their byte budget is unchanged.
+
+**Reference checks** — source review and an isolated CLI run verified the guide's init/import/read, linked task, finish, list/import and acknowledgement examples. Repository validation, installed mirror equality, Ruff, Markdown lint and diff whitespace pass. The old direct `check_preview.py` advice depended on readable asset strings; the consumer guide no longer tells agents to run that source-only check against minified assets. Build/runtime verification remains in maintenance tooling and CI.
 
 ## 2026-09-21 — The log and the tasks give up their copy buttons
 

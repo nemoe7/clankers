@@ -65,6 +65,6 @@ Anyone with preview access can read messages/reports. The per-process submission
 
 Processes, packages and URLs may disappear after a sandbox restart; workspace files are not a permanent backup service. Drafts depend on browser origin/storage. After a server restart, reload to refresh the submission token, preserving your draft. Expose network/storage failures; never call an unconfirmed save successful. A missing Markdown renderer stops `serve` at startup; the CLI steering commands still work without it.
 
-If the preview fails, report it and ask how to continue in chat. Do not silently revive ntfy or local report commits; they are historical alternatives, neither active fallback nor banned forever. See [migration and recovery](references/REFERENCE.md).
+If the preview fails, report it and ask how to continue in chat. Do not silently revive ntfy or local report commits; they are historical alternatives, neither active fallback nor banned forever. See [operation and recovery](references/REFERENCE.md).
 
 Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions. For reports, use sibling [arena-preview-reporting](../arena-preview-reporting/SKILL.md). Run `scripts/check_preview.py` with the reporting venv's Python to check the runtime without external test frameworks.
