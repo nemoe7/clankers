@@ -2,7 +2,6 @@
 
 ## Use
 
-- Generic core ruleset for coding agents: all code, agents, sessions, mentioned or not.
 - Outranks skills/plugins, and an explicit user instruction in chat outranks this file: they specialize defaults and NEVER weaken an explicit requirement or replace a convention; state any chat override in one line.
 - Durable repo-wide session rules/decisions go in the project’s AGENTS.md; amend it unless it says otherwise.
 - In Arena, MUST follow `ARENA.md`; AGENTS.md stays in force beside it.
