@@ -1,3 +1,10 @@
+## 2026-09-21 — The log filter stops taking a line of its own
+
+The filter arrived as a labelled form field, which gave the log header a full-width select and a
+second row of height (note `1006cb38`). It is a compact control in the icon row now, directly left of
+the log's copy button, with an `aria-label` in place of a visible label and a width capped at its
+four words.
+
 ## 2026-09-21 — The ASD-STE100 skill is vendored for auditing
 
 `danyuchn/asd-ste100-skill` at `7d4a135` is copied verbatim into `.agents/skills/asd-ste100/` under
