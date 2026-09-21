@@ -292,17 +292,20 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
   assert.equal(upcomingBody.children[0].children[1].open, true);
-  // The tasks copy sits here because the fixture's task list only exists inside this block;
-  // the log and report buttons are exercised later, once the fixtures hold notes.
-  get('#copy-tasks').events.click();
+  // The log and the tasks lost their own copy buttons on owner note 586d52f7. The save button
+  // copies the state it posts, as JSON, on a shift-click, and the reports tab keeps its button.
+  const cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
+  assert.ok(cacheKeyHere, 'every poll caches the state the shift-click copies');
+  copied.length = 0;
+  get('#save-state').events.click({ shiftKey: true });
   await tick();
-  const records = JSON.parse(copied.at(-1));
-  assert.equal(copied.at(-1), `${JSON.stringify(records)}\n`, 'the task copy is minified');
-  assert.equal(records.length, state.tasks.finished.length + state.tasks.upcoming.length);
-  assert.equal(records[0].id, state.tasks.finished[0].id);
-  assert.equal(records.at(-1).id, state.tasks.upcoming.at(-1).id);
-  assert.deepEqual(Object.keys(records[0]).sort(),
-    ['details', 'id', 'order', 'status', 'title', 'updated_at']);
+  const copy = JSON.parse(copied.at(-1));
+  assert.equal(copied.at(-1), `${JSON.stringify(copy)}\n`, 'the state copies as minified JSON');
+  assert.deepEqual(copy, JSON.parse(storage.get(cacheKeyHere)),
+    'the copy is the state the button posts, so a wipe costs one paste');
+  assert.equal(copy.notes.length, 0);
+  assert.equal(copy.tasks.finished.length, state.tasks.finished.length);
+  assert.equal(get('#save-state').dataset.state, 'good', 'the shift-click reports through the button');
   state.tasks.upcoming = [];
   await get('#refresh-notes').events.click();
   assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
@@ -312,9 +315,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(get('#tasks-finished').hidden, true);
   assert.equal(get('#tasks-current').hidden, true, 'no task list, no current div');
-  get('#copy-tasks').events.click();
+  storage.delete(cacheKeyHere);
+  get('#save-state').events.click({ shiftKey: true });
   await tick();
-  assert.equal(get('#copy-tasks').title, 'There is no task list to copy');
+  assert.equal(get('#save-state').title, 'There is no state to copy');
 
   assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
   assert.equal(get('#notes-tab').focused, true);
@@ -831,15 +835,17 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   // The fixture above is this test's own; later tests read the state that was live before it.
   state = priorState;
   await get('#refresh-notes').events.click();
-  // With the filter matching nothing, the copy still carries every message: it is the restore
-  // path, and a filtered copy would restore a partial log as if it were all of it.
+  // With the filter matching nothing, the state copy still carries every message: the cache is the
+  // restore path, and a filtered copy would restore a partial log as if it were all of it.
   get('#log-filter').value = 'said';
   get('#log-filter').events.change();
   copied.length = 0;
-  get('#copy-log').events.click();
+  get('#save-state').events.click({ shiftKey: true });
   await tick();
-  assert.equal(copied.at(-1).trim().split('\n').length, 2,
-    'the copy carries the log, not the filtered view of it');
+  const filteredCopy = JSON.parse(copied.at(-1));
+  assert.ok(filteredCopy.notes.length > 0, 'the fixture holds messages to carry');
+  assert.equal(filteredCopy.notes.length, state.notes.length,
+    'the state copies whatever the filter shows, not the filtered view of it');
   get('#log-filter').value = 'all';
   get('#log-filter').events.change();
   await tick();
@@ -901,48 +907,6 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   assert.equal(copied.at(-1), longId.textContent, 'a plain click still copies');
   assert.equal(noteBox.value, '', 'and does not fill the composer');
-  // The log copies as the JSON lines import-notes reads back, so a wipe costs one paste.
-  get('#copy-log').events.click();
-  await tick();
-  const logLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(Object.keys(logLines[0]),
-    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id']);
-  assert.ok(logLines.length > 0);
-  // The copied timestamp stops at the seconds; the fixture's own is a full toISOString(),
-  // so a fraction or an offset surviving the copy fails the shape and the sweep below.
-  assert.match(logLines[0].at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
-  assert.ok(logLines.every(line => !/\.\d|(?:Z|[+-]\d{2}:)/.test(line.at ?? '')),
-    'no copied timestamp keeps a fraction or an offset');
-  assert.equal(get('#copy-log').dataset.state, 'good');
-  // The receipt rides along verbatim, and a note nobody answered carries three nulls rather
-  // than three absent keys, so import-notes can tell "no receipt" from "half a receipt".
-  state.notes = [
-    { id: 'carried', text: 'answered before the wipe', at: new Date().toISOString(),
-      acknowledged_at: '2026-09-20T22:05:11.982172+00:00', ack_kind: 'reply',
-      ack_text: 'Fixed in `preview.py`.' },
-    { id: 'plain', text: 'never answered', at: new Date().toISOString(), acknowledged_at: null },
-    { id: 'read', text: 'read but not answered', at: new Date().toISOString(),
-      acknowledged_at: null, ack_kind: null, ack_text: null, seen_at: '2026-09-20T22:01:30' }
-  ];
-  await tick();
-  await get('#refresh-notes').events.click();
-  get('#copy-log').events.click();
-  await tick();
-  const receiptLines = copied.at(-1).trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(Object.keys(receiptLines[0]),
-    ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id']);
-  assert.equal(receiptLines[0].acknowledged_at, '2026-09-20T22:05:11.982172+00:00',
-    'a restored receipt keeps the stamp it was written with, fraction and offset intact');
-  assert.equal(receiptLines[0].ack_kind, 'reply');
-  assert.equal(receiptLines[0].ack_text, 'Fixed in `preview.py`.');
-  assert.deepEqual(
-    [receiptLines[1].acknowledged_at, receiptLines[1].ack_kind, receiptLines[1].ack_text],
-    [null, null, null], 'an unanswered note copies three nulls, not three missing keys');
-  assert.equal(receiptLines[2].seen_at, '2026-09-20T22:01:30',
-    'a note that was read but never answered copies the read stamp it has');
-  assert.deepEqual(
-    [receiptLines[2].acknowledged_at, receiptLines[2].ack_kind, receiptLines[2].ack_text],
-    [null, null, null], 'a read stamp is not a receipt and never stands in for one');
   // The report copies its Markdown source, fetched on the click rather than riding the poll.
   const selectBefore = get('#report-select').value;
   get('#report-select').value = 'p1';
@@ -1004,5 +968,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(uploadCalls[1].type, 'application/octet-stream');
   assert.equal(get('#upload-status').textContent, 'Upload failed: An upload must be 1,000,000 bytes or fewer');
   uploadFails = false;
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, a copy button on each of the three tabs, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy on a shift-click of the save button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });
