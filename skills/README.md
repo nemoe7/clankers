@@ -1,6 +1,6 @@
 # Skills
 
-Reusable skills for AI agents. Each skill is a self-contained directory with a `SKILL.md` entry point and any supporting files it loads on demand.
+Reusable skills for AI agents. Each skill is a self-contained directory. It holds a `SKILL.md` entry point and the supporting files that the agent loads when necessary.
 
 | Skill | Purpose |
 | --- | --- |
@@ -11,33 +11,34 @@ Reusable skills for AI agents. Each skill is a self-contained directory with a `
 
 ## Format
 
-Every skill must conform to the [Agent Skills specification](https://agentskills.io/specification). Validate any skill you add or edit against it.
+Every skill must obey the [Agent Skills specification](https://agentskills.io/specification). Check every skill that you add or edit against it.
 
-- `SKILL.md` is required, with YAML frontmatter followed by Markdown instructions.
-- `name` is required: 1–64 characters, lowercase letters, digits, and single internal hyphens, and it **must match the directory name**.
-- `description` is required: 1–1024 characters covering both what the skill does and when to use it, since agents load only the name and description when deciding whether to activate it.
-- Optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`, except that `license` is required on any skill recording `metadata.upstream`, which the validator enforces. No other top-level keys are allowed; anything else, including `argument-hint`, belongs under `metadata` as a string value.
-- Optional directories follow the convention `scripts/`, `references/`, and `assets/`.
-- Keep `SKILL.md` under 500 lines and move detail into `references/`, which agents load only when needed.
-`skills/refs/<skill>/` holds the complete unsquashed source tree for skills with baselines. Amend the refs tree first, then squash its `SKILL.md` into the live `skills/<skill>/SKILL.md`; supporting files are unchanged in refs and compressed/minified to live. Refs carry no budget and are not installed or distributed. `squash` and both preview skills have refs baselines; `web-interface-guidelines` has none.
+- `SKILL.md` is the entry point. It holds YAML frontmatter and Markdown instructions.
+- You must give the `name` field. Use 1 to 64 characters: lowercase letters, digits, and single internal hyphens. The name must agree with the directory name.
+- You must give the `description` field. Use 1 to 1024 characters. The text must give the action of the skill and the time to use it. Agents load only the name and the description when they select a skill.
+- The optional fields are `license`, `compatibility`, `metadata`, and `allowed-tools`. The `license` field is also mandatory on a skill that records `metadata.upstream`. The validator enforces that rule. Do not use other top-level keys. Put every other key, such as `argument-hint`, under `metadata` as a string value.
+- The optional directories are `scripts/`, `references/`, and `assets/`.
+- Keep `SKILL.md` below 500 lines. Move the detail into `references/`, which the agent loads only when necessary.
+
+`skills/refs/<skill>/` holds the full unsquashed source tree for a skill with a baseline. Change the refs tree first. Then squash its `SKILL.md` into the live `skills/<skill>/SKILL.md`. The supporting files stay unsquashed in refs and become compressed or minified in live. Refs carry no budget. No install or distribution includes them. `squash` and the two preview skills have refs baselines. `web-interface-guidelines` has none.
 
 ## Upstream sources
 
-Skills adapted from elsewhere record their origin in `metadata.upstream`. Pull updates from that source, then re-apply the local `Precedence` section, which keeps explicit user requirements and project conventions ahead of the skill's own preferences.
+A skill that you adapt from another source records its origin in `metadata.upstream`. Pull the updates from that source. Then apply the local `Precedence` section again. That section keeps explicit user requirements and project conventions ahead of the preferences of the skill.
 
 | Skill | Upstream |
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
-The remaining skills are first-party and maintained here; `squash` and both preview skills mark `metadata.origin`. `web-interface-guidelines` fetches its rules at review time rather than vendoring them, so it stays current without an update pass, and it bundles the upstream MIT license it is adapted under.
+The remaining skills are first-party, and this repository maintains them. `squash` and the two preview skills mark `metadata.origin`. `web-interface-guidelines` fetches its rules at review time instead of vendoring them. So it stays current with no update pass. It also bundles the upstream MIT license that its adaptation uses.
 
 ## Install
 
-Installation, updates, and removal are human maintenance, not agent tasks. Agents may inspect available skills but must treat installed copies as read-only, reporting missing or incompatible files rather than installing or repairing them. Requested edits to skill source in this repository do not authorize changes to an agent's installed copies.
+Installation, updates, and removal are human maintenance, not agent tasks. Agents can examine the available skills. An agent must treat an installed copy as read-only. Report a missing or incompatible file. Do not install or repair it. A request to edit the skill source in this repository gives no authority for a change to the installed copies of an agent.
 
-Copy complete skill folders into a discovery path your agent supports. Keep the folder name and include any `scripts/`, `references/`, and `assets/`; copying only `SKILL.md` is not enough.
+Copy the full skill folders into a discovery path that your agent supports. Keep the folder name. Include the `scripts/`, `references/`, and `assets/` directories. A copy of `SKILL.md` alone is insufficient.
 
-For an agent that discovers project skills under `.agents/skills/`, a human maintainer can run:
+A human maintainer with an agent that finds project skills under `.agents/skills/` can run:
 
 ```bash
 mkdir -p .agents/skills
@@ -46,7 +47,7 @@ cp -R /path/to/clankers/skills/squash .agents/skills/
 
 ### Discovery notes
 
-Paths and precedence are vendor/version-specific. Confirm them with your installed release; these are integration notes, not a runtime probe.
+Paths and precedence change with the vendor and the version. Check them against your installed release. These notes are integration notes, not a runtime probe.
 
 | Agent | Project | Global |
 | --- | --- | --- |
@@ -54,9 +55,9 @@ Paths and precedence are vendor/version-specific. Confirm them with your install
 | Cline | `.cline/skills/` | `~/.cline/skills/` |
 | Kilo Code | `.kilo/skills/` or `.agents/skills/` | `~/.kilo/skills/` |
 
-The Antigravity row covers the VS Code extension only; it does not document Antigravity CLI paths. Keep one active copy unless you have verified precedence. Reload or restart discovery as required. Avoid embedded shell-execution syntax in skills, since execution permissions differ by scope.
+The Antigravity row covers the VS Code extension only. It gives no path for the Antigravity CLI. Keep one active copy unless you check precedence first. Reload or restart discovery as necessary. Do not use embedded shell-execution syntax in a skill, because execution permissions differ by scope.
 
-After setup, ask the agent to identify an installed skill's `SKILL.md` and conditional reference paths without opening every supporting file. A missing skill is reported to the user, not self-installed or silently ignored. Without automatic discovery, provide the skill explicitly.
+After the setup, ask the agent to name the `SKILL.md` of an installed skill and its conditional reference paths. The agent must do this without a read of every supporting file. Report a missing skill to the user. Do not install it, and do not ignore it in silence. If no automatic discovery is available, give the skill explicitly.
 
 ### Skill selection
 
@@ -67,4 +68,4 @@ After setup, ask the agent to identify an installed skill's `SKILL.md` and condi
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Arena sessions needing mid-turn messages through the live preview |
 | [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Longer rendered reports, multiple reports or portable HTML delivery in Arena |
 
-Skills are independent of the rule files in [rules/](../rules/). The two preview skills are installed as siblings: reporting uses steering's shared runtime; steering alone needs no Markdown renderer. Their migration reference records the former ntfy and local-report-commit procedures as historical, not automatic fallback.
+Skills are independent of the rule files in [rules/](../rules/). This repository installs the two preview skills as siblings. Reporting uses the shared runtime of steering. Steering alone needs no Markdown renderer. Their migration reference records the former ntfy and local-report-commit procedures as historical. Those procedures are not an automatic fallback.

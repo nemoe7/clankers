@@ -1,3 +1,11 @@
+## 2026-09-21 — The linter gate takes two more files
+
+`skills/README.md` and the root `README.md` now report zero linter violations, so the validation workflow
+runs the linter over them beside `maintenance/README.md`. The changes are editorial: semicolons become
+separate sentences, a sentence over 25 words is split, detached passives name their actor, and one word
+carries one action throughout a file rather than two. The root `README.md` keeps its budget table and the
+sentence the measurement check rewrites, and `maintenance/check.py` still passes on both files. Three of
+the five covered files remain for task `ste-promote-files`.
 ## 2026-09-21 — An Uploads tab carries files beside the database
 
 A fourth tab takes files into the sandbox, on the four answers in report submission `c27a4dd5`: the bytes go to
