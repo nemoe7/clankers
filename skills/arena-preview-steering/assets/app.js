@@ -608,6 +608,13 @@ function showReceipt(at) {
 async function loadReport() {
   const id = $('#report-select').value;
   const sequence = ++reportRequest;
+  // The reports panel is the element that scrolls, and replacing the report collapses its content, so
+  // the browser clamps the panel to the top before the new HTML arrives. An update to the report being
+  // read keeps the owner's place; a report the owner switched to starts at its own top. Owner's bug
+  // report on note 60cdef88, the same class as the seen stamp on note d9b8ce39.
+  const panel = $('#reports-panel');
+  const place = panel.scrollTop;
+  const updating = $('#report').dataset.reportId === id;
   $('#report').replaceChildren();
   $('#report-submit').hidden = true;
   $('#report-receipt').hidden = true;
@@ -618,6 +625,8 @@ async function loadReport() {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
     if (sequence !== reportRequest) return;
     $('#report').innerHTML = result.html;
+    $('#report').dataset.reportId = id;
+    panel.scrollTop = updating ? place : 0;
     $('#report-submit').hidden = !result.fields;
     const saved = result.fields ? savedAnswers(id) : null;
     if (saved && saved.answers) {
