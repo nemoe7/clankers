@@ -6,7 +6,9 @@
 
 **Task status** — Remove the extra explanation after the updated timestamp. The client regression failed before the change and passed after it.
 
-**Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. Browser E2E was not run for this documentation change.
+**Composer preview** — Preserve paragraph newlines with scoped `white-space: pre-wrap`, without adding double-spaced `<br>` tags. Both the Python regression and real Chromium check failed before the CSS change, then passed. npm `@sparticuz/chromium` 153.0.0 supplied the binary and runtime.
+
+**Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
 
