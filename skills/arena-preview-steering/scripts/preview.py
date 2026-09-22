@@ -284,6 +284,7 @@ class Store:
 		"Write the page's cached state to the save file, in the shape the importers read.\n\n    The browser cannot write the sandbox filesystem, so it posts what it holds and this writes it.\n    Note lines keep their receipts, read stamps and task markers, because a restore that drops any\n    of them is the failure this exists to prevent; task lines keep their status and order, so the\n    queue comes back in the same shape. Answer lines come from the database rather than from the\n    page, because the owner's report answers are stored here the moment they are sent, and an\n    answer that a restore drops is an answer the owner has to type again.\n\n    The file lands at the repository root and stays untracked: a\n    restore keeps the checkout, so the copy outlives the database beside it.\n    "
 		if not isinstance(payload,dict):raise TypeError('Save a state object')
 		notes=payload.get('notes');tasks=payload.get('tasks')
+		if tasks is None:tasks={}
 		if not isinstance(notes,list)or not isinstance(tasks,dict):raise TypeError('Save a state object with notes and tasks')
 		lines=[saved_note_line(record)for record in notes]
 		for status in TASK_STATUSES:
