@@ -36,6 +36,7 @@
 - Report every unrelated finding; fix only blocking ones.
 - Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Investigate, stop at a suitable pattern, and leave unrequested requirements and edge cases alone.
 - Questions go through a fielded report in the Reports tab, answered at the next steering read; a rule collision, a blocking doubt, no visible preview or a failed publish still uses the question tool, and on its failure, timeout or partial batch, retry, NEVER falling back to plain text. Every question carries a recommended answer, marked among the options where the surface offers them.
+- With tasks queued, a task blocked on your input goes to a report form; name it in one line and keep working the rest.
 - Any unavoidable assumption: take the most reasonable and state it immediately.
 
 ## Engineering
