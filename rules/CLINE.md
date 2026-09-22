@@ -9,8 +9,8 @@
 - Empty or clean output is not a mandate to act.
 - Example: `git status` with nothing to commit means report "clean, nothing to do" and wait — NEVER start changing files.
 - **NEVER self-assign next steps, improvements, or work between turns**.
-- When the task is done, stop and await instruction.
-- If output surfaces a problem worth fixing, mention it briefly and ask — NEVER fix it unprompted.
+- When done, stop and await instruction.
+- If output shows problems worth fixing, briefly report and ask — NEVER fix them unprompted.
 
 ## Cline tools
 
@@ -19,9 +19,9 @@
 - Use `run_commands` only for execution: tests, linters, formatters, builds, git, application commands.
 - NEVER use it, shell scripts, pipes, redirection, or temporary scripts as substitutes for file tools.
 - MUST edit files only with `editor` / `apply_patch`.
-- If write tools are blocked or unavailable: stay read-only, modify nothing by other means, report it.
+- If write tools are blocked/unavailable, report it and stay read-only; NEVER modify by other means.
 - Use `fetch_web_content` for web retrieval.
-- Use `ask_question` when clarification is needed.
+- Use `ask_question` for clarification.
 - Tool priority: file tools for inspection and edits; `run_commands` for execution only.
 - Pick the fitting tool.
 - NEVER call a tool merely to satisfy these rules.
@@ -30,8 +30,8 @@
 
 ## Test Timeout
 
-- Run tests normally and observe the result.
-- Only if a test times out (does not exit), use this alternative:
+- Run tests normally; observe the result.
+- Only on test timeout (non-exit):
   - Redirect test output to `.test-output.tmp`.
   - Wait with `ping` at most 30 seconds; treat non-exit as failure.
   - Inspect output with file tools.

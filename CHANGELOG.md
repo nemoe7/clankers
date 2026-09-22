@@ -30,6 +30,8 @@
 
 **Documentation corrections** — Align renderer startup requirements, Markdown report delivery, field-only questionnaires, assert-based checks, platform-specific merge rules and the one-second read-delay comment with current code. Apply the owner-approved corrections to refs, live files and installed mirrors.
 
+**Rule and preview compression** — Full live pass and review preserve refs baselines, constraints, code spans, numbers, links and headings. `AGENTS.md` 1,560 → 1,530 `tok`; `ARENA.md` 14,225 → 13,931 `B`; `CLINE.md` 514 → 501 `tok`; `COMMIT-SPEC.txt` 129 → 119 `tok`. Preview entries: steering 11,912 → 11,684 `B`, reporting 5,589 → 5,452 `B`. Supporting references also shrink. Root Arena and installed skills match live copies. No governing budget grows. Reviewed ChatGPT, Kilo overlay and Wenyan text stay unchanged where no safe cut exists.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

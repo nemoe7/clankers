@@ -30,8 +30,8 @@ Platform constraints cause differences between Core (`rules/AGENTS.md`), Arena (
 | Rule area | Core | Arena | ChatGPT |
 | --- | --- | --- | --- |
 | Push and PR | NEVER push or open a PR unless asked. | Always push the branch and keep a PR open, disregarding never-push rules. | ALWAYS PR. |
-| Merge | — | merge by rebase only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
-| Merge authorization | — | NEVER merge the PR until authorized | — |
+| Merge | — | rebase merge only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
+| Merge authorization | — | NEVER merge the PR without authorization | — |
 | Commit list | — | Before every commit, without exception, print the planned final commit list first | Print the planned final commit list first. |
 | Question channel | Ask every question with the question tool. NEVER ask in plain text. | stop and ask with the `ask_user` tool. Questions go through a fielded report in the Reports tab. | — |
 | Ask on ambiguity | Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing. | Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. | never block an unattended run — note the question, assume, state it. |
@@ -40,7 +40,7 @@ Platform constraints cause differences between Core (`rules/AGENTS.md`), Arena (
 | Turn-end tests | — | Before turn end with a pushed branch, check and report open PR CI. Failed checks are unfinished work. | NEVER end turn until tests are green. |
 | First reply | — | the first reply, which opens `10-4: ARENA.md loaded` | — |
 | Preview steering | — | Always activate `arena-preview-steering` at its source/installed path. | — |
-| Shell check | MUST check which shell the harness runs before executing a command, and use its syntax. | — | — |
+| Shell check | MUST check the harness shell before commands. Use its syntax. | — | — |
 | Smaller scope | — | Complex request: ship the lazier version and question the requirement in the same response. | MUST propose a smaller scope for approval when brief exceeds need. |
 
 ## Install rules

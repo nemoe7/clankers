@@ -3,7 +3,7 @@
 ## Use
 
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
-- No platform loads this file: if absent from context, MUST open it before editing. Initial file/skill reads may precede the first reply, which opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`, keeping the gap visible. Name the preview once started; claim visibility only after user confirmation.
+- No platform loads this file: if absent from context, MUST read before editing. Initial file/skill reads may precede the first reply, which opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`, keeping the gap visible. Name the started preview; claim visibility only after user confirmation.
 - User instructions override it, confirmed in one line; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
 
 ## Constitution
@@ -12,8 +12,8 @@
 - Print the planned final commit list before every commit.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Always push the branch and keep a PR open, disregarding never-push rules.
-- Always activate `arena-preview-steering` at its source/installed path. Read its inbox via `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block, after return, and at the end of every shell block, so no chain starves the inbox. Blocking-only calls need the post-return read; initial discovery/startup may precede the first read. Missing/failed reads are errors, not empty inboxes. Ack every delivered note with `ack <ids> --reply <markdown>` (rendered in the log) or `--note <text>`, one text per call, only those IDs, never all pending blindly; receipt is not completion. Ack in the same tool block as the read that surfaced the note, before implementation it announces; work outliving the block is receipted as in progress. One to three lines naming the change and commit — analysis goes to a report or CHANGELOG, never the receipt. With no visible preview, ack in chat with literal `ACK:` plus your interpretation, reserved for notes, never thought. On a preview that never came up, report and block with one visibility question before non-setup work; the first successful start enters that block, including recovered failed reads — name it, then ask; the process banner is not confirmation. A restart of a preview confirmed in this session needs no ask; no silent ntfy fallback. History: the skill.
-- NEVER merge the PR until authorized; merge by rebase only: rebase onto the target, then merge, so no merge commit lands.
+- Always activate `arena-preview-steering` at its source/installed path. Read its inbox via `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. Co-issue a read in each parallel block, after return, and at the end of every shell block, so no chain starves the inbox. Blocking-only calls need the post-return read; initial discovery/startup may precede the first read. Missing/failed reads are errors, not empty inboxes. Ack every delivered note with `ack <ids> --reply <markdown>` (rendered in the log) or `--note <text>`, one text per call, only those IDs, never all pending blindly; receipt is not completion. Ack in the same tool block as the read that surfaced the note, before implementation it announces; work outliving the block is receipted as in progress. One to three lines naming the change and commit — analysis goes to a report or CHANGELOG, never the receipt. With no visible preview, ack in chat with literal `ACK:` plus your interpretation, reserved for notes, never thought. On a preview that never came up, report and block with one visibility question before non-setup work; the first successful start enters that block, including recovered failed reads — name it, then ask; the process banner is not confirmation. Restarting a session-confirmed preview needs no ask; no silent ntfy fallback. History: the skill.
+- NEVER merge the PR without authorization; rebase merge only: rebase onto the target, then merge, so no merge commit lands.
 - On a rule collision or any doubt, stop and ask with the `ask_user` tool; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
 - NEVER edit this file or either preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
@@ -24,10 +24,10 @@
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, and patterns.
 - MUST use ASD-STE100 for human-facing text.
-- Comments, docs and responses: terse but unambiguous, never cryptic.
-- Batch independent tool calls into one block where the surface permits.
-- With several tasks open, ALWAYS start with the smallest and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
-- Keep working while tasks remain. End the turn when the work is verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason. Before turn end with a pushed branch, check and report open PR CI; failed checks are unfinished work.
+- Comments, docs, responses: terse, unambiguous, NEVER cryptic.
+- Batch independent tool calls where the surface permits.
+- ALWAYS take the smallest open task next; a user-stated priority outranks size. Re-sort on arrivals; never use arrival order.
+- Work while tasks remain. End when verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason. Before turn end with a pushed branch, check and report open PR CI; failed checks are unfinished work.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
 ## Scope
@@ -36,8 +36,8 @@
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - Report every unrelated finding; fix only blocking ones.
 - Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Investigate, stop at a suitable pattern, and leave unrequested requirements and edge cases alone.
-- Questions go through a fielded report in the Reports tab, answered at the next steering read; a rule collision, a blocking doubt, a preview that never came up, or a failed publish still go to the `ask_user` tool, on its failure, timeout, or partial batch, retry, NEVER falling back to plain text. Only the first successful start not yet confirmed in this session needs that block; a same-session restart needs no block, since the owner already has it. Every question carries a recommended answer, marked among the options where the surface offers them.
-- With tasks queued, a task blocked on your input goes to a report form; name it in one line and keep working the rest.
+- Questions go through a fielded report in the Reports tab, answered at the next steering read; a rule collision, a blocking doubt, a preview that never came up, or a failed publish still go to the `ask_user` tool, on its failure, timeout, or partial batch, retry, NEVER falling back to plain text. Only the first successful, unconfirmed start needs that block, not a same-session restart. Every question needs a recommended answer, marked among options where offered.
+- With tasks queued, put input-blocked tasks in report forms; name each in one line and work the rest.
 - End a turn awaiting the owner only after publishing its fielded report and queueing the blocked task.
 - Any unavoidable assumption: take the most reasonable and state it immediately.
 
@@ -54,7 +54,7 @@
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - SOLID: one reason to change per unit, extension at an existing seam, substitutable subtypes, small interfaces, dependency on the abstraction the code varies on; it collides with YAGNI/KISS/DRY by design, so while planning ask which governs the task — reuse or simplicity — and follow it.
 - Prefer deletion over addition, boring over clever, fewest files, an existing helper over a new one.
-- Build the full version on insistence, without re-arguing.
+- On insistence, build the full version without re-arguing.
 
 ## Verification
 
@@ -71,19 +71,19 @@
 
 - `nemoe7` repos: 2-space indent overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off; Python is Ruff defaults, from the project's `ruff.toml` or one created exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; gates are `ruff check` and `ruff format`, no CLI overrides.
 - Reports must allow lines up to 120 characters (MD013 at 120).
-- NEVER add unnecessary code/config comments: only when the method is complex enough.
+- Add code/config comments ONLY when method complexity needs them.
 
 ## Git
 
 - **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, keeping the PR title and body matching it; if one landed unlisted, print the corrected timeline first.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, only `feat`/`fix` spec-mandated; reuse history's scopes, adding none otherwise.
-- Keep reports, audits, preview state, inboxes and receipts in ignored workspace dirs, not caches; NEVER commit/push them.
+- Keep reports/audits/preview state/inboxes/receipts in ignored workspace dirs, never caches; NEVER commit/push them.
 - NEVER cite a session-local note ID in a repo file: it does not persist between sessions. Cite the durable record instead. Use `arena-preview-reporting` for longer reports, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions and republish its stable ID; multiple reports may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - `GH_TOKEN` can die mid-turn with no repo change: `gh auth status` calls it invalid, pushes fail, `gh auth setup-git` does not help. Retry once, NEVER loop or ask for credentials — then block with the `ask_user` tool, not a silent end of turn; its answer is a new turn with a fresh token. Prove recovery with `git ls-remote origin <branch>` before pushing again.
 - `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.
-- **NEVER `-f body=@path`** — `-f` posts the literal string; stage PR text in the workspace, never /tmp. A 200 from a PR PATCH is not proof: re-fetch title and body, diff against the staged file, keep both current.
+- **NEVER `-f body=@path`** — `-f` posts the literal string; stage PR text in the workspace, never /tmp. A PR PATCH 200 proves nothing: re-fetch title/body, diff against the staged file, keep both current.
 - PR body is a squashed timeline: features then fixes, no round headers.
 
 ## Workspace
@@ -95,7 +95,7 @@
 
 ## Deliverables
 
-- Save/open the main deliverable; for longer reports, name the Reports tab/title and verify rendering. Keep Markdown sources; the Reports tab is the delivery, other formats stay request-only. On preview failure, report and agree on a replacement; local report commits are historical, not automatic fallback or banned forever.
+- Save/open the main deliverable; for longer reports, name the Reports tab/title and verify rendering. Keep Markdown sources; deliver in Reports, other formats request-only. On preview failure, report and agree on a replacement; local report commits are historical, not automatic fallback or banned forever.
 - Previews have no network: inline CSS, embedded SVG/data URIs, no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, never localhost/127.0.0.1.
 - Regenerate doc sections with their committed script after source data changes; never hand-edit one.
