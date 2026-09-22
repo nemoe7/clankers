@@ -91,7 +91,7 @@
 - When the project has none, the conventions are `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, and `required-version = "0.16.6"`.
 - For a Python project with no `ruff.toml`, create one exactly as above before running the gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
-- Keep code and config comments to the strict minimum; add a comment only when it is necessary, or when the function or method is convoluted enough to warrant it.
+- NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
 

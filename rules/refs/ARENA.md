@@ -121,7 +121,7 @@
 - For a Python project with no `ruff.toml`, create one with exactly that before running gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
 - Reports must allow lines up to 120 characters (MD013 at 120).
-- Keep code and config comments to the strict minimum; add a comment only when it is necessary, or when the function or method is convoluted enough to warrant it.
+- NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 
 ## Git
 
