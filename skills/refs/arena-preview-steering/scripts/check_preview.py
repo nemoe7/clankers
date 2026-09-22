@@ -813,6 +813,12 @@ with tempfile.TemporaryDirectory() as directory:
     assert record["sha256"] == hashlib.sha256(blob).hexdigest() and record["present"]
     assert Path(record["path"]).read_bytes() == blob
     assert Path(record["path"]).parent.name == "uploads"
+    # An upload writes a note, so the agent's next read sees it; the note rides the upload's ID.
+    upload_note = store.state()["notes"][-1]
+    assert upload_note["id"] == record["id"]
+    assert upload_note["text"] == (
+      f"Upload: my file.png ({len(blob)} B, image/png) saved to {record['path']}"
+    )
     assert (
       request(
         "POST",
