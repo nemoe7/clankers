@@ -77,3 +77,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved unread-or-unanswered report markers, checks and generated copies. Sizes: `assets/app.js` 26,544 → 26,656 `B`. `scripts/preview.py` 52,879 → 53,266 `B`. `scripts/check_client.cjs` 47,424 → 47,905 `B`. `scripts/check_preview.py` 46,770 → 48,044 `B`. Submission status comes from the server, independent of browser storage.
 
 2026-09-22: the approved stale-guidance correction changed the reporting entry from 5,580 to 5,589 `B`. The full compression pass funds it at 5,452 `B`, below the earlier size. No exception remains.
+
+2026-09-22: the owner requested audit M5 with approval waived. Reject incomplete bodies before writes and cover half-closed uploads. `scripts/preview.py` 53,266 → 53,371 `B`. `scripts/check_preview.py` 48,044 → 48,796 `B`.

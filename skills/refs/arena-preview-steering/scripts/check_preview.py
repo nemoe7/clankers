@@ -5,6 +5,7 @@ import hashlib
 import http.client
 import json
 import re
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -900,6 +901,30 @@ with tempfile.TemporaryDirectory() as directory:
       )[0]
       == 413
     )
+    uploads_before = store.uploads()
+    notes_before = store.state()["notes"]
+    files_before = set((root / "uploads").iterdir())
+    for partial in (b"abc", b""):
+      with socket.create_connection(
+        ("127.0.0.1", app.server_port), timeout=5
+      ) as client:
+        client.sendall(
+          (
+            "POST /api/uploads?name=partial.bin HTTP/1.0\r\n"
+            "Content-Type: application/octet-stream\r\n"
+            f"X-Preview-Token: {auth['X-Preview-Token']}\r\n"
+            "Content-Length: 10\r\n\r\n"
+          ).encode()
+          + partial
+        )
+        client.shutdown(socket.SHUT_WR)
+        response = http.client.HTTPResponse(client)
+        response.begin()
+        assert response.status == 400
+        assert "Incomplete request body" in response.read().decode()
+    assert store.uploads() == uploads_before
+    assert store.state()["notes"] == notes_before
+    assert set((root / "uploads").iterdir()) == files_before
     status, headers, served = request("GET", f"/api/uploads/{record['id']}", raw=True)
     assert status == 200 and served == blob and headers["Content-Type"] == "image/png"
     assert "attachment" in headers["Content-Disposition"]

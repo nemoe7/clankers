@@ -36,6 +36,8 @@
 
 **Audit L8** — Correct CI coverage in the rules README and house instructions: main-branch pushes and PRs targeting any branch, subject to ignored-path exclusions. Only qualifying main pushes commit refreshed README measurements.
 
+**Audit M5** — Reject incomplete HTTP bodies before parsing or saving them. Half-closed uploads with partial or empty bodies receive HTTP 400 and create no file, upload record or inbox note. Exact-size uploads remain covered.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
