@@ -1,3 +1,11 @@
+## 2026-09-23 — First steering read follows startup
+
+**Read order** — Change the first steering read from optional before discovery and startup to required after startup: before the first `serve` there is no inbox, and a missing state file then is no failed read. Update Arena refs baseline, live Arena rules, root `ARENA.md`, steering skill refs baseline, compressed live skill, and installed mirror.
+
+**Compression** — `rules/ARENA.md` 13,925 → 13,903 `B` (-22 `B`); `skills/arena-preview-steering/SKILL.md` 11,648 → 11,626 `B` (-22 `B`).
+
+**Checks** — Markdown lint, Ruff lint and format at the pinned version, `maintenance/check.py --update` with README measurements refresh, and the STE linter on the changed README rows.
+
 ## 2026-09-22 — Steering cadence: always include poll in bash calls
 
 **Cadence update** — Change preview steering check cadence from appending a read to the last command of a shell block to always including a poll in bash calls. Update steering skill refs baseline, compressed live skill, installed mirror, Arena refs baseline, live Arena rules, and root `ARENA.md`.
