@@ -351,7 +351,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#note').scrollHeight = 72;
   await get('#form').events.submit(event({}));
   assert.equal(sent[0].id, sent[1].id);
-  assert.match(sent[0].id, /^[0-9a-f]{7}-/);
+  assert.match(sent[0].id, /^[0-9a-f]{7}-[0-9a-f]{25}$/);
   assert.equal(get('#note').value, '');
   // A cleared field collapses back to the stylesheet's min-height instead of keeping its grown size.
   assert.equal(get('#note').style.height, '');
