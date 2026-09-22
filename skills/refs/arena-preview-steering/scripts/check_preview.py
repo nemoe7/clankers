@@ -1736,9 +1736,14 @@ with tempfile.TemporaryDirectory() as marker_dir:
   assert marker_store.state()["reports"][0]["needs_answer"] is False
   assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
   with marker_store.connect() as db, db:
+    # The answer is backdated on purpose: an answer survives a republish however old it is,
+    # so an agent republish never asks the owner the same form twice. The republish still
+    # clears the read stamp, so changed text shows unread.
     db.execute("UPDATE submissions SET at = '2020-01-01T00:00:00' WHERE id = 'answer'")
   marker_store.publish("form", "Revised form", marker_source)
-  assert marker_store.state()["reports"][0]["needs_answer"] is True
+  assert marker_store.state()["reports"][0]["seen_at"] is None
+  assert marker_store.state()["reports"][0]["needs_answer"] is False
+  assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
   marker_source.write_text("Plain report")
   marker_store.publish("plain", "Plain", marker_source)
   assert marker_store.state()["reports"][1]["needs_answer"] is False
