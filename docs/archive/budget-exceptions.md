@@ -73,3 +73,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved the report-refresh fix and checks. Build sizes: `assets/app.js` 26,280 → 26,544 `B`. `scripts/check_client.cjs` 46,164 → 47,424 `B`. Unrelated report changes no longer replace the selected report.
 
 2026-09-22: the owner approved compact reminder wording and its checks. Sizes: `SKILL.md` 11,900 → 11,912 `B`. `scripts/preview.py` 52,895 → 52,879 `B`. `scripts/check_preview.py` 46,215 → 46,770 `B`. The checks retain mixed-kind and non-marking coverage.
+
+2026-09-22: the owner approved unread-or-unanswered report markers, checks and generated copies. Sizes: `assets/app.js` 26,544 → 26,656 `B`. `scripts/preview.py` 52,879 → 53,266 `B`. `scripts/check_client.cjs` 47,424 → 47,905 `B`. `scripts/check_preview.py` 46,770 → 48,044 `B`. Submission status comes from the server, independent of browser storage.

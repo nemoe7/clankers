@@ -624,9 +624,21 @@ class Store:
       reports = [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, updated_at, seq, seen_at FROM reports ORDER BY seq, id"
+          "SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS("
+          "SELECT 1 FROM submissions WHERE report_id = reports.id "
+          "AND julianday(at) >= julianday(reports.updated_at)) AS answered "
+          "FROM reports ORDER BY seq, id"
         )
       ]
+      for report in reports:
+        answered = report.pop("answered")
+        try:
+          report["needs_answer"] = (
+            bool(parse_fields(report.pop("markdown"))[1]) and not answered
+          )
+        except ValueError as error:
+          report["needs_answer"] = True
+          report["field_error"] = str(error)
       uploads = self.uploads()
       for item in notes + reports + uploads:
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):

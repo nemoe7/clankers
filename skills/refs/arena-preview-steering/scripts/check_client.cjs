@@ -689,14 +689,23 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick();
   await get('#refresh-notes').events.click();
   assert.equal(pip.hidden, true, 'a report carrying a read stamp is not unread');
-  assert.equal(pip.title, 'No unread report');
+  assert.equal(pip.title, 'No unread reports or unanswered forms');
+  state.reports[0].needs_answer = true;
+  await get('#refresh-notes').events.click();
+  assert.equal(pip.hidden, false, 'reading does not answer a form');
+  assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+    '1. * Fielded', 'a read but unanswered form stays starred');
+  state.reports[0].needs_answer = false;
+  await get('#refresh-notes').events.click();
+  assert.equal(pip.hidden, true, 'a read and submitted form clears its markers');
+
   assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
     '1. Fielded', 'a report already read is not starred in the select');
   state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(), seen_at: null }];
   await get('#refresh-notes').events.click();
   assert.equal(pip.hidden, false, 'a report with no read stamp is unread');
-  assert.equal(pip.title, 'A report has not been read');
-  assert.equal(pip.attributes['aria-label'], 'Unread report');
+  assert.equal(pip.title, 'A report is unread or has an unanswered form');
+  assert.equal(pip.attributes['aria-label'], 'Unread report or unanswered form');
   assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
     '1. * Fielded', 'an unseen report is starred in the select');
   assert.equal([...storage.keys()].filter(item => item.endsWith(':reports-read-at')).length, 0,
