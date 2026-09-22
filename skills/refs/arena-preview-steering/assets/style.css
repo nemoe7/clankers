@@ -184,6 +184,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
    so it shares the message background again; a receipt ID still opts out by class. */
 :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid var(--accent); }
+.draft-preview blockquote { border-left-color: rgb(199, 194, 188); }
 @media (max-width: 760px) {
   .topbar { padding: 10px 16px; }
   main { padding: 14px 16px 16px; }
