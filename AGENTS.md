@@ -126,7 +126,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - Commit on a branch other than `main`, one logical change per commit with every changed file in it.
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
-- Merges MUST be fast-forward when possible; if the branch has diverged from the target, rebase onto the target first, then fast-forward.
+- Merges MUST be rebase merges: rebase onto the target, then merge; no merge commit.
 
 ## Boundaries
 
