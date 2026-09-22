@@ -1,3 +1,9 @@
+## 2026-09-22 — Chromium guidance and document compression
+
+**Chromium** — Move the standalone guide into `docs/archive/arena-quirks.md`, with its original project-specific environment variable and font limit labeled. Remove `docs/chromium-e2e.md`. Add the approved npm/extracted-runtime rule to the Arena refs, live and root copies. Compress only the new rule line: 14,081 to 14,225 B, an approved 144 B increase.
+
+**Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. Browser E2E was not run for this documentation change.
+
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
 
 **Approved follow-up** — Remove merge policy from generic core. Arena and ChatGPT keep platform-specific merge rules, with no new ChatGPT clause or character cut. Omit the proposed loading-path matrix cell. Local agents already load their rules. The installer is unchanged. Core already requires terse responses. Add the final inbox-read requirement, advance notice before a preview restart, and no mermaid in preview reports. Arena requires a pushed branch's PR CI check before turn end, bans mermaid in chat, and uses it for document diagrams. Steering 2.1.0 prints unacknowledged counts by kind and the task-list duty on stderr before command dispatch. Stdout formats stay unchanged, and reminders never mark messages seen. The runtime harness covers the reminder, JSON compatibility, acknowledgements, and read-only count behavior.
