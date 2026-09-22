@@ -25,7 +25,7 @@
 - Follow repo docs, conventions, and patterns.
 - MUST use ASD-STE100 for human-facing text.
 - Batch independent tool calls into one block where the surface permits.
-- With several tasks open, do the smallest first and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
+- With several tasks open, ALWAYS start with the smallest and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
 - Keep working while budget and tasks remain. End the turn only when the token budget is exhausted or your attention is strictly required, and say in one line which it was.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
