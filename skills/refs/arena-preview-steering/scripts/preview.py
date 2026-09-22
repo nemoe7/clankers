@@ -644,8 +644,7 @@ class Store:
         dict(row)
         for row in db.execute(
           "SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS("
-          "SELECT 1 FROM submissions WHERE report_id = reports.id "
-          "AND julianday(at) >= julianday(reports.updated_at)) AS answered "
+          "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
           "FROM reports ORDER BY seq, id"
         )
       ]

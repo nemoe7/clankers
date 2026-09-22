@@ -217,7 +217,7 @@ class Store:
 	def state(self):
 		"The page's state, with every stamp cut to seconds.\n\n    The shift-click copy and the save file restore from this shape, and a restore\n    needs no milliseconds or offset, so the state surface carries second stamps\n    while the database keeps what it was given.\n    ";tasks=self.tasks()
 		with closing(self.connect())as db:
-			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[dict(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id AND julianday(at) >= julianday(reports.updated_at)) AS answered FROM reports ORDER BY seq, id')]
+			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[dict(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')]
 			for report in reports:
 				answered=report.pop('answered')
 				try:report['needs_answer']=bool(parse_fields(report.pop('markdown'))[1])and not answered
