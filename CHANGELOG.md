@@ -1,3 +1,13 @@
+## 2026-09-22 — First-start preview must block for visibility
+
+**Origin** — the owner's chat approval on 2026-09-22 of the amendment proposed after a session started the steering server and continued without the visibility question. The process tool's LIVE PREVIEW banner was mistaken for owner confirmation. A steering note then recorded that the preview only became visible at turn end.
+
+**Rule change** — `rules/refs/ARENA.md` first, then the squashed `rules/ARENA.md` and its byte-identical root copy. A preview that never came up blocks with one visibility question before any work beyond setup. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask. The process tool's live-preview banner is not owner confirmation and does not replace the question. The question-tool rule now keys the block to the first successful start the owner has not yet confirmed; a later restart of a confirmed preview still needs no ask.
+
+**Cost** — `rules/ARENA.md` grows 283 `B`, 13,493 → 13,776 `B`, recorded in `docs/archive/budget-exceptions.md`. `rules/refs/ARENA.md` grows to 23,968 `B` and carries no budget.
+
+**Checks** — `maintenance/check.py --update` then a clean re-run with `TIKTOKEN_CACHE_DIR` set; root copy `cmp` identical to `rules/ARENA.md`; refs↔live section headings unchanged.
+
 ## 2026-09-22 — Preview times join the user's zone; note origin is gone
 
 **Origin** — the owner's chat task on 2026-09-22: some preview times were not respecting the user timezone, and `origin` should leave the preview skills' JSON schema entirely (SKILL.md `metadata.origin` stays).
