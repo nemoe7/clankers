@@ -833,6 +833,8 @@ class Store:
       raise TypeError("Save a state object")
     notes = payload.get("notes")
     tasks = payload.get("tasks")
+    if tasks is None:
+      tasks = {}
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
     lines = [saved_note_line(record) for record in notes]

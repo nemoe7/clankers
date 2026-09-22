@@ -1595,3 +1595,20 @@ with tempfile.TemporaryDirectory() as marker_dir:
   marker_store.publish("plain", "Plain", marker_source)
   assert marker_store.state()["reports"][1]["needs_answer"] is False
   assert "markdown" not in marker_store.state()["reports"][0]
+
+with tempfile.TemporaryDirectory() as notes_only_dir:
+  backup = Path(notes_only_dir) / "saved.ndjson"
+  notes_only = preview.Store(notes_only_dir, create=True, save_path=backup)
+  saved_note = notes_only.note("only-note", "No task yet")
+  for task_fields in ({}, {"tasks": None}, {"tasks": {}}):
+    result = notes_only.save_state({"notes": [saved_note], **task_fields})
+    assert result["notes"] == 1 and result["tasks"] == 0
+    assert json.loads(backup.read_text())["id"] == "only-note"
+  previous_backup = backup.read_bytes()
+  for invalid_tasks in ([], "invalid", False, 0):
+    try:
+      notes_only.save_state({"notes": [saved_note], "tasks": invalid_tasks})
+      raise AssertionError("Invalid task shape accepted")
+    except TypeError:
+      pass
+    assert backup.read_bytes() == previous_backup
