@@ -48,6 +48,8 @@ with tempfile.TemporaryDirectory() as directory:
   # the message log, where a line breaks through `white-space: pre-wrap` and needs no tag.
   chat = preview.render("line one\nline two", breaks=True)
   assert "<br" not in chat and "\n" in chat and chat.count("<p>") == 1
+  css = (preview.ASSETS / "style.css").read_text()
+  assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
   # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
   assert "<br" in preview.render("- a\n  b", breaks=True)
   # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline

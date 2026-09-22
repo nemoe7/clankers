@@ -194,6 +194,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 
 #send-status { margin: 0; }
 .draft-preview { min-height: 112px; max-height: 240px; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.draft-preview p { white-space: pre-wrap; }
 
 .raw-message { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message .report p { white-space: normal; }
