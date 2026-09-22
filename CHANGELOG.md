@@ -10,6 +10,12 @@ The same three files take a second rule: NEVER cite a session-local note ID in a
 
 **Evidence** — `docs/archive/arena-quirks.md` takes two observations from this session. A retry inside the same turn does not bring a dead token back, and the token returns with the next turn. Context exhaustion is worse, because it loses every unpushed commit; that is why this branch pushes after each commit.
 
+**Resquash** — the compression procedure ran across `rules/`, with the owner waiving its line-scoped rule for the pass. `rules/CHATGPT-CUSTOM.txt` lands at 1,489 `chars` and `rules/CHATGPT-MORE.txt` at 1,495, the latter recorded as a budget exception. `rules/CLINE.md` gives 3 `tok` and `rules/ARENA.md` 21 `B`, and both were already near their floor, so the pass reported that rather than manufacturing cuts. `rules/COMMIT-SPEC.txt` took a pass and gave it back, because its refs baseline records that no compression ever applied to it. The wenyan experiment keeps its lead at 26 and 35 per cent under the live fields, and the pass restored four clauses it had lost, among them the think-longer rule.
+
+**Note IDs** — `assets/app.js` mints a note ID as seven hex characters, a hyphen, then the remaining 25. A cited prefix is now a whole visible segment. The first attempt sliced at 8 and silently dropped a character, which a loose harness assertion passed; the assertion now pins the full shape.
+
+**Rule amendments** — the core takes two rules on request: never add an unnecessary code or config comment, and hold comments, docs and responses to terse but unambiguous. `ARENA.md` makes the smallest-task-first rule unconditional, ends a turn only when the budget is truly about to run out, and keeps the queue moving past a task blocked on the owner, which goes to a report form while the rest continues. The root `AGENTS.md` defines house as this repository and requires every `README.md` and `docs/` file to be squashed, with the refs baselines exempt.
+
 **Cost** — `assets/app.js` 24,243 → 24,242 `B` in both distributed copies. `rules/ARENA.md` grows 48 `B`, 13,026 → 13,074 `B`, and the budget exceptions record it; the refs baseline carries no budget. The README budget table is regenerated, which also records the nine rows the previous pull request left stale.
 
 **Checks** — the client harness failed before this change and passes after it, in refs and in both minified copies. `maintenance/minify.py` reports no drift, and `check.py`, `check_minify.py`, `check_measurements.py`, `check_preview.py`, Ruff, markdownlint and the STE lint on the changed README pass.

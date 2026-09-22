@@ -14,6 +14,7 @@ When the agent hands a command to the user to run instead of running it, print t
 
 WORK: MUST propose a smaller scope for approval before implementing when the brief looks bigger than the need; simplicity chooses how to meet the brief, NEVER what to silently drop.
 If the user insists on the full version after you proposed a smaller scope, build it without re-arguing.
+NEVER end turn until tests are green.
 MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
 Before editing, MUST grep every caller of the function you are about to touch, and fix once where all callers route through - one guard in the shared function beats a guard in every caller.
 For bugs, failures, and regressions: reproduce, isolate, hypothesize, verify, fix the root cause rather than the symptom, cover it, and recheck.
