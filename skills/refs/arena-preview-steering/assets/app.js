@@ -20,6 +20,11 @@ let writeToken = pageToken();
 function writeHeaders(type) {
   return { 'Content-Type': type, 'X-Preview-Token': writeToken };
 }
+// A cited ID prefix has to be a whole visible segment, so the first hyphen sits after 7 characters.
+function newId() {
+  const id = crypto.randomUUID();
+  return `${id.slice(0, 7)}-${id.slice(8)}`;
+}
 let historySignature = '';
 let draftPreviewSequence = 0;
 let uploadSignature = '';
@@ -356,7 +361,7 @@ $('#form').addEventListener('submit', async event => {
   event.preventDefault();
   if (send.disabled || !note.value.trim()) return;
   const text = note.value;
-  if (!pending || pending.text !== text) pending = { id: crypto.randomUUID(), text };
+  if (!pending || pending.text !== text) pending = { id: newId(), text };
   save('pending', JSON.stringify(pending));
   send.disabled = true;
   status.textContent = 'Sending…';
@@ -734,7 +739,7 @@ $('#report-form').addEventListener('submit', async event => {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
       method: 'POST',
       headers: writeHeaders('application/json'),
-      body: JSON.stringify({ id: crypto.randomUUID(), answers })
+      body: JSON.stringify({ id: newId(), answers })
     })).json();
     if (save(`answers:${id}`, JSON.stringify({ answers, at: result.at }))) showReceipt(result.at);
     $('#report-status').textContent = `Answers sent ${time(result.at)} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
