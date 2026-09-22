@@ -939,6 +939,27 @@ class Store:
       for position, row in enumerate(rows, 1):
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, row[0]))
 
+  def reminder(self):
+    """Count pending kinds without marking any message seen."""
+    with closing(self.connect()) as db:
+      uploads = db.execute(
+        "SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL"
+      ).fetchone()[0]
+      notes = (
+        db.execute(
+          "SELECT count(*) FROM notes WHERE acknowledged_at IS NULL"
+        ).fetchone()[0]
+        - uploads
+      )
+      reports = db.execute(
+        "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
+      ).fetchone()[0]
+    return (
+      f"Reminder: {notes + reports + uploads} unacknowledged"
+      f" (messages: {notes}, form answers: {reports}, uploads: {uploads})."
+      " Read and acknowledge pending items. Manage the task list."
+    )
+
   def read(self):
     with closing(self.connect()) as db, db:
       stamp = now()
@@ -1533,6 +1554,7 @@ def main():
     store = Store(
       args.state_dir, create=args.command in {"serve", "init"}, save_path=args.save_path
     )
+    print(store.reminder(), file=sys.stderr, flush=True)
     if args.command == "serve":
       require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
