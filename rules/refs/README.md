@@ -10,7 +10,7 @@ Amend here first, before any live file, in complete sentences that keep every ne
 - `ARENA.md` — uncompressed Arena rules.
 - `CHATGPT-CUSTOM.txt` — uncompressed ChatGPT instructions for the `Custom Instructions` field of Personalization.
 - `CHATGPT-MORE.txt` — uncompressed ChatGPT instructions for the `More about you` field of Personalization. The field holds the precedence rule, the response rules, and the work rules that the other field cannot take.
-- `CLINE.md` — uncompressed Cline overlay. It carries no MCPs section, which the owner dropped, and the `tokensave` reference went with it.
+- `CLINE.md` — uncompressed Cline overlay.
 - `KILO.md` — uncompressed Kilo Code overlay: the two tool rules, with nothing that the core already states.
 - `kilo/plan.md`, `kilo/code.md`, `kilo/debug.md` — Kilo mode overrides, paired with the live `rules/kilo/`. Each one opens with an empty line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - `COMMIT-SPEC.txt` — equals the live file, because no compression ever applied to it.

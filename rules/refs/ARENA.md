@@ -45,6 +45,7 @@
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - Ask every question by publishing a fielded report in the Reports tab, then read its answer at the next steering read; a rule collision, a doubt that blocks the work, a preview that never came up and a failed publish still go to the question tool. Only the first successful start that the owner has not yet confirmed needs that block, because a later restart puts the same preview back in front of an owner who has already seen it. If that tool fails, times out, or renders part of a batch, retry it with the question tool and NEVER fall back to plain text. Every question carries a recommended answer, the one you would take if the user never replied, and where the surface offers options the recommendation is marked among them, because a neutral list hands the user back the work you were asked to do.
 - When the task list is not empty and a task is blocked on user intervention or approval, publish a report form for that task, tell the user in one line, and continue with the other tasks instead of stalling.
+- End a turn that awaits the owner only after publishing its fielded report and queueing the blocked task.
 - If an assumption is unavoidable, make the most reasonable one and state it immediately.
 
 ## Engineering
