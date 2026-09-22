@@ -2,13 +2,13 @@
 
 ## Invocation and state
 
-Resolve `scripts/preview.py` from this skill, not the consuming repository. Use Python 3.10+ and the session's existing ignored state directory. Put global options before the subcommand:
+Resolve `scripts/preview.py` from this skill, never the consuming repository. Use Python 3.10+ and the session's existing ignored state directory. Put global options before the subcommand:
 
 ```text
 python <skill>/scripts/preview.py --state-dir <directory> [--save-path <file>] [--pretty] <command>
 ```
 
-`--state-dir` defaults to `reports/arena-preview` and contains `state.sqlite3`. `--save-path` selects the save button's file, defaulting to untracked `saved-state.ndjson` at the repository root, outside the state directory. CLI JSON is minified; `--pretty` indents it for human inspection. Missing, unreadable or corrupt existing state is an error, not an empty inbox. Only `init` and `serve` create state.
+`--state-dir` defaults to `reports/arena-preview` and contains `state.sqlite3`. `--save-path` selects the save button's file, defaulting to untracked `saved-state.ndjson` at the repository root, outside the state directory. CLI JSON is minified; `--pretty` indents it for human inspection. Missing, unreadable or corrupt existing state is an error, not an empty inbox. Only `init`/`serve` create state.
 
 | Command | Operation |
 | --- | --- |
@@ -25,7 +25,7 @@ python <skill>/scripts/preview.py --state-dir <directory> [--save-path <file>] [
 | `task-import [file] [--replace]` | Import a JSON array or one record per line; stdin if no file |
 | `import-notes <file>` | Restore notes and report answers from saved records, including supplied receipts and read stamps |
 
-`serve` requires `markdown-it-py` and fails with an install command if missing. The other commands need no renderer. Reuse the same server, port and state for steering and reporting; never start another server per report. Do not run a long-lived server in a timed shell call. A busy port requires another free port or identification of its owner, never killing an unrelated service.
+`serve` requires `markdown-it-py` and fails with an install command if missing. The other commands need no renderer. Reuse one server, port and state for steering/reporting; NEVER add a server per report. Do not run a long-lived server in a timed shell call. A busy port requires another free port or identification of its owner, never killing an unrelated service.
 
 ## Read and acknowledge
 
@@ -33,11 +33,11 @@ Changed existing answers carry `ack_edited_at`; first answers and identical retr
 
 Use only CLI `read` to poll. After full text reaches the agent, run `seen <ids>` or `ack` for exactly those IDs. Never mark count-only, truncated or failed deliveries Seen. Reads and browser polls never stamp Seen; repeat receipts keep the first stamp. Follow the entry point's polling cadence. Pending records distinguish `kind: note` and `kind: report`; both accept `ack`. Report answers stay separate from the message log. Read errors must remain visible.
 
-Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one call carries one answer, so separate calls when answers differ. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.
+Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one answer per call, separate calls for different answers. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.
 
 ## Tasks and message links
 
-Task IDs are 1–64 lowercase letters, digits or hyphens, starting with a letter or digit. Titles allow at most 200 characters; each task at most 40 details of 2000 characters. Existing IDs update; omitted title/details retain stored values. The echo truncates each detail to 200 characters, not the stored value. Its `prev` and `next` identify neighbors within the same status group, null at either end.
+Task IDs are 1–64 lowercase letters, digits or hyphens, starting with a letter or digit. Titles allow at most 200 characters; each task at most 40 details of 2000 characters. Existing IDs update; omitted title/details keep stored values. The echo clips details to 200 characters, not stored values. Its `prev` and `next` identify neighbors within the same status group, null at either end.
 
 | Flag | Operation |
 | --- | --- |
@@ -48,7 +48,7 @@ Task IDs are 1–64 lowercase letters, digits or hyphens, starting with a letter
 | `--msg-id <full-message-id>` | Link a note or report submission to this task |
 | `--amend <previous-task-id>` | Rename an existing task to the supplied task ID, retaining title, details, status and position; refuse an existing destination |
 
-Use `--msg-id` on the `task` command to set the message's `task_id`. Task and link are written together; an unknown message ID fails both writes. A linked note shows **Task added** in its log receipt, with the task ID in the tooltip. Report-submission links are stored without adding log messages. This marker means queued, not acknowledged or complete; still use `ack`.
+Use `--msg-id` on the `task` command to set the message's `task_id`. Task/link writes are atomic; unknown message IDs fail both. A linked note shows **Task added** in its log receipt, with the task ID in the tooltip. Report-submission links add no log messages. The marker means queued, not acknowledged/complete; still `ack`.
 
 Examples below follow the same `python <skill>/scripts/preview.py --state-dir <directory>` prefix:
 
@@ -63,9 +63,9 @@ task-import saved-state.ndjson
 
 ## Publish reports
 
-Use the companion [reporting skill](../../arena-preview-reporting/SKILL.md) for field syntax and publishing procedure. Sources must be UTF-8 `.md`, at most 2,000,000 bytes. IDs are 1–80 letters, digits, hyphens or underscores; titles 1–200 characters. Invalid fields fail before storage. Keep one ignored source per report and republish its stable ID to update it. Editing the source alone does not update the published snapshot.
+Use the companion [reporting skill](../../arena-preview-reporting/SKILL.md) for field syntax and publishing procedure. Sources must be UTF-8 `.md`, at most 2,000,000 bytes. IDs are 1–80 letters, digits, hyphens or underscores; titles 1–200 characters. Invalid fields fail before storage. Keep one ignored source per report and republish its stable ID to update it. Source edits alone never update published snapshots.
 
-Republishing preserves first-publish order, clears the report's read stamp and never deletes delivered answers. `read` delivers submissions headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty answers; resending creates a new answer. Publishing never acknowledges a submission. Verify the rendered report before claiming delivery. A rendered-report failure leaves its source available for inspection; report the failure instead of claiming success.
+Republishing preserves first-publish order, clears the report's read stamp and never deletes delivered answers. `read` delivers submissions headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty answers; resending creates a new answer. Publishing never acknowledges a submission. Verify the rendered report before claiming delivery. Render failures leave sources available for inspection; report failure, never success.
 
 ## Recovery
 

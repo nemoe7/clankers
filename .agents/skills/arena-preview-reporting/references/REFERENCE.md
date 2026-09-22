@@ -2,9 +2,9 @@
 
 ## Layout and ownership
 
-Install `arena-preview-reporting` beside `arena-preview-steering`. The latter contains the only runtime and static assets. The reporting entry point supplies publishing instructions and the renderer setup; neither skill assumes a Clankers checkout. A missing companion is an installation problem to report, not a reason to create a second server.
+Install `arena-preview-reporting` beside `arena-preview-steering`. The latter contains the only runtime and static assets. Reporting supplies publishing/renderer setup; neither skill assumes a Clankers checkout. Report missing companions as installation problems, not grounds for a second server.
 
-Use a persisted, ignored state directory and source files. Verify ignoring with Git before starting. Keep one Markdown file and stable ID for each logical subject; several report IDs can exist simultaneously. Re-publishing an ID updates its title, Markdown snapshot and timestamp. Source edits alone do not change a published snapshot.
+Persist state and sources in ignored paths; verify ignoring with Git before starting. Keep one Markdown file/stable ID per subject; multiple report IDs may coexist. Re-publishing an ID updates its title, Markdown snapshot and timestamp. Source edits alone never update published snapshots.
 
 The shared server requires `markdown-it-py`. Without it, startup fails with an install command. Steering CLI commands still work without the renderer. With authorization for that named dependency, install it in a workspace venv and start/restart the server with that Python. Never add it to a consuming application’s manifest solely for reports.
 
@@ -35,15 +35,15 @@ The shared server requires `markdown-it-py`. Without it, startup fails with an i
 - Assumptions, unverified behavior and remaining decisions.
 ```
 
-Follow the target repository's style; in Clankers reports, allow lines up to 120 characters. Never add a claim merely to fill the template. Short answers stay in chat. No Mermaid, remote fonts, CDN scripts or externally loaded images are needed.
+Follow the target repository's style; in Clankers reports, allow lines up to 120 characters. Never invent claims to fill the template. Short answers stay in chat. No Mermaid, remote fonts, CDN scripts or externally loaded images are needed.
 
 ## Delivery behavior
 
-Delivery is the live Reports tab. The standalone HTML export was removed on 2026-09-20: it did not work in the Arena sandbox preview — attachment routes returned 200 with no visible download, and the exported file added a second copy that the native viewer showed as source. Keep the UTF-8 Markdown source as the durable artifact. Raw Markdown HTML is disabled. Tables are supported, but not every GitHub Markdown extension or syntax-highlighting theme.
+Delivery is the live Reports tab. The standalone HTML export was removed on 2026-09-20: it did not work in the Arena sandbox preview — attachment routes returned 200 with no visible download, and the exported file added a second copy that the native viewer showed as source. Keep UTF-8 Markdown as the durable artifact. Raw Markdown HTML is disabled. Tables are supported, but not every GitHub Markdown extension or syntax-highlighting theme.
 
 A report may also carry fields: `- ( ) option` for one choice, `- [ ] option` for many, and `Label: ___` or a bare `___` line for text. The steering reference documents prompts, IDs and limits. Answers arrive as one inbox note headed `REPORT <id> <title>:`.
 
-Open a served report and verify its content before claiming rendering succeeded. Do not claim the native file viewer renders Markdown because a file exists on disk.
+Verify a served report’s content before claiming successful rendering. File existence never proves native-viewer Markdown rendering.
 
 ## Previous workflow and future changes
 

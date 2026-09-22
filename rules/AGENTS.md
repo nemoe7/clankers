@@ -9,7 +9,7 @@
 ## Constitution
 
 - MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
-- MUST check which shell the harness runs before executing a command, and use its syntax.
+- MUST check the harness shell before commands; use its syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Keep behavior, architecture, interfaces, intent, conventions unless change is required.
 - Grep every caller before planning or editing a function.
@@ -20,8 +20,8 @@
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, patterns.
 - MUST use ASD-STE100 Simplified Technical English for all human-facing text.
-- Comments, docs and responses: terse but unambiguous, never cryptic.
-- Batch independent tool calls into one block whenever the surface permits.
+- Comments, docs, responses: terse, unambiguous, NEVER cryptic.
+- Batch independent tool calls where the surface permits.
 
 ## Scope
 
@@ -30,8 +30,8 @@
 - Report every unrelated finding; fix only blocking ones.
 - Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing.
 - Ask every question with the question tool; NEVER ask in plain text.
-- Every question carries a recommended answer — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; a neutral list hands the user your work back.
-- If an assumption is unavoidable, make the most reasonable one and state it immediately.
+- Every question carries a recommended answer — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; neutral lists return your work to the user.
+- State any unavoidable assumption immediately; choose the most reasonable.
 
 ## Engineering
 
@@ -47,10 +47,10 @@
 - SOLID and YAGNI/KISS/DRY collide by design: during planning, ask which governs this task — SOLID reuse or simplicity — and follow the answer.
 - Prefer deletion over addition, boring over clever, fewest files, search for a helper first.
 - Never lazy about understanding: read code, trace flow; skipping comprehension ships confident wrong fixes.
-- Fix a bug once where all callers route through: one guard in the shared function beats a guard in every caller.
+- Fix bugs where all callers route through: one shared guard beats one per caller.
 - NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, or anything requested.
 - Leave a calibration knob on real hardware: clocks drift and sensors read off.
-- Build the full version on insistence, without re-arguing.
+- On insistence, build the full version without re-arguing.
 
 ## Testing
 
@@ -72,9 +72,9 @@
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
 - In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one; without one, create it exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`.
 - In `nemoe7` repositories: gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
-- NEVER add unnecessary code/config comments; only when the method is complex enough.
+- Add code/config comments ONLY when method complexity needs them.
 - Leave unrelated code alone.
-- Keep scratch files, scripts, output out of the repo or delete them once used, out of every commit.
+- Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.
 
 ## Git
 
