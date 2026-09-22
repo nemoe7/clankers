@@ -1495,8 +1495,7 @@ with tempfile.TemporaryDirectory() as reminder_dir:
       check=True,
     )
     json.loads(result.stdout)
-    assert "1 unacknowledged" in result.stderr
-    assert "messages: 1, form answers: 0, uploads: 0" in result.stderr
+    assert result.stderr.strip() == "1 message/s. Manage the task list."
     assert "Manage the task list" in result.stderr
     assert reminder_store.state()["notes"][0]["seen_at"] is None
   with (
@@ -1537,4 +1536,14 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     check=True,
   )
   assert "Manage the task list" in result.stderr
-  assert "0 unacknowledged" in reminder_store.reminder()
+  assert reminder_store.reminder() == "Manage the task list."
+  reminder_store.submission("form-answer", "form", "REPORT form: yes")
+  assert reminder_store.reminder() == "1 form answer/s. Manage the task list."
+  reminder_store.acknowledge(["form-answer"], "note", "Received")
+  for index in range(3):
+    reminder_store.note(f"mixed-{index}", "Pending")
+  for name in ("one.txt", "two.txt"):
+    upload = reminder_store.save_upload(name, "text/plain", name.encode())
+    reminder_store.note(upload["id"], "Uploaded " + name)
+  assert reminder_store.reminder() == "3 message/s. 2 upload/s. Manage the task list."
+  assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
