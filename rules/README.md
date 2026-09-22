@@ -4,7 +4,7 @@ Reference for rule structure, constraints, installation and maintenance. Do not 
 
 Commands and code-span paths are repository-root-relative unless stated otherwise.
 
-The installer uses only the Python standard library. This repository uses assert-based runtime, client and maintenance checks. On each push and PR, [.github/workflows/](../.github/workflows/) installs `markdown-it-py` and `tiktoken`, runs `maintenance/check.py`, commits refreshed README measurements, and lints Markdown.
+The installer uses only the Python standard library. This repository uses assert-based runtime, client and maintenance checks. [.github/workflows/](../.github/workflows/) checks pushes to `main` and PRs targeting any branch, except changes limited to its ignored paths. It installs `markdown-it-py` and `tiktoken`, runs `maintenance/check.py --update`, and lints Markdown. Only qualifying `main` pushes commit refreshed README measurements.
 
 ## Contents and activation
 
