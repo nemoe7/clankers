@@ -51,6 +51,8 @@ The command prints **all pending messages**, without truncation, and records the
 
 ## Fields in reports
 
+- ALWAYS include a labeled custom-response text field with each option set so the user can answer outside the listed options. Use `Custom response: ___` in Markdown reports.
+
 The preview does not render mermaid; a report never uses it.
 
 A published report may carry live inputs, and a report whose source is only field markers is a questionnaire. The agent writes the markers as ordinary Markdown; the Reports tab renders them as controls under one Send answers button, with any prose around them as context:

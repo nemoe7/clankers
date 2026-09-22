@@ -67,3 +67,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved edited-reply timestamps and jump links, including storage, restore and client checks. Build sizes: `assets/app.js` 25,275 → 26,280 `B`. `assets/style.css` 9,969 → 9,980 `B`. `assets/index.html` 6,507 → 6,678 `B`. `scripts/preview.py` 52,081 → 52,895 `B`. `scripts/check_client.cjs` 44,506 → 46,164 `B`. `scripts/check_preview.py` 44,359 → 45,971 `B`. No existing rule funds this feature.
 
 2026-09-22: the owner approved matching report left borders to reply borders. Build sizes: `assets/style.css` 9,980 → 9,968 `B`. `scripts/check_preview.py` 45,971 → 46,215 `B`. Regression checks require the shared color.
+
+2026-09-22: the owner approved mandatory custom responses for option sets. Entry sizes: `skills/arena-preview-steering/SKILL.md` 11,802 → 11,900 `B`. `skills/arena-preview-reporting/SKILL.md` 5,482 → 5,580 `B`. Only the new clause was compressed.
