@@ -16,9 +16,9 @@ That contradicts the rule's premise of "retry once, then end the turn". That pre
 
 ## The question tool returns skipped at token death
 
-2026-09-21, `arena/01a0be68-clankers`. With the token dead, a question block returned `{"answers": [], "skipped": true}`. No answers, no error, and no sign to the agent of why. The standing instruction is to attempt the tool at token death so this can be measured. Four attempts are recorded, and all four returned skipped.
+2026-09-21, `arena/01a0be68-clankers`. With the token dead, a question block returned `{"answers": [], "skipped": true}`. No answers, no error, and no sign to the agent of why. The standing instruction is to attempt the tool at token death so this can be measured. The file records four attempts, and all four returned skipped.
 
-No one has answered a question block while the token is dead, so the experiment stays open. The four readings do establish one fact. A skipped block is silent. It does not end the turn, it does not raise, and it does not say whether the owner saw anything.
+No one answered a question block while the token is dead, so the experiment stays open. The four readings do establish one fact. A skipped block is silent. It does not end the turn, it does not raise, and it does not say whether the owner saw anything.
 
 ## The token budget is not readable
 
@@ -36,7 +36,7 @@ A restore resets the workspace to an earlier snapshot while the turn still runs.
 
 2026-09-21, first restore, `arena/01a0be68-clankers`. It deleted `.venv`, killed the preview server and wiped `reports/arena-preview/state.sqlite3`. That took 111 steering notes and their receipts. Recovery was `git fetch -q origin <branch>` then `git reset --mixed FETCH_HEAD`. That restored HEAD to the pushed tip and left the tree alone. The notes were not recoverable.
 
-2026-09-21, second restore, same branch, roughly two hours later. The branch was pushed, so the code was safe. HEAD sat at the base commit `c3c11b3`. Recovery took five steps. Fetch and mixed-reset to the remote tip. Rebuild the venv with the pinned `ruff` from `ruff.toml` beside `markdown-it-py`. Restart the preview server. Rebuild the task list from what the session still held. Then write the JSON backup that `task-import` reads. That backup exists because of this restore. The feature had shipped minutes earlier with no user yet, so the loss forced a hand reconstruction.
+2026-09-21, second restore, same branch, roughly two hours later. The push landed earlier, so the code was safe. HEAD sat at the base commit `c3c11b3`. Recovery took five steps. Fetch and mixed-reset to the remote tip. Rebuild the venv with the pinned `ruff` from `ruff.toml` beside `markdown-it-py`. Restart the preview server. Rebuild the task list from what the session still held. Then write the JSON backup that `task-import` reads. That backup exists because of this restore. The feature shipped minutes earlier with no user yet, so the loss forced a hand reconstruction.
 
 A restore also leaves the repository dirtier in one specific way. The Python harness writes `__pycache__` inside the live skill copy. A `diff -r` parity check then reports a difference that no tracked file contains.
 
