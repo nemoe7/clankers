@@ -89,3 +89,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-23: the owner approved option A in the pip-after-answer report, with its harness growth. Build sizes: `scripts/preview.py` 54,509 → 54,458 `B`. `scripts/check_preview.py` 53,449 → 53,589 `B`. A form answer survives a republish, however old it is.
 
 2026-09-23: the owner directed harness asserts that read the minified build. `scripts/check_preview.py` grows 53,589 → 53,947 `B`. One compact helper makes every asset assert pass on the readable refs and the minified copies alike.
+
+2026-09-23: the owner approved ending every bash call with a poll. `rules/ARENA.md` grows 13,903 → 13,908 `B`. `skills/arena-preview-steering/SKILL.md` shrinks 11,757 → 11,722 `B`. The mechanical wording closes the bare-script gap.
