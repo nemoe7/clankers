@@ -71,3 +71,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved mandatory custom responses for option sets. Entry sizes: `skills/arena-preview-steering/SKILL.md` 11,802 → 11,900 `B`. `skills/arena-preview-reporting/SKILL.md` 5,482 → 5,580 `B`. Only the new clause was compressed.
 
 2026-09-22: the owner approved the report-refresh fix and checks. Build sizes: `assets/app.js` 26,280 → 26,544 `B`. `scripts/check_client.cjs` 46,164 → 47,424 `B`. Unrelated report changes no longer replace the selected report.
+
+2026-09-22: the owner approved compact reminder wording and its checks. Sizes: `SKILL.md` 11,900 → 11,912 `B`. `scripts/preview.py` 52,895 → 52,879 `B`. `scripts/check_preview.py` 46,215 → 46,770 `B`. The checks retain mixed-kind and non-marking coverage.

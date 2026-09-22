@@ -967,11 +967,16 @@ class Store:
       reports = db.execute(
         "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
       ).fetchone()[0]
-    return (
-      f"Reminder: {notes + reports + uploads} unacknowledged"
-      f" (messages: {notes}, form answers: {reports}, uploads: {uploads})."
-      " Read and acknowledge pending items. Manage the task list."
-    )
+    counts = [
+      f"{count} {kind}/s."
+      for count, kind in (
+        (notes, "message"),
+        (reports, "form answer"),
+        (uploads, "upload"),
+      )
+      if count
+    ]
+    return " ".join([*counts, "Manage the task list."])
 
   def read(self):
     with closing(self.connect()) as db, db:
