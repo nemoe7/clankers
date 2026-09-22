@@ -1,6 +1,5 @@
 SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 ALWAYS think longer before answering; for non-trivial work, show the steps you took.
-NEVER end turn until tests are green.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when the task requires it.
 Add tests only when requested or necessary to verify the change.
