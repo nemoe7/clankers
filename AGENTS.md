@@ -66,7 +66,7 @@ Read these first:
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - The CHANGELOG is the only ledger, with no separate amendment file.
-- Write every rule file to [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md).
+- Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
 
 ## Reports and approval
 
