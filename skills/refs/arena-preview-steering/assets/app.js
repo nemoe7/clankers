@@ -550,7 +550,7 @@ async function copyFrom(button, text, what, glyph = '⧉') {
   button.title = message;
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => {
-    button.textContent = glyph;
+    button.textContent = typeof glyph === 'function' ? glyph() : glyph;
     label(button, before);
     button.title = before;
     button.dataset.state = '';
@@ -635,13 +635,29 @@ function restoreCopy(cached) {
     },
   };
 }
+const saveButton = $('#save-state');
+let saveHover = false, saveShift = false;
+function saveGlyph() { return saveHover && saveShift ? '⧉' : '⤓'; }
+function updateSaveIcon() {
+  if (!['✓', '✗'].includes(saveButton.textContent)) saveButton.textContent = saveGlyph();
+}
+saveButton.addEventListener('pointerenter', event => {
+  saveHover = true;
+  saveShift = event.shiftKey;
+  updateSaveIcon();
+});
+saveButton.addEventListener('pointerleave', () => { saveHover = false; updateSaveIcon(); });
+for (const type of ['keydown', 'keyup']) {
+  document.addEventListener(type, event => { saveShift = event.shiftKey; updateSaveIcon(); });
+}
+window.addEventListener('blur', () => { saveHover = saveShift = false; updateSaveIcon(); });
 $('#save-state').addEventListener('click', async (event) => {
   const button = $('#save-state');
   if (event && event.shiftKey) {
     let cached = null;
     try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
     const usable = cached && Array.isArray(cached.notes);
-    return copyFrom(button, usable ? `${JSON.stringify(restoreCopy(cached))}\n` : null, 'state', '⤓');
+    return copyFrom(button, usable ? `${JSON.stringify(restoreCopy(cached))}\n` : null, 'state', saveGlyph);
   }
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }

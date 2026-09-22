@@ -57,6 +57,7 @@ class Element {
 }
 const elements = new Map();
 const documentEvents = {};
+const windowEvents = {};
 const copied = [];
 let clipboardFails = false;
 let execCommandResult = true;
@@ -97,6 +98,7 @@ let pageFetches = 0;
 const writeTokens = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
+  window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
@@ -164,6 +166,40 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
 (async () => {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
   await tick();
+  const saveIcon = get('#save-state');
+  saveIcon.events.pointerenter({shiftKey: false});
+  assert.equal(saveIcon.textContent, '⤓');
+  documentEvents.keydown({key: 'Shift', shiftKey: true});
+  assert.equal(saveIcon.textContent, '⧉');
+  documentEvents.keyup({key: 'Shift', shiftKey: false});
+  assert.equal(saveIcon.textContent, '⤓');
+  saveIcon.events.pointerenter({shiftKey: true});
+  assert.equal(saveIcon.textContent, '⧉');
+  saveIcon.events.pointerleave();
+  assert.equal(saveIcon.textContent, '⤓');
+  documentEvents.keydown({key: 'Shift', shiftKey: true});
+  assert.equal(saveIcon.textContent, '⤓', 'Shift away from the button does not change it');
+  saveIcon.events.pointerenter({shiftKey: true});
+  windowEvents.blur();
+  assert.equal(saveIcon.textContent, '⤓', 'window blur clears a held Shift');
+  const normalTimeout = context.setTimeout;
+  let finishCopy;
+  context.setTimeout = callback => { finishCopy = callback; };
+  saveIcon.events.pointerenter({shiftKey: true});
+  await context.copyFrom(saveIcon, 'icon probe', 'state', context.saveGlyph);
+  assert.equal(saveIcon.textContent, '✓');
+  documentEvents.keyup({key: 'Shift', shiftKey: false});
+  assert.equal(saveIcon.textContent, '✓', 'keep copy confirmation until its timer ends');
+  finishCopy();
+  assert.equal(saveIcon.textContent, '⤓', 'restore the current modifier state, not the clicked state');
+  saveIcon.events.pointerenter({shiftKey: true});
+  await context.copyFrom(saveIcon, 'icon probe', 'state', context.saveGlyph);
+  finishCopy();
+  assert.equal(saveIcon.textContent, '⧉', 'keep the copy icon if Shift is still held');
+  saveIcon.events.pointerleave();
+  context.setTimeout = normalTimeout;
+  copied.length = 0;
+
   assert.equal(root.dataset.theme, 'dark');
   assert.equal(get('#theme').textContent, '☀');
   assert.equal(get('#theme').getAttribute('aria-label'), 'Switch to light mode');
