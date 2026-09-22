@@ -8,7 +8,7 @@ Repository checks live in `maintenance/`.
 python3 maintenance/check.py
 ```
 
-The checker reads the repository and reports every problem it finds. It covers:
+The checker reports every problem it finds in:
 
 - Skill discovery metadata, required `SKILL.md` files, and the Agent Skills naming and frontmatter limits.
 - Workflow listing and frontmatter descriptions.
@@ -31,13 +31,13 @@ python3 maintenance/check.py --update
 python3 -m pip install markdown-it-py tiktoken
 ```
 
-The `--update` option regenerates the instruction-budget table from `EXPECTED_BUDGETS` before the check, including added and retired skill entries. Run `python3 maintenance/check_measurements.py` for its assert-based regression check.
+`--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 maintenance/check_measurements.py`.
 
-The checker stays maintenance tooling. Preview reporting uses `markdown-it-py` at runtime, and steering uses only the standard library. The reporting skill documents its approved venv setup and adds no dependency to the consuming application.
+The checker is maintenance tooling. Reporting uses `markdown-it-py` at runtime, steering only the standard library. The reporting skill documents approved venv setup without consuming-application dependencies.
 
 ## Minified assets and scripts
 
-The preview skill ships minified JavaScript, CSS, HTML and Python. The readable baselines stay in `skills/refs/arena-preview-steering/`. The two distributed copies carry the build, including all three files in `scripts/`. Edit the refs sources, not the generated copies. Markdown compression stays outside this build. Compact Python has less useful traceback line numbers.
+The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-preview-steering/` sources, never generated copies. Markdown compression is separate. Compact Python gives less useful traceback line numbers.
 
 ```bash
 npm ci
@@ -46,13 +46,13 @@ python3 maintenance/minify.py            # report drift, write nothing
 python3 maintenance/minify.py --update   # write both distributed copies
 ```
 
-`package.json` pins `terser` for JavaScript and CommonJS, `clean-css-cli` for CSS, and `html-minifier-terser` for HTML. The build and CI pin `python-minifier==3.3.0` for Python. It is a build dependency, not a server one. CI uses Python 3.11 to keep the output stable. The script refuses JavaScript that Node cannot parse, unbalanced CSS braces, and markup that loses an id or a visible word. Python output must compile, keep the same parsed tree, and meet the Python 3.10 syntax limit. Names, annotations, docstrings, assertions and shebangs stay. Ordinary comments do not.
+`package.json` pins `terser` for JavaScript/CommonJS, `clean-css-cli` for CSS, and `html-minifier-terser` for HTML. Build and CI pin `python-minifier==3.3.0`, not a server dependency. CI uses Python 3.11 for stable output. The script rejects unparseable JavaScript, unbalanced CSS braces, and HTML missing ids or visible words. Python must compile with the same parsed tree and Python 3.10 syntax. Names, annotations, docstrings, assertions and shebangs remain, not ordinary comments.
 
-`check.py` gates each live asset and script through the README budget table. The recorded size is the budget, so any growth fails until you update the table on purpose. Run `minify.py` after each change to a refs asset or script, because the budget cannot detect a stale copy. Run `python3 maintenance/check_minify.py` for copy equality, drift, Python tree equality, the syntax limit and the generated runtime. That runtime check uses readable assets for exact page assertions, then checks page assembly with the shipped assets. Ruff checks the readable Python refs, not the generated copies.
+`check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 maintenance/check_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime. It uses readable assets for exact page assertions, then shipped assets for page assembly. Ruff checks readable Python refs, not generated copies.
 
 ## Offline token measurement
 
-`tiktoken` downloads its `cl100k_base` encoding on first use. Where that host is unreachable, seed the cache from any byte-identical mirror. `tiktoken` verifies the hash itself, so a bad mirror fails loudly rather than silently.
+`tiktoken` downloads `cl100k_base` on first use. If its host is unreachable, seed from a byte-identical mirror. Its hash check rejects bad copies.
 
 ```bash
 BLOB=https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken
@@ -65,6 +65,6 @@ gh api -H "Accept: application/vnd.github.raw" \
 
 Then run with the variable set, for example `TIKTOKEN_CACHE_DIR="$PWD/.tiktoken-cache" python3 maintenance/check.py`.
 
-Use the raw media type, not a plain contents call. The encoding is 1,681,126 bytes, and the contents API stops returning base64 content above 1 MB. The raw accept header bypasses that limit. Where `gh` carries no credentials, `raw.githubusercontent.com` serves the same path. Some sandboxes block raw hosts and allow `api.github.com`, which is why this file records the API form.
+Use raw media type: this 1,681,126-byte encoding exceeds the contents API’s 1 MB base64 limit. Without `gh` credentials, use the same path at `raw.githubusercontent.com`. Some sandboxes block raw hosts but allow `api.github.com`, hence the API command here.
 
-A sandbox restore deletes `.tiktoken-cache/` with the rest of the ignored tree, so re-seed the cache when you rebuild a venv. Verified on 2026-09-21 against `arena/01a0be68-clankers`: the seeded cache made `maintenance/check.py` pass. Before that, it did not run for a whole session.
+Restores delete ignored `.tiktoken-cache/`, so seed it again with venv recovery. Verified on 2026-09-21, `arena/01a0be68-clankers`: seeding made `maintenance/check.py` pass after a session without the gate.

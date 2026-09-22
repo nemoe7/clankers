@@ -1,10 +1,10 @@
 # Rules specification
 
-This file gives the structure, constraints, installation and maintenance of the rule system. It is reference documentation, not an agent rule file. Do not deploy it into the Rules folder of an agent.
+Reference for rule structure, constraints, installation and maintenance. Do not deploy this file into an agent’s Rules folder.
 
-A command or a path in a code span is relative to the repository root unless the text says otherwise.
+Commands and code-span paths are repository-root-relative unless stated otherwise.
 
-The installation script uses only the Python standard library. The repository has no test suite. `maintenance/check.py` needs `markdown-it-py` and `tiktoken`, which CI in [.github/workflows/](../.github/workflows/) installs before running it on every push and pull request. The workflow then commits the refreshed README measurements and lints the Markdown.
+The installer uses only the Python standard library. This repository has no test suite. On each push and PR, [.github/workflows/](../.github/workflows/) installs `markdown-it-py` and `tiktoken`, runs `maintenance/check.py`, commits refreshed README measurements, and lints Markdown.
 
 ## Contents and activation
 
@@ -21,11 +21,11 @@ The installation script uses only the Python standard library. The repository ha
 | [skills/](../skills/README.md) | Reusable skills | Install the complete skill directories, including the supporting files |
 | [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into the workflow location of your platform, or run it as it is |
 
-Rules and tools load differently across agent versions. Determine which files are active in your installed release, and never assume a filename alone enables loading. ARENA.md compresses the core because it deploys on its own. CLINE.md relies on the loader also reading AGENTS.md. If that stops holding, repair the installation or deliberately put the core back in. Do not lose it in silence.
+Check active files in your installed agent version. Filenames alone do not enable loading. ARENA.md compresses the core for standalone deployment. CLINE.md requires the loader to read AGENTS.md too. If it stops, repair installation or explicitly restore the core. Never lose it silently.
 
 ## Platform difference matrix
 
-The rule sets for Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`) and the two ChatGPT fields differ where the platform surface forces a choice. Each row holds the exact wording of the live file, and a missing clause reads `—`. A semicolon inside a quoted clause becomes a period, because this file follows ASD-STE100. The ChatGPT cell holds the clause only. Automations are prompts, not rules. They stay out of the matrix. The reasons for the deltas are in the 2026-09-22 CHANGELOG entry.
+Platform constraints cause differences between Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`), and both ChatGPT fields. Cells quote live clauses, with `—` for absence and periods replacing semicolons for ASD-STE100. ChatGPT cells contain only clauses. Automations are prompts, excluded here. See the 2026-09-22 CHANGELOG for reasons.
 
 | Rule area | Core | Arena | ChatGPT |
 | --- | --- | --- | --- |
@@ -51,14 +51,14 @@ From the repository root, with Python 3:
 python3 rules/apply.py
 ```
 
-On Windows, use `python rules\apply.py` or `apply.bat` from the repository root. The script shows unified diffs for the changed files, asks for one response, then copies two files and creates destination directories when necessary. Enter `y` or `yes` to apply. Any other response aborts. The flags `--yes`/`-y` skip the prompt, and `--dry-run` shows the diffs without a change. If both destinations are current, the script exits with no prompt.
+On Windows, run `python rules\apply.py` or `apply.bat` from the root. The script shows unified diffs, asks once, copies two files, and creates needed directories. `y` or `yes` applies, any other answer aborts. `--yes`/`-y` skips the prompt. `--dry-run` only shows diffs. Current destinations cause exit without a prompt.
 
 | Source | Destination relative to the base directory |
 | --- | --- |
 | `rules/AGENTS.md` | `.agents/AGENTS.md` |
 | `rules/CLINE.md` | `Documents/Cline/Rules/CLINE.md` |
 
-The base defaults to `Path.home()`. A nonempty `APPLY_RULES_BASE` overrides it and needs no `USERPROFILE`. An empty override uses the home directory. These are the configured paths of the installer. Check that they match your agent setup.
+The base is `Path.home()` unless `APPLY_RULES_BASE` is nonempty. No `USERPROFILE` is needed. An empty override uses home. Check these installer paths against your agent setup.
 
 To install under another base directory:
 
@@ -73,11 +73,11 @@ $env:APPLY_RULES_BASE = "C:\path\to\profile"
 python .\rules\apply.py
 ```
 
-**The installer overwrites an existing destination file.** Back up local changes before applying it. It installs no skills, ARENA.md or ChatGPT files. Use their separate setup steps. Do not install this specification as an agent rule.
+**The installer overwrites destination files.** Back up local changes first. Skills, ARENA.md and ChatGPT files need separate setup. Never install this specification as an agent rule.
 
 ## Workflows
 
-A workflow is portable across coding-agent platforms. Its body depends on no platform-specific tool, agent name, model, provider, UI, permission or interaction mechanism. Each workflow is one self-contained Markdown file with a `description` frontmatter field, budgeted in `cl100k_base` tokens in the [root README](../README.md#instruction-budgets). The format details are in [workflows/README.md](../workflows/README.md).
+A workflow is one portable Markdown file with a `description` frontmatter field and a `cl100k_base` budget in the [root README](../README.md#instruction-budgets). Its body has no platform-specific tool, agent, model, provider, UI, permission or interaction mechanism. See [format details](../workflows/README.md).
 
 [workflows/README.md](../workflows/README.md#use) owns the installation and the selection, not this specification.
 
@@ -96,13 +96,13 @@ A workflow is portable across coding-agent platforms. Its body depends on no pla
 
 ### Arena file
 
-Arena uses the sibling `arena-preview-steering` and `arena-preview-reporting` skills for one Notes / Reports preview. Reports and session state stay ignored and uncommitted. The migration reference of the steering skill records the former ntfy and local-report-commit workflows. Neither is an automatic fallback, and no one guarantees that the preview is permanent.
+Arena uses sibling `arena-preview-steering` and `arena-preview-reporting` skills for one Notes / Reports preview. Keep reports and session state ignored and uncommitted. The steering migration reference records former ntfy and local-report-commit workflows, neither an automatic fallback. Preview permanence is not guaranteed.
 
 Compress wording and sections, not meaning. Keep every negation, condition, command, number, and caveat. Match the generic core in meaning, not byte for byte, except for push, PR, and merge authorization. ARENA.md always pushes and keeps a PR open so work survives a limit. It disregards the never-push rules, and it never merges until the owner authorizes it, where the core requires a question first. Both merge by rebase only: rebase onto the target, then merge, so no merge commit lands. Do not repeat Arena-managed branch mechanics beyond that.
 
 The duplication of the core is deliberate. In Arena, no platform loads ARENA.md or AGENTS.md on its own. So the file stands alone instead of overlaying the core, and it takes effect only after the agent has it in context. Verified 2026-09-13 on `nemoe7/clankers`: the injected context of an Arena session carried the sandbox, the branch, and the tool details only. The agent reached this file by opening it during repository exploration. On 2026-09-17 a session on the same repository missed it: the agent explored the skill subtree and pushed twice before it read either file. So exploration is a bet rather than a gate. The custom-instructions field, not the first message, is the only injection path that survives a forgotten bootstrap line. Activation is therefore a human step. Delivery is not activation. `.github/workflows/distribute-arena.yml` only puts the file in each target repository, and `rules/apply.py` deliberately does not install it. Put this exact line in the first message of the session. Put it in the custom-instructions field of the platform: `Read and apply AGENTS.md and ARENA.md at the repository root before your first edit; confirm in one line.` The preamble of the file then requires an Arena agent that reads it to apply it. It also requires an agent that did not receive it in context to open it before the first edit.
 
-Root `ARENA.md` is a copy of `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories. Refresh it with `cp rules/ARENA.md ARENA.md` after every amendment. `maintenance/check.py` gates the identity, so a drifted or missing root copy fails the check.
+After each amendment, run `cp rules/ARENA.md ARENA.md`. `.github/workflows/distribute-arena.yml` pushes the root copy to target repositories. `maintenance/check.py` rejects missing or different root copies.
 
 ### Emphasis
 
@@ -110,7 +110,7 @@ A deployed rule file keeps two bold clauses at most, so the emphasis keeps its m
 
 ### Persona rules
 
-A few rules state voice rather than observable behavior. They are `Concise, direct, practical, accurate`, `Write clear, readable code`, `Never lazy about understanding`, and `Criticize all`. They are deliberate, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 2.3, which says not to fight the persona on style. Section 4.8 asks that a deliberate deviation be marked rather than defended. They cost about 60 `tok` in the core and 400 `B` in ARENA.md. They stay, and an audit reads them as marked corner cuts rather than as untestable-rule violations.
+Four deliberate voice rules describe no observable behavior: `Concise, direct, practical, accurate`, `Write clear, readable code`, `Never lazy about understanding`, and `Criticize all`. [refs/GUIDELINES.md](refs/GUIDELINES.md) 2.3 says not to fight persona on style, and 4.8 requires marking deliberate deviations. These stay at about 60 `tok` in core and 400 `B` in ARENA.md. Audit them as marked exceptions, not untestable-rule violations.
 
 ### Skill rules
 
@@ -118,7 +118,7 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 ### Baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents that work without git history. Write every amendment here first, in complete sentences, keeping every negation, condition, command, number, threshold, filename and caveat. Then mirror it into its live file compressed, squashing only the new or affected line. On a removal, attempt one squash and keep the lower budget. A refs baseline copy would exceed every live budget, so the mirroring is where compression happens. Refs stay uncompressed as the baseline. A file equals its live counterpart where the change applied no compression, so refs always hold the original wording. `GUIDELINES.md` sits beside them as the writing standard that the audits use on these baselines. It is a reference, not a rule baseline, and it has no live counterpart.
+`rules/refs/` keeps uncompressed baselines for agents without git history. Amend here first in complete sentences, preserving every negation, condition, command, number, threshold, filename and caveat. Compress only new or affected lines into live files. On removal, attempt one squash and keep the lower budget. Verbatim baselines would exceed live budgets. Refs preserve originals, identical to live where no compression applied. The adjacent `GUIDELINES.md` is the writing/audit reference, not a baseline, with no live counterpart.
 
 ### Commit disciplines
 
@@ -135,10 +135,10 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/` — 10 files in all. The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
 
-Do not hard-wrap the prose. Keep each paragraph, list item and table row on one line, and let the editor soft-wrap. Third-party licenses keep their original wrapping.
+Soft-wrap prose: one line per paragraph, list item and table row. Keep third-party license wrapping.
 
 Rule files keep one rule per line, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.1. The Markdown rule files use bullets. The ChatGPT files use one plain line per rule, and item 4 keeps them free of headings and bullets. A line can carry the parameters, the enumeration, or the exact command of one rule. It does not carry two rules. The core and `ARENA.md` open with a `Use` section. The overlays `CLINE.md` and `KILO.md` do not. The Markdown rule files close with a `When in doubt` section. `KILO.md` is the exception, because the core settles the doubts it would restate. The core and `ARENA.md` also carry a constitution, and `CLINE.md` and `KILO.md` inherit the core's instead of copying it. The `rules/refs/kilo/` and `rules/kilo/` mode overrides keep a different shape on purpose. They open with a blank line, then `### Native <mode> Agent Overrides`, then the conflict clause. Kilo wraps them as a mode reminder rather than loading them as a full rules file. The ChatGPT files and `COMMIT-SPEC.txt` keep their set formats instead, per item 4 and their single-purpose scope.
 
 [.markdownlint-cli2.jsonc](../.markdownlint-cli2.jsonc) keeps the file selection, the exclusions, and the rule settings together. It keeps the markdownlint defaults, enables **MD060** for table-column consistency, and disables **MD013** so there is no line-length constraint. MD060 uses its default `any` style, and MD007 uses its default two-space list indent, so neither needs a pin. If markdownlint-cli2 is available, run it from the repository root with no additional file globs to use this scope. The workflow passes no globs either, so both use this one definition. `maintenance/check.py` recomputes the scope from this config and fails when it drifts from the counts recorded here and in the root guide. No tooling installation is necessary.
 
-The Python style stays defined in the core rules (Ruff selection E4, E7, E9, F), with no managed Ruff dependency. Keep each ChatGPT field within 1,500 Unicode characters, including the newlines. `maintenance/check.py` checks both.
+Core defines Python style (Ruff E4, E7, E9, F), with no managed Ruff dependency. `maintenance/check.py` checks both ChatGPT fields against 1,500 Unicode characters each, including newlines.

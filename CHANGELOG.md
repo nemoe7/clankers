@@ -26,6 +26,8 @@
 
 **Unanswered forms** — Keep the report star and tab dot until the current form is submitted, even after reading. Optional blanks count as a submission. Server state preserves markers across devices. Republishing requires a fresh answer. Plain reports keep read-only behavior. Invalid legacy fields remain visible as errors without breaking the state endpoint.
 
+**Documentation compression** — Two reviewed passes reduce nine maintained README/docs files from 84,888 to 72,506 Unicode characters (14.6%). Measurements include whitespace and the approved feature records. Code spans, numeric values and link targets remain. No third-party prose changed. Historical observations and their retractions remain together.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

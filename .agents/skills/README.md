@@ -1,14 +1,8 @@
 # Vendored skills
 
-The skills here are third-party tools the repository uses to audit and lint itself. They are not
-owner skills: nothing in `skills/` mirrors them, `skills/refs/` holds no baseline for them, and
-`maintenance/check.py` does not read this directory. A copy keeps the upstream files verbatim, so a
-diff against a later release is meaningful and a local fix belongs upstream instead.
+These third-party tools audit and lint the repository. They are not owner skills: `skills/` has no mirrors, `skills/refs/` has no baselines, and `maintenance/check.py` skips this directory. Copies keep upstream files verbatim for release comparisons. Local fixes belong upstream.
 
-A copy keeps the upstream layout, so a later release diffs against it: ponytail's six skills sit
-under its own `skills/` directory. Style gates skip them, deliberately: `ruff.toml` excludes `.agents/skills`, and markdownlint's
-scope is `rules/**/*.md` with `skills/**` ignored, so vendored Markdown is outside the linted count
-that `check.py` guards.
+Copies keep upstream layouts for release comparisons: ponytail’s six skills sit under its own `skills/` directory. Style gates deliberately skip them. `ruff.toml` excludes `.agents/skills`. Markdownlint covers `rules/**/*.md`, ignores `skills/**`, and excludes vendored Markdown from the count `check.py` guards.
 
 | Skill | Upstream | Commit | Vendored | Licence | Why it is here |
 | --- | --- | --- | --- | --- | --- |
