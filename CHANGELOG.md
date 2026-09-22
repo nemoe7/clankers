@@ -40,6 +40,8 @@
 
 **Audit M6** — Save notes before the first task exists. Normalize absent/null task lists to empty groups in the server save path, while rejecting malformed values. The client now permits notes-only saves. Cover persistence, malformed-task rejection and the save button.
 
+**Audit H3** — Require the full revision from rendered report responses on form submissions. Check the revision and save the answer in one write transaction. Reject stale forms with HTTP 409 and missing revisions with HTTP 400. Keep unsent/in-flight form entries during automatic updates. Explicit refresh loads the new form for review. Cover stale/current/missing revisions, retries, transaction boundaries, payload binding and retained entries.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
