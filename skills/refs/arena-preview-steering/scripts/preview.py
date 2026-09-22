@@ -1468,6 +1468,9 @@ def handler(store):
           self.problem(413, f"{subject} empty or too large")
           return
         data = self.rfile.read(length)
+        if len(data) != length:
+          self.problem(400, "Incomplete request body; retry the upload or request")
+          return
         if upload_post:
           # The file name rides the query string because the body is the file itself. The bytes are
           # stored exactly as they arrived, and the record carries the type, size and hash.

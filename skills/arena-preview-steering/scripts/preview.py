@@ -507,6 +507,7 @@ def handler(store):
 						remaining-=len(chunk)
 					self.problem(413,f"{subject} empty or too large");return
 				data=self.rfile.read(length)
+				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
 				if upload_post:name=parse_qs(urlsplit(self.path).query).get('name',[''])[0];record=store.save_upload(name,self.headers.get('Content-Type',''),data);record['at']=clip_stamp(record['at']);store.note(record['id'],f"Upload: {record['name']} ({record['size']} B, {record['type']or'unknown type'}) saved to {record['path']}");self.reply(201,json.dumps(record,ensure_ascii=False));return
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
