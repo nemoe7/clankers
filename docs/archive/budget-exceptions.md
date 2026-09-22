@@ -55,3 +55,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: The owner approved the pending amendments except the core merge clause and the incorrect repository install path. Arena grows from 13,863 to 14081 bytes for the CI check and chat versus document mermaid rules. Steering grows from 11,565 to 12061 bytes for the final read, restart notice, report rendering limit, and CLI reminder contract. The new clauses retain the approved conditions. No existing requirement was removed to fund them.
 
 2026-09-22: the owner approved the Chromium rule and its size increase. `rules/ARENA.md` grows from 14,081 to 14,225 `B`. The rule directs agents to the npm package and its extracted runtime instead of a Playwright-managed browser. The new line alone was compressed.
+
+2026-09-22: the owner approved explicit Seen receipts and their build growth. `scripts/preview.py` grows 51,632 → 52,081 `B`. `scripts/check_preview.py` grows 42,861 → 44,155 `B`. The steering entry shrinks 12,061 → 11,802 `B`. The runtime now marks only named messages after full text delivery, with failure and receipt checks.
