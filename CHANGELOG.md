@@ -1,3 +1,15 @@
+## 2026-09-22 — Uploads notify the agent's inbox
+
+**Origin** — the owner's note `feat: notify agent that a file has been uploaded`, after the previous session's uploads were lost with its sandbox state. The uploads list renders only in the browser, so the agent had no signal that bytes had arrived.
+
+**Preview change** — the upload route in `preview.py` writes an inbox note after `Store.save_upload`: the note's ID is the upload's ID, and its text names the file, byte size, content type, and stored path. A note lands only on a token-authenticated successful upload; a refused one (413, 415, 403) still creates neither record nor note. The harness pins the note's ID and its exact text.
+
+**Docs** — a new `## Uploads` section in the steering SKILL.md (refs full, live compressed) records the read-then-ack contract; `references/REFERENCE.md` takes the Uploads-tab paragraph.
+
+**Cost** — `skills/arena-preview-steering/SKILL.md` grows 166 `B`, 11,399 → 11,565 `B`, accepted rather than funded, recorded in `docs/archive/budget-exceptions.md`. `preview.py` 50,832 → 50,966 `B` and `check_preview.py` 41,740 → 41,922 `B` in the minify rebuild. The README budget table is regenerated.
+
+**Checks** — `check.py --update` then a clean re-run with `TIKTOKEN_CACHE_DIR` set, `check_minify.py`, `check_preview.py`, `check_client.cjs`, `node --check`, `ruff`, markdownlint, the STE linter, and an end-to-end upload against the live server.
+
 ## 2026-09-22 — Platform matrix, rebase-only arena merge, resquash
 
 **Origin** — the owner's `platform-reasons` form corrections (row 2 rebase, row 5 `ask_user`, row 7 terse), the steering note to drop the `.state-dot` margin, the correction putting the matrix in `rules/README.md`, and the resquash directive (refs to live, ChatGPT refs to wenyan). The previous session's ignored reports were lost with its sandbox state; the reasons report is reconstructed here with the corrections applied.
