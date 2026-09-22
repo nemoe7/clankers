@@ -49,6 +49,16 @@ No one has yet answered a question block while the token is dead, so the experim
 four readings do establish one fact: a skipped block is silent. It does not end the turn, it does not
 raise, and it does not tell the agent whether the owner saw anything.
 
+## The token budget is not readable
+
+No surface reports the remaining token budget to the agent. There is no counter, no warning, and no injected message. An agent that says the budget is about to run out guesses from the length of the conversation.
+
+One session ended a long turn with that claim. The owner did not know the claim was possible. They expected compaction instead, because a modern agent harness condenses a long conversation rather than cut it. Compaction does occur here. This repository's own session opened with a system block that replaced the earlier conversation with a condensed memory document.
+
+So the claim was a guess, and it cost that session a turn. The observable signal of a dead budget is different, and the section above records it. The question tool returns `skipped` when the budget dies, and it returns an answer while the budget lives. That probe reports death only. Nothing exposes a number, so no probe can report a refill.
+
+[rules/ARENA.md](../../rules/ARENA.md) now ends a turn when the agent verifies the work and stops. It bans the budget as a stated reason.
+
 ## Mid-turn sandbox restore
 
 A restore resets the workspace to an earlier snapshot while the turn is still running. HEAD goes back
