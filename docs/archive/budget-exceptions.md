@@ -81,3 +81,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner requested audit M5 with approval waived. Reject incomplete bodies before writes and cover half-closed uploads. `scripts/preview.py` 53,266 → 53,371 `B`. `scripts/check_preview.py` 48,044 → 48,796 `B`.
 
 2026-09-22: the owner requested audit M6 with approval waived. Allow notes-only saves and retain malformed-task checks. `assets/app.js` 26,656 → 26,646 `B`. `scripts/preview.py` 53,371 → 53,399 `B`. `scripts/check_preview.py` 48,796 → 49,520 `B`. `scripts/check_client.cjs` 47,905 → 48,319 `B`.
+
+2026-09-22: the owner requested audit H3 with approval waived. Bind answers to rendered revisions, reject stale forms atomically and retain entries during automatic updates. `assets/app.js` 26,646 → 27,178 `B`. `scripts/preview.py` 53,399 → 54,009 `B`. `scripts/check_preview.py` 49,520 → 51,841 `B`. `scripts/check_client.cjs` 48,319 → 50,670 `B`. `references/REFERENCE.md` 9,088 → 9,471 `B`.

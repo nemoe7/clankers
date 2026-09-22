@@ -88,6 +88,10 @@ let sendHandler;
 let state = { notes: [], reports: [], last_check: null };
 let stateFails = false;
 let reportFields = 0;
+let reportRevision = '2026-09-22T12:00:00.100000+00:00';
+let reportConflict = false;
+let reportHtmlWait = null;
+let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
 const saveCalls = [];
@@ -120,6 +124,8 @@ const context = {
     if (url.startsWith('/api/reports/') && url.endsWith('/submit')) {
       const submission = JSON.parse(options.body);
       sent.push(submission);
+      if (reportSubmitWait) await reportSubmitWait;
+      if (reportConflict) return {ok:false, status:409, text:async () => JSON.stringify({error:'Report changed. Copy entries before refreshing.'})};
       return response({ ...submission, at: new Date().toISOString() });
     }
     if (url.startsWith('/api/uploads')) {
@@ -157,7 +163,9 @@ const context = {
       return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
     }
     if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
-    return response({ html: '<h1>Report</h1>', fields: reportFields });
+    const renderedRevision = reportRevision;
+    if (reportHtmlWait) await reportHtmlWait;
+    return response({ html: '<h1>Report</h1>', fields: reportFields, revision: renderedRevision });
   }
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -648,6 +656,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   otherText.value = '  make it red  ';
   await get('#report-form').events.submit(event({}));
   assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
+  assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
   assert.match(get('#report-status').textContent, /^Answers sent /);
   assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
   await get('#refresh-report').events.click();
@@ -668,6 +677,45 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   shipBox.checked = false;
   await get('#report-form').events.submit(event({}));
   assert.equal('verdict' in sent.at(-1).answers, false);
+  const beforeDelayedUpdate = get('#report').renders;
+  let releaseHtml;
+  reportHtmlWait = new Promise(resolve => { releaseHtml = resolve; });
+  state.reports[0].updated_at = '2026-09-22T12:00:00';
+  await get('#refresh-notes').events.click(); await tick();
+  textInput.value = 'keep this draft';
+  get('#report-form').events.input(event({target:textInput}));
+  releaseHtml(); await tick();
+  reportHtmlWait = null;
+  assert.equal(get('#report').renders, beforeDelayedUpdate, 'keep edits made while an automatic refresh was fetching');
+  const beforeDirtyRefresh = get('#report').renders;
+  const oldRevision = reportRevision;
+  reportRevision = '2026-09-22T12:00:01.200000+00:00';
+  state.reports[0].updated_at = '2026-09-22T12:00:01';
+  await get('#refresh-notes').events.click(); await tick();
+  assert.equal(get('#report').renders, beforeDirtyRefresh, 'automatic updates must keep unsent answers');
+  reportConflict = true;
+  await get('#report-form').events.submit(event({}));
+  assert.equal(sent.at(-1).revision, oldRevision, 'never relabel an old form with the latest poll revision');
+  assert.equal(textInput.value, 'keep this draft');
+  assert.match(get('#report-status').textContent, /Submission not confirmed.*Report changed/);
+  assert.equal(get('#report-submit').disabled, false);
+  reportConflict = false;
+  await get('#refresh-report').events.click(); await tick();
+  assert.equal(get('#report').dataset.revision, reportRevision, 'explicit refresh loads a new revision');
+  let releaseSubmission;
+  reportSubmitWait = new Promise(resolve => { releaseSubmission = resolve; });
+  const beforeSendingUpdate = get('#report').renders;
+  const sendingReport = get('#report-form').events.submit(event({}));
+  reportRevision = '2026-09-22T12:00:02.300000+00:00';
+  state.reports[0].updated_at = '2026-09-22T12:00:02';
+  await get('#refresh-notes').events.click(); await tick();
+  assert.equal(get('#report').renders, beforeSendingUpdate, 'keep a submitted form until its request completes');
+  reportConflict = true;
+  releaseSubmission(); await sendingReport;
+  assert.equal(get('#report').renders, beforeSendingUpdate, 'keep the form when an in-flight request is rejected');
+  assert.match(get('#report-status').textContent, /Submission not confirmed.*Report changed/);
+  reportSubmitWait = null;
+  reportConflict = false;
   reportFields = 0;
   await get('#refresh-report').events.click();
   await tick();

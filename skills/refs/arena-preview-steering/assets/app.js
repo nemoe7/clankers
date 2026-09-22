@@ -736,7 +736,9 @@ function showReceipt(at) {
   receipt.textContent = `✓ Sent ${time(at)} · your answers stay filled in; change them and send again.`;
   receipt.hidden = false;
 }
-async function loadReport() {
+let reportDirty = false;
+$('#report-form').addEventListener('input', () => { reportDirty = true; });
+async function loadReport(force = false) {
   const id = $('#report-select').value;
   const sequence = ++reportRequest;
   // The reports panel is the element that scrolls, and replacing the report collapses its content, so
@@ -746,6 +748,8 @@ async function loadReport() {
   const panel = $('#reports-panel');
   const place = panel.scrollTop;
   const updating = $('#report').dataset.reportId === id;
+  const keepEntries = () => updating && force !== true && (reportDirty || $('#report-submit').disabled);
+  if (keepEntries()) return;
   const revision = lastState?.reports.find(report => report.id === id)?.updated_at || '';
   if (!updating || !id) {
     $('#report').replaceChildren();
@@ -757,10 +761,12 @@ async function loadReport() {
   $('#report-status').textContent = 'Loading report…';
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/html`)).json();
-    if (sequence !== reportRequest) return;
+    if (sequence !== reportRequest || keepEntries()) return;
+    reportDirty = false;
     $('#report').innerHTML = result.html;
     $('#report').dataset.reportId = id;
     $('#report').dataset.updatedAt = revision;
+    $('#report').dataset.revision = result.revision;
     panel.scrollTop = updating ? place : 0;
     $('#report-submit').hidden = !result.fields;
     $('#report-receipt').hidden = true;
@@ -781,22 +787,28 @@ async function loadReport() {
 }
 $('#report-form').addEventListener('submit', async event => {
   event.preventDefault();
-  const id = $('#report-select').value;
-  if (!id) return;
+  const id = $('#report').dataset.reportId;
+  if (!id || id !== $('#report-select').value) return;
+  const revision = $('#report').dataset.revision;
   const button = $('#report-submit');
   const answers = collect($('#report'));
+  if (button.disabled) return;
+  reportDirty = true;
   button.disabled = true;
   $('#report-status').textContent = 'Sending…';
   try {
     const result = await (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
       method: 'POST',
       headers: writeHeaders('application/json'),
-      body: JSON.stringify({ id: newId(), answers })
+      body: JSON.stringify({ id: newId(), answers, revision })
     })).json();
-    if (save(`answers:${id}`, JSON.stringify({ answers, at: result.at }))) showReceipt(result.at);
+    const saved = save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
+    if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
+    reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
+    if (saved) showReceipt(result.at);
     $('#report-status').textContent = `Answers sent ${time(result.at)} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
   } catch (error) {
-    $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
+    if ($('#report').dataset.reportId === id) $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
   } finally { button.disabled = false; }
 });
 // The Tasks tab is the agent's own status: two divs, written by the CLI, read on the same poll.
@@ -1051,7 +1063,7 @@ $('#upload-send').addEventListener('click', async () => {
   }
 });
 $('#report-select').addEventListener('change', loadReport);
-$('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(); });
+$('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
 $('#refresh-notes').addEventListener('click', refreshState);
 refreshState();
 setInterval(refreshState, 3000);

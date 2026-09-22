@@ -172,6 +172,7 @@ def render_report(markdown):
 			if item.strip():parts.append(render(item))
 		else:parts.append(field_html(item))
 	return''.join(parts),questions
+class ReportChanged(ValueError):pass
 class Store:
 	def __init__(self,directory,create=False,save_path=None):
 		directory=Path(directory).resolve();self.path=directory/'state.sqlite3';self.save_path=Path(save_path)if save_path else Path(SAVED_STATE);existed=self.path.is_file()
@@ -201,10 +202,11 @@ class Store:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return dict(existing)
 			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id));return dict(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
-	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None):
+	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None):
 		'Record report answers apart from user messages; the log never shows them.\n\n    `import-notes` restores a saved answer through here too, receipt and all, for the same\n    reason a note keeps its own: the save file exists so a restore returns what the owner\n    sent, and an answer that comes back unread was read when the agent read it (report\n    submission c0fcfad9, note 120fe358). An ID already stored keeps its record.\n    ';identifier(submission_id);identifier(report_id);submission_text(text)
-		with closing(self.connect())as db,db:
-			db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone()
+		with self.transaction(shared)as db:
+			if shared is None:db.execute('BEGIN IMMEDIATE')
+			existing=db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return dict(existing)
@@ -388,9 +390,9 @@ class Store:
 			row=db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
 			db.execute('UPDATE reports SET seen_at = COALESCE(seen_at, ?) WHERE id = ?',(now(),report_id));return dict(db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone())
-	def report(self,report_id):
+	def report(self,report_id,shared=None):
 		identifier(report_id)
-		with closing(self.connect())as db:
+		with self.transaction(shared)as db:
 			row=db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
 			return dict(row)
@@ -408,11 +410,15 @@ class Store:
 			if not 1<=len(options)<=20 or len(set(options))!=len(options)or any(not option.strip()or len(option)>200 for option in options):raise ValueError(f"{field['type']} fields take 1–20 unique options of 1–200 characters")
 			labels=[custom_label(option)for option in options];labels=[label for label in labels if label is not None]
 			if len(set(labels))!=len(labels):raise ValueError(f"{field['type']} fields give each free-text option its own label")
-	def submit_report(self,report_id,note_id,answers):
-		report=self.report(report_id);fields=parse_fields(report['markdown'])[1]
-		if not fields:raise ValueError('This report has no fields to answer')
-		return self.submit(report_id,report['title'],fields,note_id,answers)
-	def submit(self,report_id,title,fields,note_id,answers):
+	def submit_report(self,report_id,note_id,answers,revision=None):
+		if not isinstance(revision,str)or not revision:raise ValueError('Report revision required; copy your entries and reload the preview')
+		with self.transaction()as db:
+			db.execute('BEGIN IMMEDIATE');report=self.report(report_id,shared=db)
+			if revision!=report['updated_at']:raise ReportChanged('Report changed. Your entries are kept; copy them before refreshing, reviewing and resending')
+			fields=parse_fields(report['markdown'])[1]
+			if not fields:raise ValueError('This report has no fields to answer')
+			return self.submit(report_id,report['title'],fields,note_id,answers,shared=db)
+	def submit(self,report_id,title,fields,note_id,answers,shared=None):
 		if not isinstance(answers,dict):raise TypeError('Answers is a JSON object keyed by field ID')
 		known={field['id']for field in fields};unknown=set(answers)-known
 		if unknown:raise ValueError(f"Unknown field IDs: {', '.join(sorted(unknown))}")
@@ -431,7 +437,7 @@ class Store:
 				if not isinstance(value,list)or len({item for item in value if isinstance(item,str)})!=len(value)or any(item not in field['options']and not custom_answer(field,item)for item in value):raise ValueError(f"{field_id}: pick options only: "+', '.join(field['options']))
 				rendered=', '.join(value)if value else'(skipped)'
 			lines.append(f"  {field_id}: {rendered}")
-		return self.submission(note_id,report_id,'\n'.join(lines))
+		return self.submission(note_id,report_id,'\n'.join(lines),shared=shared)
 def open_link(renderer,tokens,index,options,env):
 	token=tokens[index];href=token.attrGet('href')or''
 	if href and not href.startswith('#'):token.attrSet('target','_blank');token.attrSet('rel','noopener noreferrer')
@@ -487,7 +493,7 @@ def handler(store):
 					if kind=='html':
 						try:body,questions=render_report(report['markdown'])
 						except ValueError as error:self.problem(500,f"This report cannot be rendered: {error}");return
-						self.reply(200,json.dumps({'html':body,'fields':len(questions)},ensure_ascii=False));return
+						self.reply(200,json.dumps({'html':body,'fields':len(questions),'revision':report['updated_at']},ensure_ascii=False));return
 					self.reply(200,report['markdown'],'text/plain; charset=utf-8',f"{report_id}.md");return
 				self.problem(404,'Not found')
 			except FileNotFoundError as error:self.problem(404,error)
@@ -519,12 +525,13 @@ def handler(store):
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])
 					self.reply(200,json.dumps(report,ensure_ascii=False));return
 				if report_submit:
-					note=store.submit_report(report_submit.group(1),payload.get('id'),payload.get('answers'))
+					note=store.submit_report(report_submit.group(1),payload.get('id'),payload.get('answers'),payload.get('revision'))
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 					self.reply(201,json.dumps(note,ensure_ascii=False));return
 				note=store.note(payload.get('id'),payload.get('text'))
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 				self.reply(201,json.dumps(note,ensure_ascii=False))
+			except ReportChanged as error:self.problem(409,error)
 			except FileNotFoundError as error:self.problem(404,error)
 			except(ValueError,TypeError,UnicodeDecodeError)as error:self.problem(400,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
