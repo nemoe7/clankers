@@ -4,6 +4,8 @@
 
 **Seen fix** — Reproduce a failed inbox-output write that still stamped Seen. Make `read` non-marking and add atomic per-ID `seen` receipts after full text delivery. Counts and browser polls remain read-only. Acknowledgements still imply Seen. Cover failed delivery, unknown-ID rollback, late arrivals, report answers, repeat receipts and CLI dispatch. Update the skill contract and rebuild both copies. Runtime grows 51,632 to 52,081 B and its check 42,861 to 44,155 B. The skill entry shrinks 12,061 to 11,802 B.
 
+**Task status** — Remove the extra explanation after the updated timestamp. The client regression failed before the change and passed after it.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. Browser E2E was not run for this documentation change.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

@@ -841,7 +841,7 @@ function renderTasks(tasks) {
     upcoming.hidden = true;
     return;
   }
-  status.textContent = `Updated ${time(tasks.updated_at)} · written by the agent; it takes no answers.`;
+  status.textContent = `Updated ${time(tasks.updated_at)}`;
   // The head of the queue gets a div of its own so what the agent is on next is visible without
   // reading down a list. It stays in Upcoming as well: removing it would leave a hole in the
   // authoritative order, and the copy button hands both stored sections over as they are.
