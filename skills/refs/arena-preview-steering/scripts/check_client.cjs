@@ -100,7 +100,7 @@ const context = {
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
-  crypto: { randomUUID: () => `note-${++counter}` },
+  crypto: { randomUUID: () => `${String(++counter).padStart(8, '0')}-0000-4000-8000-000000000000` },
   AbortController,
   setTimeout,
   clearTimeout,
@@ -351,6 +351,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#note').scrollHeight = 72;
   await get('#form').events.submit(event({}));
   assert.equal(sent[0].id, sent[1].id);
+  assert.match(sent[0].id, /^[0-9a-f]{7}-/);
   assert.equal(get('#note').value, '');
   // A cleared field collapses back to the stylesheet's min-height instead of keeping its grown size.
   assert.equal(get('#note').style.height, '');
