@@ -1,3 +1,17 @@
+## 2026-09-22 — Platform matrix, rebase-only arena merge, resquash
+
+**Origin** — the owner's `platform-reasons` form corrections (row 2 rebase, row 5 `ask_user`, row 7 terse), the steering note to drop the `.state-dot` margin, the correction putting the matrix in `rules/README.md`, and the resquash directive (refs to live, ChatGPT refs to wenyan). The previous session's ignored reports were lost with its sandbox state; the reasons report is reconstructed here with the corrections applied.
+
+**Rule change** — `rules/refs/ARENA.md` first, then `rules/ARENA.md` and its byte-identical root copy: merge by rebase only — rebase onto the target, then merge, so no merge commit lands. The question-tool clauses name the `ask_user` tool (three live, five refs). `rules/README.md` takes the matching commit-disciplines row, the matching Arena-file sentence, and a new Platform difference matrix: 13 rows, core v arena v chatgpt, exact clauses, clause-only ChatGPT cell, and a noted semicolon-to-period normalization for the ASD-STE100 gate.
+
+**Preview change** — `.state-dot` loses `margin-left` in the refs CSS, the harness assertion loses it with the rule, and `minify.py` rebuilds both distributed copies.
+
+**Resquash** — `rules/ARENA.md` falls 13,881 to 13,851 `B` across four passes on the steering paragraph and the turn-await line. The token-budgeted live files show no further safe pass: AGENTS 1,580 `tok`, CLINE 514, KILO 69, kilo plan/code/debug 251/232/288. The wenyan experiment files restore the dropped refs clauses (rung-1 explicit requirements, the final commit list, the no-prose enumeration, skip-restating-task, the Mermaid naming, the Pi, the failing-check minimum): CUSTOM 1,105 to 1,141 chars, MORE 970 to 1,083 chars. Both stay under the 1,500-character field and beat the live English fields (1,495 chars) by 354 and 412 chars.
+
+**Cost** — `rules/ARENA.md` 13,883 to 13,851 `B`; `style.css` 9,947 to 9,931 `B`; `check_preview.py` 41,758 to 41,740 `B`. The README budget table is regenerated; no growth is accepted.
+
+**Checks** — `check.py --update` then a clean re-run with `TIKTOKEN_CACHE_DIR` set, `check_measurements.py`, `minify.py` with no drift, `check_minify.py`, `check_preview.py`, `check_client.cjs`, `node --check`, `ruff check` and `ruff format --diff` at 0.16.6, markdownlint with 0 issues, the STE linter with 0 violations, the root copy `cmp`-identical, and a scripted verbatim match of every matrix cell against the live rule files.
+
 ## 2026-09-22 — Turn-await needs a published report and a queued task
 
 **Origin** — the owner's form `platform-reasons` disposition `accept` on 2026-09-22, after a too-specific draft was rejected and the house rule began requiring `GUIDELINES.md` before any amendment suggestion. The same form recorded why root `AGENTS.md` differs from the core, why `.agents/skills` needs no squash mirror, why `web-interface-guidelines` has no refs baseline, and that Cline MCPs stay dropped with no mention outside this ledger.
