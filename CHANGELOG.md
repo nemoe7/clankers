@@ -34,6 +34,8 @@
 
 **Reporting dependencies** — Preauthorize `markdown-it-py` installation for the reporting skill in a workspace venv, with no separate approval. Keep skill-only packages out of application manifests and generated `requirements.txt` unless the application independently needs them. Ref, live and installed instructions agree. Entry size: 5,452 → 5,450 `B`.
 
+**Audit L8** — Correct CI coverage in the rules README and house instructions: main-branch pushes and PRs targeting any branch, subject to ignored-path exclusions. Only qualifying main pushes commit refreshed README measurements.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
