@@ -8,7 +8,11 @@
 
 **Resquash** — `rules/ARENA.md` falls 13,881 to 13,851 `B` across four passes on the steering paragraph and the turn-await line. The token-budgeted live files show no further safe pass: AGENTS 1,580 `tok`, CLINE 514, KILO 69, kilo plan/code/debug 251/232/288. The wenyan experiment files restore the dropped refs clauses (rung-1 explicit requirements, the final commit list, the no-prose enumeration, skip-restating-task, the Mermaid naming, the Pi, the failing-check minimum): CUSTOM 1,105 to 1,141 chars, MORE 970 to 1,083 chars. Both stay under the 1,500-character field and beat the live English fields (1,495 chars) by 354 and 412 chars.
 
-**Cost** — `rules/ARENA.md` 13,883 to 13,851 `B`; `style.css` 9,947 to 9,931 `B`; `check_preview.py` 41,758 to 41,740 `B`. The README budget table is regenerated; no growth is accepted.
+**Rule change** — applied after the owner's `accept as written` on the `visibility-amendment` form: preview confirmation is session-scoped, so every session's first successful start blocks and only a same-session restart after its own confirmation needs no ask. Refs first, then live, then the byte-identical root copy; the two affected live lines are squashed within budget.
+
+**Preview fix** — the Upcoming list no longer re-renders the head task, which already has its own Current div: `upcoming.slice(1)` in the client refs, the harness pin flips to a two-task fixture, and minify rebuilds both distributed copies.
+
+**Cost** — `rules/ARENA.md` 13,883 to 13,863 `B`, under the 13,883 `B` the amendment proposal named; `style.css` 9,947 to 9,931 `B`; `check_preview.py` 41,758 to 41,740 `B`; `app.js` 24,231 to 24,240 `B`; `check_client.cjs` 41,716 to 41,752 `B`. The README budget table is regenerated; no growth is accepted.
 
 **Checks** — `check.py --update` then a clean re-run with `TIKTOKEN_CACHE_DIR` set, `check_measurements.py`, `minify.py` with no drift, `check_minify.py`, `check_preview.py`, `check_client.cjs`, `node --check`, `ruff check` and `ruff format --diff` at 0.16.6, markdownlint with 0 issues, the STE linter with 0 violations, the root copy `cmp`-identical, and a scripted verbatim match of every matrix cell against the live rule files.
 
