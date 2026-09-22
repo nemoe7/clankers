@@ -385,6 +385,19 @@ def cli_json(value, pretty=False):
   return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def print_read(store, pretty=False):
+  """Print a read listing, then stamp Seen for the IDs it delivered.
+
+  The stamp follows the write on purpose: a write that fails or never reaches the
+  agent leaves every printed note unseen, so the next read delivers it again.
+  Pending selection is the acknowledgement queue, so a stamped note still prints
+  until it is answered.
+  """
+  listing = store.read()
+  print(cli_json(listing, pretty), flush=True)
+  store.mark_seen([item["id"] for item in listing["pending"]])
+
+
 def parse_task_import(text):
   """Accept either a JSON array of tasks or one task per line."""
   stripped = text.strip()
@@ -1021,7 +1034,7 @@ class Store:
       return {"checked_at": clip_stamp(checked), "pending": pending}
 
   def mark_seen(self, ids):
-    """Receipt only the IDs whose full text reached the agent."""
+    """Receipt the IDs a delivered read printed or an explicit call named."""
     stamp = now()
     with closing(self.connect()) as db, db:
       for record_id in ids:
@@ -1644,7 +1657,7 @@ def main():
         )
         server.serve_forever()
     elif args.command == "read":
-      print(cli_json(store.read(), args.pretty))
+      print_read(store, args.pretty)
     elif args.command == "seen":
       store.mark_seen(args.ids)
       print("Seen: " + ", ".join(args.ids))

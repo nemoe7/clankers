@@ -152,6 +152,7 @@ def cli_json(value,pretty=False):
 	'Print agent-facing JSON minified; the agent pays for every space it reads.\n\n  `--pretty` is the human escape hatch: indentation costs tokens, and the tokens are the point.\n  '
 	if pretty:return json.dumps(value,ensure_ascii=False,indent=2)
 	return json.dumps(value,ensure_ascii=False,separators=(',',':'))
+def print_read(store,pretty=False):'Print a read listing, then stamp Seen for the IDs it delivered.\n\n  The stamp follows the write on purpose: a write that fails or never reaches the\n  agent leaves every printed note unseen, so the next read delivers it again.\n  Pending selection is the acknowledgement queue, so a stamped note still prints\n  until it is answered.\n  ';listing=store.read();print(cli_json(listing,pretty),flush=True);store.mark_seen([item['id']for item in listing['pending']])
 def parse_task_import(text):
 	'Accept either a JSON array of tasks or one task per line.';stripped=text.strip()
 	if not stripped:raise ValueError('Nothing to import')
@@ -343,7 +344,7 @@ class Store:
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));return{'checked_at':clip_stamp(checked),'pending':pending}
 	def mark_seen(self,ids):
-		'Receipt only the IDs whose full text reached the agent.';stamp=now()
+		'Receipt the IDs a delivered read printed or an explicit call named.';stamp=now()
 		with closing(self.connect())as db,db:
 			for record_id in ids:
 				identifier(record_id)
@@ -543,7 +544,7 @@ def main():
 		if args.command=='serve':
 			require_renderer()
 			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:print(f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
-		elif args.command=='read':print(cli_json(store.read(),args.pretty))
+		elif args.command=='read':print_read(store,args.pretty)
 		elif args.command=='seen':store.mark_seen(args.ids);print('Seen: '+', '.join(args.ids))
 		elif args.command=='ack':
 			if bool(args.reply)==bool(args.note):raise ValueError('Choose exactly one of --reply or --note')
