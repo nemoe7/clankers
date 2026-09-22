@@ -5,7 +5,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 | Skill | Purpose |
 | --- | --- |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox, with persistent history and receipts |
-| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Publish multiple Markdown reports and portable HTML through the same preview |
+| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Publish multiple Markdown reports through the shared Reports tab |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
@@ -66,6 +66,6 @@ After setup, ask the agent to name an installed `SKILL.md` and its conditional r
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Arena sessions needing mid-turn messages through the live preview |
-| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Longer rendered reports, multiple reports or portable HTML delivery in Arena |
+| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Longer rendered reports or multiple named reports in Arena |
 
-Skills stand alone, independent of the rule files in [rules/](../rules/). This repository installs the two preview skills as siblings, and reporting uses the shared runtime of steering. Steering alone needs no Markdown renderer. Their migration reference records the former ntfy and local-report-commit procedures as historical, and neither is an automatic fallback.
+Skills stand alone, independent of the rule files in [rules/](../rules/). This repository installs the two preview skills as siblings, and reporting uses the shared runtime of steering. Steering CLI commands need no Markdown renderer. The server requires `markdown-it-py`. Their migration reference records the former ntfy and local-report-commit procedures as historical, and neither is an automatic fallback.
