@@ -21,6 +21,7 @@
 - Follow repo docs, conventions, patterns.
 - MUST use ASD-STE100 Simplified Technical English for all human-facing text.
 - Comments, docs, responses: terse, unambiguous, NEVER cryptic.
+- Documentation: no storyline or narrative unless asked.
 - Batch independent tool calls where the surface permits.
 
 ## Scope

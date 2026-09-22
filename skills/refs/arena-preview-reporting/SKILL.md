@@ -18,7 +18,7 @@ Write each report as a UTF-8 Markdown source file under an ignored, persisted wo
 
 Publish with the shared runtime's publish command, giving the source path, a stable report ID and a meaningful title. The runtime stores a snapshot; editing a source file alone does not update the preview, so republish with the same ID after every source update. IDs contain 1–80 letters, digits, hyphens or underscores. Titles contain 1–200 characters. Each source must be .md, UTF-8 and at most 2 MB; split an oversized report by subject. The server renders Markdown with raw HTML disabled and displays tables, lists, quotations, code fences, links and emphasis. Images and other remote resources are not fetched by the page. The preview does not provide a full GFM extension set or syntax highlighting.
 
-Use the clickable Reports tab and report selector. The selection stays stable when a report is updated. Notes, drafts and message history stay intact while switching views or refreshing a report. Publishing reports never acknowledges pending steering messages. Tell the user which report to select and verify its actual rendered endpoint, rather than claiming that a Markdown source in the file viewer was rendered.
+Delivery is the live Reports tab. Keep the Markdown source as the durable artifact and direct the user to the rendered report. Tell the user which report to select and verify its actual rendered endpoint, rather than claiming that a Markdown source in the file viewer was rendered. Publishing reports never acknowledges pending steering messages. Mermaid is never rendered; do not use it in reports.
 
 ## Fields and answers
 
@@ -28,9 +28,7 @@ A report source may contain form fields written as Markdown: a `- ( ) option` li
 
 ## Delivery and retention
 
-Delivery is the live Reports tab only. Browser download/source controls and the former standalone HTML export are removed: attachment responses returned HTTP 200 yet the download never appeared in the Arena sandbox preview, and the exported artifact added a second copy that the file viewer did not render. Keep the Markdown source as the durable artifact and direct the user to the rendered report. Do not restore the unreliable attachment links or an export command silently.
-
-Do not commit or push report sources, session databases, inboxes or receipts. Report sources remain in ignored workspace files. This replaces the previous local-only report-commit workaround, which existed because Arena's native viewer exposed raw Markdown only after local commits. The historical workflow is documented in the companion's references/REFERENCE.md and the changelog. The current preview channel may change; failures require an explicit user decision, not silent fallback or a new permanent guarantee.
+Do not commit or push report sources, session databases, inboxes or receipts. Report sources remain in ignored workspace files. The current preview channel may change; failures require an explicit user decision, not silent fallback or a new permanent guarantee.
 
 Explicit user instructions and repository rules outrank skill defaults. Keep production code free of references to these skills; the skill's own files and setup chat are exceptions.
 
