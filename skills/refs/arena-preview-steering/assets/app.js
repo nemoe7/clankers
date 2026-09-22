@@ -691,7 +691,7 @@ $('#save-state').addEventListener('click', async (event) => {
   }
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
-  if (!cached || !Array.isArray(cached.notes) || !cached.tasks) {
+  if (!cached || !Array.isArray(cached.notes)) {
     status.textContent = 'Nothing cached to save yet; the page caches its copy on every poll.';
     button.dataset.state = 'bad';
     setTimeout(() => delete button.dataset.state, 1500);

@@ -1123,5 +1123,14 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report').replacements, replacements, 'keep old content until the refresh arrives');
   await tick(); await tick();
   assert.equal(get('#report').renders, renders + 1, 'explicit refresh still renders');
+  state.notes = [{id:'notes-only', text:'No tasks yet', at:'2026-09-22T12:00:00'}];
+  state.tasks = null;
+  await get('#refresh-notes').events.click();
+  const savesBeforeNotesOnly = saveCalls.length;
+  await get('#save-state').events.click({shiftKey:false});
+  await tick();
+  assert.equal(saveCalls.length, savesBeforeNotesOnly + 1, 'save a session before its first task');
+  assert.equal(saveCalls.at(-1).notes[0].id, 'notes-only');
+  assert.equal(get('#save-state').dataset.state, 'good');
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy on a shift-click of the save button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -38,6 +38,8 @@
 
 **Audit M5** — Reject incomplete HTTP bodies before parsing or saving them. Half-closed uploads with partial or empty bodies receive HTTP 400 and create no file, upload record or inbox note. Exact-size uploads remain covered.
 
+**Audit M6** — Save notes before the first task exists. Normalize absent/null task lists to empty groups in the server save path, while rejecting malformed values. The client now permits notes-only saves. Cover persistence, malformed-task rejection and the save button.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
