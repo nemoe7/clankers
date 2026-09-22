@@ -20,6 +20,7 @@
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, patterns.
 - MUST use ASD-STE100 Simplified Technical English for all human-facing text.
+- Comments, docs and responses: terse but unambiguous, never cryptic.
 - Batch independent tool calls into one block whenever the surface permits.
 
 ## Scope

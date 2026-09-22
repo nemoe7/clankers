@@ -28,6 +28,7 @@
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
+- Comments, documentation and responses MUST be terse but unambiguous: cut words, never meaning, and never go cryptic.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order never decides it and a large task never blocks a small one.
 - Keep working while budget and tasks remain. NEVER end the turn unless the token budget is truly about to be exhausted, and say so in one line.

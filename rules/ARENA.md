@@ -24,6 +24,7 @@
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, and patterns.
 - MUST use ASD-STE100 for human-facing text.
+- Comments, docs and responses: terse but unambiguous, never cryptic.
 - Batch independent tool calls into one block where the surface permits.
 - With several tasks open, ALWAYS start with the smallest and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
 - Keep working while budget and tasks remain. NEVER end the turn unless the token budget is truly about to be exhausted, and say so in one line.

@@ -22,6 +22,7 @@
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
+- Comments, documentation and responses MUST be terse but unambiguous: cut words, never meaning, and never go cryptic.
 - Batch independent tool calls into one block whenever the surface permits.
 
 ## Scope
