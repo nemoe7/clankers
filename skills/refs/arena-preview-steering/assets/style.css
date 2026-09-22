@@ -169,7 +169,6 @@ a { color: var(--accent); text-underline-offset: 3px; }
 .report table, .message-text table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .report th, .report td, .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
 /* Rendered message text used to borrow the report class, which said the wrong thing about a note. */
-.who { margin-left: 6px; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
 /* The background belongs to the block wherever markdown renders, not to a report alone: a fence
    in a message or in the draft preview is the same block, and the owner read a missing background
    as the bug. */

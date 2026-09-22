@@ -1,3 +1,15 @@
+## 2026-09-22 — Preview times join the user's zone; note origin is gone
+
+**Origin** — the owner's chat task on 2026-09-22: some preview times were not respecting the user timezone, and `origin` should leave the preview skills' JSON schema entirely (SKILL.md `metadata.origin` stays).
+
+**Preview change** — `assets/app.js` (refs, then the minified build). The state surface already cuts stamps to seconds and drops the UTC offset, so `Date` read those digits as local time and showed the server's wall clock in every zone outside UTC. `time()` now pins a seconds-only ISO stamp to UTC before the local formatter sees it, so receipts, last-check, tasks, uploads and send receipts all convert into the viewer's timezone. The header clock was already correct because it formats `toISOString()`.
+
+**Preview change** — the note schema loses `origin` end to end. `Store.note()` no longer takes an author, `NOTE_LINE_KEYS` drops the key so the save file and the shift-click copy omit it, the CREATE statement loses the column, and migration `DROP COLUMN`s a leftover `origin` when an older database reopens. `import-notes` ignores the key an older save still carries. The client stops rendering the uppercase `agent` tag and the `.who` rule goes with it; receipts read ID · state · time · task. The live references drop “note origin” from the import contract, and the refs reference records the removal.
+
+**Cost** — minified `app.js` 24,320 → 24,231 `B`, `style.css` 10,049 → 9,947 `B`, `preview.py` 51,198 → 50,832 `B`; the two harnesses grow (`check_client.cjs` 41,612 → 41,716 `B`, `check_preview.py` 41,594 → 41,758 `B`). The README budget table is regenerated.
+
+**Checks** — `check_preview.py` asserts a note and the state payload carry no `origin` and that reopening a database with a leftover column drops it; `check_client.cjs` pins the no-writer receipt and that a seconds-only stamp formats as UTC (green under `TZ=Asia/Manila` and `TZ=America/New_York`). Green: both harnesses against refs and both minified copies, `maintenance/minify.py` no drift, `check_minify.py`, `check.py --update` then a clean re-run, `check_measurements.py`, Ruff check/format, `node --check`, markdownlint, and `diff -r` across all three skill trees for the shared files.
+
 ## 2026-09-22 — The state copy survives an empty queue; a dead token blocks
 
 **Preview change** — `assets/app.js` (refs, then the minified build). `Store.tasks()` returns `None` while no task is stored, so `/api/state` sends `"tasks": null` on a session that holds notes but has written no task yet. The page cached that value, the shift-click guard required a truthy `tasks`, and the state copy silently wrote nothing to the clipboard. `restoreCopy` now defaults the queue to two empty divs, and the guard asks only for notes, so the copy carries the log again. The client harness mocked the empty queue faithfully, so it was the harness that crashed on the empty clipboard, and that crash was the red gate on the branch this one descends from.
