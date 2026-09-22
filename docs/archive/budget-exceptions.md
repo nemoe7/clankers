@@ -87,3 +87,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-23: the owner approved auto-seen reads and their build growth. Build sizes: `scripts/preview.py` 54,009 → 54,509 `B`. `scripts/check_preview.py` 51,841 → 53,449 `B`. `skills/arena-preview-steering/SKILL.md` 11,626 → 11,757 `B`. A read stamps Seen for the IDs it printed once its write succeeds.
 
 2026-09-23: the owner approved option A in the pip-after-answer report, with its harness growth. Build sizes: `scripts/preview.py` 54,509 → 54,458 `B`. `scripts/check_preview.py` 53,449 → 53,589 `B`. A form answer survives a republish, however old it is.
+
+2026-09-23: the owner directed harness asserts that read the minified build. `scripts/check_preview.py` grows 53,589 → 53,947 `B`. One compact helper makes every asset assert pass on the readable refs and the minified copies alike.

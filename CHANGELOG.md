@@ -10,6 +10,8 @@
 
 **Answers survive republish** — Compute a report's `needs_answer` from the existence of any form answer instead of one newer than the last publish, on owner approval of option A in preview report `pip-after-answer`. An agent republish never asks the owner the same form twice; the republish still clears the read stamp, so changed text shows unread. Sizes: `scripts/preview.py` 54,509 → 54,458 `B`; `scripts/check_preview.py` 53,449 → 53,589 `B`; the growth is recorded in `docs/archive/budget-exceptions.md`.
 
+**Harness reads minified builds** — Normalize the runtime harness's asset asserts through one `compact` helper and minify-tolerant spellings, on owner direction, so the live harness runs against the minified assets end to end instead of stopping at its first readable literal. Both harnesses, readable and minified, pass the same asserts. `scripts/check_preview.py` grows 53,589 → 53,947 `B`; the growth is recorded in `docs/archive/budget-exceptions.md`.
+
 ## 2026-09-22 — Steering cadence: always include poll in bash calls
 
 **Cadence update** — Change preview steering check cadence from appending a read to the last command of a shell block to always including a poll in bash calls. Update steering skill refs baseline, compressed live skill, installed mirror, Arena refs baseline, live Arena rules, and root `ARENA.md`.
