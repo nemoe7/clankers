@@ -31,7 +31,7 @@
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, never meaning, and never go cryptic.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order never decides it and a large task never blocks a small one.
-- Keep working while tasks remain. End the turn when the work is verified and stopped. No surface reports the remaining token budget to the agent, so NEVER name that budget as the reason for ending a turn.
+- Keep working while tasks remain. End the turn when the work is verified and stopped. No surface reports the remaining token budget to the agent, so NEVER name that budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
@@ -175,7 +175,7 @@
 - Prefer numbered lists for multiple points.
 - Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours, because explanation the user explicitly asked for is the only explanation that is not debt.
 - Short chat reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human. MUST use ASD-STE100. Do not ship a skill or a linter for this; the agent decides.
-- NEVER mermaid, which Arena cannot render.
+- NEVER mermaid in chat, which Arena cannot render; repository docs use mermaid for pipelines, diagrams, and flows, never ASCII art.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - Always report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
 - End a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool. This is for report turns only; it never forces a check mid-task or after a tool-only turn.

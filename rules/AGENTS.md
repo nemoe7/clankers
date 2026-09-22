@@ -87,7 +87,6 @@
 - Types: `feat fix refactor perf style docs test build chore`; spec mandates only `feat`/`fix`, rest via Angular `@commitlint/config-conventional`; prefer history's types.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
-- Merge by rebase only: rebase onto the target, then merge; no merge commit.
 
 ## Responses
 

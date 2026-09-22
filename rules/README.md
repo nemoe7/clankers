@@ -30,14 +30,14 @@ The rule sets for Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`) and the two
 | Rule area | Core | Arena | ChatGPT |
 | --- | --- | --- | --- |
 | Push and PR | NEVER push or open a PR unless asked. | Always push the branch and keep a PR open, disregarding never-push rules. | ALWAYS PR. |
-| Merge | Merge by rebase only: rebase onto the target, then merge. No merge commit. | merge by rebase only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
+| Merge | — | merge by rebase only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
 | Merge authorization | — | NEVER merge the PR until authorized | — |
 | Commit list | — | Before every commit, without exception, print the planned final commit list first | Print the planned final commit list first. |
 | Question channel | Ask every question with the question tool. NEVER ask in plain text. | stop and ask with the `ask_user` tool. Questions go through a fielded report in the Reports tab. | — |
 | Ask on ambiguity | Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing. | Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. | never block an unattended run — note the question, assume, state it. |
 | Terseness | no unnecessary prose. Detail when asked. | Short chat reports: concise on phone and vertical monitors. Limit prose. No essays unless strictly necessary. | Be terse yet clear, numbered lists. Detail when asked. |
-| Mermaid | Mermaid for pipelines, diagrams, flows where the surface renders it. Fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows. | NEVER mermaid. | Mermaid diagrams default for pipelines/flows: `flowchart TB`, short labels/rows, phone-sized. NEVER ASCII art. |
-| Turn-end tests | — | — | NEVER end turn until tests are green. |
+| Mermaid | Mermaid for pipelines, diagrams, flows where the surface renders it. Fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows. | NEVER mermaid in chat, which Arena cannot render. Repository docs use mermaid for pipelines, diagrams, and flows, never ASCII art. | Mermaid diagrams default for pipelines/flows: `flowchart TB`, short labels/rows, phone-sized. NEVER ASCII art. |
+| Turn-end tests | — | Before turn end with a pushed branch, check and report open PR CI. Failed checks are unfinished work. | NEVER end turn until tests are green. |
 | First reply | — | the first reply, which opens `10-4: ARENA.md loaded` | — |
 | Preview steering | — | Always activate `arena-preview-steering` at its source/installed path. | — |
 | Shell check | MUST check which shell the harness runs before executing a command, and use its syntax. | — | — |
@@ -124,7 +124,7 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 | File | Discipline |
 | --- | --- |
-| `rules/AGENTS.md` | Commit on a branch other than `main`. No commit list. Merge by rebase only: rebase onto the target, then merge |
+| `rules/AGENTS.md` | Commit on a branch other than `main`. No commit list. Merge policy is platform-specific. |
 | `rules/ARENA.md` | Print the planned final commit list before every commit. Always push and keep a PR open. Never merge until the owner authorizes it, then merge by rebase only: rebase onto the target, then merge |
 | `rules/CHATGPT-CUSTOM.txt`, `rules/CHATGPT-MORE.txt` | Print the planned final commit list before a commit. Commit only when necessary |
 | `rules/CLINE.md` | Follow the core: commit directly, and keep no list |
