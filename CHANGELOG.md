@@ -24,6 +24,8 @@
 
 **Reminders** — Omit zero counts, the total, and the read/ack sentence. Print only nonzero kinds as requested, followed by `Manage the task list.`. Empty, message-only, form-only and mixed-upload cases pass without Seen changes.
 
+**Unanswered forms** — Keep the report star and tab dot until the current form is submitted, even after reading. Optional blanks count as a submission. Server state preserves markers across devices. Republishing requires a fresh answer. Plain reports keep read-only behavior. Invalid legacy fields remain visible as errors without breaking the state endpoint.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

@@ -734,6 +734,9 @@ with tempfile.TemporaryDirectory() as directory:
     note = store.note("plain-note", "no author field")
     assert "origin" not in note
     assert "origin" not in store.state()["notes"][-1]
+    stale_state = next(row for row in store.state()["reports"] if row["id"] == "stale")
+    assert stale_state["needs_answer"] is True
+    assert "1–200 characters" in stale_state["field_error"]
     # A database that predates the removal loses `origin` when the store reopens.
     legacy = sqlite3.connect(root / "state.sqlite3")
     legacy.execute("ALTER TABLE notes ADD COLUMN origin TEXT")
@@ -1547,3 +1550,23 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     reminder_store.note(upload["id"], "Uploaded " + name)
   assert reminder_store.reminder() == "3 message/s. 2 upload/s. Manage the task list."
   assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
+
+with tempfile.TemporaryDirectory() as marker_dir:
+  marker_store = preview.Store(marker_dir, create=True)
+  marker_source = Path(marker_dir) / "form.md"
+  marker_source.write_text("Choice?\n- ( ) Yes\n- ( ) No\n\nCustom response: ___\n")
+  marker_store.publish("form", "Form", marker_source)
+  assert marker_store.state()["reports"][0]["needs_answer"] is True
+  marker_store.mark_report_seen("form")
+  assert marker_store.state()["reports"][0]["needs_answer"] is True
+  marker_store.submit_report("form", "answer", {})
+  assert marker_store.state()["reports"][0]["needs_answer"] is False
+  assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
+  with marker_store.connect() as db, db:
+    db.execute("UPDATE submissions SET at = '2020-01-01T00:00:00' WHERE id = 'answer'")
+  marker_store.publish("form", "Revised form", marker_source)
+  assert marker_store.state()["reports"][0]["needs_answer"] is True
+  marker_source.write_text("Plain report")
+  marker_store.publish("plain", "Plain", marker_source)
+  assert marker_store.state()["reports"][1]["needs_answer"] is False
+  assert "markdown" not in marker_store.state()["reports"][0]
