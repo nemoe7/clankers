@@ -25,7 +25,7 @@ Rules and tools load differently across agent versions. Determine which files ar
 
 ## Platform difference matrix
 
-The rule sets for Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`) and the two ChatGPT fields differ where the platform surface forces a choice. Each row holds the exact wording of the live file, and a missing clause reads `—`. A semicolon inside a quoted clause becomes a period, because this file follows ASD-STE100. The ChatGPT cell holds the clause only. The reasons for the deltas are in the 2026-09-22 CHANGELOG entry.
+The rule sets for Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`) and the two ChatGPT fields differ where the platform surface forces a choice. Each row holds the exact wording of the live file, and a missing clause reads `—`. A semicolon inside a quoted clause becomes a period, because this file follows ASD-STE100. The ChatGPT cell holds the clause only. Automations are prompts, not rules. They stay out of the matrix. The reasons for the deltas are in the 2026-09-22 CHANGELOG entry.
 
 | Rule area | Core | Arena | ChatGPT |
 | --- | --- | --- | --- |
