@@ -378,7 +378,10 @@ async function refreshState() {
         option.textContent = 'No reports published yet';
         select.append(option);
       } else if (state.reports.some(report => report.id === selected)) select.value = selected;
-      if (!$('#reports-panel').hidden) loadReport();
+      const selectedReport = state.reports.find(report => report.id === select.value);
+      if (!$('#reports-panel').hidden &&
+          ($('#report').dataset.reportId !== select.value ||
+           $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
     }
     // The pip follows every poll: a report can grow newer than the last visit without the list changing.
     updateReportPip(state.reports);
@@ -743,9 +746,12 @@ async function loadReport() {
   const panel = $('#reports-panel');
   const place = panel.scrollTop;
   const updating = $('#report').dataset.reportId === id;
-  $('#report').replaceChildren();
-  $('#report-submit').hidden = true;
-  $('#report-receipt').hidden = true;
+  const revision = lastState?.reports.find(report => report.id === id)?.updated_at || '';
+  if (!updating || !id) {
+    $('#report').replaceChildren();
+    $('#report-submit').hidden = true;
+    $('#report-receipt').hidden = true;
+  }
   if (!id) { $('#report-status').textContent = 'No report has been published yet.'; return; }
   save('report', id);
   $('#report-status').textContent = 'Loading report…';
@@ -754,8 +760,10 @@ async function loadReport() {
     if (sequence !== reportRequest) return;
     $('#report').innerHTML = result.html;
     $('#report').dataset.reportId = id;
+    $('#report').dataset.updatedAt = revision;
     panel.scrollTop = updating ? place : 0;
     $('#report-submit').hidden = !result.fields;
+    $('#report-receipt').hidden = true;
     const saved = result.fields ? savedAnswers(id) : null;
     if (saved && saved.answers) {
       applyAnswers($('#report'), saved.answers);
