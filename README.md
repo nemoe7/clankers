@@ -2,19 +2,19 @@
 
 Rules, skills, and workflows for AI agents.
 
-- [rules/](rules/): shared and platform-specific agent instructions, ChatGPT's two custom-instruction fields, and commit-message rules. The specification and setup details are in [rules/README.md](rules/README.md).
-- [skills/](skills/README.md): reusable skills for UI reviews, text compression, and a shared Arena preview for steering and rendered reports. Each skill has a `SKILL.md` entry point and any supporting files.
-- [workflows/](workflows/README.md): portable agent workflows, currently [init-docs](workflows/init-docs.md), which bootstraps repo docs for downstream users and agents. Its README gives the format a new workflow must meet.
-- [automations/](automations/DAILIES.md): prompts for recurring runs, currently the combined daily monitoring task, which runs as a ChatGPT scheduled task. Each prompt is one self-contained Markdown file, executed in one pass. It carries its own state and evidence rules, because the runtime keeps no reliable state.
+- [rules/](rules/): shared and platform-specific instructions, both ChatGPT fields, and commit rules. See [specification and setup](rules/README.md).
+- [skills/](skills/README.md): UI reviews, text compression, and a shared Arena steering/reporting preview. Each skill has `SKILL.md` and supporting files.
+- [workflows/](workflows/README.md): portable workflows, currently [init-docs](workflows/init-docs.md) for downstream user and agent docs. The README defines the required format.
+- [automations/](automations/DAILIES.md): recurring prompts, currently combined daily monitoring through ChatGPT scheduled tasks. Each self-contained Markdown prompt runs in one pass and supplies state/evidence rules because runtime state is unreliable.
 - [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`.
-- [rules/refs/](rules/refs/README.md): uncompressed rule originals and the AGENTS.md writing guidelines. Amend here first, then mirror the amendment into the live file compressed, and squash it.
+- [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines. Amend refs first, then compress only new or affected lines into live files.
 - [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines. Amend here first, then squash the live `SKILL.md`.
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-22. `maintenance/check.py` measures ARENA.md by uploaded file size and the two ChatGPT files by their custom-instruction character limits. The remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. The two preview skills are the exception, measured by UTF-8 file size instead. A byte count needs no tokenizer, so it survives a sandbox where the `tiktoken` cache cannot be seeded. This table excludes supporting files loaded on demand, including skill refs. The three `assets/` rows and three `scripts/` rows are the minified build the preview skill ships. Their recorded size is their budget, and `maintenance/minify.py` rebuilds them from the readable refs sources.
+Latest measurements as of 2026-09-22. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. Supporting files and skill refs are excluded except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -44,7 +44,7 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Compress the agent-facing rule files against the budgets above with the [`squash` skill](skills/squash/SKILL.md), an extraction of the rules below. Amend `rules/refs/` first, then mirror the amendment into its live counterpart compressed, and squash only the new or affected line. On a removal, attempt one squash and keep the lower budget. Refs stay uncompressed as the baseline. Compression is editorial, not lossy: it removes words, never rules.
+Use the [`squash` skill](skills/squash/SKILL.md), extracted from the rules below, against these budgets. Amend `rules/refs/` first, then compress only new or affected lines into live files. On removal, attempt one squash and keep the lower budget. Refs remain uncompressed. Remove words, never rules.
 
 1. Work in iterations. After each pass, re-measure and compare against the previous value. Keep the pass only when the budget improves, and repeat until a pass yields nothing.
 2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression.
@@ -53,4 +53,4 @@ Compress the agent-facing rule files against the budgets above with the [`squash
 5. New clause: squash only that new line. Amended clause: squash only the affected line. Removed clause: attempt one squash and keep whichever budget is lower.
 6. Update the budgets table above, record notable reductions in [CHANGELOG.md](CHANGELOG.md), and record a growth accepted rather than funded in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md).
 
-Recorded exceptions live in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md). An exception is a growth the owner accepted rather than funded, carrying its date, numbers and reason. This page therefore keeps the procedure and the current measurements only.
+[docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md) records growth the owner accepted rather than funded, with dates, numbers and reasons. This page holds only the procedure and current measurements.

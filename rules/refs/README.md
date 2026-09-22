@@ -1,17 +1,17 @@
 # rules/refs baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording. The text comes clause by clause from the `main` history, from the oldest rules commit `7841d84` through `dcea8d3`. Each clause keeps its longest historical sentence form. `MUST` and `NEVER` are emphasis, and they stay on the irreversible, the dangerous, and the honesty rules. Every other rule reads positively (see `GUIDELINES.md` section 4.7). The baselines follow `GUIDELINES.md`: a constitution of one-line rules, one rule per line under domain headings, and a `When in doubt` closer. The core and `ARENA.md` also open with a `Use` section. `KILO.md` drops the closer, because the core settles its doubts. The overlays drop the opener.
+`rules/refs/` keeps full rule baselines from `main` history, oldest commit `7841d84` through `dcea8d3`. Each clause keeps its longest historical sentence. `MUST` and `NEVER` emphasize irreversible, dangerous, and honesty rules. Others read positively (`GUIDELINES.md` 4.7). Baselines follow `GUIDELINES.md`: a one-line-rule constitution, one rule per line under domain headings, and a `When in doubt` closer. The core and `ARENA.md` open with `Use`. Overlays omit that opener. `KILO.md` also omits the closer because the core settles its doubts.
 
-Amend here first, before any live file, in complete sentences that keep every negation, condition, command, number, threshold, filename, and caveat. Then mirror it into its live file in `rules/` compressed, squashing only the new or affected line. On a removal, attempt one squash and keep the lower budget. A baseline copy would exceed every live budget, so refs stay uncompressed and the original wording is never lost.
+Amend here before live files. Use complete sentences and keep every negation, condition, command, number, threshold, filename, and caveat. Mirror into `rules/`, compressing only the new or affected line. On removal, attempt one squash and keep the lower budget. Refs retain the uncompressed originals, which would exceed every live budget.
 
 ## Files
 
 - `AGENTS.md` — uncompressed core rules.
 - `ARENA.md` — uncompressed Arena rules.
 - `CHATGPT-CUSTOM.txt` — uncompressed ChatGPT instructions for the `Custom Instructions` field of Personalization.
-- `CHATGPT-MORE.txt` — uncompressed ChatGPT instructions for the `More about you` field of Personalization. The field holds the precedence rule, the response rules, and the work rules that the other field cannot take.
+- `CHATGPT-MORE.txt` — uncompressed Personalization `More about you`: precedence, response rules, and overflow work rules.
 - `CLINE.md` — uncompressed Cline overlay.
-- `KILO.md` — uncompressed Kilo Code overlay: the two tool rules, with nothing that the core already states.
+- `KILO.md` — uncompressed Kilo Code overlay: two tool rules, no core repetition.
 - `kilo/plan.md`, `kilo/code.md`, `kilo/debug.md` — Kilo mode overrides, paired with the live `rules/kilo/`. Each one opens with an empty line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
-- `COMMIT-SPEC.txt` — equals the live file, because no compression ever applied to it.
-- `GUIDELINES.md` — the standard for writing an AGENTS.md, against which an audit reads these baselines. It is a reference, not a rule baseline: no live counterpart, never compressed. It stays verbatim, so parts describe a platform this repository does not use. Section 1.2 gives Kilo loading behavior and `<system-reminder>` wrapping. Section 2.1 gives the `kilo/enforce-rules-plugin/` pointer.
+- `COMMIT-SPEC.txt` — identical to live, never compressed.
+- `GUIDELINES.md` — the AGENTS.md writing and baseline-audit standard. It is a verbatim reference, not a rule baseline: no live counterpart or compression. Some parts describe an unused platform: 1.2 covers Kilo loading and `<system-reminder>` wrapping, and 2.1 links `kilo/enforce-rules-plugin/`.
