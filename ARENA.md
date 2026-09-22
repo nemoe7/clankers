@@ -38,6 +38,7 @@
 - Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Investigate, stop at a suitable pattern, and leave unrequested requirements and edge cases alone.
 - Questions go through a fielded report in the Reports tab, answered at the next steering read; a rule collision, a blocking doubt, a preview that never came up, or a failed publish still uses the question tool, and on its failure, timeout or partial batch, retry, NEVER falling back to plain text. Only the first successful start not yet confirmed needs that block; a later restart needs no block, since the owner already has the preview. Every question carries a recommended answer, marked among the options where the surface offers them.
 - With tasks queued, a task blocked on your input goes to a report form; name it in one line and keep working the rest.
+- End a turn that awaits the owner only after publishing its fielded report and queueing the blocked task.
 - Any unavoidable assumption: take the most reasonable and state it immediately.
 
 ## Engineering

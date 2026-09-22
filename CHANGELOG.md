@@ -1,3 +1,15 @@
+## 2026-09-22 — Turn-await needs a published report and a queued task
+
+**Origin** — the owner's form `platform-reasons` disposition `accept` on 2026-09-22, after a too-specific draft was rejected and the house rule began requiring `GUIDELINES.md` before any amendment suggestion. The same form recorded why root `AGENTS.md` differs from the core, why `.agents/skills` needs no squash mirror, why `web-interface-guidelines` has no refs baseline, and that Cline MCPs stay dropped with no mention outside this ledger.
+
+**Rule change** — `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy: End a turn that awaits the owner only after publishing its fielded report and queueing the blocked task. `rules/refs/README.md` loses the sentence that named the dropped Cline section.
+
+**Cost** — `rules/ARENA.md` grows 107 `B`, 13,776 → 13,883 `B`, recorded in `docs/archive/budget-exceptions.md`. Refs baseline grows to 24,075 `B` and carries no budget.
+
+**Reports** — ignored sources under `reports/`: parity audit, platform matrix (core · arena · chatgpt only), and the text-field form, republished with dispositions. Not committed.
+
+**Checks** — `maintenance/check.py` with `TIKTOKEN_CACHE_DIR` set; root `cmp`; grep: no `MCP`/`tokensave` outside `CHANGELOG.md` in rule/docs trees.
+
 ## 2026-09-22 — House rules require GUIDELINES before amendment suggestions
 
 **Origin** — the owner's steering note on 2026-09-22: always refer to `GUIDELINES.md` before suggesting amendments, after a too-specific draft was rejected.
