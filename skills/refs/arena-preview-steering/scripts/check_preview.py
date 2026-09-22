@@ -1052,7 +1052,7 @@ with tempfile.TemporaryDirectory() as directory:
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, read stamps on delivered prints, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )
 
 with tempfile.TemporaryDirectory() as legacy_dir:
@@ -1109,6 +1109,46 @@ with tempfile.TemporaryDirectory() as seen_dir:
   assert unread.state()["notes"][0]["seen_at"] == stamped
   unread.acknowledge(["s-1"], "reply", "read, then answered")
   assert unread.state()["notes"][0]["seen_at"] == stamped
+
+with tempfile.TemporaryDirectory() as printed_dir:
+  # A CLI read stamps Seen for the IDs it printed, once its output write succeeds;
+  # a failed write stamps nothing, so the next read delivers the note again. Pending
+  # selection is the acknowledgement queue, so a stamped note still prints until answered.
+  printed = preview.Store(printed_dir, create=True)
+  printed.note("p-1", "printed once")
+  printed.submission("answer-2", "form", "REPORT form Answers:\n  Choice: no")
+  with patch.object(builtins, "print", side_effect=OSError("dropped delivery")):
+    try:
+      preview.print_read(printed)
+      raise AssertionError("A failed read write must raise")
+    except OSError:
+      pass
+  assert printed.state()["notes"][0]["seen_at"] is None
+  assert printed.submissions()[0]["seen_at"] is None
+  preview.print_read(printed)
+  first = printed.state()["notes"][0]["seen_at"]
+  assert first is not None
+  assert printed.submissions()[0]["seen_at"] is not None
+  assert [row["id"] for row in printed.read()["pending"]] == ["p-1", "answer-2"]
+  with patch.object(preview, "now", return_value="2099-01-01T00:00:00"):
+    preview.print_read(printed)
+  assert printed.state()["notes"][0]["seen_at"] == first
+  # The dispatched command stamps what it printed, end to end.
+  subprocess.run(
+    [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "--state-dir",
+      str(printed_dir),
+      "read",
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  assert printed.state()["notes"][0]["seen_at"] == first
+  printed.acknowledge(["p-1"], "note", "answered after the stamp")
+  assert [row["id"] for row in printed.read()["pending"]] == ["answer-2"]
 
 with tempfile.TemporaryDirectory() as tasks_dir:
   tasks_store = preview.Store(tasks_dir, create=True)
@@ -1604,12 +1644,13 @@ with tempfile.TemporaryDirectory() as restore_dir:
   # Three restored notes, and a re-import adds none of them twice.
   assert len(preview.Store(restore).state()["notes"]) == 3
 
-# Every dispatch carries a reminder without changing stdout or marking notes seen.
+# Every dispatch carries a reminder without changing stdout; only a delivered read
+# or an explicit receipt marks a note seen.
 with tempfile.TemporaryDirectory() as reminder_dir:
   reminder_store = preview.Store(reminder_dir, create=True)
   reminder_store.note("reminder-note", "Read this")
   reminder_script = str(Path(preview.__file__))
-  for command in (["task-list"], ["task", "reminder-task", "Track work"], ["read"]):
+  for command in (["task-list"], ["task", "reminder-task", "Track work"]):
     result = subprocess.run(
       [sys.executable, reminder_script, "--state-dir", reminder_dir, *command],
       capture_output=True,
@@ -1620,12 +1661,23 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     assert result.stderr.strip() == "1 message/s. Manage the task list."
     assert "Manage the task list" in result.stderr
     assert reminder_store.state()["notes"][0]["seen_at"] is None
+  result = subprocess.run(
+    [sys.executable, reminder_script, "--state-dir", reminder_dir, "read"],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  json.loads(result.stdout)
+  assert result.stderr.strip() == "1 message/s. Manage the task list."
+  delivered = reminder_store.state()["notes"][0]["seen_at"]
+  assert delivered is not None
+  assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
   with (
     patch.object(sys, "argv", [reminder_script, "--state-dir", reminder_dir, "read"]),
     patch.object(sys.stdout, "write", side_effect=BrokenPipeError("output failed")),
   ):
     assert preview.main() == 1
-  assert reminder_store.state()["notes"][0]["seen_at"] is None
+  assert reminder_store.state()["notes"][0]["seen_at"] == delivered
   result = subprocess.run(
     [
       sys.executable,

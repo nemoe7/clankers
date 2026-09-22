@@ -4,7 +4,9 @@
 
 **Compression** — `rules/ARENA.md` 13,925 → 13,903 `B` (-22 `B`); `skills/arena-preview-steering/SKILL.md` 11,648 → 11,626 `B` (-22 `B`).
 
-**Checks** — Markdown lint, Ruff lint and format at the pinned version, `maintenance/check.py --update` with README measurements refresh, and the STE linter on the changed README rows.
+**Checks** — Markdown lint, Ruff lint and format at the pinned version, `maintenance/check.py --update` with README measurements refresh, the STE linter on the changed README rows, the refs runtime harness, minification drift, and client checks.
+
+**Auto-seen** — Make a CLI `read` stamp Seen for exactly the IDs it printed once its output write succeeds, on owner approval. A failed write stays unseen, and pending stays the acknowledgement queue, so a stamped note prints again until answered. Update the refs runtime and harness, rebuild both distributed copies, and reword the steering contract and reference. Sizes: `skills/arena-preview-steering/SKILL.md` 11,626 → 11,757 `B`; `scripts/preview.py` 54,009 → 54,509 `B`; `scripts/check_preview.py` 51,841 → 53,449 `B`; the growth is recorded in `docs/archive/budget-exceptions.md`.
 
 ## 2026-09-22 — Steering cadence: always include poll in bash calls
 
