@@ -22,6 +22,8 @@ Use the clickable Reports tab and report selector. The selection stays stable wh
 
 ## Fields and answers
 
+- ALWAYS include a labeled custom-response text field with each option set so the user can answer outside the listed options. Use `Custom response: ___` in Markdown reports.
+
 A report source may contain form fields written as Markdown: a `- ( ) option` list becomes a radio group, a `- [ ] option` list becomes a checkbox group, and `Label: ___` or a bare `___` line becomes a text box. `(x)` and `[x]` preselect an option. The prompt is the label, else the nearest text line above the field, and `{#id}` at the end of that line fixes the field ID. Markers inside fenced code blocks stay literal. The Reports tab renders one Send answers button under the whole report, and the answers arrive in the steering inbox as one note headed `REPORT <id> <title>:`, which the agent reads and acknowledges like any note. Use this when a questionnaire needs explanation around it; use the steering skill's JSON forms for a bare questionnaire. Keep one report per subject: republishing replaces the rendered document, not the answers already delivered.
 
 ## Delivery and retention

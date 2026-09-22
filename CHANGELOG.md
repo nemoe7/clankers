@@ -18,6 +18,8 @@
 
 **Left borders** — Match report questions and report blockquotes to the reply border color, `rgb(199, 194, 188)`. Widths and spacing stay unchanged. A scan found no other unmatched left border. Runtime and generated-copy checks pass.
 
+**Custom answers** — Require a labeled custom-response field with every option set in both preview skills. Refs carry full wording and the live/installed copies carry the compressed clause.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
