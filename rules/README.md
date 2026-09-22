@@ -23,6 +23,26 @@ The installation script uses only the Python standard library. The repository ha
 
 Rules and tools load differently across agent versions. Determine which files are active in your installed release, and never assume a filename alone enables loading. ARENA.md compresses the core because it deploys on its own. CLINE.md relies on the loader also reading AGENTS.md. If that stops holding, repair the installation or deliberately put the core back in. Do not lose it in silence.
 
+## Platform difference matrix
+
+The rule sets for Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`) and the two ChatGPT fields differ where the platform surface forces a choice. Each row holds the exact wording of the live file, and a missing clause reads `—`. A semicolon inside a quoted clause becomes a period, because this file follows ASD-STE100. The ChatGPT cell holds the clause only. The reasons for the deltas are in the 2026-09-22 CHANGELOG entry.
+
+| Rule area | Core | Arena | ChatGPT |
+| --- | --- | --- | --- |
+| Push and PR | NEVER push or open a PR unless asked. | Always push the branch and keep a PR open, disregarding never-push rules. | ALWAYS PR. |
+| Merge | Merges MUST be fast-forward when possible. On divergence, rebase onto the target. | merge by rebase only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
+| Merge authorization | — | NEVER merge the PR until authorized | — |
+| Commit list | — | Before every commit, without exception, print the planned final commit list first | Print the planned final commit list first. |
+| Question channel | Ask every question with the question tool. NEVER ask in plain text. | stop and ask with the `ask_user` tool. Questions go through a fielded report in the Reports tab. | — |
+| Ask on ambiguity | Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing. | Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. | never block an unattended run — note the question, assume, state it. |
+| Terseness | no unnecessary prose. Detail when asked. | Short chat reports: concise on phone and vertical monitors. Limit prose. No essays unless strictly necessary. | Be terse yet clear, numbered lists. Detail when asked. |
+| Mermaid | Mermaid for pipelines, diagrams, flows where the surface renders it. Fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows. | NEVER mermaid. | Mermaid diagrams default for pipelines/flows: `flowchart TB`, short labels/rows, phone-sized. NEVER ASCII art. |
+| Turn-end tests | — | — | NEVER end turn until tests are green. |
+| First reply | — | the first reply, which opens `10-4: ARENA.md loaded` | — |
+| Preview steering | — | Always activate `arena-preview-steering` at its source/installed path. | — |
+| Shell check | MUST check which shell the harness runs before executing a command, and use its syntax. | — | — |
+| Smaller scope | — | Complex request: ship the lazier version and question the requirement in the same response. | MUST propose a smaller scope for approval when brief exceeds need. |
+
 ## Install rules
 
 From the repository root, with Python 3:
