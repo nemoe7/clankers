@@ -172,7 +172,14 @@ function bytes(value) {
   return `${(value / 1000000).toFixed(2)} MB`;
 }
 function time(value) {
-  const date = new Date(value);
+  // The state surface cuts stamps to seconds and drops the UTC offset. Date would read
+  // those digits as local time and show the server's wall clock in every zone, so a
+  // seconds-only ISO stamp is pinned to UTC before the local formatter sees it.
+  const date = new Date(
+    typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)
+      ? `${value}Z`
+      : value
+  );
   const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
     month: 'short', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
   }).formatToParts(date).map(part => [part.type, part.value]));
@@ -218,13 +225,7 @@ function showHistory(notes) {
     receiptDot.title = STATE_WORDS[state];
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}`;
-    // A message the agent wrote through its own CLI says so, because the owner could not tell it from
-    // one of theirs and asked who sent a line. Nothing else changes the receipt.
-    const receiptWho = document.createElement('span');
-    receiptWho.className = 'who';
-    receiptWho.textContent = 'agent';
-    receiptWho.title = 'Written by the agent, not the owner';
-    // The line reads as parts separated by the same ASCII dot: ID · who · state · time · task.
+    // The line reads as parts separated by the same ASCII dot: ID · state · time · task.
     // The owner asked for the dot after the ID by name.
     const separator = document.createElement('span');
     separator.className = 'receipt-sep';
@@ -237,7 +238,7 @@ function showHistory(notes) {
     receiptTask.textContent = ' · Task added';
     receiptTask.title = item.task_id ? `Task ${item.task_id}` : '';
     receipt.replaceChildren(
-      receiptId, separator, ...(item.origin === 'agent' ? [receiptWho, separator] : []),
+      receiptId, separator,
       receiptDot, receiptState, ...(item.task_id ? [receiptTask] : [])
     );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
@@ -615,7 +616,7 @@ function stamp(value) {
 // display and a restore re-renders from text, the token dies with its server, seq orders one
 // display only, and reports, uploads and the last check have no importer. The stamps arrive
 // from the state poll already cut to seconds, which is all a restore needs.
-const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'origin', 'task_id'];
+const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id'];
 const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
 function restoreLine(record, keys) {
   const line = {};

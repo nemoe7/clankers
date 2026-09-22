@@ -310,7 +310,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     for (const key of keys) line[key] = record[key] ?? null;
     return line;
   };
-  const noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'origin', 'task_id'];
+  const noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id'];
   const taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
   assert.deepEqual(copy, {
     notes: cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
@@ -387,8 +387,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(part(get('#history').children[0].children[2], 'receipt-task'), undefined,
     'a message with no task carries no marker');
-  // A message the agent wrote says so, and the rendered text wrapper is named for what it is rather
-  // than borrowing the report class; owner note d6fcfc2a.
+  // A message the agent wrote used to say so through an origin tag; that key is gone from the
+  // schema, and the rendered text wrapper is named for what it is rather than borrowing the
+  // report class; owner note d6fcfc2a.
   assert.equal(get('#history').children[0].children[0].className, 'raw-message',
     'a message the server sent without rendered HTML keeps the raw class');
   state.notes.push({
@@ -396,16 +397,13 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     text: 'written by the agent',
     html: '<p>written by the agent</p>',
     at: new Date().toISOString(),
-    acknowledged_at: null,
-    origin: 'agent'
+    acknowledged_at: null
   });
   await get('#refresh-notes').events.click();
   const agentReceipt = get('#history').children.at(-1).children[2];
   assert.deepEqual(agentReceipt.children.map(child => child.className).filter(Boolean),
-    ['note-id', 'receipt-sep', 'who', 'receipt-sep', 'state-dot'],
-    'ID, separator, writer, separator, state, so every part reads apart from the next');
-  assert.equal(part(agentReceipt, 'who').textContent, 'agent');
-  assert.equal(part(agentReceipt, 'who').title, 'Written by the agent, not the owner');
+    ['note-id', 'receipt-sep', 'state-dot'],
+    'ID, separator, state — no writer tag remains on the receipt');
   assert.equal(get('#history').children.at(-1).children[0].className, 'message-text',
     'rendered message text is named for what it is, not for a report');
   // The fixture note is this block's own; the tests after it read the log that was there before.
@@ -429,6 +427,16 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.doesNotMatch(stamp, /\d{2}:\d{2}:\d{2}/);
   assert.doesNotMatch(stamp, /\b\d{4}\b/);
   assert.doesNotMatch(stamp, /[AP]M/);
+  // A seconds-only stamp is UTC on the wire; the formatter pins it to UTC so a browser
+  // outside UTC shows the converted local wall clock, not the server's digits.
+  {
+    const secondsOnly = context.time('2026-06-15T12:00:00');
+    const withZone = context.time('2026-06-15T12:00:00Z');
+    assert.equal(secondsOnly, withZone,
+      'a seconds-only stamp formats as UTC, matching the same instant with a Z');
+    const offsetKept = context.time('2026-06-15T12:00:00.000+00:00');
+    assert.equal(offsetKept, withZone, 'a stamped offset still parses as UTC');
+  }
   assert.equal(get('#history').children[0].children[1].hidden, true);
   assert.match(get('#history').children[0].children[1].className, /^answer/);
   assert.equal(get('#history').children[0].children[2].className, 'receipt');

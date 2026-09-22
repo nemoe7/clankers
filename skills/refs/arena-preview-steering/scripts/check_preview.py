@@ -679,18 +679,21 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
     # Notes keep the small limit; only report answers were widened.
     assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
-    # A message records who wrote it: the owner's carry no origin, the agent's carry `agent`, and a
-    # stored database that predates the column gains it by migration.
-    owner_note = store.note("owner-note", "from the owner")
-    agent_note = store.note("agent-note", "from the agent", origin="agent")
-    assert owner_note["origin"] is None and agent_note["origin"] == "agent"
-    assert store.state()["notes"][-1]["origin"] == "agent"
-    try:
-      store.note("third-party-note", "from nobody", origin="robot")
-    except ValueError:
-      pass
-    else:
-      raise AssertionError("a third kind of author is refused")
+    # The note schema carries no author column: a record is just the message and its receipt.
+    note = store.note("plain-note", "no author field")
+    assert "origin" not in note
+    assert "origin" not in store.state()["notes"][-1]
+    # A database that predates the removal loses `origin` when the store reopens.
+    legacy = sqlite3.connect(root / "state.sqlite3")
+    legacy.execute("ALTER TABLE notes ADD COLUMN origin TEXT")
+    legacy.execute("UPDATE notes SET origin = 'agent' WHERE id = 'plain-note'")
+    legacy.commit()
+    legacy.close()
+    preview.Store(root)
+    reopened = sqlite3.connect(root / "state.sqlite3")
+    columns = {row[1] for row in reopened.execute("PRAGMA table_info(notes)")}
+    reopened.close()
+    assert "origin" not in columns, "the migration drops a leftover origin column"
 
     # A report answer the owner sent is stored here, and the save file carries it: the answers
     # come from the database rather than from the page, so a restore returns what the owner
