@@ -31,7 +31,7 @@
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, never meaning, and never go cryptic.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order never decides it and a large task never blocks a small one.
-- Keep working while budget and tasks remain. NEVER end the turn unless the token budget is truly about to be exhausted, and say so in one line.
+- Keep working while tasks remain. End the turn when the work is verified and stopped. No surface reports the remaining token budget to the agent, so NEVER name that budget as the reason for ending a turn.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
