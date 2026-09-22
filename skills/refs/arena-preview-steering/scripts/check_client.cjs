@@ -37,12 +37,12 @@ class Element {
       this.children.push(child);
     }
   }
-  replaceChildren(...children) { this.children = children; }
+  replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
   // A browser clamps a scroll container when the content inside it collapses, and replacing the report
   // is the case the owner hit: the harness does the same, so a missing restore shows up as a jump to
   // the top here exactly as it does on screen.
   set innerHTML(value) {
-    this.inner = value;
+    this.inner = value; this.renders = (this.renders || 0) + 1;
     const panel = elements.get('#reports-panel');
     if (this.id === 'report' && panel) panel.scrollTop = 0;
   }
@@ -1093,5 +1093,26 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), {...context});
   await tick();
   assert.equal(get('#log-edited').hidden, true, 'viewed edits stay viewed after a reload');
+  state.reports = [{id: 'stable', title: 'Stable', updated_at: '2026-09-22T00:00:00', seen_at: '2026-09-22T00:00:01'}];
+  await get('#refresh-notes').events.click();
+  get('#report-select').value = 'stable';
+  get('#reports-tab').events.click();
+  await tick(); await tick();
+  let renders = get('#report').renders;
+  state.reports.push({id: 'other', title: 'Other report', updated_at: '2026-09-22T01:00:00'});
+  await get('#refresh-notes').events.click(); await tick();
+  assert.equal(get('#report').renders, renders, 'another report must not render the unchanged current report');
+  state.last_check = new Date().toISOString();
+  await get('#refresh-notes').events.click(); await tick();
+  assert.equal(get('#report').renders, renders, 'CLI inbox checks do not render the report');
+  state.reports[0].updated_at = '2026-09-22T02:00:00';
+  await get('#refresh-notes').events.click(); await tick();
+  assert.equal(get('#report').renders, renders + 1, 'current-report updates still render');
+  renders = get('#report').renders;
+  const replacements = get('#report').replacements;
+  get('#refresh-report').events.click();
+  assert.equal(get('#report').replacements, replacements, 'keep old content until the refresh arrives');
+  await tick(); await tick();
+  assert.equal(get('#report').renders, renders + 1, 'explicit refresh still renders');
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy on a shift-click of the save button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });

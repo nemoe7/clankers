@@ -20,6 +20,8 @@
 
 **Custom answers** — Require a labeled custom-response field with every option set in both preview skills. Refs carry full wording and the live/installed copies carry the compressed clause.
 
+**Report refresh** — Reproduce a render of the selected report when a different report changes. Reload only when the selected report ID/version changes. Retain its content while a real update loads. Client checks cover unrelated publication, CLI reads, current-report updates and explicit refresh.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

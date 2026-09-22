@@ -69,3 +69,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved matching report left borders to reply borders. Build sizes: `assets/style.css` 9,980 → 9,968 `B`. `scripts/check_preview.py` 45,971 → 46,215 `B`. Regression checks require the shared color.
 
 2026-09-22: the owner approved mandatory custom responses for option sets. Entry sizes: `skills/arena-preview-steering/SKILL.md` 11,802 → 11,900 `B`. `skills/arena-preview-reporting/SKILL.md` 5,482 → 5,580 `B`. Only the new clause was compressed.
+
+2026-09-22: the owner approved the report-refresh fix and checks. Build sizes: `assets/app.js` 26,280 → 26,544 `B`. `scripts/check_client.cjs` 46,164 → 47,424 `B`. Unrelated report changes no longer replace the selected report.
