@@ -290,7 +290,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(currentBody.children[0].children[0].className, 'task-title');
   assert.equal(currentBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
   assert.equal(upcomingBody.children.length, 1, 'the head is removed from Upcoming');
-  assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);
+  assert.match(get('#tasks-status').textContent, /^Updated /);
+  assert.doesNotMatch(get('#tasks-status').textContent, / · |written by|takes no answers/);
   // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
   const opened = upcomingBody.children[0].children[1];
   opened.open = true;
