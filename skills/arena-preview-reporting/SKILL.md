@@ -24,7 +24,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install markdown-it-py
 ```
 
-On Windows Command Prompt, use `.venv\Scripts\python.exe` for that venv. Do not overwrite an existing venv; reuse it or choose another workspace venv. Restart the shared server with the venv's Python when needed. Never change the application's manifest, vendor a parser or load CDNs/remote fonts/styles. Installation failure leaves steering and Markdown source access usable, but rendered reports unavailable; report it honestly. Venvs/packages may need restoring after sandbox restarts.
+On Windows Command Prompt, use `.venv\Scripts\python.exe` for that venv. Do not overwrite an existing venv; reuse it or choose another workspace venv. Restart the shared server with the venv's Python when needed. Never change the application's manifest, vendor a parser or load CDNs/remote fonts/styles. Installation failure leaves steering CLI commands and Markdown source access usable, but rendered reports unavailable; report it honestly. Venvs/packages may need restoring after sandbox restarts.
 
 ## Publish and update
 
@@ -52,7 +52,7 @@ A report source may carry live inputs, written as Markdown:
 | `- [ ] option` lines, `[x]` preselects | Checkbox group |
 | `Label: ___`, or a bare `___` line | Text box, at most 2000 characters |
 
-The prompt is the label, else the nearest text line above; `{#id}` ending that line fixes the field ID. Markers in fenced code stay literal. The Reports tab shows one Send answers button under the report; answers reach the steering inbox as one note headed `REPORT <id> <title>:`, read and `ACK:`-ed like any note. Use fields when a questionnaire needs prose around it, and the steering skill's JSON forms for a bare questionnaire. Republishing replaces the document, never the answers already delivered.
+The prompt is the label, else the nearest text line above; `{#id}` ending that line fixes the field ID. Markers in fenced code stay literal. The Reports tab shows one Send answers button under the report; answers reach the steering inbox as one note headed `REPORT <id> <title>:`, read and `ACK:`-ed like any note. Use fields when a questionnaire needs prose around it, and field-only Markdown reports for a bare questionnaire. Republishing replaces the document, never the answers already delivered.
 
 ## Delivery and retention
 

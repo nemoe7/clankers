@@ -922,7 +922,7 @@ function updateReportPip(reports) {
   pip.setAttribute('aria-label', unseen.length ? 'Unread report or unanswered form' : 'No unread reports or unanswered forms');
 }
 // A report counts as read when the browser has shown it: scrolled to its end, or, for a report
-// that fits the panel with nothing to scroll, held in view for five seconds on owner direction,
+// that fits the panel with nothing to scroll, held in view for one second on owner direction,
 // so a flick past it stamps nothing. Republishing clears the stamp, so changed text is unread.
 const REPORT_READ_DWELL = 1000;
 let readPending = null;
