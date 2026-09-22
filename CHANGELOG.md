@@ -8,6 +8,8 @@
 
 **Composer preview** — Preserve paragraph newlines with scoped `white-space: pre-wrap`, without adding double-spaced `<br>` tags. Both the Python regression and real Chromium check failed before the CSS change, then passed. npm `@sparticuz/chromium` 153.0.0 supplied the binary and runtime.
 
+**Shift copy icon** — Show the copy icon while Shift is held over Save state. Key release, pointer leave and window blur restore the save icon. Copy feedback keeps its timer and then uses the current modifier state. Red/green client checks cover transitions and timers.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

@@ -59,3 +59,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved explicit Seen receipts and their build growth. `scripts/preview.py` grows 51,632 → 52,081 `B`. `scripts/check_preview.py` grows 42,861 → 44,155 `B`. The steering entry shrinks 12,061 → 11,802 `B`. The runtime now marks only named messages after full text delivery, with failure and receipt checks.
 
 2026-09-22: the owner approved the composer line-break fix and checks. `assets/style.css` grows 9,931 → 9,969 `B`. `scripts/check_preview.py` grows 44,155 → 44,287 `B`. The scoped CSS preserves one line break without double spacing.
+
+2026-09-22: the owner approved Shift-hover copy feedback and checks. `assets/app.js` grows 24,169 → 24,798 `B`. `scripts/check_client.cjs` grows 41,794 → 43,189 `B`. The checks cover key, pointer, blur and copy-timer transitions.
