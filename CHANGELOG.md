@@ -1,6 +1,8 @@
-## 2026-09-22 — Chromium guidance and document compression
+## 2026-09-22 — Chromium guidance, delivery receipts and compression
 
 **Chromium** — Move the standalone guide into `docs/archive/arena-quirks.md`, with its original project-specific environment variable and font limit labeled. Remove `docs/chromium-e2e.md`. Add the approved npm/extracted-runtime rule to the Arena refs, live and root copies. Compress only the new rule line: 14,081 to 14,225 B, an approved 144 B increase.
+
+**Seen fix** — Reproduce a failed inbox-output write that still stamped Seen. Make `read` non-marking and add atomic per-ID `seen` receipts after full text delivery. Counts and browser polls remain read-only. Acknowledgements still imply Seen. Cover failed delivery, unknown-ID rollback, late arrivals, report answers, repeat receipts and CLI dispatch. Update the skill contract and rebuild both copies. Runtime grows 51,632 to 52,081 B and its check 42,861 to 44,155 B. The skill entry shrinks 12,061 to 11,802 B.
 
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. Browser E2E was not run for this documentation change.
 

@@ -881,7 +881,7 @@ with tempfile.TemporaryDirectory() as directory:
     app.server_close()
     worker.join()
 print(
-  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, seen-at-read, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )
 
 with tempfile.TemporaryDirectory() as legacy_dir:
@@ -914,9 +914,26 @@ with tempfile.TemporaryDirectory() as seen_dir:
   unread.note("s-1", "unread")
   assert unread.state()["notes"][0]["seen_at"] is None
   listing = unread.read()
-  stamped = unread.state()["notes"][0]["seen_at"]
+  assert unread.state()["notes"][0]["seen_at"] is None
   assert [row["id"] for row in listing["pending"]] == ["s-1"]
-  assert listing["pending"][0]["seen_at"] == stamped is not None
+  assert listing["pending"][0]["seen_at"] is None
+  unread.note("s-2", "arrived after the read")
+  unread.submission("answer-1", "form", "REPORT form Answers:\n  Choice: yes")
+  for ids in (["s-1", "missing"], ["s-1", "invalid id"]):
+    try:
+      unread.mark_seen(ids)
+      raise AssertionError("Invalid Seen batch accepted")
+    except ValueError:
+      assert unread.state()["notes"][0]["seen_at"] is None
+  unread.mark_seen(["s-1", "answer-1"])
+  stamped = unread.state()["notes"][0]["seen_at"]
+  assert stamped is not None
+  assert unread.state()["notes"][1]["seen_at"] is None
+  assert unread.submissions()[0]["seen_at"] is not None
+  assert unread.submissions()[0]["acknowledged_at"] is None
+  with patch.object(preview, "now", return_value="2099-01-01T00:00:00"):
+    unread.mark_seen(["s-1"])
+  assert unread.state()["notes"][0]["seen_at"] == stamped
   unread.read()
   assert unread.state()["notes"][0]["seen_at"] == stamped
   unread.acknowledge(["s-1"], "reply", "read, then answered")
@@ -1236,7 +1253,7 @@ with tempfile.TemporaryDirectory() as mixed_dir:
   ).stdout.strip()
   assert "\n" not in read_out, "read prints one line"
   # The imported note carries its receipt, so `read` has nothing pending; the receipt is what
-  # makes it read, and `read` is the only path that stamps one.
+  # makes it acknowledged; reading alone never stamps Seen.
   assert json.loads(read_out)["pending"] == []
   pretty_out = subprocess.run(
     [sys.executable, script_again, "--state-dir", str(mixed_root), "--pretty", "read"],
@@ -1430,8 +1447,29 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     assert "1 unacknowledged" in result.stderr
     assert "messages: 1, form answers: 0, uploads: 0" in result.stderr
     assert "Manage the task list" in result.stderr
-    if command != ["read"]:
-      assert reminder_store.state()["notes"][0]["seen_at"] is None
+    assert reminder_store.state()["notes"][0]["seen_at"] is None
+  with (
+    patch.object(sys, "argv", [reminder_script, "--state-dir", reminder_dir, "read"]),
+    patch.object(sys.stdout, "write", side_effect=BrokenPipeError("output failed")),
+  ):
+    assert preview.main() == 1
+  assert reminder_store.state()["notes"][0]["seen_at"] is None
+  result = subprocess.run(
+    [
+      sys.executable,
+      reminder_script,
+      "--state-dir",
+      reminder_dir,
+      "seen",
+      "reminder-note",
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  assert "Seen: reminder-note" in result.stdout
+  assert reminder_store.state()["notes"][0]["seen_at"] is not None
+  assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
   result = subprocess.run(
     [
       sys.executable,

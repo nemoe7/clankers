@@ -5,7 +5,7 @@ license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace files and long-lived process tools. Steering is standard-library only; reporting additionally needs markdown-it-py and the companion skill.
 metadata:
   origin: first-party, maintained in this repository
-  version: "2.1.0"
+  version: "2.1.1"
   arena-only: "true"
 ---
 
@@ -35,7 +35,7 @@ python <skill>/scripts/preview.py --state-dir reports/arena-preview read
 
 Every CLI subcommand prints an inbox reminder (unacknowledged count and kinds) and the duty to manage the task list to stderr, keeping stdout machine-readable. The reminder never marks messages seen.
 
-The command prints **all pending messages**, without truncation, and records the check time. It neither acknowledges nor removes them. Missing, unreadable or corrupt state is an error, never an empty inbox. This command is the agent's only poll and the only path that stamps `seen_at`, which is what turns the owner's dot from gray to blue: an inbox pulled through `Store.state()` in ad-hoc Python, or through `/api/state` with `curl`, leaves the owner looking at a note the agent has already read and answered, which reads as the agent ignoring it. The browser polls `/api/state` for display and deliberately never stamps, so the owner refreshing is not mistaken for the agent reading. Convenience is not a reason to read another way; a filter or a count wanted from the inbox is wanted from this command's output.
+The command prints **all pending messages**, without truncation, and records the check time. It never marks messages seen, acknowledges or removes them. Missing, unreadable or corrupt state is an error, never an empty inbox. Use this command as the only agent poll, including for filters or counts. After the full text reaches the agent, run `seen <ids>` for exactly those IDs, or `ack` them with a reply. Never mark a count-only notification, truncated item or failed delivery seen. An explicit receipt stamps `seen_at` and turns the owner’s dot from gray to blue. Browser `/api/state` polls and `Store.state()` never stamp. Receipt is not completion.
 
 - Read at turn start, each reasoning boundary, before/after every tool-call block, before expensive/irreversible work and before turn end. A turn MUST end with that final read in its last tool block, so a mid-turn note is handled in the same turn when possible. Co-issue a read in each parallel block and read after return; the block is the cadence unit. End every shell block by appending a read to its last command, so a long chain cannot starve the inbox. A blocking-only call needs its read after return. Initial discovery/startup may precede the first read. Never use a background consumer to mark unseen messages handled.
 - Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so ack separately when answers differ.
