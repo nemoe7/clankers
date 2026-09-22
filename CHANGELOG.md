@@ -14,6 +14,8 @@
 
 **Report read time** — Reduce the short-report dwell from five seconds to one. Keep end-of-scroll marking and cancellation on tab exit. The timing regression failed before the change and passed after it.
 
+**Edited replies** — Preserve the first receipt time and stamp changed answers with `ack_edited_at`. Identical retries and first answers remain unedited. Save/import preserve edit stamps. Show a local-time Edited label, a Notes dot and a New edit jump link without moving messages. Viewed-edit state stays browser-local across reloads. Runtime/client regressions cover changes, retries, restores, filtering and same-second edits.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

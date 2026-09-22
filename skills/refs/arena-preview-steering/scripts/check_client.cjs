@@ -50,6 +50,7 @@ class Element {
   querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
   get lastElementChild() { return this.children.at(-1); }
   focus() { this.focused = true; }
+  scrollIntoView() { this.scrolledIntoView = true; }
   select() { this.selected = true; }
   setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
   remove() { this.removed = true; }
@@ -353,7 +354,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     for (const key of keys) line[key] = record[key] ?? null;
     return line;
   };
-  const noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id'];
+  const noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'seen_at', 'task_id'];
   const taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
   assert.deepEqual(copy, {
     notes: cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
@@ -1062,5 +1063,35 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#upload-send').disabled, false);
   assert.equal(get('#upload-file').disabled, false);
   uploadFailName = '';
+  state.notes = [
+    {id: 'edited-old', text: 'Older question', at: '2026-09-22T00:00:00', acknowledged_at: '2026-09-22T00:01:00', ack_kind: 'reply', ack_text: 'First answer', ack_edited_at: null},
+    {id: 'newer-note', text: 'Newer question', at: '2026-09-22T00:02:00'}
+  ];
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#log-edited').hidden, true);
+  state.notes[0].ack_text = 'Changed answer';
+  state.notes[0].ack_edited_at = '2026-09-22T00:03:00';
+  await get('#refresh-notes').events.click();
+  const editedNode = get('#history').children[0];
+  assert.match(editedNode.children[2].textContent, / · Edited Sep 22, /);
+  assert.equal(get('#history').children[1].children[2].children[0].dataset.full, 'newer-note', 'edits keep log order');
+  assert.equal(get('#notes-pip').hidden, false);
+  assert.equal(get('#log-edited').hidden, false);
+  get('#log-filter').value = 'sent';
+  get('#log-filter').events.change();
+  get('#log-edited').events.click();
+  assert.equal(editedNode.children[1].scrolledIntoView, true);
+  assert.equal(get('#log-filter').value, 'all');
+  assert.equal(get('#notes-pip').hidden, true);
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#log-edited').hidden, true, 'an unchanged poll does not notify again');
+  assert.ok([...storage.keys()].some(key => key.endsWith(':seen-edits')));
+  state.notes[0].ack_text = 'Another edit in the same second';
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#log-edited').hidden, false, 'same-second edits still notify');
+  get('#log-edited').events.click();
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), {...context});
+  await tick();
+  assert.equal(get('#log-edited').hidden, true, 'viewed edits stay viewed after a reload');
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy on a shift-click of the save button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });

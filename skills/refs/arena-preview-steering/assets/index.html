@@ -10,7 +10,7 @@
   <header class="topbar">
     <div id="topbar-row" class="topbar-row">
       <nav role="tablist" aria-label="Workspace views">
-        <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes</button>
+        <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes <span id="notes-pip" role="img" aria-label="Unread edited reply" title="Unread edited reply" hidden></span></button>
         <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-pip" role="img" aria-label="No unread report" title="No unread report" hidden></span></button>
         <button type="button" role="tab" id="tasks-tab" aria-controls="tasks-panel" aria-selected="false" tabindex="-1">Tasks</button>
         <button type="button" role="tab" id="uploads-tab" aria-controls="uploads-panel" aria-selected="false" tabindex="-1">Uploads</button>
@@ -29,6 +29,7 @@
         <section class="card log-card" aria-labelledby="history-title">
           <div class="row">
             <h2 id="history-title">Message log</h2>
+            <button id="log-edited" type="button" hidden>New edit</button>
             <div class="stack">
               <p id="connection" role="status"><span id="connection-dot" class="dot" role="img" aria-label="Connecting"></span><span id="connection-text">Connecting…</span></p>
               <p id="last-check" class="muted">Not checked yet.</p>

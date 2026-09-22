@@ -28,6 +28,50 @@ def request(method, path, body=None, headers=None, raw=False):
   return result
 
 
+with tempfile.TemporaryDirectory() as edit_dir:
+  edited = preview.Store(edit_dir, create=True)
+  edited.note("edit-note", "Question")
+  edited.submission("edit-answer", "form", "REPORT form: answer")
+  ids = ["edit-note", "edit-answer"]
+  with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
+    edited.acknowledge(ids, "reply", "First answer")
+  assert edited.state()["notes"][0]["ack_edited_at"] is None
+  with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
+    edited.acknowledge(ids, "reply", "Changed answer")
+  row = edited.state()["notes"][0]
+  assert row["acknowledged_at"] == "2026-09-22T12:00:00"
+  assert row["ack_edited_at"] == "2026-09-22T12:01:00"
+  assert edited.submissions()[0]["ack_edited_at"] == row["ack_edited_at"]
+  with patch.object(preview, "now", return_value="2026-09-22T12:02:00"):
+    edited.acknowledge(ids, "reply", "Changed answer")
+  assert edited.state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
+  assert (
+    preview.Store(edit_dir).state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
+  )
+  saved = Path(edit_dir) / "edited.ndjson"
+  saved.write_text(json.dumps(preview.saved_note_line(row)) + "\n")
+  restored_dir = Path(edit_dir) / "restored"
+  restored = preview.Store(restored_dir, create=True)
+  subprocess.run(
+    [
+      sys.executable,
+      preview.__file__,
+      "--state-dir",
+      str(restored_dir),
+      "import-notes",
+      str(saved),
+    ],
+    check=True,
+    capture_output=True,
+  )
+  assert restored.state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
+  for bad in ("not-a-date", "2026-09-22T12:00:00"):
+    try:
+      restored.note("invalid-edit", "No receipt", ack_edited_at=bad)
+      raise AssertionError("Invalid edit receipt accepted")
+    except ValueError:
+      pass
+
 with tempfile.TemporaryDirectory() as directory:
   # The state directory and the save file are siblings, the way they are in the repository: the
   # save file is written at the root, so a restore that drops the state directory keeps it.
@@ -373,7 +417,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'id="report-pip"' in page
     assert "report-count" not in page
     assert (
-      "#report-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px;"
+      "#report-pip, #notes-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px;"
       " border-radius: 50%; background: var(--accent); vertical-align: middle; }"
       in page
     )
