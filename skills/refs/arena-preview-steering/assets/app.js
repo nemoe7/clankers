@@ -22,8 +22,8 @@ function writeHeaders(type) {
 }
 // A cited ID prefix has to be a whole visible segment, so the first hyphen sits after 7 characters.
 function newId() {
-  const id = crypto.randomUUID();
-  return `${id.slice(0, 7)}-${id.slice(8)}`;
+  const hex = crypto.randomUUID().replaceAll('-', '');
+  return `${hex.slice(0, 7)}-${hex.slice(7)}`;
 }
 let historySignature = '';
 let draftPreviewSequence = 0;
