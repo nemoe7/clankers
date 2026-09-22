@@ -1,3 +1,11 @@
+## 2026-09-22 — House rules require GUIDELINES before amendment suggestions
+
+**Origin** — the owner's steering note on 2026-09-22: always refer to `GUIDELINES.md` before suggesting amendments, after a too-specific draft was rejected.
+
+**Rule change** — root `AGENTS.md` Rules: before suggesting any amendment, read `rules/refs/GUIDELINES.md` and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard. The prior one-liner only said to write rule files to the standard.
+
+**Checks** — `maintenance/check.py` with `TIKTOKEN_CACHE_DIR` set; grep-verify of the amended line.
+
 ## 2026-09-22 — First-start preview must block for visibility
 
 **Origin** — the owner's chat approval on 2026-09-22 of the amendment proposed after a session started the steering server and continued without the visibility question. The process tool's LIVE PREVIEW banner was mistaken for owner confirmation. A steering note then recorded that the preview only became visible at turn end.
