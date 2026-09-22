@@ -317,7 +317,7 @@ with tempfile.TemporaryDirectory() as directory:
       in page
     )
     assert (
-      ".state-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--dot-sent); }"
+      ".state-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-sent); }"
       in page
     )
     assert "--dot-seen: #7fa7d1;" in page and "--dot-seen: #3f6ea8;" in page
