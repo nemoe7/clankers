@@ -1,3 +1,11 @@
+## 2026-09-22 — Steering cadence: always include poll in bash calls
+
+**Cadence update** — Change preview steering check cadence from appending a read to the last command of a shell block to always including a poll in bash calls. Update steering skill refs baseline, compressed live skill, installed mirror, Arena refs baseline, live Arena rules, and root `ARENA.md`.
+
+**Compression** — `skills/arena-preview-steering/SKILL.md` 11,684 → 11,648 `B` (-36 `B`); `rules/ARENA.md` 13,931 → 13,925 `B` (-6 `B`).
+
+**Checks** — Preview runtime harness, minification drift check, client checks, Ruff lint and format, Markdown lint, STE linter, and README measurements table update.
+
 ## 2026-09-22 — Chromium guidance, delivery receipts and compression
 
 **Chromium** — Move the standalone guide into `docs/archive/arena-quirks.md`, with its original project-specific environment variable and font limit labeled. Remove `docs/chromium-e2e.md`. Add the approved npm/extracted-runtime rule to the Arena refs, live and root copies. Compress only the new rule line: 14,081 to 14,225 B, an approved 144 B increase.
