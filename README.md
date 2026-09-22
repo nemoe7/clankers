@@ -14,13 +14,13 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-21. `maintenance/check.py` measures ARENA.md by uploaded file size. It measures the two ChatGPT files by their custom-instruction character limits. The remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. The two preview skills are the exception. The check measures them by UTF-8 file size instead. A byte count needs no tokenizer, so it survives a sandbox where the `tiktoken` cache cannot be seeded. This table excludes supporting files loaded on demand, including skill refs. The three `assets/` rows and three `scripts/` rows are the minified build that the preview skill ships. Their recorded size is their budget, and `maintenance/minify.py` rebuilds them from the readable refs sources.
+Latest measurements as of 2026-09-22. `maintenance/check.py` measures ARENA.md by uploaded file size. It measures the two ChatGPT files by their custom-instruction character limits. The remaining agent-facing rule files and `SKILL.md` entry files use `cl100k_base` tokens. The two preview skills are the exception. The check measures them by UTF-8 file size instead. A byte count needs no tokenizer, so it survives a sandbox where the `tiktoken` cache cannot be seeded. This table excludes supporting files loaded on demand, including skill refs. The three `assets/` rows and three `scripts/` rows are the minified build that the preview skill ships. Their recorded size is their budget, and `maintenance/minify.py` rebuilds them from the readable refs sources.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,571 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 13,177 `B` |
-| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,489 `chars` |
+| `rules/ARENA.md` | `UTF-8 file size` | 13,158 `B` |
+| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,495 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,495 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 514 `tok` |
 | `rules/KILO.md` | `cl100k_base` | 69 `tok` |
@@ -30,12 +30,12 @@ Latest measurements as of 2026-09-21. `maintenance/check.py` measures ARENA.md b
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 129 `tok` |
 | `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 11,361 `B` |
 | `skills/arena-preview-reporting/SKILL.md` | `UTF-8 file size` | 5,482 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 24,242 `B` |
+| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 24,320 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 6,486 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 9,997 `B` |
 | `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 51,198 `B` |
 | `skills/arena-preview-steering/scripts/check_preview.py` | `UTF-8 file size` | 41,594 `B` |
-| `skills/arena-preview-steering/scripts/check_client.cjs` | `UTF-8 file size` | 41,510 `B` |
+| `skills/arena-preview-steering/scripts/check_client.cjs` | `UTF-8 file size` | 41,612 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,265 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
