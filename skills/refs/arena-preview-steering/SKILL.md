@@ -33,7 +33,7 @@ One server and inbox per session. Reporting shares this runtime; never start a s
 python <skill>/scripts/preview.py --state-dir reports/arena-preview read
 ```
 
-Every CLI subcommand prints an inbox reminder (unacknowledged count and kinds) and the duty to manage the task list to stderr, keeping stdout machine-readable. The reminder never marks messages seen.
+Every CLI subcommand prints only nonzero pending counts by kind, followed by `Manage the task list.`, to stderr. Print the task-list duty even with no pending items. Keep stdout machine-readable. Reminders never mark messages seen.
 
 The command prints **all pending messages**, without truncation, and records the check time. It never marks messages seen, acknowledges or removes them. Missing, unreadable or corrupt state is an error, never an empty inbox. Use this command as the only agent poll, including for filters or counts. After the full text reaches the agent, run `seen <ids>` for exactly those IDs, or `ack` them with a reply. Never mark a count-only notification, truncated item or failed delivery seen. An explicit receipt stamps `seen_at` and turns the owner’s dot from gray to blue. Browser `/api/state` polls and `Store.state()` never stamp. Receipt is not completion.
 

@@ -22,6 +22,8 @@
 
 **Report refresh** — Reproduce a render of the selected report when a different report changes. Reload only when the selected report ID/version changes. Retain its content while a real update loads. Client checks cover unrelated publication, CLI reads, current-report updates and explicit refresh.
 
+**Reminders** — Omit zero counts, the total, and the read/ack sentence. Print only nonzero kinds as requested, followed by `Manage the task list.`. Empty, message-only, form-only and mixed-upload cases pass without Seen changes.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
