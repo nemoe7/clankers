@@ -29,6 +29,11 @@ def request(method, path, body=None, headers=None, raw=False):
   return result
 
 
+def compact(text):
+  """Collapse the whitespace a minifier would, so one literal reads both asset forms."""
+  return re.sub(r"\s*([{};:,><!])\s*", r"\1", text)
+
+
 with tempfile.TemporaryDirectory() as edit_dir:
   edited = preview.Store(edit_dir, create=True)
   edited.note("edit-note", "Question")
@@ -93,11 +98,14 @@ with tempfile.TemporaryDirectory() as directory:
   # the message log, where a line breaks through `white-space: pre-wrap` and needs no tag.
   chat = preview.render("line one\nline two", breaks=True)
   assert "<br" not in chat and "\n" in chat and chat.count("<p>") == 1
-  css = (preview.ASSETS / "style.css").read_text()
-  assert "border-left: 2px solid var(--accent)" not in css
-  assert "border-left: 3px solid var(--accent)" not in css
-  assert ".report .question { border-left: 2px solid rgb(199, 194, 188);" in css
-  assert "border-left: 3px solid rgb(199, 194, 188);" in css
+  css = compact((preview.ASSETS / "style.css").read_text())
+  assert "border-left:2px solid var(--accent)" not in css
+  assert "border-left:3px solid var(--accent)" not in css
+  # The minified sheet shortens rgb(199, 194, 188) to #c7c2bc, so both spellings count.
+  assert re.search(
+    r"\.report \.question\{border-left:2px solid (rgb\(199,194,188\)|#c7c2bc);", css
+  )
+  assert re.search(r"border-left:3px solid (rgb\(199,194,188\)|#c7c2bc)", css)
   assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
   # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
   assert "<br" in preview.render("- a\n  b", breaks=True)
@@ -345,108 +353,127 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'maxlength="2000"' in served["html"]
     assert "<textarea" in served["html"] and 'placeholder="Other:"' in served["html"]
     assert "> Other: <" not in served["html"]
-    status, _, page = request("GET", "/")
-    assert status == 200 and '#preview-note[aria-pressed="false"] {' in page
-    assert '#preview-note[aria-pressed="true"]' not in page
-    assert "--focus: #524d47;" in page and "#f4ca93" not in page
-    assert "--focus: #8f5b13;" in page
-    assert "--tab-border: #413d39;" in page
-    assert "--tab-border: var(--border);" in page
-    assert "nav button:focus-visible { border-color: var(--focus); }" in page
-    assert "border-color: var(--accent)" not in page
-    assert "padding-bottom: 12px;" in page
-    assert "#report-form { min-width: 0; margin-top: 12px; }" in page
+    status, _, page_text = request("GET", "/")
+    page = compact(page_text)
+    # The minified sheet drops attribute-selector quotes, so both spellings count.
+    assert status == 200 and re.search(
+      r'#preview-note\[aria-pressed="?false"?\][^{}]*\{', page
+    )
+    assert not re.search(r'#preview-note\[aria-pressed="?true"?\]', page)
+    assert "--focus:#524d47" in page and "#f4ca93" not in page
+    assert "--focus:#8f5b13" in page
+    assert "--tab-border:#413d39" in page
+    assert "--tab-border:var(--border)" in page
+    assert "nav button:focus-visible{border-color:var(--focus)" in page
+    assert "border-color:var(--accent)" not in page
+    assert "padding-bottom:12px" in page
+    assert "#report-form{min-width:0;margin-top:12px" in page
     assert (
-      ".message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }"
+      ".message{margin-bottom:14px;background:var(--bubble);padding:8px 14px;border-radius:8px"
       in page
     )
-    assert (
-      ".answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }"
-      in page
+    assert re.search(
+      r"\.answer\.reply\{border-left:2px solid (rgb\(199,194,188\)|#c7c2bc);"
+      r"padding-left:12px;color:var\(--muted\);font-size:13px",
+      page,
+    )
+    assert re.search(
+      r"\.message-text blockquote\{margin:8px 0;padding-left:12px;color:var\(--muted\);"
+      r"border-left:2px solid (rgb\(199,194,188\)|#c7c2bc)",
+      page,
     )
     assert (
-      ".message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }"
+      ".state-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dot-sent)"
       in page
     )
-    assert (
-      ".state-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-sent); }"
-      in page
+    assert "--dot-seen:#7fa7d1" in page and "--dot-seen:#3f6ea8" in page
+    assert "--dot-said:#8dc07f" in page and "--dot-said:#4a7c3a" in page
+    assert "--dot-sent:var(--muted)" in page
+    # The minified sheet drops attribute-selector quotes, so both spellings count.
+    assert re.search(
+      r'\.state-dot\[data-state="?said"?\]\{background:var\(--dot-said\)', page
     )
-    assert "--dot-seen: #7fa7d1;" in page and "--dot-seen: #3f6ea8;" in page
-    assert "--dot-said: #8dc07f;" in page and "--dot-said: #4a7c3a;" in page
-    assert "--dot-sent: var(--muted);" in page
-    assert '.state-dot[data-state="said"] { background: var(--dot-said); }' in page
     assert "--chip" not in page
-    assert "code.note-id {" in page and ".receipt code" not in page
+    assert "code.note-id{" in page and ".receipt code" not in page
     assert ".answer.note" not in page
-    assert ".answer > p:last-child { margin-bottom: 0; }" in page
+    assert ".answer>p:last-child{margin-bottom:0" in page
     assert (
-      ":not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }"
+      ":not(pre)>code{background:var(--code-bg);padding:1px 5px;border-radius:4px"
       in page
     )
     # Inline code sits darker than the page in dark mode; the light theme keeps its bubble.
-    assert "--code-bg: #1b1a19;" in page
-    assert "--code-bg: var(--bubble);" in page
+    assert "--code-bg:#1b1a19" in page
+    assert "--code-bg:var(--bubble)" in page
     # The composer's hint is half as prominent as the muted face, so what is being typed and what
     # was sent stay distinguishable from a placeholder that is neither.
-    assert "textarea::placeholder { color: var(--muted); opacity: 0.5; }" in page
-    assert 'code.note-id[data-copied="good"] { color: var(--dot-said); }' in page
-    assert 'code.note-id[data-copied="bad"] { color: #ef4444; }' in page
-    assert "#clock { font-size: inherit; font-variant-numeric: tabular-nums; }" in page
-    assert '.icon-button[data-state="good"] { color: var(--dot-said);' in page
-    assert '.icon-button[data-state="bad"] { color: #ef4444;' in page
+    # The minified sheet shortens 0.5 to .5, so both spellings count.
+    assert re.search(
+      r"textarea::placeholder\{color:var\(--muted\);opacity:(?:0)?\.5", page
+    )
+    assert re.search(
+      r'code\.note-id\[data-copied="?good"?\]\{color:var\(--dot-said\)', page
+    )
+    assert re.search(r'code\.note-id\[data-copied="?bad"?\]\{color:#ef4444', page)
+    assert "#clock{font-size:inherit;font-variant-numeric:tabular-nums" in page
+    assert re.search(
+      r'\.icon-button\[data-state="?good"?\]\{color:var\(--dot-said\);', page
+    )
+    assert re.search(r'\.icon-button\[data-state="?bad"?\]\{color:#ef4444;', page)
     assert 'id="copy-log"' not in page, "the log lost its copy button"
     # The log header is two rows tall, not three: the title stands alone and the
     # connection and last-check lines stack to its right.
     assert '<h2 id="history-title">Message log</h2>' in page
     assert page.index('id="history-title"') < page.index('class="stack"')
-    assert "#history-title { margin: 0; }" in page
+    assert "#history-title{margin:0" in page
     # The composer's outer rows give up the space they face.
-    assert "#form > div:first-child { margin-top: 0; padding-top: 0; }" in page
-    assert "#form > div:last-child { margin-bottom: 0; padding-bottom: 0; }" in page
+    assert "#form>div:first-child{margin-top:0;padding-top:0" in page
+    assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
     assert '<button id="copy-report" class="icon-button"' in page
     # The report copy button matches the refresh button beside it; it was 34px against 44px.
     # No negative assertion here: the combined rule contains the old single-selector text.
-    assert "#copy-report, #refresh-report { width: 44px; height: 44px; }" in page
+    assert "#copy-report,#refresh-report{width:44px;height:44px" in page
     # A rule separates the tasks toolbar from the finished div, and details collapse.
     assert (
-      ".tasks-layout > .row.tight { border-bottom: 1px solid var(--border);"
-      " padding-bottom: 12px; }" in page
-    )
-    assert (
-      ".task-details > summary { cursor: pointer; list-style-position: inside; }"
+      ".tasks-layout>.row.tight{border-bottom:1px solid var(--border);padding-bottom:12px"
       in page
     )
+    assert ".task-details>summary{cursor:pointer;list-style-position:inside" in page
     assert 'id="copy-tasks"' not in page, "the tasks lost their copy button"
     # The Reports tab carries an unread pip rather than a count of the reports that exist.
     assert 'id="report-pip"' in page
     assert "report-count" not in page
-    assert (
-      "#report-pip, #notes-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px;"
-      " border-radius: 50%; background: var(--accent); vertical-align: middle; }"
-      in page
+    # The minified sheet splits or reorders merged selectors, so each pip matches its own block.
+    assert re.search(
+      r"#report-pip[^{}]*\{display:inline-block;width:7px;height:7px;margin-left:6px;"
+      r"border-radius:50%;background:var\(--accent\);vertical-align:middle",
+      page,
+    )
+    assert re.search(
+      r"#notes-pip[^{}]*\{display:inline-block;width:7px;height:7px;margin-left:6px;"
+      r"border-radius:50%;background:var\(--accent\);vertical-align:middle",
+      page,
     )
     # The pip is given a shape by a display rule, so the sheet's blanket rule is what hides it.
-    assert "[hidden] { display: none !important; }" in page
+    assert "[hidden]{display:none!important" in page
     assert page.index('id="copy-report"') < page.index('id="refresh-report"')
     assert '<span id="clock" class="muted" title="Local time">--:--</span>' in page
     assert page.index('id="clock"') < page.index('id="theme"')
-    assert ".report :not(pre) > code" not in page
-    assert "background: none; padding: 0; cursor: pointer; }" in page
-    assert "#send { border-color: var(--accent); }" not in page
-    assert "#report-submit { margin-top: 16px; }" in page
+    assert ".report :not(pre)>code" not in page
+    # The minified sheet rewrites background none to 0 0, so both spellings count.
+    assert re.search(r"background:(?:none|0 0);padding:0;cursor:pointer", page)
+    assert "#send{border-color:var(--accent)" not in page
+    assert "#report-submit{margin-top:16px" in page
     # A code block carries its background wherever markdown renders, not in a report alone: the
     # owner read a fence in a message as having no background.
     assert (
-      "pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }"
-      in page
+      "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--bg)" in page
     )
     # The log filter draws its own box like the icon buttons beside it, after a second owner note
     # that the heights still differed.
-    assert "appearance: none" in page and "#log-filter" in page
-    assert page.count("#send {") == 0
-    assert "resize: none;" in page and "resize: vertical" not in page
-    assert "#notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }" in page
+    assert "appearance:none" in page and "#log-filter" in page
+    assert page.count("#send{") == 0
+    assert "resize:none" in page and "resize:vertical" not in page
+    assert "#notes-panel,#reports-panel,#tasks-panel{overflow-y:auto" in page
     assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
     assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
     assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
@@ -456,29 +483,29 @@ with tempfile.TemporaryDirectory() as directory:
     # agent is on next and what is coming are the owner's questions, and what is done is the log.
     assert page.index('id="tasks-current"') < page.index('id="tasks-upcoming"')
     assert page.index('id="tasks-upcoming"') < page.index('id="tasks-finished"')
-    assert ".task-list { margin: 0; padding-left: 20px; }" in page
-    assert ".task-title { font-weight: 600; }" in page
+    assert ".task-list{margin:0;padding-left:20px" in page
+    assert ".task-title{font-weight:600" in page
     assert (
-      ".task-details { display: block; margin-top: 2px; color: var(--muted);"
-      " font-size: 13px; }" in page
-    )
-    # The details are a real list, so a marker comes from the element rather than a span's rule.
-    assert ".task-detail-list { margin: 2px 0 0; padding-left: 18px; }" in page
-    assert ".task-detail { display: block; }" not in page
-    assert ".tasks-layout { display: flex; flex-direction: column; gap: 18px; }" in page
-    assert "max-height: 48%" not in page
-    assert "min-height: 100%" not in page
-    assert (
-      ".notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%;"
+      ".task-details{display:block;margin-top:2px;color:var(--muted);font-size:13px"
       in page
     )
-    assert "resize: none; min-height: 72px; overflow: hidden; }" in page
-    assert ".log-card { flex: 1 1 auto; min-height: 200px;" in page
-    assert "h1 { letter-spacing: -.035em; margin: 4px 0; }" in page
-    assert "h2 { margin: 0 0 8px; }" in page
-    assert ".report p, .message-text p { margin: 8px 0; }" in page
+    # The details are a real list, so a marker comes from the element rather than a span's rule.
+    assert ".task-detail-list{margin:2px 0 0;padding-left:18px" in page
+    assert ".task-detail{display:block" not in page
+    assert ".tasks-layout{display:flex;flex-direction:column;gap:18px" in page
+    assert "max-height:48%" not in page
+    assert "min-height:100%" not in page
+    assert (
+      ".notes-layout{display:flex;flex-direction:column;gap:14px;height:100%" in page
+    )
+    assert "resize:none;min-height:72px;overflow:hidden" in page
+    assert ".log-card{flex:1 1 auto;min-height:200px" in page
+    assert "h1{letter-spacing:-.035em;margin:4px 0" in page
+    assert "h2{margin:0 0 8px" in page
+    assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)
+    assert re.search(r"\.message-text p[^{}]*\{margin:8px 0", page)
     for level in ("h1", "h2", "h3", "h4", "h5", "h6"):
-      assert f"{level} {{ font-size" not in page
+      assert f"{level}{{font-size" not in page
 
     block = preview.add_copy_buttons(preview.render("```python\nprint(1)\n```"))
     assert block.startswith(
