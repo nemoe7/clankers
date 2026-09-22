@@ -51,6 +51,8 @@ The command prints **all pending messages** in full and records check time, with
 
 ## Fields in reports
 
+- ALWAYS pair each option set with a labeled custom-response field, e.g. `Custom response: ___`.
+
 The preview does not render mermaid; a report never uses it.
 
 A published report may carry live inputs, and a report whose source is only field markers is a questionnaire. The agent writes the markers as ordinary Markdown; the Reports tab renders them as controls under one Send answers button, with any prose around them as context:

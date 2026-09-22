@@ -42,6 +42,8 @@ Raw Markdown HTML is disabled. Headings, emphasis, lists, tables, quotations, co
 
 ## Fields and answers
 
+- ALWAYS pair each option set with a labeled custom-response field, e.g. `Custom response: ___`.
+
 A report source may carry live inputs, written as Markdown:
 
 | Marker | Control |
