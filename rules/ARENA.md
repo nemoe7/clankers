@@ -69,7 +69,7 @@
 
 - `nemoe7` repos: 2-space indent overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off; Python is Ruff defaults, from the project's `ruff.toml` or one created exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; gates are `ruff check` and `ruff format`, no CLI overrides.
 - Reports must allow lines up to 120 characters (MD013 at 120).
-- Minimum code/config comments: only when necessary or the function is convoluted.
+- NEVER add unnecessary code/config comments: only when the method is complex enough.
 
 ## Git
 
