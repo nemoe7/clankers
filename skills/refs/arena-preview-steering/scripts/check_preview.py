@@ -502,18 +502,32 @@ with tempfile.TemporaryDirectory() as directory:
       request(
         "POST",
         "/api/reports/fields/submit",
-        json.dumps({"id": "r1", "answers": {"severity": "extreme"}}),
+        json.dumps(
+          {
+            "id": "r1",
+            "answers": {"severity": "extreme"},
+            "revision": store.report("fields")["updated_at"],
+          }
+        ),
         auth,
       )[0]
       == 400
     )
     assert (
-      request("POST", "/api/reports/first/submit", '{"id":"r2","answers":{}}', auth)[0]
+      request(
+        "POST",
+        "/api/reports/first/submit",
+        json.dumps(
+          {"id": "r2", "answers": {}, "revision": store.report("first")["updated_at"]}
+        ),
+        auth,
+      )[0]
       == 400
     )
     report_answer = json.dumps(
       {
         "id": "report-sub-1",
+        "revision": store.report("fields")["updated_at"],
         "answers": {"pick-the-areas": ["ui"], "severity": "high", "name": "ada"},
       }
     )
@@ -573,12 +587,19 @@ with tempfile.TemporaryDirectory() as directory:
       {"id": "s1", "answers": "nope"},
     ):
       assert (
-        request("POST", "/api/reports/fields/submit", json.dumps(bad), auth)[0] == 400
+        request(
+          "POST",
+          "/api/reports/fields/submit",
+          json.dumps(dict(bad, revision=store.report("fields")["updated_at"])),
+          auth,
+        )[0]
+        == 400
       )
     sent = store.submissions()
     submission = json.dumps(
       {
         "id": "sub-1",
+        "revision": store.report("fields")["updated_at"],
         "answers": {
           "name": "it broke",
           "severity": "high",
@@ -608,7 +629,13 @@ with tempfile.TemporaryDirectory() as directory:
       request(
         "POST",
         "/api/reports/fields/submit",
-        json.dumps({"id": "sub-1", "answers": {"name": "changed"}}),
+        json.dumps(
+          {
+            "id": "sub-1",
+            "answers": {"name": "changed"},
+            "revision": store.report("fields")["updated_at"],
+          }
+        ),
         auth,
       )[0]
       == 400
@@ -704,7 +731,11 @@ with tempfile.TemporaryDirectory() as directory:
     _, wide_questions = preview.render_report(wide.read_text(encoding="utf-8"))
     assert len(wide_questions) == 50
     full = json.dumps(
-      {"id": "sub-wide", "answers": {q["id"]: "x" * 2000 for q in wide_questions}}
+      {
+        "id": "sub-wide",
+        "revision": store.report("wide")["updated_at"],
+        "answers": {q["id"]: "x" * 2000 for q in wide_questions},
+      }
     )
     assert len(full) > preview.MAX_BODY, (
       "the case has to exceed the limit it is testing"
@@ -720,7 +751,11 @@ with tempfile.TemporaryDirectory() as directory:
         "POST",
         "/api/reports/wide/submit",
         json.dumps(
-          {"id": "sub-over", "answers": {wide_questions[0]["id"]: "x" * 2001}}
+          {
+            "id": "sub-over",
+            "revision": store.report("wide")["updated_at"],
+            "answers": {wide_questions[0]["id"]: "x" * 2001},
+          }
         ),
         auth,
       )[0]
@@ -938,6 +973,63 @@ with tempfile.TemporaryDirectory() as directory:
 
     # The read stamp belongs to the report rather than to one browser's storage, so the browser
     # writes it through a route of its own, and only the first look sets it.
+    revision_source = root / "revision.md"
+    revision_source.write_text(
+      "Old plan\n\nDecision? {#decision}\n- ( ) Yes\n- ( ) No\n"
+    )
+    with patch.object(preview, "now", return_value="2026-09-22T12:00:00.100000+00:00"):
+      store.publish("revision", "Old plan", revision_source)
+    served_revision = json.loads(request("GET", "/api/reports/revision/html")[2])[
+      "revision"
+    ]
+    assert served_revision == store.report("revision")["updated_at"]
+    revision_source.write_text(
+      "Changed plan\n\nDecision? {#decision}\n- ( ) Yes\n- ( ) No\n"
+    )
+    with patch.object(preview, "now", return_value="2026-09-22T12:00:00.900000+00:00"):
+      store.publish("revision", "Changed plan", revision_source)
+    answer = {
+      "id": "revision-answer",
+      "answers": {"decision": "Yes"},
+      "revision": served_revision,
+    }
+    before_answers = store.submissions()
+    assert (
+      request("POST", "/api/reports/revision/submit", json.dumps(answer), auth)[0]
+      == 409
+    )
+    assert store.submissions() == before_answers
+    assert next(row for row in store.state()["reports"] if row["id"] == "revision")[
+      "needs_answer"
+    ]
+    del answer["revision"]
+    assert (
+      request("POST", "/api/reports/revision/submit", json.dumps(answer), auth)[0]
+      == 400
+    )
+    answer["revision"] = store.report("revision")["updated_at"]
+    statements = []
+    connect = store.connect
+
+    def traced_connection():
+      db = connect()
+      db.set_trace_callback(statements.append)
+      return db
+
+    with patch.object(store, "connect", side_effect=traced_connection) as connections:
+      assert (
+        request("POST", "/api/reports/revision/submit", json.dumps(answer), auth)[0]
+        == 201
+      )
+      assert connections.call_count == 1
+    assert statements[0] == "BEGIN IMMEDIATE" and statements[-1] == "COMMIT"
+    assert any("SELECT * FROM reports" in statement for statement in statements)
+    assert any("INSERT INTO submissions" in statement for statement in statements)
+    assert (
+      request("POST", "/api/reports/revision/submit", json.dumps(answer), auth)[0]
+      == 201
+    )
+    assert len(store.submissions()) == len(before_answers) + 1
     store.publish("seen", "Seen report", source)
     assert store.state()["reports"][-1]["seen_at"] is None
     assert request("POST", "/api/reports/seen/seen", "{}")[0] == 403
@@ -1198,7 +1290,9 @@ with tempfile.TemporaryDirectory() as wide_dir:
   _, questions = preview.render_report(wide.read_text(encoding="utf-8"))
   assert len(questions) == 50
   answers = {question["id"]: "x" * 2000 for question in questions}
-  record = wide_store.submit_report("wide", "note-wide", answers)
+  record = wide_store.submit_report(
+    "wide", "note-wide", answers, wide_store.report("wide")["updated_at"]
+  )
   # The combined answers pass the 4000 a note is capped at, and none of it is dropped.
   assert len(record["text"]) > 4000
   assert record["text"].count("x" * 2000) == 50
@@ -1584,7 +1678,9 @@ with tempfile.TemporaryDirectory() as marker_dir:
   assert marker_store.state()["reports"][0]["needs_answer"] is True
   marker_store.mark_report_seen("form")
   assert marker_store.state()["reports"][0]["needs_answer"] is True
-  marker_store.submit_report("form", "answer", {})
+  marker_store.submit_report(
+    "form", "answer", {}, marker_store.report("form")["updated_at"]
+  )
   assert marker_store.state()["reports"][0]["needs_answer"] is False
   assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
   with marker_store.connect() as db, db:

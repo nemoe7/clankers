@@ -67,6 +67,8 @@ Use the companion [reporting skill](../../arena-preview-reporting/SKILL.md) for 
 
 Republishing preserves first-publish order, clears the report's read stamp and never deletes delivered answers. `read` delivers submissions headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty answers; resending creates a new answer. Publishing never acknowledges a submission. Verify the rendered report before claiming delivery. Render failures leave sources available for inspection; report failure, never success.
 
+Rendered reports return a full `revision`; answer requests must echo it. Revision checks and answer writes share one transaction. Missing revisions return HTTP 400, stale ones HTTP 409 without saving. Reload old preview pages before sending. Automatic updates retain unsent/in-flight answers. After rejection, copy entries before explicitly refreshing and reviewing the new report.
+
 ## Recovery
 
 1. Preserve ignored state and report sources outside cache/build directories. Process IDs, venv packages and URLs are not durable. Restore the approved renderer if needed, then restart with the same state directory. Reload an old browser page if its submission token is stale; first keep/copy an unsent draft if browser storage is unavailable. Drafts are origin-local, not cross-device backups.

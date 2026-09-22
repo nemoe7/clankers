@@ -430,6 +430,10 @@ def render_report(markdown):
   return "".join(parts), questions
 
 
+class ReportChanged(ValueError):
+  pass
+
+
 class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
@@ -566,6 +570,7 @@ class Store:
     seen_at=None,
     task_id=None,
     ack_edited_at=None,
+    shared=None,
   ):
     """Record report answers apart from user messages; the log never shows them.
 
@@ -577,8 +582,9 @@ class Store:
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
-    with closing(self.connect()) as db, db:
-      db.execute("BEGIN IMMEDIATE")
+    with self.transaction(shared) as db:
+      if shared is None:
+        db.execute("BEGIN IMMEDIATE")
       existing = db.execute(
         "SELECT * FROM submissions WHERE id = ?", (submission_id,)
       ).fetchone()
@@ -1122,9 +1128,9 @@ class Store:
         db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       )
 
-  def report(self, report_id):
+  def report(self, report_id, shared=None):
     identifier(report_id)
-    with closing(self.connect()) as db:
+    with self.transaction(shared) as db:
       row = db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
@@ -1162,14 +1168,26 @@ class Store:
           f"{field['type']} fields give each free-text option its own label"
         )
 
-  def submit_report(self, report_id, note_id, answers):
-    report = self.report(report_id)
-    fields = parse_fields(report["markdown"])[1]
-    if not fields:
-      raise ValueError("This report has no fields to answer")
-    return self.submit(report_id, report["title"], fields, note_id, answers)
+  def submit_report(self, report_id, note_id, answers, revision=None):
+    if not isinstance(revision, str) or not revision:
+      raise ValueError(
+        "Report revision required; copy your entries and reload the preview"
+      )
+    with self.transaction() as db:
+      db.execute("BEGIN IMMEDIATE")
+      report = self.report(report_id, shared=db)
+      if revision != report["updated_at"]:
+        raise ReportChanged(
+          "Report changed. Your entries are kept; copy them before refreshing, reviewing and resending"
+        )
+      fields = parse_fields(report["markdown"])[1]
+      if not fields:
+        raise ValueError("This report has no fields to answer")
+      return self.submit(
+        report_id, report["title"], fields, note_id, answers, shared=db
+      )
 
-  def submit(self, report_id, title, fields, note_id, answers):
+  def submit(self, report_id, title, fields, note_id, answers, shared=None):
     if not isinstance(answers, dict):
       raise TypeError("Answers is a JSON object keyed by field ID")
     known = {field["id"] for field in fields}
@@ -1207,7 +1225,7 @@ class Store:
           )
         rendered = ", ".join(value) if value else "(skipped)"
       lines.append(f"  {field_id}: {rendered}")
-    return self.submission(note_id, report_id, "\n".join(lines))
+    return self.submission(note_id, report_id, "\n".join(lines), shared=shared)
 
 
 def open_link(renderer, tokens, index, options, env):
@@ -1401,7 +1419,14 @@ def handler(store):
               return
             self.reply(
               200,
-              json.dumps({"html": body, "fields": len(questions)}, ensure_ascii=False),
+              json.dumps(
+                {
+                  "html": body,
+                  "fields": len(questions),
+                  "revision": report["updated_at"],
+                },
+                ensure_ascii=False,
+              ),
             )
             return
           self.reply(
@@ -1510,7 +1535,10 @@ def handler(store):
           return
         if report_submit:
           note = store.submit_report(
-            report_submit.group(1), payload.get("id"), payload.get("answers")
+            report_submit.group(1),
+            payload.get("id"),
+            payload.get("answers"),
+            payload.get("revision"),
           )
           for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
             note[key] = clip_stamp(note[key])
@@ -1520,6 +1548,8 @@ def handler(store):
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))
+      except ReportChanged as error:
+        self.problem(409, error)
       except FileNotFoundError as error:
         self.problem(404, error)
       except (ValueError, TypeError, UnicodeDecodeError) as error:
