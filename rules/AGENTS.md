@@ -71,7 +71,7 @@
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
 - In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one; without one, create it exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`.
 - In `nemoe7` repositories: gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
-- Minimum code/config comments; a comment only when necessary or the function is convoluted enough to warrant it.
+- NEVER add unnecessary code/config comments; only when the method is complex enough.
 - Leave unrelated code alone.
 - Keep scratch files, scripts, output out of the repo or delete them once used, out of every commit.
 
