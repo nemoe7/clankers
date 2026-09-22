@@ -6,6 +6,7 @@ import html
 import json
 import re
 import secrets
+import socket
 import sqlite3
 import sys
 import uuid
@@ -383,6 +384,23 @@ def cli_json(value, pretty=False):
   if pretty:
     return json.dumps(value, ensure_ascii=False, indent=2)
   return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def require_server(store):
+  """Fail the poll while the preview server is down, so the agent restarts it.
+
+  `serve` records its bound port in the state, so a poll can tell a quiet
+  inbox from a dead server: the port is the evidence, and a refused connect
+  means the owner's page is gone with it.
+  """
+  port = store.meta_value("port")
+  if not port:
+    return
+  with closing(socket.socket()) as probe:
+    probe.settimeout(1)
+    if probe.connect_ex(("127.0.0.1", int(port))) == 0:
+      return
+  raise ValueError("preview server is down; start it again before polling")
 
 
 def print_read(store, pretty=False):
@@ -984,6 +1002,17 @@ class Store:
       for position, row in enumerate(rows, 1):
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, row[0]))
 
+  def meta_value(self, key):
+    """Read one meta value, or None when it is absent."""
+    with closing(self.connect()) as db:
+      row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+      return row[0] if row else None
+
+  def set_meta(self, key, value):
+    """Record one meta value, replacing any previous one."""
+    with closing(self.connect()) as db, db:
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
+
   def reminder(self):
     """Count pending kinds without marking any message seen."""
     with closing(self.connect()) as db:
@@ -1576,6 +1605,11 @@ def main():
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument("--state-dir", default="reports/arena-preview")
   parser.add_argument(
+    "--reminder",
+    action="store_true",
+    help="Print the unacked-count reminder line and exit",
+  )
+  parser.add_argument(
     "--save-path",
     default=SAVED_STATE,
     help="Where the save button writes its file; untracked, and at the repository root by default",
@@ -1585,7 +1619,7 @@ def main():
     action="store_true",
     help="Indent the JSON this CLI prints; agent-facing output is minified by default",
   )
-  commands = parser.add_subparsers(dest="command", required=True)
+  commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve")
   serve.add_argument(
     "--port", type=int, default=8000, help="Port to bind (default: 8000)"
@@ -1643,6 +1677,13 @@ def main():
   legacy.add_argument("source", type=Path)
   args = parser.parse_args()
   try:
+    if args.reminder:
+      store = Store(args.state_dir, create=False, save_path=args.save_path)
+      require_server(store)
+      print(store.reminder(), flush=True)
+      return 0
+    if not args.command:
+      parser.error("a command is required")
     store = Store(
       args.state_dir, create=args.command in {"serve", "init"}, save_path=args.save_path
     )
@@ -1650,12 +1691,14 @@ def main():
     if args.command == "serve":
       require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
+        store.set_meta("port", str(server.server_port))
         print(
           f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",
           flush=True,
         )
         server.serve_forever()
     elif args.command == "read":
+      require_server(store)
       print_read(store, args.pretty)
     elif args.command == "seen":
       store.mark_seen(args.ids)
