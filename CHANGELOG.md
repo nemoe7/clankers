@@ -1,3 +1,19 @@
+## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
+
+**Origin** — the owner's call-out that the turn ended without an inbox poll, so 13 items (two violation call-outs and eleven directives) never reached the agent mid-turn. This entry records what landed immediately; the rule changes are proposed in the `pending-amendments` report, one queue task per blocked item.
+
+**Preview fix** — the `#send-status` save line now formats the server stamp through the client's `time()` helper, which pins a seconds-only ISO stamp to UTC before the local formatter, so the status line reads the owner's timezone instead of the server's wall clock (note 90f5935).
+
+**Rule change** — root `AGENTS.md` Git: merges MUST be rebase merges — rebase onto the target, then merge, no merge commit — per note 41bbc36 (the GitHub repo is restricted to rebase merge only and the house rule may be amended), matching the core and arena lines.
+
+**Matrix and report** — `platform-difference-reasons` takes the second correction round (merge authorization on all platforms, automations out of the matrix, the retired channel a fallback only on request, core not read on a local terminal) as dispositions 7-10, and disposition 6 records the house-rule resolution. `rules/README.md` gains the scope line: automations are prompts, not rules.
+
+**Pending amendments** — the `pending-amendments` report proposes A1-A9 with answers Q1-Q9: turn-end read hardening (this turn's violation), the restart notice (violation c624da8), the arena turn-end PR CI check, the arena mermaid split (chat never, docs always), preview no-mermaid, the core merge-authorization clause with its 30-char ChatGPT CUSTOM funding cut, core "terse" (default no change — General already says it), the row-7 cell mapping, and the CLI inbox reminder on every subcommand (notes 4890cb9, 35d2e7d, 5fa7bfa).
+
+**Cost** — `app.js` 24,240 to 24,215 `B`. Root `AGENTS.md` carries no budget row. No growth is accepted.
+
+**Checks** — `check.py --update` then a clean re-run with `TIKTOKEN_CACHE_DIR` set, `check_minify.py`, `check_client.cjs`, `node --check`, `ruff`, and the STE linter on the changed scope.
+
 ## 2026-09-22 — Uploads notify the agent's inbox
 
 **Origin** — the owner's note `feat: notify agent that a file has been uploaded`, after the previous session's uploads were lost with its sandbox state. The uploads list renders only in the browser, so the agent had no signal that bytes had arrived.
