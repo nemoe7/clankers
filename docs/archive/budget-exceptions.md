@@ -85,3 +85,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner requested audit H3 with approval waived. Bind answers to rendered revisions, reject stale forms atomically and retain entries during automatic updates. `assets/app.js` 26,646 → 27,178 `B`. `scripts/preview.py` 53,399 → 54,009 `B`. `scripts/check_preview.py` 49,520 → 51,841 `B`. `scripts/check_client.cjs` 48,319 → 50,670 `B`. `references/REFERENCE.md` 9,088 → 9,471 `B`.
 
 2026-09-23: the owner approved auto-seen reads and their build growth. Build sizes: `scripts/preview.py` 54,009 → 54,509 `B`. `scripts/check_preview.py` 51,841 → 53,449 `B`. `skills/arena-preview-steering/SKILL.md` 11,626 → 11,757 `B`. A read stamps Seen for the IDs it printed once its write succeeds.
+
+2026-09-23: the owner approved option A in the pip-after-answer report, with its harness growth. Build sizes: `scripts/preview.py` 54,509 → 54,458 `B`. `scripts/check_preview.py` 53,449 → 53,589 `B`. A form answer survives a republish, however old it is.
