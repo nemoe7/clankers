@@ -130,7 +130,7 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 .icon-button[data-state="good"] { color: var(--dot-said); border-color: var(--dot-said); }
 .icon-button[data-state="bad"] { color: #ef4444; border-color: #ef4444; }
 /* Receipt state is a dot: gray until read, blue once read, green once answered. */
-.state-dot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: var(--dot-sent); }
+.state-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dot-sent); }
 .state-dot[data-state="seen"] { background: var(--dot-seen); }
 .state-dot[data-state="said"] { background: var(--dot-said); }
 .answer { margin-top: 8px; }
