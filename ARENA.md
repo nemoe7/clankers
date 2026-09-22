@@ -27,7 +27,7 @@
 - Comments, docs and responses: terse but unambiguous, never cryptic.
 - Batch independent tool calls into one block where the surface permits.
 - With several tasks open, ALWAYS start with the smallest and keep taking the smallest remaining; a user-stated priority outranks size. Re-sort whenever a task arrives, so arrival order never decides.
-- Keep working while tasks remain. End the turn when the work is verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason.
+- Keep working while tasks remain. End the turn when the work is verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason. Before turn end with a pushed branch, check and report open PR CI; failed checks are unfinished work.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
 ## Scope
@@ -102,7 +102,7 @@
 
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; MUST ASD-STE100; no skill or linter.
-- NEVER mermaid.
+- NEVER mermaid in chat, which Arena cannot render; repository docs use mermaid for pipelines, diagrams, and flows, never ASCII art.
 - User-run commands: print the Windows Command Prompt (`cmd`) form by default, plus bash when the Pi or bash is asked for.
 - Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
 

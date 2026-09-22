@@ -1,5 +1,7 @@
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
 
+**Approved follow-up** — Remove merge policy from generic core. Arena and ChatGPT keep platform-specific merge rules, with no new ChatGPT clause or character cut. Omit the proposed loading-path matrix cell. Local agents already load their rules. The installer is unchanged. Core already requires terse responses. Add the final inbox-read requirement, advance notice before a preview restart, and no mermaid in preview reports. Arena requires a pushed branch's PR CI check before turn end, bans mermaid in chat, and uses it for document diagrams. Steering 2.1.0 prints unacknowledged counts by kind and the task-list duty on stderr before command dispatch. Stdout formats stay unchanged, and reminders never mark messages seen. The runtime harness covers the reminder, JSON compatibility, acknowledgements, and read-only count behavior.
+
 **Origin** — the owner's call-out that the turn ended without an inbox poll, so 13 items (two violation call-outs and eleven directives) never reached the agent mid-turn. This entry records what landed immediately; the rule changes are proposed in the `pending-amendments` report, one queue task per blocked item.
 
 **Preview fix** — the `#send-status` save line now formats the server stamp through the client's `time()` helper, which pins a seconds-only ISO stamp to UTC before the local formatter, so the status line reads the owner's timezone instead of the server's wall clock (note 90f5935).

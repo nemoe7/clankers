@@ -109,7 +109,6 @@
   - The rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push or open a PR unless asked.
-- Merge by rebase only: rebase the branch onto the target first, then merge, so the merge is a fast-forward and creates no merge commit.
 
 ## Responses
 

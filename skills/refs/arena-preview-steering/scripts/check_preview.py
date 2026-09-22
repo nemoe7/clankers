@@ -1413,3 +1413,39 @@ with tempfile.TemporaryDirectory() as restore_dir:
   assert "existing IDs are not duplicated" in again
   # Three restored notes, and a re-import adds none of them twice.
   assert len(preview.Store(restore).state()["notes"]) == 3
+
+# Every dispatch carries a reminder without changing stdout or marking notes seen.
+with tempfile.TemporaryDirectory() as reminder_dir:
+  reminder_store = preview.Store(reminder_dir, create=True)
+  reminder_store.note("reminder-note", "Read this")
+  reminder_script = str(Path(preview.__file__))
+  for command in (["task-list"], ["task", "reminder-task", "Track work"], ["read"]):
+    result = subprocess.run(
+      [sys.executable, reminder_script, "--state-dir", reminder_dir, *command],
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+    json.loads(result.stdout)
+    assert "1 unacknowledged" in result.stderr
+    assert "messages: 1, form answers: 0, uploads: 0" in result.stderr
+    assert "Manage the task list" in result.stderr
+    if command != ["read"]:
+      assert reminder_store.state()["notes"][0]["seen_at"] is None
+  result = subprocess.run(
+    [
+      sys.executable,
+      reminder_script,
+      "--state-dir",
+      reminder_dir,
+      "ack",
+      "reminder-note",
+      "--note",
+      "Received",
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  assert "Manage the task list" in result.stderr
+  assert "0 unacknowledged" in reminder_store.reminder()
