@@ -1,10 +1,10 @@
 # Rules specification
 
-This file gives the structure, the constraints, the installation, and the maintenance of the rule system. It is reference documentation, not an agent rule file. Do not deploy it into the Rules folder of an agent.
+This file gives the structure, constraints, installation and maintenance of the rule system. It is reference documentation, not an agent rule file. Do not deploy it into the Rules folder of an agent.
 
 A command or a path in a code span is relative to the repository root unless the text says otherwise.
 
-The installation script uses only the Python standard library. The repository has no test suite. The script `maintenance/check.py` needs `markdown-it-py` and `tiktoken`, which the repository's CI in [.github/workflows/](../.github/workflows/) installs before it runs the script on every push and pull request. The workflow then commits the refreshed README measurements and lints the Markdown.
+The installation script uses only the Python standard library. The repository has no test suite. `maintenance/check.py` needs `markdown-it-py` and `tiktoken`, which CI in [.github/workflows/](../.github/workflows/) installs before running it on every push and pull request. The workflow then commits the refreshed README measurements and lints the Markdown.
 
 ## Contents and activation
 
@@ -21,7 +21,7 @@ The installation script uses only the Python standard library. The repository ha
 | [skills/](../skills/README.md) | Reusable skills | Install the complete skill directories, including the supporting files |
 | [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into the workflow location of your platform, or run it as it is |
 
-Rules and tools load differently across agent versions. Determine which files are active in your installed release. Never assume that a filename alone enables loading. ARENA.md compresses the core because it deploys on its own. CLINE.md relies on the loader also reading AGENTS.md. If that stops holding, repair the installation or deliberately put the core back in. Do not lose it in silence.
+Rules and tools load differently across agent versions. Determine which files are active in your installed release, and never assume a filename alone enables loading. ARENA.md compresses the core because it deploys on its own. CLINE.md relies on the loader also reading AGENTS.md. If that stops holding, repair the installation or deliberately put the core back in. Do not lose it in silence.
 
 ## Install rules
 
@@ -31,7 +31,7 @@ From the repository root, with Python 3:
 python3 rules/apply.py
 ```
 
-On Windows, use `python rules\apply.py` or `apply.bat` from the repository root. The script shows unified diffs for the changed files, asks for one response, and then copies two files, creating destination directories when necessary. Enter `y` or `yes` to apply. Any other response aborts. The flags `--yes`/`-y` skip the prompt, and `--dry-run` shows the diffs without a change. If both destinations are current, the script exits with no prompt.
+On Windows, use `python rules\apply.py` or `apply.bat` from the repository root. The script shows unified diffs for the changed files, asks for one response, then copies two files and creates destination directories when necessary. Enter `y` or `yes` to apply. Any other response aborts. The flags `--yes`/`-y` skip the prompt, and `--dry-run` shows the diffs without a change. If both destinations are current, the script exits with no prompt.
 
 | Source | Destination relative to the base directory |
 | --- | --- |
@@ -53,11 +53,11 @@ $env:APPLY_RULES_BASE = "C:\path\to\profile"
 python .\rules\apply.py
 ```
 
-**The installer overwrites an existing destination file.** Back up your local changes before you apply it. The installer does not install skills, ARENA.md, or the ChatGPT files. Use their separate setup steps. Do not install this specification as an agent rule.
+**The installer overwrites an existing destination file.** Back up local changes before applying it. It installs no skills, ARENA.md or ChatGPT files. Use their separate setup steps. Do not install this specification as an agent rule.
 
 ## Workflows
 
-A workflow is portable across coding-agent platforms. The workflow body depends on no platform-specific tool, agent name, model, provider, UI, permission, or interaction mechanism. Each workflow is one self-contained Markdown file with a `description` frontmatter field, budgeted in `cl100k_base` tokens in the [root README](../README.md#instruction-budgets). The format details are in [workflows/README.md](../workflows/README.md).
+A workflow is portable across coding-agent platforms. Its body depends on no platform-specific tool, agent name, model, provider, UI, permission or interaction mechanism. Each workflow is one self-contained Markdown file with a `description` frontmatter field, budgeted in `cl100k_base` tokens in the [root README](../README.md#instruction-budgets). The format details are in [workflows/README.md](../workflows/README.md).
 
 [workflows/README.md](../workflows/README.md#use) owns the installation and the selection, not this specification.
 
@@ -71,7 +71,7 @@ A workflow is portable across coding-agent platforms. The workflow body depends 
 6. A skill specializes a default. It NEVER weakens an explicit requirement, a convention, or an acceptance criterion.
 7. Keep the skill resources on demand, and keep their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification, with recorded provenance (see Skill rules).
-9. Keep this repository light: no further CI workflow, dependency manifest, or test scaffolding unless the owner asks for one. The pinned minifier manifest that the preview build uses is the one exception, on the owner's answers to report `minification-scope`. Review a change directly, and never claim a check that did not run.
+9. Keep this repository light: no further CI workflow, dependency manifest or test scaffolding unless the owner asks for one. The pinned minifier manifest the preview build uses is the one exception, on the owner's answers to report `minification-scope`. Review a change directly, and never claim a check that did not run.
 10. Amend `rules/refs/` first. Then mirror the amendment into its live counterpart in compressed form, and squash only the new or affected line. On a removal, attempt one squash and keep the lower budget. Full wording stays in refs, and the compressed form stays in `rules/` (see Baselines).
 
 ### Arena file
@@ -98,7 +98,7 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 ### Baselines
 
-`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents that work without git history. Write every amendment here first, in complete sentences, and keep every negation, condition, command, number, threshold, filename, and caveat. Then mirror the amendment into its live file in compressed form, and squash only the new or affected line. On a removal, attempt one squash and keep the lower budget. A copy of a refs baseline would exceed every live budget, so the mirroring is where the compression happens. Refs stay uncompressed as the baseline. A file equals its live counterpart where the change applied no compression, so refs always hold the original wording. `GUIDELINES.md` sits beside them as the writing standard that the audits use on these baselines. It is a reference, not a rule baseline, and it has no live counterpart.
+`rules/refs/` mirrors the agent-facing rule files in full, uncompressed wording for agents that work without git history. Write every amendment here first, in complete sentences, keeping every negation, condition, command, number, threshold, filename and caveat. Then mirror it into its live file compressed, squashing only the new or affected line. On a removal, attempt one squash and keep the lower budget. A refs baseline copy would exceed every live budget, so the mirroring is where compression happens. Refs stay uncompressed as the baseline. A file equals its live counterpart where the change applied no compression, so refs always hold the original wording. `GUIDELINES.md` sits beside them as the writing standard that the audits use on these baselines. It is a reference, not a rule baseline, and it has no live counterpart.
 
 ### Commit disciplines
 
@@ -115,7 +115,7 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/` — 10 files in all. The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
 
-Do not hard-wrap the prose. Keep each paragraph, list item, and table row on one line, and let the editor soft-wrap. Third-party licenses keep their original wrapping.
+Do not hard-wrap the prose. Keep each paragraph, list item and table row on one line, and let the editor soft-wrap. Third-party licenses keep their original wrapping.
 
 Rule files keep one rule per line, per [refs/GUIDELINES.md](refs/GUIDELINES.md) section 4.1. The Markdown rule files use bullets. The ChatGPT files use one plain line per rule, and item 4 keeps them free of headings and bullets. A line can carry the parameters, the enumeration, or the exact command of one rule. It does not carry two rules. The core and `ARENA.md` open with a `Use` section. The overlays `CLINE.md` and `KILO.md` do not. The Markdown rule files close with a `When in doubt` section. `KILO.md` is the exception, because the core settles the doubts it would restate. The core and `ARENA.md` also carry a constitution, and `CLINE.md` and `KILO.md` inherit the core's instead of copying it. The `rules/refs/kilo/` and `rules/kilo/` mode overrides keep a different shape on purpose. They open with a blank line, then `### Native <mode> Agent Overrides`, then the conflict clause. Kilo wraps them as a mode reminder rather than loading them as a full rules file. The ChatGPT files and `COMMIT-SPEC.txt` keep their set formats instead, per item 4 and their single-purpose scope.
 
