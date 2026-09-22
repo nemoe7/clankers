@@ -12,6 +12,8 @@
 
 **Harness reads minified builds** — Normalize the runtime harness's asset asserts through one `compact` helper and minify-tolerant spellings, on owner direction, so the live harness runs against the minified assets end to end instead of stopping at its first readable literal. Both harnesses, readable and minified, pass the same asserts. `scripts/check_preview.py` grows 53,589 → 53,947 `B`; the growth is recorded in `docs/archive/budget-exceptions.md`.
 
+**Poll cadence** — Amend the steering cadence, on owner approval of preview report `poll-amendment` after a bare transform script ran with no poll: end every bash call with a poll, replacing "always include a poll in bash calls". Update the Arena refs baseline, live Arena rules, root `ARENA.md`, steering skill refs baseline, compressed live skill, and installed mirror. Sizes: `rules/ARENA.md` 13,903 → 13,908 `B`; `skills/arena-preview-steering/SKILL.md` 11,757 → 11,722 `B`; the growth is recorded in `docs/archive/budget-exceptions.md`.
+
 ## 2026-09-22 — Steering cadence: always include poll in bash calls
 
 **Cadence update** — Change preview steering check cadence from appending a read to the last command of a shell block to always including a poll in bash calls. Update steering skill refs baseline, compressed live skill, installed mirror, Arena refs baseline, live Arena rules, and root `ARENA.md`.
