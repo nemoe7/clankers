@@ -703,7 +703,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.reports = [];
   await get('#refresh-notes').events.click();
   assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
-  // What stamps a report is the browser showing it: five seconds in view for one that fits the
+  // What stamps a report is the browser showing it: one second in view for one that fits the
   // panel with nothing to scroll, and the moment its end is reached for one that does not.
   const panel = get('#reports-panel');
   const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -713,8 +713,8 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#reports-tab').events.click();
   await tick(); await tick();
   assert.equal(readStamps.length, 0, 'a report that fits is not stamped on sight');
-  await wait(5200);
-  assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'five seconds in view stamps it');
+  await wait(1200);
+  assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'one second in view stamps it');
   // A report longer than the panel is not stamped while its end is out of reach, and the panel is
   // the element that scrolls, so its own position is what counts.
   state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
@@ -735,7 +735,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await tick(); await tick();
   get('#notes-tab').events.click();
   await tick();
-  await wait(5200);
+  await wait(1200);
   assert.equal(readStamps.length, 0, 'a report left before its dwell ends is not stamped');
   get('#reports-tab').events.click();
   await tick();

@@ -12,6 +12,8 @@
 
 **Multiple uploads** — Allow multi-file selection. Validate the whole selection before requests, send each file through the existing API, block duplicate batches, and report completed files on partial failure. Preserve the single-file receipt and per-file limit. Client checks cover all paths.
 
+**Report read time** — Reduce the short-report dwell from five seconds to one. Keep end-of-scroll marking and cancellation on tab exit. The timing regression failed before the change and passed after it.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
