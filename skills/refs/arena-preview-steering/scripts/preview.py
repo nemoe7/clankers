@@ -1410,6 +1410,13 @@ def handler(store):
           name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
           record = store.save_upload(name, self.headers.get("Content-Type", ""), data)
           record["at"] = clip_stamp(record["at"])
+          # An upload writes a note, so the agent's next read sees it: the uploads list renders
+          # only in the browser, and the agent has no other signal that bytes arrived. The note
+          # rides the upload's ID, so the log receipt points at the record.
+          store.note(
+            record["id"],
+            f"Upload: {record['name']} ({record['size']} B, {record['type'] or 'unknown type'}) saved to {record['path']}",
+          )
           self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         payload = json.loads(data)
