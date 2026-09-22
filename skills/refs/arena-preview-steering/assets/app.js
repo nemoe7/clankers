@@ -373,7 +373,7 @@ $('#form').addEventListener('submit', async event => {
       body: JSON.stringify(pending)
     })).json();
     note.placeholder = clipPlaceholder(result.text);
-    status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.' : `Saved ${new Date(result.at).toLocaleTimeString()} · Message sent.`;
+    status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.' : `Saved ${time(result.at)} · Message sent.`;
     pending = null;
     save('pending', 'null');
     if (note.value === text) {
