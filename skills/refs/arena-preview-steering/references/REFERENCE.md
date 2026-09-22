@@ -72,6 +72,12 @@ the server's own refusal when a send fails. `check_preview.py` pins the tab, its
 the served page, and the sentence the tab shows about a restore, and the harness covers the ceiling, the
 byte-exact body and the record whose bytes are gone.
 
+An upload also writes a note into the inbox, so the agent's next `read` sees it: the uploads list
+renders only in the browser, and without the note the agent has no signal that bytes arrived. The
+note's ID is the upload's ID, and its text names the file, its size, its type, and its path. The
+agent reads the file at that path and acknowledges the note like any note. A restore that deletes
+the bytes keeps the note and the record.
+
 ## Fields in a report
 
 The renderer splits a source into prose blocks and fields before rendering. A field is written as Markdown:

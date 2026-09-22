@@ -59,6 +59,10 @@ A published report may carry live inputs, and a report whose source is only fiel
 
 Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fix one. Markers inside fenced code blocks stay literal. Options must be unique in their group, 1–20 per group, prompts 1–500 characters, at most 50 fields per report. Answers POST to `/api/reports/<id>/submit` and are recorded apart from user messages: `read` lists them as pending items with `kind: report`, headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty ones, and `ack` answers them like notes. They never render in the message log; the report's own `✓ Sent` receipt is the user's confirmation. A send stores the answers in that browser, so the fields reload pre-filled under a `✓ Sent <time>` receipt and the user can amend and send again; each send is a new note, and republishing the source does not erase answers already sent.
 
+## Uploads
+
+An upload writes a note into the inbox, so the agent's next read sees it: the uploads list renders only in the browser, and the agent has no other signal that bytes arrived. The note's ID is the upload's ID, and its text names the file, its size and type, and its path. Read the file at that path, then acknowledge the note like any note. A restore can delete the bytes; the note and the record survive, and `present` says which is which.
+
 ## Persistence and limits
 
 `state.sqlite3` stores notes, receipts, published report snapshots and the latest check using SQLite transactions. Keep the file, not the process, as the durable artifact. The browser polls for display updates; this does **not** make the agent read automatically.
