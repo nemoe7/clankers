@@ -1875,3 +1875,9 @@ Only agent-facing rule files and `SKILL.md` entry points are tracked. Documentat
 | `skills/planning/SKILL.md` | 1,031 |
 | `skills/ponytail/SKILL.md` | 1,596 |
 | `skills/web-design-guidelines/SKILL.md` | 287 |
+
+## 2026-09-23 — Automatic preview polling
+
+**Auto-poll hook** — Install an idempotent hook, on owner direction through steering notes: one installer creates the venv, writes `~/.arena-preview-hook.sh`, and adds the EXIT trap to `~/.bash_profile`. The hook polls after every Arena bash call, prints the unacked counts to stderr, and marks nothing seen. `--reminder` is its CLI interface; `require_server` names a down server, and `serve` records its port. The manual cadence is removed. Sizes: `skills/arena-preview-steering/SKILL.md` 11,722 → 11,639 `B`; `scripts/preview.py` 54,458 → 55,826 `B`; `scripts/install.sh` new at 1,851 `B`; the growth is recorded in `docs/archive/budget-exceptions.md`.
+
+**Checks** — Markdown lint, Ruff lint and format at the pinned version, `maintenance/check.py --update` with README measurements refresh, the STE linter on changed README and docs lines, the refs and minified runtime harnesses, minification drift, and the passthrough and server-down hook verifications.

@@ -91,3 +91,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-23: the owner directed harness asserts that read the minified build. `scripts/check_preview.py` grows 53,589 → 53,947 `B`. One compact helper makes every asset assert pass on the readable refs and the minified copies alike.
 
 2026-09-23: the owner approved ending every bash call with a poll. `rules/ARENA.md` grows 13,903 → 13,908 `B`. `skills/arena-preview-steering/SKILL.md` shrinks 11,757 → 11,722 `B`. The mechanical wording closes the bare-script gap.
+
+2026-09-23: the owner directed automatic polling with an installer and a server-down message. Build size: `scripts/preview.py` grows 54,458 → 55,826 `B`. The hook prints the unacked counts after each bash call and marks nothing seen. A poll names a down server, and the agent starts it again.
