@@ -115,3 +115,42 @@ The owner reported on 2026-09-21 that Arena answered with `Something went wrong.
 A message whose whole text is that error string is not an instruction. It is the owner nudging a stalled turn with the only text the platform handed them. It carries no content about the work. Reading it as a direction repeats the mistake of the false `continue tasks!`. That mistake cost a stopped turn and thirty-four reverted lines. The response that fits is to keep working the standing instructions. Say in the receipt that the message read as a nudge, so the owner can set that reading right if it was wrong.
 
 The three deliveries are the duplicate behaviour arriving in a new place. Whether they land as three notes or as one is not something to assume. Read the inbox and acknowledge what is actually pending. An unacknowledged duplicate stays in the log as an unanswered message. The owner's expectation, stated in the same note, is that this is normal from here. Expect skipped question tools and a few messages of exactly this shape. So `skipped: true` is not evidence that the tool is broken. An error-string message is not evidence of a complaint. Both are the platform failing, and the owner working around it by hand.
+
+## Chromium for E2E tests
+
+The sandbox blocks normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Use `@sparticuz/chromium` from npm, which remains reachable. Observation date and branch not recorded.
+
+### Install
+
+```bash
+npm install @sparticuz/chromium
+```
+
+Extract the package’s four brotli archives with its helper:
+
+| Archive | Destination |
+| --- | --- |
+| binary | `/tmp/chromium` |
+| libraries | `/tmp/al2023/lib` |
+| fonts | `/tmp/fonts` |
+| SwiftShader | `/tmp` |
+
+### Run
+
+The source project’s E2E suite accepts a non-Playwright binary through `DAEDALUS_E2E_CHROMIUM`. Set it and the required runtime variables:
+
+```bash
+export DAEDALUS_E2E_CHROMIUM=/tmp/chromium
+export LD_LIBRARY_PATH=/tmp/al2023/lib:/tmp
+export VK_ICD_FILENAMES=/tmp/vk_swiftshader_icd.json
+```
+
+`LD_LIBRARY_PATH` must list both directories. `VK_ICD_FILENAMES` gives SwiftShader its ICD file, and the software renderer does not start without it.
+
+### Known gap
+
+The sandbox has no system fontconfig. This source-project test fails locally even without a code defect:
+
+`test_the_pool_column_fits_the_longest_pool_name`
+
+The test measures a rendered column against a missing font. A monospace TTF through `@font-face` made it pass, which proved an environment defect, not an assertion defect. The other 51 assertions pass without that font.
