@@ -30,7 +30,7 @@ The rule sets for Core (`rules/AGENTS.md`), Arena (`rules/ARENA.md`) and the two
 | Rule area | Core | Arena | ChatGPT |
 | --- | --- | --- | --- |
 | Push and PR | NEVER push or open a PR unless asked. | Always push the branch and keep a PR open, disregarding never-push rules. | ALWAYS PR. |
-| Merge | Merges MUST be fast-forward when possible. On divergence, rebase onto the target. | merge by rebase only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
+| Merge | Merge by rebase only: rebase onto the target, then merge. No merge commit. | merge by rebase only: rebase onto the target, then merge, so no merge commit lands | ALWAYS rebase merge. |
 | Merge authorization | — | NEVER merge the PR until authorized | — |
 | Commit list | — | Before every commit, without exception, print the planned final commit list first | Print the planned final commit list first. |
 | Question channel | Ask every question with the question tool. NEVER ask in plain text. | stop and ask with the `ask_user` tool. Questions go through a fielded report in the Reports tab. | — |
@@ -98,7 +98,7 @@ A workflow is portable across coding-agent platforms. Its body depends on no pla
 
 Arena uses the sibling `arena-preview-steering` and `arena-preview-reporting` skills for one Notes / Reports preview. Reports and session state stay ignored and uncommitted. The migration reference of the steering skill records the former ntfy and local-report-commit workflows. Neither is an automatic fallback, and no one guarantees that the preview is permanent.
 
-Compress wording and sections, not meaning. Keep every negation, condition, command, number, and caveat. Match the generic core in meaning, not byte for byte, except for push, PR, and merge handling. ARENA.md always pushes and keeps a PR open so work survives a limit. It disregards the never-push rules, and it never merges until the owner authorizes it, where the core requires a question first. The core requires fast-forward when possible. Arena merges by rebase only: rebase onto the target, then merge, so no merge commit lands. Do not repeat Arena-managed branch mechanics beyond that.
+Compress wording and sections, not meaning. Keep every negation, condition, command, number, and caveat. Match the generic core in meaning, not byte for byte, except for push, PR, and merge authorization. ARENA.md always pushes and keeps a PR open so work survives a limit. It disregards the never-push rules, and it never merges until the owner authorizes it, where the core requires a question first. Both merge by rebase only: rebase onto the target, then merge, so no merge commit lands. Do not repeat Arena-managed branch mechanics beyond that.
 
 The duplication of the core is deliberate. In Arena, no platform loads ARENA.md or AGENTS.md on its own. So the file stands alone instead of overlaying the core, and it takes effect only after the agent has it in context. Verified 2026-09-13 on `nemoe7/clankers`: the injected context of an Arena session carried the sandbox, the branch, and the tool details only. The agent reached this file by opening it during repository exploration. On 2026-09-17 a session on the same repository missed it: the agent explored the skill subtree and pushed twice before it read either file. So exploration is a bet rather than a gate. The custom-instructions field, not the first message, is the only injection path that survives a forgotten bootstrap line. Activation is therefore a human step. Delivery is not activation. `.github/workflows/distribute-arena.yml` only puts the file in each target repository, and `rules/apply.py` deliberately does not install it. Put this exact line in the first message of the session. Put it in the custom-instructions field of the platform: `Read and apply AGENTS.md and ARENA.md at the repository root before your first edit; confirm in one line.` The preamble of the file then requires an Arena agent that reads it to apply it. It also requires an agent that did not receive it in context to open it before the first edit.
 
@@ -124,7 +124,7 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 | File | Discipline |
 | --- | --- |
-| `rules/AGENTS.md` | Commit on a branch other than `main`. No commit list. Merge fast-forward when possible, and rebase first on divergence |
+| `rules/AGENTS.md` | Commit on a branch other than `main`. No commit list. Merge by rebase only: rebase onto the target, then merge |
 | `rules/ARENA.md` | Print the planned final commit list before every commit. Always push and keep a PR open. Never merge until the owner authorizes it, then merge by rebase only: rebase onto the target, then merge |
 | `rules/CHATGPT-CUSTOM.txt`, `rules/CHATGPT-MORE.txt` | Print the planned final commit list before a commit. Commit only when necessary |
 | `rules/CLINE.md` | Follow the core: commit directly, and keep no list |
