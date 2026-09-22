@@ -20,6 +20,5 @@ For bugs, failures, and regressions: reproduce, isolate, hypothesize, verify, fi
 Never lazy about understanding: read the code and trace the flow first.
 Follow the repository's docs, conventions, and patterns.
 Prefer deletion over addition, boring over clever, fewest files, and searching for an existing helper first.
-Mark a corner-cut with a `simplified:` comment naming its ceiling and its upgrade path.
 Before finishing, check the requirements, the acceptance criteria, and the scope.
 The ladder in the Custom Instructions field is a reflex, not a research project: it runs after you understand the problem rather than instead of it, and when two rungs work you take the higher one.
