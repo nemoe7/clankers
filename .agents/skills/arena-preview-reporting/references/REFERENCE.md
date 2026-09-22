@@ -6,7 +6,7 @@ Install `arena-preview-reporting` beside `arena-preview-steering`. The latter co
 
 Persist state and sources in ignored paths; verify ignoring with Git before starting. Keep one Markdown file/stable ID per subject; multiple report IDs may coexist. Re-publishing an ID updates its title, Markdown snapshot and timestamp. Source edits alone never update published snapshots.
 
-The shared server requires `markdown-it-py`. Without it, startup fails with an install command. Steering CLI commands still work without the renderer. With authorization for that named dependency, install it in a workspace venv and start/restart the server with that Python. Never add it to a consuming application’s manifest solely for reports.
+The shared server requires `markdown-it-py`. Without it, startup fails with an install command. Steering CLI commands still work without the renderer. Always install missing `markdown-it-py` in a workspace venv without asking. Reuse a venv or create one as needed; start/restart the server with its Python. Keep skill-only dependencies out of app manifests and generated `requirements.txt` unless the app independently needs them.
 
 ## Suggested report structure
 
