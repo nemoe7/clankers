@@ -10,6 +10,8 @@
 
 **Shift copy icon** — Show the copy icon while Shift is held over Save state. Key release, pointer leave and window blur restore the save icon. Copy feedback keeps its timer and then uses the current modifier state. Red/green client checks cover transitions and timers.
 
+**Multiple uploads** — Allow multi-file selection. Validate the whole selection before requests, send each file through the existing API, block duplicate batches, and report completed files on partial failure. Preserve the single-file receipt and per-file limit. Client checks cover all paths.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments

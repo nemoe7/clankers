@@ -974,27 +974,46 @@ for (const tab of tabs) {
 // rides the query string; the content type is the browser's, since the server stores any bytes as they
 // arrived and records what they were.
 $('#upload-send').addEventListener('click', async () => {
+  const button = $('#upload-send');
+  if (button.disabled) return;
   const input = $('#upload-file');
   const line = $('#upload-status');
-  const file = input.files && input.files[0];
-  if (!file) { line.textContent = 'Choose a file first.'; return; }
-  if (!file.size) { line.textContent = 'That file is empty.'; return; }
-  if (file.size > MAX_UPLOAD) {
-    line.textContent = `That file is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
-    return;
+  const files = Array.from(input.files || []);
+  if (!files.length) { line.textContent = 'Choose a file first.'; return; }
+  for (const file of files) {
+    const name = files.length === 1 ? 'That file' : file.name;
+    if (!file.size) { line.textContent = `${name} is empty.`; return; }
+    if (file.size > MAX_UPLOAD) {
+      line.textContent = `${name} is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
+      return;
+    }
   }
-  line.textContent = `Uploading ${file.name}…`;
+  const saved = [];
+  let current;
+  button.disabled = input.disabled = true;
   try {
-    const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
-      method: 'POST',
-      headers: writeHeaders(file.type || 'application/octet-stream'),
-      body: file
-    });
-    const record = await response.json();
-    line.textContent = `Saved ${record.name} · ${bytes(record.size)} · ${record.sha256.slice(0, 12)}`;
+    for (const file of files) {
+      current = file;
+      line.textContent = `Uploading ${file.name}…`;
+      const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
+        method: 'POST',
+        headers: writeHeaders(file.type || 'application/octet-stream'),
+        body: file
+      });
+      saved.push(await response.json());
+    }
+    const record = saved[0];
+    line.textContent = files.length === 1
+      ? `Saved ${record.name} · ${bytes(record.size)} · ${record.sha256.slice(0, 12)}`
+      : `Saved ${saved.length} files: ${saved.map(record => record.name).join(', ')}`;
     input.value = '';
-    await refreshState();
-  } catch (error) { line.textContent = `Upload failed: ${error.message}`; }
+  } catch (error) {
+    line.textContent = `Upload failed: ${error.message}` + (files.length === 1 ? ''
+      : ` (${current.name}). Saved ${saved.length} of ${files.length}: ${saved.map(record => record.name).join(', ') || 'none'}. Select remaining files before retrying.`);
+  } finally {
+    button.disabled = input.disabled = false;
+    if (saved.length) await refreshState();
+  }
 });
 $('#report-select').addEventListener('change', loadReport);
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(); });

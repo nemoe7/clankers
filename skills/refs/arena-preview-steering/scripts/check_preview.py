@@ -124,6 +124,7 @@ with tempfile.TemporaryDirectory() as directory:
     # the owner's answers.
     assert 'id="uploads-tab"' in page and 'id="uploads-panel"' in page
     assert 'id="upload-file"' in page and 'id="uploads-list"' in page
+    assert re.search(r'<input[^>]*id="upload-file"[^>]*\bmultiple\b', page)
     assert (
       "A record survives a restore of the preview state, and its bytes do not" in page
     )

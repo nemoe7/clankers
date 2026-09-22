@@ -92,6 +92,7 @@ const readStamps = [];
 const saveCalls = [];
 const uploadCalls = [];
 let uploadFails = false;
+let uploadFailName = '';
 let staleToken = false;
 let servedToken = 'token-one';
 let pageFetches = 0;
@@ -123,7 +124,7 @@ const context = {
     if (url.startsWith('/api/uploads')) {
       // The client sends the file itself, so the body is the bytes and the name rides the query string.
       uploadCalls.push({ url, body: options.body, type: options.headers['Content-Type'], token: options.headers['X-Preview-Token'] });
-      if (uploadFails) return response({ error: 'An upload must be 1,000,000 bytes or fewer' }, false);
+      if (uploadFails || options.body.name === uploadFailName) return response({ error: 'An upload must be 1,000,000 bytes or fewer' }, false);
       const name = decodeURIComponent((url.split('?name=')[1] || 'file'));
       const record = {
         id: `upload-${uploadCalls.length}`, name, type: options.headers['Content-Type'],
@@ -1035,5 +1036,31 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(uploadCalls[1].type, 'application/octet-stream');
   assert.equal(get('#upload-status').textContent, 'Upload failed: An upload must be 1,000,000 bytes or fewer');
   uploadFails = false;
+  const batch = [{name: 'first.txt', size: 3, type: 'text/plain'}, {name: 'second.txt', size: 4, type: 'text/plain'}];
+  get('#upload-file').files = batch;
+  let uploadsBefore = uploadCalls.length;
+  const uploading = get('#upload-send').events.click();
+  assert.equal(get('#upload-send').disabled, true);
+  await get('#upload-send').events.click();
+  await uploading;
+  assert.equal(uploadCalls.length, uploadsBefore + 2, 'one request per file, no duplicate batch');
+  assert.equal(get('#upload-status').textContent, 'Saved 2 files: first.txt, second.txt');
+  assert.equal(get('#upload-send').disabled, false);
+  assert.equal(get('#upload-file').disabled, false);
+  get('#upload-file').files = [batch[0], {name: 'empty.txt', size: 0, type: ''}];
+  uploadsBefore = uploadCalls.length;
+  await get('#upload-send').events.click();
+  assert.equal(uploadCalls.length, uploadsBefore, 'preflight validates the whole selection');
+  assert.match(get('#upload-status').textContent, /empty.txt.*empty/);
+  uploadFailName = 'second.txt';
+  get('#upload-file').files = batch;
+  get('#upload-file').value = 'selection retained';
+  await get('#upload-send').events.click();
+  assert.equal(uploadCalls.length, uploadsBefore + 2);
+  assert.match(get('#upload-status').textContent, /second.txt.*Saved 1 of 2: first.txt/);
+  assert.equal(get('#upload-file').value, 'selection retained');
+  assert.equal(get('#upload-send').disabled, false);
+  assert.equal(get('#upload-file').disabled, false);
+  uploadFailName = '';
   console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy on a shift-click of the save button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });
