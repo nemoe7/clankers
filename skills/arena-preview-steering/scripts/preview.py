@@ -41,12 +41,14 @@ def when(value):
 	try:datetime.fromisoformat(str(value))
 	except ValueError as error:raise ValueError(f"Not a timestamp: {value!r}")from error
 	return str(value)
-def restore_receipt(acknowledged_at,ack_kind,ack_text):
+def restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at=None):
 	'Validate the receipt a restored line carries: all three fields, or none of them.\n\n  A partial receipt is refused rather than filled in, because supplying the missing half\n  is how a note comes back answered when nobody answered it.\n  ';carried=acknowledged_at,ack_kind,ack_text
-	if all(value is None for value in carried):return None,None,None
+	if all(value is None for value in carried):
+		if ack_edited_at is not None:raise ValueError('An edited receipt needs an acknowledgement')
+		return None,None,None,None
 	if any(value is None for value in carried):raise ValueError('A restored receipt carries its stamp, kind and text, or none of them')
 	if ack_kind not in{'note','reply'}:raise ValueError('Every acknowledgement is a note or a reply, with its text')
-	return when(acknowledged_at),ack_kind,note_text(ack_text)
+	return when(acknowledged_at),ack_kind,note_text(ack_text),when(ack_edited_at)if ack_edited_at is not None else None
 def submission_text(text):
 	'Report answers are not notes, so they carry their own cap and their own wording.'
 	if not isinstance(text,str)or not text.strip():raise ValueError('A report submission carries at least one answer')
@@ -122,9 +124,9 @@ MAX_TASK_DETAILS=40
 ECHO_DETAIL=200
 TASK_COLUMNS='id, title, details, status, position, updated_at'
 SAVED_STATE='saved-state.ndjson'
-NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_kind','ack_text','seen_at','task_id'
+NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','seen_at','task_id'
 TASK_LINE_KEYS='id','title','details','status','order'
-SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_kind','ack_text','seen_at','task_id'
+SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','seen_at','task_id'
 def task_row(row):'Shape one stored task for the state payload, keeping its details a list.';return{'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5]}
 def echo_task(record,before=None,after=None):'The confirmation an agent gets back: whole title, details cut, neighbours named.';return{'id':record['id'],'title':record['title'],'status':record['status'],'order':record['order'],'prev':before,'next':after,'details':[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in record['details']]}
 def saved_note_line(record):
@@ -177,11 +179,12 @@ class Store:
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
 			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
-			for column in('ack_kind','ack_text','seen_at','task_id'):
+			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'origin'in columns:db.execute('ALTER TABLE notes DROP COLUMN origin');columns.discard('origin')
 			if'seen_at'not in columns:db.execute('UPDATE notes SET seen_at = acknowledged_at WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL')
 			columns={row['name']for row in db.execute('PRAGMA table_info(submissions)')}
+			if'ack_edited_at'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT')
 			if'seen_at'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN seen_at TEXT')
 			if'task_id'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN task_id TEXT')
 			columns={row['name']for row in db.execute('PRAGMA table_info(reports)')}
@@ -190,22 +193,22 @@ class Store:
 			if'seq'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seq INTEGER');db.execute('UPDATE reports SET seq = rowid WHERE seq IS NULL')
 		if not existed:self.path.chmod(384)
 	def connect(self):db=sqlite3.connect(self.path,timeout=5);db.row_factory=sqlite3.Row;return db
-	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None):
-		'Record a message; a restore carries its receipt and it is written as given.\n\n    Nothing here stamps a receipt with now(), because a restored acknowledgement has to\n    say when it was actually written. Read state rides along on the same terms and answers\n    to nobody, so a line seen but never answered comes back seen and unacknowledged. An ID\n    that is already stored keeps the record it has, so importing the same log twice\n    changes nothing.\n    ';identifier(note_id);note_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text);seen=when(seen_at)if seen_at is not None else None
+	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None):
+		'Record a message; a restore carries its receipt and it is written as given.\n\n    Nothing here stamps a receipt with now(), because a restored acknowledgement has to\n    say when it was actually written. Read state rides along on the same terms and answers\n    to nobody, so a line seen but never answered comes back seen and unacknowledged. An ID\n    that is already stored keeps the record it has, so importing the same log twice\n    changes nothing.\n    ';identifier(note_id);note_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);seen=when(seen_at)if seen_at is not None else None
 		with closing(self.connect())as db,db:
 			db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return dict(existing)
-			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id));return dict(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
-	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None):
+			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id));return dict(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
+	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None):
 		'Record report answers apart from user messages; the log never shows them.\n\n    `import-notes` restores a saved answer through here too, receipt and all, for the same\n    reason a note keeps its own: the save file exists so a restore returns what the owner\n    sent, and an answer that comes back unread was read when the agent read it (report\n    submission c0fcfad9, note 120fe358). An ID already stored keeps its record.\n    ';identifier(submission_id);identifier(report_id);submission_text(text)
 		with closing(self.connect())as db,db:
 			db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return dict(existing)
-			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*restore_receipt(acknowledged_at,ack_kind,ack_text),when(seen_at)if seen_at is not None else None,task_id));return dict(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
+			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at),when(seen_at)if seen_at is not None else None,task_id));return dict(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
 	def submissions(self):
 		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT * FROM submissions ORDER BY seq')]
 	def state(self):
@@ -213,7 +216,7 @@ class Store:
 		with closing(self.connect())as db:
 			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[dict(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at FROM reports ORDER BY seq, id')];uploads=self.uploads()
 			for item in notes+reports+uploads:
-				for key in('at','acknowledged_at','seen_at','updated_at'):
+				for key in('at','acknowledged_at','ack_edited_at','seen_at','updated_at'):
 					if key in item:item[key]=clip_stamp(item[key])
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
@@ -329,7 +332,7 @@ class Store:
 		with closing(self.connect())as db,db:
 			pending=[dict(row)|{'kind':'note'}for row in db.execute('SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq')];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')]
 			for item in pending:
-				for key in('at','acknowledged_at','seen_at'):item[key]=clip_stamp(item[key])
+				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));return{'checked_at':clip_stamp(checked),'pending':pending}
 	def mark_seen(self,ids):
 		'Receipt only the IDs whose full text reached the agent.';stamp=now()
@@ -354,7 +357,14 @@ class Store:
 			for record_id in ids:
 				identifier(record_id)
 				for table in('notes','submissions'):
-					cursor=db.execute(f"UPDATE {table} SET acknowledged_at = COALESCE(acknowledged_at, ?),\n               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text),\n               seen_at = COALESCE(seen_at, ?)\n               WHERE id = ?",(stamp,kind,text,stamp,record_id))
+					cursor=db.execute(f"""UPDATE {table} SET ack_edited_at = CASE
+               WHEN acknowledged_at IS NOT NULL AND ack_text IS NOT NULL
+                 AND (ack_kind IS NOT ? OR ack_text IS NOT ?) THEN ?
+               ELSE ack_edited_at END,
+               acknowledged_at = COALESCE(acknowledged_at, ?),
+               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text),
+               seen_at = COALESCE(seen_at, ?)
+               WHERE id = ?""",(kind,text,stamp,stamp,kind,text,stamp,record_id))
 					if cursor.rowcount:break
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
 	def publish(self,report_id,title,source):
@@ -503,10 +513,10 @@ def handler(store):
 					self.reply(200,json.dumps(report,ensure_ascii=False));return
 				if report_submit:
 					note=store.submit_report(report_submit.group(1),payload.get('id'),payload.get('answers'))
-					for key in('at','acknowledged_at','seen_at'):note[key]=clip_stamp(note[key])
+					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 					self.reply(201,json.dumps(note,ensure_ascii=False));return
 				note=store.note(payload.get('id'),payload.get('text'))
-				for key in('at','acknowledged_at','seen_at'):note[key]=clip_stamp(note[key])
+				for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 				self.reply(201,json.dumps(note,ensure_ascii=False))
 			except FileNotFoundError as error:self.problem(404,error)
 			except(ValueError,TypeError,UnicodeDecodeError)as error:self.problem(400,error)
@@ -542,8 +552,8 @@ def main():
 		elif args.command=='task-import':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();written=store.import_tasks([record for record in parse_task_import(text)if not(isinstance(record,dict)and'text'in record and'title'not in record)],args.replace);print(cli_json({'imported':len(written),'replaced':args.replace,'ids':[item['id']for item in written]},args.pretty))
 		elif args.command=='import-notes':
 			saved=[json.loads(line)for line in args.source.read_text(encoding='utf-8').splitlines()if line.strip()];answers=[record for record in saved if isinstance(record,dict)and'report_id'in record];records=[record for record in saved if not(isinstance(record,dict)and('title'in record and'text'not in record or'report_id'in record))]
-			for record in answers:store.submission(record['id'],record['report_id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),seen_at=record.get('seen_at'),task_id=record.get('task_id'))
-			for record in records:store.note(record['id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),seen_at=record.get('seen_at'),task_id=record.get('task_id'))
+			for record in answers:store.submission(record['id'],record['report_id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'))
+			for record in records:store.note(record['id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'))
 			receipts=sum(1 for record in records if record.get('acknowledged_at'));print(f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim, {len(answers)} report answers; existing IDs are not duplicated and keep the receipt they have")
 	except(OSError,ValueError,TypeError,KeyError,sqlite3.Error,RuntimeError)as error:print(f"Preview error: {error}",file=sys.stderr);return 1
 	return 0

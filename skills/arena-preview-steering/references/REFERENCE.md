@@ -29,6 +29,8 @@ python <skill>/scripts/preview.py --state-dir <directory> [--save-path <file>] [
 
 ## Read and acknowledge
 
+Changed existing answers carry `ack_edited_at`; first answers and identical retries do not. Save/import preserve that stamp. Notes show `· Edited <local time>` and a New edit jump link without changing message order. The Notes dot stays until the user follows the link. Viewed-edit state is browser-local and survives reloads.
+
 Use only CLI `read` to poll. After full text reaches the agent, run `seen <ids>` or `ack` for exactly those IDs. Never mark count-only, truncated or failed deliveries Seen. Reads and browser polls never stamp Seen; repeat receipts keep the first stamp. Follow the entry point's polling cadence. Pending records distinguish `kind: note` and `kind: report`; both accept `ack`. Report answers stay separate from the message log. Read errors must remain visible.
 
 Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one call carries one answer, so separate calls when answers differ. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.

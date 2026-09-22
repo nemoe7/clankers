@@ -78,7 +78,7 @@ def when(value):
   return str(value)
 
 
-def restore_receipt(acknowledged_at, ack_kind, ack_text):
+def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
   """Validate the receipt a restored line carries: all three fields, or none of them.
 
   A partial receipt is refused rather than filled in, because supplying the missing half
@@ -86,14 +86,21 @@ def restore_receipt(acknowledged_at, ack_kind, ack_text):
   """
   carried = (acknowledged_at, ack_kind, ack_text)
   if all(value is None for value in carried):
-    return (None, None, None)
+    if ack_edited_at is not None:
+      raise ValueError("An edited receipt needs an acknowledgement")
+    return (None, None, None, None)
   if any(value is None for value in carried):
     raise ValueError(
       "A restored receipt carries its stamp, kind and text, or none of them"
     )
   if ack_kind not in {"note", "reply"}:
     raise ValueError("Every acknowledgement is a note or a reply, with its text")
-  return (when(acknowledged_at), ack_kind, note_text(ack_text))
+  return (
+    when(acknowledged_at),
+    ack_kind,
+    note_text(ack_text),
+    when(ack_edited_at) if ack_edited_at is not None else None,
+  )
 
 
 def submission_text(text):
@@ -276,6 +283,7 @@ NOTE_LINE_KEYS = (
   "acknowledged_at",
   "ack_kind",
   "ack_text",
+  "ack_edited_at",
   "seen_at",
   "task_id",
 )
@@ -288,6 +296,7 @@ SUBMISSION_LINE_KEYS = (
   "acknowledged_at",
   "ack_kind",
   "ack_text",
+  "ack_edited_at",
   "seen_at",
   "task_id",
 )
@@ -467,7 +476,7 @@ class Store:
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
-      for column in ("ack_kind", "ack_text", "seen_at", "task_id"):
+      for column in ("ack_kind", "ack_text", "ack_edited_at", "seen_at", "task_id"):
         if column not in columns:
           db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
       if "origin" in columns:
@@ -481,6 +490,8 @@ class Store:
           " WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL"
         )
       columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
+      if "ack_edited_at" not in columns:
+        db.execute("ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT")
       if "seen_at" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN seen_at TEXT")
       if "task_id" not in columns:
@@ -514,6 +525,7 @@ class Store:
     ack_text=None,
     seen_at=None,
     task_id=None,
+    ack_edited_at=None,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -525,7 +537,7 @@ class Store:
     """
     identifier(note_id)
     note_text(text)
-    receipt = restore_receipt(acknowledged_at, ack_kind, ack_text)
+    receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
     seen = when(seen_at) if seen_at is not None else None
     with closing(self.connect()) as db, db:
       db.execute("BEGIN IMMEDIATE")
@@ -536,8 +548,8 @@ class Store:
         return dict(existing)
       db.execute(
         "INSERT INTO notes"
-        " (id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, task_id)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (note_id, text, at or now(), *receipt, seen, task_id),
       )
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
@@ -553,6 +565,7 @@ class Store:
     ack_text=None,
     seen_at=None,
     task_id=None,
+    ack_edited_at=None,
   ):
     """Record report answers apart from user messages; the log never shows them.
 
@@ -575,14 +588,14 @@ class Store:
         return dict(existing)
       db.execute(
         "INSERT INTO submissions"
-        " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, seen_at, task_id)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           submission_id,
           report_id,
           text,
           at or now(),
-          *restore_receipt(acknowledged_at, ack_kind, ack_text),
+          *restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at),
           when(seen_at) if seen_at is not None else None,
           task_id,
         ),
@@ -616,7 +629,7 @@ class Store:
       ]
       uploads = self.uploads()
       for item in notes + reports + uploads:
-        for key in ("at", "acknowledged_at", "seen_at", "updated_at"):
+        for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):
           if key in item:
             item[key] = clip_stamp(item[key])
       if tasks is not None:
@@ -975,7 +988,7 @@ class Store:
         )
       ]
       for item in pending:
-        for key in ("at", "acknowledged_at", "seen_at"):
+        for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           item[key] = clip_stamp(item[key])
       pending.sort(key=lambda item: item["at"])
       checked = now()
@@ -1027,11 +1040,15 @@ class Store:
         identifier(record_id)
         for table in ("notes", "submissions"):
           cursor = db.execute(
-            f"""UPDATE {table} SET acknowledged_at = COALESCE(acknowledged_at, ?),
+            f"""UPDATE {table} SET ack_edited_at = CASE
+               WHEN acknowledged_at IS NOT NULL AND ack_text IS NOT NULL
+                 AND (ack_kind IS NOT ? OR ack_text IS NOT ?) THEN ?
+               ELSE ack_edited_at END,
+               acknowledged_at = COALESCE(acknowledged_at, ?),
                ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text),
                seen_at = COALESCE(seen_at, ?)
                WHERE id = ?""",
-            (stamp, kind, text, stamp, record_id),
+            (kind, text, stamp, stamp, kind, text, stamp, record_id),
           )
           if cursor.rowcount:
             break
@@ -1473,12 +1490,12 @@ def handler(store):
           note = store.submit_report(
             report_submit.group(1), payload.get("id"), payload.get("answers")
           )
-          for key in ("at", "acknowledged_at", "seen_at"):
+          for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
             note[key] = clip_stamp(note[key])
           self.reply(201, json.dumps(note, ensure_ascii=False))
           return
         note = store.note(payload.get("id"), payload.get("text"))
-        for key in ("at", "acknowledged_at", "seen_at"):
+        for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))
       except FileNotFoundError as error:
@@ -1683,6 +1700,7 @@ def main():
           acknowledged_at=record.get("acknowledged_at"),
           ack_kind=record.get("ack_kind"),
           ack_text=record.get("ack_text"),
+          ack_edited_at=record.get("ack_edited_at"),
           seen_at=record.get("seen_at"),
           task_id=record.get("task_id"),
         )
@@ -1694,6 +1712,7 @@ def main():
           acknowledged_at=record.get("acknowledged_at"),
           ack_kind=record.get("ack_kind"),
           ack_text=record.get("ack_text"),
+          ack_edited_at=record.get("ack_edited_at"),
           seen_at=record.get("seen_at"),
           task_id=record.get("task_id"),
         )

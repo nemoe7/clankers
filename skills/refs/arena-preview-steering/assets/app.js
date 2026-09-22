@@ -186,6 +186,31 @@ function time(value) {
   const year = date.getFullYear() === new Date().getFullYear() ? '' : ` ${parts.year}`;
   return `${parts.month} ${parts.day}${year}, ${parts.hour}:${parts.minute}`;
 }
+let seenEdits;
+try { seenEdits = new Map(Object.entries(JSON.parse(stored('seen-edits') || '{}'))); }
+catch { seenEdits = new Map(); }
+let unreadEdits = [];
+const editKey = item => JSON.stringify([item.ack_edited_at, item.ack_kind, item.ack_text]);
+function updateEdits(notes) {
+  unreadEdits = notes.filter(item => item.ack_edited_at && seenEdits.get(item.id) !== editKey(item));
+  $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
+  $('#log-edited').textContent = unreadEdits.length > 1 ? `New edits (${unreadEdits.length})` : 'New edit';
+}
+$('#log-edited').addEventListener('click', () => {
+  const item = unreadEdits[0];
+  if (!item) return;
+  showTab($('#notes-tab'));
+  $('#log-filter').value = 'all';
+  save('log-filter', 'all');
+  applyLogFilter();
+  const answer = messageNodes.get(item.id).children[1];
+  answer.scrollIntoView({block: 'center'});
+  answer.setAttribute('tabindex', '-1');
+  answer.focus({preventScroll: true});
+  seenEdits.set(item.id, editKey(item));
+  save('seen-edits', JSON.stringify(Object.fromEntries(seenEdits)));
+  updateEdits(lastState.notes);
+});
 function showHistory(notes) {
   const signature = JSON.stringify(notes);
   if (signature === historySignature) return;
@@ -224,7 +249,8 @@ function showHistory(notes) {
     receiptDot.setAttribute('aria-label', STATE_WORDS[state]);
     receiptDot.title = STATE_WORDS[state];
     const receiptState = document.createElement('span');
-    receiptState.textContent = ` · ${time(item.at)}`;
+    receiptState.textContent = ` · ${time(item.at)}` +
+      (item.ack_edited_at ? ` · Edited ${time(item.ack_edited_at)}` : '');
     // The line reads as parts separated by the same ASCII dot: ID · state · time · task.
     // The owner asked for the dot after the ID by name.
     const separator = document.createElement('span');
@@ -264,6 +290,7 @@ function showHistory(notes) {
   const current = new Set(notes.map(item => item.id));
   for (const id of [...messageNodes.keys()]) if (!current.has(id)) messageNodes.delete(id);
   history.replaceChildren(...notes.map(item => messageNodes.get(item.id)));
+  updateEdits(notes);
   applyLogFilter();
   if (logPinned) history.scrollTop = history.scrollHeight;
   updateLogJump();
@@ -616,7 +643,7 @@ function stamp(value) {
 // display and a restore re-renders from text, the token dies with its server, seq orders one
 // display only, and reports, uploads and the last check have no importer. The stamps arrive
 // from the state poll already cut to seconds, which is all a restore needs.
-const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'seen_at', 'task_id'];
+const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'seen_at', 'task_id'];
 const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
 function restoreLine(record, keys) {
   const line = {};
