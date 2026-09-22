@@ -245,46 +245,51 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.tasks = {
     finished: [{ id: 'shipped', title: 'Dots in the receipt', details: [], status: 'finished',
       order: 1, updated_at: new Date().toISOString() }],
-    upcoming: [{ id: 'docs-archive', title: '<img onerror=alert(1)> dir',
-      details: ['move BUDGET-EXCEPTIONS.md', 'write arena-quirks.md'], status: 'upcoming',
-      order: 1, updated_at: new Date().toISOString() }],
+    upcoming: [
+      { id: 'docs-archive', title: '<img onerror=alert(1)> dir',
+        details: ['move BUDGET-EXCEPTIONS.md', 'write arena-quirks.md'], status: 'upcoming',
+        order: 1, updated_at: new Date().toISOString() },
+      { id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
+        order: 2, updated_at: new Date().toISOString() }
+    ],
     updated_at: new Date().toISOString()
   };
   await get('#refresh-notes').events.click();
   const upcomingBody = get('#tasks-upcoming-body');
   const finishedBody = get('#tasks-finished-body');
-  assert.equal(upcomingBody.children.length, 1);
+  // The head renders in its own div and stays out of Upcoming; the row shape is asserted on
+  // the second task, which Upcoming does carry.
+  assert.equal(upcomingBody.children.length, 1, 'the head stays out of Upcoming');
   assert.equal(upcomingBody.children[0].tagName, 'li');
-  // A hostile title is text, because a row is built with textContent rather than innerHTML.
-  assert.equal(upcomingBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
+  assert.equal(upcomingBody.children[0].children[0].textContent, 'Second in line');
   assert.equal(upcomingBody.children[0].children[0].className, 'task-title');
   assert.equal(upcomingBody.children[0].children[1].tagName, 'details');
   assert.equal(upcomingBody.children[0].children[1].children.length, 2, 'a summary and one list');
   assert.equal(upcomingBody.children[0].children[1].children[0].tagName, 'summary');
-  assert.equal(upcomingBody.children[0].children[1].children[0].textContent, '2 details');
+  assert.equal(upcomingBody.children[0].children[1].children[0].textContent, '1 detail');
   // The details are a real list, so each carries its own marker rather than being a line in a span.
   const detailList = upcomingBody.children[0].children[1].children[1];
   assert.equal(detailList.tagName, 'ul');
   assert.equal(detailList.className, 'task-detail-list');
-  assert.equal(detailList.children.length, 2);
+  assert.equal(detailList.children.length, 1);
   assert.equal(detailList.children[0].tagName, 'li');
   assert.equal(detailList.children[0].className, 'task-detail');
-  assert.equal(detailList.children[0].textContent, 'move BUDGET-EXCEPTIONS.md');
-  assert.equal(detailList.children[1].textContent, 'write arena-quirks.md');
-  assert.equal(upcomingBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
+  assert.equal(detailList.children[0].textContent, 'its only detail');
+  assert.equal(upcomingBody.children[0].title, 'its only detail');
   assert.equal(finishedBody.children.length, 1);
   assert.equal(finishedBody.children[0].children.length, 1);
   assert.equal(finishedBody.children[0].children[0].textContent, 'Dots in the receipt');
   assert.equal(get('#tasks-finished').hidden, false);
   assert.equal(get('#tasks-upcoming').hidden, false);
-  // The head of the queue is duplicated into a div of its own and stays in Upcoming as well.
+  // A hostile title is text in the current row, because a row is built with textContent
+  // rather than innerHTML. The head renders in a div of its own and stays out of Upcoming.
   const currentBody = get('#tasks-current-body');
   assert.equal(get('#tasks-current').hidden, false);
   assert.equal(currentBody.children.length, 1);
   assert.equal(currentBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
   assert.equal(currentBody.children[0].children[0].className, 'task-title');
   assert.equal(currentBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
-  assert.equal(upcomingBody.children.length, 1, 'the head is not removed from Upcoming');
+  assert.equal(upcomingBody.children.length, 1, 'the head is removed from Upcoming');
   assert.match(get('#tasks-status').textContent, /^Updated .* written by the agent; it takes no answers\.$/);
   // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
   const opened = upcomingBody.children[0].children[1];
