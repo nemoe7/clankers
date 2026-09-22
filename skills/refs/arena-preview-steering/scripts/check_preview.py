@@ -93,6 +93,10 @@ with tempfile.TemporaryDirectory() as directory:
   chat = preview.render("line one\nline two", breaks=True)
   assert "<br" not in chat and "\n" in chat and chat.count("<p>") == 1
   css = (preview.ASSETS / "style.css").read_text()
+  assert "border-left: 2px solid var(--accent)" not in css
+  assert "border-left: 3px solid var(--accent)" not in css
+  assert ".report .question { border-left: 2px solid rgb(199, 194, 188);" in css
+  assert "border-left: 3px solid rgb(199, 194, 188);" in css
   assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
   # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
   assert "<br" in preview.render("- a\n  b", breaks=True)
