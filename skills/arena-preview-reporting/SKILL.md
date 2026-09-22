@@ -15,16 +15,16 @@ Two procedures, one runtime: [arena-preview-steering](../arena-preview-steering/
 
 ## Setup
 
-Resolve `../arena-preview-steering/scripts/preview.py` relative to this skill; never assume the consuming repository's layout. Report missing installed resources; never self-install. Reuse the session's server, state directory and port; if absent, follow the companion's setup using Arena's long-lived process tool. Never add a server per report.
+Resolve `../arena-preview-steering/scripts/preview.py` relative to this skill; never assume the consuming repository's layout. Report missing skill files; never self-install them. Reuse the session's server, state directory and port; if absent, follow the companion's setup using Arena's long-lived process tool. Never add a server per report.
 
-Reuse an environment with `markdown-it-py`. If missing, obtain any approval required by the current task/repository for **this named rendering dependency**, then create a workspace venv and install it there:
+`markdown-it-py` is preauthorized for this skill. Reuse an environment with it; else install in a workspace venv without asking:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install markdown-it-py
 ```
 
-On Windows Command Prompt, use `.venv\Scripts\python.exe` for that venv. Never overwrite a venv; reuse it or choose another workspace venv. Restart the shared server with the venv's Python when needed. Never change the application's manifest, vendor a parser or load CDNs/remote fonts/styles. Report installation failures: steering CLI commands and Markdown sources remain usable, rendering unavailable. Venvs/packages may need restoring after sandbox restarts.
+On Windows Command Prompt, use `.venv\Scripts\python.exe` for that venv. Never overwrite a venv; reuse it or choose another workspace venv. Restart the shared server with the venv's Python when needed. Keep skill-only packages out of app manifests and generated `requirements.txt` unless the app independently needs them. Never vendor a parser or load CDNs/remote fonts/styles. Report install failures: steering CLI commands and Markdown sources remain usable, rendering unavailable. Venvs/packages may need restoring after sandbox restarts.
 
 ## Publish and update
 

@@ -32,6 +32,8 @@
 
 **Rule and preview compression** — Full live pass and review preserve refs baselines, constraints, code spans, numbers, links and headings. `AGENTS.md` 1,560 → 1,530 `tok`; `ARENA.md` 14,225 → 13,931 `B`; `CLINE.md` 514 → 501 `tok`; `COMMIT-SPEC.txt` 129 → 119 `tok`. Preview entries: steering 11,912 → 11,684 `B`, reporting 5,589 → 5,452 `B`. Supporting references also shrink. Root Arena and installed skills match live copies. No governing budget grows. Reviewed ChatGPT, Kilo overlay and Wenyan text stay unchanged where no safe cut exists.
 
+**Reporting dependencies** — Preauthorize `markdown-it-py` installation for the reporting skill in a workspace venv, with no separate approval. Keep skill-only packages out of application manifests and generated `requirements.txt` unless the application independently needs them. Ref, live and installed instructions agree. Entry size: 5,452 → 5,450 `B`.
+
 **Checks** — Repository validation with updated measurements, Markdown lint, Ruff lint/format, and the readable preview runtime harness passed. STE checks cover the changed documentation. The composer browser check passed using the extracted npm Chromium binary.
 
 ## 2026-09-22 — Inbox backlog: send-status timezone, house rebase, pending amendments
