@@ -962,13 +962,6 @@ class Store:
 
   def read(self):
     with closing(self.connect()) as db, db:
-      stamp = now()
-      for table in ("notes", "submissions"):
-        db.execute(
-          f"UPDATE {table} SET seen_at = ?"
-          " WHERE acknowledged_at IS NULL AND seen_at IS NULL",
-          (stamp,),
-        )
       pending = [
         dict(row) | {"kind": "note"}
         for row in db.execute(
@@ -988,6 +981,22 @@ class Store:
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
       return {"checked_at": clip_stamp(checked), "pending": pending}
+
+  def mark_seen(self, ids):
+    """Receipt only the IDs whose full text reached the agent."""
+    stamp = now()
+    with closing(self.connect()) as db, db:
+      for record_id in ids:
+        identifier(record_id)
+        for table in ("notes", "submissions"):
+          cursor = db.execute(
+            f"UPDATE {table} SET seen_at = COALESCE(seen_at, ?) WHERE id = ?",
+            (stamp, record_id),
+          )
+          if cursor.rowcount:
+            break
+        else:
+          raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
 
   def mark_task(self, record_id, task_id, shared=None):
     """Record that a message has a task, on whichever table holds that message.
@@ -1502,6 +1511,8 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  seen = commands.add_parser("seen")
+  seen.add_argument("ids", nargs="+")
   ack = commands.add_parser("ack")
   ack.add_argument("ids", nargs="+")
   ack.add_argument("--reply", help="Markdown answer shown in the message log")
@@ -1565,6 +1576,9 @@ def main():
         server.serve_forever()
     elif args.command == "read":
       print(cli_json(store.read(), args.pretty))
+    elif args.command == "seen":
+      store.mark_seen(args.ids)
+      print("Seen: " + ", ".join(args.ids))
     elif args.command == "ack":
       if bool(args.reply) == bool(args.note):
         raise ValueError("Choose exactly one of --reply or --note")

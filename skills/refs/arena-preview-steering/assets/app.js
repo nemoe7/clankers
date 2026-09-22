@@ -213,7 +213,7 @@ function showHistory(notes) {
     receiptId.textContent = item.id.slice(0, 7);
     receiptId.title = item.id;
     receiptId.dataset.full = item.id;
-    // Sent until the agent reads it, Seen once a CLI read has stamped seen_at, Said once answered.
+    // Sent until the agent reads it, Seen once an explicit receipt has stamped seen_at, Said once answered.
     // The state is a coloured dot; the word lives in its title and aria-label instead of the line.
     const state = item.acknowledged_at ? 'said' : item.seen_at ? 'seen' : 'sent';
     node.dataset.state = state;

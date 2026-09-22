@@ -14,7 +14,8 @@ python <skill>/scripts/preview.py --state-dir <directory> [--save-path <file>] [
 | --- | --- |
 | `init` | Create state without HTTP |
 | `serve [--port 8000]` | Start the shared server on `0.0.0.0`; use Arena's long-lived process tool |
-| `read` | Print all pending notes and report answers; stamp `seen_at` and check time without acknowledging |
+| `read` | Print all pending notes and report answers; record check time, never Seen or acknowledgement |
+| `seen <ids>` | Mark only messages whose full text reached the agent Seen; unknown IDs fail the batch |
 | `ack <id> [<id> ...] --reply <markdown>` | Acknowledge those IDs with a rendered answer |
 | `ack <id> [<id> ...] --note <text>` | Acknowledge those IDs with a plain answer |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a report snapshot |
@@ -28,7 +29,7 @@ python <skill>/scripts/preview.py --state-dir <directory> [--save-path <file>] [
 
 ## Read and acknowledge
 
-Use only CLI `read` to poll: direct database access and browser state requests do not stamp agent reads. Follow the entry point's polling cadence. Pending records distinguish `kind: note` and `kind: report`; both accept `ack`. Report answers stay separate from the message log. Read errors must remain visible.
+Use only CLI `read` to poll. After full text reaches the agent, run `seen <ids>` or `ack` for exactly those IDs. Never mark count-only, truncated or failed deliveries Seen. Reads and browser polls never stamp Seen; repeat receipts keep the first stamp. Follow the entry point's polling cadence. Pending records distinguish `kind: note` and `kind: report`; both accept `ack`. Report answers stay separate from the message log. Read errors must remain visible.
 
 Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one call carries one answer, so separate calls when answers differ. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.
 
