@@ -182,7 +182,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 /* The owner preferred the tone inline code had before a chip variable was introduced for it,
    so it shares the message background again; a receipt ID still opts out by class. */
 :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
-.report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid var(--accent); }
+.report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid rgb(199, 194, 188); }
 .draft-preview blockquote { border-left-color: rgb(199, 194, 188); }
 @media (max-width: 760px) {
   .topbar { padding: 10px 16px; }
@@ -216,7 +216,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-details > summary { cursor: pointer; list-style-position: inside; }
 .task-detail-list { margin: 2px 0 0; padding-left: 18px; }
 #tasks-status { margin: 0; }
-.report .question { border-left: 2px solid var(--accent); padding-left: 12px; }
+.report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
 /* The Uploads tab shows what the server holds: the file as stored, and a record that outlives it. */
 .uploads-layout { display: flex; flex-direction: column; gap: 12px; }
 .uploads-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }

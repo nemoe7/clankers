@@ -65,3 +65,5 @@ The owner directed an amendment from note `c5bc497` and answered report `turn-ru
 2026-09-22: the owner approved multiple uploads and regression checks. Build sizes: `assets/app.js` 24,798 → 25,275 `B`. `assets/index.html` 6,486 → 6,507 `B`. `scripts/check_client.cjs` 43,189 → 44,508 `B`. `scripts/check_preview.py` 44,287 → 44,359 `B`. The existing per-file API and limits stay unchanged.
 
 2026-09-22: the owner approved edited-reply timestamps and jump links, including storage, restore and client checks. Build sizes: `assets/app.js` 25,275 → 26,280 `B`. `assets/style.css` 9,969 → 9,980 `B`. `assets/index.html` 6,507 → 6,678 `B`. `scripts/preview.py` 52,081 → 52,895 `B`. `scripts/check_client.cjs` 44,506 → 46,164 `B`. `scripts/check_preview.py` 44,359 → 45,971 `B`. No existing rule funds this feature.
+
+2026-09-22: the owner approved matching report left borders to reply borders. Build sizes: `assets/style.css` 9,980 → 9,968 `B`. `scripts/check_preview.py` 45,971 → 46,215 `B`. Regression checks require the shared color.
