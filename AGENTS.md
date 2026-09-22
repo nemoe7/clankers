@@ -74,6 +74,8 @@ Read these first:
 A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-reporting` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
 - NEVER commit or push report artifacts.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
+- Ledger and report prose: neutral wording — actions, files, numbers; no narrative of who did what.
+- Every entry terse: one entry per event, no story between facts.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
 - No rule, skill, script, or workflow file is edited until the user approves the report; hold the work and say so in one line.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
