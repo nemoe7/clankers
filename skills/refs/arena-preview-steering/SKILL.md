@@ -78,7 +78,7 @@ Uploads write inbox notes with matching IDs, naming file, size, type and path. R
 
 ## Save state
 
-A save writes an inbox note naming the file and its counts. Read it, then ack it.
+Every committed mutation rewrites `saved-state.ndjson` in the state directory. The page's Save state button writes the same file from the page's own copy, then writes an inbox note naming the file and its counts. Read that note, then ack it. `import-notes` and `task-import` leave the file alone, so a restore reads it twice.
 
 ## Persistence and limits
 

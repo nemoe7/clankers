@@ -879,12 +879,11 @@ with tempfile.TemporaryDirectory() as directory:
       [line for line in saved_lines if "report_id" in line]
     )
     assert written["answers"] >= 1 and saved_lines[-1]["id"] == "saved-answer"
-    # The file is not in the state directory, which is the whole point of moving it (report
-    # submission c0fcfad9): a restore drops that directory and keeps this file.
+    # This block passes an explicit sibling path, so the file lands outside the state
+    # directory instead of inside it.
     assert written["path"] == str(save_file)
     assert save_file.is_file() and save_file.parent != root
-    # A save writes a note, so the agent's next read sees it: the file lands untracked at the
-    # repository root, and nothing else tells the agent the owner pressed save state.
+    # A save writes a note, so the agent's next read sees it.
     save_note = store.state()["notes"][-1]
     assert save_note["text"] == (
       f"State saved to {written['path']}: {written['notes']} notes,"
@@ -1052,20 +1051,29 @@ with tempfile.TemporaryDirectory() as directory:
       == 400
     )
     answer["revision"] = store.report("revision")["updated_at"]
-    statements = []
+    traced = []
     connect = store.connect
 
     def traced_connection():
       db = connect()
-      db.set_trace_callback(statements.append)
+      own = []
+      traced.append(own)
+      db.set_trace_callback(own.append)
       return db
 
-    with patch.object(store, "connect", side_effect=traced_connection) as connections:
+    with patch.object(store, "connect", side_effect=traced_connection):
       assert (
         request("POST", "/api/reports/revision/submit", json.dumps(answer), auth)[0]
         == 201
       )
-      assert connections.call_count == 1
+    # One connection writes the answer, and the export's reads follow that commit.
+    writers = [
+      own
+      for own in traced
+      if any(item.startswith(("BEGIN", "INSERT", "UPDATE", "DELETE")) for item in own)
+    ]
+    assert len(writers) == 1 and writers[0] is traced[0]
+    statements = traced[0]
     assert statements[0] == "BEGIN IMMEDIATE" and statements[-1] == "COMMIT"
     assert any("SELECT * FROM reports" in statement for statement in statements)
     assert any("INSERT INTO submissions" in statement for statement in statements)
@@ -1105,6 +1113,34 @@ with tempfile.TemporaryDirectory() as default_dir:
   )
   moved = preview.Store(default_root, create=True, save_path="elsewhere.ndjson")
   assert moved.save_path == Path("elsewhere.ndjson")
+
+# Autosave: a committed mutation refreshes the export, bookkeeping does not, and a fresh
+# database never overwrites an export that outlived it.
+with tempfile.TemporaryDirectory() as autosave_dir:
+  autosave_root = Path(autosave_dir) / "arena-state"
+  autosave_store = preview.Store(autosave_root, create=True)
+  assert not autosave_store.save_path.is_file()
+  autosave_store.reminder(advance=True)
+  autosave_store.set_meta("probe", "1")
+  assert not autosave_store.save_path.is_file(), "bookkeeping wrote the export"
+  autosave_store.note("autosave-note", "Written")
+  first = autosave_store.save_path.read_text(encoding="utf-8")
+  assert "autosave-note" in first
+  autosave_store.reminder(advance=True)
+  assert autosave_store.save_path.read_text(encoding="utf-8") == first
+  autosave_store.acknowledge(["autosave-note"], "note", "Receipt")
+  assert "Receipt" in autosave_store.save_path.read_text(encoding="utf-8")
+  autosave_task = autosave_store.write_task("autosave-task", "Track it")
+  assert "autosave-task" in autosave_store.save_path.read_text(encoding="utf-8")
+  assert autosave_task["id"] == "autosave-task"
+  # A restore drops the database and keeps the export, so rebuilding must not touch it.
+  autosave_store.save_path.write_text(first, encoding="utf-8")
+  autosave_store.path.unlink()
+  rebuilt = preview.Store(autosave_root, create=True)
+  rebuilt.reminder(advance=True)
+  assert rebuilt.save_path.read_text(encoding="utf-8") == first, (
+    "a fresh database overwrote the export"
+  )
 
 print(
   "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, read stamps on delivered prints, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
@@ -1481,6 +1517,12 @@ with tempfile.TemporaryDirectory() as mixed_dir:
     check=True,
   ).stdout
   assert "Imported 1 notes" in notes_out and "1 report answers" in notes_out
+  # A restore reads this file twice, so the first import leaves the task lines in it.
+  assert any(
+    "title" in json.loads(line)
+    for line in mixed.read_text(encoding="utf-8").splitlines()
+    if line.strip()
+  )
   tasks_out = subprocess.run(
     [sys.executable, script, "--state-dir", str(mixed_root), "task-import", str(mixed)],
     capture_output=True,

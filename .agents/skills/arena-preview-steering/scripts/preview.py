@@ -209,17 +209,17 @@ class Store:
 			if'seq'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seq INTEGER');db.execute('UPDATE reports SET seq = rowid WHERE seq IS NULL')
 		if not existed:self.path.chmod(384)
 	def connect(self):db=sqlite3.connect(self.path,timeout=5);db.row_factory=sqlite3.Row;return db
-	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None):
+	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True):
 		'Record a message; a restore carries its receipt and it is written as given.\n\n    Nothing here stamps a receipt with now(), because a restored acknowledgement has to\n    say when it was actually written. Read state rides along on the same terms and answers\n    to nobody, so a line seen but never answered comes back seen and unacknowledged. An ID\n    that is already stored keeps the record it has, so importing the same log twice\n    changes nothing.\n    ';identifier(note_id);note_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);seen=when(seen_at)if seen_at is not None else None
-		with closing(self.connect())as db,db:
+		with self.transaction(autosave=autosave)as db:
 			db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
 				return dict(existing)
 			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id));return dict(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
-	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None):
+	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None,autosave=True):
 		'Record report answers apart from user messages; the log never shows them.\n\n    `import-notes` restores a saved answer through here too, receipt and all, for the same\n    reason a note keeps its own: the save file exists so a restore returns what the owner\n    sent, and an answer that comes back unread was read when the agent read it (report\n    submission c0fcfad9, note 120fe358). An ID already stored keeps its record.\n    ';identifier(submission_id);identifier(report_id);submission_text(text)
-		with self.transaction(shared)as db:
+		with self.transaction(shared,autosave=autosave)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone()
 			if existing:
@@ -255,10 +255,11 @@ class Store:
 		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id").fetchall()
 		return[task_row(row)for row in rows]
 	@contextmanager
-	def transaction(self,db=None):
-		"One commit for this call's work, or a caller's open transaction when it passes one.\n\n    An import needs the second form: a delete and several writes that all land or none do.\n    "
+	def transaction(self,db=None,autosave=True):
+		"One commit for this call's work, or a caller's open transaction when it passes one.\n\n    An import needs the second form: a delete and several writes that all land or none do.\n    A committed outer transaction then refreshes the save file, unless the caller already\n    wrote it and passes `autosave=False`.\n    "
 		if db is not None:yield db;return
 		with closing(self.connect())as own,own:yield own
+		if autosave:self.autosave()
 	def write_task(self,task_id,title=None,details=None,status=None,order=None,shared=None):
 		'Insert or update one task and return it as stored.\n\n    A title or details left out keep the stored ones, so moving a task between\n    the two divs is one short command rather than a rewrite of the whole list.\n    A transaction passed in is written into rather than committed separately,\n    which is what lets an import be one atomic replacement.\n    ';details=[str(item)for item in details if str(item).strip()]if details else None;check_task(task_id,title,details)
 		if status is not None and status not in TASK_STATUSES:raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
@@ -278,7 +279,7 @@ class Store:
 		return record
 	def remove_task(self,task_id):
 		'Delete one task and return what was stored, so the echo can confirm it.'
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			row=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?",(task_id,)).fetchone()
 			if row is None:raise ValueError(f"No task is stored under {task_id}")
 			db.execute('DELETE FROM tasks WHERE id = ?',(task_id,));self.renumber(db)
@@ -292,11 +293,15 @@ class Store:
 		return before[0]if before else None,after[0]if after else None
 	def amend_task(self,prev_id,task_id):
 		'Move a stored task to a new ID and keep the rest, so a typo costs no deletion.';check_task(task_id,None,None);stamp=now()
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			row=db.execute('SELECT id, title, details, status, position, created_at FROM tasks WHERE id = ?',(prev_id,)).fetchone()
 			if row is None:raise ValueError(f"No task is stored under {prev_id}")
 			if db.execute('SELECT 1 FROM tasks WHERE id = ?',(task_id,)).fetchone():raise ValueError(f"A task is already stored under {task_id}")
 			db.execute('DELETE FROM tasks WHERE id = ?',(prev_id,));db.execute('INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)',(task_id,row[1],row[2],row[3],row[4],row[5],stamp));self.renumber(db)
+	def autosave(self):
+		'Refresh the save file from the database after a committed mutation.\n\n    State mutations route through `transaction`. Construction, `set_meta` and `reminder` do\n    not. A failed refresh warns on stderr and the committed mutation stands.\n    '
+		try:self.save_state({'notes':self.state()['notes'],'tasks':self.tasks()})
+		except Exception as error:print(f"preview: autosave failed: {error}",file=sys.stderr)
 	def save_state(self,payload):
 		"Write the page's cached state to the save file, in the shape the importers read.\n\n    The browser cannot write the sandbox filesystem, so it posts what it holds and this writes it.\n    Note lines keep their receipts, read stamps and task markers, because a restore that drops any\n    of them is the failure this exists to prevent; task lines keep their status and order, so the\n    queue comes back in the same shape. Answer lines come from the database rather than from the\n    page, because the owner's report answers are stored here the moment they are sent, and an\n    answer that a restore drops is an answer the owner has to type again.\n\n    The file lands inside the state directory unless a path overrides it, so one\n    globally ignored directory carries the database and its export together.\n    "
 		if not isinstance(payload,dict):raise TypeError('Save a state object')
@@ -323,9 +328,9 @@ class Store:
 		if not data:raise ValueError('An upload must not be empty')
 		if len(data)>MAX_UPLOAD:raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
 		cleaned=upload_name(name);upload_id=new_id();directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True);target=directory/f"{upload_id}{Path(cleaned).suffix[:16]}";target.write_bytes(bytes(data));stamp=now()
-		with closing(self.connect())as db,db:db.execute('INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)',(upload_id,cleaned,upload_type(content_type),len(data),hashlib.sha256(bytes(data)).hexdigest(),target.name,stamp));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
+		with self.transaction()as db:db.execute('INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)',(upload_id,cleaned,upload_type(content_type),len(data),hashlib.sha256(bytes(data)).hexdigest(),target.name,stamp));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return upload_row(row,self.path.parent)
-	def import_tasks(self,records,replace=False):
+	def import_tasks(self,records,replace=False,autosave=True):
 		'Rebuild a list from the JSON a copy button or task-list produced.\n\n    Every record is validated before anything is written, and the whole import is one\n    transaction, so an invalid record costs nothing. Deleting first, as this did, meant a\n    bad record later in the list took the existing list with it and left the replacement\n    half applied, which is data loss rather than an error.\n    '
 		if not isinstance(records,list):raise TypeError('Import a list of task objects')
 		prepared=[]
@@ -334,7 +339,7 @@ class Store:
 			details=[str(item)for item in record.get('details')or[]if str(item).strip()];status=record.get('status');check_task(record.get('id'),record.get('title'),details)
 			if status is not None and status not in TASK_STATUSES:raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
 			prepared.append((record.get('id'),record.get('title'),details,status,record.get('order')or index))
-		with self.transaction()as db:
+		with self.transaction(autosave=autosave)as db:
 			if replace:
 				for(task_id,title,_,_,_)in prepared:
 					stored=db.execute('SELECT 1 FROM tasks WHERE id = ?',(task_id,)).fetchone()
@@ -360,14 +365,14 @@ class Store:
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_READ,str(polls)))
 		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];head=[f"{polls} call/s waiting."]if polls and counts else[];return' '.join([*head,*counts,*ack,REMINDERS[cursor%len(REMINDERS)]])
 	def read(self):
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			pending=[dict(row)|{'kind':'note'}for row in db.execute('SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq')];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')]
 			for item in pending:
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_READ,));return{'checked_at':clip_stamp(checked),'pending':pending}
 	def mark_seen(self,ids):
 		'Receipt the IDs a delivered read printed or an explicit call named.';stamp=now()
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			for record_id in ids:
 				identifier(record_id)
 				for table in('notes','submissions'):
@@ -384,7 +389,7 @@ class Store:
 	def acknowledge(self,ids,kind,text):
 		if kind not in{'note','reply'}:raise ValueError('Every acknowledgement is a note or a reply, with its text')
 		text=note_text(text);stamp=now()
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			for record_id in ids:
 				identifier(record_id)
 				for table in('notes','submissions'):
@@ -406,13 +411,13 @@ class Store:
 		with source.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 		if len(data)>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
 		text=data.decode('utf-8');parse_fields(text)
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			answered=db.execute('SELECT count(*) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
 			if answered:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
 			highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, seq)\n           VALUES (?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),highest+1))
 	def mark_report_seen(self,report_id):
 		'Stamp the moment the owner reached the end of a report, and only the first one.\n\n    The stamp records when the report was actually read, so reopening it in another browser\n    keeps that moment instead of moving it. Republishing clears it, which is what makes a\n    changed report unread in fact rather than unread by a comparison the client has to get right.\n    ';identifier(report_id)
-		with closing(self.connect())as db,db:
+		with self.transaction()as db:
 			row=db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
 			db.execute('UPDATE reports SET seen_at = COALESCE(seen_at, ?) WHERE id = ?',(now(),report_id));return dict(db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone())
@@ -545,7 +550,7 @@ def handler(store):
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
 				if path=='/api/markdown':self.reply(200,render(note_text(payload.get('text')),breaks=True),'text/html; charset=utf-8');return
-				if save_state:saved=store.save_state(payload);store.note(new_id(),f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks, {saved['answers']} answers");self.reply(200,json.dumps(saved,ensure_ascii=False));return
+				if save_state:saved=store.save_state(payload);store.note(new_id(),f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks, {saved['answers']} answers",autosave=False);self.reply(200,json.dumps(saved,ensure_ascii=False));return
 				if report_seen:
 					report=store.mark_report_seen(report_seen.group(1))
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])
@@ -591,11 +596,11 @@ def main():
 			print(cli_json(echo,args.pretty))
 		elif args.command=='task-remove':print(cli_json(echo_task(store.remove_task(args.task_id)),args.pretty))
 		elif args.command=='task-list':print(cli_json(store.list_tasks(),args.pretty))
-		elif args.command=='task-import':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();written=store.import_tasks([record for record in parse_task_import(text)if not(isinstance(record,dict)and'text'in record and'title'not in record)],args.replace);print(cli_json({'imported':len(written),'replaced':args.replace,'ids':[item['id']for item in written]},args.pretty))
+		elif args.command=='task-import':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();written=store.import_tasks([record for record in parse_task_import(text)if not(isinstance(record,dict)and'text'in record and'title'not in record)],args.replace,autosave=False);print(cli_json({'imported':len(written),'replaced':args.replace,'ids':[item['id']for item in written]},args.pretty))
 		elif args.command=='import-notes':
 			saved=[json.loads(line)for line in args.source.read_text(encoding='utf-8').splitlines()if line.strip()];answers=[record for record in saved if isinstance(record,dict)and'report_id'in record];records=[record for record in saved if not(isinstance(record,dict)and('title'in record and'text'not in record or'report_id'in record))]
-			for record in answers:store.submission(record['id'],record['report_id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'))
-			for record in records:store.note(record['id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'))
+			for record in answers:store.submission(record['id'],record['report_id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'),autosave=False)
+			for record in records:store.note(record['id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'),autosave=False)
 			receipts=sum(1 for record in records if record.get('acknowledged_at'));print(f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim, {len(answers)} report answers; existing IDs are not duplicated and keep the receipt they have")
 	except(OSError,ValueError,TypeError,KeyError,sqlite3.Error,RuntimeError)as error:print(f"Preview error: {error}",file=sys.stderr);return 1
 	return 0

@@ -23,7 +23,7 @@ Notes retain IDs, server timestamps, text, optional acknowledgement timestamps a
 | `publish <source.md> --id <id> --title <title>` | Add/update a report snapshot |
 | `import-notes <notes.ndjson>` | Import ID/text/time records, plus the receipt a line carries and its read stamp, written verbatim; a report answer line is restored in the same run, with its own receipt and read stamp; task lines are skipped; a partial receipt is refused and none is invented |
 
-All commands take `--state-dir` before the subcommand. `--save-path` selects where the save button writes its file, `saved-state.ndjson` inside the state directory by default. `--pretty` indents CLI JSON for a human eye. Commands that read existing state fail if the database is missing; they do not create a misleading empty inbox. Import is idempotent by ID and rejects an existing ID with different text.
+All commands take `--state-dir` before the subcommand. `--save-path` selects where the save file goes, `saved-state.ndjson` inside the state directory by default. Every committed mutation rewrites it from the database. Construction, `set_meta`, `reminder` and both imports leave it alone. `--pretty` indents CLI JSON for a human eye. Commands that read existing state fail if the database is missing; they do not create a misleading empty inbox. Import is idempotent by ID and rejects an existing ID with different text.
 
 ## Read and acknowledge
 
