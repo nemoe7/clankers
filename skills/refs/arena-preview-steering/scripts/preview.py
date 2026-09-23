@@ -1566,7 +1566,15 @@ def handler(store):
           )
           return
         if save_state:
-          self.reply(200, json.dumps(store.save_state(payload), ensure_ascii=False))
+          saved = store.save_state(payload)
+          # A save writes a note, so the agent's next read sees it: the file lands untracked at
+          # the repository root, and nothing else tells the agent the owner pressed save state.
+          store.note(
+            str(uuid.uuid4()),
+            f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks,"
+            f" {saved['answers']} answers",
+          )
+          self.reply(200, json.dumps(saved, ensure_ascii=False))
           return
         if report_seen:
           report = store.mark_report_seen(report_seen.group(1))
