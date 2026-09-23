@@ -26,6 +26,8 @@ A restore returns HEAD to the branch base and deletes every gitignored directory
 
 Recovery is `git fetch -q origin <branch>` then `git reset --mixed FETCH_HEAD`, then a rebuilt venv, a restarted preview and tasks reconstructed from commit history. A task backup protects against bad imports, not restores. Missing tooling reads as a lint failure, so distinguish a broken gate from a real one. The Python harness writes `__pycache__` inside the live skill copy, so a `diff -r` parity check reports untracked differences. 
 
+The delete list follows the repository's own `.gitignore`, not every ignore source. A file ignored only through `core.excludesFile` survived a restore, and so did an untracked file that no ignore matched. A file under a `.gitignore` path did not survive. Home configuration goes too: a restore deletes `~/.gitconfig` and the global excludes file, so a global ignore stops applying after the first one. Anything that must survive a restore stays pushed, or stays untracked and unmatched by `.gitignore`. 
+
 Restore acknowledgement state with each note, or leave it unset. Never infer an answer: one import marked twenty-eight pasted notes acknowledged, and five had no answer. A log copy holding only id, text and at lacks receipt state and cannot count as complete. 
 
 ## A refresh can reset the sandbox, not just the visible history
