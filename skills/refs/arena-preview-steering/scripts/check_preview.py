@@ -1689,6 +1689,16 @@ with tempfile.TemporaryDirectory() as reminder_dir:
   reminder_store = preview.Store(reminder_dir, create=True)
   reminder_store.note("reminder-note", "Read this")
   reminder_script = str(Path(preview.__file__))
+
+  def reminder_tail(line):
+    """Return the rotating tail one reminder line ends with, or fail."""
+    stripped = line.strip()
+    for candidate in preview.REMINDERS:
+      if stripped.endswith(candidate):
+        return candidate
+    raise AssertionError(f"No rotating tail in {stripped!r}")
+
+  pending_prefix = "1 message/s. DO NOT IGNORE. ACK ASAP. "
   for command in (["task-list"], ["task", "reminder-task", "Track work"]):
     result = subprocess.run(
       [sys.executable, reminder_script, "--state-dir", reminder_dir, *command],
@@ -1697,11 +1707,8 @@ with tempfile.TemporaryDirectory() as reminder_dir:
       check=True,
     )
     json.loads(result.stdout)
-    assert (
-      result.stderr.strip()
-      == "1 message/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
-    )
-    assert "Manage the task list" in result.stderr
+    line = result.stderr.strip()
+    assert line == pending_prefix + reminder_tail(line)
     assert reminder_store.state()["notes"][0]["seen_at"] is None
   result = subprocess.run(
     [sys.executable, reminder_script, "--state-dir", reminder_dir, "read"],
@@ -1710,10 +1717,8 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     check=True,
   )
   json.loads(result.stdout)
-  assert (
-    result.stderr.strip()
-    == "1 message/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
-  )
+  line = result.stderr.strip()
+  assert line == pending_prefix + reminder_tail(line)
   delivered = reminder_store.state()["notes"][0]["seen_at"]
   assert delivered is not None
   assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
@@ -1754,24 +1759,66 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     text=True,
     check=True,
   )
-  assert "Manage the task list" in result.stderr
-  assert reminder_store.reminder() == "Manage the task list."
+  assert reminder_tail(result.stderr) in preview.REMINDERS
+  assert reminder_store.reminder() in preview.REMINDERS
   reminder_store.submission("form-answer", "form", "REPORT form: yes")
-  assert (
-    reminder_store.reminder()
-    == "1 form answer/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
-  )
+  form_line = reminder_store.reminder()
+  form_prefix = "1 form answer/s. DO NOT IGNORE. ACK ASAP. "
+  assert form_line == form_prefix + reminder_tail(form_line)
   reminder_store.acknowledge(["form-answer"], "note", "Received")
   for index in range(3):
     reminder_store.note(f"mixed-{index}", "Pending")
   for name in ("one.txt", "two.txt"):
     upload = reminder_store.save_upload(name, "text/plain", name.encode())
     reminder_store.note(upload["id"], "Uploaded " + name)
-  assert (
-    reminder_store.reminder()
-    == "3 message/s. 2 upload/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
-  )
+  mixed_line = reminder_store.reminder()
+  mixed_prefix = "3 message/s. 2 upload/s. DO NOT IGNORE. ACK ASAP. "
+  assert mixed_line == mixed_prefix + reminder_tail(mixed_line)
   assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
+
+# The tail rotates through the whole list before it repeats, a hook poll counts itself,
+# a CLI dispatch does not, and a read clears the count.
+with tempfile.TemporaryDirectory() as rotate_dir:
+  rotate_store = preview.Store(rotate_dir, create=True)
+  rotate_script = str(Path(preview.__file__))
+  span = len(preview.REMINDERS)
+  cycle = [rotate_store.reminder() for _ in range(span)]
+  assert cycle == list(preview.REMINDERS)
+  assert rotate_store.reminder() == preview.REMINDERS[0]
+  assert (
+    rotate_store.reminder(advance=True)
+    == f"1 call/s since read. {preview.REMINDERS[1]}"
+  )
+  assert (
+    rotate_store.reminder(advance=True)
+    == f"2 call/s since read. {preview.REMINDERS[2]}"
+  )
+  assert rotate_store.reminder() == f"2 call/s since read. {preview.REMINDERS[3]}"
+  rotate_store.read()
+  assert rotate_store.reminder() == preview.REMINDERS[4 % span]
+  for cursor, polls in ((2 * span, 1), (2 * span + 1, 2)):
+    result = subprocess.run(
+      [sys.executable, rotate_script, "--state-dir", rotate_dir, "--reminder"],
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+    assert (
+      result.stdout.strip()
+      == f"{polls} call/s since read. {preview.REMINDERS[cursor % span]}"
+    )
+    assert result.stderr == ""
+  result = subprocess.run(
+    [sys.executable, rotate_script, "--state-dir", rotate_dir, "task-list"],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  json.loads(result.stdout)
+  assert (
+    result.stderr.strip()
+    == f"2 call/s since read. {preview.REMINDERS[(2 * span + 2) % span]}"
+  )
 
 with tempfile.TemporaryDirectory() as marker_dir:
   marker_store = preview.Store(marker_dir, create=True)

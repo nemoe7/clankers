@@ -29,7 +29,11 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
+REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Block with ask_user on GH_TOKEN death.','Keep docs terse but clear.'
+REMINDER_CURSOR='reminder_cursor'
+POLLS_SINCE_READ='polls_since_read'
 def now():return datetime.now(timezone.utc).isoformat()
+def meta_number(db,key):'Read one meta value as a non-negative integer, or 0 when it is absent or not a number.';row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();value=str(row[0])if row else'';return int(value)if value.isdigit()else 0
 def new_id():'One identifier in the shape the log shows: seven characters, a hyphen, the rest.';hexed=uuid.uuid4().hex;return f"{hexed[:7]}-{hexed[7:]}"
 def clip_stamp(value):'Cut an ISO stamp to seconds; a restore needs no milliseconds or offset.';return value[:19]if value else value
 def identifier(value):
@@ -348,16 +352,18 @@ class Store:
 	def set_meta(self,key,value):
 		'Record one meta value, replacing any previous one.'
 		with closing(self.connect())as db,db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(key,str(value)))
-	def reminder(self):
-		'Count pending kinds without marking any message seen; any count asks for an ack.'
-		with closing(self.connect())as db:uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0]
-		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];return' '.join([*counts,*ack,'Manage the task list.'])
+	def reminder(self,advance=False):
+		'Count pending kinds without marking any message seen; any count asks for an ack.\n\n    The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook\n    poll, so the line reports the bash calls since the last read; only `--reminder` passes it.\n    '
+		with closing(self.connect())as db,db:
+			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];cursor=meta_number(db,REMINDER_CURSOR);polls=meta_number(db,POLLS_SINCE_READ)+(1 if advance else 0);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
+			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_READ,str(polls)))
+		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];head=[f"{polls} call/s since read."]if polls else[];return' '.join([*head,*counts,*ack,REMINDERS[cursor%len(REMINDERS)]])
 	def read(self):
 		with closing(self.connect())as db,db:
 			pending=[dict(row)|{'kind':'note'}for row in db.execute('SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq')];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')]
 			for item in pending:
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
-			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));return{'checked_at':clip_stamp(checked),'pending':pending}
+			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_READ,));return{'checked_at':clip_stamp(checked),'pending':pending}
 	def mark_seen(self,ids):
 		'Receipt the IDs a delivered read printed or an explicit call named.';stamp=now()
 		with closing(self.connect())as db,db:
@@ -558,7 +564,7 @@ def handler(store):
 def main():
 	parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--state-dir',default='reports/arena-preview');parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');parser.add_argument('--save-path',default=SAVED_STATE,help='Where the save button writes its file; untracked, and at the repository root by default');parser.add_argument('--pretty',action='store_true',help='Indent the JSON this CLI prints; agent-facing output is minified by default');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');seen=commands.add_parser('seen');seen.add_argument('ids',nargs='+');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-id',help='The ID the first positional takes');task.add_argument('--task-title',help='The title the second positional takes');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');task_import=commands.add_parser('task-import');task_import.add_argument('source',nargs='?',type=Path,help='JSON array or one task per line; stdin if omitted');task_import.add_argument('--replace',action='store_true',help='Clear the stored list before importing');legacy=commands.add_parser('import-notes');legacy.add_argument('source',type=Path);args=parser.parse_args()
 	try:
-		if args.reminder:store=Store(args.state_dir,create=False,save_path=args.save_path);require_server(store);print(store.reminder(),flush=True);return 0
+		if args.reminder:store=Store(args.state_dir,create=False,save_path=args.save_path);require_server(store);print(store.reminder(advance=True),flush=True);return 0
 		if not args.command:parser.error('a command is required')
 		store=Store(args.state_dir,create=args.command in{'serve','init'},save_path=args.save_path);print(store.reminder(),file=sys.stderr,flush=True)
 		if args.command=='serve':
