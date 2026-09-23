@@ -30,6 +30,7 @@ CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
 def now():return datetime.now(timezone.utc).isoformat()
+def new_id():'One identifier in the shape the log shows: seven characters, a hyphen, the rest.';hexed=uuid.uuid4().hex;return f"{hexed[:7]}-{hexed[7:]}"
 def clip_stamp(value):'Cut an ISO stamp to seconds; a restore needs no milliseconds or offset.';return value[:19]if value else value
 def identifier(value):
 	if not isinstance(value,str)or not IDENTIFIER.fullmatch(value):raise ValueError('ID must contain 1–80 letters, digits, underscores or hyphens')
@@ -316,7 +317,7 @@ class Store:
 		if not isinstance(data,(bytes,bytearray)):raise TypeError('An upload is bytes')
 		if not data:raise ValueError('An upload must not be empty')
 		if len(data)>MAX_UPLOAD:raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
-		cleaned=upload_name(name);upload_id=str(uuid.uuid4());directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True);target=directory/f"{upload_id}{Path(cleaned).suffix[:16]}";target.write_bytes(bytes(data));stamp=now()
+		cleaned=upload_name(name);upload_id=new_id();directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True);target=directory/f"{upload_id}{Path(cleaned).suffix[:16]}";target.write_bytes(bytes(data));stamp=now()
 		with closing(self.connect())as db,db:db.execute('INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)',(upload_id,cleaned,upload_type(content_type),len(data),hashlib.sha256(bytes(data)).hexdigest(),target.name,stamp));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return upload_row(row,self.path.parent)
 	def import_tasks(self,records,replace=False):
@@ -534,7 +535,7 @@ def handler(store):
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
 				if path=='/api/markdown':self.reply(200,render(note_text(payload.get('text')),breaks=True),'text/html; charset=utf-8');return
-				if save_state:saved=store.save_state(payload);store.note(str(uuid.uuid4()),f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks, {saved['answers']} answers");self.reply(200,json.dumps(saved,ensure_ascii=False));return
+				if save_state:saved=store.save_state(payload);store.note(new_id(),f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks, {saved['answers']} answers");self.reply(200,json.dumps(saved,ensure_ascii=False));return
 				if report_seen:
 					report=store.mark_report_seen(report_seen.group(1))
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])

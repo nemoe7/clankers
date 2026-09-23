@@ -924,14 +924,14 @@ const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#uploads-t
 // storage, so it survives a cleared browser, holds across browsers, and tells the agent the
 // report was read instead of leaving it to infer one.
 function reportLabel(report, position) {
-  return `${position + 1}.${report.seen_at && !report.needs_answer ? '' : ' *'} ${report.title}`;
+  return `${position + 1}.${report.seen_at ? '' : ' *'} ${report.title}`;
 }
 function updateReportPip(reports) {
   const pip = $('#report-pip');
-  const unseen = reports.filter(report => !report.seen_at || report.needs_answer);
+  const unseen = reports.filter(report => !report.seen_at);
   pip.hidden = unseen.length === 0;
-  pip.title = unseen.length ? 'A report is unread or has an unanswered form' : 'No unread reports or unanswered forms';
-  pip.setAttribute('aria-label', unseen.length ? 'Unread report or unanswered form' : 'No unread reports or unanswered forms');
+  pip.title = unseen.length ? 'A report is unread' : 'No unread reports';
+  pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread reports');
 }
 // A report counts as read when the browser has shown it: scrolled to its end, or, for a report
 // that fits the panel with nothing to scroll, held in view for one second on owner direction,
