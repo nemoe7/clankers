@@ -39,14 +39,10 @@ Follow the target repository's style; in Clankers reports, allow lines up to 120
 
 ## Delivery behavior
 
-Delivery is the live Reports tab. The standalone HTML export was removed on 2026-09-20: it did not work in the Arena sandbox preview — attachment routes returned 200 with no visible download, and the exported file added a second copy that the native viewer showed as source. Keep UTF-8 Markdown as the durable artifact. Raw Markdown HTML is disabled. Tables are supported, but not every GitHub Markdown extension or syntax-highlighting theme.
+Delivery is the live Reports tab. Keep UTF-8 Markdown as the durable artifact. Raw Markdown HTML is disabled. Tables are supported, but not every GitHub Markdown extension or syntax-highlighting theme.
 
 A report may also carry fields: `- ( ) option` for one choice, `- [ ] option` for many, and `Label: ___` or a bare `___` line for text. The steering reference documents prompts, IDs and limits. Answers arrive as one inbox note headed `REPORT <id> <title>:`.
 
-Verify a served report’s content before claiming successful rendering. File existence never proves native-viewer Markdown rendering.
+Verify a served report's content before claiming successful rendering. File existence never proves native-viewer Markdown rendering.
 
-## Previous workflow and future changes
-
-The local-only `chore(reports): hold the local records` commit was formerly used to make raw Markdown visible in Arena's diff viewer. The current preview replaces that workaround: reports, messages and receipts remain ignored and uncommitted. This is an explicit 2026-09-20 owner decision, not a claim that the preview will always be available.
-
-The former ntfy steering path and report-commit procedure are recorded in the companion's [migration reference](../../arena-preview-steering/references/REFERENCE.md) and in Git history. If the preview becomes unreliable, report what failed and agree on a new delivery method. Do not automatically resurrect either former workflow.
+If the preview becomes unreliable, report what failed and agree on a new delivery method with the user. Do not automatically resurrect former workflows.
