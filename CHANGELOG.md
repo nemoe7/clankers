@@ -1,4 +1,4 @@
-## 2026-09-23 — Clause-scoped approval, hook paths and save-state note
+## 2026-09-23 — Approval gate, hook paths, save state and read cadence
 
 **Approval gate** — Narrow the root `AGENTS.md` edit gate from every file to clause changes: no clause in a rule, skill, or workflow file is added, amended, or deleted until the owner approves its report; edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report. `scripts` stays outside the gate.
 
@@ -6,7 +6,13 @@
 
 **Save-state note** — The `/api/save-state` route writes an inbox note naming the file and its note, task and answer counts, so the next `read` delivers it; the file landed untracked at the repository root and nothing else told the agent the owner pressed save state. `scripts/preview.py` grows 55,826 → 55,978 `B` and `scripts/check_preview.py` 53,947 → 54,203 `B`; `docs/archive/budget-exceptions.md` records the growth.
 
-**Checks** — `maintenance/check.py` passes; README budget rows updated for `install.sh`, `preview.py` and `check_preview.py`; `minify.py --update` rebuilt both distributed copies and `check_minify.py` passes; the refs, shipped and compact harnesses pass; markdownlint reports 0 issues; Ruff 0.16.6 passes check and format; the STE linter reports 0 violations on the changed `README.md` and `docs/` lines.
+**Read cadence** — `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy state that a count moving inside a block means read now, not at the next boundary; the steering skill carries the same rule on its polling bullet. The reminder prints only a count, so a rising count meant notes sat unread until the next block.
+
+**Save-state clause** — Both steering `SKILL.md` copies gain a `## Save state` section, and `REFERENCE.md` records that `POST /api/save-state` also writes an inbox note.
+
+**Squash fixtures table** — `skills/squash/SKILL.md` requires a fixtures table, with before, after and percentage saved per file plus the average, when one change covers several files.
+
+**Checks** — `maintenance/check.py` passes; README budget rows updated for `install.sh`, `preview.py`, `check_preview.py`, `rules/ARENA.md`, the steering `SKILL.md` and `skills/squash/SKILL.md`; `minify.py --update` rebuilt both distributed copies and `check_minify.py` passes; the refs, shipped and compact harnesses pass; markdownlint reports 0 issues; Ruff 0.16.6 passes check and format; the STE linter reports 0 violations on the changed `README.md` and `docs/` lines.
 
 ## 2026-09-23 — Documentation compression
 
