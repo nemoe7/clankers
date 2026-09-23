@@ -14,7 +14,7 @@
 
 **Ledger neutrality** — 136 lines in the pre-2026-09-23 entries named an actor; they now name actions, files and numbers, and none of them names the owner or the agent doing something. Unchanged: every fact, date, size and command. `workflows/init-docs.md` L260 drops "along the way" for "gains skill".
 
-**Unshipped harness** — `check_preview.py` and `check_client.cjs` leave the distributed copies: nothing loads them at runtime, and `check_minify.py` now runs the harness from the readable refs tree against the generated runtime. `minify.py` builds four files instead of six, and `check.py` and the README drop the two budget rows, 54,203 `B` and 50,670 `B` out of every distributed copy. Both `SKILL.md` copies and both `REFERENCE.md` copies point at the refs path.
+**Unshipped harness** — `check_preview.py` and `check_client.cjs` leave the distributed copies: nothing loads them at runtime, and `check_minify.py` now runs the harness from the readable refs tree against the generated runtime. `minify.py` builds four files instead of six, and `check.py` and the README drop the two budget rows, 54,203 `B` and 50,670 `B` out of every distributed copy.
 
 **Checks** — `maintenance/check.py` passes; README budget rows updated for `install.sh`, `preview.py`, `check_preview.py`, `rules/ARENA.md`, the steering `SKILL.md` and `skills/squash/SKILL.md`; `minify.py --update` rebuilt both distributed copies and `check_minify.py` passes; the refs, shipped and compact harnesses pass; markdownlint reports 0 issues; Ruff 0.16.6 passes check and format; the STE linter reports 0 violations on the changed `README.md` and `docs/` lines.
 
