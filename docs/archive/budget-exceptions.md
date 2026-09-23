@@ -46,3 +46,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-23: task-link requirement. `skills/arena-preview-steering/SKILL.md` +21 `B` for the `--msg-id` clause. Unfunded.
 2026-09-23: poll count beside a pending count only. `scripts/preview.py` +75 `B` and `skills/arena-preview-steering/SKILL.md` +20 `B`. Unfunded.
 2026-09-23: composer limit raised to 15,000 characters. `scripts/preview.py` +26 `B`. Unfunded.
+2026-09-23: live-copy sync of this session's steering amendments. `skills/arena-preview-steering/SKILL.md` +238 `B` for the arena-state directory clause, the waiting-call count, the one-answer-per-message rule and the ack-and-queue clause. Unfunded.
