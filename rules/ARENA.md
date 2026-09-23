@@ -17,7 +17,7 @@
 - On a rule collision or any doubt, stop and ask with the `ask_user` tool; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
 - NEVER edit this file or either preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
-- On a rule violation, ALWAYS suggest an amendment.
+- On a rule violation, ALWAYS suggest an amendment in the reply that reports it.
 
 ## General
 
@@ -37,8 +37,9 @@
 - Report every unrelated finding; fix only blocking ones.
 - Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Investigate, stop at a suitable pattern, and leave unrequested requirements and edge cases alone.
 - Questions go through a fielded report in the Reports tab, answered at the next steering read; a rule collision, a blocking doubt, a preview that never came up, or a failed publish still go to the `ask_user` tool, on its failure, timeout, or partial batch, retry, NEVER falling back to plain text. Only the first successful, unconfirmed start needs that block, not a same-session restart. Every question needs a recommended answer, marked among options where offered.
+- ALL reports MUST go through the preview skill.
 - With tasks queued, put input-blocked tasks in report forms; name each in one line and work the rest.
-- End a turn awaiting the owner only after publishing its fielded report and queueing the blocked task.
+- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input.
 - Any unavoidable assumption: take the most reasonable and state it immediately.
 
 ## Engineering
