@@ -1043,7 +1043,9 @@ class Store:
 
     The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook
     poll, and that count prints only beside a pending count, so an idle line carries the tail
-    alone. Only `--reminder` advances it, and `read` clears it.
+    alone. A poll that finds nothing pending clears the count, so the printed number reports
+    the bash calls the current pending items have waited. Only `--reminder` advances it, and
+    `read` clears it.
     """
     with closing(self.connect()) as db, db:
       uploads = db.execute(
@@ -1059,7 +1061,13 @@ class Store:
         "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
       ).fetchone()[0]
       cursor = meta_number(db, REMINDER_CURSOR)
-      polls = meta_number(db, POLLS_SINCE_READ) + (1 if advance else 0)
+      # An idle poll has nothing waiting, so it does not count: the tally starts with the
+      # pending item the number reports.
+      polls = (
+        0
+        if advance and not (notes + reports + uploads)
+        else meta_number(db, POLLS_SINCE_READ) + (1 if advance else 0)
+      )
       db.execute(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMINDER_CURSOR, str(cursor + 1))
       )
@@ -1077,7 +1085,7 @@ class Store:
       if count
     ]
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
-    head = [f"{polls} call/s since read."] if polls and counts else []
+    head = [f"{polls} call/s waiting."] if polls and counts else []
     return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
 
   def read(self):
