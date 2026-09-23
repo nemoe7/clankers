@@ -2,7 +2,7 @@
 
 ## Runtime contract
 
-The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering; `serve` checks it at startup and exits with the install command when missing, since a page that cannot render Markdown is worse than no page. The CLI commands need no renderer.
+The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering; `serve` checks it at startup and exits with the install command when missing. The CLI commands need no renderer.
 
 The chosen `--state-dir` contains `state.sqlite3` and, by default, `saved-state.ndjson` beside it. Normal SQLite transactions handle concurrent browser sends and CLI receipts. Reads never acknowledge; a `read` stamps `seen_at` for exactly the IDs it printed, once its output write succeeds. `seen <ids>` or `ack` marks only those IDs. Count-only notifications, truncated output and failed deliveries stay Sent. Writes are committed before the server returns success.
 

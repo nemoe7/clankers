@@ -16,7 +16,7 @@ One server and inbox per session for steering messages and reports; never start 
 ## Setup
 
 1. Resolve this skill's actual path: source `skills/` and installed discovery paths differ. Report missing installed files; do not install or repair them without authorization.
-2. Use the state directory the installer ignores through `core.excludesFile`, default `arena-state`; a restore deletes every repository-ignored path, so the rule never goes in the repository `.gitignore`. Verify with `git check-ignore`. Never use cache/build folders or commit/push session state, notes, receipts or reports.
+2. Use the state directory the installer ignores through `core.excludesFile`, default `arena-state`. Never put the rule in the repository `.gitignore`. Verify with `git check-ignore`. Never use cache/build folders or commit/push session state, notes, receipts or reports.
 3. Run `<skill>/scripts/install.sh` once per session, then start the server with Arena's long-lived process tool, not a timed shell call:
 
    ```bash
