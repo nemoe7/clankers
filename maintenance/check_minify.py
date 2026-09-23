@@ -55,8 +55,6 @@ assert set(sources) == {
   "assets/style.css",
   "assets/index.html",
   "scripts/preview.py",
-  "scripts/check_preview.py",
-  "scripts/check_client.cjs",
 }
 for relative, (source, compact) in sources.items():
   assert len(compact.encode()) < len(source.encode()), relative
@@ -83,12 +81,17 @@ with tempfile.TemporaryDirectory() as directory:
     assert minify.main() == 1
     assert stale.read_text() == "stale\n"
 
-  # Exact CSS/JS assertions still use readable assets. Both Python files are the generated build.
+  # Exact CSS/JS assertions still use readable assets. The runtime is the generated build; the
+  # harness is not shipped, so it comes from the readable refs tree and drives that build.
   skill = root / "runtime"
   shutil.copytree(minify.SOURCE / "assets", skill / "assets")
   (skill / "scripts").mkdir()
-  for name in ("preview.py", "check_preview.py"):
-    shutil.copyfile(minify.TARGETS[0] / "scripts" / name, skill / "scripts" / name)
+  shutil.copyfile(
+    minify.TARGETS[0] / "scripts/preview.py", skill / "scripts/preview.py"
+  )
+  shutil.copyfile(
+    minify.SOURCE / "scripts/check_preview.py", skill / "scripts/check_preview.py"
+  )
   subprocess.run([sys.executable, str(skill / "scripts/check_preview.py")], check=True)
 
   spec = importlib.util.spec_from_file_location(
