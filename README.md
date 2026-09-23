@@ -42,13 +42,12 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Use the [`squash` skill](skills/squash/SKILL.md), extracted from the rules below, against these budgets. Amend `rules/refs/` first, then compress only new or affected lines into live files. On removal, attempt one squash and keep the lower budget. Refs remain uncompressed. Remove words, never rules. 
+Use the [`squash` skill](skills/squash/SKILL.md) against these budgets. The skill carries the method: measure, pass, re-measure, and keep only a pass that improves the budget. It also carries the survival list: every negation, condition, command, number, threshold, filename and caveat. 
 
-1. Work in iterations. After each pass, re-measure and compare against the previous value. Keep the pass only when the budget improves, and repeat until a pass yields nothing. 
-2. Preserve every negation, condition, command, number, threshold, filename, and caveat. Removing a constraint is a rule change, not compression. 
-3. Merge related bullets, drop redundant qualifiers and restated clauses, and prefer the shorter of two equivalent phrasings. Do not invent new abbreviations or telegraphic syntax that changes how a rule reads. 
-4. Keep the section headings and order the refs baseline already has. Restructuring is an amendment, so make it in refs first. 
-5. New clause: squash only that new line. Amended clause: squash only the affected line. Removed clause: attempt one squash and keep whichever budget is lower. 
-6. Update the budgets table above, record notable reductions in [CHANGELOG.md](CHANGELOG.md), and record a growth accepted rather than funded in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md). 
+- Amend `rules/refs/` first, then compress only new or affected lines into live files. Refs remain uncompressed. 
+- New clause: squash only that new line. Amended clause: squash only the affected line. Removed clause: attempt one squash and keep the lower budget. 
+- Restructuring is an amendment, so make it in refs first. Keep the section headings and order the baseline already has. 
+- Remove words, never rules. 
+- Update the budgets table above, record notable reductions in [CHANGELOG.md](CHANGELOG.md), and record a growth accepted rather than funded in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md). 
 
-[docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md) records growth the owner accepted rather than funded, with dates, numbers and reasons. This page holds only the procedure and current measurements. 
+[docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md) records growth the owner accepted rather than funded, with dates, numbers and reasons. This page holds only the Clankers compression rules and the current measurements. 
