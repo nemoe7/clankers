@@ -4,15 +4,15 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-13: Accepted without funding. `rules/AGENTS.md` +87 `tok` (1,731 → 1,818). `rules/ARENA.md` +636 `B` (9,205 → 9,841). Seven-rung ladder and three MUST upgrades accepted as baselines, not deferred debt. Both files later sit below these levels, funded by amendments. Item 5 applies at the recorded measurements. 
 
-2026-09-17: after the resquash, `rules/AGENTS.md` lands 1,785 → 1,549 `tok`. `skills/arena-live-steering/SKILL.md` 13,419 → 8,132 `B`. `rules/ARENA.md` settles 10,129 → 10,307 `B`. the residual 178 `B` funds requested new rules (SOLID pair, tool-call batching, fix-once-where-callers-route-through). The unfunded visible-activation clause raises the residual to 299 `B`. 2026-09-18 compressions reduce it to 287 `B`. the two-read-path amendment lands 2 `B` below its prior 10,416 `B`, narrowing it to 285 `B`. Item 5 applies once funded. 
+2026-09-17: after the resquash, `rules/AGENTS.md` lands 1,785 → 1,549 `tok`. `skills/arena-live-steering/SKILL.md` 13,419 → 8,132 `B`. `rules/ARENA.md` settles 10,129 → 10,307 `B`. the residual 178 `B` funds requested new rules (SOLID pair, tool-call batching, fix-once-where-callers-route-through). The unfunded visible-activation clause raises the residual to 299 `B`. 2026-09-18 compressions reduce it to 287 `B`. The two-read-path amendment lands 2 `B` below its prior 10,416 `B`, narrowing it to 285 `B`. Item 5 applies once funded. 
 
 2026-09-17: Funded in the same change. The steering `SKILL.md` note (+341 `B`, 8,473 vs 8,132 `B`) is paid by moving full wording to `BASELINE.md`: 8,022 `B`, 110 `B` below prior. No exception remains. 
 
 2026-09-18: Accepted without funding. Steering ingest-script rule: live bullet +91 `B` (10,414 → 10,505 `B`). `rules/refs/ARENA.md` 18,620 → 18,899 `B`, unbudgeted. Ten compressed clauses elsewhere recovered 275 `B`, already spent on the two-read-path rule. Residual against the 10,129 `B` baseline: 376 `B`. Item 5 applies once funded. 
 
-2026-09-18: Accepted without funding. `skills/arena-live-steering/SKILL.md` +1,141 `B` (7,961 → 9,102 `B`) for three rules: pull cadence on batched-tool-call surfaces, duty to report a mangled channel, disk-observable activation. `BASELINE.md` 10,429 → 12,211 `B`. `references/REFERENCE.md` 16,903 → 18,725 `B`, both unbudgeted. No squash pass ran. remaining wording is mechanics. Item 5 applies once funded. 
+2026-09-18: Accepted without funding. `skills/arena-live-steering/SKILL.md` +1,141 `B` (7,961 → 9,102 `B`) for three rules: pull cadence on batched-tool-call surfaces, duty to report a mangled channel, disk-observable activation. `BASELINE.md` 10,429 → 12,211 `B`. `references/REFERENCE.md` 16,903 → 18,725 `B`, both unbudgeted. No squash pass ran. Remaining wording is mechanics. Item 5 applies once funded. 
 
-2026-09-19: Accepted without funding. `rules/ARENA.md` +573 `B` (11,003 → 11,576 `B`). `rules/AGENTS.md` +41 `tok` (1,549 → 1,590 `tok`). Four rules: pull cadence with exceptions, literal activation line, literal note-acknowledgement prefix, recommended answer on every question. `skills/arena-live-steering/SKILL.md` +1,207 `B` (10,265 → 11,472 `B`) at 1.10.0: read fetch bodies not status. channel move on `SignatureDoesNotMatch`, turn pause on topic repeat, `ACK:` prefix, `BASELINE.md` home note. Unbudgeted: `rules/refs/ARENA.md` 19,908 → 21,084 `B`, `rules/refs/AGENTS.md` → 10,100 `B`, `BASELINE.md` 14,124 → 16,223 `B`, `references/REFERENCE.md`, root `AGENTS.md` 10,091 → 11,203 `B`. New lines written compressed, not copied. no squash pass ran. Item 5 applies once funded. 
+2026-09-19: Accepted without funding. `rules/ARENA.md` +573 `B` (11,003 → 11,576 `B`). `rules/AGENTS.md` +41 `tok` (1,549 → 1,590 `tok`). Four rules: pull cadence with exceptions, literal activation line, literal note-acknowledgement prefix, recommended answer on every question. `skills/arena-live-steering/SKILL.md` +1,207 `B` (10,265 → 11,472 `B`) at 1.10.0: read fetch bodies not status. channel move on `SignatureDoesNotMatch`, turn pause on topic repeat, `ACK:` prefix, `BASELINE.md` home note. Unbudgeted: `rules/refs/ARENA.md` 19,908 → 21,084 `B`, `rules/refs/AGENTS.md` → 10,100 `B`, `BASELINE.md` 14,124 → 16,223 `B`, `references/REFERENCE.md`, root `AGENTS.md` 10,091 → 11,203 `B`. New lines written compressed, not copied. No squash pass ran. Item 5 applies once funded. 
 
 2026-09-20: literal `fast-forward/rebase` wording. `rules/ARENA.md` +7 `B` (11,576 → 11,583 `B`) for `/rebase`. Unfunded. 
 
@@ -22,7 +22,7 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-20: form-submission feature. `skills/arena-preview-steering/SKILL.md` +830 `B` (7,667 → 8,497 `B`). `references/REFERENCE.md` +1,117 `B` (7,536 → 8,653 `B`), unbudgeted. Unfunded. 
 
-2026-09-20: Report answerable-field contract (+1,058 `B`), less Forms removal (−743 `B`), plus pre-filled answers and sent receipt (+195 `B`). The steering skill rose from 8,497 to 9,007 `B`, a net +510 `B`. The reporting skill rose +495 `B` (4,987 → 5,482 `B`). Refs were compressed. No further removal was available. Unfunded. 
+2026-09-20: Report answerable-field contract (+1,058 `B`), less Forms removal (−743 `B`), plus pre-filled answers and sent receipt (+195 `B`). The steering skill rose from 8,497 to 9,007 `B`, a net +510 `B`. The reporting skill rose +495 `B` (4,987 → 5,482 `B`). A compression pass covered the refs. No further removal was available. Unfunded. 
 
 2026-09-20, second round: ack answers moved into the message log, report answers out, fielded reports as question surface. `skills/arena-preview-steering/SKILL.md` +549 `B` (9,007 → 9,556 `B`). `rules/ARENA.md` +448 `B` (11,625 → 12,073 `B`) after one pass recovered 29 `B`. Refs amended first, mirrored compressed. Renderer startup check added 216 `B` later that day, to 9,772 `B`. Unfunded. 
 
@@ -44,7 +44,7 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-22: question-tool block on turn end after a dead token lost four approved commits. `rules/ARENA.md` +48 `B` (13,026 → 13,074 `B`). `rules/CHATGPT-CUSTOM.txt` +10 `chars` (1,484 → 1,494 `chars`) for the think-longer clause. the dropped lazier-alternative line pays for most, within the 1,500 limit. `rules/ARENA.md` +124 `B` more (13,074 → 13,198 `B`) for the ban on session-local note IDs in repository files. Unfunded. 
 
-2026-09-22: `rules/CHATGPT-MORE.txt` +20 `chars` (1,475 → 1,495), accepted without funding. A resquash restored `phone-sized`, `existing helper first`, and the no-turn-while-a-test-fails rule. the pass freed 33 `chars`, spent more than it recovered. 5 `chars` headroom. Unfunded. 
+2026-09-22: `rules/CHATGPT-MORE.txt` +20 `chars` (1,475 → 1,495), accepted without funding. A resquash restored `phone-sized`, `existing helper first`, and the no-turn-while-a-test-fails rule. The pass freed 33 `chars`, spent more than it recovered. 5 `chars` headroom. Unfunded. 
 
 2026-09-22: first-start visibility amendment. `rules/ARENA.md` +283 `B` (13,493 → 13,776 `B`): visibility question before non-setup work, first successful start enters the block, live-preview banner is not proof. `rules/refs/ARENA.md` 23,611 → 23,968 `B`, unbudgeted. Unfunded. 
 
