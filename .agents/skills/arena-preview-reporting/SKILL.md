@@ -1,65 +1,43 @@
 ---
 name: arena-preview-reporting
-description: Publish readable Markdown reports in Arena.ai's live preview, with a Reports tab, multiple named reports, stable updates and answerable fields written as Markdown checkboxes, choices and blanks. Use for longer reports or requested report artifacts in Arena Agent Mode; keep short reports in chat. Reuses the sibling arena-preview-steering server, never a second server or duplicated runtime.
+description: Publish readable Markdown reports in Arena.ai's live preview with a Reports tab, multiple named reports and answerable fields. Use for longer reports or requested report artifacts; keep short reports in chat. Reuses the arena-preview-steering runtime, never a second server. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
 license: MIT
-compatibility: Arena.ai Agent Mode, Python 3.10+, markdown-it-py and the sibling arena-preview-steering skill.
+compatibility: Arena.ai Agent Mode, Python 3.10+, the sibling arena-preview-steering skill, markdown-it-py in a workspace venv.
 metadata:
   origin: first-party, maintained in this repository
-  version: "1.0.0"
   arena-only: "true"
 ---
 
 # Arena Preview Reporting
 
-Two procedures, one runtime: [arena-preview-steering](../arena-preview-steering/SKILL.md) owns the server and inbox. This skill publishes reports there. User instructions and repository rules win; short reports stay in chat.
+## Purpose
 
-## Setup
+Use only in Arena.ai Agent Mode for reports that need readable rendered Markdown, multiple report documents or answerable fields inside a report. Short reports that fit in chat stay in chat; do not start a report pipeline for them. The companion arena-preview-steering skill must be present as a sibling and owns the shared Python server and interface. This skill adds a publishing procedure, not a second server or a duplicate runtime. Report missing installed skill files to the user instead of installing them without authorization.
 
-Resolve `../arena-preview-steering/scripts/preview.py` relative to this skill; never assume the consuming repository's layout. Report missing skill files; never self-install them. Reuse the session's server, state directory and port; if absent, follow the companion's setup using Arena's long-lived process tool. Never add a server per report.
+## Runtime and dependencies
 
-`markdown-it-py` is preauthorized for this skill. Reuse an environment with it; else install in a workspace venv without asking:
+Resolve ../arena-preview-steering/scripts/preview.py relative to this skill. Use the existing session's --state-dir and port. If the server is not running, follow the companion skill's setup and start it with Arena's long-lived process tool. Do not start a second server for another report.
 
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install markdown-it-py
-```
+Python 3.10+ is required. Installing markdown-it-py for this skill is preauthorized. Reuse a Python environment containing markdown-it-py when one is already present. If it is missing, always install markdown-it-py in a workspace virtual environment without asking for approval. Reuse an existing virtual environment or create one when needed. Keep skill-only dependencies out of application manifests and generated requirements.txt files unless the application independently needs them. Start or restart the shared server using that environment's Python. Do not vendor a parser or use CDNs, remote fonts or remote stylesheets. If installation fails, report the error: steering CLI commands and Markdown source access still work, but do not claim rendered reports work. Cached dependencies and virtual environments do not survive every sandbox restart.
 
-On Windows Command Prompt, use `.venv\Scripts\python.exe` for that venv. Never overwrite a venv; reuse it or choose another workspace venv. Restart the shared server with the venv's Python when needed. Keep skill-only packages out of app manifests and generated `requirements.txt` unless the app independently needs them. Never vendor a parser or load CDNs/remote fonts/styles. Report install failures: steering CLI commands and Markdown sources remain usable, rendering unavailable. Venvs/packages may need restoring after sandbox restarts.
+## Reports
 
-## Publish and update
+Write each report as a UTF-8 Markdown source file under an ignored, persisted workspace directory. Keep one report per logical subject and update its source in place, marking findings resolved when appropriate. Several different subjects can coexist; do not overwrite one report to publish another. Report changes, findings, checks and actual results, decisions, unresolved issues and limitations, and criticize the code and documentation as required by repository rules. Never claim an unrun check. In the Clankers convention, allow lines up to 120 characters.
 
-1. Write a UTF-8 `.md` source in an ignored, persisted workspace directory. Keep/update one source per subject; mark resolved findings. Subjects may coexist. Include changes/findings, checks actually run and their results, decisions, unresolved issues and limitations; review code and documentation critically. Follow repository report style, including Clankers' 120-character line allowance.
-2. Publish with a stable ID and meaningful title:
+Publish with the shared runtime's publish command, giving the source path, a stable report ID and a meaningful title. The runtime stores a snapshot; editing a source file alone does not update the preview, so republish with the same ID after every source update. IDs contain 1–80 letters, digits, hyphens or underscores. Titles contain 1–200 characters. Each source must be .md, UTF-8 and at most 2 MB; split an oversized report by subject. The server renders Markdown with raw HTML disabled and displays tables, lists, quotations, code fences, links and emphasis. Images and other remote resources are not fetched by the page. The preview does not provide a full GFM extension set or syntax highlighting.
 
-   ```bash
-   python <steering-skill>/scripts/preview.py --state-dir reports/arena-preview publish reports/review.md --id review --title "Review"
-   ```
-
-   IDs: 1–80 letters, digits, hyphens or underscores. Titles: 1–200 characters. Sources: UTF-8 `.md`, at most 2 MB; split oversized reports by subject. Publishing snapshots sources: **republish the same ID after each source update**. Another ID adds a report, never replaces the first.
-3. Direct the user to the **Reports** tab and titled selector. Updating a report preserves selection; switching tabs or refreshing must not replace drafts or message history. Publishing never acknowledges steering notes. Verify the rendered endpoint; do not claim the native file viewer renders Markdown.
-
-Raw Markdown HTML is disabled. Headings, emphasis, lists, tables, quotations, code fences and links render; remote assets are blocked. No full GFM extension set or syntax highlighter.
+Delivery is the live Reports tab. Keep the Markdown source as the durable artifact and direct the user to the rendered report. Tell the user which report to select and verify its actual rendered endpoint, rather than claiming that a Markdown source in the file viewer was rendered. Publishing reports never acknowledges pending steering messages. Mermaid is never rendered; do not use it in reports.
 
 ## Fields and answers
 
-- ALWAYS pair each option set with a labeled custom-response field, e.g. `Custom response: ___`.
+- ALWAYS include a labeled custom-response text field with each option set so the user can answer outside the listed options. Use `Custom response: ___` in Markdown reports.
 
-A report source may carry live inputs, written as Markdown:
-
-| Marker | Control |
-| --- | --- |
-| `- ( ) option` lines, `(x)` preselects | Radio group |
-| `- [ ] option` lines, `[x]` preselects | Checkbox group |
-| `Label: ___`, or a bare `___` line | Text box, at most 2000 characters |
-
-The prompt is the label, else the nearest text line above; `{#id}` ending that line fixes the field ID. Markers in fenced code stay literal. The Reports tab shows one Send answers button under the report; answers reach the steering inbox as one note headed `REPORT <id> <title>:`, read and `ACK:`-ed like any note. Use fields when a questionnaire needs prose around it, and field-only Markdown reports for a bare questionnaire. Republishing replaces documents, never delivered answers.
+A report source may contain form fields written as Markdown: a `- ( ) option` list becomes a radio group, a `- [ ] option` list becomes a checkbox group, and `Label: ___` or a bare `___` line becomes a text box. `(x)` and `[x]` preselect an option. The prompt is the label, else the nearest text line above the field, and `{#id}` at the end of that line fixes the field ID. Markers inside fenced code blocks stay literal. The Reports tab renders one Send answers button under the whole report, and the answers arrive in the steering inbox as one note headed `REPORT <id> <title>:`, which the agent reads and acknowledges like any note. Use this when a questionnaire needs explanation around it; use field-only Markdown reports for a bare questionnaire. Keep one report per subject: republishing replaces the rendered document, not the answers already delivered.
 
 ## Delivery and retention
 
-Delivery is the live Reports tab. Browser download/source controls and the former standalone HTML export are gone: attachment responses returned HTTP 200 but no download appeared in the Arena sandbox preview, and the export added a second copy the file viewer did not render. Keep the Markdown source as the durable artifact; direct the user to the rendered report and verify it. Never silently restore attachment links or an export command.
+Do not commit or push report sources, session databases, inboxes or receipts. Report sources remain in ignored workspace files. The current preview channel may change; failures require an explicit user decision, not silent fallback or a new permanent guarantee.
 
-Keep Markdown sources, session databases, inboxes and receipts **ignored and uncommitted; never push them**. This replaces the former local-only report commits used to expose raw Markdown in Arena's diff viewer. Channel permanence is not guaranteed: report preview failure and agree on a replacement, never silently reinstate the old workaround. See [report format and recovery](references/REFERENCE.md).
+Explicit user instructions and repository rules outrank skill defaults. Keep production code free of references to these skills; the skill's own files and setup chat are exceptions.
 
-Keep production free of these skill names/paths; their own files and setup chat are exceptions.
-
-Non-fragment Markdown links open new tabs with `noopener noreferrer`, keeping the preview in place. Browser popup policy can restrict new tabs.
+Non-fragment Markdown links open in a new tab with `noopener noreferrer`, keeping the preview in place. Browser popup policy can still restrict new tabs. See [portable reports](references/REFERENCE.md) for structure and delivery detail.
