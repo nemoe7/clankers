@@ -38,7 +38,7 @@ Read these first:
 - Deleted clause: attempt one squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files.
-- Keep one CHANGELOG entry per pull request, extending the open entry while that pull request is unmerged.
+- Keep one CHANGELOG entry per date, extending that entry while the date holds.
 
 ## Repository type
 
