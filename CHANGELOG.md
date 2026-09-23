@@ -8,7 +8,7 @@
 
 **Read cadence** — `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy state that a count moving inside a block means read now, not at the next boundary; the steering skill carries the same rule on its polling bullet. The reminder prints only a count, so a rising count meant notes sat unread until the next block.
 
-**Save-state clause** — Both steering `SKILL.md` copies gain a `## Save state` section, and `REFERENCE.md` records that `POST /api/save-state` also writes an inbox note.
+**Save-state clause** — The refs `SKILL.md` gains a `## Save state` section and both `REFERENCE.md` copies record that `POST /api/save-state` also writes an inbox note; the live `SKILL.md` stays unchanged by request, so its budget does not move. Both steering `SKILL.md` copies gain the clause `Markup needs `--reply`.`
 
 **Squash fixtures table** — `skills/squash/SKILL.md` requires a fixtures table, with before, after and percentage saved per file plus the average, when one change covers several files.
 
