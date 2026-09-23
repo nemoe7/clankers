@@ -10,7 +10,7 @@
 
 **Identifier shape** — Uploads and save-state notes take the shape the log shows: seven characters, a hyphen and the rest. Both used a raw uuid4. `scripts/preview.py` gains `new_id()`, and `scripts/check_preview.py` asserts the shape on both records.
 
-**Unread marks** — The report star and the Reports tab pip track unread only; `needs_answer` moves neither, so an unanswered form carries no marker.
+**Unread marks** — The report star and the Reports tab pip track unread only. `needs_answer` moves neither, so an unanswered form carries no marker.
 
 ## 2026-09-23 — Approval gate, hook paths, save state and read cadence
 
