@@ -1,4 +1,4 @@
-# Dispatch-only distribution of ARENA.md and the two sibling preview skills.
+# Dispatch-only distribution of ARENA.md and the preview skill.
 # Live skills only; retired installed transport files are removed on dispatch.
 # ARENA_DIST_PAT needs short-lived Contents read/write access to every target.
 # Delivery is not activation: each session must start its own preview.
@@ -18,10 +18,10 @@ concurrency:
 env:
   REPOS: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki"
   DEST: ARENA.md
-  SKILLS: "arena-preview-steering arena-preview-reporting"
+  SKILLS: "arena-preview-steering"
   SKILL_ROOT: skills
   SKILL_DEST_ROOT: .agents/skills
-  LEGACY_SKILL: arena-live-steering
+  LEGACY_SKILLS: "arena-live-steering arena-preview-reporting"
 jobs:
   distribute:
     runs-on: ubuntu-latest
@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Check out source repository
         uses: actions/checkout@v4
-      - name: Sync ARENA.md and both preview skills to target repos
+      - name: Sync ARENA.md and the preview skill to target repos
         env:
           ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
           TARGET_REPOS: ${{ inputs.repos }}
@@ -54,7 +54,9 @@ jobs:
               git clone "https://github.com/$repo.git" "$work"
               mkdir -p "$work/$(dirname "$DEST")"
               cp "$src" "$work/$DEST"
-              rm -rf "$work/$SKILL_DEST_ROOT/$LEGACY_SKILL"
+              for legacy in $LEGACY_SKILLS; do
+                rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
+              done
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
@@ -73,9 +75,11 @@ jobs:
               for skill in $SKILLS; do
                 git add "$SKILL_DEST_ROOT/$skill"
               done
-              if [ -n "$(git ls-files "$SKILL_DEST_ROOT/$LEGACY_SKILL")" ]; then
-                git add -u -- "$SKILL_DEST_ROOT/$LEGACY_SKILL"
-              fi
+              for legacy in $LEGACY_SKILLS; do
+                if [ -n "$(git ls-files "$SKILL_DEST_ROOT/$legacy")" ]; then
+                  git add -u -- "$SKILL_DEST_ROOT/$legacy"
+                fi
+              done
               git diff --cached --quiet || {
                 git commit -m "chore(arena): sync rules and preview skills from nemoe7/clankers"
                 git push -u origin HEAD
@@ -83,9 +87,11 @@ jobs:
               git show "HEAD:$DEST" | cmp -s - "$src" || {
                 echo "::error::$repo: ARENA.md differs after sync"; exit 1;
               }
-              [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$LEGACY_SKILL")" ] || {
-                echo "::error::$repo: retired skill remains"; exit 1;
-              }
+              for legacy in $LEGACY_SKILLS; do
+                [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$legacy")" ] || {
+                  echo "::error::$repo: retired skill $legacy remains"; exit 1;
+                }
+              done
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
@@ -99,7 +105,7 @@ jobs:
                   }
                 done
               done
-              echo "$repo: rules and both preview skills verified"
+              echo "$repo: rules and the preview skill verified"
             ) || failed="$failed $repo"
           done
           [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }

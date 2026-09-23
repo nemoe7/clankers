@@ -2,7 +2,7 @@
 
 ## Runtime contract
 
-The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering; `serve` checks it at startup and exits with the install command when missing, since a page that cannot render Markdown is worse than no page. The CLI commands need no renderer. The reporting skill is a separate entry point installed beside steering, not an independent copy of the server.
+The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering; `serve` checks it at startup and exits with the install command when missing, since a page that cannot render Markdown is worse than no page. The CLI commands need no renderer.
 
 The chosen `--state-dir` contains `state.sqlite3`. Normal SQLite transactions handle concurrent browser sends and CLI receipts. Reads never acknowledge; a `read` stamps `seen_at` for exactly the IDs it printed, once its output write succeeds. `seen <ids>` or `ack` marks only those IDs. Count-only notifications, truncated output and failed deliveries stay Sent. Writes are committed before the server returns success.
 
@@ -54,11 +54,40 @@ Use `--msg-id` on the `task` command to set the message's `task_id`. Task/link w
 
 ## Publish reports
 
-Use the companion [reporting skill](../../arena-preview-reporting/SKILL.md) for field syntax and publishing procedure. Sources must be UTF-8 `.md`, at most 2,000,000 bytes. IDs are 1–80 letters, digits, hyphens or underscores; titles 1–200 characters. Invalid fields fail before storage. Keep one ignored source per report and republish its stable ID to update it; answered reports refuse a republish, so publish the update under a new ID. Source edits alone never update published snapshots.
+Publish through the steering entry point's `publish` command. Field syntax and limits follow below. Sources must be UTF-8 `.md`, at most 2,000,000 bytes. IDs are 1–80 letters, digits, hyphens or underscores; titles 1–200 characters. Invalid fields fail before storage. Keep one ignored source per report and republish its stable ID to update it; answered reports refuse a republish, so publish the update under a new ID. Source edits alone never update published snapshots.
 
 Republishing preserves first-publish order, clears the report's read stamp and never deletes delivered answers. `read` delivers submissions headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty answers; resending creates a new answer. Publishing never acknowledges a submission. Verify the rendered report before claiming delivery. Render failures leave sources available for inspection; report failure, never success.
 
 The rendered report endpoint returns its full `revision`; answer requests must echo it. Revision checks and answer writes share one transaction. Missing revisions return HTTP 400, stale ones HTTP 409 without saving. Reload old preview pages before sending. Automatic updates retain unsent/in-flight answers. After rejection, copy entries before explicitly refreshing and reviewing the new report.
+
+## Suggested report structure
+
+```markdown
+# Review title
+
+**Result:** one clear outcome.
+
+## Changes
+
+- What changed and why.
+
+## Checks
+
+| Check | Result |
+| --- | --- |
+| Actual check command | Pass, fail or not run |
+
+## Findings and disposition
+
+- Open: issue and impact.
+- Resolved: issue and verified resolution.
+
+## Limits
+
+- Assumptions, unverified behavior and remaining decisions.
+```
+
+Follow the target repository's style. In Clankers reports, allow lines up to 120 characters. Never invent claims to fill the template. Short answers stay in chat. No Mermaid, remote fonts, CDN scripts or externally loaded images are needed.
 
 ## Fields in a report
 

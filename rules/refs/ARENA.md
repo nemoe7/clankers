@@ -19,7 +19,7 @@
 - Merge by rebase only: rebase the branch onto the target first, then merge, so the merge is a fast-forward and creates no merge commit.
 - On a collision between rules or any doubt, stop and ask with the `ask_user` tool; NEVER improvise.
 - After every file edit, grep-verify the change actually landed before building on it. A silent edit is worse than a failed one.
-- NEVER edit this file nor either preview skill (`arena-preview-steering`, `arena-preview-reporting`, including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
+- NEVER edit this file nor the preview skill (`arena-preview-steering`, including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
 - Upon any rule violation, ALWAYS suggest an amendment to the rule that failed or that should have prevented it, in the reply that reports the violation.
 - Ask questions in labeled batches that state their total.
 
@@ -139,7 +139,7 @@
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
 - NEVER cite a preview note or submission ID in a repository file. The ID is minted per session and does not survive it, so a later reader cannot resolve it and the citation rots silently. Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
-- Publish longer reports through `arena-preview-reporting` in the shared preview; do not create local report commits for the native diff viewer.
+- Publish longer reports through `arena-preview-steering` in the shared preview; do not create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
 - Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
@@ -164,7 +164,7 @@
 
 ## Deliverables
 
-- Save workspace deliverables and open the main one. For longer reports, use `arena-preview-reporting` and direct the user to its Reports tab and titled report; verify rendering rather than assuming the native viewer renders Markdown.
+- Save workspace deliverables and open the main one. For longer reports, use `arena-preview-steering` and direct the user to its Reports tab and titled report; verify rendering rather than assuming the native viewer renders Markdown.
 - Keep report sources as Markdown; the live Reports tab is the delivery, since the standalone HTML export never worked in the Arena sandbox preview and was removed on 2026-09-20. Other formats remain request-only. If preview delivery fails, report it and agree on a replacement; the former local-commit workaround remains historical, not an automatic fallback or a permanently forbidden option.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0.
