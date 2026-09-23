@@ -205,13 +205,17 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("POST", "/api/markdown", '{"text":"draft"}')[0] == 403
     assert request("POST", "/api/notes", "{}")[0] == 403
     assert request("POST", "/api/notes", "{}", {"X-Preview-Token": token})[0] == 415
-    assert request("POST", "/api/notes", "x" * 32769, auth)[0] == 413
+    # A full-length note stays inside the general body limit, so the cap is reachable over HTTP.
+    assert (
+      len(json.dumps({"id": "x", "text": "x" * preview.MAX_NOTE})) < preview.MAX_BODY
+    )
+    assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
     for body in (
       "{",
       "[]",
       '{"id":"x","text":3}',
       '{"id":"x","text":" "}',
-      json.dumps({"id": "x", "text": "x" * 4001}),
+      json.dumps({"id": "x", "text": "x" * (preview.MAX_NOTE + 1)}),
     ):
       assert request("POST", "/api/notes", body, auth)[0] == 400
     assert store.read()["pending"] == []
@@ -233,7 +237,7 @@ with tempfile.TemporaryDirectory() as directory:
       (["message-1", "unknown"], "reply", "done"),
       (["message-1"], "shout", "done"),
       (["message-1"], "reply", ""),
-      (["message-1"], "reply", "x" * 4001),
+      (["message-1"], "reply", "x" * (preview.MAX_NOTE + 1)),
     ):
       try:
         store.acknowledge(*broken)
@@ -746,7 +750,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("GET", "/api/reports/stale/source")[0] == 200
     # A submission is limited in characters and its request body in bytes, and the byte limit has
     # to sit above the character one or the documented maximum stays unreachable over HTTP, which
-    # is what one 32 KiB limit for every POST did. That maximum is 50 fields of 2,000 characters,
+    # is what one 32 KiB limit for every POST did, before the note cap set the bound. That
+    # maximum is 50 fields of 2,000 characters,
     # and no single answer reaches it because a text answer is capped at 2,000, so it takes a whole
     # wide report. The Store layer already covers the submission; this covers the HTTP path.
     wide = root / "wide-http.md"
@@ -791,7 +796,7 @@ with tempfile.TemporaryDirectory() as directory:
     # Past the body limit, so HTTP refuses it before the answers are parsed at all.
     over_body = "x" * (preview.MAX_SUBMISSION_BODY + 1)
     assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
-    # Notes keep the small limit; only report answers were widened.
+    # Notes keep the smaller limit; report answers take the wider one.
     assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
     # The note schema carries no author column: a record is just the message and its receipt.
     note = store.note("plain-note", "no author field")
@@ -1372,8 +1377,8 @@ with tempfile.TemporaryDirectory() as wide_dir:
   record = wide_store.submit_report(
     "wide", "note-wide", answers, wide_store.report("wide")["updated_at"]
   )
-  # The combined answers pass the 4000 a note is capped at, and none of it is dropped.
-  assert len(record["text"]) > 4000
+  # The combined answers pass the cap on a note, and none of it is dropped.
+  assert len(record["text"]) > preview.MAX_NOTE
   assert record["text"].count("x" * 2000) == 50
   stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
   assert stored and stored[0]["text"] == record["text"]
@@ -1398,10 +1403,11 @@ with tempfile.TemporaryDirectory() as wide_dir:
       assert "150,000" in str(error) or "at least one answer" in str(error)
   # A note keeps its own, much smaller cap, and says so in its own words.
   try:
-    preview.note_text("n" * 4001)
+    assert preview.note_text("n" * preview.MAX_NOTE) == "n" * preview.MAX_NOTE
+    preview.note_text("n" * (preview.MAX_NOTE + 1))
     raise AssertionError("An oversized note was accepted")
   except ValueError as error:
-    assert "4000" in str(error)
+    assert str(preview.MAX_NOTE) in str(error)
 
 # One file, two readers: the same saved-state file feeds both importers, each skipping the other's
 # lines, which is what makes one path enough for the owner's restore.

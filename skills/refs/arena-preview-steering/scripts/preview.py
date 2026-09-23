@@ -26,16 +26,16 @@ except ImportError:
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
-# A report holds at most 50 fields of at most 2000 characters each, so its answers legitimately
-# reach past the 4000 a note is capped at. Submissions get their own bound, with room to spare
-# for the prompts and wrapper around them, and it refuses rather than truncating.
+# A note is capped in characters. A report holds at most 50 fields of at most 2000 characters
+# each, so its answers legitimately reach past that cap and take their own bound, with room to
+# spare for the prompts and wrapper around them. Both refuse rather than truncate.
+MAX_NOTE = 15_000
 MAX_SUBMISSION = 150_000
-# A submission is limited in characters and its request body in bytes, and the two are not the
-# same size: 150,000 characters can be 900,000 bytes once each one is escaped as \uXXXX, so a
-# body limit below that makes the documented maximum unreachable over HTTP, which is what a
-# single 32 KiB limit for every POST did. Notes and rendered Markdown keep the small limit,
-# since nothing about them is allowed to be that large.
-MAX_BODY = 32_768
+# A body is limited in bytes and its text in characters, and the two are not the same size: each
+# character can be six bytes once escaped as \uXXXX, so a body limit below that makes the
+# documented maximum unreachable over HTTP, which is what a single 32 KiB limit for every POST
+# did. The note cap now sets the general bound, and submissions take the wider one.
+MAX_BODY = 96_000
 MAX_SUBMISSION_BODY = 1_000_000
 # An upload is the size of a report submission, on the owner's answer.
 MAX_UPLOAD = 1_000_000
@@ -89,8 +89,8 @@ def identifier(value):
 
 
 def note_text(text):
-  if not isinstance(text, str) or not text.strip() or len(text) > 4000:
-    raise ValueError("Enter a note of 1–4000 characters")
+  if not isinstance(text, str) or not text.strip() or len(text) > MAX_NOTE:
+    raise ValueError(f"Enter a note of 1–{MAX_NOTE} characters")
   return text
 
 
