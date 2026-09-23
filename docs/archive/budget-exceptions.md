@@ -47,3 +47,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-23: poll count beside a pending count only. `scripts/preview.py` +75 `B` and `skills/arena-preview-steering/SKILL.md` +20 `B`. Unfunded.
 2026-09-23: composer limit raised to 15,000 characters. `scripts/preview.py` +26 `B`. Unfunded.
 2026-09-23: live-copy sync of this session's steering amendments. `skills/arena-preview-steering/SKILL.md` +238 `B` for the arena-state directory clause, the waiting-call count, the one-answer-per-message rule and the ack-and-queue clause. Unfunded.
+2026-09-23: state autosave. `skills/arena-preview-steering/SKILL.md` +269 `B` for the Save state section the live copy had lost and `skills/arena-preview-steering/scripts/preview.py` +696 `B` for the autosave path. Unfunded.
