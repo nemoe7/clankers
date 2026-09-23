@@ -1,11 +1,14 @@
 #!/bin/bash
-# One-shot installer for the arena-preview-steering automatic poll hook.
-# Idempotent: safe to run repeatedly. Run from the repository root, where the
-# distributed skill lives at .agents/skills/arena-preview-steering.
+# Installer for the arena-preview-steering automatic poll hook and the state directory.
+# Idempotent: safe to run repeatedly, and a sandbox restore requires it again.
+# Run from the repository root, where the skill lives at .agents/skills/arena-preview-steering.
 set -u
 
 VENV="$HOME/.agents/.arena-preview-venv"
+REPO_ROOT="$(pwd)"
 SKILL_REL=".agents/skills/arena-preview-steering"
+STATE_REL="arena-state"
+GLOBAL_IGNORE="$HOME/.gitignore_global"
 HOOK="$HOME/.arena-preview-hook.sh"
 PROFILE="$HOME/.bash_profile"
 MARKER="# arena-preview-hook"
@@ -25,17 +28,24 @@ if ! "$VENV/bin/python" -c 'import markdown_it' >/dev/null 2>&1; then
   "$VENV/bin/pip" install --quiet markdown-it-py || fail "cannot install markdown-it-py into $VENV"
 fi
 
-# 4. Hook script: save $?, print the unacked-count reminder on stderr, restore the exit code.
-cat > "$HOOK" <<'EOF' || fail "cannot write $HOOK"
+# 4. Ignore the state directory through core.excludesFile, never through the repository .gitignore.
+touch "$GLOBAL_IGNORE" || fail "cannot write $GLOBAL_IGNORE"
+grep -qxF "$STATE_REL/" "$GLOBAL_IGNORE" || echo "$STATE_REL/" >> "$GLOBAL_IGNORE" || fail "cannot append to $GLOBAL_IGNORE"
+git config --global core.excludesFile "$GLOBAL_IGNORE" || fail "cannot set core.excludesFile"
+mkdir -p "$STATE_REL" || fail "cannot create $STATE_REL"
+git check-ignore -q "$STATE_REL/state.sqlite3" || echo "arena-preview installer: warning: $STATE_REL is not ignored, so state shows in git status until this installer runs again" >&2
+
+# 5. Hook script: save $?, print the unacked-count reminder on stderr, restore the exit code.
+cat > "$HOOK" <<EOF || fail "cannot write $HOOK"
 #!/bin/bash
 # arena-preview-hook: poll the steering inbox after every Arena bash call.
-rc=$?
-"$HOME/.agents/.arena-preview-venv/bin/python" .agents/skills/arena-preview-steering/scripts/preview.py --state-dir reports/arena-preview --reminder >&2
-exit "$rc"
+rc=\$?
+"$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --state-dir "$REPO_ROOT/$STATE_REL" --reminder >&2
+exit "\$rc"
 EOF
 chmod 755 "$HOOK"
 
-# 5. Idempotent EXIT trap in ~/.bash_profile.
+# 6. Idempotent EXIT trap in ~/.bash_profile.
 touch "$PROFILE"
 if ! grep -qF "$MARKER" "$PROFILE"; then
   cat >> "$PROFILE" <<'EOF' || fail "cannot append to $PROFILE"
@@ -48,4 +58,4 @@ esac
 EOF
 fi
 
-echo "arena-preview installer: ok"
+echo "arena-preview installer: ok; state: $REPO_ROOT/$STATE_REL, ignored through $GLOBAL_IGNORE"

@@ -16,11 +16,11 @@ One server and inbox per session for steering messages and reports; never start 
 ## Setup
 
 1. Resolve this skill's actual path: source `skills/` and installed discovery paths differ. Report missing installed files; do not install or repair them without authorization.
-2. Choose a stable, persisted, Git-ignored state directory, default `reports/arena-preview`. Verify it with `git check-ignore`; ask before adding an ignore rule if needed. Never use cache/build folders or commit/push session state, notes, receipts or reports.
+2. Use the state directory the installer ignores through `core.excludesFile`, default `arena-state`. A sandbox restore deletes every path the repository ignores, so the rule never goes into the repository `.gitignore`. Verify it with `git check-ignore`. Never use cache/build folders or commit/push session state, notes, receipts or reports.
 3. Run `<skill>/scripts/install.sh` once per session, then start the server with Arena's long-lived process tool, not a timed shell call:
 
    ```bash
-   ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir reports/arena-preview serve --port 8000
+   ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir arena-state serve --port 8000
    ```
 
    The server binds `0.0.0.0`; browser URLs are relative and the preview host is accepted. `serve` refuses to start without `markdown-it-py`; `read`, `ack` and `publish` need no renderer. After a sandbox restart, rerun the installer. Reuse its process and state directory; name the process `<repo> - Steering`. If it dies, tell the owner the restart is coming before restarting with the same directory: the restart invalidates the token in the owner's tab, and an in-flight send or upload can fail. If its port belongs to another service, choose a free port; never kill that service.
@@ -29,7 +29,7 @@ One server and inbox per session for steering messages and reports; never start 
 ## Read, then acknowledge
 
 ```bash
-python <skill>/scripts/preview.py --state-dir reports/arena-preview read
+python <skill>/scripts/preview.py --state-dir arena-state read
 ```
 
 Every CLI command prints the nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, the bash calls since the last `read` beside those counts, and one rotating reminder from `REMINDERS` to stderr, even with none pending. Only the hook's `--reminder` poll advances the call count, and a `read` clears it. Stdout stays machine-readable; reminders never mark seen.
@@ -40,7 +40,7 @@ Prints **all pending messages** in full and records check time; a failed deliver
 - Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One answer per call; ack different answers separately.
 
   ```bash
-  python <skill>/scripts/preview.py --state-dir reports/arena-preview ack <id> [<id> ...] --reply <markdown>
+  python <skill>/scripts/preview.py --state-dir arena-state ack <id> [<id> ...] --reply <markdown>
   ```
 
   Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp and replace the answer text. Never name a note by its sequence number: numbers only order one file, and IDs survive state rebuilds. With no visible preview, acknowledge in chat instead, opening with literal `ACK:` and your interpretation; reserve that prefix for delivered notes, never thought or ordinary status.
