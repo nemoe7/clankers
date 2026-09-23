@@ -107,6 +107,6 @@ New content may push the text over budget. Compress the rest in the same change 
 
 ## Reporting
 
-State each governing unit and how it was counted, before and after counts, percentage saved, and pass count. Name anything you could not compress without risking meaning, anything removed with the user's approval, and any budget left unmet.
+State each governing unit and how it was counted, before and after counts, percentage saved, and pass count. Name anything you could not compress without risking meaning, anything removed with the user's approval, and any budget left unmet. Add a fixtures table when one change covers several files: before, after and percentage saved per file, plus the average.
 
 Never claim a measurement you did not take.
