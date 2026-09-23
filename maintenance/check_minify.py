@@ -20,7 +20,7 @@ sample = '''#!/usr/bin/env python3
 from __future__ import annotations
 # This comment can go.
 def public(value: int, /, *, enabled: bool = True) -> int:
-  """Keep method documentation."""
+  """This docstring goes."""
   assert enabled
   if __debug__:
     pass
@@ -31,6 +31,7 @@ def public(value: int, /, *, enabled: bool = True) -> int:
 built = minify.minify_python(sample, "example.py")
 minify.check_python(sample, built, "example.py")
 assert len(built) < len(sample) and "This comment can go" not in built
+assert "This docstring goes" not in built
 assert built.startswith("#!/usr/bin/env python3\n")
 try:
   minify.check_python("x = 1", "x = 2", "changed.py")

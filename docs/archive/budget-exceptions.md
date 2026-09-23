@@ -34,17 +34,18 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-23: auto-seen reads. `scripts/preview.py` +500 `B` and `skills/arena-preview-steering/SKILL.md` +131 `B`. A read stamps Seen for the IDs it printed once its write succeeds. 
 2026-09-23: end-of-bash-call poll. `rules/ARENA.md` +5 `B` and `skills/arena-preview-steering/SKILL.md` −35 `B`. 
 2026-09-22 to 2026-09-23: successive preview runtime and harness changes, itemized in `CHANGELOG.md` and in Git history. Unfunded.
-2026-09-23: save-state notification. `scripts/preview.py` +152 `B`. The save route writes an inbox note, so the next `read` delivers it. Unfunded.
+2026-09-23: save-state notification. `scripts/preview.py` +152 `B`. The save route writes an inbox note, so the next `read` delivers it. Funded 2026-09-23: docstring stripping pays it.
 2026-09-23: the save-state clause, read-now timing and the squash fixtures table. `rules/ARENA.md` +192 `B`, and the root copy matches it. `skills/squash/SKILL.md` +24 `tok`. `skills/arena-preview-steering/SKILL.md` lands under its baseline, so it needs no exception. Unfunded.
-2026-09-23: ack-asap reminder. `scripts/preview.py` +66 `B` and `skills/arena-preview-steering/SKILL.md` +35 `B` for the clause `ACK ASAP.` after any pending count. Unfunded.
-2026-09-23: republish guard. `scripts/preview.py` +222 `B`, `skills/arena-preview-steering/SKILL.md` +24 `B` and `skills/arena-preview-reporting/SKILL.md` +182 `B` for the refused-republish clauses. Unfunded.
-2026-09-23: reminder emphasis. `scripts/preview.py` +15 `B` and `skills/arena-preview-steering/SKILL.md` +15 `B` for the clause `DO NOT IGNORE.` before `ACK ASAP.` Unfunded.
+2026-09-23: ack-asap reminder. `scripts/preview.py` +66 `B` and `skills/arena-preview-steering/SKILL.md` +35 `B` for the clause `ACK ASAP.` after any pending count. Unfunded for the `SKILL.md` delta. Docstring stripping funds the `scripts/preview.py` delta 2026-09-23.
+2026-09-23: republish guard. `scripts/preview.py` +222 `B`, `skills/arena-preview-steering/SKILL.md` +24 `B` and `skills/arena-preview-reporting/SKILL.md` +182 `B` for the refused-republish clauses. Unfunded for the two `SKILL.md` deltas. Docstring stripping funds the `scripts/preview.py` delta 2026-09-23.
+2026-09-23: reminder emphasis. `scripts/preview.py` +15 `B` and `skills/arena-preview-steering/SKILL.md` +15 `B` for the clause `DO NOT IGNORE.` before `ACK ASAP.` Unfunded for the `SKILL.md` delta. Docstring stripping funds the `scripts/preview.py` delta 2026-09-23.
 2026-09-23: steering prose audit. `skills/arena-preview-steering/SKILL.md` −1,892 `B` for the approved cuts, net of the external-channel pointer. Unfunded.
 2026-09-23: reporting merge. `skills/arena-preview-reporting/SKILL.md` leaves the table with the retired skill. `skills/arena-preview-steering/SKILL.md` +1,476 `B` for the publishing section, still 6,401 `B` below the two former entry points combined. Unfunded.
 2026-09-23: session-local artifact ban. `rules/ARENA.md` +4 `B`, and the root copy matches it. Unfunded.
-2026-09-23: rotating reminder and poll count. `scripts/preview.py` +1,148 `B` and `skills/arena-preview-steering/SKILL.md` +124 `B` for the reminder contract. Unfunded.
+2026-09-23: rotating reminder and poll count. `scripts/preview.py` +1,148 `B` and `skills/arena-preview-steering/SKILL.md` +124 `B` for the reminder contract. Unfunded for the `SKILL.md` delta. Docstring stripping funds the `scripts/preview.py` delta 2026-09-23.
 2026-09-23: task-link requirement. `skills/arena-preview-steering/SKILL.md` +21 `B` for the `--msg-id` clause. Unfunded.
-2026-09-23: poll count beside a pending count only. `scripts/preview.py` +75 `B` and `skills/arena-preview-steering/SKILL.md` +20 `B`. Unfunded.
-2026-09-23: composer limit raised to 15,000 characters. `scripts/preview.py` +26 `B`. Unfunded.
+2026-09-23: poll count beside a pending count only. `scripts/preview.py` +75 `B` and `skills/arena-preview-steering/SKILL.md` +20 `B`. Unfunded for the `SKILL.md` delta. Docstring stripping funds the `scripts/preview.py` delta 2026-09-23.
+2026-09-23: composer limit raised to 15,000 characters. `scripts/preview.py` +26 `B`. Funded 2026-09-23: docstring stripping pays it.
 2026-09-23: live-copy sync of this session's steering amendments. `skills/arena-preview-steering/SKILL.md` +238 `B` for the arena-state directory clause, the waiting-call count, the one-answer-per-message rule and the ack-and-queue clause. Unfunded.
-2026-09-23: state autosave. `skills/arena-preview-steering/SKILL.md` +269 `B` for the Save state section the live copy had lost and `skills/arena-preview-steering/scripts/preview.py` +696 `B` for the autosave path. Unfunded.
+2026-09-23: state autosave. `skills/arena-preview-steering/SKILL.md` +269 `B` for the Save state section the live copy had lost and `skills/arena-preview-steering/scripts/preview.py` +696 `B` for the autosave path. Unfunded for the `SKILL.md` delta. Docstring stripping funds the `scripts/preview.py` delta 2026-09-23.
+2026-09-23: docstring stripping. `maintenance/minify.py` now removes docstrings, so `skills/arena-preview-steering/scripts/preview.py` drops 9,761 `B`, from 58,551 `B` to 48,790 `B`. This pays every unfunded `scripts/preview.py` delta above, 2,400 `B` in total, and leaves 7,361 `B` of headroom. The `SKILL.md` deltas above stay unfunded.

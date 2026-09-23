@@ -299,6 +299,7 @@ TASK_COLUMNS = "id, title, details, status, position, updated_at"
 #
 # The default path is `saved-state.ndjson` inside the state directory, which the installer
 # ignores through `core.excludesFile`. `--save-path` moves it.
+CLI_DESCRIPTION = "Notes, reports, tasks and the preview server for Arena steering."
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
   "id",
@@ -1686,7 +1687,7 @@ def handler(store):
 
 
 def main():
-  parser = argparse.ArgumentParser(description=__doc__)
+  parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
   parser.add_argument("--state-dir", default="arena-state")
   parser.add_argument(
     "--reminder",

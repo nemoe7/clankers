@@ -74,17 +74,40 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
   return result.stdout.rstrip("\n") + "\n"
 
 
+def strip_string_statements(tree):
+  """Drop every bare string statement, which is what the minifier removes."""
+  for node in list(ast.walk(tree)):
+    body = getattr(node, "body", None)
+    if not isinstance(body, list):
+      continue
+    node.body = [
+      item
+      for item in body
+      if not (
+        isinstance(item, ast.Expr)
+        and isinstance(item.value, ast.Constant)
+        and isinstance(item.value.value, str)
+      )
+    ]
+  return tree
+
+
 def check_python(source: str, built: str, filename: str) -> None:
-  """Keep the Python 3.10 syntax floor and every parsed statement, name and annotation."""
+  """Keep the Python 3.10 syntax floor, every parsed statement, name and annotation.
+
+  Bare string statements are compared away, because the build removes them.
+  """
   before = ast.parse(source, filename, feature_version=(3, 10), type_comments=True)
   after = ast.parse(built, filename, feature_version=(3, 10), type_comments=True)
-  if ast.dump(before) != ast.dump(after):
+  if ast.dump(strip_string_statements(before)) != ast.dump(
+    strip_string_statements(after)
+  ):
     raise RuntimeError(f"minified Python changed the parsed tree: {filename}")
   compile(built, filename, "exec")
 
 
 def minify_python(source: str, filename: str) -> str:
-  """Remove comments and excess whitespace, not behavior or introspection data."""
+  """Remove comments, docstrings and excess whitespace, not behavior."""
   if version("python-minifier") != PYTHON_MINIFIER_VERSION:
     raise RuntimeError(f"install python-minifier=={PYTHON_MINIFIER_VERSION}")
   import python_minifier
@@ -95,7 +118,7 @@ def minify_python(source: str, filename: str) -> str:
       filename=filename,
       remove_annotations=False,
       remove_pass=False,
-      remove_literal_statements=False,
+      remove_literal_statements=True,
       combine_imports=False,
       hoist_literals=False,
       rename_locals=False,
