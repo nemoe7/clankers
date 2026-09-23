@@ -1,11 +1,13 @@
 #!/bin/bash
-# One-shot installer for the arena-preview-steering automatic poll hook.
+# Installer for the arena-preview-steering automatic poll hook.
 # Idempotent: safe to run repeatedly. Run from the repository root, where the
-# distributed skill lives at .agents/skills/arena-preview-steering.
+# skill lives at .agents/skills/arena-preview-steering.
 set -u
 
 VENV="$HOME/.agents/.arena-preview-venv"
+REPO_ROOT="$(pwd)"
 SKILL_REL=".agents/skills/arena-preview-steering"
+STATE_REL="reports/arena-preview"
 HOOK="$HOME/.arena-preview-hook.sh"
 PROFILE="$HOME/.bash_profile"
 MARKER="# arena-preview-hook"
@@ -26,12 +28,12 @@ if ! "$VENV/bin/python" -c 'import markdown_it' >/dev/null 2>&1; then
 fi
 
 # 4. Hook script: save $?, print the unacked-count reminder on stderr, restore the exit code.
-cat > "$HOOK" <<'EOF' || fail "cannot write $HOOK"
+cat > "$HOOK" <<EOF || fail "cannot write $HOOK"
 #!/bin/bash
 # arena-preview-hook: poll the steering inbox after every Arena bash call.
-rc=$?
-"$HOME/.agents/.arena-preview-venv/bin/python" .agents/skills/arena-preview-steering/scripts/preview.py --state-dir reports/arena-preview --reminder >&2
-exit "$rc"
+rc=\$?
+"$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" --state-dir "$REPO_ROOT/$STATE_REL" --reminder >&2
+exit "\$rc"
 EOF
 chmod 755 "$HOOK"
 
