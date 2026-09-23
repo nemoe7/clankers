@@ -37,7 +37,7 @@ The checker is maintenance tooling. Reporting uses `markdown-it-py` at runtime, 
 
 ## Minified assets and scripts
 
-The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-preview-steering/` sources, never generated copies. Markdown compression is separate. Compact Python gives less useful traceback line numbers.
+The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-preview-steering/` sources, never generated copies. Markdown compression is separate. A dispatch workflow writes the `.agents/skills/arena-preview-steering/` copy in each target repository. `.github/workflows/distribute-arena.yml` carries it, so markdown drift there ends at the next dispatch. Compact Python gives less useful traceback line numbers.
 
 ```bash
 npm ci
