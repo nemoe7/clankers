@@ -47,10 +47,28 @@ CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
 BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
 ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
+# One repeated tail reads as noise, so the reminder rotates through rules an agent most often
+# drops. The cursor lives in meta, so a cycle covers every string before one repeats.
+REMINDERS = (
+  "Manage the task list.",
+  "Take the smallest open task next.",
+  "Always push.",
+  "Block with ask_user on GH_TOKEN death.",
+  "Keep docs terse but clear.",
+)
+REMINDER_CURSOR = "reminder_cursor"
+POLLS_SINCE_READ = "polls_since_read"
 
 
 def now():
   return datetime.now(timezone.utc).isoformat()
+
+
+def meta_number(db, key):
+  """Read one meta value as a non-negative integer, or 0 when it is absent or not a number."""
+  row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+  value = str(row[0]) if row else ""
+  return int(value) if value.isdigit() else 0
 
 
 def new_id():
@@ -1019,9 +1037,13 @@ class Store:
     with closing(self.connect()) as db, db:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
 
-  def reminder(self):
-    """Count pending kinds without marking any message seen; any count asks for an ack."""
-    with closing(self.connect()) as db:
+  def reminder(self, advance=False):
+    """Count pending kinds without marking any message seen; any count asks for an ack.
+
+    The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook
+    poll, so the line reports the bash calls since the last read; only `--reminder` passes it.
+    """
+    with closing(self.connect()) as db, db:
       uploads = db.execute(
         "SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL"
       ).fetchone()[0]
@@ -1034,6 +1056,15 @@ class Store:
       reports = db.execute(
         "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
       ).fetchone()[0]
+      cursor = meta_number(db, REMINDER_CURSOR)
+      polls = meta_number(db, POLLS_SINCE_READ) + (1 if advance else 0)
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMINDER_CURSOR, str(cursor + 1))
+      )
+      if advance:
+        db.execute(
+          "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_READ, str(polls))
+        )
     counts = [
       f"{count} {kind}/s."
       for count, kind in (
@@ -1044,7 +1075,8 @@ class Store:
       if count
     ]
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
-    return " ".join([*counts, *ack, "Manage the task list."])
+    head = [f"{polls} call/s since read."] if polls else []
+    return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
 
   def read(self):
     with closing(self.connect()) as db, db:
@@ -1066,6 +1098,7 @@ class Store:
       pending.sort(key=lambda item: item["at"])
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_READ,))
       return {"checked_at": clip_stamp(checked), "pending": pending}
 
   def mark_seen(self, ids):
@@ -1704,7 +1737,7 @@ def main():
     if args.reminder:
       store = Store(args.state_dir, create=False, save_path=args.save_path)
       require_server(store)
-      print(store.reminder(), flush=True)
+      print(store.reminder(advance=True), flush=True)
       return 0
     if not args.command:
       parser.error("a command is required")
