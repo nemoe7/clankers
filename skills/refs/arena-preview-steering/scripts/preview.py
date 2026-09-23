@@ -1041,7 +1041,8 @@ class Store:
     """Count pending kinds without marking any message seen; any count asks for an ack.
 
     The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook
-    poll, so the line reports the bash calls since the last read; only `--reminder` passes it.
+    poll, and that count prints only beside a pending count, so an idle line carries the tail
+    alone. Only `--reminder` advances it, and `read` clears it.
     """
     with closing(self.connect()) as db, db:
       uploads = db.execute(
@@ -1075,7 +1076,7 @@ class Store:
       if count
     ]
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
-    head = [f"{polls} call/s since read."] if polls else []
+    head = [f"{polls} call/s since read."] if polls and counts else []
     return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
 
   def read(self):
