@@ -1095,6 +1095,17 @@ with tempfile.TemporaryDirectory() as directory:
     app.shutdown()
     app.server_close()
     worker.join()
+# The default save file sits inside the state directory, so one globally ignored directory carries
+# the database and its export, and an explicit path still wins.
+with tempfile.TemporaryDirectory() as default_dir:
+  default_root = Path(default_dir) / "arena-state"
+  assert (
+    preview.Store(default_root, create=True).save_path
+    == default_root / "saved-state.ndjson"
+  )
+  moved = preview.Store(default_root, create=True, save_path="elsewhere.ndjson")
+  assert moved.save_path == Path("elsewhere.ndjson")
+
 print(
   "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, read stamps on delivered prints, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
 )
