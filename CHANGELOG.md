@@ -1,5 +1,7 @@
 ## 2026-09-23
 
+**Session artifact citation** — `rules/README.md` L94 drops the report ID `minification-scope`, which does not persist between sessions, and keeps the approval: the pinned minifier manifest is the one exception on the owner's approved answers. 16,427 → 16,405 `B`. The same class left `docs/archive/budget-exceptions.md` L71 in the ledger shrink that follows.
+
 **Arena activation narrative** — `rules/README.md` L103 drops the dated verifications, the 2026-09-13 injected-context reading and the 2026-09-17 session that pushed before it read either file, plus the forgotten-bootstrap-line observation. The contract stays: exploration does not gate activation, activation is a human step, delivery is not activation, the workflow distributes while `rules/apply.py` does not install, and the exact line goes in the first message and in the custom-instructions field. 16,846 → 16,427 `B` (-419). The STE linter reports 0 violations after one sentence split held the 25-word cap.
 
 **Commit-discipline table** — `rules/README.md` drops the `### Commit disciplines` section, lines 123-133: six rows restating the commit, list and merge rules that each rule file already carries, which made a second source of truth. 17,626 → 16,846 `B` (-780). No link pointed at the anchor. `maintenance/check.py`, markdownlint and the STE linter pass.
