@@ -129,6 +129,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
 - Merges MUST be rebase merges: rebase onto the target, then merge; no merge commit.
+- A commit call never shares a shell line with the gates that judge it.
 
 ## Boundaries
 
