@@ -28,7 +28,7 @@ A restore returns HEAD to the branch base, deletes every gitignored directory, k
 
 2026-09-21, first restore: `.venv`, the preview server, and `reports/arena-preview/state.sqlite3` disappeared, including 111 notes and receipts. Recovery used `git fetch -q origin <branch>` then `git reset --mixed FETCH_HEAD` to restore HEAD without changing the tree. The notes were unrecoverable.
 
-The second restore, roughly two hours later on the same branch, left HEAD at `c3c11b3`. The earlier push protected the code. Recovery took five steps: fetch and mixed-reset. rebuild the venv with pinned `ruff` from `ruff.toml` and `markdown-it-py`. restart the preview. reconstruct tasks from context. write the JSON backup for `task-import`.
+The second restore, roughly two hours later on the same branch, left HEAD at `c3c11b3`. The earlier push protected the code. Recovery took five steps. Fetch and mixed-reset, then rebuild the venv with pinned `ruff` from `ruff.toml` and `markdown-it-py`. Restart the preview, reconstruct tasks from context, and write the JSON backup for `task-import`.
 
 The Python harness also writes `__pycache__` inside the live skill copy. A `diff -r` parity check then reports untracked differences.
 
@@ -36,7 +36,7 @@ The fourth restore occurred minutes after a commit and push on 2026-09-21. HEAD 
 
 A task backup protects against bad imports, not restores. Tooling also disappears: `npx --no-install markdownlint-cli2` reported a missing package until `npm install markdownlint-cli2` restored it. Distinguish a broken gate from a lint failure.
 
-During inbox restoration that day, the process imported pasted history and marked all twenty-eight notes acknowledged, assuming earlier answers. Five had no answer. the false receipts became an amendment.
+During inbox restoration that day, the process imported pasted history and marked all twenty-eight notes acknowledged, assuming earlier answers. Five had no answer. The false receipts became an amendment.
 
 Restore acknowledgement state with each note or leave it unset. Never infer an answer. A log copy containing only id, text, and at lacks receipt state and cannot count as complete.
 
@@ -44,7 +44,7 @@ Restore acknowledgement state with each note or leave it unset. Never infer an a
 
 2026-09-21, `arena/01a0be68-clankers`. A refresh was first read as resetting only visible history, with filesystem and preview state checked separately. That account was false: refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox, and visible-history resets are the same event at different levels. Harness reasoning does survive while files disappear. Commit and push early, before turn end.
 
-A later message requested another history-reset recovery, but local HEAD, `FETCH_HEAD`. and remote all remained `094fc30`, the tree was clean, `/api/state` returned 200, and `state.sqlite3` retained 51 notes and 32 tasks. Nothing needed pulling. A transcript-only reset variant was nevertheless recorded and pushed (`dad5ce1`) before a correction arrived: the message duplicated an earlier report, not another reset.
+A later message requested another history-reset recovery. Local HEAD, `FETCH_HEAD` and remote all remained `094fc30`, the tree was clean, `/api/state` returned 200, and `state.sqlite3` retained 51 notes and 32 tasks. Nothing needed pulling. A transcript-only reset variant was nevertheless recorded and pushed (`dad5ce1`) before a correction arrived: the message duplicated an earlier report, not another reset.
 
 Keep the retraction beside the claim. Recover from durable sources, not discardable memory, and push before turn end. Check whether a message describes a new event or repeats one before treating it as evidence or instruction.
 
@@ -76,17 +76,17 @@ Verified on 2026-09-21: 1,681,126 bytes, accepted by tiktoken's hash check. The 
 
 Historical note `41c6b09a` reports replacement, with no mechanism established: a duplicate can replace a new message. Ordinary repeats retain the original for comparison. Replacement loses that evidence and leaves no recovery path. Mismatched instructions or answers referring to absent text are indirect signs. Ask the user.
 
-A false `continue tasks!` once triggered thirty-four new lines in `scripts/preview.py`. the agent stopped the turn and `git checkout` deleted the lines before any commit. Replacements cannot be identified from plausible, unmarked instructions. Small commits and early pushes remain the practical safeguard.
+A false `continue tasks!` once triggered thirty-four new lines in `scripts/preview.py`. The turn stopped and `git checkout` deleted the lines before any commit. Replacements cannot be identified from plausible, unmarked instructions. Small commits and early pushes remain the practical safeguard.
 
 ## The question tool answered at token death
 
 2026-09-21, `arena/01a0be68-clankers`. Against four skipped attempts, a question tool returned `skipped: false` with two answers when a settled P1 bug required a decision. One answer selected an option, the other supplied text. The budget was effectively spent, but the probe did not measure a remaining count.
 
-This was not a controlled trial: the question shape differed and there were two questions, not one. The sample is one success against four skips. Ask rather than assume. One call costs less than a wrong turn.
+This was not a controlled trial: the question shape differed and there were two questions, not one. The sample is one success against four skips. Ask rather than assume.
 
 2026-09-22, `arena/01a0c5a8-clankers`. An in-turn retry reported but did not clear the dead token. The next turn restored it. Blocking through the question tool exposes the failure and leaves the turn, so [rules/ARENA.md](../../rules/ARENA.md) now requires that instead of a silent end.
 
-Context exhaustion was worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. The sandbox did not outlive its conversation. Push after each commit.
+Context exhaustion was worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. Push after each commit.
 
 ## `Something went wrong. Please try again.` arrives as a message
 
