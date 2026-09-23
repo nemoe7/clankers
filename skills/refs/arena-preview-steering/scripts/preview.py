@@ -297,9 +297,8 @@ TASK_COLUMNS = "id, title, details, status, position, updated_at"
 # carries `title`, an answer line carries `report_id`, and each importer takes its own lines and
 # skips the rest. Keys are named here so the writer and the readers cannot drift apart.
 #
-# The file sits untracked at the repository root, on the owner's answer to the save-state report
-#: a restore keeps the repository, so the copy survives the event it
-# exists for, and only explicit paths are staged, so it stays out of every commit.
+# The default path is `saved-state.ndjson` inside the state directory, which the installer
+# ignores through `core.excludesFile`. `--save-path` moves it.
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
   "id",
@@ -586,6 +585,7 @@ class Store:
     seen_at=None,
     task_id=None,
     ack_edited_at=None,
+    autosave=True,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -599,7 +599,7 @@ class Store:
     note_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
     seen = when(seen_at) if seen_at is not None else None
-    with closing(self.connect()) as db, db:
+    with self.transaction(autosave=autosave) as db:
       db.execute("BEGIN IMMEDIATE")
       existing = db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
       if existing:
@@ -627,6 +627,7 @@ class Store:
     task_id=None,
     ack_edited_at=None,
     shared=None,
+    autosave=True,
   ):
     """Record report answers apart from user messages; the log never shows them.
 
@@ -638,7 +639,7 @@ class Store:
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
-    with self.transaction(shared) as db:
+    with self.transaction(shared, autosave=autosave) as db:
       if shared is None:
         db.execute("BEGIN IMMEDIATE")
       existing = db.execute(
@@ -741,16 +742,20 @@ class Store:
     return [task_row(row) for row in rows]
 
   @contextmanager
-  def transaction(self, db=None):
+  def transaction(self, db=None, autosave=True):
     """One commit for this call's work, or a caller's open transaction when it passes one.
 
     An import needs the second form: a delete and several writes that all land or none do.
+    A committed outer transaction then refreshes the save file, unless the caller already
+    wrote it and passes `autosave=False`.
     """
     if db is not None:
       yield db
       return
     with closing(self.connect()) as own, own:
       yield own
+    if autosave:
+      self.autosave()
 
   def write_task(
     self, task_id, title=None, details=None, status=None, order=None, shared=None
@@ -826,7 +831,7 @@ class Store:
 
   def remove_task(self, task_id):
     """Delete one task and return what was stored, so the echo can confirm it."""
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
       ).fetchone()
@@ -861,7 +866,7 @@ class Store:
     """Move a stored task to a new ID and keep the rest, so a typo costs no deletion."""
     check_task(task_id, None, None)
     stamp = now()
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       row = db.execute(
         "SELECT id, title, details, status, position, created_at FROM tasks WHERE id = ?",
         (prev_id,),
@@ -876,6 +881,17 @@ class Store:
         (task_id, row[1], row[2], row[3], row[4], row[5], stamp),
       )
       self.renumber(db)
+
+  def autosave(self):
+    """Refresh the save file from the database after a committed mutation.
+
+    State mutations route through `transaction`. Construction, `set_meta` and `reminder` do
+    not. A failed refresh warns on stderr and the committed mutation stands.
+    """
+    try:
+      self.save_state({"notes": self.state()["notes"], "tasks": self.tasks()})
+    except Exception as error:
+      print(f"preview: autosave failed: {error}", file=sys.stderr)
 
   def save_state(self, payload):
     """Write the page's cached state to the save file, in the shape the importers read.
@@ -955,7 +971,7 @@ class Store:
     target = directory / f"{upload_id}{Path(cleaned).suffix[:16]}"
     target.write_bytes(bytes(data))
     stamp = now()
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       db.execute(
         "INSERT INTO uploads (id, name, type, size, sha256, file, at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -972,7 +988,7 @@ class Store:
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return upload_row(row, self.path.parent)
 
-  def import_tasks(self, records, replace=False):
+  def import_tasks(self, records, replace=False, autosave=True):
     """Rebuild a list from the JSON a copy button or task-list produced.
 
     Every record is validated before anything is written, and the whole import is one
@@ -1004,7 +1020,7 @@ class Store:
           record.get("order") or index,
         )
       )
-    with self.transaction() as db:
+    with self.transaction(autosave=autosave) as db:
       if replace:
         # A replacement makes every record new, so a title cannot be inherited from a stored
         # row. Refusing before the delete names the offending record; refusing after it would
@@ -1089,7 +1105,7 @@ class Store:
     return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
 
   def read(self):
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       pending = [
         dict(row) | {"kind": "note"}
         for row in db.execute(
@@ -1114,7 +1130,7 @@ class Store:
   def mark_seen(self, ids):
     """Receipt the IDs a delivered read printed or an explicit call named."""
     stamp = now()
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       for record_id in ids:
         identifier(record_id)
         for table in ("notes", "submissions"):
@@ -1151,7 +1167,7 @@ class Store:
       raise ValueError("Every acknowledgement is a note or a reply, with its text")
     text = note_text(text)
     stamp = now()
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       for record_id in ids:
         identifier(record_id)
         for table in ("notes", "submissions"):
@@ -1188,7 +1204,7 @@ class Store:
     # command and names the offending field; refusing there cost the report and, until the guard
     # below existed, the HTTP connection with it.
     parse_fields(text)
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       # Sent answers live in the owner's browser under this report ID, so a republish would
       # reload them pre-filled against fields that no longer match; a new ID starts clean.
       answered = db.execute(
@@ -1216,7 +1232,7 @@ class Store:
     changed report unread in fact rather than unread by a comparison the client has to get right.
     """
     identifier(report_id)
-    with closing(self.connect()) as db, db:
+    with self.transaction() as db:
       row = db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
@@ -1626,12 +1642,13 @@ def handler(store):
           return
         if save_state:
           saved = store.save_state(payload)
-          # A save writes a note, so the agent's next read sees it: the file lands untracked at
-          # the repository root, and nothing else tells the agent the owner pressed save state.
+          # A save writes a note, so the agent's next read sees it. The note takes
+          # autosave=False, because the button just wrote the file itself.
           store.note(
             new_id(),
             f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks,"
             f" {saved['answers']} answers",
+            autosave=False,
           )
           self.reply(200, json.dumps(saved, ensure_ascii=False))
           return
@@ -1833,6 +1850,7 @@ def main():
           )
         ],
         args.replace,
+        autosave=False,
       )
       print(
         cli_json(
@@ -1865,6 +1883,8 @@ def main():
           and (("title" in record and "text" not in record) or "report_id" in record)
         )
       ]
+      # An import leaves the export alone: a restore reads this file twice, once for the
+      # notes and once for the tasks, and a refresh between the two drops the task lines.
       for record in answers:
         store.submission(
           record["id"],
@@ -1877,6 +1897,7 @@ def main():
           ack_edited_at=record.get("ack_edited_at"),
           seen_at=record.get("seen_at"),
           task_id=record.get("task_id"),
+          autosave=False,
         )
       for record in records:
         store.note(
@@ -1889,6 +1910,7 @@ def main():
           ack_edited_at=record.get("ack_edited_at"),
           seen_at=record.get("seen_at"),
           task_id=record.get("task_id"),
+          autosave=False,
         )
       receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(
