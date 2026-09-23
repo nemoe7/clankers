@@ -33,7 +33,7 @@ One server and inbox per session. Reporting shares this runtime; never start a s
 python <skill>/scripts/preview.py --state-dir reports/arena-preview read
 ```
 
-Every CLI command prints nonzero pending counts by kind, `ACK ASAP.` when any are pending, and `Manage the task list.` to stderr, even with none pending. Stdout stays machine-readable; reminders never mark seen.
+Every CLI command prints nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, and `Manage the task list.` to stderr, even with none pending. Stdout stays machine-readable; reminders never mark seen.
 
 Prints **all pending messages** in full and records check time; a failed delivery stays unseen, and pending is the ack queue, so a note prints again until answered. Missing, unreadable or corrupt state is an error, never an empty inbox. The hook's poll covers the routine check; run it for the full listing, filters, or counts. `seen <ids>` stamps without an answer; `ack` answers and stamps, only those IDs. NEVER mark count-only notifications, truncated items or failed deliveries seen. Browser polls never stamp. Receipt is not completion.
 
