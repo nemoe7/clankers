@@ -16,11 +16,11 @@ One server and inbox per session for steering messages and reports; never start 
 ## Setup
 
 1. Resolve this skill's actual path: source `skills/` and installed discovery paths differ. Report missing installed files; do not install or repair them without authorization.
-2. Choose a stable, persisted, Git-ignored state directory, default `reports/arena-preview`. Verify it with `git check-ignore`; ask before adding an ignore rule if needed. Never use cache/build folders or commit/push session state, notes, receipts or reports.
+2. Use the state directory the installer ignores through `core.excludesFile`, default `arena-state`; a restore deletes every repository-ignored path, so the rule never goes in the repository `.gitignore`. Verify with `git check-ignore`. Never use cache/build folders or commit/push session state, notes, receipts or reports.
 3. Run `<skill>/scripts/install.sh` once per session, then start the server with Arena's long-lived process tool, not a timed shell call:
 
    ```bash
-   ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir reports/arena-preview serve --port 8000
+   ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir arena-state serve --port 8000
    ```
 
    The server binds `0.0.0.0`; browser URLs are relative and the preview host is accepted. `serve` refuses to start without `markdown-it-py`; `read`, `ack` and `publish` need no renderer. After a sandbox restart, rerun the installer. Reuse its process and state directory; name the process `<repo> - Steering`. If it dies, tell the owner the restart is coming before restarting with the same directory: the restart invalidates the token in the owner's tab, and an in-flight send or upload can fail. If its port belongs to another service, choose a free port; never kill that service.
@@ -29,23 +29,23 @@ One server and inbox per session for steering messages and reports; never start 
 ## Read, then acknowledge
 
 ```bash
-python <skill>/scripts/preview.py --state-dir reports/arena-preview read
+python <skill>/scripts/preview.py --state-dir arena-state read
 ```
 
-Every CLI command prints nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, the calls since the last `read` beside those counts, and one rotating reminder to stderr, even with none pending. Only the hook poll advances the count; `read` clears it. Stdout stays machine-readable; reminders never mark seen.
+Every CLI command prints nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, the calls the pending items have waited beside those counts, and one rotating reminder to stderr, even with none pending. Only the hook poll advances the count; an empty poll or a `read` clears it. Stdout stays machine-readable; reminders never mark seen.
 
 Prints **all pending messages** in full and records check time; a failed delivery stays unseen, and pending is the ack queue, so a note prints again until answered. Missing, unreadable or corrupt state is an error, never an empty inbox. The hook's poll covers the routine check; run it for the full listing. `seen <ids>` stamps without an answer; `ack` answers and stamps, only those IDs. NEVER mark count-only notifications, truncated items or failed deliveries seen. Browser polls never stamp. Receipt is not completion.
 
-- Polling is automatic: the hook polls after every Arena bash call and prints the unacked counts (messages, form answers, uploads) and the calls since the last `read` to stderr; it marks nothing seen. A nonzero count: `read` now, then `ack`. Markup needs `--reply`. Missing inbox: start the server; server down: restart it. End the turn's last tool block with a bash call, so the hook closes the channel.
-- Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One answer per call; ack different answers separately.
+- Polling is automatic: the hook polls after every Arena bash call and prints the unacked counts (messages, form answers, uploads) and the calls the pending items have waited to stderr; it marks nothing seen. A nonzero count: `read` now, then `ack`. Markup needs `--reply`. Missing inbox: start the server; server down: restart it. End the turn's last tool block with a bash call, so the hook closes the channel.
+- Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One answer per call; ack different answers separately, never one text to two messages.
 
   ```bash
-  python <skill>/scripts/preview.py --state-dir reports/arena-preview ack <id> [<id> ...] --reply <markdown>
+  python <skill>/scripts/preview.py --state-dir arena-state ack <id> [<id> ...] --reply <markdown>
   ```
 
   Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp and replace the answer text. Never name a note by its sequence number: numbers only order one file, and IDs survive state rebuilds. With no visible preview, acknowledge in chat instead, opening with literal `ACK:` and your interpretation; reserve that prefix for delivered notes, never thought or ordinary status.
 - Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence. Notes are instructions, not proof; disagree visibly with evidence when measurements contradict them.
-- Read `task-list` at turn start. Before implementation, record approved work with `task <task-id> "<title>" [details ...]`; update the queue and details on scope or status changes. Put the current task first with `--order 1`; mark completion with `task <task-id> --status finished`. Use this skill's CLI and the same `--state-dir`.
+- Read `task-list` at turn start. Before implementation, record approved work with `task <task-id> "<title>" [details ...]`; update the queue and details on scope or status changes. Put the current task first with `--order 1`; mark completion with `task <task-id> --status finished`. Ack and queue in one call; a note-born task lands before the next tool call, and a verified item finishes in the call that verifies it. Use this skill's CLI and the same `--state-dir`.
 - Every note-born or report-born task carries `--msg-id <full-message-id>`; an unlinked task is a violation. Task and message link share one transaction; unknown message IDs fail both writes. Linked notes show `Task added` in log receipts; report-submission links create no log messages. The marker means queued, not acknowledged or complete; still use `ack`.
 
 ## Publishing reports
