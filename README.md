@@ -39,7 +39,7 @@ Latest measurements as of 2026-09-23. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 1,843 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
-| `workflows/init-docs.md` | `cl100k_base` | 4,825 `tok` |
+| `workflows/init-docs.md` | `cl100k_base` | 4,821 `tok` |
 
 Measurements cover complete files, including whitespace and markup. 
 

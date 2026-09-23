@@ -257,7 +257,7 @@ Tool-specific files may exist alongside (`CLAUDE.md`, `.cursor/rules/`, and the 
 
 ## 11. Tutorials
 
-A tutorial is a learning-oriented lesson: the reader completes meaningful work toward a goal and acquires skill along the way.
+A tutorial is a learning-oriented lesson: the reader completes meaningful work toward a goal and gains skill.
 
 - State the goal up front: what the reader will build or achieve, and what they will encounter.
 - Make every step produce a visible result, and state what the reader should see after each one.
