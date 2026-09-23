@@ -19,14 +19,11 @@ Read by task: bootstrapping an empty repo — Core Rules through Bootstrap, then
 ## 1. Core Rules
 
 - The repository is the primary source of truth.
-- Serve two audiences: downstream users who consume the repo, and agents that work in it.
 - The client chooses what gets built: propose, let them pick, confirm before creating beyond the baseline.
 - New documentation is created only for baseline documents, user-selected documents, or reconciliation of an authoritative document.
-- Existing valid documentation is preserved; existing authoritative documentation is never duplicated.
-- Link to the authoritative location instead of duplicating it.
+- Existing valid documentation is preserved. Link to the authoritative location instead of duplicating it.
 - Organize by reader need on the Diátaxis map: tutorials, how-to guides, reference, explanation.
-- One page serves one need; quadrants link to each other instead of absorbing each other.
-- Split by need only, never merely for organization.
+- One page serves one need; quadrants link instead of absorbing each other, and splits follow need, never organization.
 - Technical documentation is the default; business/product documentation needs explicit request.
 - Never assert a fact without repository evidence or an explicit user statement.
 - Never silently resolve material ambiguity.
@@ -39,49 +36,23 @@ Read by task: bootstrapping an empty repo — Core Rules through Bootstrap, then
 
 ## 2. Execution Mode
 
-Determine the execution mode before making changes.
+Determine the execution mode before making changes. If the host agent has different planning/execution terminology, map these semantics to the closest equivalent.
 
 ### PLAN
 
-PLAN mode MUST:
+PLAN mode MUST inspect the repository, audit existing documentation, identify gaps, conflicts, duplication and sources of truth, determine applicable documents, ask required questions, and produce the proposed documentation set and changes.
 
-- inspect the repository;
-- audit existing documentation;
-- identify gaps, conflicts, duplication, and sources of truth;
-- determine applicable documents;
-- ask required questions;
-- produce the proposed documentation set and changes.
-
-PLAN mode MUST NOT:
-
-- create files;
-- modify files;
-- delete files;
-- rename files;
-- commit;
-- push.
+PLAN mode MUST NOT create, modify, delete or rename files, commit, or push.
 
 ### APPLY
 
-APPLY mode MUST:
+APPLY mode MUST perform the complete workflow: inspect the repository before editing, ask required questions, create or update the selected documentation, reconcile existing authoritative documentation instead of blindly replacing it, verify the result, and report exactly what changed.
 
-- perform the complete workflow;
-- inspect the repository before editing;
-- ask required questions;
-- create or update the selected documentation;
-- reconcile existing authoritative documentation instead of blindly replacing it;
-- verify the result;
-- report exactly what changed.
-
-If the host agent has different planning/execution terminology, map these semantics to the closest equivalent.
-
-### Unattended runs
-
-Establish up front whether the run is interactive or unattended. Interactive runs stop and ask on material uncertainty. Unattended runs never block: record each unanswered question, proceed on the most reasonable assumption, state it, and report every assumption for review.
+Establish up front whether the run is interactive or unattended. Uncertainty gives each mode's behaviour on a blocking question.
 
 ## 3. The client decides
 
-The client chooses what the docs become; downstream users and agents consume the result. The agent proposes; the client disposes.
+The agent proposes; the client disposes. Downstream users and agents consume the result.
 
 - Present the proposed document set before creating anything beyond the baseline, and let the client add, drop, or reorder.
 - Re-confirm when scope emerges mid-run: a newly discovered need is a proposal, never a silent addition.
@@ -89,23 +60,14 @@ The client chooses what the docs become; downstream users and agents consume the
 - Baseline documents need no per-item approval; everything else does.
 - Minor editorial judgment needs no questions.
 
-When a material uncertainty blocks progress:
-
-1. STOP the current action.
-2. Identify the specific uncertainty.
-3. ASK the minimum question necessary.
-4. WAIT for the answer.
-5. Apply the answer.
-6. RESUME from the exact blocked point.
-
-DO NOT restart the workflow. DO NOT continue the blocked action on an assumption (interactive runs).
+A material uncertainty that blocks progress follows the stop-and-ask procedure in Uncertainty.
 
 ## 4. Bootstrap
 
 When the repo has no usable docs, build the floor first, in this order:
 
 1. `README.md`: identity, purpose, how to run.
-2. `LICENSE`: ask which; never pick one.
+2. `LICENSE`: ask which.
 3. `AGENTS.md`: only if agents will work in the repo — ask.
 4. Ask what the client wants next; offer the catalog.
 
@@ -204,9 +166,9 @@ Every document the workflow can produce, with its audience and warrant:
 | `docs/SDD.md` | users | formal track: contracts, regulators, enterprise process |
 | Business/product docs | users | only when explicitly requested |
 
-Present this catalog, trimmed to what fits the repo, for selection. The baseline — `README.md`, `LICENSE`, plus `AGENTS.md` when agents are in play — needs no per-item approval; everything else is offered, never assumed, and created only when selected. Never silently expand the selected set. Reconcile existing equivalents instead of duplicating them.
+Present this catalog, trimmed to what fits the repo, for selection. The baseline is `README.md`, `LICENSE`, plus `AGENTS.md` when agents are in play. Never silently expand the selected set.
 
-Business/product documentation (Vision, Business Case, Stakeholder Register, BRD, PRD, Market Analysis, and anything else explicitly requested) is offered only when explicitly requested. Never infer it from technical docs.
+Business/product documentation means Vision, Business Case, Stakeholder Register, BRD, PRD, Market Analysis, and anything else the client names. Never infer it from technical docs.
 
 ## 8. Default Layout
 
@@ -215,7 +177,7 @@ Use the repository's existing layout when established. Otherwise:
 ```text
 repo/
 ├── README.md
-├── LICENSE                  # ask which; never pick
+├── LICENSE                  # ask which
 ├── AGENTS.md                  # only when agents work here
 ├── CONTRIBUTING.md            # optional
 ├── CODE_OF_CONDUCT.md         # optional
@@ -370,7 +332,7 @@ The changelog looks back; the roadmap looks forward. Keep both root-level and da
 
 ## 21. Reconciliation
 
-For every selected document: locate existing equivalents; identify the apparent source of truth; determine the canonical location; compare against the selected shape; preserve valid material; add only supported missing material; correct only stale material current evidence contradicts; dedupe only when authority is clear; avoid reformatting for its own sake.
+For every selected document: locate existing equivalents; identify the apparent source of truth; determine the canonical location; compare against the selected shape; preserve valid material; add only supported missing material; correct only stale material current evidence contradicts; dedupe only when authority is clear.
 
 Never rewrite a document solely to match a template. Never silently merge contradictions — conflicting sources of truth with unclear authority are a question, not a judgment call.
 
@@ -390,19 +352,17 @@ Interactive runs: STOP, identify the exact uncertainty, ASK the minimum question
 
 Unattended runs: record the question, proceed on the most reasonable stated assumption, report every assumption for review.
 
-Before finalizing, every material statement MUST be traceable to repository evidence or an explicit user statement. Anything else is an open question. There is no third category.
+Before finalizing, every material statement MUST trace to repository evidence or an explicit user statement. Anything else is an open question.
 
 ## 24. Verification
 
 In APPLY mode, verify the result: referenced commands, paths, and files exist; links resolve; names are correct; APIs, components, deployment, and diagrams match the repository; requirement identifiers are unique and stable; traceability references are valid; standards references are correctly named; repo conventions are followed.
 
-Each quadrant page serves exactly one quadrant; quadrants link rather than duplicate.
-
 Use repo-provided validation, linting, and link checking when available. Never run unrelated or expensive tests solely because docs changed.
 
 ## 25. Idempotency
 
-Repeat runs MUST be safe: preserve valid docs; update stale ones on evidence; reconcile missing sections; never duplicate documents or ADRs; never renumber ADRs or requirement IDs without cause; never formatting-only rewrites; never remove valid user content without justification; never recreate what already satisfies the selection.
+Repeat runs MUST be safe: update stale docs on evidence; reconcile missing sections; never duplicate documents or ADRs; never renumber ADRs or requirement IDs without cause; never recreate what already satisfies the selection.
 
 Destructive or materially reorganizing changes are questions first.
 
@@ -426,4 +386,4 @@ Report: CREATED; UPDATED; PRESERVED (authoritative content intentionally retaine
 
 End in exactly one state: PLAN completed (nothing modified), APPLY completed (selected docs reconciled and verified), or BLOCKED (state the exact decision required).
 
-Never continue through material uncertainty. Never invent project information. Never introduce business/product docs without explicit selection. Never duplicate sources of truth. Never commit or push unless requested.
+Never continue through material uncertainty.
