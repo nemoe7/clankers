@@ -29,7 +29,7 @@ All commands take `--state-dir` before the subcommand. `--save-path` selects whe
 
 Use only CLI `read` to poll; a failed delivery stays unseen, and a stamped message prints again until it is answered. Never mark count-only, truncated or failed deliveries Seen. Browser polls never stamp Seen. Pending records distinguish `kind: note` and `kind: report`; both accept `ack`. Report answers stay separate from the message log. Read errors must remain visible.
 
-Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one answer per call, separate calls for different answers. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.
+Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one answer per call, separate calls for different answers, and never the same text to two messages: each acknowledgement addresses its own note. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.
 
 ## External channel (ntfy)
 
