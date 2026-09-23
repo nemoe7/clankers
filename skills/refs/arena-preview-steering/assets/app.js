@@ -569,8 +569,8 @@ function quoteNoteId(code) {
 }
 // The three tab buttons share one confirmation, and null text means there was nothing to copy.
 async function copyFrom(button, text, what, glyph = '⧉') {
-  // The label a copy came in with is the label it leaves behind: the save button copies the state on
-  // a shift-click and saves on a plain click, so a restored `Copy the state` would name the wrong job.
+  // The label a copy came in with is the label it leaves behind, so a restored `Copy the state`
+  // never names the wrong job.
   const before = button.title;
   const words = text === null ? null : await copyText(text);
   const message = words || (text === null ? `There is no ${what} to copy`
@@ -665,56 +665,24 @@ function restoreCopy(cached) {
     },
   };
 }
-const saveButton = $('#save-state');
-let saveHover = false, saveShift = false;
-function saveGlyph() { return saveHover && saveShift ? '⧉' : '⤓'; }
-function updateSaveIcon() {
-  if (!['✓', '✗'].includes(saveButton.textContent)) saveButton.textContent = saveGlyph();
+const copyStateButton = $('#copy-state');
+function stateLines(state) {
+  return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished];
 }
-saveButton.addEventListener('pointerenter', event => {
-  saveHover = true;
-  saveShift = event.shiftKey;
-  updateSaveIcon();
-});
-saveButton.addEventListener('pointerleave', () => { saveHover = false; updateSaveIcon(); });
-for (const type of ['keydown', 'keyup']) {
-  document.addEventListener(type, event => { saveShift = event.shiftKey; updateSaveIcon(); });
-}
-window.addEventListener('blur', () => { saveHover = saveShift = false; updateSaveIcon(); });
-$('#save-state').addEventListener('click', async (event) => {
-  const button = $('#save-state');
-  if (event && event.shiftKey) {
-    let cached = null;
-    try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
-    const usable = cached && Array.isArray(cached.notes);
-    return copyFrom(button, usable ? `${JSON.stringify(restoreCopy(cached))}\n` : null, 'state', saveGlyph);
-  }
+copyStateButton.addEventListener('click', async () => {
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
-  if (!cached || !Array.isArray(cached.notes)) {
-    status.textContent = 'Nothing cached to save yet; the page caches its copy on every poll.';
-    button.dataset.state = 'bad';
-    setTimeout(() => delete button.dataset.state, 1500);
-    return;
-  }
-  button.disabled = true;
-  status.textContent = 'Saving the log and the tasks…';
-  try {
-    const result = await (await request('/api/save-state', {
-      method: 'POST',
-      headers: writeHeaders('application/json'),
-      body: JSON.stringify(cached)
-    })).json();
+  const state = cached && Array.isArray(cached.notes) ? restoreCopy(cached) : null;
+  if (!state) status.textContent = 'Nothing cached to copy yet; the page caches its copy on every poll.';
+  const lines = state ? stateLines(state) : [];
+  // One JSON line per record is the save file's own format, so a paste lands in `import-notes` and
+  // `task-import` without editing. Answer lines stay out: the page holds no answer it did not send,
+  // and autosave already keeps them in the file.
+  const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
+  await copyFrom(copyStateButton, text, 'state');
+  if (state) {
     status.textContent =
-      `Saved ${result.notes} messages, ${result.answers} report answers and ` +
-      `${result.tasks} tasks to ${result.path}.`;
-    button.dataset.state = 'good';
-  } catch (error) {
-    status.textContent = `Not saved: ${error.message}. The cache is kept; press the button again.`;
-    button.dataset.state = 'bad';
-  } finally {
-    button.disabled = false;
-    setTimeout(() => delete button.dataset.state, 1500);
+      `Copied ${state.notes.length} messages and ${lines.length - state.notes.length} tasks as NDJSON.`;
   }
 });
 $('#copy-report').addEventListener('click', async () => {

@@ -94,7 +94,6 @@ let reportHtmlWait = null;
 let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
-const saveCalls = [];
 const uploadCalls = [];
 let uploadFails = false;
 let uploadFailName = '';
@@ -117,6 +116,11 @@ const context = {
     if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
+      // A note send is the write the retry tests drive, now that no save route exists.
+      writeTokens.push(options.headers['X-Preview-Token']);
+      if (staleToken && options.headers['X-Preview-Token'] !== servedToken) {
+        return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
+      }
       const note = JSON.parse(options.body);
       sent.push(note);
       return sendHandler(note);
@@ -150,14 +154,6 @@ const context = {
       pageFetches += 1;
       return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
     }
-    if (url === '/api/save-state') {
-      writeTokens.push(options.headers['X-Preview-Token']);
-      if (staleToken && options.headers['X-Preview-Token'] !== servedToken) {
-        return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
-      }
-      saveCalls.push(JSON.parse(options.body));
-      return response({ path: 'saved-state.ndjson', notes: 2, answers: 1, tasks: 1 });
-    }
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
       return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
@@ -176,37 +172,15 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
 (async () => {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
   await tick();
-  const saveIcon = get('#save-state');
-  saveIcon.events.pointerenter({shiftKey: false});
-  assert.equal(saveIcon.textContent, '⤓');
-  documentEvents.keydown({key: 'Shift', shiftKey: true});
-  assert.equal(saveIcon.textContent, '⧉');
-  documentEvents.keyup({key: 'Shift', shiftKey: false});
-  assert.equal(saveIcon.textContent, '⤓');
-  saveIcon.events.pointerenter({shiftKey: true});
-  assert.equal(saveIcon.textContent, '⧉');
-  saveIcon.events.pointerleave();
-  assert.equal(saveIcon.textContent, '⤓');
-  documentEvents.keydown({key: 'Shift', shiftKey: true});
-  assert.equal(saveIcon.textContent, '⤓', 'Shift away from the button does not change it');
-  saveIcon.events.pointerenter({shiftKey: true});
-  windowEvents.blur();
-  assert.equal(saveIcon.textContent, '⤓', 'window blur clears a held Shift');
+  // The page supplies the glyph, so the client starts with none; the copy sets it and restores it.
+  const copyIcon = get('#copy-state');
   const normalTimeout = context.setTimeout;
   let finishCopy;
   context.setTimeout = callback => { finishCopy = callback; };
-  saveIcon.events.pointerenter({shiftKey: true});
-  await context.copyFrom(saveIcon, 'icon probe', 'state', context.saveGlyph);
-  assert.equal(saveIcon.textContent, '✓');
-  documentEvents.keyup({key: 'Shift', shiftKey: false});
-  assert.equal(saveIcon.textContent, '✓', 'keep copy confirmation until its timer ends');
+  await context.copyFrom(copyIcon, 'icon probe', 'state');
+  assert.equal(copyIcon.textContent, '✓');
   finishCopy();
-  assert.equal(saveIcon.textContent, '⤓', 'restore the current modifier state, not the clicked state');
-  saveIcon.events.pointerenter({shiftKey: true});
-  await context.copyFrom(saveIcon, 'icon probe', 'state', context.saveGlyph);
-  finishCopy();
-  assert.equal(saveIcon.textContent, '⧉', 'keep the copy icon if Shift is still held');
-  saveIcon.events.pointerleave();
+  assert.equal(copyIcon.textContent, '⧉', 'restore the copy glyph when its timer ends');
   context.setTimeout = normalTimeout;
   copied.length = 0;
 
@@ -344,18 +318,19 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#refresh-notes').events.click();
   assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
   assert.equal(upcomingBody.children[0].children[1].open, true);
-  // The log and the tasks lost their own copy buttons. The save button
-  // copies, on a shift-click, the note and task lines a restore reads back, minified, and the
-  // reports tab keeps its button. Nothing derived rides the copy: no rendered html, token,
-  // seq, reports, uploads or last check, and the stamps arrive from the poll already cut to
-  // seconds, which is all a restore needs.
+  // The log and the tasks lost their own copy buttons. One copy button carries the note and task
+  // lines a restore reads back, as NDJSON, and the reports tab keeps its button. Nothing derived
+  // rides the copy: no rendered html, token, seq, reports, uploads or last check, and the stamps
+  // arrive from the poll already cut to seconds, which is all a restore needs.
   const cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
-  assert.ok(cacheKeyHere, 'every poll caches the state the shift-click copies');
+  assert.ok(cacheKeyHere, 'every poll caches the state the copy button copies');
   copied.length = 0;
-  get('#save-state').events.click({ shiftKey: true });
+  get('#copy-state').events.click();
   await tick();
-  const copy = JSON.parse(copied.at(-1));
-  assert.equal(copied.at(-1), `${JSON.stringify(copy)}\n`, 'the state copies as minified JSON');
+  const copiedText = copied.at(-1);
+  assert.ok(copiedText.endsWith('\n') && !copiedText.endsWith('\n\n'),
+    'the state copies as NDJSON with one trailing newline');
+  const lines = copiedText.slice(0, -1).split('\n').map(line => JSON.parse(line));
   const cachedHere = JSON.parse(storage.get(cacheKeyHere));
   const projectHere = (record, keys) => {
     const line = {};
@@ -364,16 +339,20 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   };
   const noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'seen_at', 'task_id'];
   const taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
-  assert.deepEqual(copy, {
-    notes: cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
-    tasks: {
-      upcoming: (cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
-      finished: (cachedHere.tasks.finished || []).map(task => projectHere(task, taskKeysHere)),
-    },
-  }, 'the copy carries the note and task lines a restore reads, and nothing derived');
-  assert.equal(copy.notes.length, 0);
-  assert.equal(copy.tasks.finished.length, state.tasks.finished.length);
-  assert.equal(get('#save-state').dataset.state, 'good', 'the shift-click reports through the button');
+  assert.deepEqual(lines, [
+    ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
+    ...(cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
+    ...(cachedHere.tasks.finished || []).map(task => projectHere(task, taskKeysHere)),
+  ], 'the copy carries the note and task lines a restore reads, and nothing derived');
+  const taskLines = lines.filter(line => 'title' in line);
+  assert.equal(lines.filter(line => 'report_id' in line).length, 0, 'the copy carries no report answers');
+  assert.equal(taskLines.length,
+    (cachedHere.tasks.upcoming || []).length + (cachedHere.tasks.finished || []).length,
+    'every cached task rides the copy');
+  assert.equal(get('#copy-state').dataset.state, 'good', 'the click reports through the button');
+  assert.match(get('#send-status').textContent,
+    new RegExp(`Copied ${lines.length - taskLines.length} messages and ${taskLines.length} tasks as NDJSON\\.`),
+    'the receipt counts what the clipboard took');
   state.tasks.upcoming = [];
   await get('#refresh-notes').events.click();
   assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
@@ -384,9 +363,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#tasks-finished').hidden, true);
   assert.equal(get('#tasks-current').hidden, true, 'no task list, no current div');
   storage.delete(cacheKeyHere);
-  get('#save-state').events.click({ shiftKey: true });
+  get('#copy-state').events.click();
   await tick();
-  assert.equal(get('#save-state').title, 'There is no state to copy');
+  assert.equal(get('#copy-state').title, 'There is no state to copy');
 
   assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
   assert.equal(get('#notes-tab').focused, true);
@@ -908,48 +887,51 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     last_check: null
   };
   await get('#refresh-notes').events.click();
-  const saveButton = get('#save-state');
+  const stateCopyButton = get('#copy-state');
   const cacheKey = [...storage.keys()].find(item => item.endsWith(':state-cache'));
-  assert.ok(cacheKey, 'every successful poll caches the copy the save button posts');
-  saveButton.events.click();
+  assert.ok(cacheKey, 'every successful poll caches the copy the state button copies');
+  copied.length = 0;
+  stateCopyButton.events.click();
   await tick();
-  assert.equal(saveCalls.length, 1, 'the button posts the cache');
-  assert.ok(saveCalls[0].notes.length > 0 && saveCalls[0].tasks, 'the cache carries notes and tasks');
-  assert.match(get('#send-status').textContent, /Saved 2 messages, 1 report answers and 1 tasks to saved-state.ndjson/);
-  assert.equal(saveButton.dataset.state, 'good');
+  assert.equal(copied.length, 1, 'the button copies the cache');
+  assert.ok(copied[0].split('\n').filter(Boolean).length > 1, 'the copy carries note and task lines');
+  assert.match(get('#send-status').textContent, /Copied \d+ messages and \d+ tasks as NDJSON\./);
+  assert.equal(stateCopyButton.dataset.state, 'good');
   storage.delete(cacheKey);
-  saveButton.events.click();
+  copied.length = 0;
+  stateCopyButton.events.click();
   await tick();
-  assert.equal(saveCalls.length, 1, 'nothing is posted without a cache');
-  assert.match(get('#send-status').textContent, /Nothing cached to save yet/);
-  assert.equal(saveButton.dataset.state, 'bad');
-  // A page outlives the server that served it. After a sandbox reset the token baked into the
-  // page is refused, so the page takes a fresh token, from the poll or from a fresh page, and
-  // tries once more instead of waiting for a manual refresh; the owner pressed save state several
-  // times after a reset and nothing landed.
+  assert.equal(copied.length, 0, 'nothing is copied without a cache');
+  assert.match(get('#send-status').textContent, /Nothing cached to copy yet/);
+  assert.equal(stateCopyButton.dataset.state, 'bad');
+  // A page outlives the server that served it. After a sandbox reset the token baked into the page
+  // is refused, so the page takes a fresh token, from the poll or from a fresh page, and tries once
+  // more instead of waiting for a manual refresh; the owner pressed save state several times after
+  // a reset and nothing landed. The save route is gone, so a note send carries the same proof.
   staleToken = true;
   storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
-  // First net: the poll hands the page the token the restarted server accepts, so the save lands
+  sendHandler = async note => response({ ...note, at: new Date().toISOString() });
+  const sendNote = async text => {
+    get('#note').value = text;
+    await get('#form').events.submit(event({}));
+  };
+  // First net: the poll hands the page the token the restarted server accepts, so the write lands
   // with no page fetch and no refresh, which is what the owner needed.
   servedToken = 'token-two';
-  const savesBefore = saveCalls.length;
+  const sendsBefore = sent.length;
   const fetchesBefore = pageFetches;
   await get('#refresh-notes').events.click();
-  saveButton.events.click();
-  await tick();
+  await sendNote('after the poll');
   assert.equal(pageFetches, fetchesBefore, 'the poll already refreshed the token');
-  assert.equal(saveCalls.length, savesBefore + 1, 'the save lands on the token from the poll');
-  assert.equal(writeTokens.at(-1), 'token-two', 'the save carries the token the new server accepts');
+  assert.equal(sent.length, sendsBefore + 1, 'the send lands on the token from the poll');
+  assert.equal(writeTokens.at(-1), 'token-two', 'the send carries the token the new server accepts');
   // Second net: a write refused before any poll re-reads the page for its token and tries once more.
   servedToken = 'token-three';
-  saveButton.events.click();
-  await tick();
+  await sendNote('before any poll');
   await tick();
   assert.equal(pageFetches, fetchesBefore + 1, 'a refused write re-reads the page for its token');
-  assert.equal(saveCalls.length, savesBefore + 2, 'the write lands on the retry');
+  assert.equal(sent.length, sendsBefore + 2, 'the write lands on the retry');
   assert.equal(writeTokens.at(-1), 'token-three', 'the retry carries the token the new server accepts');
-  assert.equal(saveButton.dataset.state, 'good');
-  assert.match(get('#send-status').textContent, /Saved 2 messages, 1 report answers and 1 tasks to saved-state.ndjson/);
   staleToken = false;
   // Give the page back the token its own page carried, so a later test that writes does not
   // inherit this one's stand-in token; the poll is what hands it over.
@@ -963,11 +945,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#log-filter').value = 'said';
   get('#log-filter').events.change();
   copied.length = 0;
-  get('#save-state').events.click({ shiftKey: true });
+  get('#copy-state').events.click();
   await tick();
-  const filteredCopy = JSON.parse(copied.at(-1));
-  assert.ok(filteredCopy.notes.length > 0, 'the fixture holds messages to carry');
-  assert.equal(filteredCopy.notes.length, state.notes.length,
+  const filteredNotes = copied.at(-1).slice(0, -1).split('\n')
+    .map(line => JSON.parse(line)).filter(line => 'title' in line === false);
+  assert.ok(filteredNotes.length > 0, 'the fixture holds messages to carry');
+  assert.equal(filteredNotes.length, state.notes.length,
     'the state copies whatever the filter shows, not the filtered view of it');
   get('#log-filter').value = 'all';
   get('#log-filter').events.change();
@@ -1171,11 +1154,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.notes = [{id:'notes-only', text:'No tasks yet', at:'2026-09-22T12:00:00'}];
   state.tasks = null;
   await get('#refresh-notes').events.click();
-  const savesBeforeNotesOnly = saveCalls.length;
-  await get('#save-state').events.click({shiftKey:false});
+  const copiesBeforeNotesOnly = copied.length;
+  await get('#copy-state').events.click();
   await tick();
-  assert.equal(saveCalls.length, savesBeforeNotesOnly + 1, 'save a session before its first task');
-  assert.equal(saveCalls.at(-1).notes[0].id, 'notes-only');
-  assert.equal(get('#save-state').dataset.state, 'good');
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy on a shift-click of the save button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
+  assert.equal(copied.length, copiesBeforeNotesOnly + 1, 'copy a session before its first task');
+  assert.match(copied.at(-1), /"id":"notes-only"/);
+  assert.equal(get('#copy-state').dataset.state, 'good');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });
