@@ -1020,7 +1020,7 @@ class Store:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
 
   def reminder(self):
-    """Count pending kinds without marking any message seen."""
+    """Count pending kinds without marking any message seen; any count asks for an ack."""
     with closing(self.connect()) as db:
       uploads = db.execute(
         "SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL"
@@ -1043,7 +1043,8 @@ class Store:
       )
       if count
     ]
-    return " ".join([*counts, "Manage the task list."])
+    ack = ["ACK ASAP."] if counts else []
+    return " ".join([*counts, *ack, "Manage the task list."])
 
   def read(self):
     with closing(self.connect()) as db, db:
