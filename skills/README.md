@@ -37,7 +37,7 @@ Humans install, update, and remove skills. Agents may inspect installed copies b
 
 Copy whole skill folders into a supported discovery path. Keep their names, `scripts/`, `references/`, and `assets/`. `SKILL.md` alone is insufficient.
 
-A human maintainer with an agent that finds project skills under `.agents/skills/` can run:
+With an agent that finds project skills under `.agents/skills/`, run:
 
 ```bash
 mkdir -p .agents/skills
@@ -46,7 +46,7 @@ cp -R /path/to/clankers/skills/squash .agents/skills/
 
 ### Discovery notes
 
-Paths and precedence change with the vendor and version. Check them against your installed release. These are integration notes, not a runtime probe.
+Check each path and its precedence against your installed release.
 
 | Agent | Project | Global |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ Paths and precedence change with the vendor and version. Check them against your
 | Cline | `.cline/skills/` | `~/.cline/skills/` |
 | Kilo Code | `.kilo/skills/` or `.agents/skills/` | `~/.kilo/skills/` |
 
-The Antigravity row covers only VS Code, not the CLI. Keep one active copy unless you first check precedence. Reload or restart discovery as necessary. Do not embed shell-execution syntax: permissions differ by scope.
+The Antigravity row covers VS Code, not the CLI. Keep one active copy unless you first check precedence. Reload or restart discovery as necessary. Do not embed shell-execution syntax: permissions differ by scope.
 
 After setup, ask the agent to name an installed `SKILL.md` and its conditional reference paths without reading all supporting files. Report missing skills, never install or silently ignore them. Supply skills explicitly without automatic discovery.
 
