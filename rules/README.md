@@ -91,7 +91,7 @@ A workflow is one portable Markdown file with a `description` frontmatter field 
 6. A skill specializes a default. It NEVER weakens an explicit requirement, a convention, or an acceptance criterion.
 7. Keep the skill resources on demand, and keep their relative links valid. Do not move essential instructions out of `SKILL.md`.
 8. Keep every skill conformant to the Agent Skills specification, with recorded provenance (see Skill rules).
-9. Keep this repository light: no further CI workflow, dependency manifest or test scaffolding unless the owner asks for one. The pinned minifier manifest the preview build uses is the one exception, on the owner's answers to report `minification-scope`. Review a change directly, and never claim a check that did not run.
+9. Keep this repository light: no further CI workflow, dependency manifest or test scaffolding unless the owner asks for one. The pinned minifier manifest the preview build uses is the one exception, on the owner's approved answers. Review a change directly, and never claim a check that did not run.
 10. Amend `rules/refs/` first. Then mirror the amendment into its live counterpart in compressed form, and squash only the new or affected line. On a removal, attempt one squash and keep the lower budget. Full wording stays in refs, and the compressed form stays in `rules/` (see Baselines).
 
 ### Arena file
