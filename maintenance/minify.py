@@ -35,7 +35,7 @@ TARGETS = (
 )
 BIN = ROOT / "node_modules/.bin"
 PYTHON_MINIFIER_VERSION = "3.3.0"
-PYTHON_SCRIPTS = ("scripts/preview.py", "scripts/check_preview.py")
+PYTHON_SCRIPTS = ("scripts/preview.py",)
 
 # One job per npm build: the file name, the pinned minifier, and the flags that produce the build.
 JOBS = (
@@ -45,11 +45,6 @@ JOBS = (
     "assets/index.html",
     "html-minifier-terser",
     ("--collapse-whitespace", "--remove-comments", "--conservative-collapse"),
-  ),
-  (
-    "scripts/check_client.cjs",
-    "terser",
-    ("--compress", "--mangle", "--comments", "false"),
   ),
 )
 
@@ -190,7 +185,6 @@ def build() -> dict[str, tuple[str, str]]:
     sources[name] = (source, minify_python(source, name))
 
   check_javascript(sources["assets/app.js"][1])
-  check_javascript(sources["scripts/check_client.cjs"][1], ".cjs")
   check_stylesheet(sources["assets/style.css"][1])
   check_markup(*sources["assets/index.html"])
   return sources
