@@ -1,10 +1,12 @@
-## 2026-09-23 — Clause-scoped approval and absolute hook paths
+## 2026-09-23 — Clause-scoped approval, hook paths and save-state note
 
 **Approval gate** — Narrow the root `AGENTS.md` edit gate from every file to clause changes: no clause in a rule, skill, or workflow file is added, amended, or deleted until the owner approves its report; edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report. `scripts` stays outside the gate.
 
 **Hook paths** — Bake the absolute repository root into `~/.arena-preview-hook.sh` at install time, so the poll reminder runs from any working directory; the previous hook resolved `.agents/skills/...` and `reports/arena-preview` against the caller's cwd. `skills/arena-preview-steering/scripts/install.sh` grows 1,851 → 1,864 `B`, funded to 1,843 `B` by two comment trims; the `.agents/` twin stays byte-identical. Verified from `/` and `/tmp` in a login shell.
 
-**Checks** — `maintenance/check.py` passes; README budget row updated to 1,843 `B`; markdownlint reports 0 issues; the STE linter reports 0 violations on the changed README lines. Ruff is skipped: no Python changed.
+**Save-state note** — The `/api/save-state` route writes an inbox note naming the file and its note, task and answer counts, so the next `read` delivers it; the file landed untracked at the repository root and nothing else told the agent the owner pressed save state. `scripts/preview.py` grows 55,826 → 55,978 `B` and `scripts/check_preview.py` 53,947 → 54,203 `B`; `docs/archive/budget-exceptions.md` records the growth.
+
+**Checks** — `maintenance/check.py` passes; README budget rows updated for `install.sh`, `preview.py` and `check_preview.py`; `minify.py --update` rebuilt both distributed copies and `check_minify.py` passes; the refs, shipped and compact harnesses pass; markdownlint reports 0 issues; Ruff 0.16.6 passes check and format; the STE linter reports 0 violations on the changed `README.md` and `docs/` lines.
 
 ## 2026-09-23 — Documentation compression
 

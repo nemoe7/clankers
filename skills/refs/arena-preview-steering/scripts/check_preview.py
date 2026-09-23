@@ -878,6 +878,14 @@ with tempfile.TemporaryDirectory() as directory:
     # submission c0fcfad9): a restore drops that directory and keeps this file.
     assert written["path"] == str(save_file)
     assert save_file.is_file() and save_file.parent != root
+    # A save writes a note, so the agent's next read sees it: the file lands untracked at the
+    # repository root, and nothing else tells the agent the owner pressed save state.
+    save_note = store.state()["notes"][-1]
+    assert save_note["text"] == (
+      f"State saved to {written['path']}: {written['notes']} notes,"
+      f" {written['tasks']} tasks, {written['answers']} answers"
+    )
+    assert save_note["acknowledged_at"] is None and save_note["seen_at"] is None
     answer_line = lines_by_id["saved-answer"]
     assert answer_line["report_id"] == "first"
     assert (
