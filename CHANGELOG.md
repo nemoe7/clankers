@@ -1,3 +1,7 @@
+## 2026-09-23 — Clause-scoped approval and absolute hook paths
+
+**Approval gate** — Narrow the root `AGENTS.md` edit gate from every file to clause changes: no clause in a rule, skill, or workflow file is added, amended, or deleted until the owner approves its report; edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report. `scripts` stays outside the gate.
+
 ## 2026-09-23 — Documentation compression
 
 **Compression cut** — Strip storytelling, narrative, and per-event framing from ledger and archive prose; every entry now states actions, files, and numbers only. Sizes: `CHANGELOG.md` 457,272 → 364,377 `B` (-92,895); `docs/archive/budget-exceptions.md` 25,486 → 10,162 `B` (-15,324); `docs/archive/arena-quirks.md` 13,411 → 11,450 `B` (-1,961); total -110,180 `B`. No facts, dates, sizes, or commands removed.
