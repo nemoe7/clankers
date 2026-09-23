@@ -157,19 +157,18 @@ with tempfile.TemporaryDirectory() as directory:
     # The save button sits in the top bar after the theme button rather than in the log's own row, on
     # owner note 0f27a2b6; the log's row keeps the filter immediately left of copy-log, on owner notes
     # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught. The log's own
-    # copy and the tasks' copy are gone, and the save button carries the copy
-    # of the state it posts on a shift-click.
+    # copy and the tasks' copy are gone, and one copy button carries the state to the clipboard.
     assert (
       page.index('id="theme"')
-      < page.index('id="save-state"')
+      < page.index('id="copy-state"')
       < page.index('id="notes-panel"')
     )
     assert page.index('id="log-filter"') < page.index('id="refresh-notes"')
     assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
-    assert "shift-click copies the state" in page
+    assert "Copy the log and the tasks to the clipboard as NDJSON" in page
     # Every icon button carries a title that repeats its accessible name.
     for control in (
-      "save-state",
+      "copy-state",
       "refresh-notes",
       "upload-send",
       "copy-report",
@@ -831,48 +830,42 @@ with tempfile.TemporaryDirectory() as directory:
       seen_at="2026-09-21T09:03:00",
       task_id="saved-task",
     )
-    # The save route writes what the page posts, in one file both importers can read.
-    saved_status, _, saved = request(
-      "POST",
-      "/api/save-state",
-      json.dumps(
-        {
-          "notes": [
+    # Autosave writes what the database holds, in one file both importers can read. The page's
+    # copy button posts nothing, so this drives the writer the way a committed mutation does.
+    written = store.save_state(
+      {
+        "notes": [
+          {
+            "id": "saved-note",
+            "text": "from the browser",
+            "at": "2026-09-21T09:00:00",
+            "acknowledged_at": "2026-09-21T09:05:00",
+            "ack_kind": "reply",
+            "ack_text": "answered",
+            "seen_at": "2026-09-21T09:01:00",
+            "task_id": "saved-task",
+          }
+        ],
+        "tasks": {
+          "upcoming": [
             {
-              "id": "saved-note",
-              "text": "from the browser",
-              "at": "2026-09-21T09:00:00",
-              "acknowledged_at": "2026-09-21T09:05:00",
-              "ack_kind": "reply",
-              "ack_text": "answered",
-              "seen_at": "2026-09-21T09:01:00",
-              "task_id": "saved-task",
+              "id": "saved-task",
+              "title": "From the browser",
+              "details": ["one"],
+              "order": 1,
             }
           ],
-          "tasks": {
-            "upcoming": [
-              {
-                "id": "saved-task",
-                "title": "From the browser",
-                "details": ["one"],
-                "order": 1,
-              }
-            ],
-            "finished": [],
-          },
-        }
-      ),
-      auth,
+          "finished": [],
+        },
+      }
     )
-    assert saved_status == 200
-    written = json.loads(saved)
     assert written["notes"] == 1 and written["tasks"] == 1
     saved_lines = [
       json.loads(line)
       for line in Path(written["path"]).read_text(encoding="utf-8").splitlines()
     ]
     lines_by_id = {line["id"]: line for line in saved_lines}
-    # The page's own lines come first, in the order the button posts them; the answers come after
+    # The given lines come first, in the order the writer takes them; the answers come after
     # them, from the store, because the page never holds an answer it did not just send.
     assert [line["id"] for line in saved_lines][:2] == ["saved-note", "saved-task"]
     assert written["answers"] == len(
@@ -883,14 +876,6 @@ with tempfile.TemporaryDirectory() as directory:
     # directory instead of inside it.
     assert written["path"] == str(save_file)
     assert save_file.is_file() and save_file.parent != root
-    # A save writes a note, so the agent's next read sees it.
-    save_note = store.state()["notes"][-1]
-    assert save_note["text"] == (
-      f"State saved to {written['path']}: {written['notes']} notes,"
-      f" {written['tasks']} tasks, {written['answers']} answers"
-    )
-    assert save_note["acknowledged_at"] is None and save_note["seen_at"] is None
-    assert re.fullmatch(r"[0-9a-f]{7}-[0-9a-f]{25}", save_note["id"]), save_note["id"]
     answer_line = lines_by_id["saved-answer"]
     assert answer_line["report_id"] == "first"
     assert (
@@ -926,8 +911,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert answers["saved-answer"]["seen_at"] == "2026-09-21T09:03:00"
     assert answers["saved-answer"]["task_id"] == "saved-task"
     assert restored_store.state()["notes"][0]["task_id"] == "saved-task"
-    assert request("POST", "/api/save-state", "{}", auth)[0] == 400
-    assert request("POST", "/api/save-state", "{}")[0] == 403
+    # The save route is gone: autosave writes the file and the page copies to the clipboard.
+    assert request("POST", "/api/save-state", "{}", auth)[0] == 404
+    assert request("POST", "/api/save-state", "{}")[0] == 404
     # An upload stores its bytes beside the database and its record inside it, on the owner's answers in
     # report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling, and a record that outlives them.
     blob = bytes(range(256)) * 4

@@ -507,13 +507,13 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);save_state=path=='/api/save-state';upload_post=path=='/api/uploads'
-			if path not in{'/api/notes','/api/markdown'}and not report_submit and not report_seen and not save_state and not upload_post:self.problem(404,'Not found');return
+			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);upload_post=path=='/api/uploads'
+			if path not in{'/api/notes','/api/markdown'}and not report_submit and not report_seen and not upload_post:self.problem(404,'Not found');return
 			supplied=self.headers.get('X-Preview-Token','').encode('utf-8')
 			if not secrets.compare_digest(supplied,token.encode('ascii')):self.problem(403,'Reload the preview, then retry; your draft is kept');return
 			if self.headers.get('Content-Type')!='application/json'and not upload_post:self.problem(415,'Expected application/json');return
 			try:
-				length=int(self.headers.get('Content-Length','0'));limit=MAX_UPLOAD if upload_post else MAX_BODY if not(report_submit or save_state)else MAX_SUBMISSION_BODY
+				length=int(self.headers.get('Content-Length','0'));limit=MAX_UPLOAD if upload_post else MAX_BODY if not report_submit else MAX_SUBMISSION_BODY
 				if not 0<length<=limit:
 					subject='An upload is'if upload_post else'Report answers are'if report_submit else'Note body is';bound=MAX_UPLOAD+1 if upload_post else MAX_SUBMISSION_BODY+1;remaining=length if 0<length<=bound else 0
 					while remaining>0:
@@ -527,7 +527,6 @@ def handler(store):
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
 				if path=='/api/markdown':self.reply(200,render(note_text(payload.get('text')),breaks=True),'text/html; charset=utf-8');return
-				if save_state:saved=store.save_state(payload);store.note(new_id(),f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks, {saved['answers']} answers",autosave=False);self.reply(200,json.dumps(saved,ensure_ascii=False));return
 				if report_seen:
 					report=store.mark_report_seen(report_seen.group(1))
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])

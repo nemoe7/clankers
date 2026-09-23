@@ -895,9 +895,10 @@ class Store:
       print(f"preview: autosave failed: {error}", file=sys.stderr)
 
   def save_state(self, payload):
-    """Write the page's cached state to the save file, in the shape the importers read.
+    """Write the current state to the save file, in the shape the importers read.
 
-    The browser cannot write the sandbox filesystem, so it posts what it holds and this writes it.
+    Autosave calls this after every committed mutation, so the file follows the database with no
+    button press. The page copies its own state to the clipboard instead of posting it.
     Note lines keep their receipts, read stamps and task markers, because a restore that drops any
     of them is the failure this exists to prevent; task lines keep their status and order, so the
     queue comes back in the same shape. Answer lines come from the database rather than from the
@@ -1560,13 +1561,11 @@ def handler(store):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
-      save_state = path == "/api/save-state"
       upload_post = path == "/api/uploads"
       if (
         path not in {"/api/notes", "/api/markdown"}
         and not report_submit
         and not report_seen
-        and not save_state
         and not upload_post
       ):
         self.problem(404, "Not found")
@@ -1586,7 +1585,7 @@ def handler(store):
           MAX_UPLOAD
           if upload_post
           else MAX_BODY
-          if not (report_submit or save_state)
+          if not report_submit
           else MAX_SUBMISSION_BODY
         )
         if not 0 < length <= limit:
@@ -1640,18 +1639,6 @@ def handler(store):
             render(note_text(payload.get("text")), breaks=True),
             "text/html; charset=utf-8",
           )
-          return
-        if save_state:
-          saved = store.save_state(payload)
-          # A save writes a note, so the agent's next read sees it. The note takes
-          # autosave=False, because the button just wrote the file itself.
-          store.note(
-            new_id(),
-            f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks,"
-            f" {saved['answers']} answers",
-            autosave=False,
-          )
-          self.reply(200, json.dumps(saved, ensure_ascii=False))
           return
         if report_seen:
           report = store.mark_report_seen(report_seen.group(1))
