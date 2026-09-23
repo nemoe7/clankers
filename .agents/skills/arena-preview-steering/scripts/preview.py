@@ -19,8 +19,9 @@ except ImportError:HAS_RENDERER=False
 ASSETS=Path(__file__).resolve().parents[1]/'assets'
 IDENTIFIER=re.compile('[a-zA-Z0-9_-]{1,80}\\Z')
 MAX_REPORT=2000000
+MAX_NOTE=15000
 MAX_SUBMISSION=150000
-MAX_BODY=32768
+MAX_BODY=96000
 MAX_SUBMISSION_BODY=1000000
 MAX_UPLOAD=1000000
 UPLOAD_DIR='uploads'
@@ -40,7 +41,7 @@ def identifier(value):
 	if not isinstance(value,str)or not IDENTIFIER.fullmatch(value):raise ValueError('ID must contain 1–80 letters, digits, underscores or hyphens')
 	return value
 def note_text(text):
-	if not isinstance(text,str)or not text.strip()or len(text)>4000:raise ValueError('Enter a note of 1–4000 characters')
+	if not isinstance(text,str)or not text.strip()or len(text)>MAX_NOTE:raise ValueError(f"Enter a note of 1–{MAX_NOTE} characters")
 	return text
 def when(value):
 	'Return a timestamp a restore carried exactly as it arrived, once it parses.'
