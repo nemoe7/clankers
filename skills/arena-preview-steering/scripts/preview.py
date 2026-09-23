@@ -351,7 +351,7 @@ class Store:
 	def reminder(self):
 		'Count pending kinds without marking any message seen; any count asks for an ack.'
 		with closing(self.connect())as db:uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0]
-		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['ACK ASAP.']if counts else[];return' '.join([*counts,*ack,'Manage the task list.'])
+		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];return' '.join([*counts,*ack,'Manage the task list.'])
 	def read(self):
 		with closing(self.connect())as db,db:
 			pending=[dict(row)|{'kind':'note'}for row in db.execute('SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq')];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')]

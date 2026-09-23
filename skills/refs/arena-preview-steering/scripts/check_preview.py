@@ -1697,7 +1697,10 @@ with tempfile.TemporaryDirectory() as reminder_dir:
       check=True,
     )
     json.loads(result.stdout)
-    assert result.stderr.strip() == "1 message/s. ACK ASAP. Manage the task list."
+    assert (
+      result.stderr.strip()
+      == "1 message/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
+    )
     assert "Manage the task list" in result.stderr
     assert reminder_store.state()["notes"][0]["seen_at"] is None
   result = subprocess.run(
@@ -1707,7 +1710,10 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     check=True,
   )
   json.loads(result.stdout)
-  assert result.stderr.strip() == "1 message/s. ACK ASAP. Manage the task list."
+  assert (
+    result.stderr.strip()
+    == "1 message/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
+  )
   delivered = reminder_store.state()["notes"][0]["seen_at"]
   assert delivered is not None
   assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
@@ -1751,7 +1757,10 @@ with tempfile.TemporaryDirectory() as reminder_dir:
   assert "Manage the task list" in result.stderr
   assert reminder_store.reminder() == "Manage the task list."
   reminder_store.submission("form-answer", "form", "REPORT form: yes")
-  assert reminder_store.reminder() == "1 form answer/s. ACK ASAP. Manage the task list."
+  assert (
+    reminder_store.reminder()
+    == "1 form answer/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
+  )
   reminder_store.acknowledge(["form-answer"], "note", "Received")
   for index in range(3):
     reminder_store.note(f"mixed-{index}", "Pending")
@@ -1760,7 +1769,7 @@ with tempfile.TemporaryDirectory() as reminder_dir:
     reminder_store.note(upload["id"], "Uploaded " + name)
   assert (
     reminder_store.reminder()
-    == "3 message/s. 2 upload/s. ACK ASAP. Manage the task list."
+    == "3 message/s. 2 upload/s. DO NOT IGNORE. ACK ASAP. Manage the task list."
   )
   assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
 

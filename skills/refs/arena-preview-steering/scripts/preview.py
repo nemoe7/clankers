@@ -1043,7 +1043,7 @@ class Store:
       )
       if count
     ]
-    ack = ["ACK ASAP."] if counts else []
+    ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
     return " ".join([*counts, *ack, "Manage the task list."])
 
   def read(self):
