@@ -78,3 +78,5 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-23: session-local artifact ban. `rules/ARENA.md` grows 14,096 → 14,100 `B`, and the root copy matches it. One squash pass on the affected line funds all but 4 `B`. Unfunded.
 
 2026-09-23: rotating reminder and poll count. `scripts/preview.py` grows 56,416 → 57,564 `B` for the `REMINDERS` tuple, the cursor and the counter. `skills/arena-preview-steering/SKILL.md` grows 10,435 → 10,559 `B` for the reminder contract. The refs harness grows 77,124 → 79,039 `B` with the matching asserts. One squash pass on each new line found no further removal. Unfunded.
+
+2026-09-23: task-link requirement. `skills/arena-preview-steering/SKILL.md` grows 10,559 → 10,580 `B` for the `--msg-id` clause, after one squash pass on the new line. Unfunded.
