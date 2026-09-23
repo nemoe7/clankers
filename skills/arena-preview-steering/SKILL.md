@@ -76,9 +76,9 @@ Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fi
 
 Uploads write inbox notes with matching IDs, naming file, size, type and path. Read the file there, then ack the note. A restore can delete the bytes; the note and the record survive, and `present` says which is which.
 
-## Save state
+## State file
 
-Every committed mutation rewrites `saved-state.ndjson` in the state directory. The page's button writes it from the page's copy, then notes the file and its counts. Read that note, then ack it. Imports leave the file alone, so a restore reads it twice.
+Every committed mutation rewrites `saved-state.ndjson` in the state directory, so the file follows the database with no button press. The page's button copies the log and the tasks to the clipboard as NDJSON, one JSON line per record, without report answers. Imports leave the file alone, so a restore reads it twice.
 
 ## Persistence and limits
 

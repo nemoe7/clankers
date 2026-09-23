@@ -28,11 +28,11 @@ Latest measurements as of 2026-09-23. `maintenance/check.py` measures ARENA.md b
 | `rules/kilo/debug.md` | `cl100k_base` | 272 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 119 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 11,054 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 27,060 `B` |
-| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 6,679 `B` |
+| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 11,119 `B` |
+| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 26,004 `B` |
+| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 6,605 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 9,968 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 48,790 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 48,466 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 2,621 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
