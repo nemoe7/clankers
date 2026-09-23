@@ -1802,16 +1802,15 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   cycle = [rotate_store.reminder() for _ in range(span)]
   assert cycle == list(preview.REMINDERS)
   assert rotate_store.reminder() == preview.REMINDERS[0]
-  # An idle queue carries the tail alone, while the counter still moves under it.
+  # An idle queue carries the tail alone, and its polls do not count: the tally starts with
+  # the pending item it reports.
   assert rotate_store.reminder(advance=True) == preview.REMINDERS[1]
   assert rotate_store.reminder(advance=True) == preview.REMINDERS[2]
   assert rotate_store.reminder() == preview.REMINDERS[3]
   rotate_store.note("rotate-note", "Pending")
   pending = "1 message/s. DO NOT IGNORE. ACK ASAP. "
-  assert (
-    rotate_store.reminder() == f"2 call/s since read. {pending}{preview.REMINDERS[4]}"
-  )
-  for cursor, polls in ((2 * span, 3), (2 * span + 1, 4)):
+  assert rotate_store.reminder() == f"{pending}{preview.REMINDERS[4]}"
+  for cursor, polls in ((2 * span, 1), (2 * span + 1, 2)):
     result = subprocess.run(
       [sys.executable, rotate_script, "--state-dir", rotate_dir, "--reminder"],
       capture_output=True,
@@ -1819,7 +1818,7 @@ with tempfile.TemporaryDirectory() as rotate_dir:
       check=True,
     )
     tail = preview.REMINDERS[cursor % span]
-    assert result.stdout.strip() == f"{polls} call/s since read. {pending}{tail}"
+    assert result.stdout.strip() == f"{polls} call/s waiting. {pending}{tail}"
     assert result.stderr == ""
   result = subprocess.run(
     [sys.executable, rotate_script, "--state-dir", rotate_dir, "task-list"],
@@ -1829,10 +1828,18 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   )
   json.loads(result.stdout)
   tail = preview.REMINDERS[(2 * span + 2) % span]
-  assert result.stderr.strip() == f"4 call/s since read. {pending}{tail}"
+  assert result.stderr.strip() == f"2 call/s waiting. {pending}{tail}"
   # A read clears the count, and the note stays pending until an ack answers it.
   rotate_store.read()
   assert rotate_store.reminder() == pending + preview.REMINDERS[(2 * span + 3) % span]
+  # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
+  rotate_store.acknowledge(["rotate-note"], "note", "Done")
+  assert rotate_store.reminder(advance=True) == preview.REMINDERS[(2 * span + 4) % span]
+  assert rotate_store.reminder(advance=True) == preview.REMINDERS[(2 * span + 5) % span]
+  rotate_store.note("rotate-later", "Pending again")
+  assert rotate_store.reminder(advance=True) == (
+    f"1 call/s waiting. {pending}{preview.REMINDERS[(2 * span + 6) % span]}"
+  )
 
 with tempfile.TemporaryDirectory() as marker_dir:
   marker_store = preview.Store(marker_dir, create=True)

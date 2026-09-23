@@ -32,11 +32,11 @@ One server and inbox per session for steering messages and reports; never start 
 python <skill>/scripts/preview.py --state-dir arena-state read
 ```
 
-Every CLI command prints the nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, the bash calls since the last `read` beside those counts, and one rotating reminder from `REMINDERS` to stderr, even with none pending. Only the hook's `--reminder` poll advances the call count, and a `read` clears it. Stdout stays machine-readable; reminders never mark seen.
+Every CLI command prints the nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, the bash calls the pending items have waited beside those counts, and one rotating reminder from `REMINDERS` to stderr, even with none pending. Only the hook's `--reminder` poll advances the call count, a poll with nothing pending clears it, and a `read` clears it. Stdout stays machine-readable; reminders never mark seen.
 
 Prints **all pending messages** in full and records check time; a failed delivery stays unseen, and pending is the ack queue, so a note prints again until answered. Missing, unreadable or corrupt state is an error, never an empty inbox. The hook's poll covers the routine check; run it for the full listing. `seen <ids>` stamps without an answer; `ack` answers and stamps, only those IDs. NEVER mark count-only notifications, truncated items or failed deliveries seen. Browser polls never stamp. Receipt is not completion.
 
-- Polling is automatic: the hook polls after every Arena bash call and prints the unacked counts (messages, form answers, uploads) and the number of bash calls since the last `read` to stderr; it marks nothing seen. A nonzero count: `read` now, then `ack`. Markup needs `--reply`. Missing inbox: start the server; server down: restart it. End the turn's last tool block with a bash call, so the hook closes the channel.
+- Polling is automatic: the hook polls after every Arena bash call and prints the unacked counts (messages, form answers, uploads) and the number of bash calls the pending items have waited to stderr; it marks nothing seen. A nonzero count: `read` now, then `ack`. Markup needs `--reply`. Missing inbox: start the server; server down: restart it. End the turn's last tool block with a bash call, so the hook closes the channel.
 - Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One answer per call; ack different answers separately, and never one text to two messages: each answer addresses its own note.
 
   ```bash
