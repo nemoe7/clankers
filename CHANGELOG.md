@@ -1,12 +1,12 @@
 ## 2026-09-23 — House-rule amendments: turn end, violation receipts and the report path
 
-**Turn end** — `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy replace the awaiting-owner condition with the approved wording: never end a turn while tasks are open. A blocked task is reported through a published fielded report and then awaits input. The old line said when a turn may end awaiting the owner and never said a turn may not end while work remained.
+**Turn end** — `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy replace the awaiting-owner condition with the approved wording: never end a turn while tasks are open. A blocked task gets a published fielded report and then waits for input. The old line said when a turn may end awaiting the owner and never said a turn may not end while work remained.
 
 **Violation receipts** — The same three files pin the suggested amendment to the reply that reports the violation. The old line required a suggestion without saying when, so it could land after the turn it amends.
 
-**Report path** — The same three files gain `ALL reports MUST go through the preview skill`. It went into `ARENA.md` and not `AGENTS.md` L76, which keeps its `fits in chat` line and loses to `ARENA.md` where the two disagree. `rules/ARENA.md` grows 13,984 → 14,100 `B`, and the root copy matches it; `docs/archive/budget-exceptions.md` records the growth.
+**Report path** — The same three files gain `ALL reports MUST go through the preview skill`. It went into `ARENA.md` and not `AGENTS.md` L76, which keeps its `fits in chat` line and loses to `ARENA.md` where the two disagree. `rules/ARENA.md` grows 13,984 → 14,100 `B`, and the root copy matches it. `docs/archive/budget-exceptions.md` records the growth.
 
-**Clause audit** — Both steering `SKILL.md` copies drop three clauses: the condition stamping Seen after the write succeeds, the requirement to cite a note ID in answers and documents, and the pointer at `scripts/check_preview.py`. The live copy falls 11,123 → 10,777 `B`, under its 11,099 `B` baseline, so no exception covers it.
+**Clause audit** — Both steering `SKILL.md` copies drop three clauses. One stamps Seen after the write succeeds, one requires a note-ID citation, and one points at `scripts/check_preview.py`. The live copy falls 11,123 → 10,777 `B`, under its 11,099 `B` baseline, so no exception covers it.
 
 **Identifier shape** — Uploads and save-state notes take the shape the log shows: seven characters, a hyphen and the rest. Both used a raw uuid4. `scripts/preview.py` gains `new_id()`, and `scripts/check_preview.py` asserts the shape on both records.
 
