@@ -80,3 +80,5 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-23: rotating reminder and poll count. `scripts/preview.py` grows 56,416 → 57,564 `B` for the `REMINDERS` tuple, the cursor and the counter. `skills/arena-preview-steering/SKILL.md` grows 10,435 → 10,559 `B` for the reminder contract. The refs harness grows 77,124 → 79,039 `B` with the matching asserts. One squash pass on each new line found no further removal. Unfunded.
 
 2026-09-23: task-link requirement. `skills/arena-preview-steering/SKILL.md` grows 10,559 → 10,580 `B` for the `--msg-id` clause, after one squash pass on the new line. Unfunded.
+
+2026-09-23: poll count beside pending only. `scripts/preview.py` grows 57,564 → 57,639 `B`. `skills/arena-preview-steering/SKILL.md` grows 10,580 → 10,600 `B` for the clause. The refs harness grows 79,039 → 79,373 `B` with the rewritten rotation block. Unfunded.
