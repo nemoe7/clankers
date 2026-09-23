@@ -42,7 +42,7 @@ Restore acknowledgement state with each note, or leave it unset. Never infer an 
 
 [maintenance/README.md](../../maintenance/README.md) gives the verified seed command. The raw header is necessary, because the contents API stops base64 above 1 MB. Restores delete the ignored cache directory, so seed it again with venv recovery.
 
-2026-09-23: the block covers more hosts than the encoding blob. `agent-plugins.org` refused a TLS handshake from `curl` and `urllib` alike, and the Actions artifact host `productionresultssa19.blob.core.windows.net` ended a signed download with EOF, while `api.github.com`, PyPI and the npm registry answered. A checker that fetches a canonical schema takes a local-copy override for runs here. The runner verifies an artifact's contents. A session here reports that limit instead of claiming the bytes.
+2026-09-23: the block covers more hosts than the encoding blob. `agent-plugins.org` refused a TLS handshake from `curl` and `urllib` alike. The Actions artifact host `productionresultssa19.blob.core.windows.net` ended a signed download with EOF. `api.github.com`, PyPI and the npm registry answered. A checker that fetches a canonical schema takes a local-copy override for runs here. The runner verifies an artifact's contents. A session here reports that limit instead of claiming the bytes.
 
 ## `gh pr edit --body-file` fails
 
