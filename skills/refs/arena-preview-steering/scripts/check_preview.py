@@ -1776,19 +1776,47 @@ with tempfile.TemporaryDirectory() as marker_dir:
     "form", "answer", {}, marker_store.report("form")["updated_at"]
   )
   assert marker_store.state()["reports"][0]["needs_answer"] is False
+  try:
+    marker_store.publish("form", "Form", marker_source)
+    raise AssertionError("An answered report accepted a republish")
+  except ValueError as error:
+    assert "submitted answers" in str(error)
+  marker_store.publish("form-2", "Form", marker_source)
+  assert len(marker_store.state()["reports"]) == 2
+  result = subprocess.run(
+    [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "--state-dir",
+      marker_dir,
+      "publish",
+      str(marker_source),
+      "--id",
+      "form",
+      "--title",
+      "Form",
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 1
+  assert "submitted answers" in result.stderr
   assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
   with marker_store.connect() as db, db:
-    # The answer is backdated on purpose: an answer survives a republish however old it is,
-    # so an agent republish never asks the owner the same form twice. The republish still
-    # clears the read stamp, so changed text shows unread.
+    # The answer is backdated on purpose: any answer, however old, keeps needs_answer false,
+    # and the republish that once had to preserve it is refused while answers exist.
     db.execute("UPDATE submissions SET at = '2020-01-01T00:00:00' WHERE id = 'answer'")
-  marker_store.publish("form", "Revised form", marker_source)
-  assert marker_store.state()["reports"][0]["seen_at"] is None
   assert marker_store.state()["reports"][0]["needs_answer"] is False
   assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
+  marker_store.mark_report_seen("form-2")
+  assert marker_store.state()["reports"][1]["seen_at"] is not None
+  marker_store.publish("form-2", "Revised form", marker_source)
+  assert marker_store.state()["reports"][1]["seen_at"] is None
+  assert marker_store.state()["reports"][1]["needs_answer"] is True
   marker_source.write_text("Plain report")
   marker_store.publish("plain", "Plain", marker_source)
-  assert marker_store.state()["reports"][1]["needs_answer"] is False
+  assert marker_store.state()["reports"][2]["needs_answer"] is False
   assert "markdown" not in marker_store.state()["reports"][0]
 
 with tempfile.TemporaryDirectory() as notes_only_dir:

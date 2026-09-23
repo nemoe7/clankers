@@ -399,7 +399,10 @@ class Store:
 		with source.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 		if len(data)>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
 		text=data.decode('utf-8');parse_fields(text)
-		with closing(self.connect())as db,db:highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, seq)\n           VALUES (?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),highest+1))
+		with closing(self.connect())as db,db:
+			answered=db.execute('SELECT count(*) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
+			if answered:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
+			highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, seq)\n           VALUES (?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),highest+1))
 	def mark_report_seen(self,report_id):
 		'Stamp the moment the owner reached the end of a report, and only the first one.\n\n    The stamp records when the report was actually read, so reopening it in another browser\n    keeps that moment instead of moving it. Republishing clears it, which is what makes a\n    changed report unread in fact rather than unread by a comparison the client has to get right.\n    ';identifier(report_id)
 		with closing(self.connect())as db,db:
