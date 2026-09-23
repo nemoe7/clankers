@@ -1,3 +1,7 @@
+## 2026-09-23 — Preview reminder nudge and republish guard
+
+**Ack nudge** — `scripts/preview.py` appends `ACK ASAP.` to the stderr reminder whenever any messages, form answers or uploads are pending, for example `1 message/s. ACK ASAP. Manage the task list.`; with none pending the line stays `Manage the task list.` Both steering `SKILL.md` copies and the refs baseline amend the reminder clause, and `scripts/check_preview.py` asserts the new format for notes, form answers and uploads. `scripts/preview.py` grows 56,113 → 56,179 `B` and `skills/arena-preview-steering/SKILL.md` 10,777 → 10,812 `B`; `docs/archive/budget-exceptions.md` records the growth.
+
 ## 2026-09-23 — House-rule amendments: turn end, violation receipts and the report path
 
 **Turn end** — `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy replace the awaiting-owner condition with the approved wording: never end a turn while tasks are open. A blocked task gets a published fielded report and then waits for input. The old line said when a turn may end awaiting the owner and never said a turn may not end while work remained.
