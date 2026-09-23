@@ -41,7 +41,7 @@ Task IDs are 1–64 lowercase letters, digits or hyphens, starting with a letter
 
 | Flag | Operation |
 | --- | --- |
-| `--task-id`, `--task-title`, repeatable `--task-details` | Alternatives to the positional ID, title and detail arguments |
+| `--task-id`, `--task-title`, repeatable `--task-details` | Alternatives to the positional ID, title and detail arguments. The detail lines you pass replace the stored list |
 | `--task-details ""` | Clear all details |
 | `--status upcoming` or `--status finished` | Set status; new tasks default to upcoming |
 | `--order N` | Place at the 1-based position within its status group, not the end; positions stay dense after changes |
