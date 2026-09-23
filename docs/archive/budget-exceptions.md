@@ -82,3 +82,5 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-23: task-link requirement. `skills/arena-preview-steering/SKILL.md` grows 10,559 → 10,580 `B` for the `--msg-id` clause on the new line. Unfunded.
 
 2026-09-23: poll count beside pending only. `scripts/preview.py` grows 57,564 → 57,639 `B`. `skills/arena-preview-steering/SKILL.md` grows 10,580 → 10,600 `B` for the clause. Unfunded.
+
+2026-09-23: composer limit raised to 15,000 characters. The refs `scripts/preview.py` lands 74,689 → 74,654 `B`, while the distributed copies grow 57,639 → 57,665 `B` for the `MAX_NOTE` constant and its message. The general body limit rises 32,768 → 96,000 `B`, so a full-length note stays reachable over HTTP. The refs harness grows 79,373 → 79,785 `B`. Unfunded: 26 `B` on the measured row.
