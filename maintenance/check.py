@@ -54,8 +54,6 @@ EXPECTED_BUDGETS = {
   "skills/arena-preview-steering/assets/index.html": "UTF-8 file size",
   "skills/arena-preview-steering/assets/style.css": "UTF-8 file size",
   "skills/arena-preview-steering/scripts/preview.py": "UTF-8 file size",
-  "skills/arena-preview-steering/scripts/check_preview.py": "UTF-8 file size",
-  "skills/arena-preview-steering/scripts/check_client.cjs": "UTF-8 file size",
   "skills/arena-preview-steering/scripts/install.sh": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",

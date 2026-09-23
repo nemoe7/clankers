@@ -83,4 +83,4 @@ Processes, packages and URLs may disappear after a sandbox restart; workspace fi
 
 If the preview fails, report it and ask how to continue in chat. Do not silently revive ntfy or local report commits; they are historical alternatives, neither active fallback nor banned forever. See [operation and recovery](references/REFERENCE.md).
 
-Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions. For reports, use sibling [arena-preview-reporting](../arena-preview-reporting/SKILL.md). Check runtime with `scripts/check_preview.py` under the reporting venv's Python; no external test framework.
+Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions. For reports, use sibling [arena-preview-reporting](../arena-preview-reporting/SKILL.md). Check runtime with `skills/refs/arena-preview-steering/scripts/check_preview.py` under the reporting venv's Python; no external test framework.
