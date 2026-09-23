@@ -8,7 +8,7 @@
 - Your first action in a new session is to read this file end-to-end.
   - In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit.
   - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
-- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and both preview skills.
+- ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
   - This waiver wins that collision; editing installed copies still requires explicit user authorization.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
@@ -54,7 +54,7 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute-arena.yml` pushes to the target repositories.
-4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. Steering now uses `skills/arena-preview-steering` and its local preview inbox; `skills/arena-preview-reporting` shares that server. The former ntfy and local-report-commit workflows are historical in the steering skill's migration reference. No automatic fallback is authorized.
+4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. Steering now uses `skills/arena-preview-steering` and its local preview inbox for messages and reports. The former ntfy and local-report-commit workflows are historical in the steering skill's migration reference. No automatic fallback is authorized.
 
 ## Rules
 
@@ -71,7 +71,7 @@ Read these first:
 ## Reports and approval
 
 - Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it. A fielded report carries the same table above its fields; a form with no table is not a proposal.
-A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-reporting` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
+A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-steering` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
 - NEVER commit or push report artifacts.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Ledger and report prose: neutral wording — actions, files, numbers; no narrative of who did what.
