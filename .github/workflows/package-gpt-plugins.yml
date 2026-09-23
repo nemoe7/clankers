@@ -1,0 +1,92 @@
+name: package-gpt-plugins
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gpt-plugins/**'
+      - '.github/workflows/package-gpt-plugins.yml'
+  pull_request:
+    branches: ['**']
+    paths:
+      - 'gpt-plugins/**'
+      - '.github/workflows/package-gpt-plugins.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Keep the manifest validation on the interpreter the other workflows use.
+          python-version: "3.11"
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          # There is no requirements file: the pins live in this workflow, so the workflow
+          # itself is the honest cache key and any dependency change busts it.
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-gpt-plugins-${{ hashFiles('.github/workflows/package-gpt-plugins.yml') }}
+          restore-keys: ${{ runner.os }}-pip-gpt-plugins-
+
+      - name: Install validation dependencies
+        run: python -m pip install jsonschema PyYAML
+
+      # The required behaviour of this file is part of the check: the triggers, the archive
+      # name and the artifact name are assertions, so an edit that drops one fails here.
+      - name: Validate this workflow definition
+        run: |
+          python - <<'PY'
+          import yaml
+
+          path = ".github/workflows/package-gpt-plugins.yml"
+
+          with open(path, encoding="utf-8") as handle:
+            workflow = yaml.safe_load(handle)
+
+          triggers = workflow.get("on", workflow.get(True))
+          paths = ["gpt-plugins/**", path]
+
+          for event in ("push", "pull_request"):
+            assert triggers[event]["paths"] == paths, f"{event} paths are {triggers[event]['paths']}"
+
+          assert "workflow_dispatch" in triggers, "workflow_dispatch is missing"
+
+          steps = workflow["jobs"]["package"]["steps"]
+          upload = next(step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact"))
+
+          assert upload["with"]["name"] == "gpt-plugins", upload["with"]["name"]
+          assert upload["with"]["path"] == "gpt-plugins.zip", upload["with"]["path"]
+          assert any("gpt-plugins.zip" in str(step.get("run", "")) for step in steps), "no packaging step"
+
+          print(f"{path}: triggers, archive name and artifact name are as required.")
+          PY
+
+      # The manifest is validated against the schema fetched from agent-plugins.org, so a
+      # specification change breaks this run instead of shipping an invalid plugin.
+      - name: Validate the plugin collection
+        run: python maintenance/check_gpt_plugins.py
+
+      - name: Package the collection
+        run: zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills
+
+      - name: Verify the archive
+        run: |
+          unzip -l gpt-plugins.zip
+          python maintenance/check_gpt_plugins.py --archive gpt-plugins.zip
+
+      - name: Upload the plugin archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpt-plugins
+          path: gpt-plugins.zip
+          if-no-files-found: error

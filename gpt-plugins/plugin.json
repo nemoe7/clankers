@@ -1,0 +1,7 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "gpt-plugins",
+  "version": "1.0.0",
+  "description": "GPT-specific agent skills: verified GPT and connected tool quirks, plus independent audit and new-work handoff drafting.",
+  "repository": "https://github.com/nemoe7/clankers"
+}

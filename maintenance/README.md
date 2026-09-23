@@ -50,6 +50,22 @@ python3 maintenance/minify.py --update   # write both distributed copies
 
 `check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 maintenance/check_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime. It uses readable assets for exact page assertions, then shipped assets for page assembly. Ruff checks readable Python refs, not generated copies.
 
+## Plugin collection
+
+`gpt-plugins/` is one Agent Plugins collection. It holds `plugin.json` and the shipped skills under `skills/`. The readable skill sources live under `refs/skills/`, and the shipped copies stay byte-identical to them.
+
+```bash
+python3 -m pip install jsonschema
+python3 maintenance/check_gpt_plugins.py            # report drift, write nothing
+python3 maintenance/check_gpt_plugins.py --update   # write the shipped copies from refs
+```
+
+The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it fetches on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, both skill names, the Agent Skills frontmatter limits, and the collection tree. `gpt-plugins/README.md` documents the collection and never ships.
+
+`--archive <zip>` compares a packaged archive with the collection. The archive must carry `plugin.json` and `skills/` only, with byte-identical content, so `refs/` never ships. `.github/workflows/package-gpt-plugins.yml` runs both checks and uploads the artifact `gpt-plugins`.
+
+The two shipped `SKILL.md` files join the budget table in the root `README.md`. `plugin.json` does not, because it is metadata and not instruction text.
+
 ## Offline token measurement
 
 `tiktoken` downloads `cl100k_base` on first use. If its host is unreachable, seed from a byte-identical mirror. Its hash check rejects bad copies.
