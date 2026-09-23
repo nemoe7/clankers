@@ -886,6 +886,7 @@ with tempfile.TemporaryDirectory() as directory:
       f" {written['tasks']} tasks, {written['answers']} answers"
     )
     assert save_note["acknowledged_at"] is None and save_note["seen_at"] is None
+    assert re.fullmatch(r"[0-9a-f]{7}-[0-9a-f]{25}", save_note["id"]), save_note["id"]
     answer_line = lines_by_id["saved-answer"]
     assert answer_line["report_id"] == "first"
     assert (
@@ -938,6 +939,9 @@ with tempfile.TemporaryDirectory() as directory:
     assert record["sha256"] == hashlib.sha256(blob).hexdigest() and record["present"]
     assert Path(record["path"]).read_bytes() == blob
     assert Path(record["path"]).parent.name == "uploads"
+    # An upload writes a note under its own ID, so that ID carries the shape the log shows:
+    # seven characters, a hyphen, the rest. A raw uuid4 reads as a different kind of identifier.
+    assert re.fullmatch(r"[0-9a-f]{7}-[0-9a-f]{25}", record["id"]), record["id"]
     # An upload writes a note, so the agent's next read sees it; the note rides the upload's ID.
     upload_note = store.state()["notes"][-1]
     assert upload_note["id"] == record["id"]

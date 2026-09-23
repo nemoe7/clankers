@@ -53,6 +53,12 @@ def now():
   return datetime.now(timezone.utc).isoformat()
 
 
+def new_id():
+  """One identifier in the shape the log shows: seven characters, a hyphen, the rest."""
+  hexed = uuid.uuid4().hex
+  return f"{hexed[:7]}-{hexed[7:]}"
+
+
 def clip_stamp(value):
   """Cut an ISO stamp to seconds; a restore needs no milliseconds or offset."""
   return value[:19] if value else value
@@ -922,7 +928,7 @@ class Store:
     if len(data) > MAX_UPLOAD:
       raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
     cleaned = upload_name(name)
-    upload_id = str(uuid.uuid4())
+    upload_id = new_id()
     directory = self.path.parent / UPLOAD_DIR
     directory.mkdir(parents=True, exist_ok=True)
     # The id names the file on disk and the owner's name only reaches the record, so no path the owner
@@ -1570,7 +1576,7 @@ def handler(store):
           # A save writes a note, so the agent's next read sees it: the file lands untracked at
           # the repository root, and nothing else tells the agent the owner pressed save state.
           store.note(
-            str(uuid.uuid4()),
+            new_id(),
             f"State saved to {saved['path']}: {saved['notes']} notes, {saved['tasks']} tasks,"
             f" {saved['answers']} answers",
           )
