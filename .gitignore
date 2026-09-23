@@ -3,3 +3,6 @@ __pycache__/
 .tiktoken-cache/
 reports/
 node_modules/
+
+# Packaged plugin archive, built by .github/workflows/package-gpt-plugins.yml
+gpt-plugins.zip

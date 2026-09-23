@@ -110,7 +110,8 @@ jobs:
             .agents/skills/README.md \
             docs/archive/arena-quirks.md \
             rules/README.md \
-            rules/refs/README.md
+            rules/refs/README.md \
+            gpt-plugins/README.md
 
       - name: Compile maintenance script
         run: python -m compileall maintenance/check.py
