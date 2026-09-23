@@ -1146,6 +1146,15 @@ class Store:
     # below existed, the HTTP connection with it.
     parse_fields(text)
     with closing(self.connect()) as db, db:
+      # Sent answers live in the owner's browser under this report ID, so a republish would
+      # reload them pre-filled against fields that no longer match; a new ID starts clean.
+      answered = db.execute(
+        "SELECT count(*) FROM submissions WHERE report_id = ?", (report_id,)
+      ).fetchone()[0]
+      if answered:
+        raise ValueError(
+          f"Report {report_id} has submitted answers; publish the update under a new ID"
+        )
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
         """INSERT INTO reports (id, title, markdown, updated_at, seq)
