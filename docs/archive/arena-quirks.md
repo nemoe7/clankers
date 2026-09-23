@@ -1,50 +1,44 @@
 # Arena quirks
 
-Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified. Four restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.md) is the durable record. 
+Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified. Restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.md) is the durable record. 
 
 ## GitHub token expiry mid-turn
 
-[rules/ARENA.md](../../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repository change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. 
+[rules/ARENA.md](../../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repository change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold. 
 
-2026-09-21: three consecutive pushes failed after a commit unrelated to authentication, and the fourth succeeded roughly a minute later. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold. 
+## The question tool at token death
 
-## The question tool returns skipped at token death
+2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial. Ask rather than assume. 
 
-2026-09-21: four question blocks with a dead token returned `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. 
+2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. [rules/ARENA.md](../../rules/ARENA.md) now requires blocking through the question tool, which exposes the failure and leaves the turn, instead of a silent end. 
+
+Context exhaustion is worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. Push after each commit. 
 
 ## The token budget is not readable
 
-No surface gives the agent a remaining-token counter, warning or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. 
-
-A probe distinguishes a dead budget, which returns `skipped`, from a live one, which returns an answer. Nothing exposes a remaining count or a refill. 
+No surface gives the agent a remaining-token counter, warning or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. Nothing exposes a remaining count or a refill. 
 
 [rules/ARENA.md](../../rules/ARENA.md) ends turns after it verifies and stops the work, never for a stated budget limit. 
 
 ## Mid-turn sandbox restore
 
-A restore returns HEAD to the branch base, deletes every gitignored directory, kills processes, and deletes preview SQLite state while the turn continues. Pushed commits survive remotely. Tree-only work survives as uncommitted differences against the base. 
+A restore returns HEAD to the branch base and deletes every gitignored directory. Tooling, virtual environments and hooks under the home directory go too. The restore kills processes and deletes preview SQLite state while the turn continues. Pushed commits survive remotely, and tree-only work survives as uncommitted differences against the base. Notes, receipts and tasks held only in deleted state do not survive. 
 
-2026-09-21: four restores on one branch deleted `.venv`, `node_modules/`, `.tiktoken-cache/`, the preview server and the `reports/` data, including 111 notes and receipts. Recovery is `git fetch -q origin <branch>` then `git reset --mixed FETCH_HEAD`, then a rebuilt venv, a restarted preview and tasks reconstructed from commit history. The notes were unrecoverable. 
+Recovery is `git fetch -q origin <branch>` then `git reset --mixed FETCH_HEAD`, then a rebuilt venv, a restarted preview and tasks reconstructed from commit history. A task backup protects against bad imports, not restores. Missing tooling reads as a lint failure, so distinguish a broken gate from a real one. The Python harness writes `__pycache__` inside the live skill copy, so a `diff -r` parity check reports untracked differences. 
 
-The Python harness writes `__pycache__` inside the live skill copy, so a `diff -r` parity check then reports untracked differences. 
-
-A task backup protects against bad imports, not restores. Tooling disappears too: `npx --no-install markdownlint-cli2` reported a missing package until an install restored it. Distinguish a broken gate from a lint failure. 
-
-One import that day marked all twenty-eight pasted notes acknowledged, and five had no answer. Restore acknowledgement state with each note, or leave it unset. Never infer an answer. A log copy holding only id, text and at lacks receipt state and cannot count as complete. 
+Restore acknowledgement state with each note, or leave it unset. Never infer an answer: one import marked twenty-eight pasted notes acknowledged, and five had no answer. A log copy holding only id, text and at lacks receipt state and cannot count as complete. 
 
 ## A refresh can reset the sandbox, not just the visible history
 
-2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox and visible-history resets are the same event at different levels. Harness reasoning survives while files disappear. Commit and push early, before turn end. 
+2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox and visible-history resets are the same event at different levels, and harness reasoning survives while files disappear. One later recovery request repeated an earlier report, with HEAD, remote and state intact. Check whether a message describes a new event or repeats one before treating it as evidence or instruction. Keep the retraction beside the claim, and recover from durable sources. Commit and push early, before turn end. 
 
-A later message asked for another history-reset recovery. Local HEAD, `FETCH_HEAD` and remote all matched, the tree was clean, `/api/state` returned 200, and the state file held 51 notes and 32 tasks. Nothing needed pulling. Check whether a message describes a new event or repeats one before treating it as evidence or instruction. Keep the retraction beside the claim, and recover from durable sources, not discardable memory. 
-
-One observation remains: `gh pr view` returned `mergeable=UNKNOWN mergeStateStatus=UNKNOWN` with the correct head after an earlier MERGEABLE result. UNKNOWN means computation is pending. Query again rather than report a fault. 
+`gh pr view` can return `mergeable=UNKNOWN mergeStateStatus=UNKNOWN` with the correct head after a MERGEABLE result. UNKNOWN means computation is pending. Query again rather than report a fault. 
 
 ## The encoding host tiktoken needs is unreachable
 
-2026-09-21: `maintenance/check.py` could not fetch its encoding from `openaipublic.blob.core.windows.net`, with `SSLZeroReturnError` unchanged on retry, while PyPI stayed reachable. The unseeded budget gate cannot run. `maintenance/check_measurements.py` and three-copy `diff -r` checks cover non-token measurements and parity. 
+2026-09-21: `maintenance/check.py` could not fetch its encoding from `openaipublic.blob.core.windows.net`, with `SSLZeroReturnError` unchanged on retry, while PyPI stayed reachable. The unseeded budget gate cannot run. The remaining gates still cover non-token measurements and parity. 
 
-[maintenance/README.md](../../maintenance/README.md) gives the verified seed command. The raw header is necessary, because the contents API stops base64 above 1 MB. A seeded cache is 1,681,126 bytes and passes the tiktoken hash check. Restores delete the ignored cache directory, so seed it again with venv recovery. 
+[maintenance/README.md](../../maintenance/README.md) gives the verified seed command. The raw header is necessary, because the contents API stops base64 above 1 MB. Restores delete the ignored cache directory, so seed it again with venv recovery. 
 
 ## `gh pr edit --body-file` fails
 
@@ -62,17 +56,7 @@ One observation remains: `gh pr view` returned `mergeable=UNKNOWN mergeStateStat
 
 `Store.note()` returns the stored record for an identical ID and text pair, and it rejects changed text under that ID. A duplicate with a fresh ID is a second note. Before answering an apparent repeat, check the recent log for identical text. Without detection, repeats cause duplicate answers and can revive an ended turn. 
 
-One historical note reports replacement, with no mechanism established: a duplicate can replace a new message. Ordinary repeats retain the original for comparison, and replacement loses that evidence with no recovery path. Mismatched instructions, or answers that refer to absent text, are indirect signs. Ask the user. 
-
-A false `continue tasks!` once triggered thirty-four new lines in `scripts/preview.py`, and `git checkout` deleted them before any commit. Replacements cannot be identified from plausible, unmarked instructions. Small commits and early pushes remain the practical safeguard. 
-
-## The question tool answered at token death
-
-2026-09-21: against four skipped attempts, one question tool returned `skipped: false` with two answers when a settled P1 bug required a decision. This was not a controlled trial: the question shape differed, and there were two questions. The sample is one success against four skips. Ask rather than assume. 
-
-2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. Blocking through the question tool exposes the failure and leaves the turn, so [rules/ARENA.md](../../rules/ARENA.md) now requires that instead of a silent end. 
-
-Context exhaustion is worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. Push after each commit. 
+One note reported replacement, with no mechanism established: a duplicate can replace a new message. Replacement loses the original for comparison and leaves no recovery path. Mismatched instructions, or answers that refer to absent text, are indirect signs. Ask the user. A replacement cannot be identified from plausible, unmarked instructions, so small commits and early pushes remain the safeguard. 
 
 ## `Something went wrong. Please try again.` arrives as a message
 
