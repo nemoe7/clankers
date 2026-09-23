@@ -120,17 +120,6 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 `rules/refs/` keeps uncompressed baselines for agents without git history. Amend here first in complete sentences, preserving every negation, condition, command, number, threshold, filename and caveat. Compress only new or affected lines into live files. On removal, attempt one squash and keep the lower budget. Verbatim baselines would exceed live budgets. Refs preserve originals, identical to live where no compression applied. The adjacent `GUIDELINES.md` is the writing/audit reference, not a baseline, with no live counterpart.
 
-### Commit disciplines
-
-| File | Discipline |
-| --- | --- |
-| `rules/AGENTS.md` | Commit on a branch other than `main`. No commit list. Merge policy is platform-specific. |
-| `rules/ARENA.md` | Print the planned final commit list before every commit. Always push and keep a PR open. Never merge until the owner authorizes it, then merge by rebase only: rebase onto the target, then merge |
-| `rules/CHATGPT-CUSTOM.txt`, `rules/CHATGPT-MORE.txt` | Print the planned final commit list before a commit. Commit only when necessary |
-| `rules/CLINE.md` | Follow the core: commit directly, and keep no list |
-| `rules/KILO.md`, `rules/kilo/*.md` | Follow the core: commit directly, and keep no list |
-| `rules/COMMIT-SPEC.txt` | Format reference only. Matches the core, with no list |
-
 ### Formatting
 
 Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/` — 10 files in all. The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
