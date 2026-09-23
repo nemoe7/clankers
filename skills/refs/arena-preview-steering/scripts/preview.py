@@ -493,9 +493,10 @@ class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
     self.path = directory / "state.sqlite3"
-    # The save file is not the database: it outlives a restore, so by default it is written
-    # where the agent runs the command, which is the repository root (report c0fcfad9).
-    self.save_path = Path(save_path) if save_path else Path(SAVED_STATE)
+    # The save file is not the database, and it lands beside it by default: one directory the
+    # installer ignores through core.excludesFile carries both, and a sandbox restore keeps a
+    # path the repository does not ignore.
+    self.save_path = Path(save_path) if save_path else self.path.parent / SAVED_STATE
     existed = self.path.is_file()
     if not create and not existed:
       raise FileNotFoundError(f"Inbox missing: {self.path}; start the preview first")
@@ -886,8 +887,8 @@ class Store:
     page, because the owner's report answers are stored here the moment they are sent, and an
     answer that a restore drops is an answer the owner has to type again.
 
-    The file lands at the repository root and stays untracked: a
-    restore keeps the checkout, so the copy outlives the database beside it.
+    The file lands inside the state directory unless a path overrides it, so one
+    globally ignored directory carries the database and its export together.
     """
     if not isinstance(payload, dict):
       raise TypeError("Save a state object")
@@ -1661,7 +1662,7 @@ def handler(store):
 
 def main():
   parser = argparse.ArgumentParser(description=__doc__)
-  parser.add_argument("--state-dir", default="reports/arena-preview")
+  parser.add_argument("--state-dir", default="arena-state")
   parser.add_argument(
     "--reminder",
     action="store_true",
@@ -1669,8 +1670,8 @@ def main():
   )
   parser.add_argument(
     "--save-path",
-    default=SAVED_STATE,
-    help="Where the save button writes its file; untracked, and at the repository root by default",
+    default=None,
+    help="Where the save button writes its file; inside the state directory by default",
   )
   parser.add_argument(
     "--pretty",
