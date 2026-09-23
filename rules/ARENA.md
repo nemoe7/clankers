@@ -16,7 +16,7 @@
 - NEVER merge the PR without authorization; rebase merge only: rebase onto the target, then merge, so no merge commit lands.
 - On a rule collision or any doubt, stop and ask with the `ask_user` tool; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
-- NEVER edit this file or either preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
+- NEVER edit this file or the preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
 - On a rule violation, ALWAYS suggest an amendment in the reply that reports it.
 
 ## General
@@ -80,7 +80,7 @@
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, only `feat`/`fix` spec-mandated; reuse history's scopes, adding none otherwise.
 - Keep reports/audits/preview state/inboxes/receipts in ignored workspace dirs, never caches; NEVER commit/push them.
-- NEVER cite a session-local note ID in a repo file: it does not persist between sessions. Cite the durable record instead. Use `arena-preview-reporting` for longer reports, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions and republish its stable ID; multiple reports may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
+- NEVER cite a session-local note ID in a repo file: it does not persist between sessions. Cite the durable record instead. Use `arena-preview-steering` for longer reports, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions and republish its stable ID; multiple reports may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
 - Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - `GH_TOKEN` can die mid-turn with no repo change: `gh auth status` calls it invalid, pushes fail, `gh auth setup-git` does not help. Retry once, NEVER loop or ask for credentials — then block with the `ask_user` tool, not a silent end of turn; its answer is a new turn with a fresh token. Prove recovery with `git ls-remote origin <branch>` before pushing again.
 - `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.

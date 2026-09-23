@@ -45,7 +45,6 @@ EXPECTED_BUDGETS = {
   "rules/kilo/plan.md": "cl100k_base",
   "rules/COMMIT-SPEC.txt": "cl100k_base",
   "skills/arena-preview-steering/SKILL.md": "UTF-8 file size",
-  "skills/arena-preview-reporting/SKILL.md": "UTF-8 file size",
   # The distributed assets and scripts carry the minified build from `maintenance/minify.py`.
   # Their recorded size is their budget: any growth fails this check until the table is
   # updated on purpose. The `.agents/skills/` twins are byte-identical by construction, and

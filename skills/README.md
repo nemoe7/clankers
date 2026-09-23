@@ -4,8 +4,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 
 | Skill | Purpose |
 | --- | --- |
-| [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox, with persistent history and receipts |
-| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Publish multiple Markdown reports through the shared Reports tab |
+| [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox and publish rendered reports, with persistent history and receipts |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
@@ -20,7 +19,7 @@ Every skill must follow the [Agent Skills specification](https://agentskills.io/
 - The optional directories are `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` below 500 lines. Move the detail into `references/`, which the agent loads only when necessary.
 
-`skills/refs/<skill>/` holds full uncompressed baseline trees. Edit refs first, then compress `SKILL.md` into `skills/<skill>/SKILL.md` and compress or minify supporting files. Refs have no budget. Never install or distribute them. `squash` and both preview skills have baselines. `web-interface-guidelines` has none.
+`skills/refs/<skill>/` holds full uncompressed baseline trees. Edit refs first, then compress `SKILL.md` into `skills/<skill>/SKILL.md` and compress or minify supporting files. Refs have no budget. Never install or distribute them. `squash` and the preview skill have baselines. `web-interface-guidelines` has none.
 
 ## Upstream sources
 
@@ -30,7 +29,7 @@ Adapted skills record `metadata.upstream`. Update from that source, then reapply
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
-This repository maintains the other, first-party skills. `squash` and both preview skills record `metadata.origin`. `web-interface-guidelines` fetches current rules at review time, without vendoring or an update pass, and includes the upstream MIT license.
+This repository maintains the other, first-party skills. `squash` and the preview skill record `metadata.origin`. `web-interface-guidelines` fetches current rules at review time, without vendoring or an update pass, and includes the upstream MIT license.
 
 ## Install
 
@@ -65,7 +64,6 @@ After setup, ask the agent to name an installed `SKILL.md` and its conditional r
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
-| [arena-preview-steering](arena-preview-steering/SKILL.md) | Arena sessions needing mid-turn messages through the live preview |
-| [arena-preview-reporting](arena-preview-reporting/SKILL.md) | Longer rendered reports or multiple named reports in Arena |
+| [arena-preview-steering](arena-preview-steering/SKILL.md) | Arena sessions needing mid-turn messages or rendered reports through the live preview |
 
-Skills stand alone, independent of the rule files in [rules/](../rules/). This repository installs the two preview skills as siblings, and reporting uses the shared runtime of steering. Steering CLI commands need no Markdown renderer. The server requires `markdown-it-py`. Their migration reference records the former ntfy and local-report-commit procedures as historical, and neither is an automatic fallback.
+Skills stand alone, independent of the rule files in [rules/](../rules/). This repository installs the preview skill. One runtime serves messages and reports. Steering CLI commands need no Markdown renderer. The server requires `markdown-it-py`. The reference records the former ntfy and local-report-commit procedures as historical, and neither is an automatic fallback.

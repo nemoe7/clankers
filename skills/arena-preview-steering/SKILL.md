@@ -1,17 +1,17 @@
 ---
 name: arena-preview-steering
-description: Steer an Arena.ai agent mid-turn without interruption through a persistent local live-preview inbox. Owns the shared Notes / Reports server, message log, saved versus acknowledged receipts, and dark/light interface. Use in Arena Agent Mode when the user wants mid-turn steering or ARENA.md requires it; not outside Arena. Reporting uses the companion arena-preview-reporting skill and this same runtime. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
+description: Steer an Arena.ai agent mid-turn without interruption through a persistent local live-preview inbox. Owns the shared Notes / Reports server, message log, saved versus acknowledged receipts, dark/light interface and rendered Markdown reports. Use in Arena Agent Mode when the user wants mid-turn steering, a rendered report or ARENA.md requires it; not outside Arena. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
 license: MIT
-compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace files and long-lived process tools. Steering is standard-library only; reporting additionally needs markdown-it-py and the companion skill.
+compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace files and long-lived process tools. CLI steering commands are standard-library only; `serve` and rendered reports additionally need markdown-it-py.
 metadata:
   origin: first-party, maintained in this repository
-  version: "2.1.1"
+  version: "3.0.0"
   arena-only: "true"
 ---
 
 # Arena Preview Steering
 
-One server and inbox per session. Reporting shares this runtime; never start a second server for reports.
+One server and inbox per session for steering messages and reports; never start a second server.
 
 ## Setup
 
@@ -48,6 +48,14 @@ Prints **all pending messages** in full and records check time; a failed deliver
 - Read `task-list` at turn start. Before implementation, record approved work with `task <task-id> "<title>" [details ...]`; update the queue and details on scope or status changes. Put the current task first with `--order 1`; mark completion with `task <task-id> --status finished`. Use this skill's CLI and the same `--state-dir`.
 - For inbox-note or report-submission work, add `--msg-id <full-message-id>` to `task`. Task and message link share one transaction; unknown message IDs fail both writes. Linked notes show `Task added` in log receipts; report-submission links create no log messages. The marker means queued, not acknowledged or complete; still use `ack`.
 
+## Publishing reports
+
+Short reports that fit in chat stay in chat; start a report only for readable rendered Markdown, multiple report documents or answerable fields. Write each report as a UTF-8 Markdown source file under an ignored, persisted workspace directory: one source per logical subject, updated in place, several subjects coexisting. Report changes, findings, checks actually run, decisions, unresolved issues and limitations. Never claim an unrun check. Follow the target repository's line-length convention, 120 characters in Clankers.
+
+Publish with `publish <source.md> --id <id> --title <title>`, republishing the same ID after every source update; an answered report refuses a republish, so publish the update under a new ID. Installing markdown-it-py is preauthorized: keep it in the workspace venv and out of application manifests and generated requirements files. If installation fails, report it and do not claim rendered reports work. The renderer supports tables, lists, quotations, code fences, links and emphasis; raw HTML is disabled, images and other remote resources are not fetched, and neither the full GFM extension set nor syntax highlighting is available.
+
+Delivery is the live Reports tab. Keep the Markdown source as the durable artifact, tell the user which report to select and verify the actual rendered endpoint, rather than claiming that a Markdown source in the file viewer was rendered. Publishing reports never acknowledges pending steering messages. Use fields when a questionnaire needs explanation around them; a field-only source is a bare questionnaire.
+
 ## Fields in reports
 
 - ALWAYS pair each option set with a labeled custom-response field, e.g. `Custom response: ___`.
@@ -78,4 +86,4 @@ Processes, packages and URLs may disappear after a sandbox restart. After a serv
 
 If the preview fails, report it and ask how to continue in chat. Do not silently revive ntfy or local report commits. See [operation and recovery](references/REFERENCE.md).
 
-Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions. For reports, use sibling [arena-preview-reporting](../arena-preview-reporting/SKILL.md).
+Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions.
