@@ -1,5 +1,7 @@
 ## 2026-09-23
 
+**Install prose** — `skills/README.md` drops the vendor-and-version explanation from the discovery notes and keeps the constraint: check each path and its precedence against the installed release. The maintainer lead-in and the Antigravity scope note tighten to the same meaning. 4,806 → 4,696 `B` (-110). Every constraint survives: read-only installed copies, whole-folder copies, one active copy, no shell-execution syntax, and the post-setup check. The STE linter reports 0 violations.
+
 **Compression procedure** — `README.md` drops the six generic squash steps that the `squash` skill already carries: the iteration and re-measure loop, the survival list, the cut list, the structure rule and the ban on new abbreviations. The Clankers rules stay as bullets: refs first, the new, amended and removed clause budgets, restructuring as an amendment, remove words never rules, and the bookkeeping. 4,803 → 4,401 `B` (-402). The skill needs no addition, so its 1,289 `tok` row does not move, and the `README.md#compression` anchor that root `AGENTS.md` L124 cites still resolves. The STE linter reports 0 violations.
 
 **Session artifact citation** — `rules/README.md` L94 drops the report ID `minification-scope`, which does not persist between sessions, and keeps the approval: the pinned minifier manifest is the one exception on the owner's approved answers. 16,427 → 16,405 `B`. The same class left `docs/archive/budget-exceptions.md` L71 in the ledger shrink that follows.
