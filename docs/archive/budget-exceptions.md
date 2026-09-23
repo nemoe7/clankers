@@ -68,4 +68,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-23: save-state notification. `scripts/preview.py` grows 55,826 → 55,978 `B`. `scripts/check_preview.py` grows 53,947 → 54,203 `B`. The save route writes an inbox note, so the next `read` delivers it. The harness covers the note text and its unacknowledged state. Unfunded.
 
-2026-09-23: save-state clause, read-now timing and the squash fixtures table. `rules/ARENA.md` grows 13,908 → 13,984 `B`, and the root copy matches it. `skills/arena-preview-steering/SKILL.md` grows 11,099 → 11,123 `B`. `skills/squash/SKILL.md` grows 1,265 → 1,289 `tok`. One squash pass covered each new line, and no further removal was available. Unfunded.
+2026-09-23: save-state clause, read-now timing and the squash fixtures table. `rules/ARENA.md` grows 13,908 → 13,984 `B`, and the root copy matches it. `skills/arena-preview-steering/SKILL.md` lands under its 11,099 `B` baseline at 10,777 `B` after the clause-audit omissions, so it needs no exception. `skills/squash/SKILL.md` grows 1,265 → 1,289 `tok`. One squash pass covered each new line, and no further removal was available. Unfunded.
