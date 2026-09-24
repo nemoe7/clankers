@@ -19,13 +19,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 
 ## Edit a skill
 
-Edit the source under `refs/skills/`, then write the shipped copy:
-
-```bash
-python3 maintenance/check_gpt_plugins.py --update
-```
-
-The checker reports drift as a failure. An edited source without a regenerated copy breaks CI.
+Skill sources live under `refs/skills/`. Shipped copies must match them. See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
 
 ## Package
 
