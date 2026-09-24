@@ -9,6 +9,8 @@ Make the output easy to copy and paste as an agent prompt. Use plain text and Ma
 
 Do not repeat rules the agent already has.
 
+- Use `gpt-planning` for requirements and completion validation.
+
 ## Mode
 
 Use `audit` when the user asks for an independent review of existing or proposed work.
