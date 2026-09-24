@@ -49,7 +49,7 @@ body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex
 h1 { letter-spacing: -.035em; margin: 4px 0; }
 h2 { margin: 0 0 8px; }
 p, li { line-height: 1.6; }
-.topbar { flex: none; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
+.topbar { flex: none; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
 .topbar-row { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 body[data-chrome="closed"] .topbar-row { display: none; }
 nav { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; }
@@ -146,14 +146,17 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
    its boxes line up, so it takes the icon buttons' 34px and no minimum of its own. Only the width
    its four words need, so it costs the log no vertical space, and an aria-label carries the name
    instead of a visible label, on owner direction. */
-/* The native dropdown chrome is dropped so this control is built the way the icon buttons beside
-   it are — one 34px border box, one border, one radius — and a drawn caret replaces the platform
-   arrow, because the owner read the two heights as different twice. */
+/* The preview CSP blocks data images. Draw a visible dropdown caret on the wrapper without
+   changing the select's 34px box, native menu, or keyboard behavior. */
+.filter-wrap { position: relative; display: inline-flex; flex: none; }
+.filter-wrap::after {
+  content: ""; position: absolute; top: 50%; right: 7px; transform: translateY(-50%);
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 5px solid var(--muted); pointer-events: none;
+}
 #log-filter {
   flex: 0 0 auto; width: auto; max-width: 8em; height: 34px; min-height: 0;
-  padding: 0 20px 0 6px; line-height: 32px; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23909090'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 6px center; background-size: 9px 5px;
+  padding: 0 24px 0 6px; line-height: 32px; appearance: none;
 }
 #copy-report, #refresh-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
@@ -199,7 +202,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .raw-message { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message .report p { white-space: normal; }
 .question { margin: 14px 0; }
-.question input[type="text"] { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+.question textarea.answer-text { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
 .options { display: flex; flex-direction: column; gap: 4px; }
 .option { display: flex; align-items: baseline; gap: 8px; font-weight: 400; margin: 0; }
 .option textarea { flex: 1; width: auto; min-width: 0; min-height: 0; padding: 4px 8px; }
@@ -209,7 +212,9 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .tasks-layout { display: flex; flex-direction: column; gap: 18px; }
 .task-div { min-width: 0; overflow-wrap: anywhere; }
 .task-list { margin: 0; padding-left: 20px; }
-.task-title { font-weight: 600; }
+.task-title { cursor: pointer; }
+.task-title[data-copied="good"] { color: var(--dot-said); }
+.task-title[data-copied="bad"] { color: #ef4444; }
 /* Details sit under the title in the muted face as a real list, and repeat in the row hover. */
 .tasks-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .task-details { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
@@ -217,6 +222,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-detail-list { margin: 2px 0 0; padding-left: 18px; }
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
+.question-id { display: block; margin-bottom: 4px; }
 /* The Uploads tab shows what the server holds: the file as stored, and a record that outlives it. */
 .uploads-layout { display: flex; flex-direction: column; gap: 12px; }
 .uploads-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
