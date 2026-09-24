@@ -36,7 +36,7 @@
               <p id="last-check" class="muted">Not checked yet.</p>
             </div>
             <span class="row tight">
-              <select id="log-filter" aria-label="Filter the message log by state"><option value="all">All</option><option value="sent">Sent</option><option value="seen">Seen</option><option value="said">Said</option></select>
+              <span class="filter-wrap"><select id="log-filter" aria-label="Filter the message log by state"><option value="all">All</option><option value="sent">Sent</option><option value="seen">Seen</option><option value="said">Said</option></select></span>
               <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages" title="Refresh messages">↻</button>
               <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer" title="Hide composer">✎</button>
             </span>
@@ -76,6 +76,7 @@
           <button id="report-submit" type="submit" hidden>Send answers</button>
           <p id="report-receipt" class="receipt" role="status" hidden></p>
         </form>
+        <p id="report-agent-ack" class="receipt" role="status" aria-live="polite" hidden></p>
         <small>Answers are sent to the agent inbox as one note and acknowledged like any note. Resending creates a new answer.</small>
       </div>
     </section>

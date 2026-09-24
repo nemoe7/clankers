@@ -114,9 +114,9 @@ def parse_fields(markdown):
 	if questions:Store.validate_fields(questions)
 	return blocks,questions
 def field_html(question):
-	prompt=html.escape(question['prompt'],quote=True);body=f'<div class="question" data-field="{html.escape(question["id"],quote=True)}"';body+=f' data-type="{question["type"]}">'
-	if question['type']=='text':return f'{body}<input type="text" maxlength="2000" placeholder="Answer" aria-label="{prompt}"></div>'
-	control='radio'if question['type']=='choice'else'checkbox';group=f'<div class="options" role="group" aria-label="{prompt}">';name=html.escape(question['id'],quote=True)
+	prompt=html.escape(question['prompt'],quote=True);name=html.escape(question['id'],quote=True);body=f'<div class="question" data-field="{name}"';body+=f' data-type="{question["type"]}">';body+=f'<small class="question-id">Question ID: <code>{name}</code></small>'
+	if question['type']=='text':return f'{body}<textarea class="answer-text" rows="2" maxlength="2000" placeholder="Answer" aria-label="{prompt}"></textarea></div>'
+	control='radio'if question['type']=='choice'else'checkbox';group=f'<div class="options" role="group" aria-label="{prompt}">'
 	for option in question['options']:
 		value=html.escape(option,quote=True);checked=' checked'if option in question['default']else'';label=custom_label(option)
 		if label is None:group+=f'<label class="option"><input type="{control}" name="{name}" value="{value}"{checked}> {html.escape(option)}</label>';continue
@@ -239,9 +239,9 @@ class Store:
 	def state(self):
 		tasks=self.tasks()
 		with closing(self.connect())as db:
-			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[dict(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')]
+			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[dict(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')];latest_answers={row['report_id']:row for row in db.execute('SELECT id, report_id, at, acknowledged_at FROM submissions ORDER BY seq')}
 			for report in reports:
-				answered=report.pop('answered')
+				answered=report.pop('answered');latest=latest_answers.get(report['id']);report['latest_answer_id']=latest['id']if latest else None;report['latest_answer_at']=clip_stamp(latest['at'])if latest else None;report['latest_answer_acknowledged_at']=clip_stamp(latest['acknowledged_at'])if latest else None
 				try:report['needs_answer']=bool(parse_fields(report.pop('markdown'))[1])and not answered
 				except ValueError as error:report['needs_answer']=True;report['field_error']=str(error)
 			uploads=self.uploads();fetch_jobs=self.fetch_jobs()
