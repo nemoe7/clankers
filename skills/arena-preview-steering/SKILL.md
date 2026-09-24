@@ -23,7 +23,7 @@ Use one server and one state directory per session; do not start a second server
    ```
 
    After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting; ask them to reload after restart. If another service owns the port, choose a free one without stopping it.
-4. Name the preview in chat. At first setup, publish one fielded visibility question as soon as the preview starts; offer its status, a recommended answer, and the external-channel option. If the preview is unavailable, use `ask_user` instead. Continue independent work while the owner answers, but block preview-dependent work until visibility is confirmed. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running, then `read` it after the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
+4. Name the preview in chat. At first setup, ask one `ask_user` visibility question once the preview starts: Yes, No, ntfy, Continue without steering. Block non-setup work until answered. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running, then `read` it after the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
 
 ## Read, acknowledge, and track work
 
@@ -33,7 +33,7 @@ python <skill>/scripts/preview.py --state-dir arena-state read
 
 When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call.
 
-Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. Receipt is not completion.
+Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. Receipt is not completion. After acking a work note, add it via `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
 
 ```bash
 python <skill>/scripts/preview.py --state-dir arena-state ack <id> --reply <markdown>
