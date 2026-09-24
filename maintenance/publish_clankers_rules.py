@@ -48,6 +48,8 @@ def collect_sources(workspace: Path) -> tuple[dict[str, str], dict[str, list[str
       raise ValueError(
         f"Gists cannot store an empty source: {paths[0].relative_to(workspace)}"
       )
+    if paths[0].relative_to(rules).as_posix() == "README.md":
+      name = "#clankers-rules.md"
     desired[name] = content
   return desired, collisions
 
