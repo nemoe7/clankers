@@ -3,7 +3,7 @@ ALWAYS think longer before answering; for non-trivial work, show the steps you t
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when the task requires it.
 Add tests only when requested or necessary to verify the change.
-Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome: ask only then.
+Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
 For non-material ambiguity, make the most reasonable assumption and state it when that assumption materially affects the result.
 Ask before implementing rather than after, when the answer would change scope, data, interfaces, or outcome.
 NEVER block an unattended run on a question: a scheduled task or automation agent records the question in its output and proceeds on the most reasonable assumption, stated as such.
@@ -26,8 +26,8 @@ NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 When a test is appropriate, prefer a failing test first.
 NEVER weaken a test to pass.
 
-FORMAT: 2-space indentation.
-Python projects: use Ruff with its default rule selection.
+FORMAT: repositories owned by `nemoe7`; other repositories follow their own conventions. 2-space indentation.
+Python projects: use Ruff with its default rule selection from the project's `ruff.toml`; when none exists, create one with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
 Markdown: markdownlint defaults + MD060, MD013 off.
 
 GITHUB: ALWAYS PR.
