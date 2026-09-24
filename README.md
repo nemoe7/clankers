@@ -32,7 +32,7 @@ Latest measurements as of 2026-09-24. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 35,471 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 7,583 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 11,565 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 63,626 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 63,666 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 2,621 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
