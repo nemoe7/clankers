@@ -21,7 +21,7 @@ EXPECTED = {
   "CLINE.md",
   "COMMIT-SPEC.txt",
   "KILO.md",
-  "README.md",
+  "#clankers-rules.md",
   "kilo-code.md",
   "kilo-debug.md",
   "kilo-plan.md",
@@ -136,7 +136,7 @@ with tempfile.TemporaryDirectory() as tmp:
   assert gh.run(root) == "abcdef123456"
   assert gh.gist_id == "abcdef123456"
   assert gh.gist["files"] == {
-    "README.md": {"content": "Root README\n"},
+    "#clankers-rules.md": {"content": "Root README\n"},
     "a.md": {"content": "original\n"},
     "nested-a.txt": {"content": multiline},
   }
@@ -147,6 +147,12 @@ with tempfile.TemporaryDirectory() as tmp:
   assert len(gh.operations) == before + 1 and gh.operations[-1][0] == "GET", (
     "no-op sync"
   )
+
+  gh.gist["files"]["README.md"] = {"content": "legacy root README\n"}
+  gh.run(root)
+  assert gh.operations[-1][2]["files"] == {
+    "README.md": None,
+  }, "legacy Gist README is removed"
 
   write(root, "a.md", "changed\n")
   write(root, "new.md", "new\n")
@@ -159,7 +165,7 @@ with tempfile.TemporaryDirectory() as tmp:
     "new.md": {"content": "new\n"},
     "nested-a.txt": None,
   }
-  assert set(gh.gist["files"]) == {"README.md", "a.md", "new.md"}
+  assert set(gh.gist["files"]) == {"#clankers-rules.md", "a.md", "new.md"}
   (root / "rules/a.md").unlink()
   write(root, "refs/a.md", "moved into excluded refs\n")
   gh.run(root)
@@ -182,8 +188,8 @@ with tempfile.TemporaryDirectory() as tmp:
   (root / "rules/README.md").unlink()
   (root / "rules/new.md").unlink()
   gh.run(root)
-  assert set(gh.gist["files"]) == {"folder-a.md"}
-  assert gh.operations[-1][2]["files"] == {"README.md": None, "new.md": None}
+  assert set(gh.gist["files"]) == {"#clankers-rules.md", "folder-a.md"}
+  assert gh.operations[-1][2]["files"] == {"#clankers-rules.md": None, "new.md": None}
   (root / "rules/folder/a.md").unlink()
   (root / "rules/folder-a.md").unlink()
   assert gh.run(root) is None and gh.gist is None and gh.gist_id is None
@@ -227,9 +233,9 @@ with tempfile.TemporaryDirectory() as tmp:
   assert gh.operations[-1][2]["files"] == {"renamed.md": None}, (
     "becoming a nested README excludes and removes the old filename"
   )
-  gh.gist["files"]["README.md"]["truncated"] = True
+  gh.gist["files"]["#clankers-rules.md"]["truncated"] = True
   gh.run(root)
-  assert gh.operations[-1][2]["files"] == {"README.md": {"content": "root\n"}}
+  assert gh.operations[-1][2]["files"] == {"#clankers-rules.md": {"content": "root\n"}}
 
 with tempfile.TemporaryDirectory() as tmp:
   root = Path(tmp)
