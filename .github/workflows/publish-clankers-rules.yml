@@ -1,0 +1,33 @@
+name: Publish clankers rules to Gist
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rules/**'
+      - '!rules/refs/**'
+
+# A later main push supersedes an older pending run; never interrupt a running reconciliation.
+concurrency:
+  group: publish-clankers-rules-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pushed rules
+        uses: actions/checkout@v4
+      - name: Check reconciliation fixtures without GitHub credentials
+        run: python3 maintenance/check_publish_clankers_rules.py
+      - name: Reconcile secret clankers-rules Gist
+        # GIST_TOKEN needs Gists:write and repository Variables:write. The default
+        # GITHUB_TOKEN is used only by checkout; it cannot manage repository variables.
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ vars.GIST_ID }}
+        run: python3 maintenance/publish_clankers_rules.py
