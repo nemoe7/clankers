@@ -60,7 +60,7 @@ jobs:
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||")
+                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vFx README.md)
                 [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
                 rm -rf "$work/$skill_dest"
                 for f in $files; do
@@ -95,7 +95,7 @@ jobs:
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||")
+                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vFx README.md)
                 have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
                 want=$(printf '%s\n' $files | sort)
                 [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
