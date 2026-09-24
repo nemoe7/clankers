@@ -19,7 +19,7 @@ Latest measurements as of 2026-09-24. `maintenance/check.py` measures ARENA.md b
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,540 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 14,100 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 14,325 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,495 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,495 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 501 `tok` |
@@ -28,11 +28,11 @@ Latest measurements as of 2026-09-24. `maintenance/check.py` measures ARENA.md b
 | `rules/kilo/debug.md` | `cl100k_base` | 272 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 119 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,205 `B` |
+| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,424 `B` |
 | `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 37,255 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,091 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 11,775 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 65,926 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 66,014 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 2,621 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
