@@ -484,8 +484,9 @@ async function refreshState() {
   } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
     stateBusy = false;
-    if (queueReady && (lastState.fetch_jobs || []).some(item => item.status === 'queued'
-      || (item.status === 'fetching' && Date.parse(item.lease_until) <= Date.now()))) {
+    if (queueReady && (lastState.fetch_jobs || []).some(item => item.approval === 'approved'
+      && (item.status === 'queued'
+        || (item.status === 'fetching' && Date.parse(item.lease_until) <= Date.now())))) {
       void pumpFetchQueue();
     }
   }
@@ -1148,7 +1149,7 @@ function downloadRow(item) {
   url.textContent = item.url;
   const meta = document.createElement('span');
   meta.className = 'fetch-meta';
-  meta.textContent = `${item.status} · ${item.allow_proxy ? 'proxy opt-in' : 'direct only'}`
+  meta.textContent = `${item.approval === 'denied' ? 'denied' : item.status} · ${item.allow_proxy ? 'proxy opt-in' : 'direct only'}`
     + (item.source ? ` · ${item.source}` : '')
     + (item.size == null ? '' : ` · ${bytes(item.size)} · ${item.sha256.slice(0, 12)}`);
   row.append(url, meta);
@@ -1156,21 +1157,23 @@ function downloadRow(item) {
     const error = document.createElement('span');
     error.textContent = item.error;
     row.append(error);
-    const retry = document.createElement('button');
-    retry.type = 'button';
-    retry.textContent = 'Retry same URL';
-    retry.addEventListener('click', async () => {
-      retry.disabled = true;
-      try {
-        await request(`/api/fetch-jobs/${item.id}/retry`, {
-          method: 'POST', headers: writeHeaders('application/json'), body: '{}'
-        });
-        $('#fetch-status').textContent = `Queued ${item.url} again.`;
-        await refreshState();
-      } catch (failure) { $('#fetch-status').textContent = `Retry failed: ${failure.message}`; }
-      finally { retry.disabled = false; }
-    });
-    row.append(retry);
+    if (item.approval !== 'denied') {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.textContent = 'Retry same URL';
+      retry.addEventListener('click', async () => {
+        retry.disabled = true;
+        try {
+          await request(`/api/fetch-jobs/${item.id}/retry`, {
+            method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+          });
+          $('#fetch-status').textContent = `Queued ${item.url} again.`;
+          await refreshState();
+        } catch (failure) { $('#fetch-status').textContent = `Retry failed: ${failure.message}`; }
+        finally { retry.disabled = false; }
+      });
+      row.append(retry);
+    }
   }
   if (item.status === 'saved') {
     const where = document.createElement('span');
@@ -1181,15 +1184,65 @@ function downloadRow(item) {
   }
   return row;
 }
+function approvalRow(item) {
+  const row = document.createElement('li');
+  row.className = 'download-row';
+  const url = document.createElement('span');
+  url.className = 'fetch-url';
+  url.textContent = item.url;
+  const meta = document.createElement('span');
+  meta.className = 'fetch-meta';
+  meta.textContent = `Agent request · ${item.allow_proxy ? 'proxy opt-in' : 'direct only'}`;
+  const actions = document.createElement('div');
+  actions.className = 'row tight fetch-decisions';
+  const buttons = ['approve', 'deny'].map(action => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = action === 'approve' ? 'Approve' : 'Deny';
+    label(button, `${button.textContent} download of ${item.url}`);
+    button.addEventListener('click', async () => {
+      buttons.forEach(control => { control.disabled = true; });
+      try {
+        await request(`/api/fetch-jobs/${item.id}/${action}`, {
+          method: 'POST', headers: writeHeaders('application/json'), body: '{}', retryOnFailure: false
+        });
+        $('#fetch-status').textContent = action === 'approve'
+          ? `Approved ${item.url}; queued for browser download.`
+          : `Denied ${item.url}; this request will not be downloaded.`;
+      } catch (error) {
+        $('#fetch-status').textContent = `Decision not confirmed: ${error.message}. Check the list before trying again.`;
+      } finally {
+        await refreshState(); // A lost response may still have decided the request.
+        buttons.forEach(control => { control.disabled = false; });
+      }
+    });
+    return button;
+  });
+  actions.append(...buttons);
+  row.append(url, meta, actions);
+  return row;
+}
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);
   if (signature === fetchSignature) return;
   fetchSignature = signature;
-  $('#fetch-list').replaceChildren(...jobs.map(item => downloadRow(item)));
-  const active = jobs.filter(item => item.status === 'queued' || item.status === 'fetching').length;
-  $('#fetch-count').textContent = jobs.length
-    ? `${jobs.length} URL${jobs.length === 1 ? '' : 's'} in history; ${active} queued or active.`
+  const pending = jobs.filter(item => item.approval === 'pending');
+  const history = jobs.filter(item => item.approval !== 'pending');
+  const pip = $('#downloads-pip');
+  pip.hidden = pending.length === 0;
+  pip.title = pending.length ? `${pending.length} download${pending.length === 1 ? '' : 's'} awaiting approval`
+    : 'No downloads awaiting approval';
+  pip.setAttribute('aria-label', pip.title);
+  $('#fetch-approvals').replaceChildren(...pending.map(item => approvalRow(item)));
+  $('#fetch-approval-count').textContent = pending.length
+    ? `${pending.length} request${pending.length === 1 ? '' : 's'} awaiting approval.`
+    : 'No requests awaiting approval.';
+  $('#fetch-list').replaceChildren(...history.map(item => downloadRow(item)));
+  const active = history.filter(item => item.status === 'queued' || item.status === 'fetching').length;
+  const count = history.length
+    ? `${history.length} URL${history.length === 1 ? '' : 's'} in history; ${active} queued or active.`
     : 'No downloads queued yet.';
+  $('#fetch-count').textContent = count + (pending.length ? ` ${pending.length} awaiting approval.` : '');
 }
 
 async function fetchRemote(job) {

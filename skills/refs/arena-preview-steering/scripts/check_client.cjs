@@ -177,7 +177,7 @@ const context = {
       const payload = JSON.parse(options.body);
       const record = {
         id: `fetch-${queuedCalls.length + 1}`, url: payload.url, allow_proxy: payload.allow_proxy,
-        status: 'queued', source: null, error: null, name: null, size: null, sha256: null,
+        status: 'queued', approval: 'approved', source: null, error: null, name: null, size: null, sha256: null,
         file: null, present: false, at: '2026-09-22T00:00:00+00:00'
       };
       queuedCalls.push({ ...record });
@@ -186,7 +186,7 @@ const context = {
       return response(record);
     }
     if (url === '/api/fetch-jobs/claim') {
-      const record = [...state.fetch_jobs].reverse().find(item => item.status === 'queued');
+      const record = [...state.fetch_jobs].reverse().find(item => item.status === 'queued' && item.approval === 'approved');
       if (!record) return response({ job: null });
       record.status = 'fetching';
       return response({ job: { ...record, claim: `claim-${record.id}` } });
@@ -196,6 +196,14 @@ const context = {
       const action = actionWithQuery.split('?')[0];
       const record = state.fetch_jobs.find(item => item.id === id);
       if (!record) return response({ error: 'No queued download' }, false);
+      if (action === 'approve' || action === 'deny') {
+        if (record.approval !== 'pending' || record.status !== 'queued') {
+          return response({ error: 'Request already decided' }, false);
+        }
+        record.approval = action === 'approve' ? 'approved' : 'denied';
+        if (action === 'deny') { record.status = 'failed'; record.error = 'Denied in the preview'; }
+        return response(record);
+      }
       if (action === 'result') {
         resultCalls.push({ url, body: options.body, source: options.headers['X-Fetch-Source'] });
         record.status = 'saved';
@@ -213,6 +221,7 @@ const context = {
         record.error = JSON.parse(options.body).error;
         failedCalls.push({ id, error: record.error });
       } else if (action === 'retry') {
+        if (record.approval !== 'approved') return response({ error: 'Only approved downloads can be retried' }, false);
         record.status = 'queued';
         record.error = null;
       }
@@ -1270,6 +1279,49 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     }
     throw new Error('Browser queue did not settle');
   };
+  const approvalButton = (url, label) => {
+    const row = get('#fetch-approvals').children.find(item => item.children[0].textContent === url);
+    return row?.children.at(-1).children.find(item => item.textContent === label);
+  };
+  const requested = 'https://files.example.org/review.zip';
+  state.fetch_jobs = [{ id: 'agent-1', url: requested, allow_proxy: false, status: 'queued',
+    approval: 'pending', source: null, error: null, size: null, file: null, present: false }];
+  await tick(); // The preceding file-send completion can still be finishing its state poll.
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#downloads-pip').hidden, false, 'a pending request lights the Downloads dot');
+  assert.equal(get('#downloads-pip').attributes['aria-label'], '1 download awaiting approval');
+  assert.equal(get('#fetch-approvals').children.length, 1);
+  assert.ok(approvalButton(requested, 'Approve') && approvalButton(requested, 'Deny'));
+  assert.equal(get('#fetch-list').children.length, 0, 'pending requests appear in their own section');
+  assert.match(get('#fetch-count').textContent, /1 awaiting approval/);
+  assert.equal(remoteCalls.length, 0, 'polling must not claim or fetch an unapproved URL');
+  get('#downloads-tab').events.click();
+  assert.equal(get('#downloads-pip').hidden, false, 'opening Downloads cannot dismiss a pending decision');
+  await approvalButton(requested, 'Approve').events.click();
+  await waitFor(() => state.fetch_jobs[0].status === 'saved');
+  assert.equal(get('#downloads-pip').hidden, true);
+  assert.equal(remoteCalls.at(-1).url, requested, 'an approval queues a normal browser fetch');
+  assert.equal(get('#fetch-list').children.length, 1);
+  const deniedURL = 'https://files.example.org/denied.zip';
+  state.fetch_jobs.unshift({ id: 'agent-2', url: deniedURL, allow_proxy: true, status: 'queued',
+    approval: 'pending', source: null, error: null, size: null, file: null, present: false });
+  const fetchedBeforeDeny = remoteCalls.length;
+  await get('#refresh-notes').events.click();
+  assert.equal(get('#downloads-pip').hidden, false);
+  await approvalButton(deniedURL, 'Deny').events.click();
+  assert.equal(state.fetch_jobs[0].approval, 'denied');
+  assert.equal(state.fetch_jobs[0].status, 'failed');
+  assert.equal(get('#downloads-pip').hidden, true);
+  assert.equal(remoteCalls.length, fetchedBeforeDeny, 'denial never starts the browser worker');
+  assert.equal(get('#fetch-approvals').children.length, 0);
+  assert.match(get('#fetch-list').children[0].children[1].textContent, /denied/);
+  assert.equal(get('#fetch-list').children[0].children.some(item => item.textContent === 'Retry same URL'), false);
+  state.fetch_jobs = [];
+  await get('#refresh-notes').events.click();
+  get('#notes-tab').events.click();
+  resultCalls.length = 0;
+  remoteCalls.length = 0;
+
   get('#fetch-url').value = 'http://example.org/unsafe.zip';
   await get('#fetch-form').events.submit(event({}));
   assert.match(get('#fetch-status').textContent, /Only HTTPS/);

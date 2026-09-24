@@ -13,7 +13,7 @@
         <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes <span id="notes-pip" role="img" aria-label="Unread edited reply" title="Unread edited reply" hidden></span></button>
         <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-pip" role="img" aria-label="No unread report" title="No unread report" hidden></span></button>
         <button type="button" role="tab" id="tasks-tab" aria-controls="tasks-panel" aria-selected="false" tabindex="-1">Tasks</button>
-        <button type="button" role="tab" id="downloads-tab" aria-controls="downloads-panel" aria-selected="false" tabindex="-1">Downloads</button>
+        <button type="button" role="tab" id="downloads-tab" aria-controls="downloads-panel" aria-selected="false" tabindex="-1">Downloads <span id="downloads-pip" role="img" aria-label="No downloads awaiting approval" title="No downloads awaiting approval" hidden></span></button>
       </nav>
       <span class="row tight">
         <span id="clock" class="muted" title="Local time">--:--</span>
@@ -112,7 +112,12 @@
             </div>
             <label class="fetch-opt-in" for="fetch-proxy"><input id="fetch-proxy" type="checkbox">If direct access fails, try AllOrigins then CodeTabs for this URL</label>
           </form>
-          <p class="muted">Up to 50,000,000 bytes per URL. Direct access can fail due to CORS. Proxy fallback shares the URL with those services only when selected for that job. Keep this browser page open while transfers run. SQLite retains queued records across server restarts. A restore can remove saved bytes.</p>
+          <p class="muted">Up to 50,000,000 bytes per URL. Direct access can fail due to CORS. Proxy fallback shares the URL with those services only when selected for that job. Keep this browser page open while transfers run. SQLite retains queued records across server restarts. A restore can remove saved bytes. URLs entered here queue immediately; agent requests need an Approve click below.</p>
+          <section class="fetch-approval" aria-labelledby="fetch-approval-title">
+            <h3 id="fetch-approval-title">Agent requests · approval needed</h3>
+            <p id="fetch-approval-count" class="muted" role="status">No requests awaiting approval.</p>
+            <ol id="fetch-approvals" class="task-list"></ol>
+          </section>
           <p id="fetch-count" class="muted" role="status">No downloads queued yet.</p>
           <p id="fetch-status" role="status" aria-live="polite"></p>
           <ol id="fetch-list" class="task-list"></ol>

@@ -1411,6 +1411,7 @@ with tempfile.TemporaryDirectory() as queue_dir:
     auth = {"Content-Type": "application/json", "X-Preview-Token": token}
     assert request("GET", "/api/fetch-jobs")[0] == 404
     assert request("GET", "/downloads/file.zip")[0] == 404
+    assert 'id="downloads-pip"' in page and 'id="fetch-approvals"' in page
     assert request("POST", "/api/fetch-jobs", "{}")[0] == 403
     assert (
       request("POST", "/api/fetch-jobs", "{}", {"X-Preview-Token": token})[0] == 415
@@ -1434,6 +1435,43 @@ with tempfile.TemporaryDirectory() as queue_dir:
       )[0]
       == 400
     )
+    # An agent CLI request is visible, but no browser worker can claim it before the preview
+    # receives an Approve click. The owner-entered HTTP form below still queues immediately.
+    command = [sys.executable, preview.__file__, "--state-dir", str(queue_store.path.parent)]
+    agent_request = subprocess.run(
+      [*command, "download-request", "https://example.org/review.zip#fragment", "--allow-proxy"],
+      capture_output=True, text=True, check=True,
+    )
+    pending = json.loads(agent_request.stdout)
+    assert pending["url"] == "https://example.org/review.zip"
+    assert pending["allow_proxy"] is True and pending["approval"] == "pending"
+    assert pending["status"] == "queued" and "claim" not in pending
+    assert queue_store.claim_fetch() is None
+    assert json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"] is None
+    assert json.loads(request("GET", "/api/state")[2])["fetch_jobs"][0]["approval"] == "pending"
+    approve = f"/api/fetch-jobs/{pending['id']}/approve"
+    assert request("POST", approve, "{}", {"Content-Type": "application/json"})[0] == 403
+    assert request("POST", approve, "{}", auth)[0] == 200
+    assert request("POST", approve, "{}", auth)[0] == 409, "a second click must not decide twice"
+    assert request("POST", f"/api/fetch-jobs/{pending['id']}/deny", "{}", auth)[0] == 409
+    approved = queue_store.claim_fetch()
+    assert approved["id"] == pending["id"] and approved["approval"] == "approved"
+    queue_store.fail_fetch(pending["id"], approved["claim"], "Test browser unavailable")
+    denied = queue_store.enqueue_fetch("https://example.org/no.zip", False, pending=True)
+    assert request("POST", f"/api/fetch-jobs/{denied['id']}/deny", "{}", auth)[0] == 200
+    assert request("POST", f"/api/fetch-jobs/{denied['id']}/retry", "{}", auth)[0] == 409
+    assert request("POST", f"/api/fetch-jobs/{denied['id']}/approve", "{}", auth)[0] == 409
+    assert queue_store.claim_fetch() is None
+    reopened = preview.Store(queue_store.path.parent).fetch_jobs()
+    assert reopened[0]["approval"] == "denied" and reopened[0]["status"] == "failed"
+    assert reopened[0]["error"] == "Denied in the preview"
+    assert queue_store.state()["notes"] == [], "denial should not claim or save bytes"
+    bad_request = subprocess.run(
+      [*command, "download-request", "http://example.org/unsafe"],
+      capture_output=True, text=True,
+    )
+    assert bad_request.returncode != 0 and "HTTPS" in bad_request.stderr
+
     status, _, queued = request(
       "POST",
       "/api/fetch-jobs",
@@ -1572,6 +1610,44 @@ with tempfile.TemporaryDirectory() as queue_dir:
     app.shutdown()
     app.server_close()
     worker.join()
+
+# Upgrading an existing queue must not strand owner-entered jobs. Conflicting decisions from two
+# preview tabs must not turn a denied request back into an approved one.
+with tempfile.TemporaryDirectory() as old_queue_dir:
+  old_db = Path(old_queue_dir) / "state.sqlite3"
+  with sqlite3.connect(old_db) as connection:
+    connection.executescript("""
+      CREATE TABLE fetch_jobs (
+        seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, url TEXT NOT NULL,
+        allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),
+        status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),
+        claim TEXT, lease_until TEXT, error TEXT, source TEXT,
+        name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,
+        at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      INSERT INTO fetch_jobs (id, url, allow_proxy, status, at, updated_at)
+      VALUES ('older', 'https://example.org/older.zip', 0, 'queued',
+        '2026-09-22T00:00:00+00:00', '2026-09-22T00:00:00+00:00');
+    """)
+  upgraded = preview.Store(old_queue_dir)
+  assert upgraded.fetch_jobs()[0]["approval"] == "approved"
+  assert upgraded.claim_fetch()["id"] == "older"
+  racing = upgraded.enqueue_fetch("https://example.org/race.zip", False, pending=True)
+  def decide(choice):
+    try:
+      return upgraded.decide_fetch(racing["id"], choice)
+    except preview.FetchChanged as error:
+      return error
+  with ThreadPoolExecutor(max_workers=2) as pool:
+    outcomes = list(pool.map(decide, ("approved", "denied")))
+  assert sum(isinstance(item, preview.FetchChanged) for item in outcomes) == 1
+  assert upgraded.fetch_jobs()[0]["approval"] in {"approved", "denied"}
+  try:
+    upgraded.decide_fetch(racing["id"], "pending")
+    raise AssertionError("An invalid decision was accepted")
+  except ValueError:
+    pass
+
 # The default save file sits inside the state directory, so one globally ignored directory carries
 # the database and its export, and an explicit path still wins.
 with tempfile.TemporaryDirectory() as default_dir:
