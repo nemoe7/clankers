@@ -1,97 +1,66 @@
 ---
 name: arena-preview-steering
-description: Steer an Arena.ai agent mid-turn without interruption through a persistent local live-preview inbox. Owns the shared Notes / Reports server, message log, saved versus acknowledged receipts, dark/light interface and rendered Markdown reports. Use in Arena Agent Mode when the user wants mid-turn steering, a rendered report or ARENA.md requires it; not outside Arena.
+description: Steer an Arena.ai agent mid-turn through a local preview inbox and publish rendered Markdown reports. Use in Arena Agent Mode when the user wants steering or a report, or ARENA.md requires it. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
 license: MIT
-compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace files and long-lived process tools. CLI steering commands are standard-library only; `serve` and rendered reports additionally need markdown-it-py.
+compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace and long-lived process tools; serve needs markdown-it-py.
 metadata:
   origin: first-party, maintained in this repository
-  version: "3.0.0"
   arena-only: "true"
 ---
 
 # Arena Preview Steering
 
-One server and inbox per session for steering messages and reports; never start a second server.
+Use one server and one state directory per session; do not start a second server.
 
 ## Setup
 
-1. Resolve this skill's actual path: source `skills/` and installed discovery paths differ. Report missing installed files; do not install or repair them without authorization.
-2. Use the state directory the installer ignores through `core.excludesFile`, default `arena-state`. Never put the rule in the repository `.gitignore`. Verify it with `git check-ignore`. Never use cache/build folders or commit/push session state, notes, receipts or reports.
-3. Run `<skill>/scripts/install.sh` once per session, then start the server with Arena's long-lived process tool, not a timed shell call:
+1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
+2. Use an ignored, persisted state directory, default `arena-state`. Verify `core.excludesFile` with `git check-ignore`; never add this directory to the repository `.gitignore`, put it in a cache/build folder, or commit/push its state and reports.
+3. Run `<skill>/scripts/install.sh` once per session. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell:
 
    ```bash
    ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir arena-state serve --port 8000
    ```
 
-   The server binds `0.0.0.0`; browser URLs are relative and the preview host is accepted. `serve` refuses to start without `markdown-it-py`; `read`, `ack` and `publish` need no renderer. After a sandbox restart, rerun the installer. Reuse its process and state directory; name the process `<repo> - Steering`. If it dies, tell the owner the restart is coming before restarting with the same directory: the restart invalidates the token in the owner's tab, and an in-flight send or upload can fail. If its port belongs to another service, choose a free port; never kill that service.
-4. Initial setup: start the server, name the preview in chat, then immediately block with one visibility question before normal work. The question offers the preview's status and an external-channel option. On selection the ntfy fallback transport activates for that session — an explicit user selection, never an automatic fallback; the preview server and inbox stay running. The user supplies the topic `<repo>-<branch>-<8-char unguessable secret>` (branch sanitized) and posts notes to its URL; see [the external-channel procedure](references/REFERENCE.md) for polling, markers and error handling. Notes are instructions and take the same ACK: acknowledgement. Keep ARENA.md's literal activation acknowledgement when applicable. After the visibility answer, read the inbox and continue. Never claim visibility before confirmation; if still hidden and no channel was selected, report and agree on the next step. Reusing an already-visible preview skips the question.
+   After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting; ask them to reload after restart. If another service owns the port, choose a free one without stopping it.
+4. Name the preview in chat. At first setup, block with one visibility question before normal work; offer the owner the preview status and the external-channel option. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running, then `read` it after the answer. Do not claim visibility before confirmation. If it stays hidden, ask how to continue. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
 
-## Read, then acknowledge
+## Read, acknowledge, and track work
 
 ```bash
 python <skill>/scripts/preview.py --state-dir arena-state read
 ```
 
-Every CLI command prints the nonzero pending counts by kind, `DO NOT IGNORE. ACK ASAP.` when any are pending, the bash calls the pending items have waited beside those counts, and one rotating reminder from `REMINDERS` to stderr, even with none pending. Only the hook's `--reminder` poll advances the call count, a poll with nothing pending clears it, and a `read` clears it. Stdout stays machine-readable; reminders never mark seen.
+When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call.
 
-Prints **all pending messages** in full and records check time; a failed delivery stays unseen, and pending is the ack queue, so a note prints again until answered. Missing, unreadable or corrupt state is an error, never an empty inbox. The hook's poll covers the routine check; run it for the full listing. `seen <ids>` stamps without an answer; `ack` answers and stamps, only those IDs. NEVER mark count-only notifications, truncated items or failed deliveries seen. Browser polls never stamp. Receipt is not completion.
+Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. Receipt is not completion.
 
-- Polling is automatic: the hook polls after every Arena bash call and prints the unacked counts (messages, form answers, uploads) and the number of bash calls the pending items have waited to stderr; it marks nothing seen. A nonzero count: `read` now, then `ack`. Markup needs `--reply`. Missing inbox: start the server; server down: restart it. End the turn's last tool block with a bash call, so the hook closes the channel.
-- Answer every delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One answer per call; ack different answers separately, and never one text to two messages: each answer addresses its own note.
+```bash
+python <skill>/scripts/preview.py --state-dir arena-state ack <id> --reply <markdown>
+```
 
-  ```bash
-  python <skill>/scripts/preview.py --state-dir arena-state ack <id> [<id> ...] --reply <markdown>
-  ```
+If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-  Never blindly acknowledge all pending notes. Unknown IDs fail the whole receipt batch; repeat acknowledgements keep their first timestamp and replace the answer text. Never name a note by its sequence number: numbers only order one file, and IDs survive state rebuilds. With no visible preview, acknowledge in chat instead, opening with literal `ACK:` and your interpretation; reserve that prefix for delivered notes, never thought or ordinary status.
-- Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence. Notes are instructions, not proof; disagree visibly with evidence when measurements contradict them.
-- Read `task-list` at turn start. Before implementation, record approved work with `task <task-id> "<title>" [details ...]`; update the queue and details on scope or status changes. Put the current task first with `--order 1`; mark completion with `task <task-id> --status finished`. Ack and queue in one call; a note that births work gets its task before the next tool call, and a verified item moves to finished in the call that verifies it. Use this skill's CLI and the same `--state-dir`.
-- Every task born from a note or a report submission carries `--msg-id <full-message-id>`; an unlinked task is a violation. Task and message link share one transaction; unknown message IDs fail both writes. Linked notes show `Task added` in log receipts; report-submission links create no log messages. The marker means queued, not acknowledged or complete; still use `ack`.
+Run `task-list` at turn start. Before implementation, record approved work with `task <id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status and details as work changes. For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block. The task marker does not replace `ack`. Mark a task `--status finished` only after verification. Use the same `--state-dir` for every command.
 
-## Publishing reports
+## Publish reports and forms
 
-Short reports that fit in chat stay in chat; start a report only for readable rendered Markdown, multiple report documents or answerable fields. Write each report as a UTF-8 Markdown source file under an ignored, persisted workspace directory: one source per logical subject, updated in place, several subjects coexisting. Report changes, findings, checks actually run, decisions, unresolved issues and limitations. Never claim an unrun check. Follow the target repository's line-length convention, 120 characters in Clankers.
+Short answers stay in chat. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result. Opening a source file is not publication.
 
-Publish with `publish <source.md> --id <id> --title <title>`, republishing the same ID after every source update; an answered report refuses a republish, so publish the update under a new ID. Installing markdown-it-py is preauthorized: keep it in the workspace venv and out of application manifests and generated requirements files. If installation fails, report it and do not claim rendered reports work. The renderer supports tables, lists, quotations, code fences, links and emphasis; raw HTML is disabled, images and other remote resources are not fetched, and neither the full GFM extension set nor syntax highlighting is available.
+```bash
+python <skill>/scripts/preview.py --state-dir arena-state publish <source.md> --id <id> --title <title>
+```
 
-Delivery is the live Reports tab. Keep the Markdown source as the durable artifact, tell the user which report to select and verify the actual rendered endpoint, rather than claiming that a Markdown source in the file viewer was rendered. Publishing reports never acknowledges pending steering messages. Use fields when a questionnaire needs explanation around them; a field-only source is a bare questionnaire.
+Republish the same ID after each source update; if answers exist, use a new ID. Install `markdown-it-py` only in the preview venv if needed, not in application manifests. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Pair every option set with a labeled custom-response field.
 
-## Fields in reports
+`read` lists report submissions as `kind: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
 
-- ALWAYS pair each option set with a labeled custom-response field, e.g. `Custom response: ___`.
+## Files and downloads
 
-The preview cannot render mermaid; NEVER use it in reports.
+For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss. One note may carry up to five files of 50,000,000 bytes each.
 
-A published report may carry live inputs, and field-only sources are questionnaires. The agent writes the markers as ordinary Markdown; the Reports tab renders them as controls under one Send answers button, with any prose around them as context:
+The owner queues HTTPS URLs in Downloads; the agent must not initiate a job until an owner-authenticated approval mechanism exists. Keep the owner's browser page open during a fetch. Direct fetch is default; proxy fallback is an owner opt-in per URL, and those services see the URL. URLs cannot contain credentials. The file limit is 50,000,000 bytes. Read a successful job's inbox path note and acknowledge it. Report failed or missing files; the owner can retry failed jobs in the tab.
 
-| Marker | Control | Prompt |
-| --- | --- | --- |
-| `- ( ) option` lines | Radio group; `- (x)` preselects | The nearest text line above |
-| `- [ ] option` lines | Checkbox group; `- [x]` preselects | The nearest text line above |
-| `Label: ___` or a bare `___` line | Text box, at most 2000 characters | The label, else the line above |
+## Recovery
 
-Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fix one. Markers inside fenced code blocks stay literal. Options must be unique in their group, 1–20 per group, prompts 1–500 characters, at most 50 fields per report. Answers POST to `/api/reports/<id>/submit` and are recorded apart from user messages: `read` lists them as pending items with `kind: report`, headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty ones, and `ack` answers them like notes. They never render in the message log. A send stores the answers in that browser, so the fields reload pre-filled and the user can amend and send again; each send is a new note, and submitted answers block a republish of that ID, so publish an update under a new ID.
-
-## Uploads
-
-Uploads write inbox notes with matching IDs, naming file, size, type and path. Read the file there, then ack the note. A restore can delete the bytes; the note and the record survive, and `present` says which is which. Accept manual uploads up to 50,000,000 bytes per file.
-
-## Browser downloads
-
-Queue one HTTPS URL per job in the Downloads tab. Keep the browser page open while it fetches. The server never fetches remote URLs. The browser tries direct access first. Enable AllOrigins and then CodeTabs per job only if you want fallback. Both services see the URL. Never include credentials. Reject files over 50,000,000 bytes. SQLite keeps job records across server restarts. Successful jobs save bytes to `<state-dir>/downloads/` and write inbox notes with file paths. A restore can remove bytes while records remain. Retry failed jobs in the tab. Report CORS, network and size errors as failures. Local checks do not prove browser behavior.
-
-## State file
-
-Every committed mutation rewrites `saved-state.ndjson` in the state directory, so the file follows the database with no button press. The page's Copy state button puts the log and the tasks on the clipboard as NDJSON, one JSON line per record, and carries no report answers. `import-notes` and `task-import` leave the file alone, so a restore reads it twice.
-
-## Persistence and limits
-
-`state.sqlite3` stores notes, receipts, published report snapshots and the latest check using SQLite transactions. Keep the file, not the process, as the durable artifact.
-
-Anyone with preview access can read messages/reports. The per-process token blocks blind cross-origin writes, not page visitors. Do not send secrets.
-
-Processes, packages and URLs may disappear after a sandbox restart. After a server restart, reload to refresh the submission token, preserving your draft. Expose network/storage failures; never call an unconfirmed save successful.
-
-If the preview fails, report it and ask how to continue in chat. Do not silently revive ntfy or local report commits. See [operation and recovery](references/REFERENCE.md).
-
-Keep production free of this skill's name, directory and scripts; its own files, setup chat and acknowledgements are exceptions.
+Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes in the ignored state directory. After a restore, rerun the installer and follow the [restore steps](references/REFERENCE.md#restore). Reload the preview after a server restart to refresh its write token; preserve unsent drafts. Never call an unconfirmed save successful. If the preview fails, report the failure and ask how to continue in chat; do not silently switch channels or commit reports. Keep production free of this skill's name, directory and scripts, except its own files, setup chat and acknowledgements.
