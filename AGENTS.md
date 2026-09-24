@@ -70,7 +70,7 @@ Read these first:
 
 ## Reports and approval
 
-- Propose before editing: report the intended change as a table with `Current`, `Amended`, and `Reason` columns, one row per changed line, citing its line number; truncate a long line but never omit it. A fielded report carries the same table above its fields; a form with no table is not a proposal.
+- Before editing, show a `Current`, `Amended`, `Reason` table with one file:line row per changed line. Quote both versions verbatim. For long lines, omit only unchanged context with `...`. Never omit changed words or paraphrase. Put the table above form fields. A form without it is not a proposal.
 A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-steering` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
 - NEVER commit or push report artifacts.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
