@@ -87,7 +87,7 @@ python3 -m pip install markdown-it-py tiktoken
 
 `--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 maintenance/check_measurements.py`.
 
-The checker is maintenance tooling. Reporting uses `markdown-it-py` at runtime, steering only the standard library. The reporting skill documents approved venv setup without consuming-application dependencies.
+The checker is maintenance tooling.
 
 ## Minified assets and scripts
 
@@ -114,7 +114,7 @@ python3 maintenance/check_gpt_plugins.py            # report drift, write nothin
 python3 maintenance/check_gpt_plugins.py --update   # write the shipped copies from refs
 ```
 
-The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, both skill names, the Agent Skills frontmatter limits, and the collection tree. `gpt-plugins/README.md` documents the collection and never ships.
+The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, shipped skill names, the Agent Skills frontmatter limits, and the collection tree. `gpt-plugins/README.md` documents the collection and never ships.
 
 `--archive <zip>` compares a packaged archive with the collection. The archive must carry `plugin.json` and `skills/` only, with byte-identical content, so `refs/` never ships. `.github/workflows/package-gpt-plugins.yml` runs both checks and publishes `gpt-plugins.zip` directly.
 
