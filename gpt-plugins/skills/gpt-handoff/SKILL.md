@@ -1,6 +1,6 @@
 ---
 name: gpt-handoff
-description: "Independently audit agent work or draft a new-work handoff. Use Ponytail or SOLID when relevant."
+description: "MUST use for audits or reviews of agent-produced work (including code and human-facing docs), agent-created branches, agent-created PRs, agent-created commits, agent implementations, and follow-up audits of previously reviewed agent work. Draft new-work handoffs on request. For code audits, always use Ponytail; use SOLID only when necessary. For human-facing docs audits, always use Ponytail."
 ---
 
 Create a compact, actionable handoff for the next agent.
@@ -13,9 +13,17 @@ Do not repeat rules the agent already has.
 
 Use `audit` when the user asks for an independent review of existing or proposed work.
 
+MUST activate `audit` for reviews of agent-produced work (including code and human-facing docs), agent-created branches, agent-created PRs, agent-created commits, agent implementations, and follow-up audits of previously reviewed agent work.
+
+For code audits, MUST follow: GPT Handoff audit → Ponytail code audit/review → GPT Handoff final output.
+
+For human-facing docs audits, MUST follow: GPT Handoff audit → Ponytail docs audit/review → GPT Handoff final output.
+
 Use `handoff` when the user asks for implementation direction or a plan.
 
 Use the user's requested outcome over repository state.
+
+Do not activate GPT Handoff for ordinary non-agent tasks without an audit, review, or handoff request.
 
 ## Work type
 
@@ -36,17 +44,19 @@ Independently verify enough context to assess requirements, implementation, proj
 
 For existing work, identify defects, missed requirements, unnecessary complexity, missing verification, and scope issues.
 
+For human-facing docs audits, use `docs:` for actionable findings.
+
 For new work, define required behavior, affected areas, the simplest viable design, minimum checks, and material open questions.
 
 Do not invent requirements.
 
 ## Design
 
-Use **Ponytail** for unnecessary complexity, abstraction, indirection, duplication, dependencies, or speculative flexibility.
+MUST use **Ponytail** for code audits and human-facing docs audits, including work in agent-created branches, PRs, commits, and implementations, to assess unnecessary complexity, abstraction, indirection, duplication, dependencies, and speculative flexibility.
 
 Use **SOLID** when necessary structure improves responsibility, coupling, or changeability.
 
-Do not apply either mechanically.
+Do not apply Ponytail findings or SOLID recommendations mechanically.
 
 Prefer existing patterns and the simpler design when requirements permit.
 
@@ -109,11 +119,15 @@ Do not repeat:
 - existing agent rules
 - instructions already known to the next agent
 
-Do not create a task prompt or audit setup. The next agent already has the original task context.
+NEVER include audit setup, scope, exclusions, methodology, task restatement, repository summaries, standalone audit prose, or task prompts. The next agent already has the original task context.
 
 Do not output a standalone review, audit report, explanation, or meta-commentary around the handoff.
 
-When another skill supplies findings, analysis, or a format, use its analysis as input. The GPT Handoff format owns the final output format. Do not reproduce the other skill's standalone report or setup.
+Use another skill's findings and analysis as input only.
+
+When active, MUST use only GPT Handoff's final output format.
+
+NEVER replace that format or append another skill's report format, setup, or sections.
 
 Keep findings directly actionable. Prefer the applicable finding labels:
 
@@ -122,6 +136,8 @@ Keep findings directly actionable. Prefer the applicable finding labels:
 Omit anything that does not apply.
 
 Do not produce a separate summary.
+
+Before responding, check that only the active mode's permitted sections remain, with no banned audit text or other skill format, and end with `audit-by:` or `handoff-by:` plus the actual model identifier, never the placeholder.
 
 Do not modify files.
 
