@@ -14,7 +14,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 | Skill | Purpose |
 | --- | --- |
 | [gpt-quirks](skills/gpt-quirks/SKILL.md) | Apply verified GPT and connected tool quirks when they are relevant |
-| [gpt-handoff](skills/gpt-handoff/SKILL.md) | Audit agent work independently, or draft a new-work handoff |
+| [gpt-handoff](skills/gpt-handoff/SKILL.md) | Audit agent work and human-facing docs. Use Ponytail for code and docs audits. Own the final format or draft a handoff. |
 
 ## Edit a skill
 
