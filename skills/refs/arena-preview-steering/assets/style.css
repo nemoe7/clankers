@@ -52,8 +52,8 @@ p, li { line-height: 1.6; }
 .topbar { flex: none; position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
 .topbar-row { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 body[data-chrome="closed"] .topbar-row { display: none; }
-nav { display: flex; gap: 8px; }
-nav button { min-width: 100px; border-color: var(--tab-border); }
+nav { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; }
+nav button { min-width: 100px; flex: none; border-color: var(--tab-border); }
 /* nav button outranks the global :focus-visible, so focus needs its own rule here. */
 nav button:focus-visible { border-color: var(--focus); }
 nav [aria-selected="true"] { background: var(--bubble); }
@@ -62,7 +62,7 @@ nav [aria-selected="true"] { background: var(--bubble); }
 #report-pip, #notes-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
-#notes-panel, #reports-panel, #tasks-panel { overflow-y: auto; }
+#notes-panel, #reports-panel, #tasks-panel, #uploads-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 .log-card { flex: 1 1 auto; min-height: 200px; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
 .log-card > .row:first-child { margin-block: 0; }
@@ -78,7 +78,7 @@ body[data-composer="closed"] .compose { display: none; }
 body[data-chrome="closed"] .topbar { justify-content: flex-end; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
 label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 8px; }
-button, select, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
+button, select, textarea, input[type="url"] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
 button { padding: 7px 11px; min-height: 36px; cursor: pointer; }
 button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
@@ -228,3 +228,15 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .upload-meta, .upload-where, .upload-gone { color: var(--muted); font-size: 13px; }
 .upload-where { font-family: ui-monospace, monospace; }
 .upload-gone { font-style: italic; }
+/* The browser moves one queued HTTPS file at a time; long URLs and errors must wrap. */
+.downloads-layout { max-width: 900px; margin: auto; display: flex; flex-direction: column; gap: 12px; }
+.downloads-layout h2, .downloads-layout p { margin: 0; }
+.fetch-controls { justify-content: flex-start; margin: 0 0 10px; }
+.fetch-controls input { flex: 1 1 260px; min-width: 0; min-height: 40px; padding: 8px 10px; }
+.fetch-opt-in { display: flex; gap: 8px; align-items: baseline; font-weight: 400; }
+.fetch-opt-in input { flex: none; }
+.download-row { padding: 10px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.download-row > * { display: block; }
+.download-row .fetch-url { font-family: ui-monospace, monospace; font-size: 13px; }
+.download-row .fetch-meta { color: var(--muted); font-size: 13px; }
+.download-row button { margin-top: 6px; }

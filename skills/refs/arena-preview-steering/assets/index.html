@@ -14,6 +14,7 @@
         <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-pip" role="img" aria-label="No unread report" title="No unread report" hidden></span></button>
         <button type="button" role="tab" id="tasks-tab" aria-controls="tasks-panel" aria-selected="false" tabindex="-1">Tasks</button>
         <button type="button" role="tab" id="uploads-tab" aria-controls="uploads-panel" aria-selected="false" tabindex="-1">Uploads</button>
+        <button type="button" role="tab" id="downloads-tab" aria-controls="downloads-panel" aria-selected="false" tabindex="-1">Downloads</button>
       </nav>
       <span class="row tight">
         <span id="clock" class="muted" title="Local time">--:--</span>
@@ -107,8 +108,25 @@
           </span>
         </div>
         <p id="upload-status" class="muted" role="status"></p>
-        <p id="uploads-note" class="muted">Each file goes beside the preview database as it is, up to 1,000,000 bytes; the record keeps the name, the type, the size and the hash. A record survives a restore of the preview state, and its bytes do not: a row whose file is gone says so instead of opening nothing.</p>
+        <p id="uploads-note" class="muted">Each file goes beside the preview database as it is, up to 50,000,000 bytes; the record keeps the name, type, size and hash. A record survives a restore of the preview state, and its bytes do not: a row whose file is gone says so.</p>
         <ul id="uploads-list" class="task-list"></ul>
+      </div>
+    </section>
+    <section id="downloads-panel" role="tabpanel" aria-labelledby="downloads-tab" hidden>
+      <div class="card downloads-layout">
+        <h2>Browser download queue</h2>
+        <form id="fetch-form">
+          <label for="fetch-url">HTTPS file URL</label>
+          <div class="row fetch-controls">
+            <input id="fetch-url" type="url" maxlength="2048" autocomplete="off" placeholder="https://example.org/file.zip" required>
+            <button id="fetch-add" type="submit">Queue URL</button>
+          </div>
+          <label class="fetch-opt-in" for="fetch-proxy"><input id="fetch-proxy" type="checkbox">If direct access fails, try AllOrigins then CodeTabs for this URL</label>
+        </form>
+        <p class="muted">Up to 50,000,000 bytes per URL. Direct access can fail due to CORS. Proxy fallback shares the URL with those services only when selected for that job. Keep this browser page open while transfers run. SQLite retains queued records across server restarts. A restore can remove saved bytes.</p>
+        <p id="fetch-count" class="muted" role="status">No downloads queued yet.</p>
+        <p id="fetch-status" role="status" aria-live="polite"></p>
+        <ol id="fetch-list" class="task-list"></ol>
       </div>
     </section>
   </main>

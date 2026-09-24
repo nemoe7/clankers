@@ -9,10 +9,10 @@ import sqlite3
 import sys
 import uuid
 from contextlib import closing,contextmanager
-from datetime import datetime,timezone
+from datetime import datetime,timedelta,timezone
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs,urlsplit
+from urllib.parse import parse_qs,urlsplit,urlunsplit
 try:import markdown_it;HAS_RENDERER=True
 except ImportError:HAS_RENDERER=False
 ASSETS=Path(__file__).resolve().parents[1]/'assets'
@@ -22,8 +22,11 @@ MAX_NOTE=15000
 MAX_SUBMISSION=150000
 MAX_BODY=96000
 MAX_SUBMISSION_BODY=1000000
-MAX_UPLOAD=1000000
+MAX_UPLOAD=50000000
+MAX_FETCH=50000000
+FETCH_LEASE=timedelta(minutes=5)
 UPLOAD_DIR='uploads'
+FETCH_DIR='downloads'
 FENCE=re.compile('^ {0,3}(`{3,}|~{3,})')
 CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
@@ -146,7 +149,19 @@ def upload_name(name):
 	cleaned=Path(str(name or'')).name.strip()
 	if not cleaned:raise ValueError('An upload needs a file name')
 	if len(cleaned)>200:raise ValueError('A file name must be 200 characters or fewer')
+	if any(ord(char)<32 or ord(char)==127 for char in cleaned):raise ValueError('A file name must not contain control characters')
 	return cleaned
+def fetch_url(value):
+	if not isinstance(value,str)or not value.strip()or len(value)>2048:raise ValueError('Enter one HTTPS URL of at most 2048 characters')
+	value=value.strip()
+	if any(ord(char)<33 or ord(char)==127 for char in value):raise ValueError('A download URL must not contain spaces or control characters')
+	try:
+		parsed=urlsplit(value)
+		if parsed.scheme.lower()!='https'or not parsed.hostname or parsed.port==0:raise ValueError('Only HTTPS download URLs are allowed')
+		if parsed.username is not None or parsed.password is not None:raise ValueError('Do not put credentials in a download URL')
+	except ValueError as error:raise ValueError(f"Invalid HTTPS download URL: {error}")from error
+	return urlunsplit(parsed._replace(fragment=''))
+def fetch_row(row,directory):item=dict(row);item.pop('claim',None);item['allow_proxy']=bool(item['allow_proxy']);file=item['file'];path=directory/FETCH_DIR/file if file else None;item['path']=str(path)if path else None;item['present']=bool(path and path.is_file());return item
 def upload_type(content_type):cleaned=str(content_type or'').split(';')[0].strip()[:120];return cleaned or'application/octet-stream'
 def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];return dict(row)|{'path':str(path),'present':path.exists()}
 def cli_json(value,pretty=False):
@@ -180,13 +195,14 @@ def render_report(markdown):
 		else:parts.append(field_html(item))
 	return''.join(parts),questions
 class ReportChanged(ValueError):pass
+class FetchChanged(ValueError):pass
 class Store:
 	def __init__(self,directory,create=False,save_path=None):
 		directory=Path(directory).resolve();self.path=directory/'state.sqlite3';self.save_path=Path(save_path)if save_path else self.path.parent/SAVED_STATE;existed=self.path.is_file()
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}; start the preview first")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
-			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
+			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
 			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'origin'in columns:db.execute('ALTER TABLE notes DROP COLUMN origin');columns.discard('origin')
@@ -228,14 +244,14 @@ class Store:
 				answered=report.pop('answered')
 				try:report['needs_answer']=bool(parse_fields(report.pop('markdown'))[1])and not answered
 				except ValueError as error:report['needs_answer']=True;report['field_error']=str(error)
-			uploads=self.uploads()
-			for item in notes+reports+uploads:
+			uploads=self.uploads();fetch_jobs=self.fetch_jobs()
+			for item in notes+reports+uploads+fetch_jobs:
 				for key in('at','acknowledged_at','ack_edited_at','seen_at','updated_at'):
 					if key in item:item[key]=clip_stamp(item[key])
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'last_check':clip_stamp(meta.get('last_check'))}
+			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'last_check':clip_stamp(meta.get('last_check'))}
 	def tasks(self):
 		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id").fetchall()
 		records=[task_row(row)for row in rows]
@@ -313,6 +329,55 @@ class Store:
 		cleaned=upload_name(name);upload_id=new_id();directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True);target=directory/f"{upload_id}{Path(cleaned).suffix[:16]}";target.write_bytes(bytes(data));stamp=now()
 		with self.transaction()as db:db.execute('INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)',(upload_id,cleaned,upload_type(content_type),len(data),hashlib.sha256(bytes(data)).hexdigest(),target.name,stamp));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return upload_row(row,self.path.parent)
+	def fetch_jobs(self):
+		with closing(self.connect())as db:rows=db.execute('SELECT * FROM fetch_jobs ORDER BY seq DESC').fetchall()
+		return[fetch_row(row,self.path.parent)for row in rows]
+	def enqueue_fetch(self,url,allow_proxy):
+		url=fetch_url(url)
+		if not isinstance(allow_proxy,bool):raise TypeError('Proxy fallback must be true or false for this URL')
+		job_id,stamp=new_id(),now()
+		with self.transaction(autosave=False)as db:db.execute("INSERT INTO fetch_jobs (id, url, allow_proxy, status, at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?)",(job_id,url,int(allow_proxy),stamp,stamp));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		return fetch_row(row,self.path.parent)
+	def claim_fetch(self):
+		stamp=now()
+		with self.transaction(autosave=False)as db:
+			db.execute("UPDATE fetch_jobs SET status = 'queued', claim = NULL, lease_until = NULL, error = 'Browser stopped; queued again', updated_at = ? WHERE status = 'fetching' AND lease_until <= ?",(stamp,stamp));row=db.execute("SELECT id FROM fetch_jobs WHERE status = 'queued' ORDER BY seq LIMIT 1").fetchone()
+			if row is None:return None
+			job_id=row['id'];claim=secrets.token_urlsafe(24);lease=(datetime.now(timezone.utc)+FETCH_LEASE).isoformat();db.execute("UPDATE fetch_jobs SET status = 'fetching', claim = ?, lease_until = ?, error = NULL, updated_at = ? WHERE id = ?",(claim,lease,stamp,job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		return fetch_row(row,self.path.parent)|{'claim':claim}
+	def claimed_fetch(self,db,job_id,claim):
+		identifier(job_id);row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		if row is None:raise FileNotFoundError('No queued download with that ID')
+		if row['status']!='fetching'or not isinstance(claim,str)or not secrets.compare_digest(row['claim']or'',claim)or not row['lease_until']or row['lease_until']<=now():raise FetchChanged('Download claim expired; refresh the queue and try again')
+		return row
+	def renew_fetch(self,job_id,claim):
+		with self.transaction(autosave=False)as db:self.claimed_fetch(db,job_id,claim);lease=(datetime.now(timezone.utc)+FETCH_LEASE).isoformat();db.execute('UPDATE fetch_jobs SET lease_until = ? WHERE id = ?',(lease,job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		return fetch_row(row,self.path.parent)
+	def fail_fetch(self,job_id,claim,error):
+		message=str(error).strip()[:1000]or'The browser could not fetch this URL'
+		with self.transaction(autosave=False)as db:self.claimed_fetch(db,job_id,claim);db.execute("UPDATE fetch_jobs SET status = 'failed', error = ?, claim = NULL, lease_until = NULL, updated_at = ? WHERE id = ?",(message,now(),job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		return fetch_row(row,self.path.parent)
+	def retry_fetch(self,job_id):
+		identifier(job_id)
+		with self.transaction(autosave=False)as db:
+			row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+			if row is None:raise FileNotFoundError('No queued download with that ID')
+			if row['status']not in{'queued','failed'}:raise FetchChanged('Only a failed download can be queued again')
+			db.execute("UPDATE fetch_jobs SET status = 'queued', error = NULL, updated_at = ? WHERE id = ?",(now(),job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		return fetch_row(row,self.path.parent)
+	def complete_fetch(self,job_id,claim,name,content_type,source,data):
+		if not data or len(data)>MAX_FETCH:raise ValueError(f"A download must be 1–{MAX_FETCH:,} bytes")
+		if source not in{'direct','allorigins','codetabs'}:raise ValueError('Unknown download source')
+		cleaned=upload_name(name);file_type=upload_type(content_type);target=None
+		try:
+			with self.transaction(autosave=False)as db:
+				row=self.claimed_fetch(db,job_id,claim)
+				if source!='direct'and not row['allow_proxy']:raise ValueError('Proxy fallback was not enabled for this URL')
+				directory=self.path.parent/FETCH_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448);target=directory/f"{job_id}{Path(cleaned).suffix[:16]}";target.write_bytes(data);target.chmod(384);stamp=now();db.execute("UPDATE fetch_jobs SET status = 'saved', source = ?, name = ?, type = ?, size = ?, sha256 = ?, file = ?, error = NULL, claim = NULL, lease_until = NULL, updated_at = ? WHERE id = ?",(source,cleaned,file_type,len(data),hashlib.sha256(data).hexdigest(),target.name,stamp,job_id));message=f"Download: {cleaned} ({len(data)} B, {file_type}) from {urlsplit(row['url']).hostname} via {source} saved to {target}";db.execute('INSERT INTO notes (id, text, at) VALUES (?, ?, ?)',(job_id,message,stamp));result=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+		except Exception:
+			if target is not None:target.unlink(missing_ok=True)
+			raise
+		self.autosave();return fetch_row(result,self.path.parent)
 	def import_tasks(self,records,replace=False,autosave=True):
 		if not isinstance(records,list):raise TypeError('Import a list of task objects')
 		prepared=[]
@@ -472,7 +537,7 @@ def handler(store):
 	class Handler(BaseHTTPRequestHandler):
 		def setup(self):super().setup();self.connection.settimeout(15)
 		def reply(self,status,body,content_type='application/json; charset=utf-8',filename=None):
-			data=body if isinstance(body,(bytes,bytearray))else body.encode('utf-8');self.send_response(status);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'")
+			data=body if isinstance(body,(bytes,bytearray))else body.encode('utf-8');self.send_response(status);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Content-Security-Policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self' https:; base-uri 'none'; form-action 'self'")
 			if filename:self.send_header('Content-Disposition',f'attachment; filename="{filename}"')
 			self.end_headers();self.wfile.write(data)
 		def problem(self,status,error):self.reply(status,json.dumps({'error':str(error)}))
@@ -507,25 +572,37 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);upload_post=path=='/api/uploads'
-			if path not in{'/api/notes','/api/markdown'}and not report_submit and not report_seen and not upload_post:self.problem(404,'Not found');return
+			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry)',path);upload_post=path=='/api/uploads';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
+			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not upload_post and not fetch_post:self.problem(404,'Not found');return
 			supplied=self.headers.get('X-Preview-Token','').encode('utf-8')
 			if not secrets.compare_digest(supplied,token.encode('ascii')):self.problem(403,'Reload the preview, then retry; your draft is kept');return
-			if self.headers.get('Content-Type')!='application/json'and not upload_post:self.problem(415,'Expected application/json');return
+			if self.headers.get('Content-Type')!='application/json'and not(upload_post or fetch_result):self.problem(415,'Expected application/json');return
 			try:
-				length=int(self.headers.get('Content-Length','0'));limit=MAX_UPLOAD if upload_post else MAX_BODY if not report_submit else MAX_SUBMISSION_BODY
+				length=int(self.headers.get('Content-Length','0'));limit=MAX_UPLOAD if upload_post else MAX_FETCH if fetch_result else MAX_SUBMISSION_BODY if report_submit else MAX_BODY
 				if not 0<length<=limit:
-					subject='An upload is'if upload_post else'Report answers are'if report_submit else'Note body is';bound=MAX_UPLOAD+1 if upload_post else MAX_SUBMISSION_BODY+1;remaining=length if 0<length<=bound else 0
+					subject='Upload'if upload_post else'Download'if fetch_result else'Request body';remaining=length if 0<length<=limit+1 else 0
 					while remaining>0:
 						chunk=self.rfile.read(min(65536,remaining))
 						if not chunk:break
 						remaining-=len(chunk)
-					self.problem(413,f"{subject} empty or too large");return
+					self.problem(413,f"{subject} must be 1–{limit:,} bytes");return
 				data=self.rfile.read(length)
 				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
 				if upload_post:name=parse_qs(urlsplit(self.path).query).get('name',[''])[0];record=store.save_upload(name,self.headers.get('Content-Type',''),data);record['at']=clip_stamp(record['at']);store.note(record['id'],f"Upload: {record['name']} ({record['size']} B, {record['type']or'unknown type'}) saved to {record['path']}");self.reply(201,json.dumps(record,ensure_ascii=False));return
+				if fetch_result:
+					name=parse_qs(urlsplit(self.path).query).get('name',[''])[0];record=store.complete_fetch(fetch_post.group(1),self.headers.get('X-Fetch-Claim',''),name,self.headers.get('Content-Type',''),self.headers.get('X-Fetch-Source',''),data)
+					for key in('at','updated_at'):record[key]=clip_stamp(record[key])
+					self.reply(201,json.dumps(record,ensure_ascii=False));return
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
+				if path=='/api/fetch-jobs':record=store.enqueue_fetch(payload.get('url'),payload.get('allow_proxy',False));self.reply(201,json.dumps(record,ensure_ascii=False));return
+				if path=='/api/fetch-jobs/claim':self.reply(200,json.dumps({'job':store.claim_fetch()},ensure_ascii=False));return
+				if fetch_post:
+					job_id,action=fetch_post.groups()
+					if action=='renew':record=store.renew_fetch(job_id,self.headers.get('X-Fetch-Claim',''))
+					elif action=='fail':record=store.fail_fetch(job_id,self.headers.get('X-Fetch-Claim',''),payload.get('error',''))
+					else:record=store.retry_fetch(job_id)
+					self.reply(200,json.dumps(record,ensure_ascii=False));return
 				if path=='/api/markdown':self.reply(200,render(note_text(payload.get('text')),breaks=True),'text/html; charset=utf-8');return
 				if report_seen:
 					report=store.mark_report_seen(report_seen.group(1))
@@ -538,7 +615,7 @@ def handler(store):
 				note=store.note(payload.get('id'),payload.get('text'))
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 				self.reply(201,json.dumps(note,ensure_ascii=False))
-			except ReportChanged as error:self.problem(409,error)
+			except(ReportChanged,FetchChanged)as error:self.problem(409,error)
 			except FileNotFoundError as error:self.problem(404,error)
 			except(ValueError,TypeError,UnicodeDecodeError)as error:self.problem(400,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
