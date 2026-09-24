@@ -6,9 +6,9 @@ Rules, skills, and workflows for AI agents.
 - [skills/](skills/README.md): UI reviews, text compression, and a shared Arena steering/reporting preview. Each skill has `SKILL.md` and supporting files. 
 - [workflows/](workflows/README.md): portable workflows, currently [init-docs](workflows/init-docs.md) for downstream user and agent docs. The README defines the required format. 
 - [automations/](automations/DAILIES.md): recurring prompts, currently combined daily monitoring through ChatGPT scheduled tasks. Each self-contained Markdown prompt runs in one pass and supplies state/evidence rules because runtime state is unreliable. 
-- [maintenance/](maintenance/README.md): validation and README measurement tooling, requiring `markdown-it-py` and `tiktoken`. 
-- [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines. Amend refs first, then compress only new or affected lines into live files. 
-- [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines. Amend here first, then squash the live `SKILL.md`. 
+- [maintenance/](maintenance/README.md): validation, synchronization, and README measurement tooling, requiring `markdown-it-py` and `tiktoken`. 
+- [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines. 
+- [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines. 
 
 `rules/apply.py` copies the global rule files. `apply.bat` runs it on Windows. 
 
@@ -45,12 +45,4 @@ Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 
-Use the [`squash` skill](skills/squash/SKILL.md) against these budgets. The skill carries the method: measure, pass, re-measure, and keep only a pass that improves the budget. It also carries the survival list: every negation, condition, command, number, threshold, filename and caveat. 
-
-- Amend `rules/refs/` first, then compress only new or affected lines into live files. Refs remain uncompressed. 
-- New clause: squash only that new line. Amended clause: squash only the affected line. Removed clause: attempt one squash and keep the lower budget. 
-- Restructuring is an amendment, so make it in refs first. Keep the section headings and order the baseline already has. 
-- Remove words, never rules. 
-- Update the budgets table above, record notable reductions in [CHANGELOG.md](CHANGELOG.md), and record a growth accepted rather than funded in [docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md). 
-
-[docs/archive/budget-exceptions.md](docs/archive/budget-exceptions.md) records growth the owner accepted rather than funded, with dates, numbers and reasons. This page holds only the Clankers compression rules and the current measurements. 
+Use the [`squash` skill](skills/squash/SKILL.md) for compression. See [maintenance/README.md](maintenance/README.md) for repository-specific budget and synchronization procedures.

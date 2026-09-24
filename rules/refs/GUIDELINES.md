@@ -4,15 +4,14 @@ AGENTS.md is not a system prompt. It is a user-owned rules file that many differ
 
 ## 1. What AGENTS.md is
 
-1. A portable Markdown file at the project root. Many agents read it: Kilo, Claude Code, Codex, and others.
-2. In Kilo, the root file loads at session start. Per-directory files load on demand when the agent touches that directory, and arrive wrapped in `<system-reminder>` tags.
-3. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works.
+1. A portable Markdown file at the project root. Different agents load it through different harnesses.
+2. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works.
 
 ## 2. Threat model
 
 Write AGENTS.md against four failure modes.
 
-1. **Compaction.** Summarization can drop or dilute your rules. Mitigation: short file, atomic rules, and tool support that carries the file through compaction (see `kilo/enforce-rules-plugin/`).
+1. **Compaction.** Summarization can drop or dilute your rules. Mitigation: keep the file short and atomic.
 2. **Dilution.** The harness piles skills, plugins, and reminders around your text. Mitigation: declare precedence inside the file.
 3. **Contradiction.** The agent's own system prompt may push the opposite behavior. Mitigation: scope your rules. Do not fight the persona on style. Fight on facts, commands, and boundaries.
 4. **Staleness.** The file rots faster than code. Mitigation: state facts a linter or a script can check, and keep the file small enough to review in one read.
