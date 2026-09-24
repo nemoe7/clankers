@@ -22,7 +22,9 @@ NEVER simplify away validation, data-loss handling, security, or accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.
 NEVER invent an API/requirement, hide a failure, or claim an unrun check.
-When a test is appropriate, prefer a failing test first.
+When a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck.
+Test public interfaces and integration boundaries; reuse the project's existing frameworks, fixtures, helpers, and conventions.
+No speculative behavior or tests; trivial one-liners need no test; mechanical-only changes get proportional verification.
 NEVER weaken a test to pass.
 
 FORMAT: repositories owned by `nemoe7`; other repositories follow their own conventions. 2-space indentation.
