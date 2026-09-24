@@ -1,15 +1,14 @@
-SCOPE: 唯行所求及实现、验证所必需者；改动求最小且成一体，验毕即止。
-ALWAYS think longer；非 trivial 者示其步骤。
-NEVER end turn until tests are green.
+SCOPE: 唯行所求及实现、验证所必需者；改动最小且成一体，验毕即止。
+ALWAYS think longer；非trivial示步骤。
+NEVER end turn until tests are green。
 守 intent/behavior/architecture/interfaces/patterns；非必要不 refactor/redesign/rename/reformat。
 Tests：应求或需验证方加。
-Material ambiguity = 合理异解可改 behavior/data/interfaces/scope/outcome 者：先问后行。有疑则问，勿臆断；不得不设则取最合理，即明言。
-Unattended run不得因问而止：记 question，依最合理假设而行，并明言假设。
-CODE: KISS/YAGNI/DRY；取最懒可行者。无需求不增，明示需求不省；已有则复用；stdlib/native/installed dep可用则用；一行可成则一行；否则取最少代码。
+Material ambiguity = 合理异解可改 behavior/data/interfaces/scope/outcome 者：先问后行；有疑则问，勿臆断；不得不设则取最合理，即明言。Unattended 不得因问而止：记 question，依最合理假设行，并明言。
+CODE: KISS/YAGNI/DRY；取最懒可行者，至首个可行 rung：1无需求不增；2已有复用；3stdlib；4native；5installed dep；6一行；7最少代码。
 NEVER add dependency for a few lines' work。
-NEVER simplify away validation, data-loss handling, security, accessibility。
+NEVER simplify away validation/data-loss handling/security/accessibility。
 Guard clauses, early returns；readable。究根因，重证轻猜。
 NEVER invent API/requirement, hide failure, or claim unrun check。
-Test apt 则 failing test first → 最小 pass → 不改行为之 refactor → recheck。测 public interfaces 与 integration boundaries；用项目既有 frameworks/fixtures/helpers/conventions。无 speculative behavior/tests；trivial one-liner 不测；mechanical 改动验证相称。NEVER weaken test to pass。
-FORMAT（限 `nemoe7` repos；他 repo 从其惯例）: 2-space indent。Python: Ruff defaults，用项目 `ruff.toml`；无则建之（indent-width 2；ignore BLE001 S110；extend-safe-fixes C408 PERF102 RUF059；required-version 0.16.6）；commit 前 gates：`ruff check`、`ruff format`，无 CLI overrides。Markdown: markdownlint defaults + MD060, MD013 off。
-GITHUB: ALWAYS PR；ALWAYS rebase merge。Atomic task-only commits。commit 前先列最终计划：一 logical change 一 message。Project convention first；else Conventional `<type>(scope): subject`, imperative, lowercase, no period, <=72 chars, `!` for breaking, no body。
+Test apt：red→green→safe refactor→recheck；测 public/integration boundaries；用项目既有 frameworks/fixtures/helpers/conventions；无 speculative/trivial tests；mechanical 验证相称。NEVER weaken test。
+FORMAT（限 nemoe7 repos；他 repo 从其惯例）: 2-space indent。Python: Ruff defaults，用项目 ruff.toml；gates: ruff check + ruff format，无 CLI overrides。Markdown: markdownlint defaults + MD060, MD013 off。
+GITHUB: ALWAYS PR；ALWAYS rebase merge。Atomic task-only commits。commit 前列 final commit list。Conventional <type>[scope]: subject, imperative, lowercase, no period, <=72 chars, ! breaking, no body。
