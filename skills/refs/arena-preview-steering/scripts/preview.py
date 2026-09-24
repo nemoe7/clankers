@@ -1621,6 +1621,16 @@ class Store:
             break
         else:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
+      # An emptied inbox resets the tally now, not at the next hook poll.
+      if not any(
+        db.execute(
+          f"SELECT 1 FROM {table} WHERE acknowledged_at IS NULL LIMIT 1"
+        ).fetchone()
+        for table in ("notes", "submissions")
+      ):
+        db.execute(
+          "INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,)
+        )
 
   def publish(self, report_id, title, source):
     identifier(report_id)
@@ -2294,6 +2304,10 @@ def main():
       kind = "reply" if args.reply else "note"
       store.acknowledge(args.ids, kind, args.reply or args.note)
       print("Acknowledged: " + ", ".join(args.ids))
+      print(
+        "If a note asks for work, add it to the task list: "
+        + "; ".join(f'task <id> "<title>" --msg-id {i}' for i in args.ids)
+      )
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}; select it in the Reports tab")

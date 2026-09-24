@@ -1,3 +1,12 @@
+## 2026-09-25
+
+- **Visibility block**: the preview carried its own visibility question, so a hidden preview hid the question too, the skill let work continue, and ARENA's `ask_user` ban covered an unconfirmed preview. ARENA and `SKILL.md` now ask it through `ask_user` with Yes, No, ntfy and Continue without steering, and block non-setup work until answered. `ask_user` is also allowed when no steering channel is visible or "continue without steering" is selected. ARENA adds a negative-rating compliance line.
+- **Recommended answers**: core and ARENA require one only for questions with three or more options or an open choice; yes/no and confirm questions carry none.
+- **Ack reminders**: `ack` prints a `task ... --msg-id` reminder, and `SKILL.md` says to queue each work note. An ack that empties the inbox resets the call count at once.
+- **Approval format**: house proposals group rows under each refs file (`ID | Line | Current | Amended | Reason`), and each ID takes approve, squash, reject or custom. Code changes need no proposal. Proposals come before tasks.
+- Measurements: `rules/AGENTS.md` 1,540 → 1,556 `tok`; `rules/ARENA.md` 14,325 → 14,531 `B`; `skills/arena-preview-steering/SKILL.md` 6,424 → 6,354 `B`; `scripts/preview.py` 66,014 → 66,355 `B`.
+- Gates green.
+
 ## 2026-09-24
 
 - **Direct plugin artifact**: `.github/workflows/package-gpt-plugins.yml` keeps collection and ZIP validation, then uses `actions/upload-artifact@v7` with `archive: false` to publish `gpt-plugins.zip` as the artifact rather than wrapping it in another ZIP. The workflow-definition check pins the direct mode and the effective file name; the plugin and maintenance READMEs name the new download.
