@@ -207,11 +207,14 @@ with tempfile.TemporaryDirectory() as directory:
     ):
       block = page[page.index(f'id="{control}"') :]
       assert "title=" in block[: block.index(">")]
-    # The Uploads tab carries the file input and its list, and says what a restore leaves behind, on
-    # the owner's answers.
-    assert 'id="uploads-tab"' in page and 'id="uploads-panel"' in page
+    # One Files tab carries both workflows and records, including restored rows without bytes.
+    assert 'id="files-tab" aria-controls="files-panel"' in page
+    assert 'id="files-panel" role="tabpanel" aria-labelledby="files-tab"' in page
+    assert 'id="uploads-tab"' not in page and 'id="downloads-tab"' not in page
+    assert 'id="uploads-panel"' not in page and 'id="downloads-panel"' not in page
+    assert page.index('id="files-panel"') < page.index('id="upload-file"')
+    assert page.index('id="upload-file"') < page.index('id="fetch-url"')
     assert 'id="upload-file"' in page and 'id="uploads-list"' in page
-    assert 'id="downloads-tab"' in page and 'id="downloads-panel"' in page
     assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
     assert "50,000,000 bytes" in page
     assert re.search(r'<input[^>]*id="upload-file"[^>]*\bmultiple\b', page)
@@ -529,8 +532,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert page.count("#send{") == 0
     assert "resize:none" in page and "resize:vertical" not in page
     assert (
-      "#notes-panel,#reports-panel,#tasks-panel,#uploads-panel,#downloads-panel{overflow-y:auto"
-      in page
+      "#notes-panel,#reports-panel,#tasks-panel,#files-panel{overflow-y:auto" in page
     )
     assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
     assert '<ul id="tasks-current-body" class="task-list"></ul>' in page

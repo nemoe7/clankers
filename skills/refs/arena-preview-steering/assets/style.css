@@ -62,7 +62,8 @@ nav [aria-selected="true"] { background: var(--bubble); }
 #report-pip, #notes-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
-#notes-panel, #reports-panel, #tasks-panel, #uploads-panel, #downloads-panel { overflow-y: auto; }
+#notes-panel, #reports-panel, #tasks-panel, #files-panel { overflow-y: auto; }
+.files-layout { display: flex; flex-direction: column; gap: 18px; max-width: 900px; margin: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 .log-card { flex: 1 1 auto; min-height: 200px; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
 .log-card > .row:first-child { margin-block: 0; }
@@ -225,6 +226,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .question-id { display: block; margin-bottom: 4px; }
 /* The Uploads tab shows what the server holds: the file as stored, and a record that outlives it. */
 .uploads-layout { display: flex; flex-direction: column; gap: 12px; }
+.uploads-layout h2 { margin: 0; }
 .uploads-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .uploads-layout > .row.tight > .row.tight { align-items: center; }
 #uploads-count, #upload-status, #uploads-note { margin: 0; }
