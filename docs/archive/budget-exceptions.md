@@ -55,3 +55,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-24: Accepted without funding. `skills/arena-preview-steering/scripts/preview.py` +50 `B` for the unblocked-task reminder.
 2026-09-25: Accepted without funding. `rules/AGENTS.md` +16 `tok`, `rules/ARENA.md` +206 `B` and `scripts/preview.py` +341 `B` for the visibility block, the recommended-answer scope, the negative-rating line and the ack reminder with its count reset.
 2026-09-25: Accepted without funding. `rules/ARENA.md` +79 `B` for the lone visibility question.
+2026-09-25: Accepted without funding. `rules/ARENA.md` +168 `B` for the pending-form `ask_user` block.
