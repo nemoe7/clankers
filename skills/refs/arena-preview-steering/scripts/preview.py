@@ -59,9 +59,9 @@ REMINDERS = (
   "Manage the task list.",
   "Take the smallest open task next.",
   "Always push.",
-  "Block with ask_user on GH_TOKEN death.",
+  "Report GH_TOKEN failure; use ask_user only if requested, preview unavailable, or ntfy selected.",
   "Keep docs terse but clear.",
-  "Ask your questions via report forms.",
+  "Ask questions ASAP through fielded reports; keep other work moving.",
   "Don't forget to publish your reports.",
   "Avoid ending turn if there are unblocked tasks.",
 )

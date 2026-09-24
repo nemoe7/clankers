@@ -2418,7 +2418,14 @@ with tempfile.TemporaryDirectory() as reminder_dir:
 with tempfile.TemporaryDirectory() as rotate_dir:
   rotate_store = preview.Store(rotate_dir, create=True)
   rotate_script = str(Path(preview.__file__))
-  assert "Ask your questions via report forms." in preview.REMINDERS
+  assert (
+    "Ask questions ASAP through fielded reports; keep other work moving."
+    in preview.REMINDERS
+  )
+  assert (
+    "Report GH_TOKEN failure; use ask_user only if requested, preview unavailable, or ntfy selected."
+    in preview.REMINDERS
+  )
   assert "Don't forget to publish your reports." in preview.REMINDERS
   assert "Avoid ending turn if there are unblocked tasks." in preview.REMINDERS
   span = len(preview.REMINDERS)
