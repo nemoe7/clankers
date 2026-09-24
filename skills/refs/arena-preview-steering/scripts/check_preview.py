@@ -180,6 +180,9 @@ with tempfile.TemporaryDirectory() as directory:
     # the owner's answers.
     assert 'id="uploads-tab"' in page and 'id="uploads-panel"' in page
     assert 'id="upload-file"' in page and 'id="uploads-list"' in page
+    assert 'id="downloads-tab"' in page and 'id="downloads-panel"' in page
+    assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
+    assert "50,000,000 bytes" in page
     assert re.search(r'<input[^>]*id="upload-file"[^>]*\bmultiple\b', page)
     assert (
       "A record survives a restore of the preview state, and its bytes do not" in page
@@ -187,6 +190,8 @@ with tempfile.TemporaryDirectory() as directory:
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]
+    assert "connect-src 'self' https:" in headers["Content-Security-Policy"]
+    assert "default-src 'none'" in headers["Content-Security-Policy"]
     # The token rides the page as an HTML attribute, so it survives the shipped minified build.
     token = re.search(r'data-token="([^"]+)"', page)[1]
     auth = {"Content-Type": "application/json", "X-Preview-Token": token}
@@ -476,7 +481,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert "appearance:none" in page and "#log-filter" in page
     assert page.count("#send{") == 0
     assert "resize:none" in page and "resize:vertical" not in page
-    assert "#notes-panel,#reports-panel,#tasks-panel{overflow-y:auto" in page
+    assert (
+      "#notes-panel,#reports-panel,#tasks-panel,#uploads-panel,#downloads-panel{overflow-y:auto"
+      in page
+    )
     assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
     assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
     assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
@@ -915,7 +923,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert request("POST", "/api/save-state", "{}", auth)[0] == 404
     assert request("POST", "/api/save-state", "{}")[0] == 404
     # An upload stores its bytes beside the database and its record inside it, on the owner's answers in
-    # report submission c27a4dd5: any bytes, a 1,000,000-byte ceiling, and a record that outlives them.
+    # report submission c27a4dd5: any bytes, a 50,000,000-byte ceiling, and a record that outlives them.
     blob = bytes(range(256)) * 4
     status, _, created = request(
       "POST",
@@ -947,15 +955,18 @@ with tempfile.TemporaryDirectory() as directory:
       )[0]
       == 403
     )
-    assert (
-      request(
-        "POST",
-        "/api/uploads?name=big.bin",
-        b"0" * (1_000_001),
-        {**auth, "Content-Type": "application/octet-stream"},
-      )[0]
-      == 413
+    # A declared body above the new bound is refused before buffering 50 MB in this harness.
+    status, _, problem = request(
+      "POST",
+      "/api/uploads?name=big.bin",
+      b"0",
+      {
+        **auth,
+        "Content-Type": "application/octet-stream",
+        "Content-Length": str(preview.MAX_UPLOAD + 2),
+      },
     )
+    assert status == 413 and "50,000,000" in json.loads(problem)["error"]
     assert (
       request(
         "POST",
@@ -1089,6 +1100,182 @@ with tempfile.TemporaryDirectory() as directory:
     app.shutdown()
     app.server_close()
     worker.join()
+
+# The same SQLite server accepts browser-mediated jobs but never makes an outbound request. Queue
+# claims are exclusive, bytes are bounded, and both saved files and failures survive a restart.
+with tempfile.TemporaryDirectory() as queue_dir:
+  queue_store = preview.Store(Path(queue_dir) / "state", create=True)
+  assert queue_store.state()["fetch_jobs"] == []
+  app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(queue_store))
+  worker = threading.Thread(target=app.serve_forever, daemon=True)
+  worker.start()
+  try:
+    page = request("GET", "/")[2]
+    token = re.search(r'data-token="([^"]+)"', page)[1]
+    auth = {"Content-Type": "application/json", "X-Preview-Token": token}
+    assert request("GET", "/api/fetch-jobs")[0] == 404
+    assert request("GET", "/downloads/file.zip")[0] == 404
+    assert request("POST", "/api/fetch-jobs", "{}")[0] == 403
+    assert (
+      request("POST", "/api/fetch-jobs", "{}", {"X-Preview-Token": token})[0] == 415
+    )
+    for value in (
+      "http://example.org/a",
+      "https://user:pass@example.org/a",
+      "https://x.org/a b",
+      "bad",
+    ):
+      status, _, error = request(
+        "POST", "/api/fetch-jobs", json.dumps({"url": value}), auth
+      )
+      assert status == 400 and json.loads(error)["error"], value
+    assert (
+      request(
+        "POST",
+        "/api/fetch-jobs",
+        json.dumps({"url": "https://example.org/a", "allow_proxy": "yes"}),
+        auth,
+      )[0]
+      == 400
+    )
+    status, _, queued = request(
+      "POST",
+      "/api/fetch-jobs",
+      json.dumps({"url": "https://example.org/one.zip#fragment"}),
+      auth,
+    )
+    job = json.loads(queued)
+    assert status == 201 and job["url"] == "https://example.org/one.zip"
+    assert job["status"] == "queued" and job["allow_proxy"] is False
+    assert "claim" not in job and queue_store.claim_fetch()["id"] == job["id"]
+    assert "claim" not in json.loads(request("GET", "/api/state")[2])["fetch_jobs"][0]
+    assert (
+      json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"] is None
+    )
+    # Reclaiming an expired browser tab changes the secret, never the job ID.
+    with queue_store.connect() as db, db:
+      db.execute(
+        "UPDATE fetch_jobs SET lease_until = '2000-01-01T00:00:00+00:00' WHERE id = ?",
+        (job["id"],),
+      )
+    claim = json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"]
+    assert claim["id"] == job["id"] and claim["claim"]
+    assert queue_store.renew_fetch(job["id"], claim["claim"])["status"] == "fetching"
+    result_path = f"/api/fetch-jobs/{job['id']}/result?name=one.zip"
+    headers = {
+      **auth,
+      "Content-Type": "application/zip",
+      "X-Fetch-Claim": claim["claim"],
+      "X-Fetch-Source": "direct",
+    }
+    assert (
+      request("POST", result_path, b"PK", {**headers, "X-Fetch-Claim": "bad"})[0] == 409
+    )
+    assert (
+      request("POST", result_path, b"PK", {**headers, "X-Fetch-Source": "allorigins"})[
+        0
+      ]
+      == 400
+    )
+    assert queue_store.fetch_jobs()[0]["status"] == "fetching"
+    status, _, completed = request("POST", result_path, b"PK", headers)
+    saved = json.loads(completed)
+    assert status == 201 and saved["size"] == 2 and saved["source"] == "direct"
+    assert saved["sha256"] == hashlib.sha256(b"PK").hexdigest()
+    assert Path(saved["path"]).read_bytes() == b"PK" and saved["present"]
+    assert Path(saved["path"]).parent.name == "downloads"
+    assert queue_store.state()["notes"][-1]["id"] == job["id"]
+    assert request("POST", result_path, b"PK", headers)[0] == 409
+    Path(saved["path"]).unlink()
+    assert preview.Store(queue_store.path.parent).fetch_jobs()[0]["present"] is False
+    assert queue_store.state()["notes"][-1]["id"] == job["id"]
+
+    # A proxy source needs that job's opt-in; failure and retry keep its URL and choice.
+    proxy = queue_store.enqueue_fetch("https://example.org/proxy.zip", True)
+    claim = json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"]
+    assert claim["id"] == proxy["id"] and claim["allow_proxy"]
+    assert request("POST", f"/api/fetch-jobs/{proxy['id']}/fail", "{}", auth)[0] == 409
+    failure = request(
+      "POST",
+      f"/api/fetch-jobs/{proxy['id']}/fail",
+      json.dumps({"error": "CORS blocked"}),
+      {**auth, "X-Fetch-Claim": claim["claim"]},
+    )
+    assert failure[0] == 200 and json.loads(failure[2])["error"] == "CORS blocked"
+    assert queue_store.retry_fetch(proxy["id"])["status"] == "queued"
+    claimed = queue_store.claim_fetch()
+    assert claimed["id"] == proxy["id"] and claimed["claim"] != claim["claim"]
+    proxy_headers = {
+      **auth,
+      "Content-Type": "application/zip",
+      "X-Fetch-Claim": claimed["claim"],
+      "X-Fetch-Source": "codetabs",
+    }
+    status, _, completed = request(
+      "POST",
+      f"/api/fetch-jobs/{proxy['id']}/result?name=proxy.zip",
+      b"proxy",
+      proxy_headers,
+    )
+    assert status == 201 and json.loads(completed)["source"] == "codetabs"
+
+    # Both binary routes refuse a declared excess; manual uploads above 1 MB now succeed.
+    medium = b"x" * 1_000_001
+    status, _, created = request(
+      "POST",
+      "/api/uploads?name=medium.bin",
+      medium,
+      {**auth, "Content-Type": "application/octet-stream"},
+    )
+    assert status == 201 and json.loads(created)["size"] == len(medium)
+    assert Path(json.loads(created)["path"]).read_bytes() == medium
+    for path, limit, extra in (
+      ("/api/uploads?name=large.bin", preview.MAX_UPLOAD, {}),
+      (
+        f"/api/fetch-jobs/{proxy['id']}/result?name=large.bin",
+        preview.MAX_FETCH,
+        proxy_headers,
+      ),
+    ):
+      status, _, problem = request(
+        "POST",
+        path,
+        b"x",
+        {
+          **auth,
+          **extra,
+          "Content-Type": "application/octet-stream",
+          "Content-Length": str(limit + 2),
+        },
+      )
+      assert status == 413 and f"{limit:,}" in json.loads(problem)["error"]
+    assert preview.MAX_UPLOAD == preview.MAX_FETCH == 50_000_000
+    exact = queue_store.save_upload(
+      "exact.bin", "application/octet-stream", b"x" * preview.MAX_UPLOAD
+    )
+    assert (
+      exact["size"] == preview.MAX_UPLOAD
+      and Path(exact["path"]).stat().st_size == preview.MAX_UPLOAD
+    )
+    try:
+      queue_store.save_upload(
+        "too-large.bin", "application/octet-stream", b"x" * (preview.MAX_UPLOAD + 1)
+      )
+      raise AssertionError("A 50 MB + 1 upload was accepted")
+    except ValueError:
+      pass
+
+    # Competing tabs claim distinct rows even when both are ready at once.
+    first = queue_store.enqueue_fetch("https://example.org/a", False)
+    second = queue_store.enqueue_fetch("https://example.org/b", False)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+      claims = list(pool.map(lambda _: queue_store.claim_fetch(), range(2)))
+    assert {item["id"] for item in claims} == {first["id"], second["id"]}
+    assert all("claim" in item for item in claims)
+  finally:
+    app.shutdown()
+    app.server_close()
+    worker.join()
 # The default save file sits inside the state directory, so one globally ignored directory carries
 # the database and its export, and an explicit path still wins.
 with tempfile.TemporaryDirectory() as default_dir:
@@ -1129,7 +1316,7 @@ with tempfile.TemporaryDirectory() as autosave_dir:
   )
 
 print(
-  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, read stamps on delivered prints, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, errors and HTTP boundaries"
+  "PASS: durable notes, retry dedup, receipts carrying a rendered reply or a plain note, state migration, read stamps on delivered prints, explicit Seen receipts, reports and their read stamp, Markdown fields with inbox-answer submissions, safe rendering, a SQLite browser download queue, 50 MB manual uploads, errors and HTTP boundaries"
 )
 
 with tempfile.TemporaryDirectory() as legacy_dir:

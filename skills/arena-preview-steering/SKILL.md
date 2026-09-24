@@ -74,7 +74,11 @@ Field IDs come from the prompt; add `{#my-id}` at the end of a prompt line to fi
 
 ## Uploads
 
-Uploads write inbox notes with matching IDs, naming file, size, type and path. Read the file there, then ack the note. A restore can delete the bytes; the note and the record survive, and `present` says which is which.
+Uploads write inbox notes with matching IDs, naming file, size, type and path. Read the file there, then ack the note. A restore can delete the bytes; the note and the record survive, and `present` says which is which. Accept files up to 50,000,000 bytes each.
+
+## Browser downloads
+
+Queue one HTTPS URL/job in Downloads. Keep the page open while the browser fetches. The server never fetches URLs. Direct by default. Opt in per job to AllOrigins, then CodeTabs. Proxies see the URL. Never embed credentials. Reject files over 50,000,000 bytes. SQLite keeps jobs across server restarts. Successful jobs save bytes under `<state-dir>/downloads/` and send inbox path notes. Restores may remove bytes but retain records. Retry failed jobs in the tab. Report CORS, network and size errors. Local checks do not prove browser behavior.
 
 ## State file
 

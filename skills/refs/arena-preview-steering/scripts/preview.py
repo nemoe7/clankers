@@ -11,10 +11,10 @@ import sqlite3
 import sys
 import uuid
 from contextlib import closing, contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 try:
   import markdown_it  # noqa: F401
@@ -37,11 +37,13 @@ MAX_SUBMISSION = 150_000
 # did. The note cap now sets the general bound, and submissions take the wider one.
 MAX_BODY = 96_000
 MAX_SUBMISSION_BODY = 1_000_000
-# An upload is the size of a report submission, on the owner's answer.
-MAX_UPLOAD = 1_000_000
-# Bytes land beside the database, never inside it, and the record carries the file name under this
-# directory rather than an absolute path, so a state directory that moves still resolves.
+# Both owner-uploaded and browser-fetched files have a 50 MB (decimal) per-file ceiling.
+MAX_UPLOAD = 50_000_000
+MAX_FETCH = 50_000_000
+FETCH_LEASE = timedelta(minutes=5)
+# File bytes live beside the database, never inside it; stored names are relative to state.
 UPLOAD_DIR = "uploads"
+FETCH_DIR = "downloads"
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
@@ -385,7 +387,39 @@ def upload_name(name):
     raise ValueError("An upload needs a file name")
   if len(cleaned) > 200:
     raise ValueError("A file name must be 200 characters or fewer")
+  if any(ord(char) < 32 or ord(char) == 127 for char in cleaned):
+    raise ValueError("A file name must not contain control characters")
   return cleaned
+
+
+def fetch_url(value):
+  """Accept one HTTPS URL without credentials or control characters; the server never fetches it."""
+  if not isinstance(value, str) or not value.strip() or len(value) > 2048:
+    raise ValueError("Enter one HTTPS URL of at most 2048 characters")
+  value = value.strip()
+  if any(ord(char) < 33 or ord(char) == 127 for char in value):
+    raise ValueError("A download URL must not contain spaces or control characters")
+  try:
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() != "https" or not parsed.hostname or parsed.port == 0:
+      raise ValueError("Only HTTPS download URLs are allowed")
+    if parsed.username is not None or parsed.password is not None:
+      raise ValueError("Do not put credentials in a download URL")
+  except ValueError as error:
+    raise ValueError(f"Invalid HTTPS download URL: {error}") from error
+  return urlunsplit(parsed._replace(fragment=""))
+
+
+def fetch_row(row, directory):
+  """Expose metadata and disk presence, but never the claim secret used by a browser worker."""
+  item = dict(row)
+  item.pop("claim", None)
+  item["allow_proxy"] = bool(item["allow_proxy"])
+  file = item["file"]
+  path = directory / FETCH_DIR / file if file else None
+  item["path"] = str(path) if path else None
+  item["present"] = bool(path and path.is_file())
+  return item
 
 
 def upload_type(content_type):
@@ -489,6 +523,10 @@ class ReportChanged(ValueError):
   pass
 
 
+class FetchChanged(ValueError):
+  pass
+
+
 class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
@@ -522,6 +560,14 @@ class Store:
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,
           sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS fetch_jobs (
+          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
+          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),
+          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),
+          claim TEXT, lease_until TEXT, error TEXT, source TEXT,
+          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,
+          at TEXT NOT NULL, updated_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS tasks (
@@ -703,7 +749,8 @@ class Store:
           report["needs_answer"] = True
           report["field_error"] = str(error)
       uploads = self.uploads()
-      for item in notes + reports + uploads:
+      fetch_jobs = self.fetch_jobs()
+      for item in notes + reports + uploads + fetch_jobs:
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):
           if key in item:
             item[key] = clip_stamp(item[key])
@@ -716,6 +763,7 @@ class Store:
         "reports": reports,
         "tasks": tasks,
         "uploads": uploads,
+        "fetch_jobs": fetch_jobs,
         "last_check": clip_stamp(meta.get("last_check")),
       }
 
@@ -989,6 +1037,157 @@ class Store:
       )
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return upload_row(row, self.path.parent)
+
+  def fetch_jobs(self):
+    """Queue status and saved file locations; a claim token never reaches the state poll."""
+    with closing(self.connect()) as db:
+      rows = db.execute("SELECT * FROM fetch_jobs ORDER BY seq DESC").fetchall()
+    return [fetch_row(row, self.path.parent) for row in rows]
+
+  def enqueue_fetch(self, url, allow_proxy):
+    url = fetch_url(url)
+    if not isinstance(allow_proxy, bool):
+      raise TypeError("Proxy fallback must be true or false for this URL")
+    job_id, stamp = new_id(), now()
+    with self.transaction(autosave=False) as db:
+      db.execute(
+        "INSERT INTO fetch_jobs (id, url, allow_proxy, status, at, updated_at)"
+        " VALUES (?, ?, ?, 'queued', ?, ?)",
+        (job_id, url, int(allow_proxy), stamp, stamp),
+      )
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return fetch_row(row, self.path.parent)
+
+  def claim_fetch(self):
+    """Atomically take the oldest queued URL; abandoned claims return after five minutes."""
+    stamp = now()
+    with self.transaction(autosave=False) as db:
+      # UPDATE obtains SQLite's write lock before SELECT, so two browser tabs cannot take the
+      # same row. Active clients renew their lease while reading or sending up to 50 MB.
+      db.execute(
+        "UPDATE fetch_jobs SET status = 'queued', claim = NULL, lease_until = NULL,"
+        " error = 'Browser stopped; queued again', updated_at = ?"
+        " WHERE status = 'fetching' AND lease_until <= ?",
+        (stamp, stamp),
+      )
+      row = db.execute(
+        "SELECT id FROM fetch_jobs WHERE status = 'queued' ORDER BY seq LIMIT 1"
+      ).fetchone()
+      if row is None:
+        return None
+      job_id = row["id"]
+      claim = secrets.token_urlsafe(24)
+      lease = (datetime.now(timezone.utc) + FETCH_LEASE).isoformat()
+      db.execute(
+        "UPDATE fetch_jobs SET status = 'fetching', claim = ?, lease_until = ?,"
+        " error = NULL, updated_at = ? WHERE id = ?",
+        (claim, lease, stamp, job_id),
+      )
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return fetch_row(row, self.path.parent) | {"claim": claim}
+
+  def claimed_fetch(self, db, job_id, claim):
+    identifier(job_id)
+    row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    if row is None:
+      raise FileNotFoundError("No queued download with that ID")
+    if (
+      row["status"] != "fetching"
+      or not isinstance(claim, str)
+      or not secrets.compare_digest(row["claim"] or "", claim)
+      or not row["lease_until"]
+      or row["lease_until"] <= now()
+    ):
+      raise FetchChanged("Download claim expired; refresh the queue and try again")
+    return row
+
+  def renew_fetch(self, job_id, claim):
+    with self.transaction(autosave=False) as db:
+      self.claimed_fetch(db, job_id, claim)
+      lease = (datetime.now(timezone.utc) + FETCH_LEASE).isoformat()
+      db.execute("UPDATE fetch_jobs SET lease_until = ? WHERE id = ?", (lease, job_id))
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return fetch_row(row, self.path.parent)
+
+  def fail_fetch(self, job_id, claim, error):
+    message = str(error).strip()[:1000] or "The browser could not fetch this URL"
+    with self.transaction(autosave=False) as db:
+      self.claimed_fetch(db, job_id, claim)
+      db.execute(
+        "UPDATE fetch_jobs SET status = 'failed', error = ?, claim = NULL,"
+        " lease_until = NULL, updated_at = ? WHERE id = ?",
+        (message, now(), job_id),
+      )
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return fetch_row(row, self.path.parent)
+
+  def retry_fetch(self, job_id):
+    identifier(job_id)
+    with self.transaction(autosave=False) as db:
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+      if row is None:
+        raise FileNotFoundError("No queued download with that ID")
+      if row["status"] not in {"queued", "failed"}:
+        raise FetchChanged("Only a failed download can be queued again")
+      db.execute(
+        "UPDATE fetch_jobs SET status = 'queued', error = NULL, updated_at = ?"
+        " WHERE id = ?",
+        (now(), job_id),
+      )
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return fetch_row(row, self.path.parent)
+
+  def complete_fetch(self, job_id, claim, name, content_type, source, data):
+    if not data or len(data) > MAX_FETCH:
+      raise ValueError(f"A download must be 1–{MAX_FETCH:,} bytes")
+    if source not in {"direct", "allorigins", "codetabs"}:
+      raise ValueError("Unknown download source")
+    cleaned = upload_name(name)
+    file_type = upload_type(content_type)
+    target = None
+    try:
+      with self.transaction(autosave=False) as db:
+        row = self.claimed_fetch(db, job_id, claim)
+        if source != "direct" and not row["allow_proxy"]:
+          raise ValueError("Proxy fallback was not enabled for this URL")
+        directory = self.path.parent / FETCH_DIR
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target = directory / f"{job_id}{Path(cleaned).suffix[:16]}"
+        target.write_bytes(data)
+        target.chmod(0o600)
+        stamp = now()
+        db.execute(
+          "UPDATE fetch_jobs SET status = 'saved', source = ?, name = ?, type = ?,"
+          " size = ?, sha256 = ?, file = ?, error = NULL, claim = NULL,"
+          " lease_until = NULL, updated_at = ? WHERE id = ?",
+          (
+            source,
+            cleaned,
+            file_type,
+            len(data),
+            hashlib.sha256(data).hexdigest(),
+            target.name,
+            stamp,
+            job_id,
+          ),
+        )
+        message = (
+          f"Download: {cleaned} ({len(data)} B, {file_type}) from "
+          f"{urlsplit(row['url']).hostname} via {source} saved to {target}"
+        )
+        db.execute(
+          "INSERT INTO notes (id, text, at) VALUES (?, ?, ?)",
+          (job_id, message, stamp),
+        )
+        result = db.execute(
+          "SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+    except Exception:
+      if target is not None:
+        target.unlink(missing_ok=True)
+      raise
+    self.autosave()  # the completion wrote an inbox note; unfinished queue rows stay only in SQLite
+    return fetch_row(result, self.path.parent)
 
   def import_tasks(self, records, replace=False, autosave=True):
     """Rebuild a list from the JSON a copy button or task-list produced.
@@ -1461,7 +1660,7 @@ def handler(store):
       self.send_header(
         "Content-Security-Policy",
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-        "connect-src 'self'; base-uri 'none'; form-action 'self'",
+        "connect-src 'self' https:; base-uri 'none'; form-action 'self'",
       )
       if filename:
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
@@ -1561,12 +1760,23 @@ def handler(store):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
+      fetch_post = re.fullmatch(
+        r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry)", path
+      )
       upload_post = path == "/api/uploads"
+      fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
-        path not in {"/api/notes", "/api/markdown"}
+        path
+        not in {
+          "/api/notes",
+          "/api/markdown",
+          "/api/fetch-jobs",
+          "/api/fetch-jobs/claim",
+        }
         and not report_submit
         and not report_seen
         and not upload_post
+        and not fetch_post
       ):
         self.problem(404, "Not found")
         return
@@ -1574,9 +1784,10 @@ def handler(store):
       if not secrets.compare_digest(supplied, token.encode("ascii")):
         self.problem(403, "Reload the preview, then retry; your draft is kept")
         return
-      # An upload carries the file itself, so its content type is the browser's and any type is legal;
-      # every other route takes a JSON object.
-      if self.headers.get("Content-Type") != "application/json" and not upload_post:
+      # Owner uploads and claimed fetch results are raw bytes. Other routes take JSON.
+      if self.headers.get("Content-Type") != "application/json" and not (
+        upload_post or fetch_result
+      ):
         self.problem(415, "Expected application/json")
         return
       try:
@@ -1584,31 +1795,25 @@ def handler(store):
         limit = (
           MAX_UPLOAD
           if upload_post
-          else MAX_BODY
-          if not report_submit
+          else MAX_FETCH
+          if fetch_result
           else MAX_SUBMISSION_BODY
+          if report_submit
+          else MAX_BODY
         )
         if not 0 < length <= limit:
           subject = (
-            "An upload is"
-            if upload_post
-            else "Report answers are"
-            if report_submit
-            else "Note body is"
+            "Upload" if upload_post else "Download" if fetch_result else "Request body"
           )
-          # The refusal has to reach the client. Answering before the body is read is what keeps a
-          # wide body from being buffered, but a client still writing into a socket this side is
-          # about to close sees a broken pipe instead of the answer, which is how this test failed
-          # once in a way that looked like flakiness. Discarding what it sends, in bounded chunks
-          # that are never kept or parsed, delivers the refusal and costs nothing.
-          bound = MAX_UPLOAD + 1 if upload_post else MAX_SUBMISSION_BODY + 1
-          remaining = length if 0 < length <= bound else 0
+          # Discard at most one byte over the limit in chunks. Clients sending a wider body get
+          # the 413 without forcing this server to buffer or read all of it.
+          remaining = length if 0 < length <= limit + 1 else 0
           while remaining > 0:
             chunk = self.rfile.read(min(65536, remaining))
             if not chunk:
               break
             remaining -= len(chunk)
-          self.problem(413, f"{subject} empty or too large")
+          self.problem(413, f"{subject} must be 1–{limit:,} bytes")
           return
         data = self.rfile.read(length)
         if len(data) != length:
@@ -1629,9 +1834,44 @@ def handler(store):
           )
           self.reply(201, json.dumps(record, ensure_ascii=False))
           return
+        if fetch_result:
+          name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+          record = store.complete_fetch(
+            fetch_post.group(1),
+            self.headers.get("X-Fetch-Claim", ""),
+            name,
+            self.headers.get("Content-Type", ""),
+            self.headers.get("X-Fetch-Source", ""),
+            data,
+          )
+          for key in ("at", "updated_at"):
+            record[key] = clip_stamp(record[key])
+          self.reply(201, json.dumps(record, ensure_ascii=False))
+          return
         payload = json.loads(data)
         if not isinstance(payload, dict):
           self.problem(400, "Expected a JSON object")
+          return
+        if path == "/api/fetch-jobs":
+          record = store.enqueue_fetch(
+            payload.get("url"), payload.get("allow_proxy", False)
+          )
+          self.reply(201, json.dumps(record, ensure_ascii=False))
+          return
+        if path == "/api/fetch-jobs/claim":
+          self.reply(200, json.dumps({"job": store.claim_fetch()}, ensure_ascii=False))
+          return
+        if fetch_post:
+          job_id, action = fetch_post.groups()
+          if action == "renew":
+            record = store.renew_fetch(job_id, self.headers.get("X-Fetch-Claim", ""))
+          elif action == "fail":
+            record = store.fail_fetch(
+              job_id, self.headers.get("X-Fetch-Claim", ""), payload.get("error", "")
+            )
+          else:
+            record = store.retry_fetch(job_id)
+          self.reply(200, json.dumps(record, ensure_ascii=False))
           return
         if path == "/api/markdown":
           self.reply(
@@ -1661,7 +1901,7 @@ def handler(store):
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))
-      except ReportChanged as error:
+      except (ReportChanged, FetchChanged) as error:
         self.problem(409, error)
       except FileNotFoundError as error:
         self.problem(404, error)
