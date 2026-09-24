@@ -75,12 +75,10 @@ const get = id => {
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
 get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
-get('#uploads-tab').setAttribute('aria-controls', 'uploads-panel');
-get('#downloads-tab').setAttribute('aria-controls', 'downloads-panel');
+get('#files-tab').setAttribute('aria-controls', 'files-panel');
 get('#reports-panel').hidden = true;
 get('#tasks-panel').hidden = true;
-get('#uploads-panel').hidden = true;
-get('#downloads-panel').hidden = true;
+get('#files-panel').hidden = true;
 get('#upload-file').files = [];
 get('#fetch-proxy').checked = false;
 get('#note').placeholder = 'What should happen next?';
@@ -325,14 +323,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#tasks-panel').hidden, false);
   assert.equal(get('#reports-panel').hidden, true);
   get('#tasks-tab').events.keydown(event({ key: 'ArrowRight' }));
-  assert.equal(get('#uploads-panel').hidden, false);
+  assert.equal(get('#files-panel').hidden, false, 'uploads and downloads share the Files panel');
   assert.equal(get('#tasks-panel').hidden, true);
-  get('#uploads-tab').events.keydown(event({ key: 'ArrowRight' }));
-  assert.equal(get('#downloads-panel').hidden, false);
-  get('#downloads-tab').events.keydown(event({ key: 'ArrowRight' }));
+  get('#files-tab').events.keydown(event({ key: 'ArrowRight' }));
   assert.equal(get('#notes-panel').hidden, false);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#downloads-panel').hidden, false);
+  assert.equal(get('#files-panel').hidden, false);
   get('#tasks-tab').events.keydown(event({ key: 'Home' }));
   assert.equal(get('#notes-panel').hidden, false);
   // Switching tabs fires an unawaited refreshState, so flush the queue before a click that
@@ -808,9 +804,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-submit').hidden, true);
   assert.equal(get('#report-receipt').hidden, true);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#downloads-panel').hidden, false);
-  assert.equal(get('#downloads-tab').focused, true);
-  assert.equal(get('#downloads-tab').attributes['aria-selected'], 'true');
+  assert.equal(get('#files-panel').hidden, false);
+  assert.equal(get('#files-tab').focused, true);
+  assert.equal(get('#files-tab').attributes['aria-selected'], 'true');
   get('#tasks-tab').events.keydown(event({ key: 'ArrowLeft' }));
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
@@ -1400,5 +1396,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(copied.length, copiesBeforeNotesOnly + 1, 'copy a session before its first task');
   assert.match(copied.at(-1), /"id":"notes-only"/);
   assert.equal(get('#copy-state').dataset.state, 'good');
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, five-tab navigation wrapping both ways with Home and End, 50 MB manual uploads and a browser fetch queue with direct/opt-in proxy fallback and streamed size checks, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation and one Files page with uploads and downloads, 50 MB manual uploads and a browser fetch queue with direct/opt-in proxy fallback and streamed size checks, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });
