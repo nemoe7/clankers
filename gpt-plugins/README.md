@@ -28,4 +28,4 @@ The checker reports drift as a failure. An edited source without a regenerated c
 
 ## Package
 
-`.github/workflows/package-gpt-plugins.yml` checks the collection, writes `gpt-plugins.zip`, and uploads the artifact `gpt-plugins`. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow runs on pushes to `main`, on pull requests, and on demand. It fails on a missing or invalid plugin file.
+`.github/workflows/package-gpt-plugins.yml` checks the collection, writes `gpt-plugins.zip`, and publishes that ZIP as a direct Actions artifact. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow runs on pushes to `main`, on pull requests, and on demand. It fails on a missing or invalid plugin file.

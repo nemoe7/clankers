@@ -1,3 +1,8 @@
+## 2026-09-24
+
+- **Direct plugin artifact**: `.github/workflows/package-gpt-plugins.yml` keeps collection and ZIP validation, then uses `actions/upload-artifact@v7` with `archive: false` to publish `gpt-plugins.zip` as the artifact rather than wrapping it in another ZIP. The workflow-definition check pins the direct mode and the effective file name; the plugin and maintenance READMEs name the new download.
+- Gates green.
+
 ## 2026-09-23
 
 - **Restore survival, measured**: five restores and two probe sets settle what survives. Only tracked content, as differences against the base, in-repo files that Git does not ignore, and pushed commits survive. `/tmp`, `/var/tmp`, `/dev/shm`, `/usr/local/share` and the whole home directory reset, and `.git/info/exclude` returns to its default content, so no exclusion source behaves differently from `.gitignore`. The earlier global-exclude survivor is explained: the restore deletes `~/.gitconfig`, which leaves that file untracked and unignored. `docs/archive/arena-quirks.md` carries the corrected rule. Consequence for the steering state: no sandbox path is restore-proof, so autosave cannot replace a push.
