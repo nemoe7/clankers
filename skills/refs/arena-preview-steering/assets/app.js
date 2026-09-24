@@ -132,6 +132,60 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
+// The browser keeps a chosen File only in memory. Never put its bytes or a fake file path in storage:
+// after a reload, the owner must reselect the file before retrying that message ID.
+let stagedFile = null;
+const picker = $('#upload-file');
+const compose = $('#compose');
+function clearStagedFile() {
+  stagedFile = null;
+  picker.value = '';
+  $('#staged-file').hidden = true;
+  $('#staged-file').textContent = '';
+  $('#remove-file').hidden = true;
+}
+function stageFiles(files) {
+  if (send.disabled) return;
+  if (files.length !== 1) { status.textContent = 'Attach one file per note.'; return; }
+  const file = files[0];
+  if (!file.name || file.name.length > 200) { status.textContent = 'Use a filename of 1–200 characters.'; return; }
+  if (!file.size) { status.textContent = 'That file is empty.'; return; }
+  if (file.size > MAX_UPLOAD) {
+    status.textContent = `That file is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
+    return;
+  }
+  stagedFile = file;
+  const chip = $('#staged-file');
+  chip.textContent = file.name;
+  chip.title = file.name;
+  chip.hidden = false;
+  $('#remove-file').hidden = false;
+  status.textContent = `Staged ${file.name} · ${bytes(file.size)}. Send note to save both.`;
+}
+$('#attach-file').addEventListener('click', () => picker.click());
+picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
+$('#remove-file').addEventListener('click', () => {
+  clearStagedFile();
+  if (pending && pending.attachment) { pending = null; save('pending', 'null'); }
+  status.textContent = 'Attachment removed. Draft kept.';
+});
+const hasDraggedFile = event => Array.from((event.dataTransfer || {}).types || []).includes('Files');
+for (const type of ['dragenter', 'dragover']) compose.addEventListener(type, event => {
+  if (!hasDraggedFile(event)) return;
+  event.preventDefault();
+  compose.dataset.dragging = 'true';
+});
+compose.addEventListener('dragleave', () => { delete compose.dataset.dragging; });
+compose.addEventListener('drop', event => {
+  if (!hasDraggedFile(event) && !(event.dataTransfer && event.dataTransfer.files.length)) return;
+  event.preventDefault();
+  delete compose.dataset.dragging;
+  stageFiles(Array.from(event.dataTransfer.files || []));
+});
+if (pending && pending.attachment) {
+  status.textContent = `Reselect ${pending.attachment.name} before retrying; this page does not store file bytes.`;
+}
+
 // Short requests keep their ten-second timer. Binary transfers have a longer deadline and no
 // automatic retry after a lost response: the server may have saved the bytes already.
 async function attempt(path, options, timeoutMs) {
@@ -255,7 +309,7 @@ function showHistory(notes) {
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}` +
       (item.ack_edited_at ? ` · Edited ${time(item.ack_edited_at)}` : '');
-    // The line reads as parts separated by the same ASCII dot: ID · state · time · task.
+    // The line reads as parts separated by the same ASCII dot: ID · state · time · filename · task.
     // The owner asked for the dot after the ID by name.
     const separator = document.createElement('span');
     separator.className = 'receipt-sep';
@@ -267,9 +321,12 @@ function showHistory(notes) {
     receiptTask.className = 'receipt-task';
     receiptTask.textContent = ' · Task added';
     receiptTask.title = item.task_id ? `Task ${item.task_id}` : '';
+    const receiptFile = document.createElement('span');
+    receiptFile.className = 'receipt-file';
+    receiptFile.textContent = item.attachment_name ? ` · ${item.attachment_name}` : '';
     receipt.replaceChildren(
-      receiptId, separator,
-      receiptDot, receiptState, ...(item.task_id ? [receiptTask] : [])
+      receiptId, separator, receiptDot, receiptState,
+      ...(item.attachment_name ? [receiptFile] : []), ...(item.task_id ? [receiptTask] : [])
     );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
@@ -404,30 +461,52 @@ async function refreshState() {
 }
 $('#form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (send.disabled || !note.value.trim()) return;
-  const text = note.value;
-  if (!pending || pending.text !== text) pending = { id: newId(), text };
+  if (send.disabled || (!note.value.trim() && !stagedFile)) return;
+  const draft = note.value;
+  const text = draft.trim() ? draft : `File: ${stagedFile.name}`;
+  if (pending && pending.attachment && !stagedFile && pending.text === text) {
+    status.textContent = `Reselect ${pending.attachment.name} to retry this note, or edit the draft to send without it.`;
+    return;
+  }
+  const attachment = stagedFile ? {
+    name: stagedFile.name, size: stagedFile.size, type: stagedFile.type,
+    lastModified: stagedFile.lastModified || null
+  } : null;
+  if (!pending || pending.text !== text || JSON.stringify(pending.attachment || null) !== JSON.stringify(attachment)) {
+    pending = { id: newId(), text, ...(attachment ? { attachment } : {}) };
+  }
   save('pending', JSON.stringify(pending));
-  send.disabled = true;
-  status.textContent = 'Sending…';
+  send.disabled = picker.disabled = $('#attach-file').disabled = $('#remove-file').disabled = true;
+  status.textContent = stagedFile ? `Sending ${stagedFile.name} with note…` : 'Sending…';
   try {
-    const result = await (await request('/api/notes', {
-      method: 'POST',
-      headers: writeHeaders('application/json'),
-      body: JSON.stringify(pending)
-    })).json();
+    let response;
+    if (stagedFile) {
+      const body = new FormData();
+      body.append('id', pending.id);
+      body.append('text', text);
+      body.append('file', stagedFile, stagedFile.name);
+      response = await request('/api/notes/with-file', {
+        method: 'POST', headers: { 'X-Preview-Token': writeToken }, body,
+        timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
+      });
+    } else response = await request('/api/notes', {
+      method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(pending)
+    });
+    const result = await response.json();
     note.placeholder = clipPlaceholder(result.text);
-    status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.' : `Saved ${time(result.at)} · Message sent.`;
+    status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.'
+      : `Saved ${time(result.at)} · Message sent${attachment ? ` with ${attachment.name}` : ''}.`;
     pending = null;
     save('pending', 'null');
-    if (note.value === text) {
+    clearStagedFile();
+    if (note.value === draft) {
       note.value = '';
       save('draft', '');
       writeMode();
     }
     refreshState();
-  } catch (error) { status.textContent = `Save not confirmed: ${error.message}. Draft kept; retrying unchanged text uses the same message ID.`; }
-  finally { send.disabled = false; }
+  } catch (error) { status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFile ? ' and file' : ''} kept; retry unchanged text with the same note ID.`; }
+  finally { send.disabled = picker.disabled = $('#attach-file').disabled = $('#remove-file').disabled = false; }
 });
 note.addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
@@ -600,7 +679,7 @@ function quoteTaskId(title) {
   showTab(tabs[0]);
   quoteId(title.dataset.taskId, title);
 }
-// The three tab buttons share one confirmation, and null text means there was nothing to copy.
+// The tab buttons share one confirmation, and null text means there was nothing to copy.
 async function copyFrom(button, text, what, glyph = '⧉') {
   // The label a copy came in with is the label it leaves behind, so a restored `Copy the state`
   // never names the wrong job.
@@ -955,7 +1034,7 @@ function renderTasks(tasks) {
   finished.hidden = false;
   upcoming.hidden = false;
 }
-const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#files-tab')];
+const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#downloads-tab')];
 // The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
 // something there is unread, not how many reports exist. A report is unread until the owner has
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
@@ -1055,54 +1134,6 @@ for (const tab of tabs) {
     next.focus();
   });
 }
-// An upload sends the file itself rather than a JSON envelope, so the body is the bytes and the name
-// rides the query string; the content type is the browser's, since the server stores any bytes as they
-// arrived and records what they were.
-$('#upload-send').addEventListener('click', async () => {
-  const button = $('#upload-send');
-  if (button.disabled) return;
-  const input = $('#upload-file');
-  const line = $('#upload-status');
-  const files = Array.from(input.files || []);
-  if (!files.length) { line.textContent = 'Choose a file first.'; return; }
-  for (const file of files) {
-    const name = files.length === 1 ? 'That file' : file.name;
-    if (!file.size) { line.textContent = `${name} is empty.`; return; }
-    if (file.size > MAX_UPLOAD) {
-      line.textContent = `${name} is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
-      return;
-    }
-  }
-  const saved = [];
-  let current;
-  button.disabled = input.disabled = true;
-  try {
-    for (const file of files) {
-      current = file;
-      line.textContent = `Uploading ${file.name}…`;
-      const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
-        method: 'POST',
-        headers: writeHeaders(file.type || 'application/octet-stream'),
-        body: file,
-        timeoutMs: BINARY_TIMEOUT,
-        retryOnFailure: false
-      });
-      saved.push(await response.json());
-    }
-    const record = saved[0];
-    line.textContent = files.length === 1
-      ? `Saved ${record.name} · ${bytes(record.size)} · ${record.sha256.slice(0, 12)}`
-      : `Saved ${saved.length} files: ${saved.map(record => record.name).join(', ')}`;
-    input.value = '';
-  } catch (error) {
-    line.textContent = `Upload failed: ${error.message}` + (files.length === 1 ? ''
-      : ` (${current.name}). Saved ${saved.length} of ${files.length}: ${saved.map(record => record.name).join(', ') || 'none'}. Select remaining files before retrying.`);
-  } finally {
-    button.disabled = input.disabled = false;
-    if (saved.length) await refreshState();
-  }
-});
-
 // The server queues URLs, claims work and stores bytes; only the owner's browser contacts remote
 // sites. The proxy checkbox is saved on each job, not a global preference or an automatic fallback.
 function downloadName(url) {
