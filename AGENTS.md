@@ -63,7 +63,7 @@ Read these first:
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`.
   - They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
-- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, then squash only the new or affected line.
+- Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, and for the ChatGPT fields also into `rules/wenyan/`, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - The CHANGELOG is the only ledger, with no separate amendment file.
 - Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
