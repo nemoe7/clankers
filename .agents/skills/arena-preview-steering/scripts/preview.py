@@ -25,6 +25,7 @@ MAX_SUBMISSION=150000
 MAX_BODY=96000
 MAX_SUBMISSION_BODY=1000000
 MAX_UPLOAD=50000000
+MAX_ATTACHMENTS=5
 MAX_FETCH=50000000
 FETCH_LEASE=timedelta(minutes=5)
 UPLOAD_DIR='uploads'
@@ -34,7 +35,7 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
-REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Block with ask_user on GH_TOKEN death.','Keep docs terse but clear.'
+REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Block with ask_user on GH_TOKEN death.','Keep docs terse but clear.','Ask your questions via report forms.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 def now():return datetime.now(timezone.utc).isoformat()
@@ -165,26 +166,29 @@ def fetch_url(value):
 	return urlunsplit(parsed._replace(fragment=''))
 def fetch_row(row,directory):item=dict(row);item.pop('claim',None);item['allow_proxy']=bool(item['allow_proxy']);file=item['file'];path=directory/FETCH_DIR/file if file else None;item['path']=str(path)if path else None;item['present']=bool(path and path.is_file());return item
 def upload_type(content_type):cleaned=str(content_type or'').split(';')[0].strip()[:120];return cleaned or'application/octet-stream'
-def parse_note_attachment(content_type,data):
+def parse_note_attachments(content_type,data):
 	if len(content_type)>200 or any(char in content_type for char in'\r\n'):raise ValueError('Invalid multipart boundary')
 	prefix=b'MIME-Version: 1.0\r\nContent-Type: '+content_type.encode('ascii')+b'\r\n\r\n';message=BytesParser(policy=policy.default).parsebytes(prefix+data)
-	if not message.is_multipart()or message.defects:raise ValueError('Send one file with a valid multipart boundary')
+	if not message.is_multipart()or message.defects:raise ValueError('Send files with a valid multipart boundary')
 	parts=list(message.iter_parts())
-	if len(parts)!=3:raise ValueError('Send one note ID, text and file')
-	fields={}
+	if not 3<=len(parts)<=MAX_ATTACHMENTS+2:raise ValueError(f"Send one note ID, text and 1–{MAX_ATTACHMENTS} files")
+	fields,files={},[]
 	for part in parts:
 		name=part.get_param('name',header='content-disposition')
 		if part.get_content_disposition()!='form-data'or name not in{'id','text','file'}:raise ValueError('Unexpected note attachment field')
-		if name in fields or part.defects or part.is_multipart():raise ValueError('Duplicate or invalid note attachment field')
+		if part.defects or part.is_multipart()or name!='file'and name in fields:raise ValueError('Duplicate or invalid note attachment field')
 		body=part.get_payload(decode=True)
 		if body is None:raise ValueError('Invalid note attachment bytes')
-		if name=='file':fields[name]=part.get_filename(),part.get_content_type(),body
+		if name=='file':files.append((part.get_filename(),part.get_content_type(),body))
 		else:
 			if part.get_filename()is not None:raise ValueError('Only file may have a filename')
 			fields[name]=body.decode('utf-8')
-	if set(fields)!={'id','text','file'}:raise ValueError('Send one note ID, text and file')
-	return fields['id'],fields['text'],*fields['file']
+	if set(fields)!={'id','text'}or not files:raise ValueError('Send one note ID, text and at least one file')
+	return fields['id'],fields['text'],files
 def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];return dict(row)|{'path':str(path),'present':path.exists()}
+def add_note_attachments(note,records):
+	if records:note['attachment_name']=records[0]['name'];note['attachment_path']=records[0]['path'];note['attachments']=records
+	return note
 def cli_json(value,pretty=False):
 	if pretty:return json.dumps(value,ensure_ascii=False,indent=2)
 	return json.dumps(value,ensure_ascii=False,separators=(',',':'))
@@ -223,7 +227,7 @@ class Store:
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}; start the preview first")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
-			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
+			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
 			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'origin'in columns:db.execute('ALTER TABLE notes DROP COLUMN origin');columns.discard('origin')
@@ -236,6 +240,9 @@ class Store:
 			if'seen_at'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seen_at TEXT');db.execute('UPDATE submissions SET seen_at = acknowledged_at WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL')
 			columns={row['name']for row in db.execute('PRAGMA table_info(reports)')}
 			if'seq'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seq INTEGER');db.execute('UPDATE reports SET seq = rowid WHERE seq IS NULL')
+			columns={row['name']for row in db.execute('PRAGMA table_info(uploads)')}
+			if'note_id'not in columns:db.execute('ALTER TABLE uploads ADD COLUMN note_id TEXT');db.execute('UPDATE uploads SET note_id = id WHERE note_id IS NULL')
+			db.execute('CREATE INDEX IF NOT EXISTS uploads_note_id ON uploads(note_id)')
 		if not existed:self.path.chmod(384)
 	def connect(self):db=sqlite3.connect(self.path,timeout=5);db.row_factory=sqlite3.Row;return db
 	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None):
@@ -266,10 +273,9 @@ class Store:
 				answered=report.pop('answered');latest=latest_answers.get(report['id']);report['latest_answer_id']=latest['id']if latest else None;report['latest_answer_at']=clip_stamp(latest['at'])if latest else None;report['latest_answer_acknowledged_at']=clip_stamp(latest['acknowledged_at'])if latest else None
 				try:report['needs_answer']=bool(parse_fields(report.pop('markdown'))[1])and not answered
 				except ValueError as error:report['needs_answer']=True;report['field_error']=str(error)
-			uploads=self.uploads();by_note={item['id']:item for item in uploads}
-			for note in notes:
-				attachment=by_note.get(note['id'])
-				if attachment:note['attachment_name']=attachment['name'];note['attachment_path']=attachment['path']
+			uploads=self.uploads();by_note={}
+			for item in uploads:by_note.setdefault(item['note_id'],[]).append(item)
+			for note in notes:add_note_attachments(note,by_note.get(note['id'],[]))
 			fetch_jobs=self.fetch_jobs()
 			for item in notes+reports+uploads+fetch_jobs:
 				for key in('at','acknowledged_at','ack_edited_at','seen_at','updated_at'):
@@ -348,27 +354,53 @@ class Store:
 		identifier(upload_id)
 		with closing(self.connect())as db:row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return None if row is None else upload_row(row,self.path.parent)
-	def save_upload(self,name,content_type,data,upload_id=None,shared=None):
+	def save_upload(self,name,content_type,data,upload_id=None,shared=None,note_id=None,position=None):
 		if not isinstance(data,(bytes,bytearray)):raise TypeError('An upload is bytes')
 		if not data:raise ValueError('An upload must not be empty')
 		if len(data)>MAX_UPLOAD:raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
-		cleaned=upload_name(name);kind=upload_type(content_type);digest=hashlib.sha256(data).hexdigest();upload_id=identifier(upload_id)if upload_id is not None else new_id();directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True);target=directory/f"{upload_id}{Path(cleaned).suffix[:16]}"
+		cleaned=upload_name(name);kind=upload_type(content_type);digest=hashlib.sha256(data).hexdigest();upload_id=identifier(upload_id)if upload_id is not None else new_id();note_id=identifier(note_id)if note_id is not None else upload_id
+		if position is not None and(not isinstance(position,int)or not 1<=position<=MAX_ATTACHMENTS):raise ValueError('Invalid attachment position')
+		directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448);stem=f"{note_id}-{position}"if position is not None else upload_id;target=directory/f"{stem}{Path(cleaned).suffix[:16]}"
 		with self.transaction(shared)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 			if existing:
-				if(existing['name'],existing['type'],existing['size'],existing['sha256'])!=(cleaned,kind,len(data),digest):raise ValueError('This note ID already belongs to a different file')
+				if(existing['note_id'],existing['name'],existing['type'],existing['size'],existing['sha256'],existing['file'])!=(note_id,cleaned,kind,len(data),digest,target.name):raise ValueError('This note ID already belongs to a different file')
 				target=directory/existing['file']
-				if not target.is_file()or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:target.write_bytes(bytes(data))
+				if not target.is_file()or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:target.write_bytes(bytes(data));target.chmod(384)
 				return upload_row(existing,self.path.parent)
-			target.write_bytes(bytes(data));db.execute('INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)',(upload_id,cleaned,kind,len(data),digest,target.name,now()));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
+			target.write_bytes(bytes(data));target.chmod(384);db.execute('INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',(upload_id,note_id,cleaned,kind,len(data),digest,target.name,now()));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return upload_row(row,self.path.parent)
-	def note_with_upload(self,note_id,text,name,content_type,data):
+	def note_with_uploads(self,note_id,text,files):
 		identifier(note_id);note_text(text)
-		with self.transaction()as db:
-			db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT text FROM notes WHERE id = ?',(note_id,)).fetchone()
-			if existing and not db.execute('SELECT 1 FROM uploads WHERE id = ?',(note_id,)).fetchone():raise ValueError('This note ID was already sent without a file')
-			record=self.save_upload(name,content_type,data,upload_id=note_id,shared=db);note=self.note(note_id,text,shared=db);return note|{'attachment_name':record['name'],'attachment_path':record['path']}
+		if not isinstance(files,(list,tuple))or not 1<=len(files)<=MAX_ATTACHMENTS:raise ValueError(f"Attach 1–{MAX_ATTACHMENTS} files to a note")
+		prepared=[]
+		for file in files:
+			if not isinstance(file,(list,tuple))or len(file)!=3:raise ValueError('Each attachment needs a name, type and bytes')
+			name,content_type,data=file
+			if not isinstance(data,(bytes,bytearray)):raise TypeError('An upload is bytes')
+			if not data or len(data)>MAX_UPLOAD:raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
+			prepared.append((upload_name(name),upload_type(content_type),bytes(data)))
+		created=[]
+		try:
+			with self.transaction()as db:
+				db.execute('BEGIN IMMEDIATE');existing=db.execute('SELECT text FROM notes WHERE id = ?',(note_id,)).fetchone();rows=db.execute('SELECT * FROM uploads WHERE note_id = ? ORDER BY seq',(note_id,)).fetchall()
+				if existing and existing['text']!=text:raise ValueError('This message ID already belongs to different text')
+				if rows:
+					if len(rows)!=len(prepared)or any((row['name'],row['type'],row['size'],row['sha256'])!=(name,kind,len(data),hashlib.sha256(data).hexdigest())for(row,(name,kind,data))in zip(rows,prepared)):raise ValueError('This note ID already belongs to different files')
+					for(row,(_,_,data))in zip(rows,prepared):
+						target=self.path.parent/UPLOAD_DIR/row['file']
+						if not target.is_file()or hashlib.sha256(target.read_bytes()).hexdigest()!=row['sha256']:target.parent.mkdir(parents=True,exist_ok=True,mode=448);target.write_bytes(data);target.chmod(384)
+					records=[upload_row(row,self.path.parent)for row in rows]
+				else:
+					if existing:raise ValueError('This note ID was already sent without a file')
+					records=[]
+					for(index,(name,kind,data))in enumerate(prepared,1):record=self.save_upload(name,kind,data,upload_id=note_id if index==1 else new_id(),note_id=note_id,position=index if len(prepared)>1 else None,shared=db);records.append(record);created.append(Path(record['path']))
+				note=self.note(note_id,text,shared=db);return add_note_attachments(note,records)
+		except Exception:
+			for path in created:path.unlink(missing_ok=True)
+			raise
+	def note_with_upload(self,note_id,text,name,content_type,data):return self.note_with_uploads(note_id,text,[(name,content_type,data)])
 	def fetch_jobs(self):
 		with closing(self.connect())as db:rows=db.execute('SELECT * FROM fetch_jobs ORDER BY seq DESC').fetchall()
 		return[fetch_row(row,self.path.parent)for row in rows]
@@ -449,10 +481,10 @@ class Store:
 		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];head=[f"{polls} call/s since user messaged."]if polls and counts else[];return' '.join([*head,*counts,*ack,REMINDERS[cursor%len(REMINDERS)]])
 	def read(self):
 		with self.transaction()as db:
-			pending=[dict(row)|{'kind':'note'}for row in db.execute('SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq')];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')];attachments={row['id']:row for row in db.execute('SELECT id, name, file FROM uploads')}
+			pending=[dict(row)|{'kind':'note'}for row in db.execute('SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq')];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')];attachments={}
+			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
 			for item in pending:
-				attachment=attachments.get(item['id'])if item['kind']=='note'else None
-				if attachment:item['attachment_name']=attachment['name'];item['attachment_path']=str(self.path.parent/UPLOAD_DIR/attachment['file'])
+				if item['kind']=='note':add_note_attachments(item,attachments.get(item['id'],[]))
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));return{'checked_at':clip_stamp(checked),'pending':pending}
 	def mark_seen(self,ids):
@@ -623,7 +655,7 @@ def handler(store):
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
 			elif content_type!='application/json'and not(upload_post or fetch_result):self.problem(415,'Expected application/json');return
 			try:
-				length=int(self.headers.get('Content-Length','0'));limit=MAX_UPLOAD+MAX_BODY if note_upload else MAX_UPLOAD if upload_post else MAX_FETCH if fetch_result else MAX_SUBMISSION_BODY if report_submit else MAX_BODY
+				length=int(self.headers.get('Content-Length','0'));limit=MAX_ATTACHMENTS*MAX_UPLOAD+MAX_BODY if note_upload else MAX_UPLOAD if upload_post else MAX_FETCH if fetch_result else MAX_SUBMISSION_BODY if report_submit else MAX_BODY
 				if not 0<length<=limit:
 					subject='Upload'if upload_post or note_upload else'Download'if fetch_result else'Request body';remaining=length if 0<length<=limit+1 else 0
 					while remaining>0:
@@ -634,7 +666,7 @@ def handler(store):
 				data=self.rfile.read(length)
 				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
 				if note_upload:
-					note=store.note_with_upload(*parse_note_attachment(content_type,data))
+					note=store.note_with_uploads(*parse_note_attachments(content_type,data))
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
 					self.reply(201,json.dumps(note,ensure_ascii=False));return
 				if upload_post:name=parse_qs(urlsplit(self.path).query).get('name',[''])[0];record=store.save_upload(name,self.headers.get('Content-Type',''),data);record['at']=clip_stamp(record['at']);store.note(record['id'],f"Upload: {record['name']} ({record['size']} B, {record['type']or'unknown type'}) saved to {record['path']}");self.reply(201,json.dumps(record,ensure_ascii=False));return

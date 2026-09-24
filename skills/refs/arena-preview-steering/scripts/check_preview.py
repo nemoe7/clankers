@@ -206,14 +206,13 @@ with tempfile.TemporaryDirectory() as directory:
       "copy-state",
       "refresh-notes",
       "attach-file",
-      "remove-file",
       "copy-report",
       "refresh-report",
     ):
       block = page[page.index(f'id="{control}"') :]
       assert "title=" in block[: block.index(">")]
-    # One note owns a staged file. Its picker, chip and record list live in the composer;
-    # Downloads alone gets the remaining tab. Old upload records still render by note ID.
+    # A note owns staged file chips and a native multi-file picker. Backend records remain,
+    # but no saved-files list crowds the composer; Downloads alone keeps the remaining tab.
     assert 'id="downloads-tab" aria-controls="downloads-panel"' in page
     assert (
       'id="downloads-panel" role="tabpanel" aria-labelledby="downloads-tab"' in page
@@ -222,13 +221,13 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'id="uploads-panel"' not in page and 'id="uploads-tab"' not in page
     assert 'id="upload-send"' not in page and 'id="upload-zone"' not in page
     assert page.index('id="compose"') < page.index('id="upload-file"')
-    assert page.index('id="upload-file"') < page.index('id="uploads-list"')
-    assert page.index('id="uploads-list"') < page.index('id="reports-panel"')
-    assert 'id="staged-file"' in page and 'id="remove-file"' in page
+    assert page.index('id="upload-file"') < page.index('id="reports-panel"')
+    assert 'id="staged-files"' in page
+    assert 'id="uploads-list"' not in page and 'id="uploads-history"' not in page
     assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
     assert "50,000,000 bytes" in page
-    assert re.search(r'<input[^>]*id="upload-file"[^>]*type="file"', page)
-    assert "A restore can leave a record without its bytes" in page
+    assert re.search(r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page)
+    assert 'id="log-newest"' in page and 'stroke="#fff"' in page
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]
@@ -1198,6 +1197,101 @@ with tempfile.TemporaryDirectory() as attached_dir:
       pass
   assert Path(record["path"]).read_bytes() == raw
 
+# A several-file send stays one note. Every file has its own record, all records point at the note,
+# and identical retries preserve the note's receipt and the stored bytes without duplicate records.
+with tempfile.TemporaryDirectory() as multi_dir:
+  multi = preview.Store(multi_dir, create=True)
+  files = [
+    ("first photo.png", "image/png", b"PNG\x00\xff"),
+    ("another.bin", "application/octet-stream", b"\x00\x01"),
+    ("last photo.png", "image/png", b"raw\r\nline"),
+  ]
+  saved = multi.note_with_uploads("several-note", "Three files", files)
+  assert saved["id"] == "several-note" and len(saved["attachments"]) == 3
+  assert [item["name"] for item in saved["attachments"]] == [file[0] for file in files]
+  assert saved["attachments"][0]["id"] == "several-note"
+  assert len({item["id"] for item in saved["attachments"]}) == 3
+  assert [Path(item["path"]).name for item in saved["attachments"]] == [
+    "several-note-1.png",
+    "several-note-2.bin",
+    "several-note-3.png",
+  ]
+  assert [Path(item["path"]).read_bytes() for item in saved["attachments"]] == [
+    file[2] for file in files
+  ]
+  assert [item["note_id"] for item in multi.uploads()] == ["several-note"] * 3
+  assert [item["id"] for item in multi.read()["pending"]] == ["several-note"]
+  assert [item["name"] for item in multi.state()["notes"][0]["attachments"]] == [
+    file[0] for file in files
+  ]
+  multi.acknowledge(["several-note"], "note", "Read all three")
+  again = multi.note_with_uploads("several-note", "Three files", files)
+  assert (
+    preview.clip_stamp(again["acknowledged_at"])
+    == multi.state()["notes"][0]["acknowledged_at"]
+  )
+  assert len(multi.state()["notes"]) == 1 and len(multi.uploads()) == 3
+  for changed in ([*files[:2], ("last photo.png", "image/png", b"other")], files[:2]):
+    try:
+      multi.note_with_uploads("several-note", "Three files", changed)
+      raise AssertionError("A retry changed the saved file set")
+    except ValueError:
+      pass
+  assert [Path(item["path"]).read_bytes() for item in saved["attachments"]] == [
+    file[2] for file in files
+  ]
+  try:
+    multi.note_with_uploads(
+      "rejected-note", "Incomplete", [files[0], ("empty.bin", "", b"")]
+    )
+    raise AssertionError("An invalid file committed part of a note")
+  except ValueError:
+    pass
+  assert len(multi.state()["notes"]) == 1 and len(multi.uploads()) == 3
+  missing = Path(saved["attachments"][1]["path"])
+  missing.unlink()
+  assert multi.state()["notes"][0]["attachments"][1]["present"] is False
+  multi.note_with_uploads("several-note", "Three files", files)
+  assert missing.read_bytes() == files[1][2], "an identical retry repairs missing bytes"
+  with patch.object(
+    multi, "note", side_effect=RuntimeError("simulated note write error")
+  ):
+    try:
+      multi.note_with_uploads("rolled-back", "Do not save", files[:2])
+      raise AssertionError("The injected note error never fired")
+    except RuntimeError as error:
+      assert "simulated note write error" in str(error)
+  assert len(multi.state()["notes"]) == 1 and len(multi.uploads()) == 3
+  assert not any(Path(multi_dir, "uploads").glob("rolled-back*"))
+
+# Migration backfills existing single-file upload records so their parent note still displays a
+# filename after this schema introduces note_id; stored bytes are not renamed or removed.
+with tempfile.TemporaryDirectory() as old_upload_dir:
+  old_db = Path(old_upload_dir) / "state.sqlite3"
+  with sqlite3.connect(old_db) as db:
+    db.execute(
+      "CREATE TABLE uploads (seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL)"
+    )
+    db.execute(
+      "INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      (
+        "old-file",
+        "photo.png",
+        "image/png",
+        3,
+        hashlib.sha256(b"PNG").hexdigest(),
+        "old-file.png",
+        "2026-09-22T00:00:00+00:00",
+      ),
+    )
+  Path(old_upload_dir, "uploads").mkdir()
+  Path(old_upload_dir, "uploads", "old-file.png").write_bytes(b"PNG")
+  migrated = preview.Store(old_upload_dir)
+  assert migrated.upload("old-file")["note_id"] == "old-file"
+  migrated.note("old-file", "Upload: photo.png")
+  assert migrated.state()["notes"][0]["attachments"][0]["name"] == "photo.png"
+  assert Path(migrated.upload("old-file")["path"]).read_bytes() == b"PNG"
+
 with tempfile.TemporaryDirectory() as attached_http_dir:
   attached_http = preview.Store(attached_http_dir, create=True)
   app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(attached_http))
@@ -1262,6 +1356,42 @@ with tempfile.TemporaryDirectory() as attached_http_dir:
     closing = b"--" + boundary + b"--\r\n"
     invalid = body[: -len(closing)] + part(b"extra", b"no") + closing
     assert request("POST", "/api/notes/with-file", invalid, headers)[0] == 400
+    several = (
+      part(b"id", b"http-several")
+      + part(b"text", b"Several files")
+      + part(b"file", b"abc", b'; filename="a.txt"\r\nContent-Type: text/plain')
+      + part(
+        b"file",
+        b"\x00\xff",
+        b'; filename="b.bin"\r\nContent-Type: application/octet-stream',
+      )
+      + closing
+    )
+    status, _, payload = request("POST", "/api/notes/with-file", several, headers)
+    received = json.loads(payload)
+    assert status == 201 and received["id"] == "http-several"
+    assert [item["name"] for item in received["attachments"]] == ["a.txt", "b.bin"]
+    assert [Path(item["path"]).name for item in received["attachments"]] == [
+      "http-several-1.txt",
+      "http-several-2.bin",
+    ]
+    assert [Path(item["path"]).read_bytes() for item in received["attachments"]] == [
+      b"abc",
+      b"\x00\xff",
+    ]
+    assert request("POST", "/api/notes/with-file", several, headers)[0] == 201
+    assert (
+      len(attached_http.state()["notes"]) == 2 and len(attached_http.uploads()) == 3
+    )
+    bad = (
+      several[: -len(closing)]
+      + part(b"file", b"other", b'; filename="c.txt"')
+      + closing
+    )
+    assert request("POST", "/api/notes/with-file", bad, headers)[0] == 400
+    assert (
+      len(attached_http.state()["notes"]) == 2 and len(attached_http.uploads()) == 3
+    )
   finally:
     app.shutdown()
     app.server_close()
@@ -2179,6 +2309,7 @@ with tempfile.TemporaryDirectory() as reminder_dir:
 with tempfile.TemporaryDirectory() as rotate_dir:
   rotate_store = preview.Store(rotate_dir, create=True)
   rotate_script = str(Path(preview.__file__))
+  assert "Ask your questions via report forms." in preview.REMINDERS
   span = len(preview.REMINDERS)
   cycle = [rotate_store.reminder() for _ in range(span)]
   assert cycle == list(preview.REMINDERS)
@@ -2191,7 +2322,8 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   rotate_store.note("rotate-note", "Pending")
   pending = "1 message/s. DO NOT IGNORE. ACK ASAP. "
   assert rotate_store.reminder() == f"{pending}{preview.REMINDERS[4]}"
-  for cursor, polls in ((2 * span, 1), (2 * span + 1, 2)):
+  offset = span + 5
+  for cursor, polls in ((offset, 1), (offset + 1, 2)):
     result = subprocess.run(
       [sys.executable, rotate_script, "--state-dir", rotate_dir, "--reminder"],
       capture_output=True,
@@ -2210,26 +2342,26 @@ with tempfile.TemporaryDirectory() as rotate_dir:
     check=True,
   )
   json.loads(result.stdout)
-  tail = preview.REMINDERS[(2 * span + 2) % span]
+  tail = preview.REMINDERS[(offset + 2) % span]
   assert result.stderr.strip() == f"2 call/s since user messaged. {pending}{tail}"
   # A read does not erase the calls since this user message. Only a new user item resets it.
   rotate_store.read()
   assert rotate_store.reminder() == (
-    f"2 call/s since user messaged. {pending}{preview.REMINDERS[(2 * span + 3) % span]}"
+    f"2 call/s since user messaged. {pending}{preview.REMINDERS[(offset + 3) % span]}"
   )
   # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
   rotate_store.acknowledge(["rotate-note"], "note", "Done")
-  assert rotate_store.reminder(advance=True) == preview.REMINDERS[(2 * span + 4) % span]
-  assert rotate_store.reminder(advance=True) == preview.REMINDERS[(2 * span + 5) % span]
+  assert rotate_store.reminder(advance=True) == preview.REMINDERS[(offset + 4) % span]
+  assert rotate_store.reminder(advance=True) == preview.REMINDERS[(offset + 5) % span]
   rotate_store.note("rotate-later", "Pending again")
   assert rotate_store.reminder(advance=True) == (
-    f"1 call/s since user messaged. {pending}{preview.REMINDERS[(2 * span + 6) % span]}"
+    f"1 call/s since user messaged. {pending}{preview.REMINDERS[(offset + 6) % span]}"
   )
   rotate_store.note("rotate-newer", "Another user message")
   newer = "2 message/s. DO NOT IGNORE. ACK ASAP. "
-  assert rotate_store.reminder() == newer + preview.REMINDERS[(2 * span + 7) % span]
+  assert rotate_store.reminder() == newer + preview.REMINDERS[(offset + 7) % span]
   assert rotate_store.reminder(advance=True) == (
-    f"1 call/s since user messaged. {newer}{preview.REMINDERS[(2 * span + 8) % span]}"
+    f"1 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 8) % span]}"
   )
 
 with tempfile.TemporaryDirectory() as marker_dir:

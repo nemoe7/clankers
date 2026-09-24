@@ -68,11 +68,14 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .log-card > .row:first-child { margin-block: 0; }
 .card.compose { flex: 0 0 auto; padding: 8px 18px; }
 .compose .row { margin: 6px 0; }
-.composer-heading { flex-wrap: nowrap; gap: 8px; }
-.composer-label { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.composer-heading { flex-wrap: wrap; gap: 8px; }
+.composer-label { display: inline-flex; align-items: center; gap: 7px; min-width: 0; flex-wrap: wrap; }
 .composer-label label { margin: 0; white-space: nowrap; }
-#staged-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(42vw, 320px); }
-#attach-file, #remove-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
+#staged-files { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: 100%; }
+.staged-chip { display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 2px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--bubble); }
+.staged-chip-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.staged-chip button { min-height: 0; padding: 0 3px; border: 0; background: transparent; }
+#attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
 #compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
 #preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
 body[data-composer="closed"] .compose { display: none; }
@@ -236,16 +239,6 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
 .question-id { display: block; margin-bottom: 4px; }
-/* File records remain accessible from the composer even after a state restore loses bytes. */
-.uploads-history { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; }
-.uploads-history summary { color: var(--muted); font-size: 13px; cursor: pointer; }
-.uploads-history[open] #uploads-list { max-height: 175px; overflow-y: auto; }
-#uploads-note { display: block; margin: 7px 0; }
-.upload-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.upload-name { font-weight: 600; }
-.upload-meta, .upload-where, .upload-gone { color: var(--muted); font-size: 13px; }
-.upload-where { font-family: ui-monospace, monospace; }
-.upload-gone { font-style: italic; }
 /* The browser moves one queued HTTPS file at a time; long URLs and errors must wrap. */
 .downloads-layout { max-width: 900px; margin: auto; display: flex; flex-direction: column; gap: 12px; }
 .downloads-layout h2, .downloads-layout p { margin: 0; }
