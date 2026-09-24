@@ -5,7 +5,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 | Skill | Purpose |
 | --- | --- |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox and publish rendered reports, with persistent history and receipts |
-| [gpt-planning](gpt-planning/SKILL.md) | Validate requirements, plans, handoffs, implementation, and completion across phases |
+| [gpt-planning](gpt-planning/SKILL.md) | Keep requirements, plans, handoffs, implementation, and completion aligned across phases |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
 
