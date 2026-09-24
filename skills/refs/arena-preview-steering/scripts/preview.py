@@ -12,6 +12,8 @@ import sys
 import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
+from email import policy
+from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, urlunsplit
@@ -59,7 +61,7 @@ REMINDERS = (
   "Keep docs terse but clear.",
 )
 REMINDER_CURSOR = "reminder_cursor"
-POLLS_SINCE_READ = "polls_since_read"
+POLLS_SINCE_MESSAGE = "polls_since_message"
 
 
 def now():
@@ -429,6 +431,44 @@ def upload_type(content_type):
   return cleaned or "application/octet-stream"
 
 
+def parse_note_attachment(content_type, data):
+  """Read exactly one ID, note and binary file from a bounded multipart body."""
+  if len(content_type) > 200 or any(char in content_type for char in "\r\n"):
+    raise ValueError("Invalid multipart boundary")
+  prefix = (
+    b"MIME-Version: 1.0\r\nContent-Type: " + content_type.encode("ascii") + b"\r\n\r\n"
+  )
+  message = BytesParser(policy=policy.default).parsebytes(prefix + data)
+  if not message.is_multipart() or message.defects:
+    raise ValueError("Send one file with a valid multipart boundary")
+  parts = list(message.iter_parts())
+  if len(parts) != 3:
+    raise ValueError("Send one note ID, text and file")
+  fields = {}
+  for part in parts:
+    name = part.get_param("name", header="content-disposition")
+    if part.get_content_disposition() != "form-data" or name not in {
+      "id",
+      "text",
+      "file",
+    }:
+      raise ValueError("Unexpected note attachment field")
+    if name in fields or part.defects or part.is_multipart():
+      raise ValueError("Duplicate or invalid note attachment field")
+    body = part.get_payload(decode=True)
+    if body is None:
+      raise ValueError("Invalid note attachment bytes")
+    if name == "file":
+      fields[name] = (part.get_filename(), part.get_content_type(), body)
+    else:
+      if part.get_filename() is not None:
+        raise ValueError("Only file may have a filename")
+      fields[name] = body.decode("utf-8")
+  if set(fields) != {"id", "text", "file"}:
+    raise ValueError("Send one note ID, text and file")
+  return fields["id"], fields["text"], *fields["file"]
+
+
 def upload_row(row, directory):
   """A stored upload, plus the two things the row cannot say: where the bytes are and whether they are there."""
   path = directory / UPLOAD_DIR / row["file"]
@@ -634,6 +674,7 @@ class Store:
     task_id=None,
     ack_edited_at=None,
     autosave=True,
+    shared=None,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -647,8 +688,9 @@ class Store:
     note_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
     seen = when(seen_at) if seen_at is not None else None
-    with self.transaction(autosave=autosave) as db:
-      db.execute("BEGIN IMMEDIATE")
+    with self.transaction(shared, autosave=autosave) as db:
+      if shared is None:
+        db.execute("BEGIN IMMEDIATE")
       existing = db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
       if existing:
         if existing["text"] != text:
@@ -660,6 +702,7 @@ class Store:
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (note_id, text, at or now(), *receipt, seen, task_id),
       )
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,))
       return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
 
   def submission(
@@ -711,6 +754,7 @@ class Store:
           task_id,
         ),
       )
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,))
       return dict(
         db.execute(
           "SELECT * FROM submissions WHERE id = ?", (submission_id,)
@@ -762,6 +806,12 @@ class Store:
           report["needs_answer"] = True
           report["field_error"] = str(error)
       uploads = self.uploads()
+      by_note = {item["id"]: item for item in uploads}
+      for note in notes:
+        attachment = by_note.get(note["id"])
+        if attachment:
+          note["attachment_name"] = attachment["name"]
+          note["attachment_path"] = attachment["path"]
       fetch_jobs = self.fetch_jobs()
       for item in notes + reports + uploads + fetch_jobs:
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):
@@ -1010,15 +1060,8 @@ class Store:
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return None if row is None else upload_row(row, self.path.parent)
 
-  def save_upload(self, name, content_type, data):
-    """Write the bytes under the state directory and keep the record in the database.
-
-    Disk first, on the owner's answer: the bytes never pass through the
-    database, and the row carries the file name, the size, the hash and the content type. A record
-    outlives its file by design, because a restore deletes what is under the state directory, so
-    `present` reports that instead of an entry that silently opens nothing. Any bytes are accepted,
-    so a screenshot and an archive arrive as themselves.
-    """
+  def save_upload(self, name, content_type, data, upload_id=None, shared=None):
+    """Keep raw bytes beside SQLite; a linked note reuses its ID and is safe to retry."""
     if not isinstance(data, (bytes, bytearray)):
       raise TypeError("An upload is bytes")
     if not data:
@@ -1026,30 +1069,64 @@ class Store:
     if len(data) > MAX_UPLOAD:
       raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
     cleaned = upload_name(name)
-    upload_id = new_id()
+    kind = upload_type(content_type)
+    digest = hashlib.sha256(data).hexdigest()
+    upload_id = identifier(upload_id) if upload_id is not None else new_id()
     directory = self.path.parent / UPLOAD_DIR
     directory.mkdir(parents=True, exist_ok=True)
-    # The id names the file on disk and the owner's name only reaches the record, so no path the owner
-    # types can escape the uploads directory.
+    # The owner's name never supplies a path. Linked files use the full note ID, preserving only
+    # the extension; a retry cannot replace another name or another set of bytes.
     target = directory / f"{upload_id}{Path(cleaned).suffix[:16]}"
-    target.write_bytes(bytes(data))
-    stamp = now()
-    with self.transaction() as db:
+    with self.transaction(shared) as db:
+      if shared is None:
+        db.execute("BEGIN IMMEDIATE")
+      existing = db.execute(
+        "SELECT * FROM uploads WHERE id = ?", (upload_id,)
+      ).fetchone()
+      if existing:
+        if (
+          existing["name"],
+          existing["type"],
+          existing["size"],
+          existing["sha256"],
+        ) != (cleaned, kind, len(data), digest):
+          raise ValueError("This note ID already belongs to a different file")
+        target = directory / existing["file"]
+        if (
+          not target.is_file()
+          or hashlib.sha256(target.read_bytes()).hexdigest() != digest
+        ):
+          target.write_bytes(bytes(data))
+        return upload_row(existing, self.path.parent)
+      target.write_bytes(bytes(data))
       db.execute(
         "INSERT INTO uploads (id, name, type, size, sha256, file, at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (
-          upload_id,
-          cleaned,
-          upload_type(content_type),
-          len(data),
-          hashlib.sha256(bytes(data)).hexdigest(),
-          target.name,
-          stamp,
-        ),
+        (upload_id, cleaned, kind, len(data), digest, target.name, now()),
       )
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return upload_row(row, self.path.parent)
+
+  def note_with_upload(self, note_id, text, name, content_type, data):
+    """Store one attachment and one note under one ID and one SQLite transaction."""
+    identifier(note_id)
+    note_text(text)
+    with self.transaction() as db:
+      db.execute("BEGIN IMMEDIATE")
+      existing = db.execute(
+        "SELECT text FROM notes WHERE id = ?", (note_id,)
+      ).fetchone()
+      if (
+        existing
+        and not db.execute("SELECT 1 FROM uploads WHERE id = ?", (note_id,)).fetchone()
+      ):
+        raise ValueError("This note ID was already sent without a file")
+      record = self.save_upload(name, content_type, data, upload_id=note_id, shared=db)
+      note = self.note(note_id, text, shared=db)
+      return note | {
+        "attachment_name": record["name"],
+        "attachment_path": record["path"],
+      }
 
   def fetch_jobs(self):
     """Queue status and saved file locations; a claim token never reaches the state poll."""
@@ -1274,8 +1351,8 @@ class Store:
     The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook
     poll, and that count prints only beside a pending count, so an idle line carries the tail
     alone. A poll that finds nothing pending clears the count, so the printed number reports
-    the bash calls the current pending items have waited. Only `--reminder` advances it, and
-    `read` clears it.
+    the bash calls since the latest owner message. Only `--reminder` advances it; a new
+    note or form answer resets it, and `read` does not.
     """
     with closing(self.connect()) as db, db:
       uploads = db.execute(
@@ -1291,19 +1368,18 @@ class Store:
         "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
       ).fetchone()[0]
       cursor = meta_number(db, REMINDER_CURSOR)
-      # An idle poll has nothing waiting, so it does not count: the tally starts with the
-      # pending item the number reports.
+      # A new user item resets the count. An idle poll clears it; reading does not.
       polls = (
         0
         if advance and not (notes + reports + uploads)
-        else meta_number(db, POLLS_SINCE_READ) + (1 if advance else 0)
+        else meta_number(db, POLLS_SINCE_MESSAGE) + (1 if advance else 0)
       )
       db.execute(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMINDER_CURSOR, str(cursor + 1))
       )
       if advance:
         db.execute(
-          "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_READ, str(polls))
+          "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_MESSAGE, str(polls))
         )
     counts = [
       f"{count} {kind}/s."
@@ -1315,7 +1391,7 @@ class Store:
       if count
     ]
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
-    head = [f"{polls} call/s waiting."] if polls and counts else []
+    head = [f"{polls} call/s since user messaged."] if polls and counts else []
     return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
 
   def read(self):
@@ -1332,13 +1408,21 @@ class Store:
           "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq"
         )
       ]
+      attachments = {
+        row["id"]: row for row in db.execute("SELECT id, name, file FROM uploads")
+      }
       for item in pending:
+        attachment = attachments.get(item["id"]) if item["kind"] == "note" else None
+        if attachment:
+          item["attachment_name"] = attachment["name"]
+          item["attachment_path"] = str(
+            self.path.parent / UPLOAD_DIR / attachment["file"]
+          )
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           item[key] = clip_stamp(item[key])
       pending.sort(key=lambda item: item["at"])
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
-      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_READ,))
       return {"checked_at": clip_stamp(checked), "pending": pending}
 
   def mark_seen(self, ids):
@@ -1777,6 +1861,7 @@ def handler(store):
         r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry)", path
       )
       upload_post = path == "/api/uploads"
+      note_upload = path == "/api/notes/with-file"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
         path
@@ -1789,6 +1874,7 @@ def handler(store):
         and not report_submit
         and not report_seen
         and not upload_post
+        and not note_upload
         and not fetch_post
       ):
         self.problem(404, "Not found")
@@ -1797,16 +1883,21 @@ def handler(store):
       if not secrets.compare_digest(supplied, token.encode("ascii")):
         self.problem(403, "Reload the preview, then retry; your draft is kept")
         return
-      # Owner uploads and claimed fetch results are raw bytes. Other routes take JSON.
-      if self.headers.get("Content-Type") != "application/json" and not (
-        upload_post or fetch_result
-      ):
+      # A composed note carries one file and its text in one bounded multipart request.
+      content_type = self.headers.get("Content-Type", "")
+      if note_upload:
+        if not content_type.lower().startswith("multipart/form-data;"):
+          self.problem(415, "Expected multipart/form-data")
+          return
+      elif content_type != "application/json" and not (upload_post or fetch_result):
         self.problem(415, "Expected application/json")
         return
       try:
         length = int(self.headers.get("Content-Length", "0"))
         limit = (
-          MAX_UPLOAD
+          MAX_UPLOAD + MAX_BODY
+          if note_upload
+          else MAX_UPLOAD
           if upload_post
           else MAX_FETCH
           if fetch_result
@@ -1816,7 +1907,11 @@ def handler(store):
         )
         if not 0 < length <= limit:
           subject = (
-            "Upload" if upload_post else "Download" if fetch_result else "Request body"
+            "Upload"
+            if upload_post or note_upload
+            else "Download"
+            if fetch_result
+            else "Request body"
           )
           # Discard at most one byte over the limit in chunks. Clients sending a wider body get
           # the 413 without forcing this server to buffer or read all of it.
@@ -1831,6 +1926,12 @@ def handler(store):
         data = self.rfile.read(length)
         if len(data) != length:
           self.problem(400, "Incomplete request body; retry the upload or request")
+          return
+        if note_upload:
+          note = store.note_with_upload(*parse_note_attachment(content_type, data))
+          for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
+            note[key] = clip_stamp(note[key])
+          self.reply(201, json.dumps(note, ensure_ascii=False))
           return
         if upload_post:
           # The file name rides the query string because the body is the file itself. The bytes are

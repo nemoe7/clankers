@@ -183,6 +183,10 @@ with tempfile.TemporaryDirectory() as directory:
     assert 'id="log-filter"' in page and 'id="log-empty"' in page
     # The log's jump bar ships in the page, inside the wrapper that positions it over the scroll area.
     assert 'id="log-newest"' in page and 'class="log-scroll"' in page
+    assert 'aria-label="Scroll to bottom"' in page
+    assert '<svg width="14" height="14" viewBox="0 0 24 24"' in page
+    assert "↓ Latest message" not in page
+    assert re.search(r"\.log-newest\s*\{[^}]*border-radius:\s*4px", page)
     # The bar hugs its label rather than spanning the pane.
     assert "translateX(-50%)" in page
     # The save button sits in the top bar after the theme button rather than in the log's own row, on
@@ -201,26 +205,30 @@ with tempfile.TemporaryDirectory() as directory:
     for control in (
       "copy-state",
       "refresh-notes",
-      "upload-send",
+      "attach-file",
+      "remove-file",
       "copy-report",
       "refresh-report",
     ):
       block = page[page.index(f'id="{control}"') :]
       assert "title=" in block[: block.index(">")]
-    # One Files tab carries both workflows and records, including restored rows without bytes.
-    assert 'id="files-tab" aria-controls="files-panel"' in page
-    assert 'id="files-panel" role="tabpanel" aria-labelledby="files-tab"' in page
-    assert 'id="uploads-tab"' not in page and 'id="downloads-tab"' not in page
-    assert 'id="uploads-panel"' not in page and 'id="downloads-panel"' not in page
-    assert page.index('id="files-panel"') < page.index('id="upload-file"')
-    assert page.index('id="upload-file"') < page.index('id="fetch-url"')
-    assert 'id="upload-file"' in page and 'id="uploads-list"' in page
+    # One note owns a staged file. Its picker, chip and record list live in the composer;
+    # Downloads alone gets the remaining tab. Old upload records still render by note ID.
+    assert 'id="downloads-tab" aria-controls="downloads-panel"' in page
+    assert (
+      'id="downloads-panel" role="tabpanel" aria-labelledby="downloads-tab"' in page
+    )
+    assert 'id="files-tab"' not in page and 'id="files-panel"' not in page
+    assert 'id="uploads-panel"' not in page and 'id="uploads-tab"' not in page
+    assert 'id="upload-send"' not in page and 'id="upload-zone"' not in page
+    assert page.index('id="compose"') < page.index('id="upload-file"')
+    assert page.index('id="upload-file"') < page.index('id="uploads-list"')
+    assert page.index('id="uploads-list"') < page.index('id="reports-panel"')
+    assert 'id="staged-file"' in page and 'id="remove-file"' in page
     assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
     assert "50,000,000 bytes" in page
-    assert re.search(r'<input[^>]*id="upload-file"[^>]*\bmultiple\b', page)
-    assert (
-      "A record survives a restore of the preview state, and its bytes do not" in page
-    )
+    assert re.search(r'<input[^>]*id="upload-file"[^>]*type="file"', page)
+    assert "A restore can leave a record without its bytes" in page
     for value in ("all", "sent", "seen", "said"):
       assert f'<option value="{value}">' in page
     assert "frame-ancestors" not in headers["Content-Security-Policy"]
@@ -415,10 +423,14 @@ with tempfile.TemporaryDirectory() as directory:
     assert "border-color:var(--accent)" not in page
     assert "padding-bottom:12px" in page
     assert "#report-form{min-width:0;margin-top:12px" in page
+    assert re.search(r"\.card\.compose\{[^}]*padding:8px 18px", page), (
+      "composer padding must override .card"
+    )
     assert (
       ".message{margin-bottom:14px;background:var(--bubble);padding:8px 14px;border-radius:8px"
       in page
     )
+    assert ".message:last-child{margin-bottom:0" in page
     assert re.search(
       r"\.answer\.reply\{border-left:2px solid (rgb\(199,194,188\)|#c7c2bc);"
       r"padding-left:12px;color:var\(--muted\);font-size:13px",
@@ -532,7 +544,8 @@ with tempfile.TemporaryDirectory() as directory:
     assert page.count("#send{") == 0
     assert "resize:none" in page and "resize:vertical" not in page
     assert (
-      "#notes-panel,#reports-panel,#tasks-panel,#files-panel{overflow-y:auto" in page
+      "#notes-panel,#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto"
+      in page
     )
     assert 'id="tasks-tab" aria-controls="tasks-panel"' in page
     assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
@@ -1145,6 +1158,110 @@ with tempfile.TemporaryDirectory() as directory:
     )
     store.publish("seen", "Seen report revised", source)
     assert store.state()["reports"][-1]["seen_at"] is None
+  finally:
+    app.shutdown()
+    app.server_close()
+    worker.join()
+
+# A composed note owns one attachment with the same ID. The original name reaches its receipt,
+# while the stored bytes use the full note ID and only one inbox note is created.
+with tempfile.TemporaryDirectory() as attached_dir:
+  attached = preview.Store(attached_dir, create=True)
+  raw = bytes(range(256)) + b"\r\nline two\x00"
+  note = attached.note_with_upload(
+    "linked-note", "Read this file", "old name.bin", "application/octet-stream", raw
+  )
+  assert note["id"] == "linked-note" and note["text"] == "Read this file"
+  record = attached.upload("linked-note")
+  assert record["name"] == "old name.bin" and record["size"] == len(raw)
+  assert Path(record["path"]).name == "linked-note.bin"
+  assert Path(record["path"]).read_bytes() == raw
+  assert [item["id"] for item in attached.read()["pending"]] == ["linked-note"]
+  assert attached.state()["notes"][0]["attachment_name"] == "old name.bin"
+  assert attached.read()["pending"][0]["attachment_path"] == record["path"]
+  attached.acknowledge(["linked-note"], "note", "Seen")
+  again = attached.note_with_upload(
+    "linked-note", "Read this file", "old name.bin", "application/octet-stream", raw
+  )
+  assert (
+    preview.clip_stamp(again["acknowledged_at"])
+    == attached.state()["notes"][0]["acknowledged_at"]
+  )
+  assert len(attached.uploads()) == 1 and len(attached.state()["notes"]) == 1
+  for text, content in (("Different text", raw), ("Read this file", b"different")):
+    try:
+      attached.note_with_upload(
+        "linked-note", text, "old name.bin", "application/octet-stream", content
+      )
+      raise AssertionError("A reused note ID replaced an attachment or its text")
+    except ValueError:
+      pass
+  assert Path(record["path"]).read_bytes() == raw
+
+with tempfile.TemporaryDirectory() as attached_http_dir:
+  attached_http = preview.Store(attached_http_dir, create=True)
+  app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(attached_http))
+  worker = threading.Thread(target=app.serve_forever, daemon=True)
+  worker.start()
+  try:
+    token = re.search(r'data-token="([^"]+)"', request("GET", "/")[2])[1]
+    boundary = b"preview-attachment-test"
+
+    def part(name, content, extra=b""):
+      return (
+        b"--"
+        + boundary
+        + b'\r\nContent-Disposition: form-data; name="'
+        + name
+        + b'"'
+        + extra
+        + b"\r\n\r\n"
+        + content
+        + b"\r\n"
+      )
+
+    binary = b"\x00\xff\r\nraw bytes\x00"
+    body = (
+      part(b"id", b"http-note")
+      + part(b"text", b"Please see attachment")
+      + part(b"file", binary, b'; filename="old photo.png"\r\nContent-Type: image/png')
+      + b"--"
+      + boundary
+      + b"--\r\n"
+    )
+    headers = {
+      "Content-Type": "multipart/form-data; boundary=preview-attachment-test",
+      "X-Preview-Token": token,
+    }
+    assert (
+      request(
+        "POST", "/api/notes/with-file", body, {"Content-Type": headers["Content-Type"]}
+      )[0]
+      == 403
+    )
+    assert (
+      request(
+        "POST",
+        "/api/notes/with-file",
+        b"{}",
+        {"Content-Type": "application/json", "X-Preview-Token": token},
+      )[0]
+      == 415
+    )
+    invalid_header = {**headers, "Content-Type": "multipart/form-data; boundary=é"}
+    assert request("POST", "/api/notes/with-file", body, invalid_header)[0] == 400
+    status, _, payload = request("POST", "/api/notes/with-file", body, headers)
+    saved = json.loads(payload)
+    assert status == 201 and saved["id"] == "http-note"
+    assert saved["attachment_name"] == "old photo.png"
+    assert Path(saved["attachment_path"]).name == "http-note.png"
+    assert Path(saved["attachment_path"]).read_bytes() == binary
+    assert [item["id"] for item in attached_http.read()["pending"]] == ["http-note"]
+    assert request("POST", "/api/notes/with-file", body, headers)[0] == 201
+    assert len(attached_http.uploads()) == len(attached_http.state()["notes"]) == 1
+    closing = b"--" + boundary + b"--\r\n"
+    invalid = body[: -len(closing)] + part(b"extra", b"no") + closing
+    assert request("POST", "/api/notes/with-file", invalid, headers)[0] == 400
   finally:
     app.shutdown()
     app.server_close()
@@ -2058,7 +2175,7 @@ with tempfile.TemporaryDirectory() as reminder_dir:
   assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
 
 # The tail rotates through the whole list before it repeats, a hook poll counts itself, a CLI
-# dispatch does not, the count prints only beside a pending count, and a read clears it.
+# dispatch and a read do not, and the count resets when a new user item arrives.
 with tempfile.TemporaryDirectory() as rotate_dir:
   rotate_store = preview.Store(rotate_dir, create=True)
   rotate_script = str(Path(preview.__file__))
@@ -2082,7 +2199,9 @@ with tempfile.TemporaryDirectory() as rotate_dir:
       check=True,
     )
     tail = preview.REMINDERS[cursor % span]
-    assert result.stdout.strip() == f"{polls} call/s waiting. {pending}{tail}"
+    assert (
+      result.stdout.strip() == f"{polls} call/s since user messaged. {pending}{tail}"
+    )
     assert result.stderr == ""
   result = subprocess.run(
     [sys.executable, rotate_script, "--state-dir", rotate_dir, "task-list"],
@@ -2092,17 +2211,25 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   )
   json.loads(result.stdout)
   tail = preview.REMINDERS[(2 * span + 2) % span]
-  assert result.stderr.strip() == f"2 call/s waiting. {pending}{tail}"
-  # A read clears the count, and the note stays pending until an ack answers it.
+  assert result.stderr.strip() == f"2 call/s since user messaged. {pending}{tail}"
+  # A read does not erase the calls since this user message. Only a new user item resets it.
   rotate_store.read()
-  assert rotate_store.reminder() == pending + preview.REMINDERS[(2 * span + 3) % span]
+  assert rotate_store.reminder() == (
+    f"2 call/s since user messaged. {pending}{preview.REMINDERS[(2 * span + 3) % span]}"
+  )
   # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
   rotate_store.acknowledge(["rotate-note"], "note", "Done")
   assert rotate_store.reminder(advance=True) == preview.REMINDERS[(2 * span + 4) % span]
   assert rotate_store.reminder(advance=True) == preview.REMINDERS[(2 * span + 5) % span]
   rotate_store.note("rotate-later", "Pending again")
   assert rotate_store.reminder(advance=True) == (
-    f"1 call/s waiting. {pending}{preview.REMINDERS[(2 * span + 6) % span]}"
+    f"1 call/s since user messaged. {pending}{preview.REMINDERS[(2 * span + 6) % span]}"
+  )
+  rotate_store.note("rotate-newer", "Another user message")
+  newer = "2 message/s. DO NOT IGNORE. ACK ASAP. "
+  assert rotate_store.reminder() == newer + preview.REMINDERS[(2 * span + 7) % span]
+  assert rotate_store.reminder(advance=True) == (
+    f"1 call/s since user messaged. {newer}{preview.REMINDERS[(2 * span + 8) % span]}"
   )
 
 with tempfile.TemporaryDirectory() as marker_dir:

@@ -13,7 +13,7 @@
         <button type="button" role="tab" id="notes-tab" aria-controls="notes-panel" aria-selected="true">Notes <span id="notes-pip" role="img" aria-label="Unread edited reply" title="Unread edited reply" hidden></span></button>
         <button type="button" role="tab" id="reports-tab" aria-controls="reports-panel" aria-selected="false" tabindex="-1">Reports <span id="report-pip" role="img" aria-label="No unread report" title="No unread report" hidden></span></button>
         <button type="button" role="tab" id="tasks-tab" aria-controls="tasks-panel" aria-selected="false" tabindex="-1">Tasks</button>
-        <button type="button" role="tab" id="files-tab" aria-controls="files-panel" aria-selected="false" tabindex="-1">Files</button>
+        <button type="button" role="tab" id="downloads-tab" aria-controls="downloads-panel" aria-selected="false" tabindex="-1">Downloads</button>
       </nav>
       <span class="row tight">
         <span id="clock" class="muted" title="Local time">--:--</span>
@@ -42,14 +42,17 @@
           </div>
           <div class="log-scroll">
             <ol id="history" aria-label="Messages, oldest first"></ol>
-            <button id="log-newest" class="log-newest" type="button" hidden>↓ Latest message</button>
+            <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" title="Scroll to bottom" hidden><svg width="14" height="14" viewBox="0 0 24 24" stroke-width="1.5" fill="none" aria-hidden="true" focusable="false"><path d="M12 3L12 21M12 21L20.5 12.5M12 21L3.5 12.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
           </div>
           <p id="log-empty" class="receipt" role="status" hidden></p>
         </section>
         <section class="card compose" id="compose" aria-label="Send a steer">
           <form id="form">
-            <div class="row"><label for="note">Your message</label><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">MD 👁</button></div>
-            <textarea id="note" name="note" rows="3" maxlength="15000" required placeholder="What should happen next?"></textarea>
+            <div class="row composer-heading">
+              <span class="composer-label"><label for="note">Your message</label><span id="staged-file" class="muted" role="status" hidden></span><button id="remove-file" class="icon-button" type="button" aria-label="Remove staged file" title="Remove staged file" hidden>×</button></span>
+              <span class="row tight"><input id="upload-file" type="file" aria-label="Choose a file to attach" hidden><button id="attach-file" class="icon-button" type="button" aria-label="Choose a file to attach" title="Choose a file to attach">＋</button><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">MD 👁</button></span>
+            </div>
+            <textarea id="note" name="note" rows="3" maxlength="15000" placeholder="What should happen next?"></textarea>
             <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
             <div class="row">
               <div class="stack">
@@ -59,6 +62,11 @@
               <button id="send" type="submit">Send note</button>
             </div>
           </form>
+          <details id="uploads-history" class="uploads-history">
+            <summary id="uploads-count">No files uploaded yet.</summary>
+            <small id="uploads-note">Files saved with a note use that note's ID as their stored filename. Records keep each original name, type, size and hash. A restore can leave a record without its bytes.</small>
+            <ul id="uploads-list" class="task-list"></ul>
+          </details>
         </section>
       </div>
     </section>
@@ -98,22 +106,8 @@
         </div>
       </div>
     </section>
-    <section id="files-panel" role="tabpanel" aria-labelledby="files-tab" hidden>
-      <div class="files-layout">
-        <div id="upload-zone" class="card uploads-layout">
-          <h2>Uploads</h2>
-          <div class="row tight">
-            <p id="uploads-count" class="muted" role="status">No files uploaded yet.</p>
-            <span class="row tight">
-              <input id="upload-file" type="file" multiple aria-label="Files to upload">
-              <button id="upload-send" class="icon-button" type="button" aria-label="Upload the chosen file" title="Upload the chosen file">↑</button>
-            </span>
-          </div>
-          <p id="upload-status" class="muted" role="status"></p>
-          <p id="uploads-note" class="muted">Each file goes beside the preview database as it is, up to 50,000,000 bytes; the record keeps the name, type, size and hash. A record survives a restore of the preview state, and its bytes do not: a row whose file is gone says so.</p>
-          <ul id="uploads-list" class="task-list"></ul>
-        </div>
-        <div class="card downloads-layout">
+    <section id="downloads-panel" role="tabpanel" aria-labelledby="downloads-tab" hidden>
+      <div class="card downloads-layout">
           <h2>Browser download queue</h2>
           <form id="fetch-form">
             <label for="fetch-url">HTTPS file URL</label>
@@ -127,7 +121,6 @@
           <p id="fetch-count" class="muted" role="status">No downloads queued yet.</p>
           <p id="fetch-status" role="status" aria-live="polite"></p>
           <ol id="fetch-list" class="task-list"></ol>
-        </div>
       </div>
     </section>
   </main>
