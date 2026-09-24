@@ -76,16 +76,19 @@ get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
 get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
 get('#uploads-tab').setAttribute('aria-controls', 'uploads-panel');
+get('#downloads-tab').setAttribute('aria-controls', 'downloads-panel');
 get('#reports-panel').hidden = true;
 get('#tasks-panel').hidden = true;
 get('#uploads-panel').hidden = true;
+get('#downloads-panel').hidden = true;
 get('#upload-file').files = [];
+get('#fetch-proxy').checked = false;
 get('#note').placeholder = 'What should happen next?';
 const storage = new Map();
 const root = { dataset: {} };
 let counter = 0;
 let sendHandler;
-let state = { notes: [], reports: [], last_check: null };
+let state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
 let stateFails = false;
 let reportFields = 0;
 let reportRevision = '2026-09-22T12:00:00.100000+00:00';
@@ -97,6 +100,12 @@ const readStamps = [];
 const uploadCalls = [];
 let uploadFails = false;
 let uploadFailName = '';
+const queuedCalls = [];
+const remoteCalls = [];
+const remoteBehaviors = new Map();
+const resultCalls = [];
+const failedCalls = [];
+let enqueueResponseLost = false;
 let staleToken = false;
 let servedToken = 'token-one';
 let pageFetches = 0;
@@ -109,9 +118,12 @@ const context = {
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `${String(++counter).padStart(8, '0')}-0000-4000-8000-000000000000` },
   AbortController,
+  Blob,
+  URL,
   setTimeout,
   clearTimeout,
-  setInterval: () => {},
+  setInterval: () => 1,
+  clearInterval: () => {},
   fetch: async (url, options) => {
     if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
@@ -135,7 +147,7 @@ const context = {
     if (url.startsWith('/api/uploads')) {
       // The client sends the file itself, so the body is the bytes and the name rides the query string.
       uploadCalls.push({ url, body: options.body, type: options.headers['Content-Type'], token: options.headers['X-Preview-Token'] });
-      if (uploadFails || options.body.name === uploadFailName) return response({ error: 'An upload must be 1,000,000 bytes or fewer' }, false);
+      if (uploadFails || options.body.name === uploadFailName) return response({ error: 'Upload must be 1–50,000,000 bytes' }, false);
       const name = decodeURIComponent((url.split('?name=')[1] || 'file'));
       const record = {
         id: `upload-${uploadCalls.length}`, name, type: options.headers['Content-Type'],
@@ -145,6 +157,68 @@ const context = {
       };
       state.uploads = [...(state.uploads || []), record];
       return response(record);
+    }
+    if (url === '/api/fetch-jobs') {
+      const payload = JSON.parse(options.body);
+      const record = {
+        id: `fetch-${queuedCalls.length + 1}`, url: payload.url, allow_proxy: payload.allow_proxy,
+        status: 'queued', source: null, error: null, name: null, size: null, sha256: null,
+        file: null, present: false, at: '2026-09-22T00:00:00+00:00'
+      };
+      queuedCalls.push({ ...record });
+      state.fetch_jobs = [record, ...(state.fetch_jobs || [])];
+      if (enqueueResponseLost) { enqueueResponseLost = false; throw new Error('response lost after commit'); }
+      return response(record);
+    }
+    if (url === '/api/fetch-jobs/claim') {
+      const record = [...state.fetch_jobs].reverse().find(item => item.status === 'queued');
+      if (!record) return response({ job: null });
+      record.status = 'fetching';
+      return response({ job: { ...record, claim: `claim-${record.id}` } });
+    }
+    if (url.startsWith('/api/fetch-jobs/')) {
+      const [, , , id, actionWithQuery] = url.split('/');
+      const action = actionWithQuery.split('?')[0];
+      const record = state.fetch_jobs.find(item => item.id === id);
+      if (!record) return response({ error: 'No queued download' }, false);
+      if (action === 'result') {
+        resultCalls.push({ url, body: options.body, source: options.headers['X-Fetch-Source'] });
+        record.status = 'saved';
+        record.source = options.headers['X-Fetch-Source'];
+        record.name = decodeURIComponent(url.split('?name=')[1]);
+        record.type = options.headers['Content-Type'];
+        record.size = options.body.size;
+        record.sha256 = 'd'.repeat(64);
+        record.file = id + (record.name.includes('.') ? record.name.slice(record.name.lastIndexOf('.')) : '');
+        record.present = true;
+        return response(record);
+      }
+      if (action === 'fail') {
+        record.status = 'failed';
+        record.error = JSON.parse(options.body).error;
+        failedCalls.push({ id, error: record.error });
+      } else if (action === 'retry') {
+        record.status = 'queued';
+        record.error = null;
+      }
+      return response(record);
+    }
+    if (url.startsWith('https://')) {
+      remoteCalls.push({ url, options });
+      const behavior = remoteBehaviors.get(url) || {};
+      if (behavior.error) throw new Error(behavior.error);
+      const chunks = behavior.chunks || [Uint8Array.from([1, 2, 3])];
+      let position = 0;
+      return {
+        ok: behavior.ok !== false, status: behavior.status || 200, url: behavior.finalURL || url,
+        headers: { get: name => name === 'content-length'
+          ? behavior.declared == null ? null : String(behavior.declared)
+          : behavior.type || 'application/octet-stream' },
+        body: { getReader: () => ({
+          read: async () => position < chunks.length ? { done: false, value: chunks[position++] } : { done: true },
+          cancel: async () => { behavior.cancelled = true; }
+        }) }
+      };
     }
     if (url === '/') {
       // A fresh page carries the token the restarted server accepts, so the retry has one to take.
@@ -254,9 +328,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#uploads-panel').hidden, false);
   assert.equal(get('#tasks-panel').hidden, true);
   get('#uploads-tab').events.keydown(event({ key: 'ArrowRight' }));
+  assert.equal(get('#downloads-panel').hidden, false);
+  get('#downloads-tab').events.keydown(event({ key: 'ArrowRight' }));
   assert.equal(get('#notes-panel').hidden, false);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#uploads-panel').hidden, false);
+  assert.equal(get('#downloads-panel').hidden, false);
   get('#tasks-tab').events.keydown(event({ key: 'Home' }));
   assert.equal(get('#notes-panel').hidden, false);
   // Switching tabs fires an unawaited refreshState, so flush the queue before a click that
@@ -701,9 +777,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-submit').hidden, true);
   assert.equal(get('#report-receipt').hidden, true);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#uploads-panel').hidden, false);
-  assert.equal(get('#uploads-tab').focused, true);
-  assert.equal(get('#uploads-tab').attributes['aria-selected'], 'true');
+  assert.equal(get('#downloads-panel').hidden, false);
+  assert.equal(get('#downloads-tab').focused, true);
+  assert.equal(get('#downloads-tab').attributes['aria-selected'], 'true');
   get('#tasks-tab').events.keydown(event({ key: 'ArrowLeft' }));
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
@@ -1027,7 +1103,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
   // The Uploads tab sends the file itself rather than a JSON envelope, and lists what the server
-  // holds, on the owner's answers: any bytes, a 1,000,000-byte ceiling,
+  // holds, on the owner's answers: any bytes, a 50,000,000-byte ceiling,
   // and a record that outlives them.
   state.uploads = [
     { id: 'kept', name: 'shot.png', type: 'image/png', size: 2048, sha256: 'a'.repeat(64), file: 'kept.png', at: '2026-09-21T00:00:00+00:00', present: true },
@@ -1050,9 +1126,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   await get('#upload-send').events.click();
   assert.equal(get('#upload-status').textContent, 'That file is empty.');
   assert.equal(uploadCalls.length, 0);
-  get('#upload-file').files = [{ name: 'big.bin', size: 1_000_001, type: 'application/octet-stream' }];
+  get('#upload-file').files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
   await get('#upload-send').events.click();
-  assert.equal(get('#upload-status').textContent, 'That file is 1,000,001 bytes; the ceiling is 1,000,000.');
+  assert.equal(get('#upload-status').textContent, 'That file is 50,000,001 bytes; the ceiling is 50,000,000.');
   assert.equal(uploadCalls.length, 0, 'an oversize file never leaves the page');
   const file = { name: 'report card.pdf', size: 12, type: 'application/pdf' };
   get('#upload-file').files = [file];
@@ -1072,7 +1148,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   get('#upload-file').files = [{ name: 'blob', size: 9, type: '' }];
   await get('#upload-send').events.click();
   assert.equal(uploadCalls[1].type, 'application/octet-stream');
-  assert.equal(get('#upload-status').textContent, 'Upload failed: An upload must be 1,000,000 bytes or fewer');
+  assert.equal(get('#upload-status').textContent, 'Upload failed: Upload must be 1–50,000,000 bytes');
   uploadFails = false;
   const batch = [{name: 'first.txt', size: 3, type: 'text/plain'}, {name: 'second.txt', size: 4, type: 'text/plain'}];
   get('#upload-file').files = batch;
@@ -1100,6 +1176,117 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#upload-send').disabled, false);
   assert.equal(get('#upload-file').disabled, false);
   uploadFailName = '';
+  uploadsBefore = uploadCalls.length;
+  get('#upload-file').files = [{ name: 'medium.bin', size: 1_000_001, type: 'application/octet-stream' }];
+  await get('#upload-send').events.click();
+  assert.equal(uploadCalls.length, uploadsBefore + 1, 'manual uploads over 1 MB now reach the server');
+  assert.match(get('#upload-status').textContent, /Saved medium.bin/);
+
+  // The queue records per-job opt-in and a browser worker claims one URL at a time. Remote fetches
+  // omit credentials and referrers. None of these mocks assert actual browser CORS behavior.
+  const waitFor = async predicate => {
+    for (let attempt = 0; attempt < 80; attempt++) {
+      if (predicate()) return;
+      await tick();
+    }
+    throw new Error('Browser queue did not settle');
+  };
+  get('#fetch-url').value = 'http://example.org/unsafe.zip';
+  await get('#fetch-form').events.submit(event({}));
+  assert.match(get('#fetch-status').textContent, /Only HTTPS/);
+  assert.equal(queuedCalls.length, 0);
+  get('#fetch-url').value = 'https://user:password@example.org/unsafe.zip';
+  await get('#fetch-form').events.submit(event({}));
+  assert.equal(queuedCalls.length, 0, 'embedded credentials are rejected before queueing');
+
+  const direct = 'https://files.example.org/plugin.zip';
+  remoteBehaviors.set(direct, { declared: 2, type: 'application/zip', chunks: [Uint8Array.from([80, 75])] });
+  get('#fetch-url').value = direct;
+  await get('#fetch-form').events.submit(event({}));
+  await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
+  assert.equal(queuedCalls[0].allow_proxy, false, 'direct access is the per-job default');
+  assert.equal(remoteCalls.at(-1).url, direct);
+  assert.equal(remoteCalls.at(-1).options.credentials, 'omit');
+  assert.equal(remoteCalls.at(-1).options.referrerPolicy, 'no-referrer');
+  assert.equal(resultCalls[0].source, 'direct');
+  assert.equal(resultCalls[0].body.size, 2);
+  assert.equal(get('#fetch-list').children[0].children[2].textContent, 'downloads/fetch-1.zip');
+  assert.equal(get('#fetch-count').textContent, '1 URL in history; 0 queued or active.');
+
+  const blocked = 'https://files.example.org/cors.zip';
+  remoteBehaviors.set(blocked, { error: 'CORS blocked' });
+  get('#fetch-url').value = blocked;
+  await get('#fetch-form').events.submit(event({}));
+  await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
+  assert.equal(queuedCalls[1].allow_proxy, false);
+  assert.match(state.fetch_jobs[0].error, /CORS blocked.*proxy fallback checked/);
+  assert.equal(remoteCalls.filter(item => item.url.startsWith('https://api.allorigins.win/')).length, 0,
+    'no proxy is used without opt-in');
+  remoteBehaviors.set(blocked, { chunks: [Uint8Array.from([1])] });
+  const retryRow = get('#fetch-list').children.find(item => item.children[0].textContent === blocked);
+  await retryRow.children.at(-1).events.click();
+  await waitFor(() => state.fetch_jobs.find(item => item.url === blocked)?.status === 'saved');
+  assert.equal(queuedCalls.length, 2, 'retry reuses the same SQLite job');
+
+  const origin = 'https://files.example.org/fallback.zip';
+  const allOrigins = `https://api.allorigins.win/raw?url=${encodeURIComponent(origin)}`;
+  remoteBehaviors.set(origin, { error: 'CORS blocked' });
+  remoteBehaviors.set(allOrigins, { chunks: [Uint8Array.from([3, 4])] });
+  get('#fetch-url').value = origin;
+  get('#fetch-proxy').checked = true;
+  await get('#fetch-form').events.submit(event({}));
+  await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
+  assert.equal(queuedCalls[2].allow_proxy, true);
+  assert.equal(get('#fetch-proxy').checked, false, 'the next URL requires its own opt-in');
+  assert.equal(resultCalls.at(-1).source, 'allorigins');
+  assert.equal(remoteCalls.at(-1).url, allOrigins);
+
+  const third = 'https://files.example.org/third.zip';
+  const allOriginsThird = `https://api.allorigins.win/raw?url=${encodeURIComponent(third)}`;
+  const codeTabs = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(third)}`;
+  remoteBehaviors.set(third, { error: 'CORS blocked' });
+  remoteBehaviors.set(allOriginsThird, { error: 'Proxy offline' });
+  remoteBehaviors.set(codeTabs, { chunks: [Uint8Array.from([5])] });
+  get('#fetch-url').value = third;
+  get('#fetch-proxy').checked = true;
+  await get('#fetch-form').events.submit(event({}));
+  await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
+  assert.equal(resultCalls.at(-1).source, 'codetabs');
+  assert.equal(remoteCalls.at(-1).url, codeTabs);
+
+  const tooLarge = 'https://files.example.org/too-large.bin';
+  remoteBehaviors.set(tooLarge, { declared: 50_000_001 });
+  const callsBeforeLimit = remoteCalls.length;
+  const resultsBeforeLimit = resultCalls.length;
+  get('#fetch-url').value = tooLarge;
+  get('#fetch-proxy').checked = true;
+  await get('#fetch-form').events.submit(event({}));
+  await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
+  assert.equal(remoteCalls.length, callsBeforeLimit + 1, 'a declared oversize file never reaches proxies');
+  assert.equal(resultCalls.length, resultsBeforeLimit, 'oversize bytes never reach the preview');
+  assert.match(state.fetch_jobs[0].error, /50,000,000 bytes/);
+
+  const streamed = 'https://files.example.org/stream.bin';
+  const streamBehavior = { chunks: [{ byteLength: 50_000_001 }] };
+  remoteBehaviors.set(streamed, streamBehavior);
+  get('#fetch-url').value = streamed;
+  await get('#fetch-form').events.submit(event({}));
+  await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
+  assert.equal(streamBehavior.cancelled, true, 'oversize streams are cancelled');
+  assert.equal(resultCalls.length, resultsBeforeLimit);
+  const lost = 'https://files.example.org/lost.bin';
+  remoteBehaviors.set(lost, { chunks: [Uint8Array.from([1])] });
+  const beforeLost = queuedCalls.length;
+  enqueueResponseLost = true;
+  get('#fetch-url').value = lost;
+  await get('#fetch-form').events.submit(event({}));
+  assert.equal(queuedCalls.length, beforeLost + 1, 'a lost enqueue response is not blindly retried');
+  assert.match(get('#fetch-status').textContent, /Queue not confirmed.*Check the list/);
+  await get('#refresh-notes').events.click();
+  await waitFor(() => state.fetch_jobs.find(item => item.url === lost)?.status === 'saved');
+  state.fetch_jobs = [];
+  await get('#refresh-notes').events.click();
+
   state.notes = [
     {id: 'edited-old', text: 'Older question', at: '2026-09-22T00:00:00', acknowledged_at: '2026-09-22T00:01:00', ack_kind: 'reply', ack_text: 'First answer', ack_edited_at: null},
     {id: 'newer-note', text: 'Newer question', at: '2026-09-22T00:02:00'}
@@ -1160,5 +1347,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(copied.length, copiesBeforeNotesOnly + 1, 'copy a session before its first task');
   assert.match(copied.at(-1), /"id":"notes-only"/);
   assert.equal(get('#copy-state').dataset.state, 'good');
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation wrapping both ways with Home and End, the uploads tab with its ceiling, its byte-exact POST and a record whose bytes are gone, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, five-tab navigation wrapping both ways with Home and End, 50 MB manual uploads and a browser fetch queue with direct/opt-in proxy fallback and streamed size checks, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });

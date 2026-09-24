@@ -71,7 +71,8 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
       f"{binary} on {source.name}:\n{result.stderr.strip() or 'failed'}"
     )
 
-  return result.stdout.rstrip("\n") + "\n"
+  # The HTML minifier leaves a separator after </html>; do not ship trailing whitespace.
+  return result.stdout.rstrip() + "\n"
 
 
 def strip_string_statements(tree):

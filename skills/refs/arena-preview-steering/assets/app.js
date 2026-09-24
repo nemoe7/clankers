@@ -4,8 +4,10 @@ const note = $('#note');
 const send = $('#send');
 const status = $('#send-status');
 const key = 'arena-preview-v1';
-// The ceiling matches MAX_UPLOAD in preview.py, on the owner's answer.
-const MAX_UPLOAD = 1_000_000;
+// Browser and server both enforce the decimal 50 MB per-file ceiling.
+const MAX_UPLOAD = 50_000_000;
+const MAX_FETCH = 50_000_000;
+const BINARY_TIMEOUT = 600_000;
 let pending = null;
 let stateBusy = false;
 let reportRequest = 0;
@@ -28,6 +30,8 @@ function newId() {
 let historySignature = '';
 let draftPreviewSequence = 0;
 let uploadSignature = '';
+let fetchSignature = '';
+let fetchBusy = false;
 const messageNodes = new Map();
 
 function stored(name) {
@@ -128,34 +132,34 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
-// One attempt, with the abort timer every write has always carried.
-async function attempt(path, options) {
+// Short requests keep their ten-second timer. Binary transfers have a longer deadline and no
+// automatic retry after a lost response: the server may have saved the bytes already.
+async function attempt(path, options, timeoutMs) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(path, { ...options, cache: 'no-store', signal: controller.signal });
   } finally { clearTimeout(timer); }
 }
-// A page outlives the server it came from. A sandbox reset starts the server with a new write token,
-// so the copy baked into this page is refused and every write needs a manual refresh first: the
-// owner pressed save state several times after a reset and nothing landed until they reloaded and
-// pasted the log by hand. A refused write now takes the token from a fresh page and
-// tries once more, and a write that never reached a server waits a second and tries again.
+// A page outlives the server it came from. A sandbox reset changes the write token, so a refused
+// write takes the new token from the page. Small writes retry once after a network failure.
 async function request(path, options = {}) {
+  const { timeoutMs = 10_000, retryOnFailure = true, ...init } = options;
   let response;
   try {
-    response = await attempt(path, options);
-  } catch {
+    response = await attempt(path, init, timeoutMs);
+  } catch (error) {
+    if (!retryOnFailure) throw error;
     await new Promise((done) => setTimeout(done, 1000));
-    response = await attempt(path, options);
+    response = await attempt(path, init, timeoutMs);
   }
   if (response.status === 401 || response.status === 403) {
     const page = await (await fetch('/', { cache: 'no-store' })).text();
     const token = (page.match(/data-token="([^"]+)"/) || [])[1];
     if (token) {
       writeToken = token;
-      const headers = { ...(options.headers || {}), 'X-Preview-Token': token };
-      response = await attempt(path, { ...options, headers });
+      const headers = { ...(init.headers || {}), 'X-Preview-Token': token };
+      response = await attempt(path, { ...init, headers }, timeoutMs);
     }
   }
   if (!response.ok) {
@@ -346,6 +350,7 @@ $('#log-filter').addEventListener('change', () => {
 async function refreshState() {
   if (stateBusy) return;
   stateBusy = true;
+  let queueReady = false;
   try {
     const state = await (await request('/api/state')).json();
     lastState = state;
@@ -360,6 +365,8 @@ async function refreshState() {
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
     renderUploadsIfChanged(state.uploads);
+    renderFetchIfChanged(state.fetch_jobs || []);
+    queueReady = true;
     const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {
       listSignature = signature;
@@ -386,7 +393,13 @@ async function refreshState() {
     // The pip follows every poll: a report can grow newer than the last visit without the list changing.
     updateReportPip(state.reports);
   } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
-  finally { stateBusy = false; }
+  finally {
+    stateBusy = false;
+    if (queueReady && (lastState.fetch_jobs || []).some(item => item.status === 'queued'
+      || (item.status === 'fetching' && Date.parse(item.lease_until) <= Date.now()))) {
+      void pumpFetchQueue();
+    }
+  }
 }
 $('#form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -821,7 +834,7 @@ function taskRow(task) {
 let taskSignature = Symbol('tasks not yet rendered');
 
 // An upload keeps its bytes beside the preview database and its record inside it, on the owner's
-// answers: any bytes, a 1,000,000-byte ceiling, and a record that
+// answers: any bytes, a 50,000,000-byte ceiling, and a record that
 // outlives them. The row says which of the two is gone, because a restore removes the bytes and
 // leaves the record, and a download link on a file that is not there would open nothing.
 function uploadRow(item) {
@@ -885,7 +898,7 @@ function renderTasks(tasks) {
   finished.hidden = false;
   upcoming.hidden = false;
 }
-const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#uploads-tab')];
+const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#uploads-tab'), $('#downloads-tab')];
 // The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
 // something there is unread, not how many reports exist. A report is unread until the owner has
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
@@ -1013,7 +1026,9 @@ $('#upload-send').addEventListener('click', async () => {
       const response = await request(`/api/uploads?name=${encodeURIComponent(file.name)}`, {
         method: 'POST',
         headers: writeHeaders(file.type || 'application/octet-stream'),
-        body: file
+        body: file,
+        timeoutMs: BINARY_TIMEOUT,
+        retryOnFailure: false
       });
       saved.push(await response.json());
     }
@@ -1029,6 +1044,188 @@ $('#upload-send').addEventListener('click', async () => {
     button.disabled = input.disabled = false;
     if (saved.length) await refreshState();
   }
+});
+
+// The server queues URLs, claims work and stores bytes; only the owner's browser contacts remote
+// sites. The proxy checkbox is saved on each job, not a global preference or an automatic fallback.
+function downloadName(url) {
+  const part = new URL(url).pathname.split('/').filter(Boolean).at(-1) || 'download.bin';
+  let name;
+  try { name = decodeURIComponent(part); } catch { name = part; }
+  return name.replace(/[\\/\u0000-\u001f\u007f]/g, '_').slice(0, 200) || 'download.bin';
+}
+function downloadRow(item) {
+  const row = document.createElement('li');
+  row.className = 'download-row';
+  const url = document.createElement('span');
+  url.className = 'fetch-url';
+  url.textContent = item.url;
+  const meta = document.createElement('span');
+  meta.className = 'fetch-meta';
+  meta.textContent = `${item.status} · ${item.allow_proxy ? 'proxy opt-in' : 'direct only'}`
+    + (item.source ? ` · ${item.source}` : '')
+    + (item.size == null ? '' : ` · ${bytes(item.size)} · ${item.sha256.slice(0, 12)}`);
+  row.append(url, meta);
+  if (item.status === 'failed' && item.error) {
+    const error = document.createElement('span');
+    error.textContent = item.error;
+    row.append(error);
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry same URL';
+    retry.addEventListener('click', async () => {
+      retry.disabled = true;
+      try {
+        await request(`/api/fetch-jobs/${item.id}/retry`, {
+          method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+        });
+        $('#fetch-status').textContent = `Queued ${item.url} again.`;
+        await refreshState();
+      } catch (failure) { $('#fetch-status').textContent = `Retry failed: ${failure.message}`; }
+      finally { retry.disabled = false; }
+    });
+    row.append(retry);
+  }
+  if (item.status === 'saved') {
+    const where = document.createElement('span');
+    where.className = item.present ? 'fetch-meta' : 'upload-gone';
+    where.textContent = item.present ? `downloads/${item.file}`
+      : 'The bytes are gone; the record survived a restore.';
+    row.append(where);
+  }
+  return row;
+}
+function renderFetchIfChanged(jobs) {
+  const signature = JSON.stringify(jobs);
+  if (signature === fetchSignature) return;
+  fetchSignature = signature;
+  $('#fetch-list').replaceChildren(...jobs.map(item => downloadRow(item)));
+  const active = jobs.filter(item => item.status === 'queued' || item.status === 'fetching').length;
+  $('#fetch-count').textContent = jobs.length
+    ? `${jobs.length} URL${jobs.length === 1 ? '' : 's'} in history; ${active} queued or active.`
+    : 'No downloads queued yet.';
+}
+
+async function fetchRemote(job) {
+  const candidates = [{ source: 'direct', label: 'Direct', url: job.url }];
+  if (job.allow_proxy) candidates.push(
+    { source: 'allorigins', label: 'AllOrigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(job.url)}` },
+    { source: 'codetabs', label: 'CodeTabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(job.url)}` }
+  );
+  const failures = [];
+  for (const candidate of candidates) {
+    $('#fetch-status').textContent = `Fetching ${job.url} via ${candidate.label}…`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), BINARY_TIMEOUT);
+    try {
+      const response = await fetch(candidate.url, {
+        credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (new URL(response.url).protocol !== 'https:') throw new Error('Redirect did not end at HTTPS');
+      const declared = Number(response.headers.get('content-length') || 0);
+      if (declared > MAX_FETCH) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
+      if (!response.body || typeof response.body.getReader !== 'function') {
+        throw new Error('This browser cannot stream a response to check its size');
+      }
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          size += value.byteLength;
+          if (size > MAX_FETCH) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
+          chunks.push(value);
+        }
+      } catch (error) {
+        try { await reader.cancel(); } catch { /* A failed cancellation still ends this attempt. */ }
+        throw error;
+      }
+      if (!size) throw new Error('The response was empty');
+      const type = response.headers.get('content-type') || 'application/octet-stream';
+      return { body: new Blob(chunks, { type }), type, source: candidate.source };
+    } catch (error) {
+      if (error instanceof RangeError) throw error; // Proxies cannot override a per-file limit.
+      failures.push(`${candidate.label}: ${error.message || String(error)}`);
+    } finally { clearTimeout(timer); }
+  }
+  const hint = job.allow_proxy ? '' : ' Queue the URL again with proxy fallback checked to try proxy services.';
+  throw new Error(failures.join('; ') + hint);
+}
+
+async function pumpFetchQueue() {
+  if (fetchBusy) return;
+  fetchBusy = true;
+  try {
+    while (true) {
+      const { job } = await (await request('/api/fetch-jobs/claim', {
+        method: 'POST', headers: writeHeaders('application/json'), body: '{}', retryOnFailure: false
+      })).json();
+      if (!job) break;
+      await refreshState();
+      const renew = setInterval(() => {
+        void request(`/api/fetch-jobs/${job.id}/renew`, {
+          method: 'POST', headers: { ...writeHeaders('application/json'), 'X-Fetch-Claim': job.claim }, body: '{}'
+        }).catch(error => { $('#fetch-status').textContent = `Lease renewal failed: ${error.message}`; });
+      }, 30_000);
+      try {
+        const file = await fetchRemote(job);
+        $('#fetch-status').textContent = `Saving ${downloadName(job.url)} in the preview…`;
+        const saved = await (await request(
+          `/api/fetch-jobs/${job.id}/result?name=${encodeURIComponent(downloadName(job.url))}`, {
+            method: 'POST',
+            headers: { ...writeHeaders(file.type), 'X-Fetch-Claim': job.claim, 'X-Fetch-Source': file.source },
+            body: file.body, timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
+          }
+        )).json();
+        $('#fetch-status').textContent = `Saved ${saved.name} · ${bytes(saved.size)} · ${saved.source}.`;
+      } catch (error) {
+        $('#fetch-status').textContent = `Download failed: ${error.message}`;
+        try {
+          await request(`/api/fetch-jobs/${job.id}/fail`, {
+            method: 'POST',
+            headers: { ...writeHeaders('application/json'), 'X-Fetch-Claim': job.claim },
+            body: JSON.stringify({ error: error.message }), retryOnFailure: false
+          });
+        } catch (failure) {
+          $('#fetch-status').textContent += ` Could not record failure: ${failure.message}. Check the queue before retrying.`;
+        }
+      } finally {
+        clearInterval(renew);
+        await refreshState();
+      }
+    }
+  } catch (error) { $('#fetch-status').textContent = `Queue unavailable: ${error.message}`; }
+  finally { fetchBusy = false; }
+}
+$('#fetch-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const field = $('#fetch-url');
+  const checkbox = $('#fetch-proxy');
+  const button = $('#fetch-add');
+  if (button.disabled) return;
+  let parsed;
+  try { parsed = new URL(field.value.trim()); }
+  catch { $('#fetch-status').textContent = 'Enter one valid HTTPS URL.'; return; }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    $('#fetch-status').textContent = 'Only HTTPS URLs without embedded credentials are allowed.';
+    return;
+  }
+  button.disabled = true;
+  try {
+    const job = await (await request('/api/fetch-jobs', {
+      method: 'POST', headers: writeHeaders('application/json'),
+      body: JSON.stringify({ url: field.value.trim(), allow_proxy: checkbox.checked }),
+      retryOnFailure: false
+    })).json();
+    $('#fetch-status').textContent = `Queued ${job.url} · ${job.allow_proxy ? 'proxy opt-in' : 'direct only'}.`;
+    field.value = '';
+    checkbox.checked = false;
+    await refreshState();
+  } catch (error) { $('#fetch-status').textContent = `Queue not confirmed: ${error.message}. Check the list before retrying.`; }
+  finally { button.disabled = false; }
 });
 $('#report-select').addEventListener('change', loadReport);
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
