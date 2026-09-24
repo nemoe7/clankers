@@ -1437,30 +1437,59 @@ with tempfile.TemporaryDirectory() as queue_dir:
     )
     # An agent CLI request is visible, but no browser worker can claim it before the preview
     # receives an Approve click. The owner-entered HTTP form below still queues immediately.
-    command = [sys.executable, preview.__file__, "--state-dir", str(queue_store.path.parent)]
+    command = [
+      sys.executable,
+      preview.__file__,
+      "--state-dir",
+      str(queue_store.path.parent),
+    ]
     agent_request = subprocess.run(
-      [*command, "download-request", "https://example.org/review.zip#fragment", "--allow-proxy"],
-      capture_output=True, text=True, check=True,
+      [
+        *command,
+        "download-request",
+        "https://example.org/review.zip#fragment",
+        "--allow-proxy",
+      ],
+      capture_output=True,
+      text=True,
+      check=True,
     )
     pending = json.loads(agent_request.stdout)
     assert pending["url"] == "https://example.org/review.zip"
     assert pending["allow_proxy"] is True and pending["approval"] == "pending"
     assert pending["status"] == "queued" and "claim" not in pending
     assert queue_store.claim_fetch() is None
-    assert json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"] is None
-    assert json.loads(request("GET", "/api/state")[2])["fetch_jobs"][0]["approval"] == "pending"
+    assert (
+      json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"] is None
+    )
+    assert (
+      json.loads(request("GET", "/api/state")[2])["fetch_jobs"][0]["approval"]
+      == "pending"
+    )
     approve = f"/api/fetch-jobs/{pending['id']}/approve"
-    assert request("POST", approve, "{}", {"Content-Type": "application/json"})[0] == 403
+    assert (
+      request("POST", approve, "{}", {"Content-Type": "application/json"})[0] == 403
+    )
     assert request("POST", approve, "{}", auth)[0] == 200
-    assert request("POST", approve, "{}", auth)[0] == 409, "a second click must not decide twice"
-    assert request("POST", f"/api/fetch-jobs/{pending['id']}/deny", "{}", auth)[0] == 409
+    assert request("POST", approve, "{}", auth)[0] == 409, (
+      "a second click must not decide twice"
+    )
+    assert (
+      request("POST", f"/api/fetch-jobs/{pending['id']}/deny", "{}", auth)[0] == 409
+    )
     approved = queue_store.claim_fetch()
     assert approved["id"] == pending["id"] and approved["approval"] == "approved"
     queue_store.fail_fetch(pending["id"], approved["claim"], "Test browser unavailable")
-    denied = queue_store.enqueue_fetch("https://example.org/no.zip", False, pending=True)
+    denied = queue_store.enqueue_fetch(
+      "https://example.org/no.zip", False, pending=True
+    )
     assert request("POST", f"/api/fetch-jobs/{denied['id']}/deny", "{}", auth)[0] == 200
-    assert request("POST", f"/api/fetch-jobs/{denied['id']}/retry", "{}", auth)[0] == 409
-    assert request("POST", f"/api/fetch-jobs/{denied['id']}/approve", "{}", auth)[0] == 409
+    assert (
+      request("POST", f"/api/fetch-jobs/{denied['id']}/retry", "{}", auth)[0] == 409
+    )
+    assert (
+      request("POST", f"/api/fetch-jobs/{denied['id']}/approve", "{}", auth)[0] == 409
+    )
     assert queue_store.claim_fetch() is None
     reopened = preview.Store(queue_store.path.parent).fetch_jobs()
     assert reopened[0]["approval"] == "denied" and reopened[0]["status"] == "failed"
@@ -1468,7 +1497,9 @@ with tempfile.TemporaryDirectory() as queue_dir:
     assert queue_store.state()["notes"] == [], "denial should not claim or save bytes"
     bad_request = subprocess.run(
       [*command, "download-request", "http://example.org/unsafe"],
-      capture_output=True, text=True,
+      capture_output=True,
+      text=True,
+      check=False,
     )
     assert bad_request.returncode != 0 and "HTTPS" in bad_request.stderr
 
@@ -1633,11 +1664,13 @@ with tempfile.TemporaryDirectory() as old_queue_dir:
   assert upgraded.fetch_jobs()[0]["approval"] == "approved"
   assert upgraded.claim_fetch()["id"] == "older"
   racing = upgraded.enqueue_fetch("https://example.org/race.zip", False, pending=True)
+
   def decide(choice):
     try:
       return upgraded.decide_fetch(racing["id"], choice)
     except preview.FetchChanged as error:
       return error
+
   with ThreadPoolExecutor(max_workers=2) as pool:
     outcomes = list(pool.map(decide, ("approved", "denied")))
   assert sum(isinstance(item, preview.FetchChanged) for item in outcomes) == 1

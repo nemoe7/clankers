@@ -1245,7 +1245,14 @@ class Store:
       db.execute(
         "INSERT INTO fetch_jobs (id, url, allow_proxy, status, approval, at, updated_at)"
         " VALUES (?, ?, ?, 'queued', ?, ?, ?)",
-        (job_id, url, int(allow_proxy), "pending" if pending else "approved", stamp, stamp),
+        (
+          job_id,
+          url,
+          int(allow_proxy),
+          "pending" if pending else "approved",
+          stamp,
+          stamp,
+        ),
       )
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
     return fetch_row(row, self.path.parent)
@@ -1266,9 +1273,14 @@ class Store:
         (decision, decision, decision, now(), job_id),
       )
       if changed.rowcount != 1:
-        if db.execute("SELECT 1 FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone() is None:
+        if (
+          db.execute("SELECT 1 FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+          is None
+        ):
           raise FileNotFoundError("No queued download with that ID")
-        raise FetchChanged("This download request was already decided; refresh Downloads")
+        raise FetchChanged(
+          "This download request was already decided; refresh Downloads"
+        )
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
     return fetch_row(row, self.path.parent)
 
@@ -2183,11 +2195,13 @@ def main():
   commands.add_parser("init")
   commands.add_parser("read")
   download = commands.add_parser(
-    "download-request", help="Request an HTTPS browser download, pending a preview Approve click"
+    "download-request",
+    help="Request an HTTPS browser download, pending a preview Approve click",
   )
   download.add_argument("url", help="One HTTPS URL without embedded credentials")
   download.add_argument(
-    "--allow-proxy", action="store_true",
+    "--allow-proxy",
+    action="store_true",
     help="Let the owner opt in to AllOrigins and CodeTabs fallback for this request",
   )
   seen = commands.add_parser("seen")
@@ -2266,7 +2280,11 @@ def main():
       print_read(store, args.pretty)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.
-      print(cli_json(store.enqueue_fetch(args.url, args.allow_proxy, pending=True), args.pretty))
+      print(
+        cli_json(
+          store.enqueue_fetch(args.url, args.allow_proxy, pending=True), args.pretty
+        )
+      )
     elif args.command == "seen":
       store.mark_seen(args.ids)
       print("Seen: " + ", ".join(args.ids))
