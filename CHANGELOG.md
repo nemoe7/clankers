@@ -2,6 +2,7 @@
 
 - **Direct plugin artifact**: `.github/workflows/package-gpt-plugins.yml` keeps collection and ZIP validation, then uses `actions/upload-artifact@v7` with `archive: false` to publish `gpt-plugins.zip` as the artifact rather than wrapping it in another ZIP. The workflow-definition check pins the direct mode and the effective file name; the plugin and maintenance READMEs name the new download.
 - **Preview download queue**: Add a SQLite-backed browser queue for HTTPS files. It tries direct access first, with per-job opt-in AllOrigins and CodeTabs fallback. Both fetched files and manual uploads accept at most 50,000,000 bytes. Claims expire after five minutes without renewal. Successful jobs save file bytes and inbox path notes. Update the readable source and both shipped copies. Trim the minifier's trailing HTML space, record new budgets, and remove the stale HTTP inventory. Keep the trust warning. Server and client checks run locally. No browser visibility test ran.
+- **GPT Handoff audits**: Activate audit mode for reviews of agent-produced work, including code, human-facing docs, agent-created branches, PRs, commits, implementations and follow-up audits. Always route code and docs audits through Ponytail, then produce only the GPT Handoff format. Keep SOLID conditional on need, exclude audit setup and methodology, and check the actual-model marker. A normal non-agent task does not require this skill. The source and shipped copies match; the measured skill grows 297 `tok` after squash.
 - Gates green.
 
 ## 2026-09-23
