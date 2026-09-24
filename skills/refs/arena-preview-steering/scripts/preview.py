@@ -41,6 +41,8 @@ MAX_BODY = 96_000
 MAX_SUBMISSION_BODY = 1_000_000
 # Both owner-uploaded and browser-fetched files have a 50 MB (decimal) per-file ceiling.
 MAX_UPLOAD = 50_000_000
+# A composed note may carry several files. Bound the whole multipart body as well as each file.
+MAX_ATTACHMENTS = 5
 MAX_FETCH = 50_000_000
 FETCH_LEASE = timedelta(minutes=5)
 # File bytes live beside the database, never inside it; stored names are relative to state.
@@ -59,6 +61,7 @@ REMINDERS = (
   "Always push.",
   "Block with ask_user on GH_TOKEN death.",
   "Keep docs terse but clear.",
+  "Ask your questions via report forms.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
@@ -431,8 +434,8 @@ def upload_type(content_type):
   return cleaned or "application/octet-stream"
 
 
-def parse_note_attachment(content_type, data):
-  """Read exactly one ID, note and binary file from a bounded multipart body."""
+def parse_note_attachments(content_type, data):
+  """Read one ID and note, plus 1–5 binary files, from a bounded multipart body."""
   if len(content_type) > 200 or any(char in content_type for char in "\r\n"):
     raise ValueError("Invalid multipart boundary")
   prefix = (
@@ -440,11 +443,11 @@ def parse_note_attachment(content_type, data):
   )
   message = BytesParser(policy=policy.default).parsebytes(prefix + data)
   if not message.is_multipart() or message.defects:
-    raise ValueError("Send one file with a valid multipart boundary")
+    raise ValueError("Send files with a valid multipart boundary")
   parts = list(message.iter_parts())
-  if len(parts) != 3:
-    raise ValueError("Send one note ID, text and file")
-  fields = {}
+  if not 3 <= len(parts) <= MAX_ATTACHMENTS + 2:
+    raise ValueError(f"Send one note ID, text and 1–{MAX_ATTACHMENTS} files")
+  fields, files = {}, []
   for part in parts:
     name = part.get_param("name", header="content-disposition")
     if part.get_content_disposition() != "form-data" or name not in {
@@ -453,26 +456,35 @@ def parse_note_attachment(content_type, data):
       "file",
     }:
       raise ValueError("Unexpected note attachment field")
-    if name in fields or part.defects or part.is_multipart():
+    if part.defects or part.is_multipart() or (name != "file" and name in fields):
       raise ValueError("Duplicate or invalid note attachment field")
     body = part.get_payload(decode=True)
     if body is None:
       raise ValueError("Invalid note attachment bytes")
     if name == "file":
-      fields[name] = (part.get_filename(), part.get_content_type(), body)
+      files.append((part.get_filename(), part.get_content_type(), body))
     else:
       if part.get_filename() is not None:
         raise ValueError("Only file may have a filename")
       fields[name] = body.decode("utf-8")
-  if set(fields) != {"id", "text", "file"}:
-    raise ValueError("Send one note ID, text and file")
-  return fields["id"], fields["text"], *fields["file"]
+  if set(fields) != {"id", "text"} or not files:
+    raise ValueError("Send one note ID, text and at least one file")
+  return fields["id"], fields["text"], files
 
 
 def upload_row(row, directory):
   """A stored upload, plus the two things the row cannot say: where the bytes are and whether they are there."""
   path = directory / UPLOAD_DIR / row["file"]
   return dict(row) | {"path": str(path), "present": path.exists()}
+
+
+def add_note_attachments(note, records):
+  """Expose all file paths to the agent and names to the receipt; keep first-file compatibility."""
+  if records:
+    note["attachment_name"] = records[0]["name"]
+    note["attachment_path"] = records[0]["path"]
+    note["attachments"] = records
+  return note
 
 
 def cli_json(value, pretty=False):
@@ -598,7 +610,7 @@ class Store:
           acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS uploads (
-          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
+          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,
           name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,
           sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL
         );
@@ -654,6 +666,12 @@ class Store:
       if "seq" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seq INTEGER")
         db.execute("UPDATE reports SET seq = rowid WHERE seq IS NULL")
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(uploads)")}
+      if "note_id" not in columns:
+        db.execute("ALTER TABLE uploads ADD COLUMN note_id TEXT")
+        # Older uploads posted one notification note with the upload's ID. Keep those links.
+        db.execute("UPDATE uploads SET note_id = id WHERE note_id IS NULL")
+      db.execute("CREATE INDEX IF NOT EXISTS uploads_note_id ON uploads(note_id)")
     if not existed:
       self.path.chmod(0o600)
 
@@ -806,12 +824,11 @@ class Store:
           report["needs_answer"] = True
           report["field_error"] = str(error)
       uploads = self.uploads()
-      by_note = {item["id"]: item for item in uploads}
+      by_note = {}
+      for item in uploads:
+        by_note.setdefault(item["note_id"], []).append(item)
       for note in notes:
-        attachment = by_note.get(note["id"])
-        if attachment:
-          note["attachment_name"] = attachment["name"]
-          note["attachment_path"] = attachment["path"]
+        add_note_attachments(note, by_note.get(note["id"], []))
       fetch_jobs = self.fetch_jobs()
       for item in notes + reports + uploads + fetch_jobs:
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):
@@ -1060,8 +1077,17 @@ class Store:
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return None if row is None else upload_row(row, self.path.parent)
 
-  def save_upload(self, name, content_type, data, upload_id=None, shared=None):
-    """Keep raw bytes beside SQLite; a linked note reuses its ID and is safe to retry."""
+  def save_upload(
+    self,
+    name,
+    content_type,
+    data,
+    upload_id=None,
+    shared=None,
+    note_id=None,
+    position=None,
+  ):
+    """Keep raw bytes beside SQLite, with a stable note link and distinct file record."""
     if not isinstance(data, (bytes, bytearray)):
       raise TypeError("An upload is bytes")
     if not data:
@@ -1072,11 +1098,17 @@ class Store:
     kind = upload_type(content_type)
     digest = hashlib.sha256(data).hexdigest()
     upload_id = identifier(upload_id) if upload_id is not None else new_id()
+    note_id = identifier(note_id) if note_id is not None else upload_id
+    if position is not None and (
+      not isinstance(position, int) or not 1 <= position <= MAX_ATTACHMENTS
+    ):
+      raise ValueError("Invalid attachment position")
     directory = self.path.parent / UPLOAD_DIR
-    directory.mkdir(parents=True, exist_ok=True)
-    # The owner's name never supplies a path. Linked files use the full note ID, preserving only
-    # the extension; a retry cannot replace another name or another set of bytes.
-    target = directory / f"{upload_id}{Path(cleaned).suffix[:16]}"
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # The owner's name never supplies a path. Several-file sends use <note-id>-1, -2, etc.; a
+    # single-file send keeps <note-id> for existing links and restored records.
+    stem = f"{note_id}-{position}" if position is not None else upload_id
+    target = directory / f"{stem}{Path(cleaned).suffix[:16]}"
     with self.transaction(shared) as db:
       if shared is None:
         db.execute("BEGIN IMMEDIATE")
@@ -1085,11 +1117,13 @@ class Store:
       ).fetchone()
       if existing:
         if (
+          existing["note_id"],
           existing["name"],
           existing["type"],
           existing["size"],
           existing["sha256"],
-        ) != (cleaned, kind, len(data), digest):
+          existing["file"],
+        ) != (note_id, cleaned, kind, len(data), digest, target.name):
           raise ValueError("This note ID already belongs to a different file")
         target = directory / existing["file"]
         if (
@@ -1097,36 +1131,91 @@ class Store:
           or hashlib.sha256(target.read_bytes()).hexdigest() != digest
         ):
           target.write_bytes(bytes(data))
+          target.chmod(0o600)
         return upload_row(existing, self.path.parent)
       target.write_bytes(bytes(data))
+      target.chmod(0o600)
       db.execute(
-        "INSERT INTO uploads (id, name, type, size, sha256, file, at)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (upload_id, cleaned, kind, len(data), digest, target.name, now()),
+        "INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (upload_id, note_id, cleaned, kind, len(data), digest, target.name, now()),
       )
       row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
     return upload_row(row, self.path.parent)
 
-  def note_with_upload(self, note_id, text, name, content_type, data):
-    """Store one attachment and one note under one ID and one SQLite transaction."""
+  def note_with_uploads(self, note_id, text, files):
+    """Store several linked files and one note in one transaction; identical retries are safe."""
     identifier(note_id)
     note_text(text)
-    with self.transaction() as db:
-      db.execute("BEGIN IMMEDIATE")
-      existing = db.execute(
-        "SELECT text FROM notes WHERE id = ?", (note_id,)
-      ).fetchone()
-      if (
-        existing
-        and not db.execute("SELECT 1 FROM uploads WHERE id = ?", (note_id,)).fetchone()
-      ):
-        raise ValueError("This note ID was already sent without a file")
-      record = self.save_upload(name, content_type, data, upload_id=note_id, shared=db)
-      note = self.note(note_id, text, shared=db)
-      return note | {
-        "attachment_name": record["name"],
-        "attachment_path": record["path"],
-      }
+    if not isinstance(files, (list, tuple)) or not 1 <= len(files) <= MAX_ATTACHMENTS:
+      raise ValueError(f"Attach 1–{MAX_ATTACHMENTS} files to a note")
+    prepared = []
+    for file in files:
+      if not isinstance(file, (list, tuple)) or len(file) != 3:
+        raise ValueError("Each attachment needs a name, type and bytes")
+      name, content_type, data = file
+      if not isinstance(data, (bytes, bytearray)):
+        raise TypeError("An upload is bytes")
+      if not data or len(data) > MAX_UPLOAD:
+        raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
+      prepared.append((upload_name(name), upload_type(content_type), bytes(data)))
+    created = []
+    try:
+      with self.transaction() as db:
+        db.execute("BEGIN IMMEDIATE")
+        existing = db.execute(
+          "SELECT text FROM notes WHERE id = ?", (note_id,)
+        ).fetchone()
+        rows = db.execute(
+          "SELECT * FROM uploads WHERE note_id = ? ORDER BY seq", (note_id,)
+        ).fetchall()
+        if existing and existing["text"] != text:
+          raise ValueError("This message ID already belongs to different text")
+        if rows:
+          if len(rows) != len(prepared) or any(
+            (row["name"], row["type"], row["size"], row["sha256"])
+            != (name, kind, len(data), hashlib.sha256(data).hexdigest())
+            for row, (name, kind, data) in zip(rows, prepared)
+          ):
+            raise ValueError("This note ID already belongs to different files")
+          # A restore can keep SQLite records but lose bytes. Repeating exactly the same request
+          # repairs missing bytes, not the note's acknowledgement or its attachment order.
+          for row, (_, _, data) in zip(rows, prepared):
+            target = self.path.parent / UPLOAD_DIR / row["file"]
+            if (
+              not target.is_file()
+              or hashlib.sha256(target.read_bytes()).hexdigest() != row["sha256"]
+            ):
+              target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+              target.write_bytes(data)
+              target.chmod(0o600)
+          records = [upload_row(row, self.path.parent) for row in rows]
+        else:
+          if existing:
+            raise ValueError("This note ID was already sent without a file")
+          records = []
+          for index, (name, kind, data) in enumerate(prepared, 1):
+            record = self.save_upload(
+              name,
+              kind,
+              data,
+              upload_id=note_id if index == 1 else new_id(),
+              note_id=note_id,
+              position=index if len(prepared) > 1 else None,
+              shared=db,
+            )
+            records.append(record)
+            created.append(Path(record["path"]))
+        note = self.note(note_id, text, shared=db)
+        return add_note_attachments(note, records)
+    except Exception:
+      for path in created:
+        path.unlink(missing_ok=True)
+      raise
+
+  def note_with_upload(self, note_id, text, name, content_type, data):
+    """Keep the one-file call compatible with linked notes from the earlier preview."""
+    return self.note_with_uploads(note_id, text, [(name, content_type, data)])
 
   def fetch_jobs(self):
     """Queue status and saved file locations; a claim token never reaches the state poll."""
@@ -1408,16 +1497,13 @@ class Store:
           "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq"
         )
       ]
-      attachments = {
-        row["id"]: row for row in db.execute("SELECT id, name, file FROM uploads")
-      }
+      attachments = {}
+      for row in db.execute("SELECT * FROM uploads ORDER BY seq"):
+        record = upload_row(row, self.path.parent)
+        attachments.setdefault(record["note_id"], []).append(record)
       for item in pending:
-        attachment = attachments.get(item["id"]) if item["kind"] == "note" else None
-        if attachment:
-          item["attachment_name"] = attachment["name"]
-          item["attachment_path"] = str(
-            self.path.parent / UPLOAD_DIR / attachment["file"]
-          )
+        if item["kind"] == "note":
+          add_note_attachments(item, attachments.get(item["id"], []))
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           item[key] = clip_stamp(item[key])
       pending.sort(key=lambda item: item["at"])
@@ -1883,7 +1969,7 @@ def handler(store):
       if not secrets.compare_digest(supplied, token.encode("ascii")):
         self.problem(403, "Reload the preview, then retry; your draft is kept")
         return
-      # A composed note carries one file and its text in one bounded multipart request.
+      # A composed note carries up to five files and its text in one bounded multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:
         if not content_type.lower().startswith("multipart/form-data;"):
@@ -1895,7 +1981,7 @@ def handler(store):
       try:
         length = int(self.headers.get("Content-Length", "0"))
         limit = (
-          MAX_UPLOAD + MAX_BODY
+          MAX_ATTACHMENTS * MAX_UPLOAD + MAX_BODY
           if note_upload
           else MAX_UPLOAD
           if upload_post
@@ -1928,7 +2014,7 @@ def handler(store):
           self.problem(400, "Incomplete request body; retry the upload or request")
           return
         if note_upload:
-          note = store.note_with_upload(*parse_note_attachment(content_type, data))
+          note = store.note_with_uploads(*parse_note_attachments(content_type, data))
           for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
             note[key] = clip_stamp(note[key])
           self.reply(201, json.dumps(note, ensure_ascii=False))

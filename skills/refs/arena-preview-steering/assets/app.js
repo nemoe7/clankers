@@ -29,7 +29,6 @@ function newId() {
 }
 let historySignature = '';
 let draftPreviewSequence = 0;
-let uploadSignature = '';
 let fetchSignature = '';
 let fetchBusy = false;
 const messageNodes = new Map();
@@ -132,43 +131,73 @@ note.addEventListener('input', () => {
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
 
-// The browser keeps a chosen File only in memory. Never put its bytes or a fake file path in storage:
-// after a reload, the owner must reselect the file before retrying that message ID.
-let stagedFile = null;
+// File bytes stay in this browser tab, not in localStorage. Every staged file has its own removal
+// control beside "Your message"; the picker and drop add files before one atomic note send.
+const MAX_NOTE_FILES = 5;
+let stagedFiles = [];
 const picker = $('#upload-file');
 const compose = $('#compose');
-function clearStagedFile() {
-  stagedFile = null;
+const attachmentInfo = file => ({
+  name: file.name, size: file.size, type: file.type, lastModified: file.lastModified || null
+});
+function pendingFiles() {
+  if (!pending) return [];
+  if (Array.isArray(pending.attachments)) return pending.attachments;
+  return pending.attachment ? [pending.attachment] : [];
+}
+function renderStagedFiles() {
+  const holder = $('#staged-files');
+  holder.replaceChildren(...stagedFiles.map((file, index) => {
+    const chip = document.createElement('span');
+    chip.className = 'staged-chip';
+    const name = document.createElement('span');
+    name.className = 'staged-chip-name';
+    name.textContent = file.name;
+    name.title = file.name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    label(remove, `Remove ${file.name}`);
+    remove.addEventListener('click', () => {
+      if (send.disabled) return;
+      stagedFiles.splice(index, 1);
+      picker.value = '';
+      renderStagedFiles();
+      status.textContent = stagedFiles.length
+        ? `${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'} staged.`
+        : 'Attachments removed. Draft kept.';
+    });
+    chip.append(name, remove);
+    return chip;
+  }));
+  holder.hidden = !stagedFiles.length;
+}
+function clearStagedFiles() {
+  stagedFiles = [];
   picker.value = '';
-  $('#staged-file').hidden = true;
-  $('#staged-file').textContent = '';
-  $('#remove-file').hidden = true;
+  renderStagedFiles();
 }
 function stageFiles(files) {
-  if (send.disabled) return;
-  if (files.length !== 1) { status.textContent = 'Attach one file per note.'; return; }
-  const file = files[0];
-  if (!file.name || file.name.length > 200) { status.textContent = 'Use a filename of 1–200 characters.'; return; }
-  if (!file.size) { status.textContent = 'That file is empty.'; return; }
-  if (file.size > MAX_UPLOAD) {
-    status.textContent = `That file is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
+  if (send.disabled || !files.length) return;
+  if (stagedFiles.length + files.length > MAX_NOTE_FILES) {
+    status.textContent = `Attach no more than ${MAX_NOTE_FILES} files per note.`;
     return;
   }
-  stagedFile = file;
-  const chip = $('#staged-file');
-  chip.textContent = file.name;
-  chip.title = file.name;
-  chip.hidden = false;
-  $('#remove-file').hidden = false;
-  status.textContent = `Staged ${file.name} · ${bytes(file.size)}. Send note to save both.`;
+  for (const file of files) {
+    if (!file.name || file.name.length > 200) { status.textContent = 'Use filenames of 1–200 characters.'; return; }
+    if (!file.size) { status.textContent = `${file.name} is empty.`; return; }
+    if (file.size > MAX_UPLOAD) {
+      status.textContent = `${file.name} is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
+      return;
+    }
+  }
+  stagedFiles.push(...files);
+  picker.value = '';
+  renderStagedFiles();
+  status.textContent = `Staged ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}. Send note to save them together.`;
 }
 $('#attach-file').addEventListener('click', () => picker.click());
 picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
-$('#remove-file').addEventListener('click', () => {
-  clearStagedFile();
-  if (pending && pending.attachment) { pending = null; save('pending', 'null'); }
-  status.textContent = 'Attachment removed. Draft kept.';
-});
 const hasDraggedFile = event => Array.from((event.dataTransfer || {}).types || []).includes('Files');
 for (const type of ['dragenter', 'dragover']) compose.addEventListener(type, event => {
   if (!hasDraggedFile(event)) return;
@@ -182,8 +211,8 @@ compose.addEventListener('drop', event => {
   delete compose.dataset.dragging;
   stageFiles(Array.from(event.dataTransfer.files || []));
 });
-if (pending && pending.attachment) {
-  status.textContent = `Reselect ${pending.attachment.name} before retrying; this page does not store file bytes.`;
+if (pendingFiles().length) {
+  status.textContent = `Reselect ${pendingFiles().length} file${pendingFiles().length === 1 ? '' : 's'} before retrying; this page does not store file bytes.`;
 }
 
 // Short requests keep their ten-second timer. Binary transfers have a longer deadline and no
@@ -323,10 +352,13 @@ function showHistory(notes) {
     receiptTask.title = item.task_id ? `Task ${item.task_id}` : '';
     const receiptFile = document.createElement('span');
     receiptFile.className = 'receipt-file';
-    receiptFile.textContent = item.attachment_name ? ` · ${item.attachment_name}` : '';
+    const names = item.attachments?.length
+      ? item.attachments.map(file => file.name)
+      : item.attachment_name ? [item.attachment_name] : [];
+    receiptFile.textContent = names.map(name => ` · ${name}`).join('');
     receipt.replaceChildren(
       receiptId, separator, receiptDot, receiptState,
-      ...(item.attachment_name ? [receiptFile] : []), ...(item.task_id ? [receiptTask] : [])
+      ...(names.length ? [receiptFile] : []), ...(item.task_id ? [receiptTask] : [])
     );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
@@ -421,7 +453,6 @@ async function refreshState() {
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
-    renderUploadsIfChanged(state.uploads);
     renderFetchIfChanged(state.fetch_jobs || []);
     queueReady = true;
     const signature = JSON.stringify(state.reports);
@@ -461,30 +492,30 @@ async function refreshState() {
 }
 $('#form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (send.disabled || (!note.value.trim() && !stagedFile)) return;
+  if (send.disabled || (!note.value.trim() && !stagedFiles.length)) return;
   const draft = note.value;
-  const text = draft.trim() ? draft : `File: ${stagedFile.name}`;
-  if (pending && pending.attachment && !stagedFile && pending.text === text) {
-    status.textContent = `Reselect ${pending.attachment.name} to retry this note, or edit the draft to send without it.`;
+  const names = stagedFiles.map(file => file.name);
+  const text = draft.trim() ? draft : names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(', ')}`;
+  const attachments = stagedFiles.map(attachmentInfo);
+  const former = pendingFiles();
+  if (pending && pending.text === text && former.length &&
+      JSON.stringify(former) !== JSON.stringify(attachments)) {
+    status.textContent = `Reselect the ${former.length} original files in order to retry this note ID, or edit the draft to start a new note.`;
     return;
   }
-  const attachment = stagedFile ? {
-    name: stagedFile.name, size: stagedFile.size, type: stagedFile.type,
-    lastModified: stagedFile.lastModified || null
-  } : null;
-  if (!pending || pending.text !== text || JSON.stringify(pending.attachment || null) !== JSON.stringify(attachment)) {
-    pending = { id: newId(), text, ...(attachment ? { attachment } : {}) };
+  if (!pending || pending.text !== text || JSON.stringify(former) !== JSON.stringify(attachments)) {
+    pending = { id: newId(), text, ...(attachments.length ? { attachments } : {}) };
   }
   save('pending', JSON.stringify(pending));
-  send.disabled = picker.disabled = $('#attach-file').disabled = $('#remove-file').disabled = true;
-  status.textContent = stagedFile ? `Sending ${stagedFile.name} with note…` : 'Sending…';
+  send.disabled = picker.disabled = $('#attach-file').disabled = true;
+  status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with note…` : 'Sending…';
   try {
     let response;
-    if (stagedFile) {
+    if (stagedFiles.length) {
       const body = new FormData();
       body.append('id', pending.id);
       body.append('text', text);
-      body.append('file', stagedFile, stagedFile.name);
+      for (const file of stagedFiles) body.append('file', file, file.name);
       response = await request('/api/notes/with-file', {
         method: 'POST', headers: { 'X-Preview-Token': writeToken }, body,
         timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
@@ -495,18 +526,18 @@ $('#form').addEventListener('submit', async event => {
     const result = await response.json();
     note.placeholder = clipPlaceholder(result.text);
     status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.'
-      : `Saved ${time(result.at)} · Message sent${attachment ? ` with ${attachment.name}` : ''}.`;
+      : `Saved ${time(result.at)} · Message sent${attachments.length ? ` with ${attachments.length} file${attachments.length === 1 ? '' : 's'}` : ''}.`;
     pending = null;
     save('pending', 'null');
-    clearStagedFile();
+    clearStagedFiles();
     if (note.value === draft) {
       note.value = '';
       save('draft', '');
       writeMode();
     }
     refreshState();
-  } catch (error) { status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFile ? ' and file' : ''} kept; retry unchanged text with the same note ID.`; }
-  finally { send.disabled = picker.disabled = $('#attach-file').disabled = $('#remove-file').disabled = false; }
+  } catch (error) { status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same note ID.`; }
+  finally { send.disabled = picker.disabled = $('#attach-file').disabled = false; }
 });
 note.addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
@@ -969,39 +1000,6 @@ function taskRow(task) {
 // normalised to null would equal a null sentinel and skip the first render entirely.
 let taskSignature = Symbol('tasks not yet rendered');
 
-// An upload keeps its bytes beside the preview database and its record inside it, on the owner's
-// answers: any bytes, a 50,000,000-byte ceiling, and a record that
-// outlives them. The row says which of the two is gone, because a restore removes the bytes and
-// leaves the record, and a download link on a file that is not there would open nothing.
-function uploadRow(item) {
-  const row = document.createElement('li');
-  row.className = 'upload-row';
-  const name = document.createElement('span');
-  name.className = 'upload-name';
-  name.textContent = item.name;
-  const meta = document.createElement('span');
-  meta.className = 'upload-meta';
-  meta.textContent = `${bytes(item.size)} · ${item.type} · ${time(item.at)} · ${item.sha256.slice(0, 12)}`;
-  row.append(name, meta);
-  const where = document.createElement('span');
-  where.className = 'upload-where';
-  // The path rather than a download link: the preview offers no download controls, on the standing
-  // owner choice, so the row says which file on disk the bytes are in for a terminal to read.
-  where.textContent = item.present ? `uploads/${item.file}` : 'the bytes are gone; the record survived a restore';
-  if (!item.present) where.className = 'upload-gone';
-  row.append(where);
-  return row;
-}
-function renderUploadsIfChanged(uploads) {
-  const signature = JSON.stringify(uploads || []);
-  if (signature === uploadSignature) return;
-  uploadSignature = signature;
-  const rows = uploads || [];
-  $('#uploads-list').replaceChildren(...rows.map(item => uploadRow(item)));
-  $('#uploads-count').textContent = rows.length
-    ? `${rows.length} file${rows.length === 1 ? '' : 's'} saved.`
-    : 'No files uploaded yet.';
-}
 function renderTasksIfChanged(tasks) {
   const signature = JSON.stringify(tasks);
   if (signature === taskSignature) return;

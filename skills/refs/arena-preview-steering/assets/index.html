@@ -42,15 +42,15 @@
           </div>
           <div class="log-scroll">
             <ol id="history" aria-label="Messages, oldest first"></ol>
-            <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" title="Scroll to bottom" hidden><svg width="14" height="14" viewBox="0 0 24 24" stroke-width="1.5" fill="none" aria-hidden="true" focusable="false"><path d="M12 3L12 21M12 21L20.5 12.5M12 21L3.5 12.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
+            <button id="log-newest" class="log-newest" type="button" aria-label="Scroll to bottom" title="Scroll to bottom" hidden><svg width="14" height="14" viewBox="0 0 24 24" stroke-width="1.5" fill="none" aria-hidden="true" focusable="false"><path d="M12 3L12 21M12 21L20.5 12.5M12 21L3.5 12.5" stroke="#fff" stroke-linecap="round" stroke-linejoin="round"></path></svg></button>
           </div>
           <p id="log-empty" class="receipt" role="status" hidden></p>
         </section>
         <section class="card compose" id="compose" aria-label="Send a steer">
           <form id="form">
             <div class="row composer-heading">
-              <span class="composer-label"><label for="note">Your message</label><span id="staged-file" class="muted" role="status" hidden></span><button id="remove-file" class="icon-button" type="button" aria-label="Remove staged file" title="Remove staged file" hidden>×</button></span>
-              <span class="row tight"><input id="upload-file" type="file" aria-label="Choose a file to attach" hidden><button id="attach-file" class="icon-button" type="button" aria-label="Choose a file to attach" title="Choose a file to attach">＋</button><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">MD 👁</button></span>
+              <span class="composer-label"><label for="note">Your message</label><span id="staged-files" role="status" hidden></span></span>
+              <span class="row tight"><input id="upload-file" type="file" multiple aria-label="Choose files to attach" hidden><button id="attach-file" class="icon-button" type="button" aria-label="Choose files to attach" title="Choose files to attach">＋</button><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">MD 👁</button></span>
             </div>
             <textarea id="note" name="note" rows="3" maxlength="15000" placeholder="What should happen next?"></textarea>
             <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
@@ -62,11 +62,6 @@
               <button id="send" type="submit">Send note</button>
             </div>
           </form>
-          <details id="uploads-history" class="uploads-history">
-            <summary id="uploads-count">No files uploaded yet.</summary>
-            <small id="uploads-note">Files saved with a note use that note's ID as their stored filename. Records keep each original name, type, size and hash. A restore can leave a record without its bytes.</small>
-            <ul id="uploads-list" class="task-list"></ul>
-          </details>
         </section>
       </div>
     </section>
