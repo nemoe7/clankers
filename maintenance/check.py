@@ -54,12 +54,12 @@ EXPECTED_BUDGETS = {
   "skills/arena-preview-steering/assets/style.css": "UTF-8 file size",
   "skills/arena-preview-steering/scripts/preview.py": "UTF-8 file size",
   "skills/arena-preview-steering/scripts/install.sh": "UTF-8 file size",
-  "skills/gpt-planning/SKILL.md": "cl100k_base",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",
   "gpt-plugins/skills/gpt-quirks/SKILL.md": "cl100k_base",
   "gpt-plugins/skills/gpt-handoff/SKILL.md": "cl100k_base",
+  "gpt-plugins/skills/gpt-planning/SKILL.md": "cl100k_base",
 }
 
 # Root `ARENA.md` is the copy `.github/workflows/distribute-arena.yml` pushes to
