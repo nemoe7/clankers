@@ -390,8 +390,9 @@ async function refreshState() {
           ($('#report').dataset.reportId !== select.value ||
            $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
     }
-    // The pip follows every poll: a report can grow newer than the last visit without the list changing.
+    // The pip tracks unread reports; the separate receipt tracks the selected report's latest answer.
     updateReportPip(state.reports);
+    renderReportAcknowledgement();
   } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
     stateBusy = false;
@@ -468,7 +469,7 @@ function collect(root) {
   for (const field of root.querySelectorAll('.question[data-field]')) {
     const id = field.dataset.field;
     if (field.dataset.type === 'text') {
-      const input = field.querySelector('input[type="text"]');
+      const input = field.querySelector('textarea.answer-text');
       if (input && input.value.trim()) answers[id] = input.value;
     } else {
       const values = [];
@@ -496,8 +497,11 @@ function applyAnswers(root, answers) {
     const saved = answers[field.dataset.field];
     if (saved === undefined) continue;
     if (field.dataset.type === 'text') {
-      const input = field.querySelector('input[type="text"]');
-      if (input) input.value = saved;
+      const input = field.querySelector('textarea.answer-text');
+      if (input) {
+        input.value = saved;
+        growSlot(input);
+      }
       continue;
     }
     const values = Array.isArray(saved) ? saved : [saved];
@@ -569,16 +573,32 @@ async function copyNoteId(code, shift) {
 // than lost, and a first line that is already a quote is retargeted, so quoting a second note
 // replaces the prefix instead of stacking two. Meta is taken with ctrl, since that is the same
 // gesture on a Mac.
-function quoteNoteId(code) {
-  const short = (code.dataset.full || code.textContent).slice(0, 7);
+function quoteId(id, control) {
   const rest = note.value.replace(/^RE: \S+\n/, '');
-  note.value = `RE: ${short}\n${rest ? `\n${rest}` : ''}`;
+  note.value = `RE: ${id}\n${rest ? `\n${rest}` : ''}`;
   if (note.hidden) writeMode();
   note.focus();
-  const caret = short.length + 5;
+  const caret = id.length + 5;
   note.setSelectionRange(caret, caret);
   save('draft', note.value);
-  code.title = `Quoted in the composer: RE: ${short}`;
+  control.title = `Quoted in the composer: RE: ${id}`;
+}
+function quoteNoteId(code) {
+  quoteId((code.dataset.full || code.textContent).slice(0, 7), code);
+}
+async function copyTaskId(title) {
+  const id = title.dataset.taskId;
+  const words = await copyText(id);
+  title.dataset.copied = words ? 'good' : 'bad';
+  title.title = words ? `${words}: ${id}` : `Clipboard blocked; the ID is ${id}`;
+  setTimeout(() => {
+    delete title.dataset.copied;
+    title.title = id;
+  }, 1500);
+}
+function quoteTaskId(title) {
+  showTab(tabs[0]);
+  quoteId(title.dataset.taskId, title);
 }
 // The three tab buttons share one confirmation, and null text means there was nothing to copy.
 async function copyFrom(button, text, what, glyph = '⧉') {
@@ -607,7 +627,9 @@ function growSlot(area) {
 document.addEventListener('input', event => {
   const target = event.target;
   if (!target || typeof target.className !== 'string') return;
-  if (!target.className.split(' ').includes('custom-text')) return;
+  const classes = target.className.split(' ');
+  if (classes.includes('answer-text')) { growSlot(target); return; }
+  if (!classes.includes('custom-text')) return;
   growSlot(target);
   // Typing in a slot is choosing it: the box checks itself, and blanking the text lets go again.
   const label = (target.dataset.custom || '').replace(/"/g, '\\"');
@@ -623,7 +645,19 @@ document.addEventListener('click', event => {
     // Three modifiers on one element: plain copies the short ID, shift the whole one, ctrl quotes.
     if (event.ctrlKey || event.metaKey) quoteNoteId(target);
     else copyNoteId(target, event.shiftKey);
+  } else if (classes.includes('task-title')) {
+    if (event.ctrlKey || event.metaKey) quoteTaskId(target);
+    else void copyTaskId(target);
   }
+});
+document.addEventListener('keydown', event => {
+  const target = event.target;
+  if (!target || typeof target.className !== 'string' ||
+      !target.className.split(' ').includes('task-title')) return;
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  event.preventDefault();
+  if (event.ctrlKey || event.metaKey) quoteTaskId(target);
+  else void copyTaskId(target);
 });
 // The header clock is the log's own face with seconds appended, so the two never disagree.
 function showClock() {
@@ -717,6 +751,17 @@ function showReceipt(at) {
   receipt.textContent = `✓ Sent ${time(at)} · your answers stay filled in; change them and send again.`;
   receipt.hidden = false;
 }
+function renderReportAcknowledgement() {
+  const report = lastState?.reports.find(item => item.id === $('#report-select').value);
+  const receipt = $('#report-agent-ack');
+  const submission = report?.latest_answer_id ? `Submission ${report.latest_answer_id.slice(0, 7)} · ` : '';
+  receipt.textContent = report?.latest_answer_at
+    ? submission + (report.latest_answer_acknowledged_at
+      ? `Agent acknowledged the latest answer ${time(report.latest_answer_acknowledged_at)}.`
+      : `Latest answer sent ${time(report.latest_answer_at)}. It is awaiting agent acknowledgement.`)
+    : '';
+  receipt.hidden = !report?.latest_answer_at;
+}
 let reportDirty = false;
 $('#report-form').addEventListener('input', () => { reportDirty = true; });
 async function loadReport(force = false) {
@@ -788,6 +833,14 @@ $('#report-form').addEventListener('submit', async event => {
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
     if (saved) showReceipt(result.at);
     $('#report-status').textContent = `Answers sent ${time(result.at)} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
+    const report = lastState?.reports.find(item => item.id === id);
+    if (report) {
+      report.latest_answer_id = result.id;
+      report.latest_answer_at = result.at;
+      report.latest_answer_acknowledged_at = null;
+      renderReportAcknowledgement();
+    }
+    void refreshState();
   } catch (error) {
     if ($('#report').dataset.reportId === id) $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
   } finally { button.disabled = false; }
@@ -797,10 +850,14 @@ $('#report-form').addEventListener('submit', async event => {
 function taskRow(task) {
   const item = document.createElement('li');
   item.className = 'task';
-  item.title = task.details.join('\n');
+  item.title = task.id;
   const title = document.createElement('span');
   title.className = 'task-title';
   title.textContent = task.title;
+  title.dataset.taskId = task.id;
+  title.tabIndex = 0;
+  title.setAttribute('role', 'button');
+  title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to copy it`);
   const rows = [title];
   if (task.details.length) {
     // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
@@ -1227,7 +1284,7 @@ $('#fetch-form').addEventListener('submit', async event => {
   } catch (error) { $('#fetch-status').textContent = `Queue not confirmed: ${error.message}. Check the list before retrying.`; }
   finally { button.disabled = false; }
 });
-$('#report-select').addEventListener('change', loadReport);
+$('#report-select').addEventListener('change', () => { renderReportAcknowledgement(); loadReport(); });
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
 $('#refresh-notes').addEventListener('click', refreshState);
 refreshState();

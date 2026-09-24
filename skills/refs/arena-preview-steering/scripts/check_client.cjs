@@ -371,8 +371,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(detailList.children[0].tagName, 'li');
   assert.equal(detailList.children[0].className, 'task-detail');
   assert.equal(detailList.children[0].textContent, 'its only detail');
-  assert.equal(upcomingBody.children[0].title, 'its only detail');
+  assert.equal(upcomingBody.children[0].title, 'second', 'hover shows the task ID, not its detail');
   assert.equal(finishedBody.children.length, 1);
+  assert.equal(finishedBody.children[0].title, 'shipped');
   assert.equal(finishedBody.children[0].children.length, 1);
   assert.equal(finishedBody.children[0].children[0].textContent, 'Dots in the receipt');
   assert.equal(get('#tasks-finished').hidden, false);
@@ -384,7 +385,24 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(currentBody.children.length, 1);
   assert.equal(currentBody.children[0].children[0].textContent, '<img onerror=alert(1)> dir');
   assert.equal(currentBody.children[0].children[0].className, 'task-title');
-  assert.equal(currentBody.children[0].title, 'move BUDGET-EXCEPTIONS.md\nwrite arena-quirks.md');
+  assert.equal(currentBody.children[0].title, 'docs-archive');
+  const taskControl = currentBody.children[0].children[0];
+  assert.equal(taskControl.dataset.taskId, 'docs-archive');
+  assert.equal(taskControl.attributes.role, 'button');
+  assert.equal(taskControl.tabIndex, 0, 'keyboard users can reach the task ID');
+  documentEvents.click(event({ target: taskControl }));
+  await tick();
+  assert.equal(copied.at(-1), 'docs-archive', 'click copies the full task ID');
+  assert.equal(taskControl.dataset.copied, 'good');
+  const taskDraft = get('#note').value;
+  const taskCopied = copied.length;
+  documentEvents.click(event({ target: taskControl, ctrlKey: true }));
+  assert.equal(copied.length, taskCopied, 'Ctrl-click quotes without copying');
+  assert.equal(get('#note').value, `RE: docs-archive\n\n${taskDraft}`);
+  assert.equal(get('#notes-panel').hidden, false, 'quoting a task opens the Notes tab');
+  assert.equal(get('#note').focused, true);
+  get('#note').value = taskDraft;
+  get('#tasks-tab').events.click();
   assert.equal(upcomingBody.children.length, 1, 'the head is removed from Upcoming');
   assert.match(get('#tasks-status').textContent, /^Updated /);
   assert.doesNotMatch(get('#tasks-status').textContent, / · |written by|takes no answers/);
@@ -652,10 +670,10 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
   reportFields = 3;
   storage.set('arena-preview-v1:answers:r1', JSON.stringify({ answers: { name: 'ada', areas: ['ui'], verdict: 'Other: make it blue' }, at: '2026-09-20T12:00:00.000Z' }));
-  const textInput = { value: '' };
+  const textInput = { value: '', className: 'answer-text', scrollHeight: 40, style: {} };
   const text = new Element();
   text.dataset = { field: 'name', type: 'text' };
-  text.querySelector = () => textInput;
+  text.querySelector = selector => selector === 'textarea.answer-text' ? textInput : null;
   text.querySelectorAll = () => [];
   const uiBox = { value: 'ui', checked: false, dataset: {} };
   const apiBox = { value: 'api', checked: true, dataset: {} };
@@ -685,6 +703,14 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-submit').hidden, false);
   assert.match(get('#report-status').textContent, /3 fields/);
   assert.equal(textInput.value, 'ada');
+  assert.equal(textInput.style.height, '42px', 'restored answers expand the textarea');
+  textInput.value = 'first line\nsecond line';
+  textInput.scrollHeight = 88;
+  documentEvents.input({ target: textInput });
+  assert.equal(textInput.style.height, '90px', 'typed lines grow the textarea');
+  assert.equal(context.collect(get('#report')).name, 'first line\nsecond line',
+    'line breaks survive answer collection');
+  textInput.value = 'ada';
   assert.equal(uiBox.checked, true);
   assert.equal(apiBox.checked, false);
   assert.equal(shipBox.checked, false);
@@ -713,6 +739,11 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
   assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
   assert.match(get('#report-status').textContent, /^Answers sent /);
+  assert.match(get('#report-agent-ack').textContent, /awaiting agent acknowledgement/);
+  assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 7)),
+    'show the seven-character ID immediately after sending');
+  assert.ok(!get('#report-agent-ack').textContent.includes(sent.at(-1).id),
+    'do not show the full submission ID');
   assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
   await get('#refresh-report').events.click();
   await tick();
@@ -810,8 +841,30 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
     '1. * Fielded', 'an unseen report is starred in the select');
   assert.equal([...storage.keys()].filter(item => item.endsWith(':reports-read-at')).length, 0,
     'the tab writes no browser marker now that the stamp lives on the report');
+  const agentAck = get('#report-agent-ack');
+  state.reports[0].latest_answer_id = 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa';
+  state.reports[0].latest_answer_at = '2026-09-24T10:00:00';
+  state.reports[0].latest_answer_acknowledged_at = null;
+  await get('#refresh-notes').events.click();
+  assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
+  assert.match(agentAck.textContent, /Submission a123456/);
+  assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
+  assert.match(agentAck.textContent, /awaiting agent acknowledgement/);
+  state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
+  await get('#refresh-notes').events.click();
+  assert.match(agentAck.textContent, /Agent acknowledged the latest answer/);
+  assert.equal(pip.hidden, false, 'acknowledging an answer does not mark the report read');
+  state.reports[0].latest_answer_id = 'b765432-bbbbbbbbbbbbbbbbbbbbbbbbb';
+  state.reports[0].latest_answer_at = '2026-09-24T10:02:00';
+  state.reports[0].latest_answer_acknowledged_at = null;
+  await get('#refresh-notes').events.click();
+  assert.match(agentAck.textContent, /Submission b765432/);
+  assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
+  assert.match(agentAck.textContent, /awaiting agent acknowledgement/,
+    'a previous receipt does not cover a later answer');
   state.reports = [];
   await get('#refresh-notes').events.click();
+  assert.equal(agentAck.hidden, true, 'hide receipts when no report is selected');
   assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
   // What stamps a report is the browser showing it: one second in view for one that fits the
   // panel with nothing to scroll, and the moment its end is reached for one that does not.

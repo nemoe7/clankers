@@ -258,16 +258,17 @@ def parse_fields(markdown):
 
 def field_html(question):
   prompt = html.escape(question["prompt"], quote=True)
-  body = f'<div class="question" data-field="{html.escape(question["id"], quote=True)}"'
+  name = html.escape(question["id"], quote=True)
+  body = f'<div class="question" data-field="{name}"'
   body += f' data-type="{question["type"]}">'
+  body += f'<small class="question-id">Question ID: <code>{name}</code></small>'
   if question["type"] == "text":
     return (
-      f'{body}<input type="text" maxlength="2000" placeholder="Answer" '
-      f'aria-label="{prompt}"></div>'
+      f'{body}<textarea class="answer-text" rows="2" maxlength="2000" '
+      f'placeholder="Answer" aria-label="{prompt}"></textarea></div>'
     )
   control = "radio" if question["type"] == "choice" else "checkbox"
   group = f'<div class="options" role="group" aria-label="{prompt}">'
-  name = html.escape(question["id"], quote=True)
   for option in question["options"]:
     value = html.escape(option, quote=True)
     checked = " checked" if option in question["default"] else ""
@@ -739,8 +740,20 @@ class Store:
           "FROM reports ORDER BY seq, id"
         )
       ]
+      latest_answers = {
+        row["report_id"]: row
+        for row in db.execute(
+          "SELECT id, report_id, at, acknowledged_at FROM submissions ORDER BY seq"
+        )
+      }
       for report in reports:
         answered = report.pop("answered")
+        latest = latest_answers.get(report["id"])
+        report["latest_answer_id"] = latest["id"] if latest else None
+        report["latest_answer_at"] = clip_stamp(latest["at"]) if latest else None
+        report["latest_answer_acknowledged_at"] = (
+          clip_stamp(latest["acknowledged_at"]) if latest else None
+        )
         try:
           report["needs_answer"] = (
             bool(parse_fields(report.pop("markdown"))[1]) and not answered

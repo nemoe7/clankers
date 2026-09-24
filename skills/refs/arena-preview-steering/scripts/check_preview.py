@@ -78,6 +78,37 @@ with tempfile.TemporaryDirectory() as edit_dir:
     except ValueError:
       pass
 
+with tempfile.TemporaryDirectory() as receipts_dir:
+  receipt_store = preview.Store(receipts_dir, create=True)
+  report_source = Path(receipts_dir) / "receipt.md"
+  report_source.write_text(
+    "# Receipt\n\nDecision? {#decision}\n- (x) Yes\n- ( ) No\nCustom response: ___\n"
+  )
+  receipt_store.publish("receipt", "Receipt", report_source)
+  report = receipt_store.state()["reports"][0]
+  assert report["latest_answer_at"] is None
+  assert report["latest_answer_id"] is None
+  assert report["latest_answer_acknowledged_at"] is None
+  receipt_store.submission("answer-one", "receipt", "REPORT receipt: Yes")
+  report = receipt_store.state()["reports"][0]
+  assert report["latest_answer_at"] == preview.clip_stamp(
+    receipt_store.submissions()[-1]["at"]
+  )
+  assert report["latest_answer_id"] == "answer-one"
+  assert report["latest_answer_acknowledged_at"] is None
+  assert "REPORT receipt: Yes" not in json.dumps(report)
+  receipt_store.acknowledge(["answer-one"], "note", "Received")
+  report = receipt_store.state()["reports"][0]
+  assert report["latest_answer_acknowledged_at"] == preview.clip_stamp(
+    receipt_store.submissions()[-1]["acknowledged_at"]
+  )
+  receipt_store.submission("answer-two", "receipt", "REPORT receipt: No")
+  report = receipt_store.state()["reports"][0]
+  assert report["latest_answer_id"] == "answer-two", "use the new submission's ID"
+  assert report["latest_answer_acknowledged_at"] is None, (
+    "an earlier ack must not cover a new answer"
+  )
+
 with tempfile.TemporaryDirectory() as directory:
   # The state directory and the save file are siblings, the way they are in the repository: the
   # save file is written at the root, so a restore that drops the state directory keeps it.
@@ -352,6 +383,11 @@ with tempfile.TemporaryDirectory() as directory:
     served = json.loads(served)
     assert status == 200 and served["fields"] == 4
     assert served["html"].count("data-field=") == 4
+    assert served["html"].count('class="question-id"') == 4
+    for question in questions:
+      assert f"Question ID: <code>{question['id']}</code>" in served["html"]
+    assert served["html"].count('class="answer-text"') == 2
+    assert 'input type="text"' not in served["html"]
     assert 'type="radio"' in served["html"] and 'type="checkbox"' in served["html"]
     assert "- [ ] not a field" in served["html"]
     assert served["html"].count("checked") == 2
@@ -446,9 +482,12 @@ with tempfile.TemporaryDirectory() as directory:
       in page
     )
     assert ".task-details>summary{cursor:pointer;list-style-position:inside" in page
+    assert ".task-title{cursor:pointer" in page
+    assert not re.search(r"\.task-title\{[^}]*font-weight", page)
     assert 'id="copy-tasks"' not in page, "the tasks lost their copy button"
     # The Reports tab carries an unread pip rather than a count of the reports that exist.
     assert 'id="report-pip"' in page
+    assert 'id="report-agent-ack"' in page
     assert "report-count" not in page
     # The minified sheet splits or reorders merged selectors, so each pip matches its own block.
     assert re.search(
@@ -479,6 +518,14 @@ with tempfile.TemporaryDirectory() as directory:
     # The log filter draws its own box like the icon buttons beside it, after a second owner note
     # that the heights still differed.
     assert "appearance:none" in page and "#log-filter" in page
+    assert 'class="filter-wrap"' in page
+    assert "border-top:5px solid var(--muted)" in page, (
+      "the filter caret needs no blocked data image"
+    )
+    assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
+    assert re.search(r"\.topbar\{[^}]*gap:8px;", page), (
+      "collapse button uses the same 8px gap"
+    )
     assert page.count("#send{") == 0
     assert "resize:none" in page and "resize:vertical" not in page
     assert (
@@ -495,7 +542,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert page.index('id="tasks-current"') < page.index('id="tasks-upcoming"')
     assert page.index('id="tasks-upcoming"') < page.index('id="tasks-finished"')
     assert ".task-list{margin:0;padding-left:20px" in page
-    assert ".task-title{font-weight:600" in page
+    assert ".task-title{cursor:pointer" in page
     assert (
       ".task-details{display:block;margin-top:2px;color:var(--muted);font-size:13px"
       in page
