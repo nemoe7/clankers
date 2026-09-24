@@ -1,130 +1,68 @@
-# Preview transport: operation
+# Preview transport: commands and recovery
 
-## Runtime contract
+Use `scripts/preview.py` relative to the actual installed steering skill. Put `--state-dir <directory>` before every subcommand. Keep the same ignored, persisted directory across CLI calls and server restarts.
 
-The shared runtime is `scripts/preview.py`, relative to the steering skill. It uses Python 3.10+ standard-library HTTP, JSON and SQLite support. The report renderer imports `markdown-it-py` only when rendering; `serve` checks it at startup and exits with the install command when missing. The CLI commands need no renderer.
+## Commands
 
-The chosen `--state-dir` contains `state.sqlite3` and, by default, `saved-state.ndjson` beside it. Normal SQLite transactions handle concurrent browser sends and CLI receipts. Reads never acknowledge; a `read` stamps `seen_at` for exactly the IDs it printed, once its output write succeeds. `seen <ids>` or `ack` marks only those IDs. Count-only notifications, truncated output and failed deliveries stay Sent. Writes are committed before the server returns success.
-
-Notes retain IDs, server timestamps, text, optional acknowledgement timestamps and an optional acknowledgement kind, `note` or `reply`, with its answer text. Changed existing answers carry `ack_edited_at`; first answers and identical retries do not, and save/import preserve that stamp. Report answers are recorded in a separate `submissions` table with the same receipt columns plus their report ID: `read` merges both as pending items tagged `kind: note` or `kind: report`, `ack` accepts either ID, and `/api/state` serves notes only, so submissions never render as messages. Reports retain stable IDs, titles, Markdown snapshots, update timestamps and a `seq` fixed at first publish, which is the send order the UI numbers; their fields are parsed from that snapshot at every render, never stored separately. Missing columns migrate in place as nullable and `seq` is backfilled from `rowid`; no message or report is dropped. Keep the state directory ignored through `core.excludesFile`, never through the repository `.gitignore`, and outside transient cache/build directories.
-
-| Command | Purpose |
+| Command | Use |
 | --- | --- |
-| `init` | Create state without starting HTTP |
-| `serve` | Start the shared interface on `0.0.0.0`, port 8000 unless `--port` says otherwise |
-| `read` | Print all unacknowledged messages and report answers; record check time; stamp `seen_at` for printed IDs; minified JSON |
-| `seen <ids>` | Stamp only IDs whose full text reached the agent; unknown IDs fail the whole batch |
-| `task ID TITLE [DETAIL ...]` | Add or update one task in the Tasks tab; `--status`, `--order`, or the `--task-*` flags |
-| `task-remove ID` | Delete one task and echo what was stored |
-| `task-import [FILE]` | Rebuild the list from JSON, a file or stdin; `--replace` clears first; note lines are skipped |
-| `task-list` | Print every task as minified JSON, in the shape `task-import` reads back |
-| `ack <id> [<id> ...] --reply <markdown>` | Record receipts with a rendered answer in the log |
-| `ack <id> [<id> ...] --note <text>` | Record receipts with one plain answer line |
-| `publish <source.md> --id <id> --title <title>` | Add/update a report snapshot |
-| `import-notes <notes.ndjson>` | Import ID/text/time records, plus the receipt a line carries and its read stamp, written verbatim; a report answer line is restored in the same run, with its own receipt and read stamp; task lines are skipped; a partial receipt is refused and none is invented |
+| `init` | Create a missing state database before restoring an NDJSON backup |
+| `serve --port 8000` | Start the shared preview with a long-lived process tool |
+| `read` | List every pending note and report answer; mark only delivered IDs Seen |
+| `seen <ids>` | Mark fully delivered IDs Seen without answering; never use on counts or truncated output |
+| `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply |
+| `ack <id> --note <text>` | Answer one delivered ID with one plain line |
+| `task-list` | List tasks and their stored status, order and details |
+| `task ID TITLE [DETAIL ...]` | Add or update a task; use `--msg-id` for note-born and report-born tasks |
+| `task-remove ID` | Remove a task entered by mistake |
+| `task-import [FILE]` | Restore task records from JSON, a file or stdin; `--replace` clears first |
+| `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
+| `import-notes <notes.ndjson>` | Restore note and report-answer records from an export |
 
-All commands take `--state-dir` before the subcommand. `--save-path` selects where the save file goes, `saved-state.ndjson` inside the state directory by default. Every committed mutation rewrites it from the database. Construction, `set_meta`, `reminder` and both imports leave it alone. `--pretty` indents CLI JSON for a human eye. Commands that read existing state fail if the database is missing; they do not create a misleading empty inbox. Import is idempotent by ID and rejects an existing ID with different text.
-
-## Read and acknowledge
-
-Use only CLI `read` to poll; a failed delivery stays unseen, and a stamped message prints again until it is answered. Never mark count-only, truncated or failed deliveries Seen. Browser polls never stamp Seen. Pending records distinguish `kind: note` and `kind: report`; both accept `ack`. Report answers stay separate from the message log. Read errors must remain visible.
-
-Acknowledge exactly the delivered IDs, never all pending blindly. Supply exactly one of `--reply` or `--note`; one answer per call, separate calls for different answers, and never the same text to two messages: each acknowledgement addresses its own note. Unknown IDs fail the receipt batch. Repeated acknowledgement keeps its first timestamp and replaces the answer. Receipt is not completion. Use full IDs in CLI arguments; cite their first seven characters in prose, never sequence numbers. Without a visible preview, acknowledge in chat with literal `ACK:` and the interpretation.
+Use complete IDs in CLI calls; cite their first seven characters in prose. `read` does not acknowledge an item. Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers. An unknown ID fails the whole receipt batch. Answer later submissions under their own IDs. If the preview is unavailable, use `ACK:` in chat for delivered notes.
 
 ## External channel (ntfy)
 
-When the owner selects the external channel, the session falls back to ntfy. The user supplies the topic `<repo>-<branch>-<8-char unguessable secret>` (branch sanitized) and posts notes to its URL. Poll `https://ntfy.sh/<topic>/json?poll=1&since=<marker>` with page-fetch at every steering read: first poll `since=all`, then `since=` the newest seen `event:"message"` ID, persisted in `<state-dir>/ntfy-since.txt`; ignore `open`/`keepalive` events. The fallback ladder is the JSON endpoint, the HTML topic page, and a `since=all` replay. An empty response or a 500 with no message body is the quiet case; a fresh topic's first read is expected to fail until the user posts. Read the body, not the status: on an upstream error body such as object-store `SignatureDoesNotMatch`, retry once; on the same error, generate a fresh topic of the same form, post its link in chat naming the error, and continue with `since=all`, whose first empty failure is expected; if the fresh topic repeats the error, stop polling for the turn and resume after the user's next. A 500 repeating on a topic with delivered notes is reported once as a channel error and retried at the next read. Page-fetch is the path because sandbox HTTP to ntfy returns misleading empty responses.
+Use this only after the owner selects the external channel. The owner supplies a topic `<repo>-<branch>-<8-char unguessable secret>` (sanitize the branch) and posts notes to its URL. At each steering read, use page-fetch on `https://ntfy.sh/<topic>/json?poll=1&since=<marker>`. Start with `since=all`. Then use the newest `event:"message"` ID as the marker in `<state-dir>/ntfy-since.txt`; ignore `open` and `keepalive` events. An empty response, or a first 500 with no message body on a new topic, is quiet until the owner posts. For other JSON failures, try the HTML topic page, then a `since=all` replay. Read error bodies: retry an upstream error once. If it repeats, tell the owner the error and a fresh topic URL, then read that topic with `since=all`. If the new topic repeats the error, stop for this turn and retry after the owner's next message. Report a repeated 500 on an established topic once and retry at the next read. Do not use sandbox HTTP to poll ntfy.
 
 ## Tasks
 
-Task IDs are 1–64 lowercase letters, digits or hyphens, starting with a letter or digit. Titles allow at most 200 characters; each task at most 40 details of 2000 characters. Existing IDs update; omitted title/details keep stored values. The echo clips details to 200 characters, not stored values. Its `prev` and `next` identify neighbors within the same status group, null at either end.
+Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.
 
-| Flag | Operation |
+| Flag | Use |
 | --- | --- |
-| `--task-id`, `--task-title`, repeatable `--task-details` | Alternatives to the positional ID, title and detail arguments. The detail lines you pass replace the stored list |
-| `--task-details ""` | Clear all details |
-| `--status upcoming` or `--status finished` | Set status; new tasks default to upcoming |
-| `--order N` | Place at the 1-based position within its status group, not the end; positions stay dense after changes |
-| `--msg-id <full-message-id>` | Link a note or report submission to this task |
-| `--amend <previous-task-id>` | Rename an existing task to the supplied task ID, retaining title, details, status and position; refuse an existing destination |
+| `--status upcoming` or `--status finished` | Set status; new tasks start upcoming |
+| `--order N` | Set 1-based position in the task's status group |
+| `--task-id`, `--task-title`, repeatable `--task-details` | Set supplied fields; detail arguments replace stored details |
+| `--task-details ""` | Clear stored details |
+| `--msg-id <full-message-id>` | Link a note or report answer to its task; still call `ack` |
+| `--amend <previous-task-id>` | Rename a task without losing its details or order |
 
-Use `--msg-id` on the `task` command to set the message's `task_id`. Task/link writes are atomic; unknown message IDs fail both. Report-submission links add no log messages. The marker means queued, not acknowledged/complete; still `ack`.
-
-`task-import` merges by ID; `--replace` clears first. It validates every record before writing in one transaction, so invalid input cannot erase the existing queue. Mixed save files skip note and report-answer records. Tasks need no Markdown renderer.
+`task-import` merges by ID. Use `--replace` only after you check the input. Never infer a finished task from a commit alone.
 
 ## Publish reports
 
-Publish through the steering entry point's `publish` command. Field syntax and limits follow below. Sources must be UTF-8 `.md`, at most 2,000,000 bytes. IDs are 1–80 letters, digits, hyphens or underscores; titles 1–200 characters. Invalid fields fail before storage. Keep one ignored source per report and republish its stable ID to update it; answered reports refuse a republish, so publish the update under a new ID. Source edits alone never update published snapshots.
+A report source is UTF-8 `.md`, at most 2,000,000 bytes. IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters. Source edits do not update a published report: call `publish` again. A report that has answers refuses republishing under the same ID; publish its update under a new ID. Verify the rendered report before telling the owner it is available. If an answer is rejected after an update, ask the owner to preserve the draft, reload and review the current report.
 
-Republishing preserves first-publish order, clears the report's read stamp and never deletes delivered answers. `read` delivers submissions headed `REPORT <id> <title>:`, one indented line per field, `(skipped)` for empty answers; resending creates a new answer. Publishing never acknowledges a submission. Verify the rendered report before claiming delivery. Render failures leave sources available for inspection; report failure, never success.
+## Report fields
 
-The rendered report endpoint returns its full `revision`; answer requests must echo it. Revision checks and answer writes share one transaction. Missing revisions return HTTP 400, stale ones HTTP 409 without saving. Reload old preview pages before sending. Automatic updates retain unsent/in-flight answers. After rejection, copy entries before explicitly refreshing and reviewing the new report.
-
-## Suggested report structure
-
-```markdown
-# Review title
-
-**Result:** one clear outcome.
-
-## Changes
-
-- What changed and why.
-
-## Checks
-
-| Check | Result |
+| Markdown marker | Control |
 | --- | --- |
-| Actual check command | Pass, fail or not run |
+| `- ( ) option` (`- (x)` to preselect) | One radio choice |
+| `- [ ] option` (`- [x]` to preselect) | Checkbox choices |
+| `- ( ) Label: ___` or `- [ ] Label: ___` inside a group | A labeled free-text choice |
+| `Label: ___` or bare `___` | A text answer |
 
-## Findings and disposition
+Pair each option group with a labeled custom-response field. The nearest non-empty line before a group is its prompt; a labeled blank supplies its own prompt. Append `{#my-id}` to a prompt to keep the field ID stable. Markers inside fenced code blocks remain text. Limit a report to 50 fields, each prompt to 500 characters, each group to 1–20 unique options of at most 200 characters, and each text answer to 2000 characters. A whole submission is limited to 150,000 characters. Fix invalid fields before publication. Each submission has its own pending ID; acknowledge every new answer, not just an earlier submission.
 
-- Open: issue and impact.
-- Resolved: issue and verified resolution.
+## Uploaded notes and Downloads
 
-## Limits
+One composed note can include up to five files, each 1–50,000,000 bytes. `read` returns the note with an `attachments[]` list; read each record's `path` before acknowledging the single note ID. `present: false` means the record remains but the bytes do not. The note's receipt shows the original filenames.
 
-- Assumptions, unverified behavior and remaining decisions.
-```
+The owner enters one HTTPS URL per job in Downloads. Keep their browser open for the fetch. Direct access is the default. Proxy fallback needs a separate opt-in for each URL; AllOrigins and then CodeTabs see that URL. Credentials in URLs are rejected. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes. Agent-initiated jobs have no owner-authenticated approval gate yet.
 
-Follow the target repository's style. In Clankers reports, allow lines up to 120 characters. Never invent claims to fill the template. Short answers stay in chat. No Mermaid, remote fonts, CDN scripts or externally loaded images are needed.
+## Restore
 
-## Fields in a report
+Run `<skill>/scripts/install.sh` after a sandbox restore, before `git add`, to reinstate the venv, poll hook and ignore rule. Preserve the state directory and report source files. If the database is lost but `saved-state.ndjson` survives, run `init` on that state directory first. Then run `import-notes <file>` and `task-import <file>` there; neither import alone restores both notes and tasks. Report sources must be republished if their snapshots are lost. Files and unfinished download jobs are not in the NDJSON backup.
 
-| Marker | Control | Notes |
-| --- | --- | --- |
-| `- ( ) option` list | Radio group | `- (x)` preselects that option |
-| `- [ ] option` list | Checkbox group | `- [x]` preselects that option |
-| `- ( ) Label: ___` inside a group | Free-text slot | The typed text becomes the answer, as `Label: text` |
-| `Label: ___` or a bare `___` line | Text box | At most 2000 characters |
-
-Limits: 1–50 fields per report; prompts 1–500 characters; 1–20 unique options of 1–200 characters per group, where a group may hold a single option; each text answer 2000 characters; a whole submission 150,000 characters, checked before storage and refused with the limit named, never truncated. A duplicate option in one group is an error, and the whole report then fails to render rather than silently dropping a choice. Two free-text slots in one group may not share a label.
-
-The prompt is the label before `___`, else the nearest non-empty line above the group, stripped of list, heading, quote and emphasis markers and a trailing colon. The field ID is a slug of that prompt, deduplicated with a numeric suffix; `{#my-id}` at the end of the prompt line sets it explicitly. Markers inside fenced code blocks are literal text.
-
-`GET /api/reports/<id>/html` returns JSON with `html` and the field count, not raw HTML. `POST /api/reports/<id>/submit` pairs a client-generated ID with per-field answers (`choice` one of its options or a slot's `Label: text`, `checkbox` a unique subset of its options and slots) and writes one inbox note headed `REPORT <id> <title>:`. Resending is a new answer, not an update. A report with no fields rejects a submission. Republishing a source does not change or delete answers already delivered.
-
-## Uploads
-
-Uploads write inbox notes with matching IDs, naming file, size, type and path. One file is 50,000,000 bytes at most. The server returns `413` for longer bodies and stores no bytes. The bytes go to `<state-dir>/uploads/`, named after the upload's own UUID with the owner's extension kept, and never enter the database. A record outlives its bytes: a restore removes the files but keeps the records, and `present` on `/api/state` says which is which. Read the file at its path, then acknowledge the note. The save file does not restore missing upload bytes.
-
-## Browser download queue
-
-The Downloads tab queues one HTTPS URL per job. Each open browser moves one job at a time. The server never fetches remote URLs. The browser checks declared and streamed bytes against the 50,000,000-byte limit. Direct access is the default. The per-job checkbox enables AllOrigins and then CodeTabs after direct access fails. Both proxies see the full URL. The server rejects embedded credentials. A CORS or proxy failure appears in the job row. Retry there, or queue the URL again to change its proxy choice. SQLite holds job records and claims. An abandoned claim requeues after five minutes. An active browser renews its claim. Completed bytes live in `<state-dir>/downloads/`, outside SQLite. Successful jobs write inbox notes with the path. Records and notes can outlive bytes after a restore. `present` reports whether a file remains. The save file does not restore jobs or bytes.
-
-## HTTP and trust boundary
-
-Treat the preview URL as private session access. Do not publish secrets. Do not enable CORS, arbitrary file serving or remote assets. Raw HTML in Markdown is disabled. Report titles and messages are text, not HTML. The server accepts the Arena proxy host and does not block iframe embedding.
-
-## Recovery and checks
-
-- Run `<skill>/scripts/install.sh` after every sandbox restore, before any `git add`. It recreates the venv, the poll hook and the global ignore rule, and without that rule the state directory shows as untracked. Preserve the state directory and Markdown sources when restarting. Process IDs, venv packages and URLs are not durable, so restore the approved renderer and restart the same state directory as needed.
-- Reload an old browser page after server restart to obtain the new submission token. Keep/copy an unsent draft first if browser storage is unavailable. Browser drafts are origin-local, not a cross-device backup.
-- If a port is occupied, identify its owner or select another port; never kill an unrelated service. A failed read or save must remain visible, not become an empty state.
-- In the source repository, run `python skills/refs/arena-preview-steering/scripts/check_preview.py` with `markdown-it-py` available. It checks missing state, persistence, retry deduplication, receipt transactions, multiple reports, Markdown fields and their submissions, unsafe Markdown, absent-renderer behavior and HTTP route boundaries. Check the readable `assets/app.js` with `node --check` and run `node skills/refs/arena-preview-steering/scripts/check_client.cjs` where Node is available. These checks do not prove actual browser rendering; record manual browser observations separately.
-- Import `saved-state.ndjson` after a restore; autosave rewrites it on every committed mutation. The file carries the notes, the tasks and the owner's report answers; a report itself rebuilds from the source that produced it. The page's Copy state button copies the notes and the tasks as NDJSON, and it carries no answers.
-- Rebuild the queue from Git when the task backup dies with the state directory: `git log --oneline` is one finished task per shipped change, with the commit as its detail line, and `task-import` reads the JSON that those records form. Recover upcoming work from known requests, not invented completion claims.
-- Import a pasted log with `import-notes`, and never assume an answer: a line keeps the receipt it carries and a line without one stays unacknowledged.
-- Writes use a per-process token. The `/api/state` poll keeps the page's token fresh; `request()` also takes the token from a fresh page and retries once on a 401 or 403, and waits a second and retries once when a write never reached a server. If a write still fails, preserve drafts and report the failure; do not treat an unconfirmed write as durable.
-- Keep backups until restoration is verified with `read`, `task-list` and the rendered reports. Do not commit or push state, inboxes, receipts or reports.
-- If preview remains unavailable, report the observed failure and ask in chat how to continue. Do not silently revive ntfy or local report commits; another delivery method needs fresh approval.
+Reload the browser after a server restart to obtain a fresh write token. Preserve any unsent draft first. If a port is occupied, identify its owner or choose another port; do not stop another service. Verify a restore with `read`, `task-list` and rendered reports before discarding backups. Report failed reads or saves; never treat them as empty state or a confirmed save. If the preview stays unavailable, ask how to continue in chat. Do not enable an external channel or local report commits without a new choice.
