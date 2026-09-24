@@ -35,7 +35,7 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
-REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Block with ask_user on GH_TOKEN death.','Keep docs terse but clear.','Ask your questions via report forms.',"Don't forget to publish your reports.",'Avoid ending turn if there are unblocked tasks.'
+REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Report GH_TOKEN failure; use ask_user only if requested, preview unavailable, or ntfy selected.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Avoid ending turn if there are unblocked tasks.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 def now():return datetime.now(timezone.utc).isoformat()
