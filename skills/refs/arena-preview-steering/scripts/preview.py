@@ -620,6 +620,8 @@ class Store:
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),
           status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),
+          approval TEXT NOT NULL DEFAULT 'approved'
+            CHECK (approval IN ('pending', 'approved', 'denied')),
           claim TEXT, lease_until TEXT, error TEXT, source TEXT,
           name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,
           at TEXT NOT NULL, updated_at TEXT NOT NULL
@@ -674,6 +676,13 @@ class Store:
         # Older uploads posted one notification note with the upload's ID. Keep those links.
         db.execute("UPDATE uploads SET note_id = id WHERE note_id IS NULL")
       db.execute("CREATE INDEX IF NOT EXISTS uploads_note_id ON uploads(note_id)")
+      # Older owner-entered jobs stay claimable after the approval column is introduced.
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(fetch_jobs)")}
+      if "approval" not in columns:
+        db.execute(
+          "ALTER TABLE fetch_jobs ADD COLUMN approval TEXT NOT NULL DEFAULT 'approved'"
+          " CHECK (approval IN ('pending', 'approved', 'denied'))"
+        )
     if not existed:
       self.path.chmod(0o600)
 
@@ -1225,17 +1234,41 @@ class Store:
       rows = db.execute("SELECT * FROM fetch_jobs ORDER BY seq DESC").fetchall()
     return [fetch_row(row, self.path.parent) for row in rows]
 
-  def enqueue_fetch(self, url, allow_proxy):
+  def enqueue_fetch(self, url, allow_proxy, *, pending=False):
     url = fetch_url(url)
     if not isinstance(allow_proxy, bool):
       raise TypeError("Proxy fallback must be true or false for this URL")
+    if not isinstance(pending, bool):
+      raise TypeError("Pending approval must be true or false")
     job_id, stamp = new_id(), now()
     with self.transaction(autosave=False) as db:
       db.execute(
-        "INSERT INTO fetch_jobs (id, url, allow_proxy, status, at, updated_at)"
-        " VALUES (?, ?, ?, 'queued', ?, ?)",
-        (job_id, url, int(allow_proxy), stamp, stamp),
+        "INSERT INTO fetch_jobs (id, url, allow_proxy, status, approval, at, updated_at)"
+        " VALUES (?, ?, ?, 'queued', ?, ?, ?)",
+        (job_id, url, int(allow_proxy), "pending" if pending else "approved", stamp, stamp),
       )
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return fetch_row(row, self.path.parent)
+
+  def decide_fetch(self, job_id, decision):
+    """A preview Approve/Deny click decides one pending request exactly once."""
+    identifier(job_id)
+    if decision not in {"approved", "denied"}:
+      raise ValueError("Choose Approve or Deny for the download")
+    with self.transaction(autosave=False) as db:
+      # The conditional UPDATE acquires SQLite's write lock before reading a job, so simultaneous
+      # tabs cannot decide the same request differently. Denied jobs cannot be retried or claimed.
+      changed = db.execute(
+        "UPDATE fetch_jobs SET approval = ?, status = CASE WHEN ? = 'denied'"
+        " THEN 'failed' ELSE status END, error = CASE WHEN ? = 'denied'"
+        " THEN 'Denied in the preview' ELSE NULL END, updated_at = ?"
+        " WHERE id = ? AND approval = 'pending' AND status = 'queued'",
+        (decision, decision, decision, now(), job_id),
+      )
+      if changed.rowcount != 1:
+        if db.execute("SELECT 1 FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone() is None:
+          raise FileNotFoundError("No queued download with that ID")
+        raise FetchChanged("This download request was already decided; refresh Downloads")
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
     return fetch_row(row, self.path.parent)
 
@@ -1248,11 +1281,12 @@ class Store:
       db.execute(
         "UPDATE fetch_jobs SET status = 'queued', claim = NULL, lease_until = NULL,"
         " error = 'Browser stopped; queued again', updated_at = ?"
-        " WHERE status = 'fetching' AND lease_until <= ?",
+        " WHERE status = 'fetching' AND approval = 'approved' AND lease_until <= ?",
         (stamp, stamp),
       )
       row = db.execute(
-        "SELECT id FROM fetch_jobs WHERE status = 'queued' ORDER BY seq LIMIT 1"
+        "SELECT id FROM fetch_jobs WHERE status = 'queued' AND approval = 'approved'"
+        " ORDER BY seq LIMIT 1"
       ).fetchone()
       if row is None:
         return None
@@ -1274,6 +1308,7 @@ class Store:
       raise FileNotFoundError("No queued download with that ID")
     if (
       row["status"] != "fetching"
+      or row["approval"] != "approved"
       or not isinstance(claim, str)
       or not secrets.compare_digest(row["claim"] or "", claim)
       or not row["lease_until"]
@@ -1308,6 +1343,8 @@ class Store:
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
       if row is None:
         raise FileNotFoundError("No queued download with that ID")
+      if row["approval"] != "approved":
+        raise FetchChanged("Only approved downloads can be retried")
       if row["status"] not in {"queued", "failed"}:
         raise FetchChanged("Only a failed download can be queued again")
       db.execute(
@@ -1946,7 +1983,8 @@ def handler(store):
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
       fetch_post = re.fullmatch(
-        r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry)", path
+        r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)",
+        path,
       )
       upload_post = path == "/api/uploads"
       note_upload = path == "/api/notes/with-file"
@@ -2071,6 +2109,10 @@ def handler(store):
             record = store.fail_fetch(
               job_id, self.headers.get("X-Fetch-Claim", ""), payload.get("error", "")
             )
+          elif action in {"approve", "deny"}:
+            record = store.decide_fetch(
+              job_id, "approved" if action == "approve" else "denied"
+            )
           else:
             record = store.retry_fetch(job_id)
           self.reply(200, json.dumps(record, ensure_ascii=False))
@@ -2140,6 +2182,14 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  download = commands.add_parser(
+    "download-request", help="Request an HTTPS browser download, pending a preview Approve click"
+  )
+  download.add_argument("url", help="One HTTPS URL without embedded credentials")
+  download.add_argument(
+    "--allow-proxy", action="store_true",
+    help="Let the owner opt in to AllOrigins and CodeTabs fallback for this request",
+  )
   seen = commands.add_parser("seen")
   seen.add_argument("ids", nargs="+")
   ack = commands.add_parser("ack")
@@ -2214,6 +2264,9 @@ def main():
     elif args.command == "read":
       require_server(store)
       print_read(store, args.pretty)
+    elif args.command == "download-request":
+      # The agent path is pending; the browser form keeps its existing immediate queue path.
+      print(cli_json(store.enqueue_fetch(args.url, args.allow_proxy, pending=True), args.pretty))
     elif args.command == "seen":
       store.mark_seen(args.ids)
       print("Seen: " + ", ".join(args.ids))
