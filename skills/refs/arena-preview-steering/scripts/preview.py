@@ -63,7 +63,7 @@ REMINDERS = (
   "Keep docs terse but clear.",
   "Ask your questions via report forms.",
   "Don't forget to publish your reports.",
-  "Avoid ending turn if there are unblocked tasks",
+  "Avoid ending turn if there are unblocked tasks.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"

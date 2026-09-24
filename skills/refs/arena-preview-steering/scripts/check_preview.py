@@ -2311,7 +2311,7 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   rotate_script = str(Path(preview.__file__))
   assert "Ask your questions via report forms." in preview.REMINDERS
   assert "Don't forget to publish your reports." in preview.REMINDERS
-  assert "Avoid ending turn if there are unblocked tasks" in preview.REMINDERS
+  assert "Avoid ending turn if there are unblocked tasks." in preview.REMINDERS
   span = len(preview.REMINDERS)
   cycle = [rotate_store.reminder() for _ in range(span)]
   assert cycle == list(preview.REMINDERS)
