@@ -8,6 +8,7 @@
 - **ChatGPT alignment**: ChatGPT takes core wording on asking (ask when in doubt), big briefs (ship lazier, question in the same reply) and user-run commands (`cmd` default, bash on request). It gains core testing details and nemoe7 formatting; the live field keeps a short Ruff line to fit 1,500 chars. It drops the unrequested-abstraction pair and the no-preamble line, which the terse clause covers. House cascade adds `rules/wenyan/` for ChatGPT, and the wenyan fields follow. `rules/CHATGPT-CUSTOM.txt` 1,495 → 1,499 chars; `rules/CHATGPT-MORE.txt` 1,495 → 1,481 chars.
 - **Per-clause options**: house proposals put each clause's options directly under its row, with a new table per clause under the file heading.
 - **Pending-form block**: when a report form awaits answers and no unblocked work remains, ARENA blocks with `ask_user` naming that report instead of ending the turn, then reads the inbox; the `ask_user` exceptions list this case. `rules/ARENA.md` 14,610 → 14,778 `B`.
+- **No ID column**: house proposal rows drop the ID; each clause takes its own options.
 - Measurements: `rules/AGENTS.md` 1,540 → 1,556 `tok`; `rules/ARENA.md` 14,325 → 14,531 `B`; `skills/arena-preview-steering/SKILL.md` 6,424 → 6,354 `B`; `scripts/preview.py` 66,014 → 66,355 `B`.
 - Gates green.
 

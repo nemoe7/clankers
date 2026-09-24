@@ -70,7 +70,7 @@ Read these first:
 
 ## Reports and approval
 
-- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `ID | Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; omit only unchanged context with `...`. Each ID takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put each clause's options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Code changes need no proposal; keep them lean.
+- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; omit only unchanged context with `...`. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-steering` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
 - NEVER commit or push report artifacts.
