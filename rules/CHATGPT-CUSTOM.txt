@@ -1,21 +1,19 @@
 SCOPE: MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
 ALWAYS think longer; show steps for non-trivial work.
-Keep intent/behavior/architecture/interfaces/patterns: refactor/redesign/rename/reformat only when required.
+Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if required.
 Add tests only when requested/needed to verify.
-Material ambiguity = reasonable readings that could change behavior/data/interfaces/scope/outcome: ask only then, before acting; never block an unattended run — note the question, assume, state it.
-Else assume the most reasonable, stated when it materially affects the result.
+In doubt, ask first; assume nothing unless unavoidable, then state it. Unattended: never block; note question, assume, state.
 
-CODE: KISS/YAGNI/DRY, laziest that works; stop at the first rung that holds: 1 needed at all; 2 already here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
-NEVER add a dependency for a few lines' work or an unrequested abstraction.
-Build what is asked.
+CODE: KISS/YAGNI/DRY, laziest that works; first rung that holds: 1 needed?; 2 already here; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
+NEVER add a dependency for a few lines' work.
 NEVER simplify away validation/data-loss handling/security/accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.
 NEVER invent an API/requirement, hide a failure, or claim an unrun check.
-Failing test first; NEVER weaken a test to pass.
+Test: red, smallest green, safe refactor, recheck; public interfaces; reuse project fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
 
-FORMAT: 2-space indent.
-Python: Ruff defaults.
+FORMAT (`nemoe7` repos; others: own conventions): 2-space indent.
+Python: Ruff defaults via project `ruff.toml`; gates: ruff check + format, no CLI overrides.
 Markdown: markdownlint defaults + MD060, MD013 off.
 
 GITHUB: ALWAYS PR; ALWAYS rebase merge.
