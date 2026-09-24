@@ -17,6 +17,8 @@ Contents:
 
 Copy a workflow file into your platform's workflow location, or run it as-is where the platform accepts a file path. Portability requirements are in the [rules specification](../rules/README.md#workflows).
 
-Installation is human maintenance. Agents treat installed copies as read-only and report missing or incompatible files, never install or repair them. Source edits here do not authorize installed-copy changes.
+Agents treat installed workflow copies as read-only and report missing or incompatible files. Source edits here do not authorize installed-copy changes.
 
 Workflows stand alone, independent of the rule files in [rules/](../rules/).
+
+See [maintenance/README.md](../maintenance/README.md) for workflow maintenance and validation.
