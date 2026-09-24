@@ -2469,6 +2469,7 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   )
   # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
   rotate_store.acknowledge(["rotate-note"], "note", "Done")
+  assert rotate_store.meta_value(preview.POLLS_SINCE_MESSAGE) == "0"
   assert rotate_store.reminder(advance=True) == preview.REMINDERS[(offset + 4) % span]
   assert rotate_store.reminder(advance=True) == preview.REMINDERS[(offset + 5) % span]
   rotate_store.note("rotate-later", "Pending again")
@@ -2481,6 +2482,26 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   assert rotate_store.reminder(advance=True) == (
     f"1 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 8) % span]}"
   )
+
+# An ack reminds the agent to queue the note's work.
+with tempfile.TemporaryDirectory() as ack_dir:
+  preview.Store(ack_dir, create=True).note("ack-work", "Needs work")
+  result = subprocess.run(
+    [
+      sys.executable,
+      rotate_script,
+      "--state-dir",
+      ack_dir,
+      "ack",
+      "ack-work",
+      "--note",
+      "Ok",
+    ],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  assert "--msg-id ack-work" in result.stdout
 
 with tempfile.TemporaryDirectory() as marker_dir:
   marker_store = preview.Store(marker_dir, create=True)

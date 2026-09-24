@@ -31,7 +31,7 @@
 - Report every unrelated finding; fix only blocking ones.
 - Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing.
 - Ask every question with the question tool; NEVER ask in plain text.
-- Every question carries a recommended answer — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; neutral lists return your work to the user.
+- Questions with 3+ options or an open choice carry a recommended answer (yes/no or confirm: none) — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; neutral lists return your work to the user.
 - State any unavoidable assumption immediately; choose the most reasonable.
 
 ## Engineering
