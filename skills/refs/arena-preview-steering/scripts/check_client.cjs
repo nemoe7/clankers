@@ -55,6 +55,7 @@ class Element {
   setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
   remove() { this.removed = true; }
   requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
+  click() { this.clicks = (this.clicks || 0) + 1; }
 }
 const elements = new Map();
 const documentEvents = {};
@@ -75,10 +76,10 @@ const get = id => {
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
 get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
-get('#files-tab').setAttribute('aria-controls', 'files-panel');
+get('#downloads-tab').setAttribute('aria-controls', 'downloads-panel');
 get('#reports-panel').hidden = true;
 get('#tasks-panel').hidden = true;
-get('#files-panel').hidden = true;
+get('#downloads-panel').hidden = true;
 get('#upload-file').files = [];
 get('#fetch-proxy').checked = false;
 get('#note').placeholder = 'What should happen next?';
@@ -96,8 +97,12 @@ let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
 const uploadCalls = [];
-let uploadFails = false;
-let uploadFailName = '';
+let loseUploadResponse = false;
+class FormDataStub {
+  constructor() { this.fields = new Map(); }
+  append(name, value) { this.fields.set(name, value); }
+  get(name) { return this.fields.get(name); }
+}
 const queuedCalls = [];
 const remoteCalls = [];
 const remoteBehaviors = new Map();
@@ -117,6 +122,7 @@ const context = {
   crypto: { randomUUID: () => `${String(++counter).padStart(8, '0')}-0000-4000-8000-000000000000` },
   AbortController,
   Blob,
+  FormData: FormDataStub,
   URL,
   setTimeout,
   clearTimeout,
@@ -142,19 +148,23 @@ const context = {
       if (reportConflict) return {ok:false, status:409, text:async () => JSON.stringify({error:'Report changed. Copy entries before refreshing.'})};
       return response({ ...submission, at: new Date().toISOString() });
     }
-    if (url.startsWith('/api/uploads')) {
-      // The client sends the file itself, so the body is the bytes and the name rides the query string.
-      uploadCalls.push({ url, body: options.body, type: options.headers['Content-Type'], token: options.headers['X-Preview-Token'] });
-      if (uploadFails || options.body.name === uploadFailName) return response({ error: 'Upload must be 1–50,000,000 bytes' }, false);
-      const name = decodeURIComponent((url.split('?name=')[1] || 'file'));
-      const record = {
-        id: `upload-${uploadCalls.length}`, name, type: options.headers['Content-Type'],
-        size: options.body.size, sha256: String(uploadCalls.length).repeat(64),
-        file: `upload-${uploadCalls.length}${name.includes('.') ? name.slice(name.lastIndexOf('.')) : ''}`,
-        at: '2026-09-21T00:00:00+00:00', present: true
-      };
-      state.uploads = [...(state.uploads || []), record];
-      return response(record);
+    if (url === '/api/notes/with-file') {
+      const id = options.body.get('id');
+      const text = options.body.get('text');
+      const file = options.body.get('file');
+      uploadCalls.push({ id, text, file, token: options.headers['X-Preview-Token'],
+        contentType: options.headers['Content-Type'] });
+      let saved = state.notes.find(note => note.id === id);
+      if (!saved) {
+        saved = { id, text, attachment_name: file.name, attachment_path: `uploads/${id}.pdf`,
+          at: '2026-09-21T00:00:00+00:00', acknowledged_at: null };
+        state.notes = [...state.notes, saved];
+        state.uploads = [...(state.uploads || []), { id, name: file.name, type: file.type,
+          size: file.size, sha256: 'c'.repeat(64), file: `${id}.pdf`, present: true,
+          at: saved.at }];
+      }
+      if (loseUploadResponse) { loseUploadResponse = false; throw new Error('response lost after commit'); }
+      return response(saved);
     }
     if (url === '/api/fetch-jobs') {
       const payload = JSON.parse(options.body);
@@ -323,12 +333,12 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#tasks-panel').hidden, false);
   assert.equal(get('#reports-panel').hidden, true);
   get('#tasks-tab').events.keydown(event({ key: 'ArrowRight' }));
-  assert.equal(get('#files-panel').hidden, false, 'uploads and downloads share the Files panel');
+  assert.equal(get('#downloads-panel').hidden, false, 'the Downloads panel holds the browser queue');
   assert.equal(get('#tasks-panel').hidden, true);
-  get('#files-tab').events.keydown(event({ key: 'ArrowRight' }));
+  get('#downloads-tab').events.keydown(event({ key: 'ArrowRight' }));
   assert.equal(get('#notes-panel').hidden, false);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#files-panel').hidden, false);
+  assert.equal(get('#downloads-panel').hidden, false);
   get('#tasks-tab').events.keydown(event({ key: 'Home' }));
   assert.equal(get('#notes-panel').hidden, false);
   // Switching tabs fires an unawaited refreshState, so flush the queue before a click that
@@ -804,9 +814,9 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#report-submit').hidden, true);
   assert.equal(get('#report-receipt').hidden, true);
   get('#notes-tab').events.keydown(event({ key: 'End' }));
-  assert.equal(get('#files-panel').hidden, false);
-  assert.equal(get('#files-tab').focused, true);
-  assert.equal(get('#files-tab').attributes['aria-selected'], 'true');
+  assert.equal(get('#downloads-panel').hidden, false);
+  assert.equal(get('#downloads-tab').focused, true);
+  assert.equal(get('#downloads-tab').attributes['aria-selected'], 'true');
   get('#tasks-tab').events.keydown(event({ key: 'ArrowLeft' }));
   assert.equal(get('#reports-panel').hidden, false);
   assert.equal(get('#reports-tab').focused, true);
@@ -1151,9 +1161,7 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(get('#copy-report').dataset.state, 'bad');
   assert.equal(get('#copy-report').title, 'There is no report to copy');
   get('#report-select').value = selectBefore;
-  // The Uploads tab sends the file itself rather than a JSON envelope, and lists what the server
-  // holds, on the owner's answers: any bytes, a 50,000,000-byte ceiling,
-  // and a record that outlives them.
+  // Existing upload records still live beside the composer; a missing file retains its row.
   state.uploads = [
     { id: 'kept', name: 'shot.png', type: 'image/png', size: 2048, sha256: 'a'.repeat(64), file: 'kept.png', at: '2026-09-21T00:00:00+00:00', present: true },
     { id: 'gone', name: 'notes.zip', type: 'application/zip', size: 3000, sha256: 'b'.repeat(64), file: 'gone.zip', at: '2026-09-21T00:00:00+00:00', present: false }
@@ -1164,72 +1172,87 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(kept.children[0].textContent, 'shot.png');
   assert.match(kept.children[1].textContent, /^2 kB · image\/png · .* · aaaaaaaaaaaa$/);
   assert.equal(kept.children[2].textContent, 'uploads/kept.png');
-  // A record outlives its bytes, so a row whose file is gone says so rather than opening nothing.
   const gone = get('#uploads-list').children[1];
   assert.equal(gone.children[2].textContent, 'the bytes are gone; the record survived a restore');
   assert.equal(gone.children[2].className, 'upload-gone');
-  await get('#upload-send').events.click();
-  assert.equal(get('#upload-status').textContent, 'Choose a file first.');
-  assert.equal(uploadCalls.length, 0);
-  get('#upload-file').files = [{ name: 'empty.bin', size: 0, type: '' }];
-  await get('#upload-send').events.click();
-  assert.equal(get('#upload-status').textContent, 'That file is empty.');
-  assert.equal(uploadCalls.length, 0);
-  get('#upload-file').files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
-  await get('#upload-send').events.click();
-  assert.equal(get('#upload-status').textContent, 'That file is 50,000,001 bytes; the ceiling is 50,000,000.');
-  assert.equal(uploadCalls.length, 0, 'an oversize file never leaves the page');
-  const file = { name: 'report card.pdf', size: 12, type: 'application/pdf' };
-  get('#upload-file').files = [file];
-  await get('#upload-send').events.click();
+
+  // The file picker is kept, but now stages a single file beside "Your message". The composer
+  // accepts one dropped file, rejects empty/oversize files before sending, and can remove/replace it.
+  const picker = get('#upload-file');
+  get('#attach-file').events.click();
+  assert.equal(picker.clicks, 1, 'the attach button opens the native picker');
+  picker.files = [{ name: 'empty.bin', size: 0, type: '' }];
+  picker.events.change();
+  assert.equal(get('#send-status').textContent, 'That file is empty.');
+  picker.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
+  picker.events.change();
+  assert.equal(get('#send-status').textContent, 'That file is 50,000,001 bytes; the ceiling is 50,000,000.');
+  assert.equal(uploadCalls.length, 0, 'invalid files never leave the page');
+  const file = { name: 'report card.pdf', size: 12, type: 'application/pdf', lastModified: 7 };
+  picker.files = [file];
+  picker.events.change();
+  assert.equal(get('#staged-file').textContent, 'report card.pdf');
+  assert.equal(get('#staged-file').hidden, false);
+  assert.equal(get('#remove-file').hidden, false);
+  assert.equal(uploadCalls.length, 0, 'choosing a file does not upload it yet');
+  get('#remove-file').events.click();
+  assert.equal(get('#staged-file').hidden, true);
+  assert.equal(picker.value, '');
+  const dragging = event({ dataTransfer: { types: ['Files'], files: [file] } });
+  get('#compose').events.dragover(dragging);
+  assert.equal(dragging.prevented, true);
+  assert.equal(get('#compose').dataset.dragging, 'true');
+  const dropping = event({ dataTransfer: { types: ['Files'], files: [file] } });
+  get('#compose').events.drop(dropping);
+  assert.equal(dropping.prevented, true);
+  assert.equal(get('#compose').dataset.dragging, undefined);
+  assert.equal(get('#staged-file').textContent, 'report card.pdf');
+  get('#compose').events.drop(event({ dataTransfer: { types: ['Files'], files: [file, file] } }));
+  assert.equal(get('#send-status').textContent, 'Attach one file per note.');
+  assert.equal(get('#staged-file').textContent, 'report card.pdf', 'a rejected selection keeps the staged file');
+
+  // The file and text share one ID and one multipart call. A lost response keeps both in memory;
+  // a manual retry uses the same ID and never generates a separate upload notification note.
+  const notesBeforeFile = state.notes.length;
+  const sendsBeforeFile = sent.length;
+  get('#note').value = 'Please review the attached report';
+  loseUploadResponse = true;
+  await get('#form').events.submit(event({}));
   assert.equal(uploadCalls.length, 1);
-  assert.equal(uploadCalls[0].url, '/api/uploads?name=report%20card.pdf');
-  assert.equal(uploadCalls[0].body, file, 'the body is the bytes themselves');
-  assert.equal(uploadCalls[0].type, 'application/pdf');
+  assert.equal(uploadCalls[0].file, file);
+  assert.equal(uploadCalls[0].text, 'Please review the attached report');
+  assert.equal(uploadCalls[0].contentType, undefined, 'the browser supplies the multipart boundary');
   assert.equal(uploadCalls[0].token, '__TOKEN__');
-  assert.equal(get('#upload-status').textContent, 'Saved report card.pdf · 12 B · 111111111111');
-  assert.equal(get('#upload-file').value, '');
-  assert.equal(get('#uploads-list').children.length, 3, 'the new record joins the list');
-  assert.equal(get('#uploads-list').children[2].children[2].textContent, 'uploads/upload-1.pdf');
+  assert.equal(sent.length, sendsBeforeFile, 'no separate note is posted');
+  assert.equal(get('#staged-file').hidden, false, 'a failed response keeps the staged file');
+  assert.match(get('#send-status').textContent, /^Save not confirmed:/);
+  assert.equal(JSON.parse(storage.get('arena-preview-v1:pending')).id, uploadCalls[0].id);
+  await get('#form').events.submit(event({}));
+  await tick();
+  await get('#refresh-notes').events.click();
+  assert.equal(uploadCalls.length, 2);
+  assert.equal(uploadCalls[0].id, uploadCalls[1].id, 'an unchanged retry has one note ID');
+  assert.equal(state.notes.length, notesBeforeFile + 1, 'one message, not a separate upload note');
+  assert.equal(sent.length, sendsBeforeFile);
+  assert.equal(get('#note').value, '');
+  assert.equal(get('#staged-file').hidden, true);
+  assert.equal(get('#uploads-list').children.length, 3, 'the linked file stays in composer records');
   assert.equal(get('#uploads-list').children[2].children[0].textContent, 'report card.pdf');
-  // A file the browser has no type for still goes: the server stores any bytes as they arrived.
-  uploadFails = true;
-  get('#upload-file').files = [{ name: 'blob', size: 9, type: '' }];
-  await get('#upload-send').events.click();
-  assert.equal(uploadCalls[1].type, 'application/octet-stream');
-  assert.equal(get('#upload-status').textContent, 'Upload failed: Upload must be 1–50,000,000 bytes');
-  uploadFails = false;
-  const batch = [{name: 'first.txt', size: 3, type: 'text/plain'}, {name: 'second.txt', size: 4, type: 'text/plain'}];
-  get('#upload-file').files = batch;
-  let uploadsBefore = uploadCalls.length;
-  const uploading = get('#upload-send').events.click();
-  assert.equal(get('#upload-send').disabled, true);
-  await get('#upload-send').events.click();
-  await uploading;
-  assert.equal(uploadCalls.length, uploadsBefore + 2, 'one request per file, no duplicate batch');
-  assert.equal(get('#upload-status').textContent, 'Saved 2 files: first.txt, second.txt');
-  assert.equal(get('#upload-send').disabled, false);
-  assert.equal(get('#upload-file').disabled, false);
-  get('#upload-file').files = [batch[0], {name: 'empty.txt', size: 0, type: ''}];
-  uploadsBefore = uploadCalls.length;
-  await get('#upload-send').events.click();
-  assert.equal(uploadCalls.length, uploadsBefore, 'preflight validates the whole selection');
-  assert.match(get('#upload-status').textContent, /empty.txt.*empty/);
-  uploadFailName = 'second.txt';
-  get('#upload-file').files = batch;
-  get('#upload-file').value = 'selection retained';
-  await get('#upload-send').events.click();
-  assert.equal(uploadCalls.length, uploadsBefore + 2);
-  assert.match(get('#upload-status').textContent, /second.txt.*Saved 1 of 2: first.txt/);
-  assert.equal(get('#upload-file').value, 'selection retained');
-  assert.equal(get('#upload-send').disabled, false);
-  assert.equal(get('#upload-file').disabled, false);
-  uploadFailName = '';
-  uploadsBefore = uploadCalls.length;
-  get('#upload-file').files = [{ name: 'medium.bin', size: 1_000_001, type: 'application/octet-stream' }];
-  await get('#upload-send').events.click();
-  assert.equal(uploadCalls.length, uploadsBefore + 1, 'manual uploads over 1 MB now reach the server');
-  assert.match(get('#upload-status').textContent, /Saved medium.bin/);
+  assert.equal(get('#uploads-list').children[2].children[2].textContent, `uploads/${uploadCalls[0].id}.pdf`);
+  const attached = get('#history').children.find(item => item.children[2].children[0].dataset.full === uploadCalls[0].id);
+  assert.ok(attached);
+  const receipt = attached.children[2];
+  assert.equal(part(receipt, 'receipt-file').textContent, ' · report card.pdf');
+  assert.ok(receipt.children.indexOf(part(receipt, 'receipt-file')) > receipt.children.indexOf(part(receipt, 'state-dot')),
+    'the filename follows the receipt date and state dot');
+
+  // A file-only composer still sends a real note instead of an upload notification.
+  picker.files = [{ name: 'single.bin', size: 1, type: '' }];
+  picker.events.change();
+  await get('#form').events.submit(event({}));
+  assert.equal(uploadCalls.at(-1).text, 'File: single.bin');
+  assert.equal(sent.length, sendsBeforeFile);
+  assert.equal(get('#staged-file').hidden, true);
 
   // The queue records per-job opt-in and a browser worker claims one URL at a time. Remote fetches
   // omit credentials and referrers. None of these mocks assert actual browser CORS behavior.
@@ -1396,5 +1419,5 @@ const event = properties => ({ preventDefault() { this.prevented = true; }, ...p
   assert.equal(copied.length, copiesBeforeNotesOnly + 1, 'copy a session before its first task');
   assert.match(copied.at(-1), /"id":"notes-only"/);
   assert.equal(get('#copy-state').dataset.state, 'good');
-  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation and one Files page with uploads and downloads, 50 MB manual uploads and a browser fetch queue with direct/opt-in proxy fallback and streamed size checks, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
+  console.log('PASS: default theme, theme persistence, the chevron bar toggle, the pencil composer toggle and the sun/moon theme button with persistence, the MD eye preview toggle, the green and red connection dot, 24-hour timestamps without seconds or a same-year year, four-tab navigation with Downloads separate from composer uploads, staged picker/drop/removal and one linked file per note with a 50 MB limit, a browser fetch queue with direct/opt-in proxy fallback and streamed size checks, the tasks tab rendering the head of the queue in its own div, both stored sections and its unwritten state, draft retention, Enter/IME, retries, receipts with visible note IDs, state dots and a click that copies the short ID or the whole one on shift and quotes it into the composer on ctrl, clipped placeholders, the header clock with its date and seconds, the copy button on the reports tab and the state copy button, agent replies and notes in the log, chat order with the log pinned to the newest message, the bare last-sent placeholder, report fields, pre-filled saved answers and the sent receipt, and the log filter over Sent, Seen and Said');
 })().catch(error => { console.error(error); process.exitCode = 1; });

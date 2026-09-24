@@ -62,13 +62,18 @@ nav [aria-selected="true"] { background: var(--bubble); }
 #report-pip, #notes-pip { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
-#notes-panel, #reports-panel, #tasks-panel, #files-panel { overflow-y: auto; }
-.files-layout { display: flex; flex-direction: column; gap: 18px; max-width: 900px; margin: auto; }
+#notes-panel, #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 .log-card { flex: 1 1 auto; min-height: 200px; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
 .log-card > .row:first-child { margin-block: 0; }
-.compose { flex: 0 0 auto; padding: 8px 18px; }
+.card.compose { flex: 0 0 auto; padding: 8px 18px; }
 .compose .row { margin: 6px 0; }
+.composer-heading { flex-wrap: nowrap; gap: 8px; }
+.composer-label { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.composer-label label { margin: 0; white-space: nowrap; }
+#staged-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(42vw, 320px); }
+#attach-file, #remove-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
+#compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
 #preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
 body[data-composer="closed"] .compose { display: none; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
@@ -109,14 +114,21 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
    say what it does. It appears only while the log is scrolled away from its end. */
 .log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 .log-newest {
-  /* Fit to the label, centred over the log: a strip that spans the pane
-     is a bar the eye reads as furniture, and this one is a control. */
-  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); white-space: nowrap;
-  min-height: 0; padding: 5px 12px; font-size: 13px; border-radius: 999px;
-  background: var(--panel); color: var(--text); box-shadow: 0 2px 10px rgb(0 0 0 / 35%);
+  /* Compact arrow from the owner's Arena UI reference; the log still owns its scroll state. */
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 0; padding: 4px 12px; font-size: 12px; border-radius: 4px;
+  border-color: var(--tab-border); background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--accent);
+  box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(8px);
+  transition: color .15s, background-color .15s, border-color .15s;
 }
-.log-newest:hover { border-color: var(--muted); }
+.log-newest svg { pointer-events: none; flex: none; }
+.log-newest:hover { color: var(--text); border-color: var(--muted); }
+.log-newest:active { color: var(--muted); }
+.log-newest:focus-visible { box-shadow: 0 0 0 2px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
+.message:last-child { margin-bottom: 0; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
 /* A receipt ID is text rather than a chip, so it opts out by class instead of by ancestry. */
@@ -224,13 +236,11 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
 .question-id { display: block; margin-bottom: 4px; }
-/* The Uploads tab shows what the server holds: the file as stored, and a record that outlives it. */
-.uploads-layout { display: flex; flex-direction: column; gap: 12px; }
-.uploads-layout h2 { margin: 0; }
-.uploads-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-.uploads-layout > .row.tight > .row.tight { align-items: center; }
-#uploads-count, #upload-status, #uploads-note { margin: 0; }
-#upload-file { max-width: 16em; font-size: 13px; color: var(--muted); }
+/* File records remain accessible from the composer even after a state restore loses bytes. */
+.uploads-history { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; }
+.uploads-history summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+.uploads-history[open] #uploads-list { max-height: 175px; overflow-y: auto; }
+#uploads-note { display: block; margin: 7px 0; }
 .upload-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .upload-name { font-weight: 600; }
 .upload-meta, .upload-where, .upload-gone { color: var(--muted); font-size: 13px; }
