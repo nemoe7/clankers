@@ -64,11 +64,13 @@ jobs:
           steps = workflow["jobs"]["package"]["steps"]
           upload = next(step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact"))
 
-          assert upload["with"]["name"] == "gpt-plugins", upload["with"]["name"]
+          assert upload["uses"] == "actions/upload-artifact@v7", upload["uses"]
           assert upload["with"]["path"] == "gpt-plugins.zip", upload["with"]["path"]
+          assert upload["with"]["archive"] is False, upload["with"]["archive"]
+          assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
           assert any("gpt-plugins.zip" in str(step.get("run", "")) for step in steps), "no packaging step"
 
-          print(f"{path}: triggers, archive name and artifact name are as required.")
+          print(f"{path}: triggers and direct gpt-plugins.zip upload are as required.")
           PY
 
       # The manifest is validated against the schema fetched from agent-plugins.org, so a
@@ -85,8 +87,8 @@ jobs:
           python maintenance/check_gpt_plugins.py --archive gpt-plugins.zip
 
       - name: Upload the plugin archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: gpt-plugins
           path: gpt-plugins.zip
           if-no-files-found: error
+          archive: false
