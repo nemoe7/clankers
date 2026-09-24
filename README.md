@@ -34,12 +34,12 @@ Latest measurements as of 2026-09-24. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 11,775 `B` |
 | `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 65,926 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 2,621 `B` |
-| `skills/gpt-planning/SKILL.md` | `cl100k_base` | 398 `tok` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,552 `tok` |
 | `gpt-plugins/skills/gpt-quirks/SKILL.md` | `cl100k_base` | 142 `tok` |
 | `gpt-plugins/skills/gpt-handoff/SKILL.md` | `cl100k_base` | 1,090 `tok` |
+| `gpt-plugins/skills/gpt-planning/SKILL.md` | `cl100k_base` | 398 `tok` |
 
 Measurements cover complete files, including whitespace and markup. 
 
