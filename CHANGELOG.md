@@ -4,6 +4,7 @@
 - **Recommended answers**: core and ARENA require one only for questions with three or more options or an open choice; yes/no and confirm questions carry none.
 - **Ack reminders**: `ack` prints a `task ... --msg-id` reminder, and `SKILL.md` says to queue each work note. An ack that empties the inbox resets the call count at once.
 - **Approval format**: house proposals group rows under each refs file (`ID | Line | Current | Amended | Reason`), and each ID takes approve, squash, reject or custom. Code changes need no proposal. Proposals come before tasks.
+- **Visibility question alone**: ARENA asks it alone; after "Yes", all other questions go by fielded report. A house `squash` decision now means re-propose a line squashed with the `squash` skill, not land it. `rules/ARENA.md` 14,531 → 14,610 `B`.
 - Measurements: `rules/AGENTS.md` 1,540 → 1,556 `tok`; `rules/ARENA.md` 14,325 → 14,531 `B`; `skills/arena-preview-steering/SKILL.md` 6,424 → 6,354 `B`; `scripts/preview.py` 66,014 → 66,355 `B`.
 - Gates green.
 

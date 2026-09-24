@@ -54,3 +54,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-24: Accepted without funding. `gpt-plugins/skills/gpt-handoff/SKILL.md` grows by 297 `tok` from 779 to 1,076 after one squash pass recovered 19 `tok`. The added audit triggers, mandatory Ponytail review of code and human-facing docs, exclusive final format, output bans and compliance check need the extra tokens.
 2026-09-24: Accepted without funding. `skills/arena-preview-steering/scripts/preview.py` +50 `B` for the unblocked-task reminder.
 2026-09-25: Accepted without funding. `rules/AGENTS.md` +16 `tok`, `rules/ARENA.md` +206 `B` and `scripts/preview.py` +341 `B` for the visibility block, the recommended-answer scope, the negative-rating line and the ack reminder with its count reset.
+2026-09-25: Accepted without funding. `rules/ARENA.md` +79 `B` for the lone visibility question.
