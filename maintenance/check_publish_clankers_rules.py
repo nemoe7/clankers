@@ -188,7 +188,7 @@ with tempfile.TemporaryDirectory() as tmp:
   (root / "rules/README.md").unlink()
   (root / "rules/new.md").unlink()
   gh.run(root)
-  assert set(gh.gist["files"]) == {"#clankers-rules.md", "folder-a.md"}
+  assert set(gh.gist["files"]) == {"folder-a.md"}
   assert gh.operations[-1][2]["files"] == {"#clankers-rules.md": None, "new.md": None}
   (root / "rules/folder/a.md").unlink()
   (root / "rules/folder-a.md").unlink()
