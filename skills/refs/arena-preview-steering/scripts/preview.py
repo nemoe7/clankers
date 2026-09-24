@@ -62,6 +62,7 @@ REMINDERS = (
   "Block with ask_user on GH_TOKEN death.",
   "Keep docs terse but clear.",
   "Ask your questions via report forms.",
+  "Don't forget to publish your reports.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"

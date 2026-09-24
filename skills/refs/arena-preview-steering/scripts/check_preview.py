@@ -2310,6 +2310,7 @@ with tempfile.TemporaryDirectory() as rotate_dir:
   rotate_store = preview.Store(rotate_dir, create=True)
   rotate_script = str(Path(preview.__file__))
   assert "Ask your questions via report forms." in preview.REMINDERS
+  assert "Don't forget to publish your reports." in preview.REMINDERS
   span = len(preview.REMINDERS)
   cycle = [rotate_store.reminder() for _ in range(span)]
   assert cycle == list(preview.REMINDERS)
