@@ -1,6 +1,6 @@
 # WENYAN CHATGPT EXPERIMENT
 
-Experimental only; not authoritative or validated.
+Experimental only. It is not authoritative or validated.
 
 ## Purpose
 
