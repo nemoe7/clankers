@@ -4,7 +4,7 @@ Reference for rule structure, constraints, and installation. See [maintenance/RE
 
 Commands and code-span paths are repository-root-relative unless stated otherwise.
 
-The installer uses only the Python standard library. This repository uses assert-based runtime, client and maintenance checks. [.github/workflows/](../.github/workflows/) checks pushes to `main` and PRs targeting any branch, except changes limited to its ignored paths. It installs `markdown-it-py` and `tiktoken`, runs `maintenance/check.py --update`, and lints Markdown. Only qualifying `main` pushes commit refreshed README measurements.
+The installer uses only the Python standard library.
 
 ## Contents and activation
 
@@ -18,8 +18,6 @@ The installer uses only the Python standard library. This repository uses assert
 | [rules/CHATGPT-MORE.txt](CHATGPT-MORE.txt) | ChatGPT Personalization: `More about you` | Paste it into More about you, hinted "Interests, values, or preferences to keep in mind". 1,500 characters at most |
 | [rules/COMMIT-SPEC.txt](COMMIT-SPEC.txt) | Short commit-message reference | Use it to prepare an authorized commit or a proposed message |
 | [rules/refs/](refs/README.md) | Uncompressed rule originals and the AGENTS.md writing guidelines | Amend here first. Then mirror the amendment into the live file in compressed form, and squash it |
-| [skills/](../skills/README.md) | Reusable skills | Install the complete skill directories, including the supporting files |
-| [workflows/](../workflows/README.md) | Portable agent workflows | Copy the workflow file into the workflow location of your platform, or run it as it is |
 
 Check active files in your installed agent version. Filenames alone do not enable loading. ARENA.md compresses the core for standalone deployment. CLINE.md requires the loader to read AGENTS.md too. If it stops, repair installation or explicitly restore the core. Never lose it silently.
 
@@ -74,12 +72,6 @@ python .\rules\apply.py
 ```
 
 **The installer overwrites destination files.** Back up local changes first. Skills, ARENA.md and ChatGPT files need separate setup. Never install this specification as an agent rule.
-
-## Workflows
-
-A workflow is one portable Markdown file with a `description` frontmatter field and a `cl100k_base` budget in the [root README](../README.md#instruction-budgets). Its body has no platform-specific tool, agent, model, provider, UI, permission or interaction mechanism. See [format details](../workflows/README.md).
-
-[workflows/README.md](../workflows/README.md#use) owns the installation and the selection, not this specification.
 
 ## Markdown lint scope
 
