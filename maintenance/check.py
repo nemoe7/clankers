@@ -81,6 +81,7 @@ EXPECTED_LINTED = (
   "rules/refs/GUIDELINES.md",
   "rules/refs/KILO.md",
   "rules/refs/README.md",
+  "rules/wenyan/README.md",
 )
 
 # Where the documented markdownlint file count lives, and how to find it. Root AGENTS.md

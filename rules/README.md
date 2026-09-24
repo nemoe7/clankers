@@ -122,7 +122,7 @@ A simpler scope needs approval before a substitution. The testing guidance in th
 
 ### Formatting
 
-Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/` — 10 files in all. The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
+Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/`, plus `rules/wenyan/README.md` — 11 files in all. The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
 
 Soft-wrap prose: one line per paragraph, list item and table row. Keep third-party license wrapping.
 
