@@ -955,7 +955,7 @@ function renderTasks(tasks) {
   finished.hidden = false;
   upcoming.hidden = false;
 }
-const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#uploads-tab'), $('#downloads-tab')];
+const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#files-tab')];
 // The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
 // something there is unread, not how many reports exist. A report is unread until the owner has
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
