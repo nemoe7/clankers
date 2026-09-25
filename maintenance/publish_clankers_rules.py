@@ -12,6 +12,208 @@ from pathlib import Path
 DESCRIPTION = "clankers-rules"
 EXTENSIONS = {".md", ".txt"}
 NESTED_READMES = {"README.md", "README.txt"}
+INDEX_NAME = "#clankers-rules.md"
+INDEX_SOURCE = "README.md"
+REPO_ONLY_HEADINGS = {"Install rules", "Markdown lint scope"}
+_OUTSIDE = (
+  "CHANGELOG",
+  "apply.py",
+  "apply.bat",
+  "maintenance/",
+  "refs/",
+  "installation",
+)
+_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_CODE = re.compile(r"`([^`]+)`")
+_RULES_PATH = re.compile(r"\brules/([A-Za-z0-9_./-]+)")
+
+
+def _sections(text: str) -> dict[str, str]:
+  parts = re.split(r"(?m)^## ", text)
+  sections = {}
+  for part in parts[1:]:
+    heading, _, body = part.partition("\n")
+    title = heading.strip()
+    if title not in REPO_ONLY_HEADINGS:
+      sections[title] = body
+  return sections
+
+
+def _join_names(names: list[str]) -> str:
+  shown = [f"`{name}`" for name in names]
+  if len(shown) < 2:
+    return shown[0] if shown else ""
+  if len(shown) == 2:
+    return f"{shown[0]} and {shown[1]}"
+  return ", ".join(shown[:-1]) + ", and " + shown[-1]
+
+
+def _children(target: str, names: set[str]) -> list[str]:
+  prefix = target.rstrip("/").replace("/", "-")
+  return sorted(name for name in names if name.startswith(prefix + "-"))
+
+
+def _gist_name(target: str) -> str:
+  return target.rstrip("/").replace("/", "-")
+
+
+def _rewrite_links(text: str, names: set[str]) -> str:
+  def replace(match: re.Match[str]) -> str:
+    target = match.group(2)
+    if target.startswith("#"):
+      return ""
+    if target.endswith("/"):
+      return _join_names(_children(target, names))
+    gist = _gist_name(target)
+    return f"`{gist}`" if gist in names else ""
+
+  return _LINK.sub(replace, text)
+
+
+def _rewrite_code_paths(text: str, names: set[str]) -> str:
+  def replace(match: re.Match[str]) -> str:
+    raw = match.group(1)
+    if not raw.startswith("rules/"):
+      return match.group(0)
+    gist = raw.removeprefix("rules/").replace("/", "-")
+    return f"`{gist}`" if gist in names else ""
+
+  return _CODE.sub(replace, text)
+
+
+def _rewrite_plain_paths(text: str, names: set[str]) -> str:
+  def replace(match: re.Match[str]) -> str:
+    gist = match.group(1).replace("/", "-")
+    return gist if gist in names else ""
+
+  return _RULES_PATH.sub(replace, text)
+
+
+def _tidy(text: str) -> str:
+  text = re.sub(r"[ \t]{2,}", " ", text)
+  text = text.replace(" in .", ".")
+  text = text.replace(" .", ".")
+  text = re.sub(r" +([,.;])", r"\1", text)
+  return text.strip()
+
+
+def _cite_only_included(text: str) -> str:
+  kept = []
+  for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+    if any(token in sentence for token in _OUTSIDE):
+      continue
+    if sentence.strip():
+      kept.append(sentence.strip())
+  return " ".join(kept)
+
+
+def _rewrite(text: str, names: set[str]) -> str:
+  return _tidy(
+    _cite_only_included(
+      _rewrite_plain_paths(
+        _rewrite_code_paths(_rewrite_links(text, names), names), names
+      )
+    )
+  )
+
+
+def _fallback(name: str, names: set[str]) -> tuple[str, str]:
+  # wenyan/README.md is a nested README, so the gist excludes it. Keep its boundary here.
+  if name.startswith("wenyan-"):
+    base = name.removeprefix("wenyan-")
+    return (
+      f"Experimental Wenyan form of {base}. Not authoritative.",
+      "Do not replace the production field.",
+    )
+  if name.startswith("kilo-") and "KILO.md" in names:
+    return "Kilo mode override", "Load it with KILO.md."
+  return "Included rule file", "Use this file."
+
+
+def _file_rows(contents: str, names: set[str]) -> list[str]:
+  found: dict[str, tuple[str, str]] = {}
+  for line in contents.splitlines():
+    if not line.startswith("|") or line.startswith("| ---") or " | " not in line:
+      continue
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    if (
+      len(cells) < 3
+      or cells[0].startswith("---")
+      or cells[0].lower().startswith("file")
+    ):
+      continue
+    match = _LINK.search(cells[0])
+    target = match.group(2) if match else cells[0].strip("`")
+    if target.endswith("/") or _gist_name(target) not in names:
+      continue
+    gist = _gist_name(target)
+    found[gist] = (_rewrite(cells[1], names), _rewrite(cells[2], names))
+  for name in names:
+    found.setdefault(name, _fallback(name, names))
+  return [
+    f"| `{name}` | {found[name][0]} | {found[name][1]} |" for name in sorted(found)
+  ]
+
+
+def _activation(contents: str, names: set[str]) -> str:
+  lines = []
+  seen_table = False
+  for line in contents.splitlines():
+    if line.startswith("|"):
+      seen_table = True
+      continue
+    if seen_table and line.strip():
+      lines.append(line.strip())
+  return _rewrite(" ".join(lines), names)
+
+
+def _clean_matrix(section: str, names: set[str]) -> str:
+  prose: list[str] = []
+  table: list[str] = []
+  in_table = False
+  for line in section.strip().splitlines():
+    if line.startswith("|"):
+      in_table = True
+    if in_table:
+      table.append(_rewrite_code_paths(line, names))
+    else:
+      prose.append(line)
+  intro = _rewrite(" ".join(prose), names)
+  parts = [part for part in (intro, "\n".join(table).strip()) if part]
+  return "\n\n".join(parts)
+
+
+def gist_index(readme: str, included: dict[str, str] | set[str]) -> str:
+  """Return the gist copy of rules/README.md. It lists only included files."""
+  names = set(included) - {INDEX_NAME}
+  sections = _sections(readme)
+  rows = _file_rows(sections.get("Contents and activation", ""), names)
+  activation = _activation(sections.get("Contents and activation", ""), names)
+  matrix = _clean_matrix(sections.get("Platform difference matrix", ""), names)
+  lines = [
+    "# clankers-rules",
+    "",
+    "These files are the rules in this gist. This file is an index, not an agent rule.",
+    "",
+  ]
+  if rows:
+    lines.extend(
+      [
+        "## Files",
+        "",
+        "| File | Purpose | How to use |",
+        "| --- | --- | --- |",
+        *rows,
+        "",
+      ]
+    )
+  else:
+    lines.extend(["No other rule file is included.", ""])
+  if activation:
+    lines.extend([activation, ""])
+  if matrix:
+    lines.extend(["## Platform difference matrix", "", matrix, ""])
+  return "\n".join(lines).rstrip() + "\n"
 
 
 def collect_sources(workspace: Path) -> tuple[dict[str, str], dict[str, list[str]]]:
@@ -38,6 +240,7 @@ def collect_sources(workspace: Path) -> tuple[dict[str, str], dict[str, list[str
     if len(paths) > 1
   }
   desired = {}
+  readme = None
   for name, paths in names.items():
     if name in collisions:
       continue
@@ -48,9 +251,12 @@ def collect_sources(workspace: Path) -> tuple[dict[str, str], dict[str, list[str
       raise ValueError(
         f"Gists cannot store an empty source: {paths[0].relative_to(workspace)}"
       )
-    if paths[0].relative_to(rules).as_posix() == "README.md":
-      name = "#clankers-rules.md"
+    if paths[0].relative_to(rules).as_posix() == INDEX_SOURCE:
+      readme = content
+      continue
     desired[name] = content
+  if readme is not None:
+    desired[INDEX_NAME] = gist_index(readme, desired)
   return desired, collisions
 
 

@@ -136,7 +136,9 @@ with tempfile.TemporaryDirectory() as tmp:
   assert gh.run(root) == "abcdef123456"
   assert gh.gist_id == "abcdef123456"
   assert gh.gist["files"] == {
-    "#clankers-rules.md": {"content": "Root README\n"},
+    "#clankers-rules.md": {
+      "content": sync.gist_index("Root README\n", {"a.md", "nested-a.txt"})
+    },
     "a.md": {"content": "original\n"},
     "nested-a.txt": {"content": multiline},
   }
@@ -164,14 +166,18 @@ with tempfile.TemporaryDirectory() as tmp:
     "a.md": {"content": "changed\n"},
     "new.md": {"content": "new\n"},
     "nested-a.txt": None,
+    "#clankers-rules.md": {
+      "content": sync.gist_index("Root README\n", {"a.md", "new.md"})
+    },
   }
   assert set(gh.gist["files"]) == {"#clankers-rules.md", "a.md", "new.md"}
   (root / "rules/a.md").unlink()
   write(root, "refs/a.md", "moved into excluded refs\n")
   gh.run(root)
-  assert gh.operations[-1][2]["files"] == {"a.md": None}, (
-    "moving to refs deletes old name"
-  )
+  assert gh.operations[-1][2]["files"] == {
+    "a.md": None,
+    "#clankers-rules.md": {"content": sync.gist_index("Root README\n", {"new.md"})},
+  }, "moving to refs deletes old name and the index drops that file"
   write(root, "folder-a.md", "flat\n")
   write(root, "folder/a.md", "nested\n")
   gh.gist["files"]["folder-a.md"] = {"content": "Keep old Gist file\n"}
@@ -226,16 +232,20 @@ with tempfile.TemporaryDirectory() as tmp:
   assert gh.operations[-1][2]["files"] == {
     "old.md": None,
     "renamed.md": {"content": "keep content\n"},
+    "#clankers-rules.md": {"content": sync.gist_index("root\n", {"renamed.md"})},
   }, "a rename replaces the old flattened filename"
   (root / "rules/nested").mkdir()
   (root / "rules/renamed.md").rename(root / "rules/nested/README.md")
   gh.run(root)
-  assert gh.operations[-1][2]["files"] == {"renamed.md": None}, (
-    "becoming a nested README excludes and removes the old filename"
-  )
+  assert gh.operations[-1][2]["files"] == {
+    "renamed.md": None,
+    "#clankers-rules.md": {"content": sync.gist_index("root\n", set())},
+  }, "becoming a nested README excludes and removes the old filename"
   gh.gist["files"]["#clankers-rules.md"]["truncated"] = True
   gh.run(root)
-  assert gh.operations[-1][2]["files"] == {"#clankers-rules.md": {"content": "root\n"}}
+  assert gh.operations[-1][2]["files"] == {
+    "#clankers-rules.md": {"content": sync.gist_index("root\n", set())}
+  }
 
 with tempfile.TemporaryDirectory() as tmp:
   root = Path(tmp)
@@ -269,6 +279,34 @@ with patch.object(sync.subprocess, "run") as process:
   assert json.loads(kwargs["input"]) == payload
   assert kwargs["encoding"] == "utf-8" and kwargs["capture_output"] is True
 
+readme = (ROOT / "rules/README.md").read_text(encoding="utf-8")
+included = EXPECTED - {sync.INDEX_NAME}
+index = sync.gist_index(readme, included)
+for banned in (
+  "apply.py",
+  "apply.bat",
+  "refs/",
+  "maintenance/",
+  "CHANGELOG",
+  "Markdown lint",
+  "## Install rules",
+  "#arena-file",
+  "rules/",
+):
+  assert banned not in index, banned
+for name in included:
+  assert f"`{name}`" in index, name
+assert "Platform difference matrix" in index
+assert "NEVER push or open a PR unless asked." in index
+assert "Not authoritative." in index
+assert "These files are the rules in this gist." in index
+assert index != readme
+assert sync.gist_index("root\n", set()) == (
+  "# clankers-rules\n\n"
+  "These files are the rules in this gist. This file is an index, not an agent rule.\n\n"
+  "No other rule file is included.\n"
+)
+
 print(
-  "PASS: workflow trigger/concurrency/permissions, secret Gist creation and ID storage, multiline JSON, authoritative update/add/delete/move/exclusions, collision preservation, empty-result cleanup, invalid input and rollback"
+  "PASS: workflow trigger/concurrency/permissions, secret Gist creation and ID storage, multiline JSON, authoritative update/add/delete/move/exclusions, collision preservation, empty-result cleanup, invalid input and rollback, gist index strip"
 )
