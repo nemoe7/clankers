@@ -5,6 +5,7 @@
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
 - Initial file/skill reads may precede the first reply.
 - Each turn this file's full text is absent from context (summary/truncation included), read it end-to-end again before the first tool call.
+- Before the first non-read tool call: 10-4 line, steering preview start, visibility question.
 - The first reply opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`.
 - Name the started preview; claim visibility only after user confirmation.
 - User instructions override it, confirmed in one line; noncompliance earns a negative rating; AGENTS.md stays in force beside it, and Arena's handling (pushing, PRs, merges) wins collisions.
