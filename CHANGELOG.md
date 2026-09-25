@@ -1,5 +1,6 @@
 ## 2026-09-26
 
+- **Re-read clause**: the `Use` section of refs, live and root `ARENA.md` tells the agent to read the file end-to-end again at the start of each turn in which its full text is not in context, summary or truncation included, before the first tool call. Owner approval. Live ARENA 14,442 B, ledgered.
 - **Gist index links**: the Files table in `#clankers-rules.md` links each file to its anchor on the gist page, for example `[AGENTS.md](#file-agents-md)`, owner call. `publish_clankers_rules.py` gains `gist_anchor`; the contract check asserts the linked rows.
 - **Answers ride the copy**: the copy button's NDJSON gains the answers of every report still in the tab. A new GET /api/submissions endpoint serves them filtered to live reports, the copy click merges them in, and the receipt reads "Copied N messages, A answers and T tasks as NDJSON."; import-notes restores them as before. preview.py 70,112 B, app.js 38,601 B, index.html 7,996 B, all ledgered.
 
