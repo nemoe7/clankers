@@ -2,6 +2,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import re
 import secrets
 import socket
@@ -26,10 +27,21 @@ MAX_BODY=96000
 MAX_SUBMISSION_BODY=1000000
 MAX_UPLOAD=50000000
 MAX_ATTACHMENTS=5
-MAX_FETCH=50000000
+SNAPSHOT_CAP_BYTES=128000000
+MAX_FETCH=SNAPSHOT_CAP_BYTES*80//100
+WORKSPACE_SKIP={'.arena','.cache','.git','.local','.mypy_cache','.next','.nox','.npm','.nuxt','.output','.parcel-cache','.pytest_cache','.ruff_cache','.svelte-kit','.tox','.turbo','.venv','.vite','__pycache__','build','coverage','dist','node_modules','out','target'}
 FETCH_LEASE=timedelta(minutes=5)
 UPLOAD_DIR='uploads'
 FETCH_DIR='downloads'
+def workspace_usage(root=None):
+	root=Path(root or Path.cwd());total=0;count=0
+	for(dirpath,dirnames,filenames)in os.walk(root,followlinks=False):
+		dirnames[:]=[name for name in dirnames if name not in WORKSPACE_SKIP]
+		for name in filenames:
+			try:total+=(Path(dirpath)/name).stat().st_size
+			except OSError:continue
+			count+=1
+	return{'bytes':total,'files':count,'documented_cap_bytes':SNAPSHOT_CAP_BYTES,'download_cap_bytes':MAX_FETCH}
 FENCE=re.compile('^ {0,3}(`{3,}|~{3,})')
 CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
@@ -284,7 +296,7 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'last_check':clip_stamp(meta.get('last_check'))}
+			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check'))}
 	def tasks(self):
 		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id").fetchall()
 		records=[task_row(row)for row in rows]

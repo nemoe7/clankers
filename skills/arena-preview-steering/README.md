@@ -58,7 +58,11 @@ The browser fetches directly first. The owner can allow AllOrigins, then CodeTab
 for that URL only. Both proxies see the full URL. The URL validator rejects embedded credentials.
 The server holds `fetch_jobs` rows and five-minute claims. An active browser renews its claim.
 An abandoned claim returns to the queue. Jobs run one at a time in each open browser.
-The browser checks declared and streamed bytes against the 50,000,000-byte cap.
+The browser checks declared and streamed bytes against the 102,400,000-byte cap.
+That cap is 80% of the documented 128,000,000-byte snapshot figure.
+The figure is not measured.
+It came from a workspace without GitHub.
+One session reported 512 MB.
 Completed bytes go under `<state-dir>/downloads/`, outside SQLite.
 The saved result writes one inbox note with a path. Jobs and notes can outlive file bytes.
 The NDJSON backup does not include jobs or file bytes.
@@ -82,9 +86,9 @@ The server does not enable CORS or arbitrary file serving.
 Edit readable sources under `skills/refs/arena-preview-steering/` first.
 Build both runtime copies with `python3 maintenance/minify.py --update`.
 Measure budgets with `python3 maintenance/check.py --update` and check drift without `--update`.
-Run `python3 skills/refs/arena-preview-steering/scripts/check_preview.py` with `markdown-it-py`.
+Run `python3 -m pytest skills/refs/arena-preview-steering/scripts/check_preview.py` with `markdown-it-py` and `pytest`.
 Run `node --check skills/refs/arena-preview-steering/assets/app.js` and
-`node skills/refs/arena-preview-steering/scripts/check_client.cjs` when Node is available.
+`node --test skills/refs/arena-preview-steering/scripts/check_client.cjs` when Node is available.
 Run `python3 maintenance/check_minify.py` to check generated parity and parsed behavior.
 Local checks cannot prove actual browser rendering or browser download behavior.
 

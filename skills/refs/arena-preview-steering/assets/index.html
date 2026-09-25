@@ -112,7 +112,8 @@
             </div>
             <label class="fetch-opt-in" for="fetch-proxy"><input id="fetch-proxy" type="checkbox">If direct access fails, try AllOrigins then CodeTabs for this URL</label>
           </form>
-          <p class="muted">Up to 50,000,000 bytes per URL. Direct access can fail due to CORS. Proxy fallback shares the URL with those services only when selected for that job. Keep this browser page open while transfers run. SQLite retains queued records across server restarts. A restore can remove saved bytes. URLs entered here queue immediately; agent requests need an Approve click below.</p>
+          <p id="workspace-use" class="muted" role="status">Measuring workspace files.</p>
+          <p class="muted">Up to 102,400,000 bytes per URL. That ceiling is 80% of the documented 128,000,000-byte snapshot cap. The cap is not measured. The 128 MB figure was for a workspace without GitHub. One session reported 512 MB. Direct access can fail due to CORS. Proxy fallback shares the URL with those services only when selected for that job. Keep this browser page open while transfers run. SQLite retains queued records across server restarts. A restore can remove saved bytes. URLs entered here queue immediately; agent requests need an Approve click below.</p>
           <section class="fetch-approval" aria-labelledby="fetch-approval-title">
             <h3 id="fetch-approval-title">Agent requests · approval needed</h3>
             <p id="fetch-approval-count" class="muted" role="status">No requests awaiting approval.</p>

@@ -59,7 +59,7 @@ Pair each option group with a labeled custom-response field. The nearest non-emp
 
 One composed note can include up to five files, each 1–50,000,000 bytes. `read` returns the note with an `attachments[]` list; read each record's `path` before acknowledging the single note ID. `present: false` means the record remains but the bytes do not. The note's receipt shows the original filenames.
 
-The owner enters one HTTPS URL per job in Downloads. Keep their browser open for the fetch. Direct access is the default. Proxy fallback needs a separate opt-in for each URL; AllOrigins and then CodeTabs see that URL. Credentials in URLs are rejected. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes. Agent-initiated jobs have no owner-authenticated approval gate yet.
+The owner enters one HTTPS URL per job in Downloads. An agent asks with `download-request <url>`. That queues a pending job. The owner approves or denies it before the browser fetches the URL. Add `--allow-proxy` only for that URL. Keep their browser open for the fetch. Direct access is the default. Proxy fallback needs a separate opt-in for each URL; AllOrigins and then CodeTabs see that URL. Credentials in URLs are rejected. A download is at most 102,400,000 bytes, 80% of the documented 128,000,000-byte snapshot cap. That cap is not measured. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes.
 
 ## Restore
 
