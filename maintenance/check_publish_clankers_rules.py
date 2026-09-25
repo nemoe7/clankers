@@ -296,7 +296,9 @@ for banned in (
 ):
   assert banned not in index, banned
 for name in included:
-  assert f"`{name}`" in index, name
+  assert f"| [{name}](#{sync.gist_anchor(name)}) |" in index, name
+assert sync.gist_anchor("AGENTS.md") == "file-agents-md"
+assert sync.gist_anchor("wenyan-CHATGPT-MORE.txt") == "file-wenyan-chatgpt-more-txt"
 assert "Platform difference matrix" in index
 assert "| Git/Hub | <ul><li>NEVER push unasked. </li>" in index
 assert "Not authoritative." in index

@@ -57,6 +57,11 @@ def _gist_name(target: str) -> str:
   return target.rstrip("/").replace("/", "-")
 
 
+def gist_anchor(name: str) -> str:
+  """Return the fragment a Gist page gives the file, for example file-agents-md."""
+  return "file-" + re.sub(r"[^a-z0-9]", "-", name.lower())
+
+
 def _rewrite_links(text: str, names: set[str]) -> str:
   def replace(match: re.Match[str]) -> str:
     target = match.group(2)
@@ -128,7 +133,7 @@ def _fallback(name: str) -> str:
 
 
 def _file_rows(contents: str, names: set[str]) -> list[str]:
-  """One File and Purpose row per included name; the index has no How-to-use column."""
+  """One File and Purpose row per included name, linked to its anchor on the Gist page."""
   found: dict[str, str] = {}
   for line in contents.splitlines():
     if not line.startswith("|") or line.startswith("| ---") or " | " not in line:
@@ -144,7 +149,9 @@ def _file_rows(contents: str, names: set[str]) -> list[str]:
     found[gist] = _rewrite(cells[1], names)
   for name in names:
     found.setdefault(name, _fallback(name))
-  return [f"| `{name}` | {found[name]} |" for name in sorted(found)]
+  return [
+    f"| [{name}](#{gist_anchor(name)}) | {found[name]} |" for name in sorted(found)
+  ]
 
 
 def _activation(contents: str, names: set[str]) -> str:
