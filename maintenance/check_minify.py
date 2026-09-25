@@ -93,7 +93,10 @@ with tempfile.TemporaryDirectory() as directory:
   shutil.copyfile(
     minify.SOURCE / "scripts/check_preview.py", skill / "scripts/check_preview.py"
   )
-  subprocess.run([sys.executable, str(skill / "scripts/check_preview.py")], check=True)
+  subprocess.run(
+    [sys.executable, "-m", "pytest", str(skill / "scripts/check_preview.py"), "-q"],
+    check=True,
+  )
 
   spec = importlib.util.spec_from_file_location(
     "compact_preview", minify.TARGETS[0] / "scripts/preview.py"

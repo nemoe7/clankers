@@ -1,6 +1,8 @@
 # Budget exceptions
 
-Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them. 
+Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/SKILL.md` +81 `B` for the `download-request` command, the separate upload and download ceilings, and the unmeasured-cap note. `assets/app.js` +341 `B`, `assets/index.html` +259 `B`, and `scripts/preview.py` +797 `B` for workspace file use on Downloads and the 102,400,000-byte download ceiling. 
 
 2026-09-13: Accepted without funding. `rules/AGENTS.md` +87 `tok` and `rules/ARENA.md` +636 `B` for the seven-rung ladder and three MUST upgrades, accepted as baselines rather than deferred debt. Both files later sit below these levels, funded by amendments. 
 2026-09-17: after the resquash, `rules/AGENTS.md` −236 `tok` and `skills/arena-live-steering/SKILL.md` −5,287 `B`, against `rules/ARENA.md` +178 `B`. The residual against the 10,129 `B` baseline is 285 `B` after the later amendments. It funds the requested new rules: the SOLID pair, tool-call batching, fix-once-where-callers-route-through, and the visible-activation clause. 

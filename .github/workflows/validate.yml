@@ -24,7 +24,8 @@ permissions:
   contents: write
 
 jobs:
-  validate:
+  lint-validate-budget:
+    name: Lint, validate, and budget
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -86,15 +87,10 @@ jobs:
           ruff check .
           ruff format --diff .
 
-      - name: Check shared preview runtime and client
+      - name: Check budget generator and shipped script syntax
         run: |
           python maintenance/check_measurements.py
-          # Exact page strings use readable assets; check_minify also exercises generated Python
-          # with those assets and page assembly with the shipped assets.
-          python skills/refs/arena-preview-steering/scripts/check_preview.py
-          python maintenance/check_minify.py
           node --check skills/arena-preview-steering/assets/app.js
-          node skills/refs/arena-preview-steering/scripts/check_client.cjs
 
       # The AGENTS.md clause on Simplified Technical English: text you add or change in docs/ and the
       # README files must pass the vendored linter, and each covered file joins this step as it is
@@ -118,3 +114,75 @@ jobs:
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20
+
+  preview-tests:
+    name: Preview tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect preview changes
+        id: preview
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+          else
+            base="$PUSH_BEFORE"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Base commit is missing. Run the preview tests."
+            exit 0
+          fi
+          files=$(git diff --name-only "$base" HEAD -- \
+            skills/refs/arena-preview-steering \
+            skills/arena-preview-steering \
+            .agents/skills/arena-preview-steering \
+            maintenance/minify.py \
+            maintenance/check_minify.py \
+            package.json \
+            package-lock.json \
+            .github/workflows/validate.yml)
+          if [ -n "$files" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "Preview paths changed:" "$files"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No preview paths changed. Skip the preview tests."
+          fi
+
+      - name: Set up Python
+        if: steps.preview.outputs.run == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        if: steps.preview.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install test dependencies
+        if: steps.preview.outputs.run == 'true'
+        run: |
+          python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1
+          npm ci
+
+      - name: Run preview tests
+        if: steps.preview.outputs.run == 'true'
+        run: |
+          python -m pytest skills/refs/arena-preview-steering/scripts/check_preview.py -q
+          python maintenance/check_minify.py
+          node --test skills/refs/arena-preview-steering/scripts/check_client.cjs

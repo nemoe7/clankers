@@ -6,7 +6,7 @@ const status = $('#send-status');
 const key = 'arena-preview-v1';
 // Browser and server both enforce the decimal 50 MB per-file ceiling.
 const MAX_UPLOAD = 50_000_000;
-const MAX_FETCH = 50_000_000;
+const MAX_FETCH = 102_400_000;
 const BINARY_TIMEOUT = 600_000;
 let pending = null;
 let stateBusy = false;
@@ -253,6 +253,14 @@ async function request(path, options = {}) {
   }
   return response;
 }
+function showWorkspace(usage) {
+  const node = $('#workspace-use');
+  if (!usage) {
+    node.textContent = 'Workspace file use is unavailable.';
+    return;
+  }
+  node.textContent = `Workspace files: ${usage.bytes.toLocaleString()} bytes in ${usage.files.toLocaleString()} files. Documented snapshot cap: ${usage.documented_cap_bytes.toLocaleString()} bytes. This cap is not measured.`;
+}
 function bytes(value) {
   if (value < 1000) return `${value} B`;
   if (value < 1000000) return `${Math.round(value / 1000)} kB`;
@@ -454,6 +462,7 @@ async function refreshState() {
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
     renderFetchIfChanged(state.fetch_jobs || []);
+    showWorkspace(state.workspace);
     queueReady = true;
     const signature = JSON.stringify(state.reports);
     if (signature !== listSignature) {

@@ -59,7 +59,7 @@ Republish the same ID after each source update; if answers exist, use a new ID. 
 
 For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss. One note may carry up to five files of 50,000,000 bytes each.
 
-The owner queues HTTPS URLs in Downloads; the agent must not initiate a job until an owner-authenticated approval mechanism exists. Keep the owner's browser page open during a fetch. Direct fetch is default; proxy fallback is an owner opt-in per URL, and those services see the URL. URLs cannot contain credentials. The file limit is 50,000,000 bytes. Read a successful job's inbox path note and acknowledge it. Report failed or missing files; the owner can retry failed jobs in the tab.
+The owner can queue an HTTPS URL in Downloads. Run `download-request <url>` to queue a pending job. It does not download. The owner approves or denies it in Downloads. Add `--allow-proxy` only for that URL. Keep the browser page open during a fetch. URLs cannot contain credentials. An upload is at most 50,000,000 bytes. A download is at most 102,400,000 bytes, 80% of the documented 128,000,000-byte snapshot cap. That cap is not measured. Read the saved-file inbox note and acknowledge it. Report failed or missing files. The owner can retry failed jobs in the tab.
 
 ## Recovery
 
