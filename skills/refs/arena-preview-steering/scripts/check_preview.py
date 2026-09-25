@@ -35,6 +35,7 @@ def compact(text):
 
 
 def test_edited_ack_stamp():
+  """A second ack appends a reply block; the first answer stays (owner, re-ack of 52d7cce)."""
   with tempfile.TemporaryDirectory() as edit_dir:
     edited = preview.Store(edit_dir, create=True)
     edited.note("edit-note", "Question")
@@ -42,19 +43,30 @@ def test_edited_ack_stamp():
     ids = ["edit-note", "edit-answer"]
     with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
       edited.acknowledge(ids, "reply", "First answer")
-    assert edited.state()["notes"][0]["ack_edited_at"] is None
+    first = edited.state()["notes"][0]
+    assert first["ack_edited_at"] is None and first["replies"] == []
     with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
-      edited.acknowledge(ids, "reply", "Changed answer")
+      edited.acknowledge(ids, "reply", "Second answer")
     row = edited.state()["notes"][0]
     assert row["acknowledged_at"] == "2026-09-22T12:00:00"
+    assert row["ack_text"] == "First answer", "the first answer is not replaced"
     assert row["ack_edited_at"] == "2026-09-22T12:01:00"
-    assert edited.submissions()[0]["ack_edited_at"] == row["ack_edited_at"]
+    assert row["replies"] == [
+      {"kind": "reply", "text": "Second answer", "at": "2026-09-22T12:01:00"}
+    ]
+    answer = edited.submissions()[0]
+    assert answer["ack_edited_at"] == row["ack_edited_at"]
+    assert answer["replies"] == row["replies"]
+    # The same text again is still one more block: nothing is compared, nothing is dropped.
     with patch.object(preview, "now", return_value="2026-09-22T12:02:00"):
-      edited.acknowledge(ids, "reply", "Changed answer")
-    assert edited.state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
-    assert (
-      preview.Store(edit_dir).state()["notes"][0]["ack_edited_at"]
-      == row["ack_edited_at"]
+      edited.acknowledge(ids, "note", "Second answer")
+    row = edited.state()["notes"][0]
+    assert row["ack_edited_at"] == "2026-09-22T12:02:00"
+    assert [reply["kind"] for reply in row["replies"]] == ["reply", "note"]
+    assert preview.Store(edit_dir).state()["notes"][0]["replies"] == row["replies"]
+    with_html = preview.Store(edit_dir).state()["notes"][0]
+    assert "html" not in with_html["replies"][0], (
+      "the state parses replies; the page route renders"
     )
     saved = Path(edit_dir) / "edited.ndjson"
     saved.write_text(json.dumps(preview.saved_note_line(row)) + "\n")
@@ -73,6 +85,36 @@ def test_edited_ack_stamp():
       capture_output=True,
     )
     assert restored.state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
+    assert restored.state()["notes"][0]["replies"] == row["replies"], (
+      "a restore carries every appended reply block"
+    )
+    receipt = {
+      "acknowledged_at": "2026-09-22T12:00:00",
+      "ack_kind": "reply",
+      "ack_text": "First",
+    }
+    for flaw, replies in (
+      ("no receipt", None),
+      ("not a list", {"kind": "reply", "text": "x", "at": "2026-09-22T12:01:00"}),
+      ("no kind", [{"text": "x", "at": "2026-09-22T12:01:00"}]),
+      ("bad stamp", [{"kind": "reply", "text": "x", "at": "yesterday"}]),
+      ("empty text", [{"kind": "note", "text": " ", "at": "2026-09-22T12:01:00"}]),
+    ):
+      try:
+        if flaw == "no receipt":
+          restored.note(
+            "invalid-replies",
+            "Question",
+            replies=[{"kind": "reply", "text": "x", "at": "2026-09-22T12:01:00"}],
+          )
+        else:
+          restored.note("invalid-replies", "Question", replies=replies, **receipt)
+        raise AssertionError(f"Invalid replies accepted: {flaw}")
+      except (ValueError, TypeError):
+        pass
+    assert restored.note("invalid-replies", "Question")["replies"] == [], (
+      "a refused restore wrote nothing"
+    )
     for bad in ("not-a-date", "2026-09-22T12:00:00"):
       try:
         restored.note("invalid-edit", "No receipt", ack_edited_at=bad)
@@ -114,6 +156,37 @@ def test_report_receipt_ids():
     )
 
 
+def test_report_unpublish():
+  """Deleting a report prunes the tab row only; answers and the source file stay."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.unpublish("pick")
+    assert store.state()["reports"] == []
+    try:
+      store.report("pick")
+      raise AssertionError("A deleted report still read back")
+    except FileNotFoundError:
+      pass
+    try:
+      store.unpublish("pick")
+      raise AssertionError("Deleting the same report twice was accepted")
+    except FileNotFoundError:
+      pass
+    assert store.submissions()[0]["report_id"] == "pick", "sent answers are history"
+    assert source.exists(), "the .md source stays for republishing"
+    try:
+      store.publish("pick", "Pick again", source)
+      raise AssertionError("Republishing over sent answers was accepted")
+    except ValueError:
+      pass
+
+
 def test_http_boundaries():
   global app
   with tempfile.TemporaryDirectory() as directory:
@@ -147,6 +220,22 @@ def test_http_boundaries():
     )
     assert re.search(r"border-left:3px solid (rgb\(199,194,188\)|#c7c2bc)", css)
     assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
+    # The three report toolbar buttons share one box size (owner screenshot: the late unpublish
+    # button had fallen back to the 34px default), and the report select carries the log
+    # filter's chevron rather than the native arrow.
+    assert (
+      "#copy-report,#refresh-report,#unpublish-report{width:44px;height:44px;}" in css
+    )
+    assert re.search(
+      r"\.select-wrap::after\{[^}]*border-top:5px solid var\(--muted\)", css
+    )
+    assert re.search(r"#report-select\{appearance:none;padding-right:26px;\}", css)
+    # The green send flash is gone (owner: the footnote under the report covers it), so neither the
+    # page nor the client script carries report-receipt; the footnote element stays.
+    page = (preview.ASSETS / "index.html").read_text()
+    script = (preview.ASSETS / "app.js").read_text()
+    assert "report-receipt" not in page and "report-receipt" not in script
+    assert "showReceipt" not in script and 'id="report-agent-ack"' in page
     # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
     assert "<br" in preview.render("- a\n  b", breaks=True)
     # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline
@@ -209,12 +298,13 @@ def test_http_boundaries():
       )
       assert page.index('id="log-filter"') < page.index('id="refresh-notes"')
       assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
-      assert "Copy the log and the tasks to the clipboard as NDJSON" in page
+      assert "Copy the log, answers and tasks to the clipboard as NDJSON" in page
       # Every icon button carries a title that repeats its accessible name.
       for control in (
         "copy-state",
         "refresh-notes",
         "attach-file",
+        "unpublish-report",
         "copy-report",
         "refresh-report",
       ):
@@ -234,8 +324,9 @@ def test_http_boundaries():
       assert 'id="staged-files"' in page
       assert 'id="uploads-list"' not in page and 'id="uploads-history"' not in page
       assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
-      assert "102,400,000 bytes" in page
-      assert "The cap is not measured." in page
+      assert "102.4 MB per URL" in page
+      assert "Keep this page open while transfers run." in page
+      assert "not measured" not in page
       assert 'id="workspace-use"' in page
       assert re.search(
         r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page
@@ -260,8 +351,8 @@ def test_http_boundaries():
       )
       assert store.state()["notes"] == []
       assert request("POST", "/api/markdown", '{"text":" "}', auth)[0] == 400
-      assert request("POST", "/api/markdown", '{"text":"draft"}')[0] == 403
-      assert request("POST", "/api/notes", "{}")[0] == 403
+      assert request("POST", "/api/markdown", '{"text":"draft"}')[0] == 415
+      assert request("POST", "/api/notes", "{}")[0] == 415
       assert request("POST", "/api/notes", "{}", {"X-Preview-Token": token})[0] == 415
       # A full-length note stays inside the general body limit, so the cap is reachable over HTTP.
       assert (
@@ -311,7 +402,12 @@ def test_http_boundaries():
       store.acknowledge(["message-1"], "note", "and rechecked")
       row = store.state()["notes"][0]
       assert row["acknowledged_at"] == stamp
-      assert row["ack_kind"] == "note" and row["ack_text"] == "and rechecked"
+      assert (
+        row["ack_kind"] == "reply" and row["ack_text"] == "Fixed in `preview.py`."
+      ), "a second ack appends; the first answer stays"
+      assert [(reply["kind"], reply["text"]) for reply in row["replies"]] == [
+        ("note", "and rechecked")
+      ]
       assert preview.Store(root).read()["pending"] == []
       assert len(preview.Store(root).state()["notes"]) == 1
       status, _, state_body = request("GET", "/api/state")
@@ -324,16 +420,19 @@ def test_http_boundaries():
           assert "markdown-it-py" in str(error)
       served_note = json.loads(state_body)["notes"][0]
       assert "&lt;script&gt;" in served_note["html"]
-      assert (
-        "ack_html" not in served_note and served_note["ack_text"] == "and rechecked"
-      )
+      assert "<code>preview.py</code>" in served_note["ack_html"]
+      # A note block rides plain: the route renders reply blocks only.
+      assert served_note["replies"] == [
+        {"kind": "note", "text": "and rechecked", "at": served_note["ack_edited_at"]}
+      ]
       assert served_note["seen_at"] is not None
       store.acknowledge(["message-1"], "reply", "<script>alert(1)</script> **safe**")
       status, _, state_body = request("GET", "/api/state")
       served_note = json.loads(state_body)["notes"][0]
-      assert "&lt;script&gt;" in served_note["ack_html"]
-      assert "<strong>safe</strong>" in served_note["ack_html"]
-      assert "<script>" not in served_note["ack_html"]
+      appended = served_note["replies"][1]
+      assert "&lt;script&gt;" in appended["html"]
+      assert "<strong>safe</strong>" in appended["html"]
+      assert "<script>" not in appended["html"]
       status, _, rendered = request("GET", "/api/reports/first/html")
       assert status == 200
       rendered = json.loads(rendered)
@@ -342,6 +441,24 @@ def test_http_boundaries():
       assert 'href="javascript:' not in rendered["html"]
       assert request("GET", "/api/reports/first/export")[0] == 404
       assert request("GET", "/api/reports/first/source")[0] == 200
+      prune = root / "prune.md"
+      prune.write_text("# Prune\n\nA report the tab outgrew.\n", encoding="utf-8")
+      store.publish("prune", "Prune", prune)
+      assert request("GET", "/api/reports/prune/html")[0] == 200
+      status, _, removed = request("POST", "/api/reports/prune/unpublish", "{}", auth)
+      assert status == 200 and json.loads(removed) == {"unpublished": "prune"}
+      assert request("GET", "/api/reports/prune/html")[0] == 404
+      assert request("POST", "/api/reports/prune/unpublish", "{}", auth)[0] == 404
+      assert (
+        request(
+          "POST",
+          "/api/reports/prune/unpublish",
+          "{}",
+          {"Content-Type": "application/json"},
+        )[0]
+        == 404
+      )
+      assert prune.exists()
       for path in (
         "/.git/config",
         "/state.sqlite3",
@@ -506,9 +623,11 @@ def test_http_boundaries():
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
       assert '<button id="copy-report" class="icon-button"' in page
-      # The report copy button matches the refresh button beside it; it was 34px against 44px.
+      # The report copy button matches the boxes beside it; they were 34px against 44px.
       # No negative assertion here: the combined rule contains the old single-selector text.
-      assert "#copy-report,#refresh-report{width:44px;height:44px" in page
+      assert (
+        "#copy-report,#refresh-report,#unpublish-report{width:44px;height:44px" in page
+      )
       # A rule separates the tasks toolbar from the finished div, and details collapse.
       assert (
         ".tasks-layout>.row.tight{border-bottom:1px solid var(--border);padding-bottom:12px"
@@ -700,7 +819,7 @@ def test_http_boundaries():
           "/api/reports/fields/submit",
           json.dumps({"id": "s1", "answers": {"name": "x"}}),
         )[0]
-        == 403
+        == 415
       )
       for bad in (
         {"id": "s1", "answers": {"name": "x", "nope": "unknown"}},
@@ -1037,15 +1156,6 @@ def test_http_boundaries():
       assert upload_note["text"] == (
         f"Upload: my file.png ({len(blob)} B, image/png) saved to {record['path']}"
       )
-      assert (
-        request(
-          "POST",
-          "/api/uploads?name=x",
-          blob,
-          {"Content-Type": "application/octet-stream"},
-        )[0]
-        == 403
-      )
       # A declared body above the new bound is refused before buffering 50 MB in this harness.
       status, _, problem = request(
         "POST",
@@ -1176,7 +1286,7 @@ def test_http_boundaries():
       assert len(store.submissions()) == len(before_answers) + 1
       store.publish("seen", "Seen report", source)
       assert store.state()["reports"][-1]["seen_at"] is None
-      assert request("POST", "/api/reports/seen/seen", "{}")[0] == 403
+      assert request("POST", "/api/reports/seen/seen", "{}")[0] == 415
       assert request("POST", "/api/reports/missing/seen", "{}", auth)[0] == 404
       assert request("GET", "/api/reports/seen/seen")[0] == 404
       status, _, stamped = request("POST", "/api/reports/seen/seen", "{}", auth)
@@ -1191,6 +1301,17 @@ def test_http_boundaries():
       )
       store.publish("seen", "Seen report revised", source)
       assert store.state()["reports"][-1]["seen_at"] is None
+      store.publish("scoped", "Scoped", source)
+      store.submission("scoped-answer", "scoped", "REPORT scoped: noted")
+      assert any(
+        line["id"] == "scoped-answer"
+        for line in json.loads(request("GET", "/api/submissions")[2])
+      ), "a live report's answers ride the copy endpoint"
+      store.unpublish("scoped")
+      assert not any(
+        line["id"] == "scoped-answer"
+        for line in json.loads(request("GET", "/api/submissions")[2])
+      ), "a deleted report's answers stay out of the copy (owner scope)"
     finally:
       app.shutdown()
       app.server_close()
@@ -1380,15 +1501,6 @@ def test_http_note_attachment():
         request(
           "POST",
           "/api/notes/with-file",
-          body,
-          {"Content-Type": headers["Content-Type"]},
-        )[0]
-        == 403
-      )
-      assert (
-        request(
-          "POST",
-          "/api/notes/with-file",
           b"{}",
           {"Content-Type": "application/json", "X-Preview-Token": token},
         )[0]
@@ -1467,7 +1579,7 @@ def test_download_queue():
       assert request("GET", "/api/fetch-jobs")[0] == 404
       assert request("GET", "/downloads/file.zip")[0] == 404
       assert 'id="downloads-pip"' in page and 'id="fetch-approvals"' in page
-      assert request("POST", "/api/fetch-jobs", "{}")[0] == 403
+      assert request("POST", "/api/fetch-jobs", "{}")[0] == 415
       assert (
         request("POST", "/api/fetch-jobs", "{}", {"X-Preview-Token": token})[0] == 415
       )
@@ -1523,9 +1635,7 @@ def test_download_queue():
         == "pending"
       )
       approve = f"/api/fetch-jobs/{pending['id']}/approve"
-      assert (
-        request("POST", approve, "{}", {"Content-Type": "application/json"})[0] == 403
-      )
+      assert request("POST", approve, "{}")[0] == 415
       assert request("POST", approve, "{}", auth)[0] == 200
       assert request("POST", approve, "{}", auth)[0] == 409, (
         "a second click must not decide twice"
@@ -2541,7 +2651,7 @@ def test_reminder_rotation():
       in preview.REMINDERS
     )
     assert (
-      "Report GH_TOKEN failure; use ask_user only if requested, preview unavailable, or ntfy selected."
+      "Report GH_TOKEN failure; use ask_user only if requested or preview unavailable."
       in preview.REMINDERS
     )
     assert "Don't forget to publish your reports." in preview.REMINDERS
@@ -2580,7 +2690,8 @@ def test_reminder_rotation():
     json.loads(result.stdout)
     tail = preview.REMINDERS[(offset + 2) % span]
     assert result.stderr.strip() == f"2 call/s since user messaged. {pending}{tail}"
-    # A read does not erase the calls since this user message. Only a new user item resets it.
+    # A read does not erase the calls since the first unread message. Only a fresh backlog
+    # resets the tally; a message landing on an unacked pile leaves it running.
     rotate_store.read()
     assert rotate_store.reminder() == (
       f"2 call/s since user messaged. {pending}{preview.REMINDERS[(offset + 3) % span]}"
@@ -2596,9 +2707,12 @@ def test_reminder_rotation():
     )
     rotate_store.note("rotate-newer", "Another user message")
     newer = "2 message/s. DO NOT IGNORE. ACK ASAP. "
-    assert rotate_store.reminder() == newer + preview.REMINDERS[(offset + 7) % span]
+    # A second message on an unacked pile keeps the count anchored to the first unread one.
+    assert rotate_store.reminder() == (
+      f"1 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 7) % span]}"
+    )
     assert rotate_store.reminder(advance=True) == (
-      f"1 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 8) % span]}"
+      f"2 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 8) % span]}"
     )
 
 

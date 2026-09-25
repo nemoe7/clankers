@@ -18,7 +18,7 @@ Write AGENTS.md against four failure modes.
 
 ## 3. Structure
 
-1. Put a constitution first: the 5 to 15 rules that must never be lost. No rationale. One line each.
+1. Put a constitution first: the 5 to 15 rules that MUST NEVER be lost. No rationale. One line each.
 2. Group the rest by domain: setup, testing, style, git, boundaries. One heading per domain. Headings give re-anchoring tools natural slice points.
 3. Put directory-specific rules in nested AGENTS.md files, not in the root file. The root file loads everywhere. Nested files load only where relevant.
 4. End the file with a short "When in doubt" section. Give the judgment rule that covers what the rules missed. This is the stance section, and it absorbs edge cases.
@@ -29,7 +29,7 @@ Write AGENTS.md against four failure modes.
 2. Make every rule testable. "Run `ruff check` before every commit" survives summarization. "Write clean code" does not.
 3. Use exact commands, paths, and numbers. A rule a script can check is a rule an agent can obey.
 4. Pick one verb per action and keep it for the whole file. Do not rotate two words for the same action across sections.
-5. Use MUST, NEVER, and ALWAYS for hard rules. Use "prefer" for soft ones. Do not mix "should" and "must" at random.
+5. Use MUST, NEVER, and ALWAYS for hard rules. Use "prefer" for soft ones. Do not mix "should" and "MUST" at random.
 6. No contradictions between sections. If two rules can collide, state which one wins.
 7. Keep negated rules positive where possible: "Commit only staged files" reads better than "NEVER commit unstaged files". Keep NEVER for irreversible or dangerous acts.
 8. Mark corners you cut on purpose. A rule with a stated ceiling ("simplified: covers main branch only") ages better than a hidden one.
@@ -53,7 +53,7 @@ Write AGENTS.md against four failure modes.
 ```markdown
 # AGENTS.md
 
-## Use (one line: what this file is, who must apply it, that user chat overrides it)
+## Use (one line: what this file is, who MUST apply it, that user chat overrides it)
 
 ## Constitution (5-15 one-line rules, no rationale)
 

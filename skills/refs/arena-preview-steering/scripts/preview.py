@@ -113,7 +113,7 @@ REMINDERS = (
   "Manage the task list.",
   "Take the smallest open task next.",
   "Always push.",
-  "Report GH_TOKEN failure; use ask_user only if requested, preview unavailable, or ntfy selected.",
+  "Report GH_TOKEN failure; use ask_user only if requested or preview unavailable.",
   "Keep docs terse but clear.",
   "Ask questions ASAP through fielded reports; keep other work moving.",
   "Don't forget to publish your reports.",
@@ -125,6 +125,21 @@ POLLS_SINCE_MESSAGE = "polls_since_message"
 
 def now():
   return datetime.now(timezone.utc).isoformat()
+
+
+def reset_poll_count(db):
+  """Zero the hook-poll tally only when an item starts a fresh backlog.
+
+  The hook line reports calls since the owner's first still-unread message, so an item
+  landing on an unacked pile keeps the tally running instead of zeroing the backlog's age.
+  The arriving item is already written when this runs, so a fresh backlog counts one.
+  """
+  unacked = db.execute(
+    "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL)"
+    " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
+  ).fetchone()[0]
+  if unacked == 1:
+    db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,))
 
 
 def meta_number(db, key):
@@ -189,6 +204,47 @@ def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
     note_text(ack_text),
     when(ack_edited_at) if ack_edited_at is not None else None,
   )
+
+
+def restore_replies(replies, acknowledged):
+  """Validate the replies a second and later ack appended: a list of kind, text and stamp.
+
+  A reply block cannot exist without the first answer, so replies on an unanswered line
+  are refused the way a partial receipt is. The database keeps the list as JSON text.
+  """
+  if not replies:
+    return None
+  if not acknowledged:
+    raise ValueError("Appended replies need an acknowledgement")
+  if not isinstance(replies, list):
+    raise TypeError("Appended replies are a list")
+  checked = []
+  for item in replies:
+    if not isinstance(item, dict) or item.get("kind") not in {"note", "reply"}:
+      raise ValueError(
+        "Every appended reply is a note or a reply, with its text and stamp"
+      )
+    checked.append(
+      {
+        "kind": item["kind"],
+        "text": note_text(item.get("text")),
+        "at": when(item.get("at")),
+      }
+    )
+  return json.dumps(checked, ensure_ascii=False)
+
+
+def replies_list(value):
+  """The list shape the state surface and the save file carry for a stored replies column."""
+  return json.loads(value) if value else []
+
+
+def message_row(row):
+  """One note or answer row as a record, its replies parsed."""
+  record = dict(row)
+  if "replies" in record:
+    record["replies"] = replies_list(record["replies"])
+  return record
 
 
 def submission_text(text):
@@ -373,6 +429,7 @@ NOTE_LINE_KEYS = (
   "ack_kind",
   "ack_text",
   "ack_edited_at",
+  "replies",
   "seen_at",
   "task_id",
 )
@@ -386,6 +443,7 @@ SUBMISSION_LINE_KEYS = (
   "ack_kind",
   "ack_text",
   "ack_edited_at",
+  "replies",
   "seen_at",
   "task_id",
 )
@@ -616,13 +674,55 @@ def check_task(task_id, title, details):
       raise ValueError(f"A task detail must be {MAX_TASK_DETAIL} characters or fewer")
 
 
+# A report can carry one allowlisted list form: report prose is agent-authored, and the
+# matrix's Platform specific row needs real lists (the owner read the raw tags, note 8d4ede2).
+# ul, ol and li only, on their own lines, no attributes; everything else keeps escaping.
+REPORT_LIST_TAG = re.compile(r"\s*</?(?:ul|ol|li)>\s*", re.IGNORECASE)
+REPORT_LIST_TAGS = re.compile(r"^(?:\s*</?(?:ul|ol|li)>\s*)+$", re.IGNORECASE)
+
+
+def render_report_block(markdown):
+  """Render a markdown chunk, letting allowlisted list markup through the renderer.
+
+  Bare ul, ol and li tags pass anywhere when they form one contiguous block of tags and
+  padding; the text around and between them renders as markdown (a `<li>`'s text
+  renders inline, so **bold** survives). A tag with an attribute, or any other tag,
+  keeps escaping like every other HTML.
+  """
+  held = []
+
+  def hold(match):
+    held.append(match.group(0).strip().lower())
+    return f" previewlisttag{len(held) - 1}x "
+
+  # A maximal run of list tags with optional whitespace between them is one holdout;
+  # the run stays inline so a table cell keeps its structure, and the spaces around
+  # let markdown end the paragraph on either side.
+  tagged = re.sub(
+    r"(?:\s*(?:</?(?:ul|ol|li)>)\s*){2,}",
+    hold,
+    markdown,
+  )
+  rendered = render(tagged)
+
+  def restore(match):
+    return held[int(match.group(1))]
+
+  out = re.sub(r"previewlisttag(\d+)x", restore, rendered)
+  # Block tags kept inline sit in the paragraph their text formed: break the paragraph
+  # at each block boundary so the list renders as a list, and drop the empty pairs.
+  out = re.sub(r"<p>(<(?:ul|ol)>)", r"\1", out)
+  out = re.sub(r"(</(?:ul|ol)>)</p>", r"\1", out)
+  return out
+
+
 def render_report(markdown):
   blocks, questions = parse_fields(markdown)
   parts = []
   for kind, item in blocks:
     if kind == "markdown":
       if item.strip():
-        parts.append(render(item))
+        parts.append(render_report_block(item))
     else:
       parts.append(field_html(item))
   return "".join(parts), questions
@@ -654,7 +754,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS notes (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
-          ack_kind TEXT, ack_text TEXT, seen_at TEXT
+          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -663,7 +763,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
-          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT
+          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT
         );
         CREATE TABLE IF NOT EXISTS uploads (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,
@@ -693,7 +793,14 @@ class Store:
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
-      for column in ("ack_kind", "ack_text", "ack_edited_at", "seen_at", "task_id"):
+      for column in (
+        "ack_kind",
+        "ack_text",
+        "ack_edited_at",
+        "seen_at",
+        "task_id",
+        "replies",
+      ):
         if column not in columns:
           db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
       if "origin" in columns:
@@ -713,6 +820,8 @@ class Store:
         db.execute("ALTER TABLE submissions ADD COLUMN seen_at TEXT")
       if "task_id" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN task_id TEXT")
+      if "replies" not in columns:
+        db.execute("ALTER TABLE submissions ADD COLUMN replies TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "seen_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seen_at TEXT")
@@ -758,6 +867,7 @@ class Store:
     ack_edited_at=None,
     autosave=True,
     shared=None,
+    replies=None,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -770,6 +880,7 @@ class Store:
     identifier(note_id)
     note_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
+    more = restore_replies(replies, receipt[0])
     seen = when(seen_at) if seen_at is not None else None
     with self.transaction(shared, autosave=autosave) as db:
       if shared is None:
@@ -778,15 +889,17 @@ class Store:
       if existing:
         if existing["text"] != text:
           raise ValueError("This message ID already belongs to different text")
-        return dict(existing)
+        return message_row(existing)
       db.execute(
         "INSERT INTO notes"
-        " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (note_id, text, at or now(), *receipt, seen, task_id),
+        " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id,"
+        " replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (note_id, text, at or now(), *receipt, seen, task_id, more),
       )
-      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,))
-      return dict(db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone())
+      reset_poll_count(db)
+      return message_row(
+        db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
+      )
 
   def submission(
     self,
@@ -802,6 +915,7 @@ class Store:
     ack_edited_at=None,
     shared=None,
     autosave=True,
+    replies=None,
   ):
     """Record report answers apart from user messages; the log never shows them.
 
@@ -813,6 +927,8 @@ class Store:
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
+    receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
+    more = restore_replies(replies, receipt[0])
     with self.transaction(shared, autosave=autosave) as db:
       if shared is None:
         db.execute("BEGIN IMMEDIATE")
@@ -822,23 +938,24 @@ class Store:
       if existing:
         if existing["text"] != text:
           raise ValueError("This message ID already belongs to different text")
-        return dict(existing)
+        return message_row(existing)
       db.execute(
         "INSERT INTO submissions"
-        " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at,"
+        " task_id, replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           submission_id,
           report_id,
           text,
           at or now(),
-          *restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at),
+          *receipt,
           when(seen_at) if seen_at is not None else None,
           task_id,
+          more,
         ),
       )
-      db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,))
-      return dict(
+      reset_poll_count(db)
+      return message_row(
         db.execute(
           "SELECT * FROM submissions WHERE id = ?", (submission_id,)
         ).fetchone()
@@ -846,7 +963,9 @@ class Store:
 
   def submissions(self):
     with closing(self.connect()) as db:
-      return [dict(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")]
+      return [
+        message_row(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")
+      ]
 
   def state(self):
     """The page's state, with every stamp cut to seconds.
@@ -858,7 +977,9 @@ class Store:
     tasks = self.tasks()
     with closing(self.connect()) as db:
       meta = dict(db.execute("SELECT key, value FROM meta"))
-      notes = [dict(row) for row in db.execute("SELECT * FROM notes ORDER BY seq")]
+      notes = [
+        message_row(row) for row in db.execute("SELECT * FROM notes ORDER BY seq")
+      ]
       reports = [
         dict(row)
         for row in db.execute(
@@ -899,6 +1020,8 @@ class Store:
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):
           if key in item:
             item[key] = clip_stamp(item[key])
+        for reply in item.get("replies") or []:
+          reply["at"] = clip_stamp(reply["at"])
       if tasks is not None:
         for item in tasks["finished"] + tasks["upcoming"]:
           item["updated_at"] = clip_stamp(item["updated_at"])
@@ -1546,8 +1669,9 @@ class Store:
     The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook
     poll, and that count prints only beside a pending count, so an idle line carries the tail
     alone. A poll that finds nothing pending clears the count, so the printed number reports
-    the bash calls since the latest owner message. Only `--reminder` advances it; a new
-    note or form answer resets it, and `read` does not.
+    the bash calls since the owner's first still-unread message. Only `--reminder` advances
+    it; a new note or form answer resets it only when it starts a fresh backlog, and `read`
+    does not.
     """
     with closing(self.connect()) as db, db:
       uploads = db.execute(
@@ -1653,6 +1777,12 @@ class Store:
     raise ValueError(f"Unknown note: {record_id}; no task marker written")
 
   def acknowledge(self, ids, kind, text):
+    """Answer each ID: the first ack is the receipt, every later one appends a reply block.
+
+    Nothing is replaced: the owner asked that a second ack keep the earlier answer in view
+    and add its own block under it. `ack_edited_at` carries the stamp of the latest added
+    block, so the page can point at the line that grew.
+    """
     if kind not in {"note", "reply"}:
       raise ValueError("Every acknowledgement is a note or a reply, with its text")
     text = note_text(text)
@@ -1661,19 +1791,26 @@ class Store:
       for record_id in ids:
         identifier(record_id)
         for table in ("notes", "submissions"):
-          cursor = db.execute(
-            f"""UPDATE {table} SET ack_edited_at = CASE
-               WHEN acknowledged_at IS NOT NULL AND ack_text IS NOT NULL
-                 AND (ack_kind IS NOT ? OR ack_text IS NOT ?) THEN ?
-               ELSE ack_edited_at END,
-               acknowledged_at = COALESCE(acknowledged_at, ?),
-               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text),
-               seen_at = COALESCE(seen_at, ?)
-               WHERE id = ?""",
-            (kind, text, stamp, stamp, kind, text, stamp, record_id),
-          )
-          if cursor.rowcount:
-            break
+          row = db.execute(
+            f"SELECT acknowledged_at, replies FROM {table} WHERE id = ?", (record_id,)
+          ).fetchone()
+          if row is None:
+            continue
+          if row["acknowledged_at"] is None:
+            db.execute(
+              f"UPDATE {table} SET acknowledged_at = ?, ack_kind = ?, ack_text = ?,"
+              " seen_at = COALESCE(seen_at, ?) WHERE id = ?",
+              (stamp, kind, text, stamp, record_id),
+            )
+          else:
+            more = replies_list(row["replies"]) + [
+              {"kind": kind, "text": text, "at": stamp}
+            ]
+            db.execute(
+              f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",
+              (json.dumps(more, ensure_ascii=False), stamp, record_id),
+            )
+          break
         else:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
       # An emptied inbox resets the tally now, not at the next hook poll.
@@ -1723,6 +1860,21 @@ class Store:
              seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL""",
         (report_id, title, text, now(), highest + 1),
       )
+
+  def unpublish(self, report_id):
+    """Delete the report's tab row only; its answers and source file stay.
+
+    Sent answers are inbox history the agent already read, and the .md under the
+    state directory is the republish source, so pruning the tab touches neither.
+    """
+    identifier(report_id)
+    with self.transaction() as db:
+      missing = db.execute(
+        "SELECT 1 FROM reports WHERE id = ?", (report_id,)
+      ).fetchone()
+      if missing is None:
+        raise FileNotFoundError("Report not found")
+      db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
 
   def mark_report_seen(self, report_id):
     """Stamp the moment the owner reached the end of a report, and only the first one.
@@ -1996,9 +2148,29 @@ def handler(store):
               item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
                 item["ack_html"] = render(item["ack_text"])
+              for reply in item.get("replies") or []:
+                if reply["kind"] == "reply":
+                  reply["html"] = render(reply["text"])
           except RuntimeError as error:
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))
+          return
+        if path == "/api/submissions":
+          # The clipboard copy asks for the answer lines on click, scoped to the reports still in
+          # the tab; a deleted report's answers stay in the database and out of this copy.
+          live = {report["id"] for report in store.state()["reports"]}
+          self.reply(
+            200,
+            json.dumps(
+              [
+                saved_answer_line(record)
+                for record in store.submissions()
+                if record["report_id"] in live
+              ],
+              ensure_ascii=False,
+            ),
+            "application/json; charset=utf-8",
+          )
           return
         upload = re.fullmatch(r"/api/uploads/([a-zA-Z0-9_-]{1,80})", path)
         if upload:
@@ -2059,6 +2231,9 @@ def handler(store):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
+      report_unpublish = re.fullmatch(
+        r"/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish", path
+      )
       fetch_post = re.fullmatch(
         r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)",
         path,
@@ -2076,16 +2251,19 @@ def handler(store):
         }
         and not report_submit
         and not report_seen
+        and not report_unpublish
         and not upload_post
         and not note_upload
         and not fetch_post
       ):
         self.problem(404, "Not found")
         return
-      supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
-      if not secrets.compare_digest(supplied, token.encode("ascii")):
-        self.problem(403, "Reload the preview, then retry; your draft is kept")
-        return
+      # The owner dropped the write-token check; the original doc clause survives here for recovery:
+      # Reload the preview after a server restart to refresh its write token; preserve unsent drafts.
+      # supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
+      # if not secrets.compare_digest(supplied, token.encode("ascii")):
+      #   self.problem(403, "Reload the preview, then retry; your draft is kept")
+      #   return
       # A composed note carries up to five files and its text in one bounded multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:
@@ -2207,6 +2385,10 @@ def handler(store):
             report[key] = clip_stamp(report[key])
           self.reply(200, json.dumps(report, ensure_ascii=False))
           return
+        if report_unpublish:
+          store.unpublish(report_unpublish.group(1))
+          self.reply(200, json.dumps({"unpublished": report_unpublish.group(1)}))
+          return
         if report_submit:
           note = store.submit_report(
             report_submit.group(1),
@@ -2279,6 +2461,8 @@ def main():
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
   publish.add_argument("--title", required=True)
+  unpublish = commands.add_parser("unpublish")
+  unpublish.add_argument("report_id")
   task = commands.add_parser("task")
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
   task.add_argument("title_arg", nargs="?", metavar="TASK-TITLE")
@@ -2366,6 +2550,9 @@ def main():
     elif args.command == "publish":
       store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}; select it in the Reports tab")
+    elif args.command == "unpublish":
+      store.unpublish(args.report_id)
+      print(f"Unpublished {args.report_id}; its answers and source file remain")
     elif args.command == "task":
       task_id = args.task_id or args.id_arg
       if not task_id:
@@ -2468,6 +2655,7 @@ def main():
           seen_at=record.get("seen_at"),
           task_id=record.get("task_id"),
           autosave=False,
+          replies=record.get("replies"),
         )
       for record in records:
         store.note(
@@ -2481,6 +2669,7 @@ def main():
           seen_at=record.get("seen_at"),
           task_id=record.get("task_id"),
           autosave=False,
+          replies=record.get("replies"),
         )
       receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(

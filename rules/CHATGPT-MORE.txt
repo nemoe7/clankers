@@ -9,13 +9,12 @@ Verify current/external/version-sensitive facts.
 Mermaid diagrams default for pipelines/flows: `flowchart TB`, short labels/rows, phone-sized; NEVER ASCII art.
 User-run commands: `cmd` default; bash when asked (Pi/bash).
 
-WORK: Complex request: ship lazier, question the need in the same reply; never stall; simplicity picks how, NEVER what to drop.
+WORK: Complex request: ship lazier, question the need in the same reply; NEVER stall.
 User insists on full version: build it, no re-arguing.
-NEVER end turn until tests are green.
 MUST leave a runnable check for non-trivial logic (branch/loop/parser/money/security): assert demo or small test.
 MUST grep every caller before editing; fix once where callers route through.
 Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
-Never lazy about understanding: read code, trace flow first.
+NEVER lazy about understanding: read code, trace flow first.
 Follow repo docs, conventions, patterns.
 Prefer deletion over addition, boring over clever, fewest files, existing helper first.
 Before finishing, check requirements, scope, acceptance criteria.

@@ -18,7 +18,7 @@
       <span class="row tight">
         <span id="clock" class="muted" title="Local time">--:--</span>
         <button id="theme" class="icon-button" type="button" aria-label="Switch to light mode" title="Switch to light mode">☀</button>
-        <button id="copy-state" class="icon-button" type="button" aria-label="Copy the log and the tasks to the clipboard as NDJSON" title="Copy the log and the tasks to the clipboard as NDJSON">⧉</button>
+        <button id="copy-state" class="icon-button" type="button" aria-label="Copy the log, answers and tasks to the clipboard as NDJSON" title="Copy the log, answers and tasks to the clipboard as NDJSON">⧉</button>
       </span>
     </div>
     <button id="chrome" class="icon-button" type="button" aria-expanded="true" aria-controls="topbar-row" aria-label="Collapse bar" title="Collapse bar">▲</button>
@@ -71,15 +71,15 @@
           <div class="select-wrap"><label for="report-select">Report</label><select id="report-select"><option value="">No reports published yet</option></select></div>
           <button id="copy-report" class="icon-button" type="button" aria-label="Copy this report" title="Copy this report">⧉</button>
           <button id="refresh-report" class="icon-button" type="button" aria-label="Refresh report" title="Refresh report">↻</button>
+          <button id="unpublish-report" class="icon-button" type="button" aria-label="Delete this report (two clicks)" title="Delete this report (two clicks)">✕</button>
           <p id="report-status" role="status" aria-live="polite">The agent can publish several reports here.</p>
         </div>
         <form id="report-form">
           <article id="report" class="report" aria-label="Selected report"></article>
           <button id="report-submit" type="submit" hidden>Send answers</button>
-          <p id="report-receipt" class="receipt" role="status" hidden></p>
         </form>
         <p id="report-agent-ack" class="receipt" role="status" aria-live="polite" hidden></p>
-        <small>Answers are sent to the agent inbox as one note and acknowledged like any note. Resending creates a new answer.</small>
+        <small>Answers reach the agent inbox as one note; resending creates a new one.</small>
       </div>
     </section>
     <section id="tasks-panel" role="tabpanel" aria-labelledby="tasks-tab" hidden>
@@ -113,7 +113,7 @@
             <label class="fetch-opt-in" for="fetch-proxy"><input id="fetch-proxy" type="checkbox">If direct access fails, try AllOrigins then CodeTabs for this URL</label>
           </form>
           <p id="workspace-use" class="muted" role="status">Measuring workspace files.</p>
-          <p class="muted">Up to 102,400,000 bytes per URL. That ceiling is 80% of the documented 128,000,000-byte snapshot cap. The cap is not measured. The 128 MB figure was for a workspace without GitHub. One session reported 512 MB. Direct access can fail due to CORS. Proxy fallback shares the URL with those services only when selected for that job. Keep this browser page open while transfers run. SQLite retains queued records across server restarts. A restore can remove saved bytes. URLs entered here queue immediately; agent requests need an Approve click below.</p>
+          <p class="muted">Up to 102.4 MB per URL. Keep this page open while transfers run. Your URLs queue at once; agent requests need approval below.</p>
           <section class="fetch-approval" aria-labelledby="fetch-approval-title">
             <h3 id="fetch-approval-title">Agent requests · approval needed</h3>
             <p id="fetch-approval-count" class="muted" role="status">No requests awaiting approval.</p>

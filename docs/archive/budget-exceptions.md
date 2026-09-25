@@ -2,6 +2,34 @@
 
 Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
 
+2026-09-26: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +268 `B` for the GET /api/submissions endpoint that serves answers filtered to live reports, owner request.
+
+2026-09-26: Unfunded. `skills/arena-preview-steering/assets/app.js` +239 `B` for merging the report answers into the copy button's NDJSON, owner request.
+
+2026-09-26: Unfunded. `skills/arena-preview-steering/assets/index.html` +10 `B` for the copy button's widened tooltip text, owner request.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/SKILL.md` +52 `B` for the negative-rating clause on late acks, owner verbatim.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +172 `B` for the call-count anchor on the first unread message, an owner fix.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/assets/style.css` +307 `B` for the shared 44px toolbar boxes and the select's matching chevron, owner screenshots.
+
+2026-09-25: Unfunded. `rules/AGENTS.md` +7 `tok` and `rules/ARENA.md` +63 `B` for the material-ambiguity guards on the assumption and lazy-default clauses, owner verbatim. The root copy matches.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/assets/app.js` +963 `B`, `assets/index.html` +162 `B`, `scripts/preview.py` +772 `B` and `SKILL.md` +86 `B` for report deletion from the tab and the CLI, an owner feature. `assets/style.css` needs no new bytes: the second-click arm reuses the danger state.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/assets/index.html` +1 `B` for "approval" prose on Downloads, owner wording.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +600 `B` for the report-line grammar, the list allowlist, and the spacing, owner orders. `assets/style.css` +79 `B`. `assets/app.js` -188 `B` net.
+2026-09-25: Unfunded. `skills/arena-preview-steering/assets/app.js` +337 `B`, `assets/style.css` +137 `B`, `scripts/preview.py` +1,374 `B` for the appended reply blocks on a repeated ack, an owner feature.
+2026-09-25: Unfunded. `rules/ARENA.md` +127 `B` for the CI poll backoff amendment, an owner amendment. The root copy matches.
+2026-09-25: Unfunded. `rules/AGENTS.md` +2 `tok` and `rules/ARENA.md` +31 `B` for one shared ASD-STE100 line, terseness T1. The root copy matches.
+2026-09-25: Unfunded. `rules/ARENA.md` +8 `B` for splitting the question-channel bullet into five one-rule bullets (audit F2). The root copy matches.
+2026-09-25: Unfunded. `rules/ARENA.md` +12 `B` for the GitHub reconnect through `ask_user`, an owner correction. The root copy matches.
+2026-09-25: Unfunded. `rules/ARENA.md` +57 `B` for the documentation storyline ban, mirrored from the core. The root copy matches.
+
+2026-09-25: Unfunded. `skills/arena-preview-steering/SKILL.md` +100 `B` for the owner-verbatim re-ack clause: a second ack on the same ID replaces the earlier answer.
+
 2026-09-25: Unfunded. `skills/arena-preview-steering/SKILL.md` +81 `B` for the `download-request` command, the separate upload and download ceilings, and the unmeasured-cap note. `assets/app.js` +341 `B`, `assets/index.html` +259 `B`, and `scripts/preview.py` +797 `B` for workspace file use on Downloads and the 102,400,000-byte download ceiling.
 
 2026-09-25: Unfunded. `rules/ARENA.md` +61 `B` for the owner investigation clause. The rule stops when verification supports the current conclusion. It investigates alternatives only when verification fails or the evidence remains ambiguous. The root copy matches. 

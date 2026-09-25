@@ -154,10 +154,21 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 /* Only the reply carries the bar, the muted colour and the smaller size: prose costs log space. */
 .answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
-#report-receipt { margin: 10px 0 0; }
+/* Each later ack is one more block under the first answer, parted by a hairline; nothing is replaced. */
+.answer .reply-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.answer .reply-block > p:last-child { margin-bottom: 0; }
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-.select-wrap { flex: 1 1 240px; max-width: 500px; }
+.select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
+/* The report select takes the log filter's own chevron instead of the native arrow, on owner
+   note: both selects now read as one control. position sits on the wrap, which also holds the
+   label, so the triangle anchors to the bottom half where the select box lives. */
+.select-wrap::after {
+  content: ""; position: absolute; right: 10px; bottom: 22px; transform: translateY(50%);
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 5px solid var(--muted); pointer-events: none;
+}
+#report-select { appearance: none; padding-right: 26px; }
 /* The log filter is a control in a header row, not a form field: the row reads as one row only when
    its boxes line up, so it takes the icon buttons' 34px and no minimum of its own. Only the width
    its four words need, so it costs the log no vertical space, and an aria-label carries the name
@@ -174,7 +185,7 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
   flex: 0 0 auto; width: auto; max-width: 8em; height: 34px; min-height: 0;
   padding: 0 24px 0 6px; line-height: 32px; appearance: none;
 }
-#copy-report, #refresh-report { width: 44px; height: 44px; }
+#copy-report, #refresh-report, #unpublish-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
 a { color: var(--accent); text-underline-offset: 3px; }
 .report, .message-text { overflow-wrap: anywhere; overflow-x: auto; }
@@ -183,6 +194,9 @@ a { color: var(--accent); text-underline-offset: 3px; }
 /* Paragraph gaps were the browser default 16px while the headings had been tightened; the owner
    called the paragraphs too far apart, so they take the heading's 6px rhythm at 8. */
 .report p, .message-text p { margin: 8px 0; }
+/* The allowlisted list passes through as-is; give it the paragraph spacing and the marker indent. */
+.report ul, .report ol { margin: 8px 0; padding-left: 22px; }
+.report li { margin: 2px 0; }
 /* Message blockquotes take the reply's bar and padding but keep the message's font size. */
 .message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }
 .report table, .message-text table { border-collapse: collapse; width: 100%; font-size: 14px; }
