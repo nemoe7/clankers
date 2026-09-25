@@ -6,6 +6,8 @@ on:
     paths:
       - 'rules/**'
       - '!rules/refs/**'
+      - 'maintenance/publish_clankers_rules.py'
+      - 'maintenance/check_publish_clankers_rules.py'
 
 # A later main push supersedes an older pending run; never interrupt a running reconciliation.
 concurrency:
