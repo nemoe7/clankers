@@ -79,6 +79,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - Every entry terse: one entry per event, no story between facts.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
 - No clause in a rule, skill, or workflow file is added, amended, or deleted until the user approves the report; hold the work and say so in one line. Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
+- Clauses amended/added verbatim by the owner do not need to pass thru approval.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
 - Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
   - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are never pushed.
