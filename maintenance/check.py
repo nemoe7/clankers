@@ -60,6 +60,7 @@ EXPECTED_BUDGETS = {
   "gpt-plugins/skills/gpt-quirks/SKILL.md": "cl100k_base",
   "gpt-plugins/skills/gpt-handoff/SKILL.md": "cl100k_base",
   "gpt-plugins/skills/gpt-planning/SKILL.md": "cl100k_base",
+  "gpt-plugins/skills/gpt-github/SKILL.md": "cl100k_base",
 }
 
 # Root `ARENA.md` is the copy `.github/workflows/distribute-arena.yml` pushes to

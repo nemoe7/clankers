@@ -259,7 +259,7 @@ function showWorkspace(usage) {
     node.textContent = 'Workspace file use is unavailable.';
     return;
   }
-  node.textContent = `Workspace files: ${usage.bytes.toLocaleString()} bytes in ${usage.files.toLocaleString()} files. Documented snapshot cap: ${usage.documented_cap_bytes.toLocaleString()} bytes. This cap is not measured.`;
+  node.textContent = `Workspace files: ${bytes(usage.bytes)} in ${usage.files.toLocaleString()} files. Documented snapshot cap: ${bytes(usage.documented_cap_bytes)}.`;
 }
 function bytes(value) {
   if (value < 1000) return `${value} B`;
@@ -285,11 +285,13 @@ let seenEdits;
 try { seenEdits = new Map(Object.entries(JSON.parse(stored('seen-edits') || '{}'))); }
 catch { seenEdits = new Map(); }
 let unreadEdits = [];
-const editKey = item => JSON.stringify([item.ack_edited_at, item.ack_kind, item.ack_text]);
+// A later ack appends a reply block; the key changes with the newest block, so the pip returns for
+// each one, same-second ones included.
+const editKey = item => JSON.stringify([item.ack_edited_at, (item.replies || []).length, item.ack_text]);
 function updateEdits(notes) {
   unreadEdits = notes.filter(item => item.ack_edited_at && seenEdits.get(item.id) !== editKey(item));
   $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
-  $('#log-edited').textContent = unreadEdits.length > 1 ? `New edits (${unreadEdits.length})` : 'New edit';
+  $('#log-edited').textContent = unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
 }
 $('#log-edited').addEventListener('click', () => {
   const item = unreadEdits[0];
@@ -345,7 +347,7 @@ function showHistory(notes) {
     receiptDot.title = STATE_WORDS[state];
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}` +
-      (item.ack_edited_at ? ` · Edited ${time(item.ack_edited_at)}` : '');
+      (item.ack_edited_at ? ` · Replied again ${time(item.ack_edited_at)}` : '');
     // The line reads as parts separated by the same ASCII dot: ID · state · time · filename · task.
     // The owner asked for the dot after the ID by name.
     const separator = document.createElement('span');
@@ -370,15 +372,33 @@ function showHistory(notes) {
     );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
+    // A second ack appends a block under the first answer instead of replacing it (the owner's
+    // order on the re-ack of 52d7cce); each block keeps its own kind and carries its stamp in
+    // its title.
     const answer = node.children[1];
     if (item.ack_text) {
       answer.className = item.ack_kind === 'reply' ? 'answer reply message-text' : 'answer reply';
       answer.hidden = false;
+      const blocks = (item.replies || []).map(reply => {
+        const block = document.createElement('div');
+        block.className = 'reply-block';
+        block.title = `Replied again ${time(reply.at)}`;
+        if (reply.kind === 'reply' && reply.html !== undefined) block.innerHTML = reply.html;
+        else {
+          const plain = document.createElement('p');
+          plain.textContent = reply.text;
+          block.replaceChildren(plain);
+        }
+        return block;
+      });
       if (item.ack_html === undefined) {
         const plain = document.createElement('p');
         plain.textContent = item.ack_text;
-        answer.replaceChildren(plain);
-      } else answer.innerHTML = item.ack_html;
+        answer.replaceChildren(plain, ...blocks);
+      } else {
+        answer.innerHTML = item.ack_html;
+        answer.append(...blocks);
+      }
     } else {
       answer.className = 'answer';
       answer.hidden = true;
@@ -813,7 +833,7 @@ function stamp(value) {
 // display and a restore re-renders from text, the token dies with its server, seq orders one
 // display only, and reports, uploads and the last check have no importer. The stamps arrive
 // from the state poll already cut to seconds, which is all a restore needs.
-const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'seen_at', 'task_id'];
+const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'seen_at', 'task_id'];
 const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
 function restoreLine(record, keys) {
   const line = {};
@@ -833,23 +853,30 @@ function restoreCopy(cached) {
   };
 }
 const copyStateButton = $('#copy-state');
-function stateLines(state) {
-  return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished];
+function stateLines(state, answers = []) {
+  return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished, ...answers];
 }
 copyStateButton.addEventListener('click', async () => {
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
   const state = cached && Array.isArray(cached.notes) ? restoreCopy(cached) : null;
   if (!state) status.textContent = 'Nothing cached to copy yet; the page caches its copy on every poll.';
-  const lines = state ? stateLines(state) : [];
+  let answers = null;
+  if (state) {
+    try { answers = await (await request('/api/submissions')).json(); }
+    catch { answers = null; }
+  }
+  const lines = state ? stateLines(state, answers || []) : [];
   // One JSON line per record is the save file's own format, so a paste lands in `import-notes` and
-  // `task-import` without editing. Answer lines stay out: the page holds no answer it did not send,
-  // and autosave already keeps them in the file.
+  // `task-import` without editing. The server supplies the answer lines on click, scoped to the
+  // reports still in the tab.
   const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
   await copyFrom(copyStateButton, text, 'state');
   if (state) {
-    status.textContent =
-      `Copied ${state.notes.length} messages and ${lines.length - state.notes.length} tasks as NDJSON.`;
+    const taskCount = lines.length - state.notes.length - (answers?.length || 0);
+    status.textContent = answers
+      ? `Copied ${state.notes.length} messages, ${answers.length} answers and ${taskCount} tasks as NDJSON.`
+      : `Copied ${state.notes.length} messages and ${taskCount} tasks as NDJSON; the answers did not arrive.`;
   }
 });
 $('#copy-report').addEventListener('click', async () => {
@@ -866,21 +893,21 @@ function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }
 }
-function showReceipt(at) {
-  const receipt = $('#report-receipt');
-  receipt.textContent = `✓ Sent ${time(at)} · your answers stay filled in; change them and send again.`;
-  receipt.hidden = false;
+// One grammar for the three report lines, matching the log receipts: object, then state, then
+// time, joined by the dot, no sentences. Acked is the Reports tab word; the log keeps Said.
+function submissionParts(report) {
+  if (!report?.latest_answer_at) return '';
+  return ` · Submission ${report.latest_answer_id.slice(0, 7)} · Sent ${time(report.latest_answer_at)}` +
+    (report.latest_answer_acknowledged_at
+      ? ` · Acked ${time(report.latest_answer_acknowledged_at)}`
+      : ' · Awaiting ack');
 }
 function renderReportAcknowledgement() {
   const report = lastState?.reports.find(item => item.id === $('#report-select').value);
   const receipt = $('#report-agent-ack');
-  const submission = report?.latest_answer_id ? `Submission ${report.latest_answer_id.slice(0, 7)} · ` : '';
-  receipt.textContent = report?.latest_answer_at
-    ? submission + (report.latest_answer_acknowledged_at
-      ? `Agent acknowledged the latest answer ${time(report.latest_answer_acknowledged_at)}.`
-      : `Latest answer sent ${time(report.latest_answer_at)}. It is awaiting agent acknowledgement.`)
-    : '';
-  receipt.hidden = !report?.latest_answer_at;
+  const parts = submissionParts(report);
+  receipt.textContent = parts ? parts.slice(3) : '';
+  receipt.hidden = !parts;
 }
 let reportDirty = false;
 $('#report-form').addEventListener('input', () => { reportDirty = true; });
@@ -900,7 +927,6 @@ async function loadReport(force = false) {
   if (!updating || !id) {
     $('#report').replaceChildren();
     $('#report-submit').hidden = true;
-    $('#report-receipt').hidden = true;
   }
   if (!id) { $('#report-status').textContent = 'No report has been published yet.'; return; }
   save('report', id);
@@ -915,17 +941,14 @@ async function loadReport(force = false) {
     $('#report').dataset.revision = result.revision;
     panel.scrollTop = updating ? place : 0;
     $('#report-submit').hidden = !result.fields;
-    $('#report-receipt').hidden = true;
     const saved = result.fields ? savedAnswers(id) : null;
     if (saved && saved.answers) {
       applyAnswers($('#report'), saved.answers);
-      showReceipt(saved.at);
     }
-    $('#report-status').textContent = saved && saved.answers
-      ? `Answers sent ${saved.at ? time(saved.at) : 'earlier'} · ${result.fields} field${result.fields === 1 ? '' : 's'} stay filled in; change them and send again to replace them.`
-      : result.fields
-        ? `Report loaded with ${result.fields} field${result.fields === 1 ? '' : 's'}. Fill them in, then send; answers reach the agent inbox as one note.`
-        : 'Report loaded. Updates appear automatically.';
+    $('#report-form').dataset.fields = result.fields;
+    const report = lastState?.reports.find(item => item.id === id);
+    $('#report-status').textContent =
+      `Report · ${result.fields} field${result.fields === 1 ? '' : 's'}` + submissionParts(report);
     checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
@@ -948,11 +971,11 @@ $('#report-form').addEventListener('submit', async event => {
       headers: writeHeaders('application/json'),
       body: JSON.stringify({ id: newId(), answers, revision })
     })).json();
-    const saved = save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
+    save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
-    if (saved) showReceipt(result.at);
-    $('#report-status').textContent = `Answers sent ${time(result.at)} · the agent reads the inbox; awaiting acknowledgement. Your entries stay on screen.`;
+    $('#report-status').textContent =
+      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)} · Sent ${time(result.at)} · Awaiting ack`;
     const report = lastState?.reports.find(item => item.id === id);
     if (report) {
       report.latest_answer_id = result.id;
@@ -1377,6 +1400,42 @@ $('#fetch-form').addEventListener('submit', async event => {
 });
 $('#report-select').addEventListener('change', () => { renderReportAcknowledgement(); loadReport(); });
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
+// A delete asks for a second click against the same report, the way the log's armed actions do,
+// and the arm expires so a stray first click does not sit armed forever. The server keeps the
+// report's answers and its source file; only the tab row goes.
+let unpublishArmed = null;
+$('#unpublish-report').addEventListener('click', async () => {
+  const id = $('#report-select').value;
+  if (!id) return;
+  const button = $('#unpublish-report');
+  if (unpublishArmed !== id) {
+    unpublishArmed = id;
+    button.dataset.state = 'bad';
+    $('#report-status').textContent = `Delete ${id}? Click ✕ again to confirm.`;
+    setTimeout(() => {
+      if (unpublishArmed === id) { unpublishArmed = null; button.dataset.state = ''; }
+    }, 8000);
+    return;
+  }
+  if (button.disabled) return;
+  unpublishArmed = null;
+  button.disabled = true;
+  try {
+    await request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {
+      method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+    });
+    button.dataset.state = '';
+    $('#report').replaceChildren();
+    delete $('#report').dataset.reportId;
+    delete $('#report').dataset.updatedAt;
+    delete $('#report').dataset.revision;
+    save('report', '');
+    $('#report-status').textContent = `Report ${id} · Deleted · ${time(new Date().toISOString())}`;
+    void refreshState();
+  } catch (error) {
+    $('#report-status').textContent = `Delete failed: ${error.message}`;
+  } finally { button.disabled = false; }
+});
 $('#refresh-notes').addEventListener('click', refreshState);
 refreshState();
 setInterval(refreshState, 3000);

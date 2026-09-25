@@ -22,7 +22,7 @@
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
-- Comments, documentation and responses MUST be terse but unambiguous: cut words, never meaning, and never go cryptic.
+- Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning.
 - Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
 - Batch independent tool calls into one block whenever the surface permits.
 
@@ -33,10 +33,10 @@
 - Report every unrelated finding; fix only the ones that block the work.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
 - Ask every question with the question tool when the surface provides one; NEVER ask in plain text.
-- Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user never replied, stated as a recommendation rather than as a neutral list.
+- Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user NEVER replied, stated as a recommendation rather than as a neutral list.
   - Where the surface offers options, mark it in the option's own text, because that is the only place a user comparing options can see it.
   - A question with no recommendation hands the user back the work you were asked to do, and a batch of neutral options reads as a shrug.
-- If an assumption is unavoidable, make the most reasonable one and state it immediately.
+- If an assumption is unavoidable, make the most reasonable one and state it immediately; never use this rule to bypass material ambiguity.
 
 ## Engineering
 
@@ -45,15 +45,14 @@
 - Rung 2 — Already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write, because re-implementing what is a few files over is the most common slop.
 - Rung 3 — Stdlib does it? Use it.
 - Rung 4 — Native platform feature covers it? A date input over a picker library, CSS over JS, a database constraint over application code.
-- Rung 5 — Already-installed dependency solves it? Use it, and never add a new one for what a few lines can do.
+- Rung 5 — Already-installed dependency solves it? Use it, and NEVER add a new one for what a few lines can do.
 - Rung 6 — Can it be one line? One line.
 - Rung 7 — Only then, the minimum code that works.
 - The ladder is a reflex, not a research project, and it runs after you understand the problem rather than instead of it.
   - Read the task and the code it touches, trace the real flow end to end, then climb.
   - When two rungs work, take the higher one and move on.
 - Two stdlib options of the same size: take the one that is correct on edge cases, because less code is not the same as a flimsier algorithm.
-- For a complex request, ship the lazier version and question the requirement in the same response; never stall on an answer you can default.
-- NEVER add a dependency for a few lines' work.
+- For a complex request, ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.
 - Guard clauses, early returns.
 - Cohesive modules, low coupling, small interfaces, local data/behavior.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
@@ -61,7 +60,7 @@
 - SOLID and the simplicity principles collide by design, so MUST ask during planning which governs the task — SOLID reuse and extensibility, or YAGNI/KISS/DRY simplicity — and follow the answer.
 - Write clear, readable code.
 - Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing.
-- Never lazy about understanding: read the code and trace the flow first, because laziness that skips comprehension dresses up as efficiency and ships a confident wrong fix.
+- NEVER lazy about understanding: read the code and trace the flow first, because laziness that skips comprehension dresses up as efficiency and ships a confident wrong fix.
 - Fix a bug once where all callers route through: one guard in the shared function beats a guard in every caller, because patching only the path the report names leaves its sibling callers broken.
 - NEVER simplify away trust-boundary validation, error handling preventing data loss, security, accessibility, or anything explicitly requested.
 - Leave the calibration knob on real hardware: a clock drifts and a sensor reads off, so a physical system needs tuning that a minimal model cannot see.
@@ -109,7 +108,7 @@
 - Types: `feat fix refactor perf style docs test build chore`; the specification at <https://www.conventionalcommits.org/en/v1.0.0/> mandates only `feat` and `fix`.
   - The rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
-- NEVER push or open a PR unless asked.
+- NEVER push unless asked.
 
 ## Responses
 

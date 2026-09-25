@@ -22,7 +22,7 @@ Use one server and one state directory per session; do not start a second server
    ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir arena-state serve --port 8000
    ```
 
-   After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting; ask them to reload after restart. If another service owns the port, choose a free one without stopping it.
+   After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it.
 4. Name the preview in chat. At first setup, ask one visibility question with `ask_user` as soon as the preview starts, options: Yes, No, ntfy, Continue without steering. Block all work beyond setup until the answer. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running, then `read` it after the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
 
 ## Read, acknowledge, and track work
@@ -33,7 +33,7 @@ python <skill>/scripts/preview.py --state-dir arena-state read
 
 When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call.
 
-Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. Receipt is not completion. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
+Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack on the same ID appends a reply block under the earlier answer; nothing is replaced. Receipt is not completion. Failure to ack immediately earns a negative rating. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
 
 ```bash
 python <skill>/scripts/preview.py --state-dir arena-state ack <id> --reply <markdown>
@@ -51,7 +51,7 @@ Short answers stay in chat. For a longer report, write UTF-8 Markdown to an igno
 python <skill>/scripts/preview.py --state-dir arena-state publish <source.md> --id <id> --title <title>
 ```
 
-Republish the same ID after each source update; if answers exist, use a new ID. Install `markdown-it-py` only in the preview venv if needed, not in application manifests. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Pair every option set with a labeled custom-response field.
+Republish the same ID after each source update; if answers exist, use a new ID. Remove a stale one with `unpublish <id>`; its answers and source survive for a new ID. Install `markdown-it-py` only in the preview venv if needed, not in application manifests. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Pair every option set with a labeled custom-response field.
 
 `read` lists report submissions as `kind: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
 
@@ -59,8 +59,8 @@ Republish the same ID after each source update; if answers exist, use a new ID. 
 
 For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss. One note may carry up to five files of 50,000,000 bytes each.
 
-The owner can queue an HTTPS URL in Downloads. To ask for a file, run `download-request <url>`. That command queues a pending job and does not download it. The owner approves or denies the request in Downloads. Add `--allow-proxy` only when that URL may use AllOrigins and then CodeTabs. Keep the owner's browser page open during a fetch. URLs cannot contain credentials. An upload is at most 50,000,000 bytes. A download is at most 102,400,000 bytes, 80% of the documented 128,000,000-byte snapshot cap. That cap is not measured. A saved job writes an inbox note with the path. Read that note and acknowledge it. Report failed or missing files. The owner can retry failed jobs in the tab.
+The owner can queue an HTTPS URL in Downloads. To ask for a file, run `download-request <url>`. That command queues a pending job and does not download it. The owner approves or denies the request in Downloads. Add `--allow-proxy` only when that URL may use AllOrigins and then CodeTabs. Keep the owner's browser page open during a fetch. URLs cannot contain credentials. An upload is at most 50,000,000 bytes. A download is at most 102,400,000 bytes. That cap is not measured. A saved job writes an inbox note with the path. Read that note and acknowledge it. Report failed or missing files. The owner can retry failed jobs in the tab.
 
 ## Recovery
 
-Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes in the ignored state directory. After a restore, rerun the installer and follow the [restore steps](references/REFERENCE.md#restore). Reload the preview after a server restart to refresh its write token; preserve unsent drafts. Never call an unconfirmed save successful. If the preview fails, report the failure and use `ask_user` to ask how to continue; do not silently switch channels or commit reports. Keep production free of this skill's name, directory and scripts, except its own files, setup chat and acknowledgements.
+Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes in the ignored state directory. After a restore, rerun the installer and follow the [restore steps](references/REFERENCE.md#restore). Never call an unconfirmed save successful. If the preview fails, report the failure and use `ask_user` to ask how to continue; do not silently switch channels or commit reports. Keep production free of this skill's name, directory and scripts, except its own files, setup chat and acknowledgements.

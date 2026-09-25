@@ -31,7 +31,7 @@ README = PLUGIN / "README.md"
 REFS = PLUGIN / "refs" / "skills"
 SHIPPED = PLUGIN / "skills"
 PLUGIN_NAME = "gpt-plugins"
-EXPECTED_SKILLS = ("gpt-quirks", "gpt-handoff", "gpt-planning")
+EXPECTED_SKILLS = ("gpt-quirks", "gpt-handoff", "gpt-planning", "gpt-github")
 SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EXPECTED_SKILL_FIELDS = {
@@ -343,7 +343,7 @@ def main() -> int:
     print(f"gpt-plugins validation failed: {len(errors)} problems", file=sys.stderr)
     return 1
 
-  scope = "manifest against the canonical schema, refs parity, and all three skills"
+  scope = f"manifest against the canonical schema, refs parity, and all {len(EXPECTED_SKILLS)} skills"
 
   if arguments.archive:
     scope += f", plus the {Path(arguments.archive).name} listing"
