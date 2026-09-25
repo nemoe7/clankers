@@ -8,6 +8,7 @@ on:
       - '!rules/refs/**'
       - 'maintenance/publish_clankers_rules.py'
       - 'maintenance/check_publish_clankers_rules.py'
+      - '.github/workflows/publish-clankers-rules.yml'
 
 # A later main push supersedes an older pending run; never interrupt a running reconciliation.
 concurrency:
