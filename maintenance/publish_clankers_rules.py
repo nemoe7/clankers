@@ -360,11 +360,41 @@ def reconcile(
     store_id(repo, "delete")
     print(f"Removed empty Gist {gist_id} and GIST_ID")
     return None
+  added = sorted(name for name in changes if name not in old_files)
+  updated = sorted(
+    name for name in changes if name in old_files and changes[name] is not None
+  )
   if changes:
     call("PATCH", f"gists/{gist_id}", {"files": changes})
+  verified = call("GET", f"gists/{gist_id}")
+  if (
+    not isinstance(verified, dict)
+    or verified.get("public") is not False
+    or verified.get("description") != DESCRIPTION
+    or not isinstance(verified.get("files"), dict)
+  ):
+    raise RuntimeError("Gist verification failed: invalid Gist response")
+  verified_files = verified["files"]
+  expected_files = set(desired) | (set(collisions) & set(old_files))
+  if set(verified_files) != expected_files:
+    raise RuntimeError(
+      "Gist verification failed: file set does not match desired state"
+    )
+  for name, content in desired.items():
+    if (
+      verified_files.get(name, {}).get("truncated")
+      or verified_files.get(name, {}).get("content") != content
+    ):
+      raise RuntimeError(f"Gist verification failed: content mismatch for {name}")
+  for name in set(collisions) & set(old_files):
+    if verified_files.get(name, {}).get("truncated"):
+      raise RuntimeError(
+        f"Gist verification failed: preserved file {name} is truncated"
+      )
   print(
     f"Reconciled Gist {gist_id}: {len(desired)} authoritative rules, "
-    f"{len(deleted)} stale files removed, {len(collisions)} collision names preserved"
+    f"{len(added)} added, {len(updated)} updated, {len(deleted)} deleted, "
+    f"{len(collisions)} collision names preserved; verification passed"
   )
   return gist_id
 
