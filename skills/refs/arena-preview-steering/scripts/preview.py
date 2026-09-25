@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import re
 import secrets
 import socket
@@ -39,15 +40,66 @@ MAX_SUBMISSION = 150_000
 # did. The note cap now sets the general bound, and submissions take the wider one.
 MAX_BODY = 96_000
 MAX_SUBMISSION_BODY = 1_000_000
-# Both owner-uploaded and browser-fetched files have a 50 MB (decimal) per-file ceiling.
+# Owner uploads keep a 50 MB (decimal) per-file ceiling.
 MAX_UPLOAD = 50_000_000
 # A composed note may carry several files. Bound the whole multipart body as well as each file.
 MAX_ATTACHMENTS = 5
-MAX_FETCH = 50_000_000
+# Documented snapshot cap, not a measured limit. The 128 MB figure was for a workspace
+# without GitHub. One session reported 512 MB. Downloads use 80% of the documented figure.
+SNAPSHOT_CAP_BYTES = 128_000_000
+MAX_FETCH = SNAPSHOT_CAP_BYTES * 80 // 100
+WORKSPACE_SKIP = {
+  ".arena",
+  ".cache",
+  ".git",
+  ".local",
+  ".mypy_cache",
+  ".next",
+  ".nox",
+  ".npm",
+  ".nuxt",
+  ".output",
+  ".parcel-cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".svelte-kit",
+  ".tox",
+  ".turbo",
+  ".venv",
+  ".vite",
+  "__pycache__",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+  "target",
+}
 FETCH_LEASE = timedelta(minutes=5)
 # File bytes live beside the database, never inside it; stored names are relative to state.
 UPLOAD_DIR = "uploads"
 FETCH_DIR = "downloads"
+
+
+def workspace_usage(root=None):
+  """Bytes and files under root, skipping snapshot-excluded directories."""
+  root = Path(root or Path.cwd())
+  total = 0
+  count = 0
+  for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    dirnames[:] = [name for name in dirnames if name not in WORKSPACE_SKIP]
+    for name in filenames:
+      try:
+        total += (Path(dirpath) / name).stat().st_size
+      except OSError:
+        continue
+      count += 1
+  return {
+    "bytes": total,
+    "files": count,
+    "documented_cap_bytes": SNAPSHOT_CAP_BYTES,
+    "download_cap_bytes": MAX_FETCH,
+  }
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
@@ -855,6 +907,7 @@ class Store:
         "tasks": tasks,
         "uploads": uploads,
         "fetch_jobs": fetch_jobs,
+        "workspace": workspace_usage(),
         "last_check": clip_stamp(meta.get("last_check")),
       }
 
