@@ -47,10 +47,13 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
-REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Report GH_TOKEN failure; use ask_user only if requested, preview unavailable, or ntfy selected.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Avoid ending turn if there are unblocked tasks.'
+REMINDERS='Manage the task list.','Take the smallest open task next.','Always push.','Report GH_TOKEN failure; use ask_user only if requested or preview unavailable.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Avoid ending turn if there are unblocked tasks.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 def now():return datetime.now(timezone.utc).isoformat()
+def reset_poll_count(db):
+	unacked=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0]
+	if unacked==1:db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 def meta_number(db,key):row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();value=str(row[0])if row else'';return int(value)if value.isdigit()else 0
 def new_id():hexed=uuid.uuid4().hex;return f"{hexed[:7]}-{hexed[7:]}"
 def clip_stamp(value):return value[:19]if value else value
@@ -72,6 +75,20 @@ def restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at=None):
 	if any(value is None for value in carried):raise ValueError('A restored receipt carries its stamp, kind and text, or none of them')
 	if ack_kind not in{'note','reply'}:raise ValueError('Every acknowledgement is a note or a reply, with its text')
 	return when(acknowledged_at),ack_kind,note_text(ack_text),when(ack_edited_at)if ack_edited_at is not None else None
+def restore_replies(replies,acknowledged):
+	if not replies:return None
+	if not acknowledged:raise ValueError('Appended replies need an acknowledgement')
+	if not isinstance(replies,list):raise TypeError('Appended replies are a list')
+	checked=[]
+	for item in replies:
+		if not isinstance(item,dict)or item.get('kind')not in{'note','reply'}:raise ValueError('Every appended reply is a note or a reply, with its text and stamp')
+		checked.append({'kind':item['kind'],'text':note_text(item.get('text')),'at':when(item.get('at'))})
+	return json.dumps(checked,ensure_ascii=False)
+def replies_list(value):return json.loads(value)if value else[]
+def message_row(row):
+	record=dict(row)
+	if'replies'in record:record['replies']=replies_list(record['replies'])
+	return record
 def submission_text(text):
 	if not isinstance(text,str)or not text.strip():raise ValueError('A report submission carries at least one answer')
 	if len(text)>MAX_SUBMISSION:raise ValueError(f"A report submission must be under {MAX_SUBMISSION:,} characters; answer fewer fields or shorten them")
@@ -146,9 +163,9 @@ ECHO_DETAIL=200
 TASK_COLUMNS='id, title, details, status, position, updated_at'
 CLI_DESCRIPTION='Notes, reports, tasks and the preview server for Arena steering.'
 SAVED_STATE='saved-state.ndjson'
-NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','seen_at','task_id'
+NOTE_LINE_KEYS='id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','replies','seen_at','task_id'
 TASK_LINE_KEYS='id','title','details','status','order'
-SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','seen_at','task_id'
+SUBMISSION_LINE_KEYS='id','report_id','text','at','acknowledged_at','ack_kind','ack_text','ack_edited_at','replies','seen_at','task_id'
 def task_row(row):return{'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5]}
 def echo_task(record,before=None,after=None):return{'id':record['id'],'title':record['title'],'status':record['status'],'order':record['order'],'prev':before,'next':after,'details':[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in record['details']]}
 def saved_note_line(record):
@@ -224,11 +241,19 @@ def check_task(task_id,title,details):
 	if len(details or())>MAX_TASK_DETAILS:raise ValueError(f"A task carries at most {MAX_TASK_DETAILS} details")
 	for detail in details or():
 		if len(detail)>MAX_TASK_DETAIL:raise ValueError(f"A task detail must be {MAX_TASK_DETAIL} characters or fewer")
+REPORT_LIST_TAG=re.compile('\\s*</?(?:ul|ol|li)>\\s*',re.IGNORECASE)
+REPORT_LIST_TAGS=re.compile('^(?:\\s*</?(?:ul|ol|li)>\\s*)+$',re.IGNORECASE)
+def render_report_block(markdown):
+	held=[]
+	def hold(match):held.append(match.group(0).strip().lower());return f" previewlisttag{len(held)-1}x "
+	tagged=re.sub('(?:\\s*(?:</?(?:ul|ol|li)>)\\s*){2,}',hold,markdown);rendered=render(tagged)
+	def restore(match):return held[int(match.group(1))]
+	out=re.sub('previewlisttag(\\d+)x',restore,rendered);out=re.sub('<p>(<(?:ul|ol)>)','\\1',out);out=re.sub('(</(?:ul|ol)>)</p>','\\1',out);return out
 def render_report(markdown):
 	blocks,questions=parse_fields(markdown);parts=[]
 	for(kind,item)in blocks:
 		if kind=='markdown':
-			if item.strip():parts.append(render(item))
+			if item.strip():parts.append(render_report_block(item))
 		else:parts.append(field_html(item))
 	return''.join(parts),questions
 class ReportChanged(ValueError):pass
@@ -239,8 +264,8 @@ class Store:
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}; start the preview first")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
-			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
-			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id'):
+			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
+			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id','replies'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'origin'in columns:db.execute('ALTER TABLE notes DROP COLUMN origin');columns.discard('origin')
 			if'seen_at'not in columns:db.execute('UPDATE notes SET seen_at = acknowledged_at WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL')
@@ -248,6 +273,7 @@ class Store:
 			if'ack_edited_at'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT')
 			if'seen_at'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN seen_at TEXT')
 			if'task_id'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN task_id TEXT')
+			if'replies'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN replies TEXT')
 			columns={row['name']for row in db.execute('PRAGMA table_info(reports)')}
 			if'seen_at'not in columns:db.execute('ALTER TABLE reports ADD COLUMN seen_at TEXT');db.execute('UPDATE submissions SET seen_at = acknowledged_at WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL')
 			columns={row['name']for row in db.execute('PRAGMA table_info(reports)')}
@@ -258,30 +284,30 @@ class Store:
 			if'approval'not in columns:db.execute("ALTER TABLE fetch_jobs ADD COLUMN approval TEXT NOT NULL DEFAULT 'approved' CHECK (approval IN ('pending', 'approved', 'denied'))")
 		if not existed:self.path.chmod(384)
 	def connect(self):db=sqlite3.connect(self.path,timeout=5);db.row_factory=sqlite3.Row;return db
-	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None):
-		identifier(note_id);note_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);seen=when(seen_at)if seen_at is not None else None
+	def note(self,note_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,autosave=True,shared=None,replies=None):
+		identifier(note_id);note_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0]);seen=when(seen_at)if seen_at is not None else None
 		with self.transaction(shared,autosave=autosave)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
-				return dict(existing)
-			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id));db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,));return dict(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
-	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None,autosave=True):
-		identifier(submission_id);identifier(report_id);submission_text(text)
+				return message_row(existing)
+			db.execute('INSERT INTO notes (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(note_id,text,at or now(),*receipt,seen,task_id,more));reset_poll_count(db);return message_row(db.execute('SELECT * FROM notes WHERE id = ?',(note_id,)).fetchone())
+	def submission(self,submission_id,report_id,text,at=None,acknowledged_at=None,ack_kind=None,ack_text=None,seen_at=None,task_id=None,ack_edited_at=None,shared=None,autosave=True,replies=None):
+		identifier(submission_id);identifier(report_id);submission_text(text);receipt=restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at);more=restore_replies(replies,receipt[0])
 		with self.transaction(shared,autosave=autosave)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone()
 			if existing:
 				if existing['text']!=text:raise ValueError('This message ID already belongs to different text')
-				return dict(existing)
-			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*restore_receipt(acknowledged_at,ack_kind,ack_text,ack_edited_at),when(seen_at)if seen_at is not None else None,task_id));db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,));return dict(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
+				return message_row(existing)
+			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*receipt,when(seen_at)if seen_at is not None else None,task_id,more));reset_poll_count(db);return message_row(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
 	def submissions(self):
-		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT * FROM submissions ORDER BY seq')]
+		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY seq')]
 	def state(self):
 		tasks=self.tasks()
 		with closing(self.connect())as db:
-			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[dict(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')];latest_answers={row['report_id']:row for row in db.execute('SELECT id, report_id, at, acknowledged_at FROM submissions ORDER BY seq')}
+			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[message_row(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')];latest_answers={row['report_id']:row for row in db.execute('SELECT id, report_id, at, acknowledged_at FROM submissions ORDER BY seq')}
 			for report in reports:
 				answered=report.pop('answered');latest=latest_answers.get(report['id']);report['latest_answer_id']=latest['id']if latest else None;report['latest_answer_at']=clip_stamp(latest['at'])if latest else None;report['latest_answer_acknowledged_at']=clip_stamp(latest['acknowledged_at'])if latest else None
 				try:report['needs_answer']=bool(parse_fields(report.pop('markdown'))[1])and not answered
@@ -293,6 +319,7 @@ class Store:
 			for item in notes+reports+uploads+fetch_jobs:
 				for key in('at','acknowledged_at','ack_edited_at','seen_at','updated_at'):
 					if key in item:item[key]=clip_stamp(item[key])
+				for reply in item.get('replies')or[]:reply['at']=clip_stamp(reply['at'])
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
@@ -535,15 +562,11 @@ class Store:
 			for record_id in ids:
 				identifier(record_id)
 				for table in('notes','submissions'):
-					cursor=db.execute(f"""UPDATE {table} SET ack_edited_at = CASE
-               WHEN acknowledged_at IS NOT NULL AND ack_text IS NOT NULL
-                 AND (ack_kind IS NOT ? OR ack_text IS NOT ?) THEN ?
-               ELSE ack_edited_at END,
-               acknowledged_at = COALESCE(acknowledged_at, ?),
-               ack_kind = COALESCE(?, ack_kind), ack_text = COALESCE(?, ack_text),
-               seen_at = COALESCE(seen_at, ?)
-               WHERE id = ?""",(kind,text,stamp,stamp,kind,text,stamp,record_id))
-					if cursor.rowcount:break
+					row=db.execute(f"SELECT acknowledged_at, replies FROM {table} WHERE id = ?",(record_id,)).fetchone()
+					if row is None:continue
+					if row['acknowledged_at']is None:db.execute(f"UPDATE {table} SET acknowledged_at = ?, ack_kind = ?, ack_text = ?, seen_at = COALESCE(seen_at, ?) WHERE id = ?",(stamp,kind,text,stamp,record_id))
+					else:more=replies_list(row['replies'])+[{'kind':kind,'text':text,'at':stamp}];db.execute(f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",(json.dumps(more,ensure_ascii=False),stamp,record_id))
+					break
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
 			if not any(db.execute(f"SELECT 1 FROM {table} WHERE acknowledged_at IS NULL LIMIT 1").fetchone()for table in('notes','submissions')):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 	def publish(self,report_id,title,source):
@@ -558,6 +581,12 @@ class Store:
 			answered=db.execute('SELECT count(*) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
 			if answered:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
 			highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, seq)\n           VALUES (?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),highest+1))
+	def unpublish(self,report_id):
+		identifier(report_id)
+		with self.transaction()as db:
+			missing=db.execute('SELECT 1 FROM reports WHERE id = ?',(report_id,)).fetchone()
+			if missing is None:raise FileNotFoundError('Report not found')
+			db.execute('DELETE FROM reports WHERE id = ?',(report_id,))
 	def mark_report_seen(self,report_id):
 		identifier(report_id)
 		with self.transaction()as db:
@@ -651,8 +680,11 @@ def handler(store):
 						for item in state['notes']:
 							item['html']=render(item['text'])
 							if item.get('ack_kind')=='reply'and item.get('ack_text'):item['ack_html']=render(item['ack_text'])
+							for reply in item.get('replies')or[]:
+								if reply['kind']=='reply':reply['html']=render(reply['text'])
 					except RuntimeError as error:state['rendering_error']=str(error)
 					self.reply(200,json.dumps(state,ensure_ascii=False));return
+				if path=='/api/submissions':live={report['id']for report in store.state()['reports']};self.reply(200,json.dumps([saved_answer_line(record)for record in store.submissions()if record['report_id']in live],ensure_ascii=False),'application/json; charset=utf-8');return
 				upload=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})',path)
 				if upload:
 					record=store.upload(upload.group(1))
@@ -672,10 +704,8 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)',path);upload_post=path=='/api/uploads';note_upload=path=='/api/notes/with-file';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
-			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not upload_post and not note_upload and not fetch_post:self.problem(404,'Not found');return
-			supplied=self.headers.get('X-Preview-Token','').encode('utf-8')
-			if not secrets.compare_digest(supplied,token.encode('ascii')):self.problem(403,'Reload the preview, then retry; your draft is kept');return
+			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)',path);upload_post=path=='/api/uploads';note_upload=path=='/api/notes/with-file';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
+			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not report_unpublish and not upload_post and not note_upload and not fetch_post:self.problem(404,'Not found');return
 			content_type=self.headers.get('Content-Type','')
 			if note_upload:
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
@@ -716,6 +746,7 @@ def handler(store):
 					report=store.mark_report_seen(report_seen.group(1))
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])
 					self.reply(200,json.dumps(report,ensure_ascii=False));return
+				if report_unpublish:store.unpublish(report_unpublish.group(1));self.reply(200,json.dumps({'unpublished':report_unpublish.group(1)}));return
 				if report_submit:
 					note=store.submit_report(report_submit.group(1),payload.get('id'),payload.get('answers'),payload.get('revision'))
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
@@ -729,7 +760,7 @@ def handler(store):
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 	return Handler
 def main():
-	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('--state-dir',default='arena-state');parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');parser.add_argument('--save-path',default=None,help='Where the save button writes its file; inside the state directory by default');parser.add_argument('--pretty',action='store_true',help='Indent the JSON this CLI prints; agent-facing output is minified by default');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');seen=commands.add_parser('seen');seen.add_argument('ids',nargs='+');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-id',help='The ID the first positional takes');task.add_argument('--task-title',help='The title the second positional takes');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');task_import=commands.add_parser('task-import');task_import.add_argument('source',nargs='?',type=Path,help='JSON array or one task per line; stdin if omitted');task_import.add_argument('--replace',action='store_true',help='Clear the stored list before importing');legacy=commands.add_parser('import-notes');legacy.add_argument('source',type=Path);args=parser.parse_args()
+	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('--state-dir',default='arena-state');parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');parser.add_argument('--save-path',default=None,help='Where the save button writes its file; inside the state directory by default');parser.add_argument('--pretty',action='store_true',help='Indent the JSON this CLI prints; agent-facing output is minified by default');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');seen=commands.add_parser('seen');seen.add_argument('ids',nargs='+');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-id',help='The ID the first positional takes');task.add_argument('--task-title',help='The title the second positional takes');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');task_import=commands.add_parser('task-import');task_import.add_argument('source',nargs='?',type=Path,help='JSON array or one task per line; stdin if omitted');task_import.add_argument('--replace',action='store_true',help='Clear the stored list before importing');legacy=commands.add_parser('import-notes');legacy.add_argument('source',type=Path);args=parser.parse_args()
 	try:
 		if args.reminder:store=Store(args.state_dir,create=False,save_path=args.save_path);require_server(store);print(store.reminder(advance=True),flush=True);return 0
 		if not args.command:parser.error('a command is required')
@@ -744,6 +775,7 @@ def main():
 			if bool(args.reply)==bool(args.note):raise ValueError('Choose exactly one of --reply or --note')
 			kind='reply'if args.reply else'note';store.acknowledge(args.ids,kind,args.reply or args.note);print('Acknowledged: '+', '.join(args.ids));print('If a note asks for work, add it to the task list: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in args.ids))
 		elif args.command=='publish':store.publish(args.id,args.title,args.source);print(f"Published {args.id}; select it in the Reports tab")
+		elif args.command=='unpublish':store.unpublish(args.report_id);print(f"Unpublished {args.report_id}; its answers and source file remain")
 		elif args.command=='task':
 			task_id=args.task_id or args.id_arg
 			if not task_id:raise ValueError('A task needs an ID')
@@ -761,8 +793,8 @@ def main():
 		elif args.command=='task-import':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();written=store.import_tasks([record for record in parse_task_import(text)if not(isinstance(record,dict)and'text'in record and'title'not in record)],args.replace,autosave=False);print(cli_json({'imported':len(written),'replaced':args.replace,'ids':[item['id']for item in written]},args.pretty))
 		elif args.command=='import-notes':
 			saved=[json.loads(line)for line in args.source.read_text(encoding='utf-8').splitlines()if line.strip()];answers=[record for record in saved if isinstance(record,dict)and'report_id'in record];records=[record for record in saved if not(isinstance(record,dict)and('title'in record and'text'not in record or'report_id'in record))]
-			for record in answers:store.submission(record['id'],record['report_id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'),autosave=False)
-			for record in records:store.note(record['id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'),autosave=False)
+			for record in answers:store.submission(record['id'],record['report_id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'),autosave=False,replies=record.get('replies'))
+			for record in records:store.note(record['id'],record['text'],record.get('at'),acknowledged_at=record.get('acknowledged_at'),ack_kind=record.get('ack_kind'),ack_text=record.get('ack_text'),ack_edited_at=record.get('ack_edited_at'),seen_at=record.get('seen_at'),task_id=record.get('task_id'),autosave=False,replies=record.get('replies'))
 			receipts=sum(1 for record in records if record.get('acknowledged_at'));print(f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim, {len(answers)} report answers; existing IDs are not duplicated and keep the receipt they have")
 	except(OSError,ValueError,TypeError,KeyError,sqlite3.Error,RuntimeError)as error:print(f"Preview error: {error}",file=sys.stderr);return 1
 	return 0

@@ -98,6 +98,7 @@ let reportHtmlWait = null;
 let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
+const unpublished = [];
 const uploadCalls = [];
 let loseUploadResponse = false;
 class FormDataStub {
@@ -133,6 +134,7 @@ const context = {
   clearInterval: () => {},
   fetch: async (url, options) => {
     if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+    if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
       // A note send is the write the retry tests drive, now that no save route exists.
@@ -257,6 +259,13 @@ const context = {
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
       return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
+    }
+    if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
+      const target = decodeURIComponent(url.split('/')[3]);
+      unpublished.push(target);
+      writeTokens.push(options.headers['X-Preview-Token']);
+      state.reports = state.reports.filter(report => report.id !== target);
+      return response({ unpublished: target });
     }
     if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
     const renderedRevision = reportRevision;
@@ -572,12 +581,15 @@ test('preview client', async (t) => {
   });
 
   await t.test("The log and the tasks lost their own copy buttons", async () => {
-    // The log and the tasks lost their own copy buttons. One copy button carries the note and task
-    // lines a restore reads back, as NDJSON, and the reports tab keeps its button. Nothing derived
-    // rides the copy: no rendered html, token, seq, reports, uploads or last check, and the stamps
-    // arrive from the poll already cut to seconds, which is all a restore needs.
+    // The log and the tasks lost their own copy buttons. One copy button carries the note, task and
+    // live-answer lines a restore reads back, as NDJSON, and the reports tab keeps its button.
+    // Nothing derived rides the copy: no rendered html, token, seq, uploads or last check, and the
+    // stamps arrive from the poll already cut to seconds, which is all a restore needs.
     cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
     assert.ok(cacheKeyHere, 'every poll caches the state the copy button copies');
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
+    state.submissions = [{ id: 'ans-1', report_id: 'r1', text: 'REPORT r1: one', at: '2026-09-22T10:00:00',
+      acknowledged_at: null, ack_kind: null, ack_text: null, ack_edited_at: null, replies: null, seen_at: null, task_id: null }];
     copied.length = 0;
     get('#copy-state').events.click();
     await tick();
@@ -591,21 +603,24 @@ test('preview client', async (t) => {
       for (const key of keys) line[key] = record[key] ?? null;
       return line;
     };
-    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'seen_at', 'task_id'];
+    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'seen_at', 'task_id'];
     taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
     assert.deepEqual(lines, [
       ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
       ...(cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
       ...(cachedHere.tasks.finished || []).map(task => projectHere(task, taskKeysHere)),
-    ], 'the copy carries the note and task lines a restore reads, and nothing derived');
+      ...state.submissions,
+    ], 'the copy carries the note, task and answer lines a restore reads, and nothing derived');
     taskLines = lines.filter(line => 'title' in line);
-    assert.equal(lines.filter(line => 'report_id' in line).length, 0, 'the copy carries no report answers');
+    answerLines = lines.filter(line => 'report_id' in line);
+    assert.equal(answerLines.length, 1, 'the copy carries the live report answers');
+    assert.equal(answerLines[0].id, 'ans-1', 'the answer line is the save-file shape from the server');
     assert.equal(taskLines.length,
       (cachedHere.tasks.upcoming || []).length + (cachedHere.tasks.finished || []).length,
       'every cached task rides the copy');
     assert.equal(get('#copy-state').dataset.state, 'good', 'the click reports through the button');
     assert.match(get('#send-status').textContent,
-      new RegExp(`Copied ${lines.length - taskLines.length} messages and ${taskLines.length} tasks as NDJSON\\.`),
+      new RegExp(`Copied ${lines.length - taskLines.length - answerLines.length} messages, ${answerLines.length} answers and ${taskLines.length} tasks as NDJSON\\.`),
       'the receipt counts what the clipboard took');
     state.tasks.upcoming = [];
     await get('#refresh-notes').events.click();
@@ -914,16 +929,15 @@ test('preview client', async (t) => {
     otherText.value = 'make it blue';
     documentEvents.input({ target: otherText });
     assert.equal(otherBox.checked, true);
-    assert.equal(get('#report-receipt').hidden, false);
-    assert.match(get('#report-receipt').textContent, /^✓ Sent /);
     textInput.value = 'ada lovelace';
     apiBox.checked = true;
     otherText.value = '  make it red  ';
     await get('#report-form').events.submit(event({}));
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
-    assert.match(get('#report-status').textContent, /^Answers sent /);
-    assert.match(get('#report-agent-ack').textContent, /awaiting agent acknowledgement/);
+    assert.match(get('#report-status').textContent, /^Report · /);
+    assert.match(get('#report-status').textContent, / · Awaiting ack/);
+    assert.match(get('#report-agent-ack').textContent, /Awaiting ack/);
     assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 7)),
       'show the seven-character ID immediately after sending');
     assert.ok(!get('#report-agent-ack').textContent.includes(sent.at(-1).id),
@@ -931,8 +945,8 @@ test('preview client', async (t) => {
     assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     await get('#refresh-report').events.click();
     await tick();
-    assert.match(get('#report-status').textContent, /^Answers sent /);
-    assert.match(get('#report-status').textContent, /3 fields stay filled in/);
+    assert.match(get('#report-status').textContent, /^Report · 3 fields · Submission /);
+    assert.match(get('#report-status').textContent, / · Awaiting ack/);
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it red');
     otherText.value = '   ';
@@ -990,7 +1004,6 @@ test('preview client', async (t) => {
     await get('#refresh-report').events.click();
     await tick();
     assert.equal(get('#report-submit').hidden, true);
-    assert.equal(get('#report-receipt').hidden, true);
     get('#notes-tab').events.keydown(event({ key: 'End' }));
     assert.equal(get('#downloads-panel').hidden, false);
     assert.equal(get('#downloads-tab').focused, true);
@@ -1039,10 +1052,10 @@ test('preview client', async (t) => {
     assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
     assert.match(agentAck.textContent, /Submission a123456/);
     assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
-    assert.match(agentAck.textContent, /awaiting agent acknowledgement/);
+    assert.match(agentAck.textContent, /Awaiting ack/);
     state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
     await get('#refresh-notes').events.click();
-    assert.match(agentAck.textContent, /Agent acknowledged the latest answer/);
+    assert.match(agentAck.textContent, /Acked Sep /);
     assert.equal(pip.hidden, false, 'acknowledging an answer does not mark the report read');
     state.reports[0].latest_answer_id = 'b765432-bbbbbbbbbbbbbbbbbbbbbbbbb';
     state.reports[0].latest_answer_at = '2026-09-24T10:02:00';
@@ -1050,7 +1063,7 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.match(agentAck.textContent, /Submission b765432/);
     assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
-    assert.match(agentAck.textContent, /awaiting agent acknowledgement/,
+    assert.match(agentAck.textContent, /Awaiting ack/,
       'a previous receipt does not cover a later answer');
     state.reports = [];
     await get('#refresh-notes').events.click();
@@ -1244,7 +1257,7 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(copied.length, 1, 'the button copies the cache');
     assert.ok(copied[0].split('\n').filter(Boolean).length > 1, 'the copy carries note and task lines');
-    assert.match(get('#send-status').textContent, /Copied \d+ messages and \d+ tasks as NDJSON\./);
+    assert.match(get('#send-status').textContent, /Copied \d+ messages, \d+ answers and \d+ tasks as NDJSON\./);
     assert.equal(stateCopyButton.dataset.state, 'good');
     storage.delete(cacheKey);
     copied.length = 0;
@@ -1408,6 +1421,56 @@ test('preview client', async (t) => {
     assert.equal(get('#copy-report').dataset.state, 'bad');
     assert.equal(get('#copy-report').title, 'There is no report to copy');
     get('#report-select').value = selectBefore;
+  });
+
+  await t.test("A report delete asks for a second click against the same selection, then leaves the tab", async () => {
+    // A report delete asks for a second click against the same selection, then leaves the tab.
+    // Later subtests read the state that was live before this one, so both are restored on exit.
+    const keptReports = state.reports;
+    const keptSelect = get('#report-select').value;
+    state.reports = [
+      { id: 'keep1', title: 'Keep', updated_at: '2026-09-25T10:00:00', seen_at: '2026-09-25T10:05:00' },
+      { id: 'gone1', title: 'Gone', updated_at: '2026-09-25T10:00:00', seen_at: '2026-09-25T10:05:00' }
+    ];
+    get('#reports-tab').events.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    get('#report-select').value = 'gone1';
+    // The Deleted receipt is transient: the poll the handler fires reloads the report and rewrites
+    // the line, so this probe records every write the flow makes before the receipt is asserted.
+    const statusLines = [];
+    const statusNode = get('#report-status');
+    const nodeProto = Object.getPrototypeOf(statusNode);
+    const textAccessor = Object.getOwnPropertyDescriptor(nodeProto, 'textContent');
+    Object.defineProperty(statusNode, 'textContent', {
+      set(value) { statusLines.push(value); textAccessor.set.call(this, value); },
+      get() { return textAccessor.get.call(this); }
+    });
+    get('#unpublish-report').events.click();
+    await tick();
+    assert.deepEqual(unpublished, [], 'the first click only arms');
+    assert.equal(get('#unpublish-report').dataset.state, 'bad', 'the armed button reads danger');
+    assert.match(get('#report-status').textContent, /Click ✕ again to confirm/);
+    get('#report-select').value = 'keep1';
+    get('#unpublish-report').events.click();
+    await tick();
+    assert.deepEqual(unpublished, [], 'a click against another selection re-arms instead of deleting');
+    get('#report-select').value = 'gone1';
+    get('#unpublish-report').events.click();
+    await tick();
+    get('#unpublish-report').events.click();
+    await tick();
+    assert.deepEqual(unpublished, ['gone1']);
+    assert.equal(get('#unpublish-report').dataset.state, '');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(state.reports.some(report => report.id === 'gone1'), false, 'the server dropped the row');
+    assert.ok(statusLines.some(line => /^Report gone1 · Deleted · /.test(line)),
+      `the delete receipt flashed; flow wrote: ${statusLines.join(' | ')}`);
+    delete statusNode.textContent;
+    state.reports = keptReports;
+    unpublished.length = 0;
+    get('#reports-tab').events.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    get('#report-select').value = keptSelect;
   });
 
   await t.test("Multiple files stage as removable filename chips beside \"Your message\"", async () => {
@@ -1670,11 +1733,19 @@ test('preview client', async (t) => {
     ];
     await get('#refresh-notes').events.click();
     assert.equal(get('#log-edited').hidden, true);
-    state.notes[0].ack_text = 'Changed answer';
+    // A re-ack appends a block: the first answer stays, the new one lands under it with its stamp.
+    state.notes[0].replies = [{kind: 'reply', text: 'Second answer', at: '2026-09-22T00:03:00', html: '<p>Second answer</p>'}];
     state.notes[0].ack_edited_at = '2026-09-22T00:03:00';
     await get('#refresh-notes').events.click();
     editedNode = get('#history').children[0];
-    assert.match(editedNode.children[2].textContent, / · Edited Sep 22, /);
+    assert.match(editedNode.children[2].textContent, / · Replied again Sep 22, /);
+    const grown = editedNode.children[1];
+    assert.equal(grown.children.length, 2, 'the first answer stays and the re-ack adds a block');
+    assert.equal(grown.children[0].tagName, 'p');
+    assert.equal(grown.children[0].textContent, 'First answer');
+    assert.equal(grown.children[1].className, 'reply-block');
+    assert.equal(grown.children[1].innerHTML, '<p>Second answer</p>');
+    assert.match(grown.children[1].title, /^Replied again Sep 22, /);
     assert.equal(get('#history').children[1].children[2].children[0].dataset.full, 'newer-note', 'edits keep log order');
     assert.equal(get('#notes-pip').hidden, false);
     assert.equal(get('#log-edited').hidden, false);
@@ -1687,9 +1758,12 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.equal(get('#log-edited').hidden, true, 'an unchanged poll does not notify again');
     assert.ok([...storage.keys()].some(key => key.endsWith(':seen-edits')));
-    state.notes[0].ack_text = 'Another edit in the same second';
+    state.notes[0].replies.push({kind: 'note', text: 'Third block, same second'});
+    state.notes[0].replies[1].at = '2026-09-22T00:03:00';
     await get('#refresh-notes').events.click();
-    assert.equal(get('#log-edited').hidden, false, 'same-second edits still notify');
+    assert.equal(get('#log-edited').hidden, false, 'same-second replies still notify');
+    assert.equal(editedNode.children[1].children.length, 3);
+    assert.equal(editedNode.children[1].children[2].children[0].textContent, 'Third block, same second', 'a note ack renders as plain text');
     get('#log-edited').events.click();
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), {...context});
     await tick();

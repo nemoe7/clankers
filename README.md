@@ -18,21 +18,21 @@ Latest measurements as of 2026-09-25. `maintenance/check.py` measures ARENA.md b
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `cl100k_base` | 1,556 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 14,839 `B` |
-| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
-| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,481 `chars` |
+| `rules/AGENTS.md` | `cl100k_base` | 1,545 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 14,301 `B` |
+| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,436 `chars` |
+| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,401 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 501 `tok` |
 | `rules/KILO.md` | `cl100k_base` | 69 `tok` |
 | `rules/kilo/code.md` | `cl100k_base` | 223 `tok` |
 | `rules/kilo/debug.md` | `cl100k_base` | 272 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 119 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,435 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 37,596 `B` |
-| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,350 `B` |
-| `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 11,775 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 67,152 `B` |
+| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,489 `B` |
+| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 38,601 `B` |
+| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 7,996 `B` |
+| `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 12,266 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 70,112 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 2,621 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
@@ -40,6 +40,7 @@ Latest measurements as of 2026-09-25. `maintenance/check.py` measures ARENA.md b
 | `gpt-plugins/skills/gpt-quirks/SKILL.md` | `cl100k_base` | 142 `tok` |
 | `gpt-plugins/skills/gpt-handoff/SKILL.md` | `cl100k_base` | 1,090 `tok` |
 | `gpt-plugins/skills/gpt-planning/SKILL.md` | `cl100k_base` | 398 `tok` |
+| `gpt-plugins/skills/gpt-github/SKILL.md` | `cl100k_base` | 275 `tok` |
 
 Measurements cover complete files, including whitespace and markup. 
 

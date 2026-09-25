@@ -2,20 +2,18 @@ SCOPE: MUST do only the requested task plus the work strictly necessary to imple
 ALWAYS think longer before answering; for non-trivial work, show the steps you took.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when the task requires it.
-Add tests only when requested or necessary to verify the change.
+Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
-When in doubt, ask; assume nothing. If an assumption is unavoidable, make the most reasonable one and state it immediately.
-NEVER block an unattended run on a question: a scheduled task or automation agent records the question in its output and proceeds on the most reasonable assumption, stated as such.
+Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
 Rung 1 - does this need to exist at all? Skip speculative additions, not explicit requirements.
 Rung 2 - already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write.
 Rung 3 - stdlib does it? Use it.
 Rung 4 - native platform feature covers it? A date input over a picker library, CSS over JS, a database constraint over application code.
-Rung 5 - already-installed dependency solves it? Use it, and never add a new one for what a few lines can do.
+Rung 5 - already-installed dependency solves it? Use it, and NEVER add a new one for what a few lines can do.
 Rung 6 - can it be one line? One line.
 Rung 7 - only then, the minimum code that works.
-NEVER add a dependency for a few lines' work.
 NEVER simplify away validation, data-loss handling, security, or accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.
@@ -24,13 +22,11 @@ When a test is appropriate, prefer a failing test first, then the smallest passi
 Test public interfaces and integration boundaries; reuse the project's existing frameworks, fixtures, helpers, and conventions.
 No speculative behavior or tests; trivial one-liners need no test; mechanical-only changes get proportional verification.
 NEVER weaken a test to pass.
+SOLID and the simplicity principles collide by design, so MUST ask during planning which governs the task — SOLID reuse and extensibility, or YAGNI/KISS/DRY simplicity — and follow the answer.
 
 FORMAT: repositories owned by `nemoe7`; other repositories follow their own conventions. 2-space indentation.
 Python projects: use Ruff with its default rule selection from the project's `ruff.toml`; when none exists, create one with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
 Markdown: markdownlint defaults + MD060, MD013 off.
+NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 
-GITHUB: ALWAYS PR.
-ALWAYS rebase merge.
-Atomic task-only commits.
-Print the planned final commit list, every commit you intend to land with one message per logical change, before committing.
-Follow the project's commit convention when it states one; otherwise Conventional `<type>[optional scope]: description`, imperative, lowercase after ":", no period, <=72 characters, no commit body, with "!" before the colon for a breaking change.
+DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.

@@ -117,42 +117,34 @@ def _rewrite(text: str, names: set[str]) -> str:
   )
 
 
-def _fallback(name: str, names: set[str]) -> tuple[str, str]:
+def _fallback(name: str) -> str:
   # wenyan/README.md is a nested README, so the gist excludes it. Keep its boundary here.
   if name.startswith("wenyan-"):
     base = name.removeprefix("wenyan-")
-    return (
-      f"Experimental Wenyan form of {base}. Not authoritative.",
-      "Do not replace the production field.",
-    )
-  if name.startswith("kilo-") and "KILO.md" in names:
-    return "Kilo mode override", "Load it with KILO.md."
-  return "Included rule file", "Use this file."
+    return f"Experimental Wenyan form of {base}. Not authoritative."
+  if name.startswith("kilo-"):
+    return "Kilo mode override"
+  return "Included rule file"
 
 
 def _file_rows(contents: str, names: set[str]) -> list[str]:
-  found: dict[str, tuple[str, str]] = {}
+  """One File and Purpose row per included name; the index has no How-to-use column."""
+  found: dict[str, str] = {}
   for line in contents.splitlines():
     if not line.startswith("|") or line.startswith("| ---") or " | " not in line:
       continue
     cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-    if (
-      len(cells) < 3
-      or cells[0].startswith("---")
-      or cells[0].lower().startswith("file")
-    ):
+    if cells[0].startswith("---") or cells[0].lower().startswith("file"):
       continue
     match = _LINK.search(cells[0])
     target = match.group(2) if match else cells[0].strip("`")
     if target.endswith("/") or _gist_name(target) not in names:
       continue
     gist = _gist_name(target)
-    found[gist] = (_rewrite(cells[1], names), _rewrite(cells[2], names))
+    found[gist] = _rewrite(cells[1], names)
   for name in names:
-    found.setdefault(name, _fallback(name, names))
-  return [
-    f"| `{name}` | {found[name][0]} | {found[name][1]} |" for name in sorted(found)
-  ]
+    found.setdefault(name, _fallback(name))
+  return [f"| `{name}` | {found[name]} |" for name in sorted(found)]
 
 
 def _activation(contents: str, names: set[str]) -> str:
@@ -187,8 +179,8 @@ def gist_index(readme: str, included: dict[str, str] | set[str]) -> str:
   """Return the gist copy of rules/README.md. It lists only included files."""
   names = set(included) - {INDEX_NAME}
   sections = _sections(readme)
-  rows = _file_rows(sections.get("Contents and activation", ""), names)
-  activation = _activation(sections.get("Contents and activation", ""), names)
+  rows = _file_rows(sections.get("Contents", ""), names)
+  activation = _activation(sections.get("Contents", ""), names)
   matrix = _clean_matrix(sections.get("Platform difference matrix", ""), names)
   lines = [
     "# clankers-rules",
@@ -201,8 +193,8 @@ def gist_index(readme: str, included: dict[str, str] | set[str]) -> str:
       [
         "## Files",
         "",
-        "| File | Purpose | How to use |",
-        "| --- | --- | --- |",
+        "| File | Purpose |",
+        "| --- | --- |",
         *rows,
         "",
       ]

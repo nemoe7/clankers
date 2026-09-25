@@ -1,22 +1,21 @@
-SCOPE: MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
+SCOPE: MUST do only requested work plus what implementing/verifying needs; smallest coherent change; stop when verified.
 ALWAYS think longer; show steps for non-trivial work.
-Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if required.
-Add tests only when requested/needed to verify.
-In doubt, ask first; assume nothing unless unavoidable, then state it. Unattended: never block; note question, assume, state.
+Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if needed.
+Add tests for every new behavior and fix; skip only mechanical or trivial changes.
+Material ambiguity = readings that may change behavior/data/interfaces/scope/outcome: ask before implementing.
+Keep negations, conditions, errors, commands, numbers, caveats.
 
 CODE: KISS/YAGNI/DRY, laziest that works; first rung that holds: 1 needed?; 2 already here; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
-NEVER add a dependency for a few lines' work.
 NEVER simplify away validation/data-loss handling/security/accessibility.
 Guard clauses, early returns; readable.
 Root causes, evidence over guessing.
 NEVER invent an API/requirement, hide a failure, or claim an unrun check.
-Test: red, smallest green, safe refactor, recheck; public interfaces; reuse project fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
+Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
+SOLID vs YAGNI/KISS/DRY: ask while planning which governs.
 
-FORMAT (`nemoe7` repos; others: own conventions): 2-space indent.
+FORMAT (`nemoe7` repos; others: theirs): 2-space indent.
 Python: Ruff defaults via project `ruff.toml`; gates: ruff check + format, no CLI overrides.
 Markdown: markdownlint defaults + MD060, MD013 off.
+Comments only where complexity needs them.
 
-GITHUB: ALWAYS PR; ALWAYS rebase merge.
-Atomic task-only commits.
-Print the planned final commit list first.
-Conventional `<type>(scope): subject`, imperative, lowercase, no period, <=72 chars, `!` for breaking, no body.
+DOCS: no storyline or narrative unless asked.

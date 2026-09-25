@@ -26,8 +26,8 @@ Before declaring any plan, handoff, or implementation complete:
 4. Run the required checks.
 5. Only then declare the result complete.
 
-Do not wait for the user to ask `final?`, `good?`, `sure?`, or similar.
-Do not ask the user to confirm completion.
+NEVER wait for the user to ask `final?`, `good?`, `sure?`, or similar.
+NEVER ask the user to confirm completion.
 
 After declaring completion, do not reopen the completion gate unless the user changes the requirements, scope, or artifact.
 

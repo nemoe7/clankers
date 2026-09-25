@@ -298,7 +298,7 @@ for banned in (
 for name in included:
   assert f"`{name}`" in index, name
 assert "Platform difference matrix" in index
-assert "NEVER push or open a PR unless asked." in index
+assert "| Git/Hub | <ul><li>NEVER push unasked. </li>" in index
 assert "Not authoritative." in index
 assert "These files are the rules in this gist." in index
 assert (

@@ -118,7 +118,7 @@ The checker checks `plugin.json` against the canonical schema at `https://agent-
 
 `--archive <zip>` compares a packaged archive with the collection. The archive must carry `plugin.json` and `skills/` only, with byte-identical content, so `refs/` never ships. `.github/workflows/package-gpt-plugins.yml` runs both checks and publishes `gpt-plugins.zip` directly.
 
-The three shipped `SKILL.md` files join the budget table in the root `README.md`. `plugin.json` does not, because it is metadata and not instruction text.
+The four shipped `SKILL.md` files join the budget table in the root `README.md`. `plugin.json` does not, because it is metadata and not instruction text.
 
 ## Offline token measurement
 

@@ -70,7 +70,8 @@ Read these first:
 
 ## Reports and approval
 
-- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; omit only unchanged context with `...`. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Code changes need no proposal; keep them lean.
+- Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
+- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; omit only unchanged context with `...`. Quote clauses in double quotes, never backticks, in proposals, acks, and reports. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through `arena-preview-steering` in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
 - NEVER commit or push report artifacts.
@@ -109,7 +110,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request.
   - Web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt must not depend on them.
   - The connector can read and write in this repository; the prompts repeat no git rule.
-  - [rules/CHATGPT-CUSTOM.txt](rules/CHATGPT-CUSTOM.txt) gates pushes, branches, and pull requests on every request of that account, including scheduled ones.
+  - The [gpt-github](gpt-plugins/skills/gpt-github/SKILL.md) skill manages ChatGPT's behavior when using GitHub.
   - Reports go to the chat response and nothing is persisted.
 - Prompts carry no budget row and no validator gate, both declined on request rather than deferred.
   - The scheduler owns its own copy and edits the embedded datetime between runs; CI must not depend on their contents.
