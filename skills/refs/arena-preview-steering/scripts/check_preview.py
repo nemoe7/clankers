@@ -33,6 +33,7 @@ def compact(text):
   """Collapse the whitespace a minifier would, so one literal reads both asset forms."""
   return re.sub(r"\s*([{};:,><!])\s*", r"\1", text)
 
+
 def test_edited_ack_stamp():
   with tempfile.TemporaryDirectory() as edit_dir:
     edited = preview.Store(edit_dir, create=True)
@@ -52,7 +53,8 @@ def test_edited_ack_stamp():
       edited.acknowledge(ids, "reply", "Changed answer")
     assert edited.state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
     assert (
-      preview.Store(edit_dir).state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
+      preview.Store(edit_dir).state()["notes"][0]["ack_edited_at"]
+      == row["ack_edited_at"]
     )
     saved = Path(edit_dir) / "edited.ndjson"
     saved.write_text(json.dumps(preview.saved_note_line(row)) + "\n")
@@ -127,7 +129,9 @@ def test_http_boundaries():
     linked = preview.render(
       "[PR](https://github.com/nemoe7/clankers/pull/26) [here](#here)"
     )
-    assert linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
+    assert (
+      linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
+    )
     assert "<s>" in preview.render("~~gone~~")
     # A paragraph carries no `<br>` at all, on the owner's suggestion: markdown-it
     # turns a newline into one when breaks are on, and the owner read the result as too airy beside
@@ -233,7 +237,9 @@ def test_http_boundaries():
       assert "102,400,000 bytes" in page
       assert "The cap is not measured." in page
       assert 'id="workspace-use"' in page
-      assert re.search(r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page)
+      assert re.search(
+        r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page
+      )
       assert 'id="log-newest"' in page and 'stroke="#fff"' in page
       for value in ("all", "sent", "seen", "said"):
         assert f'<option value="{value}">' in page
@@ -298,7 +304,9 @@ def test_http_boundaries():
           assert store.read()["pending"]
       store.acknowledge(["message-1"], "reply", "Fixed in `preview.py`.")
       stamp = store.state()["notes"][0]["acknowledged_at"]
-      assert len(stamp) == 19, "the state surface carries second stamps, no ms or offset"
+      assert len(stamp) == 19, (
+        "the state surface carries second stamps, no ms or offset"
+      )
       assert store.state()["notes"][0]["ack_text"] == "Fixed in `preview.py`."
       store.acknowledge(["message-1"], "note", "and rechecked")
       row = store.state()["notes"][0]
@@ -316,7 +324,9 @@ def test_http_boundaries():
           assert "markdown-it-py" in str(error)
       served_note = json.loads(state_body)["notes"][0]
       assert "&lt;script&gt;" in served_note["html"]
-      assert "ack_html" not in served_note and served_note["ack_text"] == "and rechecked"
+      assert (
+        "ack_html" not in served_note and served_note["ack_text"] == "and rechecked"
+      )
       assert served_note["seen_at"] is not None
       store.acknowledge(["message-1"], "reply", "<script>alert(1)</script> **safe**")
       status, _, state_body = request("GET", "/api/state")
@@ -392,7 +402,9 @@ def test_http_boundaries():
       ]
       assert questions[0]["options"] == ["ui", "api", "Other: ___"]
       assert questions[0]["default"] == ["api"]
-      assert questions[1]["prompt"] == "Severity" and questions[1]["default"] == ["high"]
+      assert questions[1]["prompt"] == "Severity" and questions[1]["default"] == [
+        "high"
+      ]
       assert questions[2]["prompt"] == "Name" and questions[3]["id"] == "notes"
       assert len({question["id"] for question in questions}) == 4
       assert sum(1 for kind, _ in blocks if kind == "field") == 4
@@ -534,7 +546,8 @@ def test_http_boundaries():
       # A code block carries its background wherever markdown renders, not in a report alone: the
       # owner read a fence in a message as having no background.
       assert (
-        "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--bg)" in page
+        "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--bg)"
+        in page
       )
       # The log filter draws its own box like the icon buttons beside it, after a second owner note
       # that the heights still differed.
@@ -637,7 +650,9 @@ def test_http_boundaries():
           "answers": {"pick-the-areas": ["ui"], "severity": "high", "name": "ada"},
         }
       )
-      assert request("POST", "/api/reports/fields/submit", report_answer, auth)[0] == 201
+      assert (
+        request("POST", "/api/reports/fields/submit", report_answer, auth)[0] == 201
+      )
       assert not [
         row for row in store.state()["notes"] if row["text"].startswith("REPORT")
       ]
@@ -674,7 +689,9 @@ def test_http_boundaries():
         == 404
       )
       assert (
-        request("POST", "/api/reports/fields/submit", "{}", {"X-Preview-Token": token})[0]
+        request("POST", "/api/reports/fields/submit", "{}", {"X-Preview-Token": token})[
+          0
+        ]
         == 415
       )
       assert (
@@ -715,7 +732,9 @@ def test_http_boundaries():
       )
       assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
       pending = [
-        row for row in store.read()["pending"] if row["text"].startswith("REPORT fields")
+        row
+        for row in store.read()["pending"]
+        if row["text"].startswith("REPORT fields")
       ]
       assert len(pending) == len(sent) + 1
       assert pending[-1]["kind"] == "report"
@@ -831,7 +850,9 @@ def test_http_boundaries():
       # wide report. The Store layer already covers the submission; this covers the HTTP path.
       wide = root / "wide-http.md"
       wide.write_text(
-        "# Wide\n\n" + "\n".join(f"Question {index}: ___" for index in range(50)) + "\n",
+        "# Wide\n\n"
+        + "\n".join(f"Question {index}: ___" for index in range(50))
+        + "\n",
         encoding="utf-8",
       )
       store.publish("wide", "Wide report", wide)
@@ -877,7 +898,9 @@ def test_http_boundaries():
       note = store.note("plain-note", "no author field")
       assert "origin" not in note
       assert "origin" not in store.state()["notes"][-1]
-      stale_state = next(row for row in store.state()["reports"] if row["id"] == "stale")
+      stale_state = next(
+        row for row in store.state()["reports"] if row["id"] == "stale"
+      )
       assert stale_state["needs_answer"] is True
       assert "1–200 characters" in stale_state["field_error"]
       # A database that predates the removal loses `origin` when the store reopens.
@@ -1085,7 +1108,9 @@ def test_http_boundaries():
       revision_source.write_text(
         "Old plan\n\nDecision? {#decision}\n- ( ) Yes\n- ( ) No\n"
       )
-      with patch.object(preview, "now", return_value="2026-09-22T12:00:00.100000+00:00"):
+      with patch.object(
+        preview, "now", return_value="2026-09-22T12:00:00.100000+00:00"
+      ):
         store.publish("revision", "Old plan", revision_source)
       served_revision = json.loads(request("GET", "/api/reports/revision/html")[2])[
         "revision"
@@ -1094,7 +1119,9 @@ def test_http_boundaries():
       revision_source.write_text(
         "Changed plan\n\nDecision? {#decision}\n- ( ) Yes\n- ( ) No\n"
       )
-      with patch.object(preview, "now", return_value="2026-09-22T12:00:00.900000+00:00"):
+      with patch.object(
+        preview, "now", return_value="2026-09-22T12:00:00.900000+00:00"
+      ):
         store.publish("revision", "Changed plan", revision_source)
       answer = {
         "id": "revision-answer",
@@ -1219,7 +1246,9 @@ def test_multi_file_note():
     ]
     saved = multi.note_with_uploads("several-note", "Three files", files)
     assert saved["id"] == "several-note" and len(saved["attachments"]) == 3
-    assert [item["name"] for item in saved["attachments"]] == [file[0] for file in files]
+    assert [item["name"] for item in saved["attachments"]] == [
+      file[0] for file in files
+    ]
     assert saved["attachments"][0]["id"] == "several-note"
     assert len({item["id"] for item in saved["attachments"]}) == 3
     assert [Path(item["path"]).name for item in saved["attachments"]] == [
@@ -1263,7 +1292,9 @@ def test_multi_file_note():
     missing.unlink()
     assert multi.state()["notes"][0]["attachments"][1]["present"] is False
     multi.note_with_uploads("several-note", "Three files", files)
-    assert missing.read_bytes() == files[1][2], "an identical retry repairs missing bytes"
+    assert missing.read_bytes() == files[1][2], (
+      "an identical retry repairs missing bytes"
+    )
     with patch.object(
       multi, "note", side_effect=RuntimeError("simulated note write error")
     ):
@@ -1334,7 +1365,9 @@ def test_http_note_attachment():
       body = (
         part(b"id", b"http-note")
         + part(b"text", b"Please see attachment")
-        + part(b"file", binary, b'; filename="old photo.png"\r\nContent-Type: image/png')
+        + part(
+          b"file", binary, b'; filename="old photo.png"\r\nContent-Type: image/png'
+        )
         + b"--"
         + boundary
         + b"--\r\n"
@@ -1345,7 +1378,10 @@ def test_http_note_attachment():
       }
       assert (
         request(
-          "POST", "/api/notes/with-file", body, {"Content-Type": headers["Content-Type"]}
+          "POST",
+          "/api/notes/with-file",
+          body,
+          {"Content-Type": headers["Content-Type"]},
         )[0]
         == 403
       )
@@ -1479,7 +1515,8 @@ def test_download_queue():
       assert pending["status"] == "queued" and "claim" not in pending
       assert queue_store.claim_fetch() is None
       assert (
-        json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"] is None
+        json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"]
+        is None
       )
       assert (
         json.loads(request("GET", "/api/state")[2])["fetch_jobs"][0]["approval"]
@@ -1498,11 +1535,15 @@ def test_download_queue():
       )
       approved = queue_store.claim_fetch()
       assert approved["id"] == pending["id"] and approved["approval"] == "approved"
-      queue_store.fail_fetch(pending["id"], approved["claim"], "Test browser unavailable")
+      queue_store.fail_fetch(
+        pending["id"], approved["claim"], "Test browser unavailable"
+      )
       denied = queue_store.enqueue_fetch(
         "https://example.org/no.zip", False, pending=True
       )
-      assert request("POST", f"/api/fetch-jobs/{denied['id']}/deny", "{}", auth)[0] == 200
+      assert (
+        request("POST", f"/api/fetch-jobs/{denied['id']}/deny", "{}", auth)[0] == 200
+      )
       assert (
         request("POST", f"/api/fetch-jobs/{denied['id']}/retry", "{}", auth)[0] == 409
       )
@@ -1534,7 +1575,8 @@ def test_download_queue():
       assert "claim" not in job and queue_store.claim_fetch()["id"] == job["id"]
       assert "claim" not in json.loads(request("GET", "/api/state")[2])["fetch_jobs"][0]
       assert (
-        json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"] is None
+        json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"]
+        is None
       )
       # Reclaiming an expired browser tab changes the secret, never the job ID.
       with queue_store.connect() as db, db:
@@ -1553,12 +1595,13 @@ def test_download_queue():
         "X-Fetch-Source": "direct",
       }
       assert (
-        request("POST", result_path, b"PK", {**headers, "X-Fetch-Claim": "bad"})[0] == 409
+        request("POST", result_path, b"PK", {**headers, "X-Fetch-Claim": "bad"})[0]
+        == 409
       )
       assert (
-        request("POST", result_path, b"PK", {**headers, "X-Fetch-Source": "allorigins"})[
-          0
-        ]
+        request(
+          "POST", result_path, b"PK", {**headers, "X-Fetch-Source": "allorigins"}
+        )[0]
         == 400
       )
       assert queue_store.fetch_jobs()[0]["status"] == "fetching"
@@ -1578,7 +1621,9 @@ def test_download_queue():
       proxy = queue_store.enqueue_fetch("https://example.org/proxy.zip", True)
       claim = json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"]
       assert claim["id"] == proxy["id"] and claim["allow_proxy"]
-      assert request("POST", f"/api/fetch-jobs/{proxy['id']}/fail", "{}", auth)[0] == 409
+      assert (
+        request("POST", f"/api/fetch-jobs/{proxy['id']}/fail", "{}", auth)[0] == 409
+      )
       failure = request(
         "POST",
         f"/api/fetch-jobs/{proxy['id']}/fail",
@@ -1890,7 +1935,10 @@ def test_task_list():
       (lambda: tasks_store.write_task("no-title"), "A new task without a title passed"),
       (lambda: tasks_store.write_task("huge", "x" * 201), "An oversized title passed"),
       (lambda: tasks_store.write_task("many", "M", ["d"] * 41), "41 details passed"),
-      (lambda: tasks_store.write_task("deep", "D", ["y" * 2001]), "A huge detail passed"),
+      (
+        lambda: tasks_store.write_task("deep", "D", ["y" * 2001]),
+        "A huge detail passed",
+      ),
       (
         lambda: tasks_store.write_task("docs-archive", status="open"),
         "A third status passed",
@@ -1975,7 +2023,10 @@ def test_task_amend():
     # deleting first, as this did, lost the whole list to a bad record further down.
     before = other.list_tasks()
     for bad, flaw in (
-      ([{"id": "good", "title": "Good"}, {"id": "BAD ID", "title": "Bad"}], "invalid ID"),
+      (
+        [{"id": "good", "title": "Good"}, {"id": "BAD ID", "title": "Bad"}],
+        "invalid ID",
+      ),
       ([{"id": "good", "title": "Good"}, {"id": "no-title"}], "missing title"),
       (
         [{"id": "good", "title": "Good"}, {"id": "late", "status": "sideways"}],
@@ -2139,7 +2190,14 @@ def test_shared_save_import():
       if line.strip()
     )
     tasks_out = subprocess.run(
-      [sys.executable, script, "--state-dir", str(mixed_root), "task-import", str(mixed)],
+      [
+        sys.executable,
+        script,
+        "--state-dir",
+        str(mixed_root),
+        "task-import",
+        str(mixed),
+      ],
       capture_output=True,
       text=True,
       check=True,
@@ -2182,7 +2240,14 @@ def test_shared_save_import():
     # makes it acknowledged; reading alone never stamps Seen.
     assert json.loads(read_out)["pending"] == []
     pretty_out = subprocess.run(
-      [sys.executable, script_again, "--state-dir", str(mixed_root), "--pretty", "read"],
+      [
+        sys.executable,
+        script_again,
+        "--state-dir",
+        str(mixed_root),
+        "--pretty",
+        "read",
+      ],
       capture_output=True,
       text=True,
       check=True,
@@ -2202,6 +2267,7 @@ def test_serve_help():
     check=True,
   ).stdout
   assert "default: 8000" in help_text and "--port PORT" in help_text
+
 
 def test_restore_import():
 
@@ -2288,9 +2354,9 @@ def test_restore_import():
       check=True,
     ).stdout
     assert json.loads(linked)["msg_id"] == "plain"
-    assert {row["id"]: row["task_id"] for row in preview.Store(restore).state()["notes"]}[
-      "plain"
-    ] == "from-note"
+    assert {
+      row["id"]: row["task_id"] for row in preview.Store(restore).state()["notes"]
+    }["plain"] == "from-note"
     refused = subprocess.run(
       [
         sys.executable,
@@ -2337,7 +2403,14 @@ def test_restore_import():
       encoding="utf-8",
     )
     refused = subprocess.run(
-      [sys.executable, script, "--state-dir", str(restore), "import-notes", str(partial)],
+      [
+        sys.executable,
+        script,
+        "--state-dir",
+        str(restore),
+        "import-notes",
+        str(partial),
+      ],
       capture_output=True,
       text=True,
       check=False,
@@ -2594,7 +2667,9 @@ def test_report_unread_markers():
     with marker_store.connect() as db, db:
       # The answer is backdated on purpose: any answer, however old, keeps needs_answer false,
       # and the republish that once had to preserve it is refused while answers exist.
-      db.execute("UPDATE submissions SET at = '2020-01-01T00:00:00' WHERE id = 'answer'")
+      db.execute(
+        "UPDATE submissions SET at = '2020-01-01T00:00:00' WHERE id = 'answer'"
+      )
     assert marker_store.state()["reports"][0]["needs_answer"] is False
     assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
     marker_store.mark_report_seen("form-2")
@@ -2639,4 +2714,3 @@ def test_workspace_usage():
   assert usage["documented_cap_bytes"] == 128_000_000
   assert usage["download_cap_bytes"] == preview.MAX_FETCH == 102_400_000
   assert preview.MAX_UPLOAD == 50_000_000
-
