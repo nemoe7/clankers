@@ -65,7 +65,7 @@ def _rewrite_links(text: str, names: set[str]) -> str:
     if target.endswith("/"):
       return _join_names(_children(target, names))
     gist = _gist_name(target)
-    return f"`{gist}`" if gist in names else ""
+    return f"[{gist}]({gist})" if gist in names else ""
 
   return _LINK.sub(replace, text)
 

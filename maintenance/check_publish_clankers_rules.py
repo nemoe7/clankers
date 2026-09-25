@@ -300,6 +300,20 @@ assert "Platform difference matrix" in index
 assert "NEVER push or open a PR unless asked." in index
 assert "Not authoritative." in index
 assert "These files are the rules in this gist." in index
+assert (
+  sync._rewrite_links(
+    "[A](a.md) [Nested](nested-a.txt) [Excluded](missing.md)", {"a.md", "nested-a.txt"}
+  )
+  == "[a.md](a.md) [nested-a.txt](nested-a.txt) "
+)
+assert (
+  sync._rewrite_links("[rules/KILO.md](KILO.md) [Excluded](missing.md)", {"KILO.md"})
+  == "[KILO.md](KILO.md) "
+)
+assert (
+  sync._rewrite_links("[kilo/plan.md](kilo/plan.md)", {"kilo-plan.md"})
+  == "[kilo-plan.md](kilo-plan.md)"
+)
 assert index != readme
 assert sync.gist_index("root\n", set()) == (
   "# clankers-rules\n\n"
