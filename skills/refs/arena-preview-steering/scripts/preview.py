@@ -100,6 +100,8 @@ def workspace_usage(root=None):
     "documented_cap_bytes": SNAPSHOT_CAP_BYTES,
     "download_cap_bytes": MAX_FETCH,
   }
+
+
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
