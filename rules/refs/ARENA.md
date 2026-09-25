@@ -149,7 +149,6 @@
 - Types: feat fix refactor perf style docs test build chore; only `feat` and `fix` are mandated by the specification at <https://www.conventionalcommits.org/en/v1.0.0/>, and the rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
-- Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
 - NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.

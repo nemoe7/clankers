@@ -1,5 +1,6 @@
 ## 2026-09-26
 
+- **Force-with-lease clause dropped**: "Rewrite remotes with `--force-with-lease`, NEVER plain `--force`." leaves refs, live and root `ARENA.md`, owner call. The matrix Git/Hub Arena cell drops "`--force-with-lease` only." Live ARENA 14,469 B. Shrink only, no ledger line.
 - **Setup gate**: the `Use` section of refs, live and root `ARENA.md` requires the 10-4 line, the steering preview start and the visibility question before the first tool call that is not a read of a rule or skill file. Owner approval. Live ARENA 14,537 B, ledgered.
 - **Re-read clause**: the `Use` section of refs, live and root `ARENA.md` tells the agent to read the file end-to-end again at the start of each turn in which its full text is not in context, summary or truncation included, before the first tool call. Owner approval. Live ARENA 14,442 B, ledgered.
 - **Gist index links**: the Files table in `#clankers-rules.md` links each file to its anchor on the gist page, for example `[AGENTS.md](#file-agents-md)`, owner call. `publish_clankers_rules.py` gains `gist_anchor`; the contract check asserts the linked rows.

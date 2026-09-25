@@ -98,7 +98,6 @@
 - Keep reports/audits/preview state/inboxes/receipts in ignored workspace dirs, NEVER caches; NEVER commit/push them.
 - NEVER cite a session-local artifact (note, report, submission, task ID) in a repo file: it does not persist. Cite the durable record instead.
 - Longer reports use `arena-preview-steering`, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions, republish its stable ID; several may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
-- Rewrite remotes with `--force-with-lease`, NEVER plain `--force`.
 - `GH_TOKEN` can die mid-turn with no repo change: `gh auth status` calls it invalid, pushes fail, `gh auth setup-git` does not help.
 - Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; do not end silently.
 - Use `ask_user` only under the question-route exceptions above.
