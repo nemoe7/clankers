@@ -7,6 +7,7 @@
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
 - Initial reads of this file and the preview skill may precede that reply.
+- At the start of every turn in which the full text of this file is not in your context, including after a context summary or truncation, read this file end-to-end again before your first tool call.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 - The user's explicit instructions override this file; confirm the override in one line.
 - Failure to comply with this file results in a negative rating.
