@@ -1,5 +1,6 @@
 ## 2026-09-26
 
+- **gpt-plugins package split**: `.github/workflows/package-gpt-plugins.yml` validates on pull requests only. A PR that changes shipped plugin files must raise `plugin.json` version above the base. Package and artifact upload stay on `main`. `maintenance/check_gpt_plugins.py` gains `--base-manifest` and `--self-check`.
 - **Steering preview auto-click**: on `/agent/*`, `userscripts/arena-agent-prompt.user.js` clicks the `{repo} - Steering` button on port 8000 once per page. Composer fill stays on exact `/agent`.
 - **userscripts README**: root README lists `userscripts/`. `userscripts/README.md` covers Tampermonkey install, `/agent` fill behavior, and the node check. No budget-table row.
 - **Arena agent prompt userscript**: `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md` when the GitHub repo bar is present, and updates that text when the repo slug changes.

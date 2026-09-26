@@ -257,6 +257,79 @@ def check_tree(errors: list[str]) -> None:
     errors.append(f"gpt-plugins/: unexpected files: {stray}")
 
 
+def parse_plugin_version(value: object) -> tuple[int, ...] | None:
+  """Return dotted integer parts, or None when the value is not a version."""
+  if not isinstance(value, str) or not value:
+    return None
+
+  parts = value.split(".")
+
+  if not parts or any(not part.isdigit() for part in parts):
+    return None
+
+  return tuple(int(part) for part in parts)
+
+
+def check_version_bump(base_path: Path, errors: list[str]) -> None:
+  """Require gpt-plugins/plugin.json version to be greater than the base manifest."""
+  if not base_path.is_file():
+    errors.append(f"{base_path}: missing base manifest")
+    return
+
+  try:
+    base = json.loads(base_path.read_text(encoding="utf-8"))
+  except json.JSONDecodeError as error:
+    errors.append(f"{base_path}: invalid JSON: {error}")
+    return
+
+  if not isinstance(base, dict):
+    errors.append(f"{base_path}: the manifest is not a JSON object")
+    return
+
+  if not MANIFEST.is_file():
+    return
+
+  try:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+  except json.JSONDecodeError:
+    return
+
+  if not isinstance(manifest, dict):
+    return
+
+  new_raw = manifest.get("version")
+  base_raw = base.get("version")
+  new = parse_plugin_version(new_raw)
+  old = parse_plugin_version(base_raw)
+
+  if new is None:
+    errors.append(
+      f"gpt-plugins/plugin.json: version {new_raw!r} is not dotted integers"
+    )
+    return
+
+  if old is None:
+    errors.append(f"{base_path}: version {base_raw!r} is not dotted integers")
+    return
+
+  if new <= old:
+    errors.append(
+      f"gpt-plugins/plugin.json: version {new_raw} must be greater than base {base_raw}"
+    )
+
+
+def run_self_check() -> None:
+  """Assert version comparison for dotted integer plugin versions."""
+  assert parse_plugin_version("1.2.0") == (1, 2, 0)
+  assert parse_plugin_version("1.2.1") > parse_plugin_version("1.2.0")
+  assert parse_plugin_version("2.0.0") > parse_plugin_version("1.9.9")
+  assert parse_plugin_version("1.10.0") > parse_plugin_version("1.9.0")
+  assert parse_plugin_version("") is None
+  assert parse_plugin_version("1.2.a") is None
+  assert parse_plugin_version(None) is None
+  print("ok version-check")
+
+
 def check_archive(archive: Path, errors: list[str]) -> None:
   """Check the zip carries exactly the shipped bytes, and no refs."""
   if not archive.is_file():
@@ -317,11 +390,24 @@ def main() -> int:
   )
   parser.add_argument("--archive", help="Packaged zip to verify against the collection")
   parser.add_argument(
+    "--base-manifest",
+    help="Require plugin.json version greater than this base manifest",
+  )
+  parser.add_argument(
+    "--self-check",
+    action="store_true",
+    help="Run version-parser assertions and exit",
+  )
+  parser.add_argument(
     "--update",
     action="store_true",
     help="Write the shipped skill copies from refs, then check",
   )
   arguments = parser.parse_args()
+
+  if arguments.self_check:
+    run_self_check()
+    return 0
 
   written = update() if arguments.update else []
   errors: list[str] = []
@@ -329,6 +415,9 @@ def main() -> int:
   check_tree(errors)
   check_collections(errors)
   check_manifest(load_schema(arguments.schema, errors), errors)
+
+  if arguments.base_manifest:
+    check_version_bump(Path(arguments.base_manifest), errors)
 
   if arguments.archive:
     check_archive(Path(arguments.archive), errors)
@@ -344,6 +433,9 @@ def main() -> int:
     return 1
 
   scope = f"manifest against the canonical schema, refs parity, and all {len(EXPECTED_SKILLS)} skills"
+
+  if arguments.base_manifest:
+    scope += ", plus a version bump against the base manifest"
 
   if arguments.archive:
     scope += f", plus the {Path(arguments.archive).name} listing"
