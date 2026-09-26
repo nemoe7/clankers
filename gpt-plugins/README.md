@@ -24,4 +24,4 @@ Skill sources live under `refs/skills/`. Shipped copies must match them. See [ma
 
 ## Package
 
-`.github/workflows/package-gpt-plugins.yml` checks the collection, writes `gpt-plugins.zip`, and publishes that ZIP as a direct Actions artifact. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow runs on pushes to `main`, on pull requests, and on demand. It fails on a missing or invalid plugin file.
+`.github/workflows/package-gpt-plugins.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch. Pushes to `main` write `gpt-plugins.zip` and publish that ZIP as a direct Actions artifact. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. On-demand runs package only from `main`. The workflow fails on a missing or invalid plugin file.
