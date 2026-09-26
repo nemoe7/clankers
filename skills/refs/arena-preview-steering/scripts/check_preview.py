@@ -2797,6 +2797,70 @@ def test_report_unread_markers():
     assert "markdown" not in marker_store.state()["reports"][0]
 
 
+def test_poll_inbox():
+  with tempfile.TemporaryDirectory() as poll_dir:
+    store = preview.Store(poll_dir, create=True)
+    sleeps = []
+
+    def sleeper(seconds):
+      sleeps.append(seconds)
+      store.note("poll-1", "arrived during wait")
+
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "--state-dir",
+        poll_dir,
+        "poll",
+        "--interval",
+        "0",
+        "--max",
+        "1",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert result.returncode == 1
+    listing = json.loads(result.stdout)
+    assert listing["pending"] == []
+    assert store.state()["notes"] == []
+    rc = preview.poll_inbox(store, interval=10, max_loops=3, sleeper=sleeper)
+    assert rc == 0
+    assert sleeps == [10]
+    assert store.state()["notes"][0]["seen_at"] is not None
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "--state-dir",
+        poll_dir,
+        "poll",
+        "--interval",
+        "0",
+        "--max",
+        "2",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert result.returncode == 0
+    listing = json.loads(result.stdout)
+    assert [item["id"] for item in listing["pending"]] == ["poll-1"]
+    try:
+      preview.poll_inbox(store, interval=-1, max_loops=1)
+      raise AssertionError("negative interval accepted")
+    except ValueError:
+      pass
+    try:
+      preview.poll_inbox(store, interval=0, max_loops=0)
+      raise AssertionError("zero max_loops accepted")
+    except ValueError:
+      pass
+
+
 def test_notes_only_save():
   with tempfile.TemporaryDirectory() as notes_only_dir:
     backup = Path(notes_only_dir) / "saved.ndjson"

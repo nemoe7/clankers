@@ -66,7 +66,7 @@
 - Every question with three or more options or an open choice carries a recommended answer, the one you would take on silence, marked among options where offered; a yes/no or confirm question carries none.
 - ALL reports MUST go through the preview skill.
 - When the task list is not empty and a task is blocked on user intervention or approval, publish a report form for that task, tell the user in one line, and continue with the other tasks instead of stalling.
-- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; when a report form awaits answers and no unblocked work remains, loop `sleep 10` and inbox `read`, break on a new message or after 100 loops.
+- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; when a report form awaits answers and no unblocked work remains, run `poll`.
 - If an assumption is unavoidable, make the most reasonable one and state it immediately; NEVER use an assumption to bypass material ambiguity.
 
 ## Engineering

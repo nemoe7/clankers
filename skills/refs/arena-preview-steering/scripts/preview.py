@@ -10,6 +10,7 @@ import secrets
 import socket
 import sqlite3
 import sys
+import time
 import uuid
 from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
@@ -639,6 +640,26 @@ def print_read(store, pretty=False):
   listing = store.read()
   print(cli_json(listing, pretty), flush=True)
   store.mark_seen([item["id"] for item in listing["pending"]])
+
+
+def poll_inbox(store, pretty=False, interval=10, max_loops=100, sleeper=None):
+  if sleeper is None:
+    sleeper = time.sleep
+  if interval < 0:
+    raise ValueError("interval must be >= 0")
+  if max_loops < 1:
+    raise ValueError("max_loops must be >= 1")
+  listing = {"checked_at": None, "pending": []}
+  for index in range(max_loops):
+    listing = store.read()
+    if listing["pending"]:
+      print(cli_json(listing, pretty), flush=True)
+      store.mark_seen([item["id"] for item in listing["pending"]])
+      return 0
+    if index + 1 < max_loops:
+      sleeper(interval)
+  print(cli_json(listing, pretty), flush=True)
+  return 1
 
 
 def parse_task_import(text):
@@ -2441,6 +2462,20 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  poll = commands.add_parser("poll")
+  poll.add_argument(
+    "--interval",
+    type=float,
+    default=10,
+    help="Seconds to wait between empty reads (default: 10)",
+  )
+  poll.add_argument(
+    "--max",
+    dest="max_loops",
+    type=int,
+    default=100,
+    help="Empty reads before giving up (default: 100)",
+  )
   download = commands.add_parser(
     "download-request",
     help="Request an HTTPS browser download, pending a preview Approve click",
@@ -2527,6 +2562,9 @@ def main():
     elif args.command == "read":
       require_server(store)
       print_read(store, args.pretty)
+    elif args.command == "poll":
+      require_server(store)
+      return poll_inbox(store, args.pretty, args.interval, args.max_loops)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.
       print(
