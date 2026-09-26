@@ -4,16 +4,19 @@ Tampermonkey userscripts for Arena.ai.
 
 | File | Purpose |
 | --- | --- |
-| [arena-agent-prompt.user.js](arena-agent-prompt.user.js) | Fills the `/agent` composer. Clicks the `{repo} - Steering` preview on `/agent/*`. |
+| [arena-agent-prompt.user.js](arena-agent-prompt.user.js) | Fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md`. |
+| [arena-agent-steering.user.js](arena-agent-steering.user.js) | Clicks the `{repo} - Steering` preview on `/agent/*`. |
+| [arena-agent-hide-composer.user.js](arena-agent-hide-composer.user.js) | Hides the composer shell on `/agent/*` while Stop generating is present. |
 
 ## Install
 
-Copy a script into Tampermonkey.
+Copy each script into Tampermonkey.
 
 1. Install Tampermonkey in the browser.
 2. Open the Tampermonkey dashboard and create a new script.
-3. Paste the contents of the `.user.js` file.
+3. Paste the contents of one `.user.js` file.
 4. Save the script.
+5. Repeat for each script.
 
 ## arena-agent-prompt
 
@@ -25,7 +28,17 @@ The script writes `{repo} read AGENTS.md ARENA.md` into the composer. If the rep
 
 The script does not overwrite an unrelated draft.
 
-When the path has a segment after `/agent/`, the script clicks the `{repo} - Steering` button on port 8000. The script clicks that button once per page.
+## arena-agent-steering
+
+The script runs only when the path has a segment after `/agent/`.
+
+The script clicks the `{repo} - Steering` button on port 8000. The script clicks that button once per page.
+
+## arena-agent-hide-composer
+
+The script runs only when the path has a segment after `/agent/`.
+
+If a button `aria-label` is `Stop generating`, the script adds `hidden` to the outermost `div.flex.w-full.flex-col.items-start.justify-center.p-2` that holds the editor. The script removes `hidden` when that button is gone.
 
 ## Check
 
@@ -33,6 +46,8 @@ From the repository root:
 
 ```bash
 node userscripts/arena-agent-prompt.user.js
+node userscripts/arena-agent-steering.user.js
+node userscripts/arena-agent-hide-composer.user.js
 ```
 
-The command prints `ok` when the URL, slug, and steering-label checks pass.
+Each command prints `ok` when its checks pass.
