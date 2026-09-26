@@ -1,5 +1,6 @@
 ## 2026-09-26
 
+- **Composer hide vs flex**: `userscripts/arena-agent-hide-composer.user.js` sets the `hidden` class and inline `display: none !important` so Tailwind `flex` cannot keep the composer open.
 - **Form-wait inbox poll**: drop `ask_user` when a report form awaits answers, owner custom: that tool dropped the preview. Loop `sleep 10` and inbox `read`, break on a new message or after 100 loops. Live ARENA 14,434 B. SKILL.md 6,605 B, ledgered.
 - **Hide composer while generating**: `userscripts/arena-agent-hide-composer.user.js` on `/agent/*` adds `hidden` to the outermost composer shell when a button `aria-label` is `Stop generating`, and removes it when that button is gone.
 - **Userscripts split**: Steering click moves to `userscripts/arena-agent-steering.user.js`. `arena-agent-prompt.user.js` fills the `/agent` composer only.

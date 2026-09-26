@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena agent hide composer
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.0.0
+// @version      1.1.0
 // @description  On /agent/*, hide the composer shell while Stop generating is present
 // @author       nemoe7
 // @license      MIT
@@ -80,23 +80,29 @@
     return;
   }
 
-  function hasStopGenerating(doc) {
+  function findStopGeneratingButton(doc) {
     var buttons = doc.querySelectorAll("button[aria-label]");
     var i;
-    var label;
+    var button;
     for (i = 0; i < buttons.length; i += 1) {
-      label = buttons[i].getAttribute("aria-label");
-      if (isStopGeneratingLabel(label)) {
-        return true;
+      button = buttons[i];
+      if (isStopGeneratingLabel(button.getAttribute("aria-label"))) {
+        return button;
       }
     }
-    return false;
+    return null;
   }
 
-  function findComposerShell(doc) {
+  function findComposerShell(doc, stopButton) {
+    var node;
+    if (stopButton) {
+      node = stopButton.closest(SHELL_SELECTOR);
+      if (node) {
+        return node;
+      }
+    }
     var nodes = doc.querySelectorAll(SHELL_SELECTOR);
     var i;
-    var node;
     for (i = 0; i < nodes.length; i += 1) {
       node = nodes[i];
       if (node.querySelector(EDITOR_SELECTOR)) {
@@ -107,12 +113,10 @@
   }
 
   function hideShell(shell) {
-    if (!shell.hasAttribute("hidden")) {
-      shell.setAttribute("hidden", "");
-    }
-    if (!shell.hasAttribute(HIDE_MARK)) {
-      shell.setAttribute(HIDE_MARK, "");
-    }
+    shell.setAttribute("hidden", "");
+    shell.classList.add("hidden");
+    shell.style.setProperty("display", "none", "important");
+    shell.setAttribute(HIDE_MARK, "");
   }
 
   function showShell(shell) {
@@ -120,16 +124,19 @@
       return;
     }
     shell.removeAttribute("hidden");
+    shell.classList.remove("hidden");
+    shell.style.removeProperty("display");
     shell.removeAttribute(HIDE_MARK);
   }
 
   function sync() {
     var session = isSessionUrl(location.href);
-    var shell = findComposerShell(document);
+    var stopButton = findStopGeneratingButton(document);
+    var shell = findComposerShell(document, stopButton);
     if (!shell) {
       return;
     }
-    if (shouldHideComposer(session, hasStopGenerating(document))) {
+    if (shouldHideComposer(session, Boolean(stopButton))) {
       hideShell(shell);
       return;
     }
