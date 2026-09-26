@@ -642,7 +642,7 @@ def print_read(store, pretty=False):
   store.mark_seen([item["id"] for item in listing["pending"]])
 
 
-def poll_inbox(store, pretty=False, interval=10, max_loops=100, sleeper=None):
+def poll_inbox(store, pretty=False, interval=1, max_loops=300, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   if interval < 0:
@@ -2466,15 +2466,15 @@ def main():
   poll.add_argument(
     "--interval",
     type=float,
-    default=10,
-    help="Seconds to wait between empty reads (default: 10)",
+    default=1,
+    help="Seconds to wait between empty reads (default: 1)",
   )
   poll.add_argument(
     "--max",
     dest="max_loops",
     type=int,
-    default=100,
-    help="Empty reads before giving up (default: 100)",
+    default=300,
+    help="Empty reads before giving up (default: 300)",
   )
   download = commands.add_parser(
     "download-request",
