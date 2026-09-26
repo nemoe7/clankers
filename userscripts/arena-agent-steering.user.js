@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Arena agent steering
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.0.0
-// @description  On /agent/*, click {repo} - Steering on port 8000 once per page
+// @version      1.1.0
+// @description  On /agent/*, wait 1s then click {repo} - Steering on port 8000 once per page
 // @author       nemoe7
 // @license      MIT
 // @match        https://arena.ai/*
@@ -18,6 +18,7 @@
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
   var STEERING_LABEL_RE = /^(\S+) - Steering$/;
   var SLUG_KEY = "clankers-arena-agent-slug";
+  var CLICK_DELAY_MS = 1000;
 
   function parseArenaUrl(urlString) {
     var url;
@@ -99,6 +100,7 @@
       [buttonMatchesSteering("daedalus - Steering", ":8000", "clankers"), false],
       [buttonMatchesSteering("daedalus - Steering", ":3000", null), false],
       [buttonMatchesSteering("Website", ":8000", null), false],
+      [CLICK_DELAY_MS, 1000],
     ];
     var failed = 0;
     var i;
@@ -120,6 +122,34 @@
   }
 
   var clickedPath = null;
+  var clickTimer = null;
+  var pendingPath = null;
+
+  function clearClickTimer() {
+    if (clickTimer !== null) {
+      clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    pendingPath = null;
+  }
+
+  function fireClick(path) {
+    clickTimer = null;
+    pendingPath = null;
+    if (!isSessionUrl(location.href) || location.pathname !== path) {
+      return;
+    }
+    if (clickedPath === path) {
+      return;
+    }
+    var slug = readSlug(document) || recalledSlug();
+    var button = findSteeringButton(document, slug);
+    if (!button) {
+      return;
+    }
+    button.click();
+    clickedPath = path;
+  }
 
   function readSlug(doc) {
     var bar = doc.querySelector(BAR_SELECTOR);
@@ -183,6 +213,7 @@
   function sync() {
     if (!isSessionUrl(location.href)) {
       clickedPath = null;
+      clearClickTimer();
       return;
     }
     if (clickedPath === location.pathname) {
@@ -193,8 +224,15 @@
     if (!button) {
       return;
     }
-    button.click();
-    clickedPath = location.pathname;
+    if (pendingPath === location.pathname && clickTimer !== null) {
+      return;
+    }
+    clearClickTimer();
+    var path = location.pathname;
+    pendingPath = path;
+    clickTimer = setTimeout(function () {
+      fireClick(path);
+    }, CLICK_DELAY_MS);
   }
 
   var observer = new MutationObserver(sync);

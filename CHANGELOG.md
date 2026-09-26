@@ -1,3 +1,7 @@
+## 2026-09-27
+
+- **Steering click delay**: `userscripts/arena-agent-steering.user.js` waits 1 second, then clicks `{repo} - Steering` once per page.
+
 ## 2026-09-26
 
 - **Composer hide vs flex**: `userscripts/arena-agent-hide-composer.user.js` sets the `hidden` class and inline `display: none !important` so Tailwind `flex` cannot keep the composer open.

@@ -32,7 +32,7 @@ The script does not overwrite an unrelated draft.
 
 The script runs only when the path has a segment after `/agent/`.
 
-The script clicks the `{repo} - Steering` button on port 8000. The script clicks that button once per page.
+The script waits 1 second. Then the script clicks the `{repo} - Steering` button on port 8000. The script clicks that button once per page.
 
 ## arena-agent-hide-composer
 
