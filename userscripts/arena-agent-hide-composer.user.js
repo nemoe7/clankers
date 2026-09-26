@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Arena agent hide composer
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.0
-// @description  On /agent/*, hide the composer shell while Stop generating is present
+// @version      1.2.0
+// @description  On /agent/*, hide div.editor-content while Stop generating is present
 // @author       nemoe7
 // @license      MIT
 // @match        https://arena.ai/*
@@ -15,7 +15,7 @@
   "use strict";
 
   var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
-  var EDITOR_SELECTOR = "div.editor-content, div.tiptap.ProseMirror";
+  var EDITOR_CONTENT_SELECTOR = "div.editor-content";
   var HIDE_MARK = "data-clankers-hidden";
 
   function parseArenaUrl(urlString) {
@@ -93,54 +93,47 @@
     return null;
   }
 
-  function findComposerShell(doc, stopButton) {
-    var node;
+  function findEditorContent(doc, stopButton) {
+    var root = doc;
+    var shell;
     if (stopButton) {
-      node = stopButton.closest(SHELL_SELECTOR);
-      if (node) {
-        return node;
+      shell = stopButton.closest(SHELL_SELECTOR);
+      if (shell) {
+        root = shell;
       }
     }
-    var nodes = doc.querySelectorAll(SHELL_SELECTOR);
-    var i;
-    for (i = 0; i < nodes.length; i += 1) {
-      node = nodes[i];
-      if (node.querySelector(EDITOR_SELECTOR)) {
-        return node;
-      }
-    }
-    return null;
+    return root.querySelector(EDITOR_CONTENT_SELECTOR);
   }
 
-  function hideShell(shell) {
-    shell.setAttribute("hidden", "");
-    shell.classList.add("hidden");
-    shell.style.setProperty("display", "none", "important");
-    shell.setAttribute(HIDE_MARK, "");
+  function hideEditor(editor) {
+    editor.setAttribute("hidden", "");
+    editor.classList.add("hidden");
+    editor.style.setProperty("display", "none", "important");
+    editor.setAttribute(HIDE_MARK, "");
   }
 
-  function showShell(shell) {
-    if (!shell.hasAttribute(HIDE_MARK)) {
+  function showEditor(editor) {
+    if (!editor.hasAttribute(HIDE_MARK)) {
       return;
     }
-    shell.removeAttribute("hidden");
-    shell.classList.remove("hidden");
-    shell.style.removeProperty("display");
-    shell.removeAttribute(HIDE_MARK);
+    editor.removeAttribute("hidden");
+    editor.classList.remove("hidden");
+    editor.style.removeProperty("display");
+    editor.removeAttribute(HIDE_MARK);
   }
 
   function sync() {
     var session = isSessionUrl(location.href);
     var stopButton = findStopGeneratingButton(document);
-    var shell = findComposerShell(document, stopButton);
-    if (!shell) {
+    var editor = findEditorContent(document, stopButton);
+    if (!editor) {
       return;
     }
     if (shouldHideComposer(session, Boolean(stopButton))) {
-      hideShell(shell);
+      hideEditor(editor);
       return;
     }
-    showShell(shell);
+    showEditor(editor);
   }
 
   var observer = new MutationObserver(sync);
