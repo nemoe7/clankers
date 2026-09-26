@@ -6,6 +6,7 @@ Rules, skills, and workflows for AI agents.
 - [skills/](skills/README.md): UI reviews, text compression, and a shared Arena steering/reporting preview. Each skill has `SKILL.md` and supporting files. 
 - [workflows/](workflows/README.md): portable workflows, currently [init-docs](workflows/init-docs.md) for downstream user and agent docs. The README defines the required format. 
 - [automations/](automations/DAILIES.md): recurring prompts, currently combined daily monitoring through ChatGPT scheduled tasks. Each self-contained Markdown prompt runs in one pass and supplies state/evidence rules because runtime state is unreliable. 
+- [userscripts/](userscripts/README.md): Tampermonkey userscripts for Arena. [arena-agent-prompt.user.js](userscripts/arena-agent-prompt.user.js) fills the `/agent` composer from the GitHub repo slug. 
 - [maintenance/](maintenance/README.md): validation, synchronization, and README measurement tooling, requiring `markdown-it-py` and `tiktoken`. 
 - [rules/refs/](rules/refs/README.md): uncompressed originals and AGENTS.md writing guidelines. 
 - [skills/refs/](skills/refs/): complete unsquashed source trees for skills with baselines. 
