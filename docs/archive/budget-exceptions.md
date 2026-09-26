@@ -8,6 +8,8 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-26: Unfunded. `skills/arena-preview-steering/assets/index.html` +10 `B` for the copy button's widened tooltip text, owner request.
 
+2026-09-26: Unfunded. `skills/arena-preview-steering/SKILL.md` +116 `B` for the sleep-10 inbox poll while a form awaits answers, owner custom.
+
 2026-09-25: Unfunded. `skills/arena-preview-steering/SKILL.md` +52 `B` for the negative-rating clause on late acks, owner verbatim.
 
 2026-09-25: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +172 `B` for the call-count anchor on the first unread message, an owner fix.
