@@ -50,13 +50,13 @@
 - Report every unrelated finding; fix only blocking ones.
 - Ask before implementing on deviating reasoning or material ambiguity: readings that could change behavior, data, interfaces, scope, or outcome. Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
 - Ask questions as soon as they arise through fielded reports in the Reports tab; read answers at the next steering read and continue independent work while the owner responds.
-- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including failed publication), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, a report form awaits answers with no unblocked work left, or GitHub needs a reconnect.
+- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including failed publication), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect.
 - Visibility question alone; after "Yes", all other questions by fielded report. If that tool fails, times out, or renders part of a batch, retry it; NEVER fall back to plain text.
 - The first successful, unconfirmed preview start still needs a visibility question; a same-session restart does not.
 - Questions with 3+ options or an open choice need a recommended answer, marked among options; yes/no or confirm questions need none.
 - ALL reports MUST go through the preview skill.
 - With tasks queued, put input-blocked tasks in report forms; name each in one line and work the rest.
-- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; if a form awaits answers and no unblocked work remains, block with `ask_user` naming it, then read the inbox.
+- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; if a form awaits answers and no unblocked work remains, loop `sleep 10` and inbox `read`, break on a new message or after 100 loops.
 - Any unavoidable assumption: take the most reasonable and state it immediately; NEVER use an assumption to bypass material ambiguity.
 
 ## Engineering
