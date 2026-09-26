@@ -1,5 +1,7 @@
 ## 2026-09-26
 
+- **userscripts README**: root README lists `userscripts/`. `userscripts/README.md` covers Tampermonkey install, `/agent` fill behavior, and the node check. No budget-table row.
+- **Arena agent prompt userscript**: `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md` when the GitHub repo bar is present, and updates that text when the repo slug changes.
 - **Force-with-lease clause dropped**: "Rewrite remotes with `--force-with-lease`, NEVER plain `--force`." leaves refs, live and root `ARENA.md`, owner call. The matrix Git/Hub Arena cell drops "`--force-with-lease` only." Live ARENA 14,469 B. Shrink only, no ledger line.
 - **Setup gate**: the `Use` section of refs, live and root `ARENA.md` requires the 10-4 line, the steering preview start and the visibility question before the first tool call that is not a read of a rule or skill file. Owner approval. Live ARENA 14,537 B, ledgered.
 - **Re-read clause**: the `Use` section of refs, live and root `ARENA.md` tells the agent to read the file end-to-end again at the start of each turn in which its full text is not in context, summary or truncation included, before the first tool call. Owner approval. Live ARENA 14,442 B, ledgered.
