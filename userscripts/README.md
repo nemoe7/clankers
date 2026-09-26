@@ -38,7 +38,7 @@ The script clicks the `{repo} - Steering` button on port 8000. The script clicks
 
 The script runs only when the path has a segment after `/agent/`.
 
-If a button `aria-label` is `Stop generating`, the script adds `hidden` to the outermost `div.flex.w-full.flex-col.items-start.justify-center.p-2` that holds the editor. The script removes `hidden` when that button is gone.
+If a button `aria-label` is `Stop generating`, the script hides the outermost `div.flex.w-full.flex-col.items-start.justify-center.p-2` that holds the editor. It sets the `hidden` attribute, the `hidden` class, and `display: none !important`, because Tailwind `flex` overrides the `hidden` attribute. The script restores the shell when that button is gone.
 
 ## Check
 
