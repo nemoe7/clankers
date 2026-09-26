@@ -2,6 +2,8 @@
 
 Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
 
+2026-09-27: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +945 `B` for `poll`, owner request. `SKILL.md` +4 `B`.
+
 2026-09-26: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +268 `B` for the GET /api/submissions endpoint that serves answers filtered to live reports, owner request.
 
 2026-09-26: Unfunded. `skills/arena-preview-steering/assets/app.js` +239 `B` for merging the report answers into the copy button's NDJSON, owner request.
