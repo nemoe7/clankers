@@ -1,5 +1,6 @@
 ## 2026-09-26
 
+- **Steering preview auto-click**: on `/agent/*`, `userscripts/arena-agent-prompt.user.js` clicks the `{repo} - Steering` button on port 8000 once per page. Composer fill stays on exact `/agent`.
 - **userscripts README**: root README lists `userscripts/`. `userscripts/README.md` covers Tampermonkey install, `/agent` fill behavior, and the node check. No budget-table row.
 - **Arena agent prompt userscript**: `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md` when the GitHub repo bar is present, and updates that text when the repo slug changes.
 - **Force-with-lease clause dropped**: "Rewrite remotes with `--force-with-lease`, NEVER plain `--force`." leaves refs, live and root `ARENA.md`, owner call. The matrix Git/Hub Arena cell drops "`--force-with-lease` only." Live ARENA 14,469 B. Shrink only, no ledger line.
