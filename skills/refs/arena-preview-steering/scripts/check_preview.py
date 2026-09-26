@@ -2849,6 +2849,13 @@ def test_poll_inbox():
     assert result.returncode == 0
     listing = json.loads(result.stdout)
     assert [item["id"] for item in listing["pending"]] == ["poll-1"]
+    help_text = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "poll", "--help"],
+      capture_output=True,
+      text=True,
+      check=True,
+    ).stdout
+    assert "default: 1" in help_text and "default: 300" in help_text
     try:
       preview.poll_inbox(store, interval=-1, max_loops=1)
       raise AssertionError("negative interval accepted")

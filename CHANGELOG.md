@@ -2,7 +2,7 @@
 
 - **Steering click delay**: `userscripts/arena-agent-steering.user.js` waits 1 second, then clicks `{repo} - Steering` once per page.
 - **Hide editor-content**: `userscripts/arena-agent-hide-composer.user.js` hides `div.editor-content` while Stop generating is present, not the outer composer shell.
-- **Turn-end poll**: `preview.py poll` waits for a pending inbox item. Refs, live and root drop the sleep-10 / 100-loop wait. Owner call. preview.py 71,057 B, SKILL.md 6,609 B, ARENA 14,369 B. ARENA shrink only.
+- **Turn-end poll**: `preview.py poll` waits for a pending inbox item. Refs, live and root drop the sleep-10 / 100-loop wait. Owner call. Default wait is 1 second, 300 times (5 min). preview.py 71,054 B, SKILL.md 6,609 B, ARENA 14,369 B. ARENA shrink only.
 
 ## 2026-09-26
 
