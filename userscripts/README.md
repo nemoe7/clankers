@@ -6,7 +6,7 @@ Tampermonkey userscripts for Arena.ai.
 | --- | --- |
 | [arena-agent-prompt.user.js](arena-agent-prompt.user.js) | Fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md`. |
 | [arena-agent-steering.user.js](arena-agent-steering.user.js) | Clicks the `{repo} - Steering` preview on `/agent/*`. |
-| [arena-agent-hide-composer.user.js](arena-agent-hide-composer.user.js) | Hides the composer shell on `/agent/*` while Stop generating is present. |
+| [arena-agent-hide-composer.user.js](arena-agent-hide-composer.user.js) | Hides `div.editor-content` on `/agent/*` while Stop generating is present. |
 
 ## Install
 
@@ -38,7 +38,7 @@ The script waits 1 second. Then the script clicks the `{repo} - Steering` button
 
 The script runs only when the path has a segment after `/agent/`.
 
-If a button `aria-label` is `Stop generating`, the script hides the outermost `div.flex.w-full.flex-col.items-start.justify-center.p-2` that holds the editor. It sets the `hidden` attribute, the `hidden` class, and `display: none !important`, because Tailwind `flex` overrides the `hidden` attribute. The script restores the shell when that button is gone.
+If a button `aria-label` is `Stop generating`, the script hides `div.editor-content`. It sets the `hidden` attribute, the `hidden` class, and `display: none !important`. The script restores the editor when that button is gone.
 
 ## Check
 

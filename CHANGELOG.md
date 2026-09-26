@@ -1,6 +1,7 @@
 ## 2026-09-27
 
 - **Steering click delay**: `userscripts/arena-agent-steering.user.js` waits 1 second, then clicks `{repo} - Steering` once per page.
+- **Hide editor-content**: `userscripts/arena-agent-hide-composer.user.js` hides `div.editor-content` while Stop generating is present, not the outer composer shell.
 
 ## 2026-09-26
 
