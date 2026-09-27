@@ -781,7 +781,8 @@ class Store:
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
-          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT
+          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT,
+          ever_seen INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
@@ -856,6 +857,11 @@ class Store:
       if "seq" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seq INTEGER")
         db.execute("UPDATE reports SET seq = rowid WHERE seq IS NULL")
+      if "ever_seen" not in columns:
+        db.execute(
+          "ALTER TABLE reports ADD COLUMN ever_seen INTEGER NOT NULL DEFAULT 0"
+        )
+        db.execute("UPDATE reports SET ever_seen = 1 WHERE seen_at IS NOT NULL")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(uploads)")}
       if "note_id" not in columns:
         db.execute("ALTER TABLE uploads ADD COLUMN note_id TEXT")
@@ -1006,7 +1012,7 @@ class Store:
       reports = [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, updated_at, seq, seen_at, markdown, EXISTS("
+          "SELECT id, title, updated_at, seq, seen_at, ever_seen, markdown, EXISTS("
           "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
           "FROM reports ORDER BY seq, id"
         )
@@ -1905,6 +1911,7 @@ class Store:
     The stamp records when the report was actually read, so reopening it in another browser
     keeps that moment instead of moving it. Republishing clears it, which is what makes a
     changed report unread in fact rather than unread by a comparison the client has to get right.
+    ever_seen survives that clear, so the tab dot waits for a report nobody ever opened.
     """
     identifier(report_id)
     with self.transaction() as db:
@@ -1912,7 +1919,7 @@ class Store:
       if row is None:
         raise FileNotFoundError("Report not found")
       db.execute(
-        "UPDATE reports SET seen_at = COALESCE(seen_at, ?) WHERE id = ?",
+        "UPDATE reports SET seen_at = COALESCE(seen_at, ?), ever_seen = 1 WHERE id = ?",
         (now(), report_id),
       )
       return dict(

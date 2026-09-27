@@ -1071,6 +1071,20 @@ test('preview client', async (t) => {
     assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
   });
 
+  await t.test("An edited report keeps its star but drops the pip", async () => {
+    // An edited report keeps its star but drops the pip: ever_seen remembers the open.
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
+      seen_at: null, ever_seen: 1 }];
+    await get('#refresh-notes').events.click();
+    assert.equal(pip.hidden, true, 'an opened report edited later shows no dot');
+    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+      '1. * Fielded', 'the star still marks the changed text');
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
+      seen_at: null, ever_seen: 0 }];
+    await get('#refresh-notes').events.click();
+    assert.equal(pip.hidden, false, 'a report nobody opened shows the dot');
+  });
+
   await t.test("What stamps a report is the browser showing it: one second in view for one that fits the", async () => {
     // What stamps a report is the browser showing it: one second in view for one that fits the
     // panel with nothing to scroll, and the moment its end is reached for one that does not.
