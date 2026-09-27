@@ -1556,6 +1556,28 @@ def test_http_note_attachment():
       assert (
         len(attached_http.state()["notes"]) == 2 and len(attached_http.uploads()) == 3
       )
+      six = (
+        part(b"id", b"http-six")
+        + part(b"text", b"Six files")
+        + b"".join(
+          part(
+            b"file",
+            f"content-{n}".encode(),
+            f'; filename="f{n}.txt"\r\nContent-Type: text/plain'.encode("ascii"),
+          )
+          for n in range(6)
+        )
+        + closing
+      )
+      status, _, payload = request("POST", "/api/notes/with-file", six, headers)
+      received = json.loads(payload)
+      assert status == 201 and received["id"] == "http-six"
+      assert [item["name"] for item in received["attachments"]] == [
+        f"f{n}.txt" for n in range(6)
+      ]
+      assert [Path(item["path"]).name for item in received["attachments"]] == [
+        f"http-six-{n + 1}.txt" for n in range(6)
+      ]
     finally:
       app.shutdown()
       app.server_close()

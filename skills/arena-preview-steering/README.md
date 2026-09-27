@@ -38,9 +38,9 @@ The UI shows whether the agent answered the latest submission, not just an earli
 
 ## Note attachments
 
-The composer sends one note and one to five files together through `/api/notes/with-file`.
+The composer sends one note and its files together through `/api/notes/with-file`.
 The note has one ID and one acknowledgement. `read` includes each file in `attachments[]`.
-Files stay outside SQLite under `<state-dir>/uploads/`. Each file is at most 50,000,000 bytes.
+Files stay outside SQLite under `<state-dir>/uploads/`. Each file is at most 50MB.
 Multiple files use `<note-id>-1`, `<note-id>-2`, and so on, plus their original extensions.
 A one-file note keeps its note ID in the filename for existing links.
 The legacy `/api/uploads` route can still create a separate upload note.

@@ -27,7 +27,7 @@ MAX_SUBMISSION=150000
 MAX_BODY=96000
 MAX_SUBMISSION_BODY=1000000
 MAX_UPLOAD=50000000
-MAX_ATTACHMENTS=5
+MAX_NOTE_UPLOAD=250000000
 SNAPSHOT_CAP_BYTES=128000000
 MAX_FETCH=SNAPSHOT_CAP_BYTES*80//100
 WORKSPACE_SKIP={'.arena','.cache','.git','.local','.mypy_cache','.next','.nox','.npm','.nuxt','.output','.parcel-cache','.pytest_cache','.ruff_cache','.svelte-kit','.tox','.turbo','.venv','.vite','__pycache__','build','coverage','dist','node_modules','out','target'}
@@ -200,9 +200,7 @@ def parse_note_attachments(content_type,data):
 	if len(content_type)>200 or any(char in content_type for char in'\r\n'):raise ValueError('Invalid multipart boundary')
 	prefix=b'MIME-Version: 1.0\r\nContent-Type: '+content_type.encode('ascii')+b'\r\n\r\n';message=BytesParser(policy=policy.default).parsebytes(prefix+data)
 	if not message.is_multipart()or message.defects:raise ValueError('Send files with a valid multipart boundary')
-	parts=list(message.iter_parts())
-	if not 3<=len(parts)<=MAX_ATTACHMENTS+2:raise ValueError(f"Send one note ID, text and 1–{MAX_ATTACHMENTS} files")
-	fields,files={},[]
+	parts=list(message.iter_parts());fields,files={},[]
 	for part in parts:
 		name=part.get_param('name',header='content-disposition')
 		if part.get_content_disposition()!='form-data'or name not in{'id','text','file'}:raise ValueError('Unexpected note attachment field')
@@ -411,7 +409,7 @@ class Store:
 		if not data:raise ValueError('An upload must not be empty')
 		if len(data)>MAX_UPLOAD:raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
 		cleaned=upload_name(name);kind=upload_type(content_type);digest=hashlib.sha256(data).hexdigest();upload_id=identifier(upload_id)if upload_id is not None else new_id();note_id=identifier(note_id)if note_id is not None else upload_id
-		if position is not None and(not isinstance(position,int)or not 1<=position<=MAX_ATTACHMENTS):raise ValueError('Invalid attachment position')
+		if position is not None and(not isinstance(position,int)or position<1):raise ValueError('Invalid attachment position')
 		directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448);stem=f"{note_id}-{position}"if position is not None else upload_id;target=directory/f"{stem}{Path(cleaned).suffix[:16]}"
 		with self.transaction(shared)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
@@ -425,7 +423,7 @@ class Store:
 		return upload_row(row,self.path.parent)
 	def note_with_uploads(self,note_id,text,files):
 		identifier(note_id);note_text(text)
-		if not isinstance(files,(list,tuple))or not 1<=len(files)<=MAX_ATTACHMENTS:raise ValueError(f"Attach 1–{MAX_ATTACHMENTS} files to a note")
+		if not isinstance(files,(list,tuple))or len(files)<1:raise ValueError('Attach at least one file to a note')
 		prepared=[]
 		for file in files:
 			if not isinstance(file,(list,tuple))or len(file)!=3:raise ValueError('Each attachment needs a name, type and bytes')
@@ -723,7 +721,7 @@ def handler(store):
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
 			elif content_type!='application/json'and not(upload_post or fetch_result):self.problem(415,'Expected application/json');return
 			try:
-				length=int(self.headers.get('Content-Length','0'));limit=MAX_ATTACHMENTS*MAX_UPLOAD+MAX_BODY if note_upload else MAX_UPLOAD if upload_post else MAX_FETCH if fetch_result else MAX_SUBMISSION_BODY if report_submit else MAX_BODY
+				length=int(self.headers.get('Content-Length','0'));limit=MAX_NOTE_UPLOAD+MAX_BODY if note_upload else MAX_UPLOAD if upload_post else MAX_FETCH if fetch_result else MAX_SUBMISSION_BODY if report_submit else MAX_BODY
 				if not 0<length<=limit:
 					subject='Upload'if upload_post or note_upload else'Download'if fetch_result else'Request body';remaining=length if 0<length<=limit+1 else 0
 					while remaining>0:
