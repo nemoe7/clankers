@@ -135,7 +135,6 @@
 - For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding my conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`, nothing else until flagged).
 - For a Python project with no `ruff.toml`, create one with exactly that before running gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
-- Reports MUST allow lines up to 120 characters (MD013 at 120).
 - NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 
 ## Git
