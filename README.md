@@ -15,12 +15,12 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-26. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
+Latest measurements as of 2026-09-27. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,545 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 14,369 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 14,299 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,436 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,401 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 501 `tok` |
