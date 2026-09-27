@@ -52,15 +52,15 @@ Short answers stay in chat. For a longer report, write UTF-8 Markdown to an igno
 python <skill>/scripts/preview.py --state-dir arena-state publish <source.md> --id <id> --title <title>
 ```
 
-Republish the same ID after each source update; if answers exist, use a new ID. A stale report leaves with `unpublish <id>`; answers and source survive for a new ID. Install `markdown-it-py` only in the preview venv if needed, not in application manifests. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Pair every option set with a labeled custom-response field.
+Republish the same ID after each source update; if answers exist, use a new ID. A stale report leaves with `unpublish <id>`; answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Pair every option set with a labeled custom-response field.
 
 `read` lists report submissions as `kind: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
 
 ## Files and downloads
 
-For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss. Each file on a note is at most 50MB.
+For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss.
 
-The owner can queue an HTTPS URL in Downloads. Run `download-request <url>` to queue a pending job. It does not download. The owner approves or denies it in Downloads. Add `--allow-proxy` only for that URL. Keep the browser page open during a fetch. URLs cannot contain credentials. An upload is at most 50,000,000 bytes. A download is at most 102,400,000 bytes. That cap is not measured. Read the saved-file inbox note and acknowledge it. Report failed or missing files. The owner can retry failed jobs in the tab.
+Run `download-request <url>` to queue a pending job. It does not download. The owner approves or denies it in Downloads. Add `--allow-proxy` only for that URL. URLs cannot contain credentials. Read the saved-file inbox note and acknowledge it. Report failed or missing files.
 
 ## Recovery
 
