@@ -43,8 +43,8 @@ MAX_BODY = 96_000
 MAX_SUBMISSION_BODY = 1_000_000
 # Owner uploads keep a 50 MB (decimal) per-file ceiling.
 MAX_UPLOAD = 50_000_000
-# A composed note may carry several files. Bound the whole multipart body as well as each file.
-MAX_ATTACHMENTS = 5
+# A composed note may carry files; bound the multipart body instead of a file count.
+MAX_NOTE_UPLOAD = 250_000_000
 # Documented snapshot cap, not a measured limit. The 128 MB figure was for a workspace
 # without GitHub. One session reported 512 MB. Downloads use 80% of the documented figure.
 SNAPSHOT_CAP_BYTES = 128_000_000
@@ -552,7 +552,7 @@ def upload_type(content_type):
 
 
 def parse_note_attachments(content_type, data):
-  """Read one ID and note, plus 1–5 binary files, from a bounded multipart body."""
+  """Read one ID and note, plus its binary files, from a bounded multipart body."""
   if len(content_type) > 200 or any(char in content_type for char in "\r\n"):
     raise ValueError("Invalid multipart boundary")
   prefix = (
@@ -562,8 +562,6 @@ def parse_note_attachments(content_type, data):
   if not message.is_multipart() or message.defects:
     raise ValueError("Send files with a valid multipart boundary")
   parts = list(message.iter_parts())
-  if not 3 <= len(parts) <= MAX_ATTACHMENTS + 2:
-    raise ValueError(f"Send one note ID, text and 1–{MAX_ATTACHMENTS} files")
   fields, files = {}, []
   for part in parts:
     name = part.get_param("name", header="content-disposition")
@@ -1317,9 +1315,7 @@ class Store:
     digest = hashlib.sha256(data).hexdigest()
     upload_id = identifier(upload_id) if upload_id is not None else new_id()
     note_id = identifier(note_id) if note_id is not None else upload_id
-    if position is not None and (
-      not isinstance(position, int) or not 1 <= position <= MAX_ATTACHMENTS
-    ):
+    if position is not None and (not isinstance(position, int) or position < 1):
       raise ValueError("Invalid attachment position")
     directory = self.path.parent / UPLOAD_DIR
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -1365,8 +1361,8 @@ class Store:
     """Store several linked files and one note in one transaction; identical retries are safe."""
     identifier(note_id)
     note_text(text)
-    if not isinstance(files, (list, tuple)) or not 1 <= len(files) <= MAX_ATTACHMENTS:
-      raise ValueError(f"Attach 1–{MAX_ATTACHMENTS} files to a note")
+    if not isinstance(files, (list, tuple)) or len(files) < 1:
+      raise ValueError("Attach at least one file to a note")
     prepared = []
     for file in files:
       if not isinstance(file, (list, tuple)) or len(file) != 3:
@@ -2294,7 +2290,7 @@ def handler(store):
       # if not secrets.compare_digest(supplied, token.encode("ascii")):
       #   self.problem(403, "Reload the preview, then retry; your draft is kept")
       #   return
-      # A composed note carries up to five files and its text in one bounded multipart request.
+      # A composed note carries its files and text in one bounded multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:
         if not content_type.lower().startswith("multipart/form-data;"):
@@ -2306,7 +2302,7 @@ def handler(store):
       try:
         length = int(self.headers.get("Content-Length", "0"))
         limit = (
-          MAX_ATTACHMENTS * MAX_UPLOAD + MAX_BODY
+          MAX_NOTE_UPLOAD + MAX_BODY
           if note_upload
           else MAX_UPLOAD
           if upload_post

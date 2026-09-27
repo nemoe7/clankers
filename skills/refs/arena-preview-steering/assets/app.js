@@ -133,7 +133,6 @@ note.addEventListener('input', () => {
 
 // File bytes stay in this browser tab, not in localStorage. Every staged file has its own removal
 // control beside "Your message"; the picker and drop add files before one atomic note send.
-const MAX_NOTE_FILES = 5;
 let stagedFiles = [];
 const picker = $('#upload-file');
 const compose = $('#compose');
@@ -179,10 +178,6 @@ function clearStagedFiles() {
 }
 function stageFiles(files) {
   if (send.disabled || !files.length) return;
-  if (stagedFiles.length + files.length > MAX_NOTE_FILES) {
-    status.textContent = `Attach no more than ${MAX_NOTE_FILES} files per note.`;
-    return;
-  }
   for (const file of files) {
     if (!file.name || file.name.length > 200) { status.textContent = 'Use filenames of 1–200 characters.'; return; }
     if (!file.size) { status.textContent = `${file.name} is empty.`; return; }
