@@ -5,6 +5,7 @@
 - **Turn-end poll**: `preview.py poll` waits for a pending inbox item. Refs, live and root drop the sleep-10 / 100-loop wait. Owner call. Default wait is 1 second, 300 times (5 min). preview.py 71,054 B, SKILL.md 6,609 B, ARENA 14,369 B. ARENA shrink only.
 - **Poll wait 15 min**: `preview.py poll` default 900 × 1 s (15 min), from 300 × 1 s (5 min), in refs and both live copies. Owner request. preview.py stays 71,054 B.
 - **Report 120 line dropped**: "Reports MUST allow lines up to 120 characters (MD013 at 120)." leaves refs, live and root `ARENA.md`, owner approval. One squash attempt on the live Style gates line keeps "gates: `ruff check`, `ruff format`, no CLI overrides." Live and root 14,369 → 14,299 B; refs 21,703 → 21,639 B.
+- **Reminder rotation**: the GH_TOKEN line becomes "`ask_user` on GH_TOKEN failure."; adds "Remove stale reports with unpublish." and "End the turn with `poll` to wait for more work." Owner verbatim. preview.py 71,054 → 71,095 B.
 
 ## 2026-09-26
 

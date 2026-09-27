@@ -2650,10 +2650,9 @@ def test_reminder_rotation():
       "Ask questions ASAP through fielded reports; keep other work moving."
       in preview.REMINDERS
     )
-    assert (
-      "Report GH_TOKEN failure; use ask_user only if requested or preview unavailable."
-      in preview.REMINDERS
-    )
+    assert "`ask_user` on GH_TOKEN failure." in preview.REMINDERS
+    assert "Remove stale reports with unpublish." in preview.REMINDERS
+    assert "End the turn with `poll` to wait for more work." in preview.REMINDERS
     assert "Don't forget to publish your reports." in preview.REMINDERS
     assert "Avoid ending turn if there are unblocked tasks." in preview.REMINDERS
     span = len(preview.REMINDERS)
