@@ -507,7 +507,8 @@ async function refreshState() {
           ($('#report').dataset.reportId !== select.value ||
            $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
     }
-    // The pip tracks unread reports; the separate receipt tracks the selected report's latest answer.
+    // The pip tracks reports never opened; an edited report keeps its star alone; the separate
+    // receipt tracks the selected report's latest answer.
     updateReportPip(state.reports);
     renderReportAcknowledgement();
   } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
@@ -1076,7 +1077,7 @@ function reportLabel(report, position) {
 }
 function updateReportPip(reports) {
   const pip = $('#report-pip');
-  const unseen = reports.filter(report => !report.seen_at);
+  const unseen = reports.filter(report => !report.seen_at && !report.ever_seen);
   pip.hidden = unseen.length === 0;
   pip.title = unseen.length ? 'A report is unread' : 'No unread reports';
   pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread reports');

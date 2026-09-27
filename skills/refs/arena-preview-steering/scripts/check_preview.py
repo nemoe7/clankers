@@ -2744,8 +2744,10 @@ def test_report_unread_markers():
     marker_source.write_text("Choice?\n- ( ) Yes\n- ( ) No\n\nCustom response: ___\n")
     marker_store.publish("form", "Form", marker_source)
     assert marker_store.state()["reports"][0]["needs_answer"] is True
+    assert marker_store.state()["reports"][0]["ever_seen"] == 0
     marker_store.mark_report_seen("form")
     assert marker_store.state()["reports"][0]["needs_answer"] is True
+    assert marker_store.state()["reports"][0]["ever_seen"] == 1
     marker_store.submit_report(
       "form", "answer", {}, marker_store.report("form")["updated_at"]
     )
@@ -2789,11 +2791,48 @@ def test_report_unread_markers():
     assert marker_store.state()["reports"][1]["seen_at"] is not None
     marker_store.publish("form-2", "Revised form", marker_source)
     assert marker_store.state()["reports"][1]["seen_at"] is None
+    assert marker_store.state()["reports"][1]["ever_seen"] == 1
     assert marker_store.state()["reports"][1]["needs_answer"] is True
     marker_source.write_text("Plain report")
     marker_store.publish("plain", "Plain", marker_source)
     assert marker_store.state()["reports"][2]["needs_answer"] is False
     assert "markdown" not in marker_store.state()["reports"][0]
+
+
+def test_report_ever_seen_migration():
+  # An older reports table gains ever_seen; the backfill marks a stamped report opened so a
+  # republish after migration still hides the tab dot for it while a fresh report keeps it.
+  with tempfile.TemporaryDirectory() as old_report_dir:
+    old_db = Path(old_report_dir) / "state.sqlite3"
+    with sqlite3.connect(old_db) as db:
+      db.execute(
+        "CREATE TABLE reports (id TEXT PRIMARY KEY, title TEXT NOT NULL,"
+        " markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT)"
+      )
+      for report_id, seen in (("opened", "2026-09-21T00:00:00+00:00"), ("fresh", None)):
+        db.execute(
+          "INSERT INTO reports (id, title, markdown, updated_at, seq, seen_at)"
+          " VALUES (?, ?, ?, ?, ?, ?)",
+          (
+            report_id,
+            report_id.title(),
+            "Text",
+            "2026-09-20T00:00:00+00:00",
+            1 if seen else 2,
+            seen,
+          ),
+        )
+    source = Path(old_report_dir) / "fresh.md"
+    source.write_text("Text")
+    migrated = preview.Store(old_report_dir)
+    state = {row["id"]: row for row in migrated.state()["reports"]}
+    assert state["opened"]["ever_seen"] == 1
+    assert state["fresh"]["ever_seen"] == 0
+    migrated.mark_report_seen("fresh")
+    migrated.publish("fresh", "Fresh", source)
+    state = {row["id"]: row for row in migrated.state()["reports"]}
+    assert state["fresh"]["seen_at"] is None
+    assert state["fresh"]["ever_seen"] == 1
 
 
 def test_poll_inbox():
