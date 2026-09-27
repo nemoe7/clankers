@@ -114,11 +114,13 @@ REMINDERS = (
   "Manage the task list.",
   "Take the smallest open task next.",
   "Always push.",
-  "Report GH_TOKEN failure; use ask_user only if requested or preview unavailable.",
+  "`ask_user` on GH_TOKEN failure.",
   "Keep docs terse but clear.",
   "Ask questions ASAP through fielded reports; keep other work moving.",
   "Don't forget to publish your reports.",
   "Avoid ending turn if there are unblocked tasks.",
+  "Remove stale reports with unpublish.",
+  "End the turn with `poll` to wait for more work.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
