@@ -1503,8 +1503,13 @@ test('preview client', async (t) => {
     tooMany = Array.from({ length: 6 }, (_, n) => ({ name: `file-${n}.bin`, size: 1, type: '' }));
     picker.files = tooMany;
     picker.events.change();
-    assert.equal(get('#send-status').textContent, 'Attach no more than 5 files per note.');
-    assert.equal(uploadCalls.length, 0, 'invalid selections never leave the page');
+    assert.equal(get('#send-status').textContent, 'Staged 6 files. Send note to save them together.');
+    assert.equal(get('#staged-files').children.length, 6, 'no count cap stages six files');
+    assert.equal(uploadCalls.length, 0, 'choosing files does not upload them yet');
+    while (get('#staged-files').children.length) {
+      get('#staged-files').children[0].children[1].events.click();
+    }
+    assert.equal(get('#staged-files').hidden, true, 'clearing the six keeps the exact chips below');
     first = { name: 'report card.pdf', size: 12, type: 'application/pdf', lastModified: 7 };
     second = { name: 'photo.png', size: 2, type: 'image/png', lastModified: 8 };
     thirdFile = { name: 'notes.txt', size: 9, type: 'text/plain', lastModified: 9 };
@@ -1532,10 +1537,10 @@ test('preview client', async (t) => {
     picker.files = [second];
     picker.events.change();
     assert.deepEqual(chips(), ['report card.pdf', 'notes.txt', 'photo.png']);
-    badDrop = event({ dataTransfer: { types: ['Files'], files: tooMany } });
+    badDrop = event({ dataTransfer: { types: ['Files'], files: [{ name: 'empty-drop.bin', size: 0, type: '' }] } });
     get('#compose').events.drop(badDrop);
     assert.deepEqual(chips(), ['report card.pdf', 'notes.txt', 'photo.png'], 'an invalid drop keeps staged files');
-    assert.equal(get('#send-status').textContent, 'Attach no more than 5 files per note.');
+    assert.equal(get('#send-status').textContent, 'empty-drop.bin is empty.');
 
   });
 
