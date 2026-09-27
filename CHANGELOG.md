@@ -9,6 +9,7 @@
 - **Edited report dot dropped**: the Reports tab pip hides a report the owner already opened; the select star still marks changed text. `reports.ever_seen` carries the open across a republish, with a migration backfill, in refs and both live copies. Owner request. app.js 38,601 → 38,615 B; preview.py 71,095 → 71,356 B.
 - **Inbox cadence hardened**: REFERENCE line 32 swaps "End every bash call with a poll..." for "ALWAYS run \`poll\` on the bash call that ends the turn, chained or not. Between two reads, NEVER run a fourth bash call; a read MUST come before it." Owner approval, MUST/ALWAYS/NEVER per GUIDELINES.md. Mirrored refs and live, no size row.
 - **Five-file cap dropped**: the composer stage, the multipart note route and the skill docs lose the five-file count; the 50MB per-file ceiling and the multipart body bound stay (`MAX_NOTE_UPLOAD` 250,000,000 + `MAX_BODY`). Owner custom: write "50MB". app.js 38,615 → 38,496 B; preview.py 71,356 → 71,180 B; SKILL.md 6,609 → 6,584 B. Six-file HTTP and chip tests added.
+- **Skill prose trimmed**: the `noknow-20260927` report's 12 approved rows leave `SKILL.md` and `references/REFERENCE.md` — size ceilings, browser-page facts, proxy transport names, the tab ✕ detail, the filename receipt and the venv-install line. Live, refs and `.agents` copies stay byte-identical where mirrored. SKILL.md 6,584 → 6,216 B; REFERENCE.md 8,448 → 8,059 B.
 
 ## 2026-09-26
 
