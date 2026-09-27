@@ -2855,7 +2855,7 @@ def test_poll_inbox():
       text=True,
       check=True,
     ).stdout
-    assert "default: 1" in help_text and "default: 300" in help_text
+    assert "default: 1" in help_text and "default: 900" in help_text
     try:
       preview.poll_inbox(store, interval=-1, max_loops=1)
       raise AssertionError("negative interval accepted")
