@@ -12,7 +12,7 @@ metadata:
 
 Use one server and one state directory per session; do not start a second server.
 
-Use this guide and its Markdown references for instructions. Do not read shipped scripts to learn the workflow. Read a script only when the task needs a code change or source-level analysis.
+Use this guide and its Markdown references for workflow; read shipped scripts only for code changes or source analysis.
 
 ## Setup
 
@@ -25,7 +25,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
    ```
 
    After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it.
-4. Name the preview in chat. At first setup, ask one `ask_user` visibility question once the preview starts: Yes, No, ntfy, Continue without steering. Block non-setup work until answered. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running, then `read` it after the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
+4. Name the preview in chat. At first setup, when it starts, ask one `ask_user` visibility question: Yes, No, ntfy, or Continue without steering. Block non-setup work until answered. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running and `read` it after the answer. Do not claim visibility before confirmation. If hidden, ask how to continue with `ask_user`. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
 
 ## Read, acknowledge, and track work
 
@@ -36,7 +36,7 @@ arena-preview poll
 
 When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call. When ending a turn or a form awaits answers, run `poll`.
 
-Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack on the same ID appends a reply block under the earlier answer; nothing is replaced. Receipt is not completion. Failure to ack immediately earns a negative rating. After acking a work note, add it via `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
+Acknowledge each delivered ID separately where the owner reads it. Use `--reply <Markdown>` for rendered Markdown or `--note <text>` for one plain line. Never acknowledge all blindly or share one answer across notes. Use the full ID, not a sequence number. A second ack appends a reply below the first; it does not replace it. Receipt is not completion. Ack immediately; failure earns a negative rating. After acking a work note, add it via `task <id> ... --msg-id <full-id>`; `ack` reminds you.
 
 ```bash
 arena-preview ack <id> --reply <markdown>
@@ -44,7 +44,7 @@ arena-preview ack <id> --reply <markdown>
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-Run `task-list` at turn start. Before implementation, record approved work with `task <id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status and details as work changes. For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block. The task marker does not replace `ack`. Mark a task `--status finished` only after verification.
+Run `task-list` at turn start. Before implementation, add approved work with `task <id> "<title>" [details ...]`; put it first with `--order 1` and update status/details as work changes. For a task from a note or report answer, use `--msg-id <full-message-id>` and queue/ack it in the same tool block. The task marker does not replace `ack`. Mark it finished only after verification.
 
 ## Publish reports and forms
 
