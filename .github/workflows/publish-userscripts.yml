@@ -1,0 +1,34 @@
+name: Publish userscripts to secret Gist
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'userscripts/*.user.js'
+      - 'maintenance/publish_userscripts.py'
+      - 'maintenance/check_publish_userscripts.py'
+      - '.github/workflows/publish-userscripts.yml'
+
+concurrency:
+  group: publish-userscripts-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pushed userscripts
+        uses: actions/checkout@v4
+      - name: Check reconciliation fixtures without GitHub credentials
+        run: python3 maintenance/check_publish_userscripts.py
+      - name: Reconcile secret userscripts Gist
+        # GIST_TOKEN needs Gists:write and repository Variables:write. The default
+        # GITHUB_TOKEN is used only by checkout.
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          USERSCRIPTS_GIST_ID: ${{ vars.USERSCRIPTS_GIST_ID }}
+        run: python3 maintenance/publish_userscripts.py
