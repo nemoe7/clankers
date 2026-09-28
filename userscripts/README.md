@@ -6,7 +6,7 @@ Tampermonkey userscripts for Arena.ai.
 | --- | --- |
 | [arena-agent-prompt.user.js](arena-agent-prompt.user.js) | Fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md`. |
 | [arena-agent-steering.user.js](arena-agent-steering.user.js) | Clicks the `{repo} - Steering` preview on `/agent/*`. |
-| [arena-agent-hide-composer.user.js](arena-agent-hide-composer.user.js) | Hides `div.editor-content` on `/agent/*` while Stop generating is present. |
+| [arena-agent-hide-composer.user.js](arena-agent-hide-composer.user.js) | Hides the editor while Stop generating is present. Locks the blank 24px spacer on `/agent/*`. |
 
 ## Install
 
@@ -38,7 +38,9 @@ The script waits 1 second. Then the script clicks the `{repo} - Steering` button
 
 The script runs only when the path has a segment after `/agent/`.
 
-If a button `aria-label` is `Stop generating`, the script hides `div.editor-content`. It sets the `hidden` attribute, the `hidden` class, and `display: none !important`. The script restores the editor when that button is gone.
+If a button `aria-label` is `Stop generating`, the script hides `div.editor-content` with the `hidden` attribute, the `hidden` class, and `display: none !important`. It restores the editor when that button is gone.
+
+The script keeps a blank `div.shrink-0` at 24px on `/agent/*`. It resets the height if another script changes it.
 
 ## Check
 

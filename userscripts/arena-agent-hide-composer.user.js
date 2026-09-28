@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Arena agent hide composer
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.0
-// @description  On /agent/*, hide div.editor-content while Stop generating is present
+// @version      1.3.0
+// @description  On /agent/*, hide the editor while generating and lock the 24px spacer
 // @author       nemoe7
 // @license      MIT
 // @match        https://arena.ai/*
@@ -17,6 +17,9 @@
   var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
   var EDITOR_CONTENT_SELECTOR = "div.editor-content";
   var HIDE_MARK = "data-clankers-hidden";
+  var SPACER_SELECTOR = 'div.shrink-0[style*="height: 24px"]';
+  var SPACER_HEIGHT = "24px";
+  var fixedSpacers = new WeakSet();
 
   function parseArenaUrl(urlString) {
     var url;
@@ -45,7 +48,110 @@
     return Boolean(session) && Boolean(stopGenerating);
   }
 
+  function isSpacerElement(spacer) {
+    return (
+      String(spacer.tagName || "").toLowerCase() === "div" &&
+      spacer.classList.contains("shrink-0") &&
+      !String(spacer.textContent || "").trim()
+    );
+  }
+
+  function hasSpacerHeight(styleText) {
+    return /(?:^|;)\s*height\s*:\s*24px\s*(?:!important\s*)?(?:;|$)/i.test(
+      String(styleText || ""),
+    );
+  }
+
+  function lockSpacerHeight(spacer) {
+    fixedSpacers.add(spacer);
+    if (
+      spacer.style.getPropertyValue("height") === SPACER_HEIGHT &&
+      spacer.style.getPropertyPriority("height") === "important"
+    ) {
+      return false;
+    }
+    spacer.style.setProperty("height", SPACER_HEIGHT, "important");
+    return true;
+  }
+
+  function enforceSpacerHeight(doc, mutations) {
+    var changes = mutations && typeof mutations.length === "number" ? mutations : null;
+    var scan = !changes || changes.length === 0;
+    var i;
+    var change;
+    if (changes) {
+      for (i = 0; i < changes.length; i += 1) {
+        change = changes[i];
+        if (change.type === "attributes" && change.attributeName === "style") {
+          if (
+            fixedSpacers.has(change.target) ||
+            (isSpacerElement(change.target) && hasSpacerHeight(change.oldValue))
+          ) {
+            lockSpacerHeight(change.target);
+          }
+        } else {
+          scan = true;
+        }
+      }
+    }
+    if (!scan) {
+      return;
+    }
+    var spacers = doc.querySelectorAll(SPACER_SELECTOR);
+    for (i = 0; i < spacers.length; i += 1) {
+      if (
+        fixedSpacers.has(spacers[i]) ||
+        (isSpacerElement(spacers[i]) && hasSpacerHeight(spacers[i].getAttribute("style")))
+      ) {
+        lockSpacerHeight(spacers[i]);
+      }
+    }
+  }
+
   function runChecks() {
+    var styleState = { height: SPACER_HEIGHT, priority: "", writes: 0 };
+    var spacerStyle = {
+      getPropertyValue: function (name) {
+        return name === "height" ? styleState.height : "";
+      },
+      getPropertyPriority: function (name) {
+        return name === "height" ? styleState.priority : "";
+      },
+      setProperty: function (name, value, priority) {
+        if (name === "height") {
+          styleState.height = value;
+          styleState.priority = priority;
+          styleState.writes += 1;
+        }
+      },
+    };
+    var spacer = {
+      tagName: "DIV",
+      classList: { contains: function (name) { return name === "shrink-0"; } },
+      textContent: "",
+      style: spacerStyle,
+      getAttribute: function (name) {
+        return name === "style" ? "height: 24px;" : null;
+      },
+    };
+    var spacerDoc = {
+      querySelectorAll: function (selector) {
+        return selector === SPACER_SELECTOR ? [spacer] : [];
+      },
+    };
+    var candidate = isSpacerElement(spacer) && hasSpacerHeight(spacer.getAttribute("style"));
+    enforceSpacerHeight(spacerDoc);
+    var initialPriority = styleState.priority;
+    styleState.height = "18px";
+    styleState.priority = "";
+    enforceSpacerHeight(spacerDoc, [
+      {
+        type: "attributes",
+        attributeName: "style",
+        oldValue: "height: 24px !important;",
+        target: spacer,
+      },
+    ]);
     var cases = [
       [isSessionUrl("https://arena.ai/agent/foo"), true],
       [isSessionUrl("https://www.arena.ai/agent/foo/bar"), true],
@@ -60,6 +166,14 @@
       [shouldHideComposer(true, true), true],
       [shouldHideComposer(true, false), false],
       [shouldHideComposer(false, true), false],
+      [candidate, true],
+      [hasSpacerHeight("height: 24px;"), true],
+      [hasSpacerHeight("height: 24px !important;"), true],
+      [hasSpacerHeight("height: 25px;"), false],
+      [initialPriority, "important"],
+      [styleState.height, SPACER_HEIGHT],
+      [styleState.priority, "important"],
+      [styleState.writes, 2],
     ];
     var failed = 0;
     var i;
@@ -136,13 +250,35 @@
     showEditor(editor);
   }
 
-  var observer = new MutationObserver(sync);
+  function enforceCurrentSpacerHeight(mutations) {
+    if (isSessionUrl(location.href)) {
+      enforceSpacerHeight(document, mutations);
+    }
+  }
+
+  function handleMutations(mutations) {
+    enforceCurrentSpacerHeight(mutations);
+    var i;
+    for (i = 0; i < mutations.length; i += 1) {
+      if (mutations[i].type !== "attributes" || mutations[i].attributeName !== "style") {
+        sync();
+        return;
+      }
+    }
+  }
+
+  var observer = new MutationObserver(handleMutations);
   observer.observe(document.documentElement, {
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ["aria-label"],
+    attributeFilter: ["aria-label", "style"],
+    attributeOldValue: true,
   });
-  window.addEventListener("popstate", sync);
+  window.addEventListener("popstate", function () {
+    enforceCurrentSpacerHeight();
+    sync();
+  });
+  enforceCurrentSpacerHeight();
   sync();
 })();
