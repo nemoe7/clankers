@@ -185,12 +185,12 @@ jobs:
       - name: Install Test Dependencies
         if: steps.preview.outputs.run == 'true'
         run: |
-          python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1
+          python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1 pytest-xdist==3.6.1
           npm ci
 
       - name: Run Preview Tests
         if: steps.preview.outputs.run == 'true'
         run: |
-          python -m pytest skills/refs/arena-preview-steering/scripts/check_preview.py -q
+          python -m pytest skills/refs/arena-preview-steering/scripts/check_preview.py -q -n auto
           python maintenance/check_minify.py
-          node --test skills/refs/arena-preview-steering/scripts/check_client.cjs
+          node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-preview-steering/scripts/check_client.cjs
