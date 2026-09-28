@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Arena agent steering
+// @name         Arena Agent Steering
 // @namespace    https://github.com/nemoe7/clankers
 // @version      1.1.0
 // @description  On /agent/*, wait 1s then click {repo} - Steering on port 8000 once per page
@@ -7,6 +7,8 @@
 // @license      MIT
 // @match        https://arena.ai/*
 // @match        https://www.arena.ai/*
+// @updateURL    https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/arena-agent-steering.user.js
+// @downloadURL  https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/arena-agent-steering.user.js
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
