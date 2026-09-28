@@ -1818,4 +1818,66 @@ test('preview client', async (t) => {
     assert.match(copied.at(-1), /"id":"notes-only"/);
     assert.equal(get('#copy-state').dataset.state, 'good');
   });
+  await t.test('Acknowledgement IDs link to matching messages, reports, and tasks', async () => {
+    state = {
+      notes: [
+        { id: 'question', text: 'Question', at: '2026-09-22T12:00:00',
+          acknowledged_at: '2026-09-22T12:01:00', ack_kind: 'reply', ack_text: 'See references',
+          ack_html: '<p>See <code>report-ref</code>, <code>message-ref</code>, <code>task-ref</code>, <code>missing-ref</code>, <code>duplicate-ref</code>.</p><pre><code>task-ref\n</code></pre>' },
+        { id: 'message-ref', text: 'Linked message', at: '2026-09-22T12:02:00' }
+      ],
+      reports: [
+        { id: 'report-ref', title: 'Linked report', updated_at: '2026-09-22T12:00:00' },
+        { id: 'duplicate-ref', title: 'Duplicate report', updated_at: '2026-09-22T12:00:00' }
+      ],
+      tasks: {
+        upcoming: [
+          { id: 'task-ref', title: 'Linked task', details: [], status: 'upcoming', order: 1 },
+          { id: 'duplicate-ref', title: 'Duplicate task', details: [], status: 'upcoming', order: 2 }
+        ],
+        finished: [], updated_at: '2026-09-22T12:00:00'
+      },
+      fetch_jobs: [], last_check: null
+    };
+    await get('#refresh-notes').events.click();
+    const row = id => get('#history').children.find(item => item.children[2].children[0].dataset.full === id);
+    const answer = row('question').children[1];
+    for (const [type, id, panel] of [
+      ['report', 'report-ref', 'reports-panel'],
+      ['note', 'message-ref', 'notes-panel'],
+      ['task', 'task-ref', 'tasks-panel']
+    ]) {
+      assert.match(answer.innerHTML, new RegExp(`<a class="ack-reference" href="#${panel}" data-reference-type="${type}" data-reference-id="${id}"><code>${id}</code></a>`));
+    }
+    assert.match(answer.innerHTML, /<code>missing-ref<\/code>/, 'unknown IDs stay plain code');
+    assert.match(answer.innerHTML, /<code>duplicate-ref<\/code>/, 'ambiguous IDs stay plain code');
+    assert.match(answer.innerHTML, /<pre><code>task-ref\n<\/code><\/pre>/, 'code blocks stay unchanged');
+
+    const follow = (type, id) => {
+      const target = new Element();
+      target.className = 'ack-reference';
+      target.dataset = { referenceType: type, referenceId: id };
+      let prevented = false;
+      documentEvents.click({ target, preventDefault: () => { prevented = true; } });
+      assert.equal(prevented, true, `${type} navigation prevents the fragment jump`);
+    };
+    get('#log-filter').value = 'said';
+    get('#log-filter').events.change();
+    follow('report', 'report-ref');
+    assert.equal(get('#reports-panel').hidden, false);
+    assert.equal(get('#report-select').value, 'report-ref');
+    await tick(); await tick();
+
+    follow('note', 'message-ref');
+    assert.equal(get('#notes-panel').hidden, false);
+    assert.equal(get('#log-filter').value, 'all', 'note links clear filters that hide their target');
+    assert.equal(row('message-ref').hidden, false);
+    assert.equal(row('message-ref').scrolledIntoView, true);
+
+    follow('task', 'task-ref');
+    assert.equal(get('#tasks-panel').hidden, false);
+    const taskTitle = get('#tasks-current-body').children[0].children[0];
+    assert.equal(taskTitle.scrolledIntoView, true);
+    assert.equal(taskTitle.focused, true);
+  });
 });
