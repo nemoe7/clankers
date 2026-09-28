@@ -66,6 +66,7 @@ Read these first:
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, and for the ChatGPT fields also into `rules/wenyan/`, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - The CHANGELOG is the only ledger, with no separate amendment file.
+- No size diffs in CHANGELOG.md.
 - Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
 
 ## Reports and approval
@@ -79,6 +80,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - Ledger and report prose: neutral wording — actions, files, numbers; no narrative of who did what.
 - Every entry terse: one entry per event, no story between facts.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
+- Chat text and reports: at most 3 sentences per block; keep terse.
 - No clause in a rule, skill, or workflow file is added, amended, or deleted until the user approves the report; hold the work and say so in one line. Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
 - Clauses amended/added verbatim by the owner do not need to pass thru approval.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
@@ -123,7 +125,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
-- Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100. The covered files are `docs/` and every `README.md`. The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files. Prose that predates this rule keeps its wording until someone edits it. Rules, skills and agent-facing files such as this one stay outside the linter's scope. A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
+- Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100. The covered files are `docs/`, every `README.md`, and `CHANGELOG.md`. The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files. Prose that predates this rule keeps its wording until someone edits it. Rules, skills and agent-facing files such as this one stay outside the linter's scope. A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 
 - Squash every `README.md` and every file in `docs/` against the [compression procedure](README.md#compression); prose is not exempt.
 
