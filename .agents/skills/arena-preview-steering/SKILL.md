@@ -12,6 +12,8 @@ metadata:
 
 Use one server and one state directory per session; do not start a second server.
 
+Use this guide and its Markdown references for instructions. Do not read shipped scripts to learn the workflow. Read a script only when the task needs a code change or source-level analysis.
+
 ## Setup
 
 1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
