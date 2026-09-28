@@ -101,3 +101,6 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-26: Accepted without funding. `rules/ARENA.md` +141 `B` for the re-read clause.
 2026-09-26: Accepted without funding. `rules/ARENA.md` +95 `B` for the setup-gate clause.
 2026-09-28: Accepted without funding. `rules/AGENTS.md` +44 `tok`, 1,545 to 1,589, for the three approved no-restate clauses from report `no-restate-clause-proposals`.
+2026-09-28: Accepted without funding. `rules/ARENA.md` +201 `B`, 14,375 to 14,576, for the three approved no-restate clauses from report `no-restate-clause-proposals-arena`; the root copy matches byte for byte.
+2026-09-28: Accepted without funding. `rules/CHATGPT-CUSTOM.txt` +62 `chars`, 1,436 to 1,498, for the approved DOCS lines and FORMAT compression that funds them against the 1,500-char field cap.
+
