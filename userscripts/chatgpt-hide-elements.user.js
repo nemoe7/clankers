@@ -2,7 +2,7 @@
 // @name         ChatGPT Hide Elements
 // @namespace    https://github.com/nemoe7/clankers
 // @version      1.0.0
-// @description  On chatgpt.com, add hidden to the claim, offer, toggle and Codex elements
+// @description  On chatgpt.com, add hidden to the claim, offer, toggle, Codex and header elements
 // @author       nemoe7
 // @license      MIT
 // @match        https://chatgpt.com/*
@@ -22,6 +22,7 @@
   var SURFACE_RADIO_SELECTOR = 'div[role="radiogroup"][aria-label="Select chat surface"]';
   var SURFACE_DIV_SELECTOR = "div.start-1\\/2";
   var CODEX_LINK_SELECTOR = 'a[data-sidebar-item][href="/codex"]';
+  var HEADER_DIV_SELECTOR = "div[data-prompt-textarea-header]";
 
   function findClaimDiv(doc) {
     var button = doc.querySelector(CLAIM_BUTTON_SELECTOR);
@@ -48,6 +49,10 @@
     return doc.querySelector(CODEX_LINK_SELECTOR);
   }
 
+  function findHeaderDiv(doc) {
+    return doc.querySelector(HEADER_DIV_SELECTOR);
+  }
+
   function hideElement(el) {
     if (!el || el.hasAttribute("hidden")) {
       return false;
@@ -61,6 +66,7 @@
     hideElement(findFreeOfferDiv(document));
     hideElement(findSurfaceDiv(document));
     hideElement(findCodexLink(document));
+    hideElement(findHeaderDiv(document));
   }
 
   function fakeElement() {
@@ -82,6 +88,7 @@
     var freeDiv = fakeElement();
     var surfaceDiv = fakeElement();
     var codexLink = fakeElement();
+    var headerDiv = fakeElement();
     var claimButton = {
       closest: function (selector) {
         return selector === CLAIM_DIV_SELECTOR ? claimDiv : null;
@@ -129,6 +136,11 @@
         return selector === CODEX_LINK_SELECTOR ? codexLink : null;
       },
     };
+    var headerDoc = {
+      querySelector: function (selector) {
+        return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
+      },
+    };
     var emptyDoc = {
       querySelector: function () {
         return null;
@@ -152,6 +164,8 @@
       [findSurfaceDiv(emptyDoc), null],
       [findCodexLink(codexDoc), codexLink],
       [findCodexLink(emptyDoc), null],
+      [findHeaderDiv(headerDoc), headerDiv],
+      [findHeaderDiv(emptyDoc), null],
       [hideElement(claimDiv), true],
       [claimDiv.hasAttribute("hidden"), true],
       [hideElement(claimDiv), false],

@@ -48,12 +48,13 @@ The script keeps a blank `div.shrink-0` at 24px on `/agent/*`. It resets the hei
 
 The script runs on any path of `chatgpt.com`.
 
-The script adds the `hidden` attribute to four elements:
+The script adds the `hidden` attribute to five elements:
 
 - The div that holds the Claim offer button.
 - The div that holds the Free offer button.
 - The div that holds the Select chat surface toggle.
 - The Codex sidebar link.
+- The prompt textarea header banner.
 
 A MutationObserver repeats the work when the page changes.
 
