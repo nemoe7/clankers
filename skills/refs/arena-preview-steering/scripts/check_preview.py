@@ -2726,6 +2726,26 @@ def test_restore_import():
     assert len(preview.Store(restore).state()["notes"]) == 3
 
 
+def test_bash_gate():
+  # The gate blocks only past the threshold while the inbox stays pending.
+  with tempfile.TemporaryDirectory() as gate_dir:
+    gate_store = preview.Store(gate_dir, create=True)
+    gate_store.note("gate-note", "Pending work")
+    gate_store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD - 1))
+    assert gate_store.gate()
+    gate_store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+    assert not gate_store.gate()
+    gate_store.acknowledge(["gate-note"], "note", "Cleared")
+    assert gate_store.gate()
+    gate_script = str(Path(preview.__file__))
+    blocked = subprocess.run(
+      [sys.executable, gate_script, "--state-dir", gate_dir, "gate"],
+      capture_output=True,
+      text=True,
+    )
+    assert blocked.returncode == 0
+
+
 def test_dispatch_reminder():
   # Every dispatch carries a reminder without changing stdout; only a delivered read
   # or an explicit receipt marks a note seen.
