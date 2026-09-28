@@ -76,7 +76,8 @@
 ## Verification
 
 - Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
-- Work in several passes; label questions Q1, Q2, …, state the batch total first, restating it before adding one; ALWAYS end every turn with normal `arena-preview poll` on the final Bash call. MUST NOT substitute sleep or `poll --max 1`; NEVER treat a bounded no-result poll as a successful wait.
+- Work in several passes; label Q1,Q2,…, state batch total first, restating before adding one; ALWAYS end every turn with `arena-preview poll` on final Bash call; MUST NOT substitute sleep; NEVER treat bounded no-result poll as successful wait.
+- Run `arena-preview poll` with bash timeout 1800s.
 - Confirm a duplicated, garbled, or disowned message in one line before acting, keeping its edit reversible until then; the Arena client resends, truncates, and returns empty results from tools that ran, so treat a repeat as a resend: answer what is pending, restate finished work in one line, NEVER redo or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; grep every caller first, keep hypotheses falsifiable, one variable at a time, NEVER guess, use a fallback, or hide a failure, and revise disproven assumptions.
 - Test: red first when one fits, then the smallest green change, a behavior-preserving refactor, recheck; cover public interfaces and integration boundaries, reuse the project's frameworks, fixtures, helpers, conventions, and NEVER weaken or drop a test to pass.
