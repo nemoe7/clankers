@@ -6,3 +6,4 @@
 - ALWAYS manage the TODO list with `todowrite`/`todoread`.
 - ALWAYS include commit steps in the TODO list, each with its message.
 - Run shell commands in PowerShell (`pwsh`), not Bash.
+- NEVER use `cd`. The `bash` tool already starts in the correct directory.
