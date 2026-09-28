@@ -30,3 +30,6 @@ Markdown: markdownlint defaults + MD060, MD013 off.
 NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
+DOCS: Open on the substance, no preamble or postamble.
+DOCS: Cite code, diffs and tool output by path and line instead of repeating.
+DOCS: Continue after a tool call with no narration of the result.
