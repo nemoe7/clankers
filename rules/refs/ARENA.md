@@ -31,7 +31,7 @@
 
 ## General
 
-- Read the inbox with `scripts/preview.py --state-dir <directory> read` at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. Block mechanics: the skill reference, Read cadence.
+- Read the inbox with `arena-preview read` at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. Block mechanics: the skill reference, Read cadence.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read; once the inbox exists, missing or failed reads are errors, NEVER empty inboxes.
 - Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so acknowledge notes separately when the answers differ. NEVER blindly acknowledge all pending notes.
 - A receipt means received, not implemented. Acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
@@ -100,7 +100,7 @@
 - Before asking questions, state the total number of questions that batch will hold and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same batch without first stating the updated total.
 - Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
-- End every turn by reading the session's steering channel: the user's "anything else" arrives there, so check for it instead of asking for it.
+- ALWAYS end every turn with normal `arena-preview poll` on the final Bash call. MUST NOT substitute sleep or `poll --max 1`; NEVER treat a bounded no-result poll as a successful wait.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
 - The Arena client is unreliable: it resends messages, truncates or drops replies, and returns empty results from tools that did run. Treat a repeated or identical message as a resend rather than a new instruction — answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
@@ -181,8 +181,7 @@
 
 ## Deliverables
 
-- Save workspace deliverables and open the main one. For longer reports, use `arena-preview-steering` and direct the user to its Reports tab and titled report; verify rendering rather than assuming the native viewer renders Markdown.
-- Keep report sources as Markdown; the live Reports tab is the delivery.
+- Save workspace deliverables and open the main one.
 - Other formats remain request-only.
 - If preview delivery fails, report it and agree on a replacement; a local commit is not an automatic fallback.
 - Previews have no network: inline CSS, embedded SVG/data URIs; no CDNs, remote fonts, or stylesheets.
@@ -197,7 +196,6 @@
 - Prefer numbered lists for multiple points.
 - Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours.
 - Short chat reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
-- MUST use ASD-STE100.
 - NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
