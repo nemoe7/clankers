@@ -4,6 +4,7 @@ import contextlib
 import http.client
 import importlib.util
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -14,6 +15,100 @@ from pathlib import Path
 from unittest.mock import patch
 
 import minify
+
+
+def check_preview_path():
+  """Check PATH installation, reset recovery and repo-local command dispatch."""
+  source_scripts = minify.SOURCE / "scripts"
+  copies = ("install.sh", "arena-preview")
+  for name in copies:
+    source = source_scripts / name
+    for target in minify.TARGETS:
+      installed = target / "scripts" / name
+      assert installed.read_bytes() == source.read_bytes(), installed
+    assert os.access(minify.TARGETS[1] / "scripts" / name, os.X_OK), name
+
+  with tempfile.TemporaryDirectory(prefix="arena-preview-path-") as directory:
+    home = Path(directory)
+    python = home / ".agents/.arena-preview-venv/bin/python"
+    python.parent.mkdir(parents=True)
+    python.write_text(
+      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$HOME/arena-preview-args"\n',
+      encoding="utf-8",
+    )
+    python.chmod(0o755)
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+    environment["XDG_CONFIG_HOME"] = str(home / ".config")
+    environment.pop("BASH_ENV", None)
+    environment.pop("GIT_CONFIG_GLOBAL", None)
+    install = minify.TARGETS[1] / "scripts/install.sh"
+
+    # A fresh home models a reset. Reinstallation must restore the hook once.
+    for _ in range(2):
+      result = subprocess.run(
+        ["bash", str(install)],
+        cwd=minify.ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert result.returncode == 0, result.stderr
+
+    profile = (home / ".bash_profile").read_text(encoding="utf-8")
+    assert profile.count("# arena-preview-hook") == 1
+    assert profile.count("# arena-preview-path") == 1
+    path_result = subprocess.run(
+      [
+        "bash",
+        "--noprofile",
+        "--norc",
+        "-c",
+        (
+          'source "$HOME/.bash_profile"; source "$HOME/.bash_profile"; '
+          "command -v arena-preview; printf '%s\\n' \"$PATH\"; trap - EXIT"
+        ),
+      ],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert path_result.returncode == 0, path_result.stderr
+    lines = path_result.stdout.splitlines()
+    command = str(minify.TARGETS[1] / "scripts/arena-preview")
+    assert lines[0] == command, path_result.stdout
+    assert lines[1].split(os.pathsep).count(str(minify.TARGETS[1] / "scripts")) == 1
+
+    command_result = subprocess.run(
+      [
+        "bash",
+        "--noprofile",
+        "--norc",
+        "-c",
+        'source "$HOME/.bash_profile"; arena-preview poll --max 1; trap - EXIT',
+      ],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert command_result.returncode == 0, command_result.stderr
+    assert (home / "arena-preview-args").read_text(encoding="utf-8").splitlines() == [
+      str(minify.TARGETS[1] / "scripts/preview.py"),
+      "--state-dir",
+      str(minify.ROOT / "arena-state"),
+      "poll",
+      "--max",
+      "1",
+    ]
+  print("PASS: repo-aware PATH install, reset and dispatch")
+
+
+check_preview_path()
 
 sample = '''#!/usr/bin/env python3
 """Keep CLI help and module documentation."""

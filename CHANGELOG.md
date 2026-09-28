@@ -1,3 +1,7 @@
+## 2026-09-28
+
+- **Preview CLI PATH command**: `install.sh` adds the active repo's `.agents/skills/arena-preview-steering/scripts` to PATH for new Bash shells. `arena-preview <command>` uses the repo's installed script, venv and state; rerun the installer after a sandbox reset. Tests cover PATH recovery and argument forwarding.
+
 ## 2026-09-27
 
 - **Steering click delay**: `userscripts/arena-agent-steering.user.js` waits 1 second, then clicks `{repo} - Steering` once per page.

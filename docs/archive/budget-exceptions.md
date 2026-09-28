@@ -2,6 +2,8 @@
 
 Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
 
+2026-09-28: Accepted without funding. `skills/arena-preview-steering/scripts/install.sh` +883 `B` to expose `arena-preview` through PATH and restore it after a reset.
+
 2026-09-27: Unfunded. `skills/arena-preview-steering/assets/app.js` +14 `B` and `scripts/preview.py` +261 `B` for `ever_seen` on reports, owner request.
 
 2026-09-27: Unfunded. `skills/arena-preview-steering/scripts/preview.py` +41 `B` for the reminder rotation, owner verbatim.
