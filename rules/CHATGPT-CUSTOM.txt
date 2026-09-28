@@ -13,9 +13,10 @@ NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
 SOLID vs YAGNI/KISS/DRY: ask while planning which governs.
 
-FORMAT (`nemoe7` repos; others: theirs): 2-space indent.
-Python: Ruff defaults via project `ruff.toml`; gates: ruff check + format, no CLI overrides.
-Markdown: markdownlint defaults + MD060, MD013 off.
+FORMAT: 2-space; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
 Comments only where complexity needs them.
 
 DOCS: no storyline or narrative unless asked.
+DOCS: Open on substance, no preamble, no postamble.
+DOCS: Cite code, diffs and output by path and line; never repeat.
+DOCS: After a tool call, continue with no result narration.

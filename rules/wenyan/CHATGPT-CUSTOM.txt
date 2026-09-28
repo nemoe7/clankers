@@ -13,3 +13,6 @@ Planning 时问：SOLID 或 YAGNI/KISS/DRY 孰主。
 FORMAT（限 `nemoe7` repos；他 repo 从其惯例）: 2-space indent。Python: Ruff defaults，用项目 `ruff.toml`；无则建之（indent-width 2；ignore BLE001 S110；extend-safe-fixes C408 PERF102 RUF059；required-version 0.16.6）；commit 前 gates：`ruff check`、`ruff format`，无 CLI overrides。Markdown: markdownlint defaults + MD060, MD013 off。
 Comments 唯 method 复杂所需时加。
 DOCS: 非用户所求，无 storyline/narrative。
+DOCS: 开门见山，不铺垫，不收尾。
+DOCS: 代码、差异、文件内容与工具输出只引路径与行号，不复述。
+DOCS: 工具调用成功后直接继续，不复述结果。

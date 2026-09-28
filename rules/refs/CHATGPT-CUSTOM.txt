@@ -24,9 +24,7 @@ No speculative behavior or tests; trivial one-liners need no test; mechanical-on
 NEVER weaken a test to pass.
 SOLID and the simplicity principles collide by design, so MUST ask during planning which governs the task — SOLID reuse and extensibility, or YAGNI/KISS/DRY simplicity — and follow the answer.
 
-FORMAT: repositories owned by `nemoe7`; other repositories follow their own conventions. 2-space indentation.
-Python projects: use Ruff with its default rule selection from the project's `ruff.toml`; when none exists, create one with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`; gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
-Markdown: markdownlint defaults + MD060, MD013 off.
+FORMAT: 2-space; other repos keep their conventions; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
 NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.

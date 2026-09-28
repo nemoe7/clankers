@@ -38,6 +38,9 @@
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
 - Comments, docs, responses: terse, unambiguous.
 - Documentation: no storyline or narrative unless asked.
+- Open on the substance, never preamble or postamble.
+- Cite code, diffs and tool output by path and line instead of repeating.
+- Step straight on after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 - ALWAYS take the smallest open task next; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
 - Work while tasks remain. End when verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason. After each push, poll PR checks with backoff: at once, then 10s, 20s, 30s, then every 30s to a conclusion. Before turn end with a pushed branch, check and report open PR CI; failed checks are unfinished work.
