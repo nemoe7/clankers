@@ -250,6 +250,17 @@ def message_row(row):
   return record
 
 
+def restore_reply_seen_count(value, replies):
+  """Validate how many appended replies a save records as already viewed."""
+  if value is None:
+    return 0
+  if type(value) is not int or value < 0:
+    raise ValueError("A saved viewed-reply count is a nonnegative integer")
+  if value > len(replies_list(replies)):
+    raise ValueError("A saved viewed-reply count exceeds the stored replies")
+  return value
+
+
 def submission_text(text):
   """Report answers are not notes, so they carry their own cap and their own wording."""
   if not isinstance(text, str) or not text.strip():
@@ -433,6 +444,7 @@ NOTE_LINE_KEYS = (
   "ack_text",
   "ack_edited_at",
   "replies",
+  "ack_edited_seen_count",
   "seen_at",
   "task_id",
 )
@@ -447,6 +459,7 @@ SUBMISSION_LINE_KEYS = (
   "ack_text",
   "ack_edited_at",
   "replies",
+  "ack_edited_seen_count",
   "seen_at",
   "task_id",
 )
@@ -775,7 +788,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS notes (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
-          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT
+          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
+          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -785,7 +799,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,
-          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT
+          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
+          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS uploads (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,
@@ -825,6 +840,10 @@ class Store:
       ):
         if column not in columns:
           db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
+      if "ack_edited_seen_count" not in columns:
+        db.execute(
+          "ALTER TABLE notes ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0"
+        )
       if "origin" in columns:
         # The author tag is gone from the note schema; drop a column a restore might
         # still carry so SELECT * never resurfaces it on the state surface.
@@ -844,6 +863,10 @@ class Store:
         db.execute("ALTER TABLE submissions ADD COLUMN task_id TEXT")
       if "replies" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN replies TEXT")
+      if "ack_edited_seen_count" not in columns:
+        db.execute(
+          "ALTER TABLE submissions ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0"
+        )
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "seen_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN seen_at TEXT")
@@ -895,6 +918,7 @@ class Store:
     autosave=True,
     shared=None,
     replies=None,
+    ack_edited_seen_count=None,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -908,6 +932,7 @@ class Store:
     note_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
     more = restore_replies(replies, receipt[0])
+    seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
     seen = when(seen_at) if seen_at is not None else None
     with self.transaction(shared, autosave=autosave) as db:
       if shared is None:
@@ -920,8 +945,8 @@ class Store:
       db.execute(
         "INSERT INTO notes"
         " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id,"
-        " replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (note_id, text, at or now(), *receipt, seen, task_id, more),
+        " replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (note_id, text, at or now(), *receipt, seen, task_id, more, seen_reply_count),
       )
       reset_poll_count(db)
       return message_row(
@@ -943,6 +968,7 @@ class Store:
     shared=None,
     autosave=True,
     replies=None,
+    ack_edited_seen_count=None,
   ):
     """Record report answers apart from user messages; the log never shows them.
 
@@ -956,6 +982,7 @@ class Store:
     submission_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
     more = restore_replies(replies, receipt[0])
+    seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
     with self.transaction(shared, autosave=autosave) as db:
       if shared is None:
         db.execute("BEGIN IMMEDIATE")
@@ -969,7 +996,7 @@ class Store:
       db.execute(
         "INSERT INTO submissions"
         " (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at,"
-        " task_id, replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " task_id, replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
           submission_id,
           report_id,
@@ -979,6 +1006,7 @@ class Store:
           when(seen_at) if seen_at is not None else None,
           task_id,
           more,
+          seen_reply_count,
         ),
       )
       reset_poll_count(db)
@@ -1797,6 +1825,30 @@ class Store:
         else:
           raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
 
+  def mark_replies_seen(self, record_id, count):
+    """Persist the number of appended replies this page actually displayed as viewed."""
+    identifier(record_id)
+    if type(count) is not int or count < 0:
+      raise ValueError("A viewed-reply count is a nonnegative integer")
+    with self.transaction() as db:
+      for table in ("notes", "submissions"):
+        row = db.execute(
+          f"SELECT replies, ack_edited_seen_count FROM {table} WHERE id = ?",
+          (record_id,),
+        ).fetchone()
+        if row is None:
+          continue
+        reply_count = len(replies_list(row["replies"]))
+        if count > reply_count:
+          raise ValueError("The viewed-reply count exceeds the current replies")
+        seen_count = max(int(row["ack_edited_seen_count"] or 0), count)
+        db.execute(
+          f"UPDATE {table} SET ack_edited_seen_count = ? WHERE id = ?",
+          (seen_count, record_id),
+        )
+        return {"id": record_id, "ack_edited_seen_count": seen_count}
+    raise FileNotFoundError("Message not found")
+
   def mark_task(self, record_id, task_id, shared=None):
     """Record that a message has a task, on whichever table holds that message.
 
@@ -2272,6 +2324,9 @@ def handler(store):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
+      message_replies_seen = re.fullmatch(
+        r"/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen", path
+      )
       report_unpublish = re.fullmatch(
         r"/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish", path
       )
@@ -2292,6 +2347,7 @@ def handler(store):
         }
         and not report_submit
         and not report_seen
+        and not message_replies_seen
         and not report_unpublish
         and not upload_post
         and not note_upload
@@ -2425,6 +2481,12 @@ def handler(store):
           for key in ("updated_at", "seen_at"):
             report[key] = clip_stamp(report[key])
           self.reply(200, json.dumps(report, ensure_ascii=False))
+          return
+        if message_replies_seen:
+          seen = store.mark_replies_seen(
+            message_replies_seen.group(1), payload.get("count")
+          )
+          self.reply(200, json.dumps(seen, ensure_ascii=False))
           return
         if report_unpublish:
           store.unpublish(report_unpublish.group(1))
@@ -2714,6 +2776,7 @@ def main():
           task_id=record.get("task_id"),
           autosave=False,
           replies=record.get("replies"),
+          ack_edited_seen_count=record.get("ack_edited_seen_count"),
         )
       for record in records:
         store.note(
@@ -2728,6 +2791,7 @@ def main():
           task_id=record.get("task_id"),
           autosave=False,
           replies=record.get("replies"),
+          ack_edited_seen_count=record.get("ack_edited_seen_count"),
         )
       receipts = sum(1 for record in records if record.get("acknowledged_at"))
       print(
