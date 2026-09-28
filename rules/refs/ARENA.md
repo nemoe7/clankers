@@ -39,6 +39,7 @@
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
 - If the preview did not start, report it and block with one visibility question, asked through `ask_user`, before any work beyond setup; the preview cannot carry its own visibility question. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask; the process tool's live-preview banner is not owner confirmation and does not replace the question.
 - A confirmation NEVER crosses a session boundary: every session's first successful start enters that block, and only a later restart in the same session, after that session's own confirmation, needs no ask; NEVER silently restore ntfy. The historical transport is documented in the skill's migration reference.
+- After a sandbox reset, run `git fetch origin`, rerun the preview installer, and restart the preview with the same state directory. Do not ask the visibility question again after the reset.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
