@@ -1319,10 +1319,6 @@ class Store:
       raise ValueError("Invalid attachment position")
     directory = self.path.parent / UPLOAD_DIR
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # The owner's name never supplies a path. Several-file sends use <note-id>-1, -2, etc.; a
-    # single-file send keeps <note-id> for existing links and restored records.
-    stem = f"{note_id}-{position}" if position is not None else upload_id
-    target = directory / f"{stem}{Path(cleaned).suffix[:16]}"
     with self.transaction(shared) as db:
       if shared is None:
         db.execute("BEGIN IMMEDIATE")
@@ -1336,8 +1332,7 @@ class Store:
           existing["type"],
           existing["size"],
           existing["sha256"],
-          existing["file"],
-        ) != (note_id, cleaned, kind, len(data), digest, target.name):
+        ) != (note_id, cleaned, kind, len(data), digest):
           raise ValueError("This note ID already belongs to a different file")
         target = directory / existing["file"]
         if (
@@ -1347,6 +1342,26 @@ class Store:
           target.write_bytes(bytes(data))
           target.chmod(0o600)
         return upload_row(existing, self.path.parent)
+      duplicate_count = db.execute(
+        "SELECT COUNT(*) FROM uploads WHERE note_id = ? AND replace(name, ' ', '-') = ?",
+        (note_id, cleaned.replace(" ", "-")),
+      ).fetchone()[0]
+      number = duplicate_count + 1
+      timestamp = int(time.time())
+      extension = Path(cleaned).suffix[:16].replace(" ", "-")
+      filename_stem = Path(cleaned).stem.replace(" ", "-")
+      while True:
+        duplicate = f"-{number}" if number > 1 else ""
+        stem = f"{note_id[:7]}-{timestamp}{duplicate}-{filename_stem}"
+        target = directory / f"{stem}{extension}"
+        if len(os.fsencode(target.name)) > 255:
+          raise ValueError("A stored file name exceeds the filesystem limit")
+        collision = db.execute(
+          "SELECT 1 FROM uploads WHERE file = ?", (target.name,)
+        ).fetchone()
+        if not collision and not target.exists():
+          break
+        number += 1
       target.write_bytes(bytes(data))
       target.chmod(0o600)
       db.execute(
