@@ -5,7 +5,7 @@ copies carry minified JavaScript, CSS, HTML and Python, each budgeted in README.
 Markdown compression is editorial, never part of this build.
 
 Install the pinned npm tools with `npm ci` and the build-only Python dependency with
-`python -m pip install python-minifier==3.3.0`. CI builds with Python 3.11; generated
+`python -m pip install python-minifier==3.3.0`. CI builds with Python 3.11. Generated
 Python must retain its parsed tree and parse as Python 3.10 before any output is written.
 
 Usage:
@@ -13,7 +13,7 @@ Usage:
   python maintenance/minify.py --update   # write the minified copies
 
 `check.py` gates each live file's size through the README table. This script reports drift,
-which the budget cannot see; run it after any change to a refs asset or script.
+which the budget cannot see. Run it after any change to a refs asset or script.
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
       f"{binary} on {source.name}:\n{result.stderr.strip() or 'failed'}"
     )
 
-  # The HTML minifier leaves a separator after </html>; do not ship trailing whitespace.
+  # The HTML minifier leaves a separator after </html>. Do not ship trailing whitespace.
   return result.stdout.rstrip() + "\n"
 
 

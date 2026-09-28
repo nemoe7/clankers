@@ -177,7 +177,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert minify.main() == 1
     assert stale.read_text() == "stale\n"
 
-  # Exact CSS/JS assertions still use readable assets. The runtime is the generated build; the
+  # Exact CSS/JS assertions still use readable assets. The runtime is the generated build. The
   # harness is not shipped, so it comes from the readable refs tree and drives that build.
   skill = root / "runtime"
   shutil.copytree(minify.SOURCE / "assets", skill / "assets")

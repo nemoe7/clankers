@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate repository structure and maintain README measurements."""
+"""Check repository structure and maintain README measurements."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 SKILLS = ROOT / "skills"
 # Vendored agent-facing skills live only under `.agents/skills/`, which this script
-# deliberately never reads: they are not owner skills, so they are neither validated
+# deliberately never reads: they are not owner skills, so they are neither checked
 # here nor listed in `skills/README.md`.
 RULES = ROOT / "rules"
 WORKFLOWS = ROOT / "workflows"
@@ -90,7 +90,7 @@ EXPECTED_LINTED = (
 # agent-facing file, and the owner's ruling keeps this script off those.
 LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 
-# Rule refs baselines hold full wording; live files compress it. Compression may
+# Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
 SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md", "KILO.md")
 PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT-SPEC.txt")
