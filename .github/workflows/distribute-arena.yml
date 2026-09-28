@@ -2,7 +2,7 @@
 # Live skills only; retired installed transport files are removed on dispatch.
 # ARENA_DIST_PAT needs short-lived Contents read/write access to every target.
 # Delivery is not activation: each session must start its own preview.
-name: distribute-arena
+name: Distribute Arena
 on:
   workflow_dispatch:
     inputs:
@@ -24,12 +24,13 @@ env:
   LEGACY_SKILLS: "arena-live-steering arena-preview-reporting"
 jobs:
   distribute:
+    name: Distribute
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out source repository
+      - name: Check Out Source Repository
         uses: actions/checkout@v4
-      - name: Sync ARENA.md and the preview skill to target repos
+      - name: Sync ARENA.md And The Preview Skill To Target Repos
         env:
           ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
           TARGET_REPOS: ${{ inputs.repos }}
