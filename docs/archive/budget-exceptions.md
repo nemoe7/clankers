@@ -100,3 +100,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-25: Accepted without funding. `rules/ARENA.md` +168 `B` for the pending-form `ask_user` block.
 2026-09-26: Accepted without funding. `rules/ARENA.md` +141 `B` for the re-read clause.
 2026-09-26: Accepted without funding. `rules/ARENA.md` +95 `B` for the setup-gate clause.
+2026-09-28: Accepted without funding. `rules/AGENTS.md` +44 `tok`, 1,545 to 1,589, for the three approved no-restate clauses from report `no-restate-clause-proposals`.

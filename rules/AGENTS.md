@@ -22,6 +22,9 @@
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
 - Comments, docs, responses: terse, unambiguous.
 - Documentation: no storyline or narrative unless asked.
+- Open on the substance, never preamble or postamble.
+- Cite code, diffs and tool output by path and line instead of repeating.
+- Step straight on after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 
 ## Scope
