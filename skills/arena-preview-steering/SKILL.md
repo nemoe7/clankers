@@ -18,10 +18,10 @@ Use this guide and its Markdown references for workflow; read shipped scripts on
 
 1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
 2. Use an ignored, persisted state directory, default `arena-state`. Verify `core.excludesFile` with `git check-ignore`; never add this directory to the repository `.gitignore`, put it in a cache/build folder, or commit/push its state and reports.
-3. Run `<skill>/scripts/install.sh` once per session. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell:
+3. Run `<skill>/scripts/install.sh` once per session; it adds repo-aware `arena-preview` to PATH. Use `arena-preview <command>` for CLI calls. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell:
 
    ```bash
-   ~/.agents/.arena-preview-venv/bin/python <skill>/scripts/preview.py --state-dir arena-state serve --port 8000
+   arena-preview serve --port 8000
    ```
 
    After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it.
@@ -30,8 +30,8 @@ Use this guide and its Markdown references for workflow; read shipped scripts on
 ## Read, acknowledge, and track work
 
 ```bash
-python <skill>/scripts/preview.py --state-dir arena-state read
-python <skill>/scripts/preview.py --state-dir arena-state poll
+arena-preview read
+arena-preview poll
 ```
 
 When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call. When ending a turn or a form awaits answers, run `poll`.
@@ -39,7 +39,7 @@ When a pending count is nonzero, `read` now. It prints full pending notes and re
 Acknowledge each delivered ID separately where the owner reads it. Use `--reply <Markdown>` for rendered Markdown or `--note <text>` for one plain line. Never acknowledge all blindly or share one answer across notes. Use the full ID, not a sequence number. A second ack appends a reply below the first; it does not replace it. Receipt is not completion. Ack immediately; failure earns a negative rating. After acking a work note, add it via `task <id> ... --msg-id <full-id>`; `ack` reminds you.
 
 ```bash
-python <skill>/scripts/preview.py --state-dir arena-state ack <id> --reply <markdown>
+arena-preview ack <id> --reply <markdown>
 ```
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
@@ -51,7 +51,7 @@ Run `task-list` at turn start. Before implementation, add approved work with `ta
 Short answers stay in chat. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result. Opening a source file is not publication.
 
 ```bash
-python <skill>/scripts/preview.py --state-dir arena-state publish <source.md> --id <id> --title <title>
+arena-preview publish <source.md> --id <id> --title <title>
 ```
 
 Republish the same ID after each source update; if answers exist, use a new ID. A stale report leaves with `unpublish <id>`; answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Pair every option set with a labeled custom-response field.
