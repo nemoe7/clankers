@@ -109,7 +109,8 @@ jobs:
             docs/archive/arena-quirks.md \
             rules/README.md \
             rules/refs/README.md \
-            gpt-plugins/README.md
+            gpt-plugins/README.md \
+            CHANGELOG.md
 
       - name: Compile Maintenance Script
         run: python -m compileall maintenance/check.py
