@@ -1,6 +1,6 @@
 ## 2026-09-28
 
-- **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to the Claim offer div, the Free offer div, the chat surface toggle, and the Codex sidebar link. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. Node checks print `ok`.
+- **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to the Claim offer div, the Free offer div, the chat surface toggle, the Codex sidebar link, and the prompt-textarea header banner. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. Node checks print `ok`.
 - **Preview CLI PATH command**: `install.sh` adds `.agents/skills/arena-preview-steering/scripts` to PATH for new Bash shells. `arena-preview <command>` uses the repo's script, venv and state. Tests cover PATH recovery and forwarding, so rerun the installer after a sandbox reset.
 - **Final task-list check**: Require `task-list` before the final reply, then continue any unblocked upcoming task.
 - **Steering prose cleanup**: Use `arena-preview` for ARENA inbox reads and the end-turn wait. Drop duplicate rules and report text plus the primary-skill `--state-dir` line. Keep the raw Python fallback.
