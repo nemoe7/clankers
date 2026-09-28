@@ -17,6 +17,7 @@ EXPECTED = {
   "arena-agent-hide-composer.user.js",
   "arena-agent-prompt.user.js",
   "arena-agent-steering.user.js",
+  "chatgpt-hide-claim-offer.user.js",
 }
 
 
