@@ -99,6 +99,7 @@
 - Work in several passes, not one sweep, re-checking after each.
 - Before asking questions, state the total number of questions that batch will hold and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same batch without first stating the updated total.
+- Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - End every turn by reading the session's steering channel: the user's "anything else" arrives there, so check for it instead of asking for it.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
 - The Arena client is unreliable: it resends messages, truncates or drops replies, and returns empty results from tools that did run. Treat a repeated or identical message as a resend rather than a new instruction — answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
