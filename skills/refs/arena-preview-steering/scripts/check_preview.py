@@ -1324,13 +1324,14 @@ def test_note_owns_one_attachment():
   with tempfile.TemporaryDirectory() as attached_dir:
     attached = preview.Store(attached_dir, create=True)
     raw = bytes(range(256)) + b"\r\nline two\x00"
-    note = attached.note_with_upload(
-      "linked-note", "Read this file", "old name.bin", "application/octet-stream", raw
-    )
+    with patch.object(preview.time, "time", return_value=1_760_000_000):
+      note = attached.note_with_upload(
+        "linked-note", "Read this file", "old name.bin", "application/octet-stream", raw
+      )
     assert note["id"] == "linked-note" and note["text"] == "Read this file"
     record = attached.upload("linked-note")
     assert record["name"] == "old name.bin" and record["size"] == len(raw)
-    assert Path(record["path"]).name == "linked-note.bin"
+    assert Path(record["path"]).name == "linked--1760000000-old-name.bin"
     assert Path(record["path"]).read_bytes() == raw
     assert [item["id"] for item in attached.read()["pending"]] == ["linked-note"]
     assert attached.state()["notes"][0]["attachment_name"] == "old name.bin"
@@ -1365,7 +1366,8 @@ def test_multi_file_note():
       ("another.bin", "application/octet-stream", b"\x00\x01"),
       ("last photo.png", "image/png", b"raw\r\nline"),
     ]
-    saved = multi.note_with_uploads("several-note", "Three files", files)
+    with patch.object(preview.time, "time", return_value=1_760_000_000):
+      saved = multi.note_with_uploads("several-note", "Three files", files)
     assert saved["id"] == "several-note" and len(saved["attachments"]) == 3
     assert [item["name"] for item in saved["attachments"]] == [
       file[0] for file in files
@@ -1373,9 +1375,9 @@ def test_multi_file_note():
     assert saved["attachments"][0]["id"] == "several-note"
     assert len({item["id"] for item in saved["attachments"]}) == 3
     assert [Path(item["path"]).name for item in saved["attachments"]] == [
-      "several-note-1.png",
-      "several-note-2.bin",
-      "several-note-3.png",
+      "several-1760000000-first-photo.png",
+      "several-1760000000-another.bin",
+      "several-1760000000-last-photo.png",
     ]
     assert [Path(item["path"]).read_bytes() for item in saved["attachments"]] == [
       file[2] for file in files
@@ -1426,6 +1428,42 @@ def test_multi_file_note():
         assert "simulated note write error" in str(error)
     assert len(multi.state()["notes"]) == 1 and len(multi.uploads()) == 3
     assert not any(Path(multi_dir, "uploads").glob("rolled-back*"))
+
+
+def test_upload_filenames_are_unique():
+  with tempfile.TemporaryDirectory() as name_dir:
+    store = preview.Store(name_dir, create=True)
+    files = [
+      ("same photo.png", "image/png", b"one"),
+      ("same photo.png", "image/png", b"two"),
+      ("same photo.png", "image/png", b"three"),
+    ]
+    with patch.object(preview.time, "time", return_value=1_760_000_000):
+      first = store.note_with_uploads("abcdefg-one", "Three files", files)
+      second = store.note_with_upload("abcdefg-two", "Same prefix and name", *files[0])
+    names = [Path(item["path"]).name for item in first["attachments"]]
+    second_record = second["attachments"][0]
+    names.append(Path(second_record["path"]).name)
+    assert names == [
+      "abcdefg-1760000000-same-photo.png",
+      "abcdefg-1760000000-2-same-photo.png",
+      "abcdefg-1760000000-3-same-photo.png",
+      "abcdefg-1760000000-4-same-photo.png",
+    ]
+    assert [
+      Path(item["path"]).read_bytes() for item in [*first["attachments"], second_record]
+    ] == [
+      b"one",
+      b"two",
+      b"three",
+      b"one",
+    ]
+    assert [item["name"] for item in [*first["attachments"], second_record]] == [
+      "same photo.png",
+      "same photo.png",
+      "same photo.png",
+      "same photo.png",
+    ]
 
 
 def test_upload_record_migration():
@@ -1508,11 +1546,12 @@ def test_http_note_attachment():
       )
       invalid_header = {**headers, "Content-Type": "multipart/form-data; boundary=é"}
       assert request("POST", "/api/notes/with-file", body, invalid_header)[0] == 400
-      status, _, payload = request("POST", "/api/notes/with-file", body, headers)
+      with patch.object(preview.time, "time", return_value=1_760_000_000):
+        status, _, payload = request("POST", "/api/notes/with-file", body, headers)
       saved = json.loads(payload)
       assert status == 201 and saved["id"] == "http-note"
       assert saved["attachment_name"] == "old photo.png"
-      assert Path(saved["attachment_path"]).name == "http-note.png"
+      assert Path(saved["attachment_path"]).name == "http-no-1760000000-old-photo.png"
       assert Path(saved["attachment_path"]).read_bytes() == binary
       assert [item["id"] for item in attached_http.read()["pending"]] == ["http-note"]
       assert request("POST", "/api/notes/with-file", body, headers)[0] == 201
@@ -1535,10 +1574,11 @@ def test_http_note_attachment():
       received = json.loads(payload)
       assert status == 201 and received["id"] == "http-several"
       assert [item["name"] for item in received["attachments"]] == ["a.txt", "b.bin"]
-      assert [Path(item["path"]).name for item in received["attachments"]] == [
-        "http-several-1.txt",
-        "http-several-2.bin",
-      ]
+      assert [
+        re.fullmatch(rf"http-se-\d+-{re.escape(name)}", Path(item["path"]).name)
+        is not None
+        for item, name in zip(received["attachments"], ("a.txt", "b.bin"))
+      ] == [True, True]
       assert [Path(item["path"]).read_bytes() for item in received["attachments"]] == [
         b"abc",
         b"\x00\xff",
@@ -1575,9 +1615,10 @@ def test_http_note_attachment():
       assert [item["name"] for item in received["attachments"]] == [
         f"f{n}.txt" for n in range(6)
       ]
-      assert [Path(item["path"]).name for item in received["attachments"]] == [
-        f"http-six-{n + 1}.txt" for n in range(6)
-      ]
+      assert [
+        re.fullmatch(rf"http-si-\d+-f{n}\.txt", Path(item["path"]).name) is not None
+        for n, item in enumerate(received["attachments"])
+      ] == [True] * 6
     finally:
       app.shutdown()
       app.server_close()

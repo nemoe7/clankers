@@ -410,15 +410,22 @@ class Store:
 		if len(data)>MAX_UPLOAD:raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
 		cleaned=upload_name(name);kind=upload_type(content_type);digest=hashlib.sha256(data).hexdigest();upload_id=identifier(upload_id)if upload_id is not None else new_id();note_id=identifier(note_id)if note_id is not None else upload_id
 		if position is not None and(not isinstance(position,int)or position<1):raise ValueError('Invalid attachment position')
-		directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448);stem=f"{note_id}-{position}"if position is not None else upload_id;target=directory/f"{stem}{Path(cleaned).suffix[:16]}"
+		directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with self.transaction(shared)as db:
 			if shared is None:db.execute('BEGIN IMMEDIATE')
 			existing=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 			if existing:
-				if(existing['note_id'],existing['name'],existing['type'],existing['size'],existing['sha256'],existing['file'])!=(note_id,cleaned,kind,len(data),digest,target.name):raise ValueError('This note ID already belongs to a different file')
+				if(existing['note_id'],existing['name'],existing['type'],existing['size'],existing['sha256'])!=(note_id,cleaned,kind,len(data),digest):raise ValueError('This note ID already belongs to a different file')
 				target=directory/existing['file']
 				if not target.is_file()or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:target.write_bytes(bytes(data));target.chmod(384)
 				return upload_row(existing,self.path.parent)
+			duplicate_count=db.execute("SELECT COUNT(*) FROM uploads WHERE note_id = ? AND replace(name, ' ', '-') = ?",(note_id,cleaned.replace(' ','-'))).fetchone()[0];number=duplicate_count+1;timestamp=int(time.time());extension=Path(cleaned).suffix[:16].replace(' ','-');filename_stem=Path(cleaned).stem.replace(' ','-')
+			while True:
+				duplicate=f"-{number}"if number>1 else'';stem=f"{note_id[:7]}-{timestamp}{duplicate}-{filename_stem}";target=directory/f"{stem}{extension}"
+				if len(os.fsencode(target.name))>255:raise ValueError('A stored file name exceeds the filesystem limit')
+				collision=db.execute('SELECT 1 FROM uploads WHERE file = ?',(target.name,)).fetchone()
+				if not collision and not target.exists():break
+				number+=1
 			target.write_bytes(bytes(data));target.chmod(384);db.execute('INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',(upload_id,note_id,cleaned,kind,len(data),digest,target.name,now()));row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return upload_row(row,self.path.parent)
 	def note_with_uploads(self,note_id,text,files):

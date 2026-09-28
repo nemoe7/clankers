@@ -38,14 +38,14 @@ The UI shows whether the agent answered the latest submission, not just an earli
 
 ## Note attachments
 
-The composer sends one note and its files together through `/api/notes/with-file`.
-The note has one ID and one acknowledgement. `read` includes each file in `attachments[]`.
-Files stay outside SQLite under `<state-dir>/uploads/`. Each file is at most 50MB.
-Multiple files use `<note-id>-1`, `<note-id>-2`, and so on, plus their original extensions.
-A one-file note keeps its note ID in the filename for existing links.
-The legacy `/api/uploads` route can still create a separate upload note.
-Records keep the owner's original filenames. `present` reports whether bytes still exist.
-An identical retry repairs lost file bytes without changing the note receipt or file order.
+The composer sends one note plus files through `/api/notes/with-file`.
+Each note has one ID and acknowledgement. `read` lists files in `attachments[]`.
+Files stay outside SQLite in `<state-dir>/uploads/`. Each is at most 50MB.
+Name stored files with the note ID's first seven characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
+Only duplicate names add `-2`, `-3`, and so on after the timestamp. Keep existing files unchanged.
+Legacy `/api/uploads` can still create a separate upload note.
+Records keep the original filename. `present` reports if bytes exist.
+Identical retries repair missing bytes without changing the note receipt or file order.
 The server limits multipart bodies and rejects files above the cap with HTTP 413.
 
 ## Browser download queue
