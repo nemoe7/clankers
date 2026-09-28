@@ -18,7 +18,7 @@ Copy each script into Tampermonkey.
 4. Save the script.
 5. Repeat for each script.
 
-## arena-agent-prompt
+## Arena Agent Prompt
 
 The script fills the composer only when the path is `/agent`. It does not fill the composer when the path has a trailing segment.
 
@@ -28,13 +28,13 @@ The script writes `{repo} read AGENTS.md ARENA.md` into the composer. If the rep
 
 The script does not overwrite an unrelated draft.
 
-## arena-agent-steering
+## Arena Agent Steering
 
 The script runs only when the path has a segment after `/agent/`.
 
 The script waits 1 second. Then the script clicks the `{repo} - Steering` button on port 8000. The script clicks that button once per page.
 
-## arena-agent-hide-composer
+## Arena Agent Hide Composer
 
 The script runs only when the path has a segment after `/agent/`.
 

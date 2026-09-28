@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Arena agent hide composer
+// @name         Arena Agent Hide Composer
 // @namespace    https://github.com/nemoe7/clankers
 // @version      1.3.0
 // @description  On /agent/*, hide the editor while generating and lock the 24px spacer
@@ -7,6 +7,8 @@
 // @license      MIT
 // @match        https://arena.ai/*
 // @match        https://www.arena.ai/*
+// @updateURL    https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/arena-agent-hide-composer.user.js
+// @downloadURL  https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/arena-agent-hide-composer.user.js
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==

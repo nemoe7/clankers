@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Arena agent prompt
+// @name         Arena Agent Prompt
 // @namespace    https://github.com/nemoe7/clankers
 // @version      1.2.0
 // @description  On exact /agent, fill the composer with "{repo} read AGENTS.md ARENA.md"
@@ -7,6 +7,8 @@
 // @license      MIT
 // @match        https://arena.ai/*
 // @match        https://www.arena.ai/*
+// @updateURL    https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/arena-agent-prompt.user.js
+// @downloadURL  https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/arena-agent-prompt.user.js
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
