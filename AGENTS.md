@@ -21,7 +21,7 @@
 Read these first:
 
 - [README.md](README.md) — budgets, compression procedure, layout
-- [CHANGELOG.md](CHANGELOG.md) — rule history and token changes
+- [CHANGELOG.md](CHANGELOG.md) — rule history
 - [rules/README.md](rules/README.md) — rule structure, installation, maintenance
 - [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) — the standard for writing an AGENTS.md; audit rule files against it
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
@@ -66,7 +66,7 @@ Read these first:
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, and for the ChatGPT fields also into `rules/wenyan/`, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
 - The CHANGELOG is the only ledger, with no separate amendment file.
-- No size diffs in CHANGELOG.md.
+- No size diffs or budget changes in CHANGELOG.md.
 - Before suggesting any amendment, read [rules/refs/GUIDELINES.md](rules/refs/GUIDELINES.md) and draft the line to its section 4 (one rule per line, imperative, testable); write every rule file to that standard.
 
 ## Reports and approval
