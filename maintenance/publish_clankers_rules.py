@@ -216,7 +216,7 @@ def gist_index(readme: str, included: dict[str, str] | set[str]) -> str:
 
 
 def collect_sources(workspace: Path) -> tuple[dict[str, str], dict[str, list[str]]]:
-  """Flatten eligible filenames; skip *every* source involved in a collision."""
+  """Flatten eligible filenames. Skip *every* source involved in a collision."""
   rules = workspace / "rules"
   if not rules.is_dir():
     raise FileNotFoundError(f"Rules directory missing: {rules}")
@@ -354,7 +354,7 @@ def reconcile(
   changes.update({name: None for name in deleted})
   if not desired and not set(collisions).intersection(old_files):
     # GitHub rejects a Gist with zero files. The authoritative empty result is no Gist,
-    # so remove it and clear the ID; a later eligible rule will create a new secret Gist.
+    # so remove it and clear the ID. A later eligible rule will create a new secret Gist.
     call("DELETE", f"gists/{gist_id}")
     store_id(repo, "delete")
     print(f"Removed empty Gist {gist_id} and GIST_ID")

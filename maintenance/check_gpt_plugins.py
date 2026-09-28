@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the gpt-plugins collection and, with --archive, its packaged zip.
+"""Check the gpt-plugins collection and, with --archive, its packaged zip.
 
 The collection ships one Agent Plugins manifest and the skills listed in
 EXPECTED_SKILLS. `gpt-plugins/refs/skills/` holds the readable sources and
@@ -7,7 +7,7 @@ EXPECTED_SKILLS. `gpt-plugins/refs/skills/` holds the readable sources and
 `--update` writes the copies, the default run reports drift as a failure.
 Packaging rewrites nothing, so `--archive` compares the zip members with the
 committed bytes and rejects anything the collection does not ship, including
-`refs/`. The manifest is validated against the canonical schema fetched from
+`refs/`. The manifest is checked against the canonical schema fetched from
 agent-plugins.org, never a vendored copy.
 """
 
@@ -126,7 +126,7 @@ def load_schema(source: str, errors: list[str]) -> dict | None:
 
 
 def check_manifest(schema: dict | None, errors: list[str]) -> None:
-  """Check the manifest identity, then validate it against the schema."""
+  """Check the manifest identity, then compare it with the schema."""
   if not MANIFEST.is_file():
     errors.append("gpt-plugins/plugin.json is missing")
     return

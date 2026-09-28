@@ -73,6 +73,14 @@ The checker reports every problem it finds in:
 - Refs/live rule parity: identical section headings in the same order, and each live section holding no more rule lines than its refs baseline.
 - The byte identity of the root `ARENA.md` copy and `rules/ARENA.md`.
 
+## Prose lint
+
+```bash
+python3 maintenance/lint_prose.py
+```
+
+The prose linter runs the ste-lint rules over the covered scope: `docs/`, every `README.md`, and `CHANGELOG.md`. It also runs them on the Python comments in `maintenance/` and `rules/`. `CHANGELOG.md` bullets cap at 3 sentences. `skills/` stays out of the target set.
+
 ## Update README measurements
 
 ```bash

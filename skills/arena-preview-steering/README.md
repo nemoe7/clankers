@@ -50,10 +50,10 @@ The server limits multipart bodies and rejects files above the cap with HTTP 413
 
 ## Browser download queue
 
-The owner enters one HTTPS URL per job; that form queues immediately. An agent can run
+The owner enters one HTTPS URL per job. That form queues immediately. An agent can run
 `preview.py --state-dir arena-state download-request <https-url> [--allow-proxy]` to create a
 `pending` approval record instead. The Downloads tab shows an approval dot and Approve/Deny buttons.
-A pending request cannot be claimed; Approve makes it claimable and Deny prevents retry.
+A pending request cannot be claimed. Approve makes it claimable and Deny prevents retry.
 The browser fetches directly first. The owner can allow AllOrigins, then CodeTabs, as fallback
 for that URL only. Both proxies see the full URL. The URL validator rejects embedded credentials.
 The server holds `fetch_jobs` rows and five-minute claims. An active browser renews its claim.
@@ -68,11 +68,11 @@ The saved result writes one inbox note with a path. Jobs and notes can outlive f
 The NDJSON backup does not include jobs or file bytes.
 
 **This approval is UI-only, not a security boundary.** Every preview page receives the same write
-token; it guards against CSRF but does not authenticate the owner. `GET /api/state` returns the
+token. It guards against CSRF but does not authenticate the owner. `GET /api/state` returns the
 token to a client that can reach the server. An agent can bypass the pending request by POSTing
 directly to the existing immediately queued `/api/fetch-jobs` route, calling the decision route
 with the shared token, or changing agent-writable code/SQLite state. A client with preview access
-can click Approve or Deny. Do not rely on this gate for owner-only authorization; no password is
+can click Approve or Deny. Do not rely on this gate for owner-only authorization. No password is
 asked for or stored. Enforce a real approval outside agent-writable code and state if needed.
 
 ## HTTP behavior and checks

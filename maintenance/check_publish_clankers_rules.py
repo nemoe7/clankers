@@ -1,4 +1,4 @@
-"""Offline contract checks for the rules -> secret Gist workflow; no GitHub credentials."""
+"""Offline contract checks for the rules -> secret Gist workflow. No GitHub credentials."""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ class FakeGitHub:
     )
 
 
-# Opt into a one-time snapshot check locally; future additions, moves and deletions must not
+# Opt into a one-time snapshot check locally. Future additions, moves and deletions must not
 # break the workflow's fixture tests merely because the authoritative rules changed.
 if os.environ.get("CHECK_CURRENT_RULE_NAMES") == "1":
   names, collisions = sync.collect_sources(ROOT)
