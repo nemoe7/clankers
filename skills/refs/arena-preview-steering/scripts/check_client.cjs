@@ -98,6 +98,7 @@ let reportHtmlWait = null;
 let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
+const replySeenCalls = [];
 const unpublished = [];
 const uploadCalls = [];
 let loseUploadResponse = false;
@@ -255,6 +256,15 @@ const context = {
       // the owner's save presses after a reset never landed.
       pageFetches += 1;
       return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
+    }
+    if (url.startsWith('/api/messages/') && url.endsWith('/replies/seen')) {
+      const id = decodeURIComponent(url.split('/')[3]);
+      const count = JSON.parse(options.body).count;
+      const item = [...(state.notes || []), ...(state.submissions || [])].find(record => record.id === id);
+      if (!item) return response({ error: 'Message not found' }, false);
+      item.ack_edited_seen_count = Math.max(Number(item.ack_edited_seen_count || 0), count);
+      replySeenCalls.push({ url, count });
+      return response({ id, ack_edited_seen_count: item.ack_edited_seen_count });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
@@ -589,7 +599,7 @@ test('preview client', async (t) => {
     assert.ok(cacheKeyHere, 'every poll caches the state the copy button copies');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
     state.submissions = [{ id: 'ans-1', report_id: 'r1', text: 'REPORT r1: one', at: '2026-09-22T10:00:00',
-      acknowledged_at: null, ack_kind: null, ack_text: null, ack_edited_at: null, replies: null, seen_at: null, task_id: null }];
+      acknowledged_at: null, ack_kind: null, ack_text: null, ack_edited_at: null, replies: null, ack_edited_seen_count: 0, seen_at: null, task_id: null }];
     copied.length = 0;
     get('#copy-state').events.click();
     await tick();
@@ -603,7 +613,7 @@ test('preview client', async (t) => {
       for (const key of keys) line[key] = record[key] ?? null;
       return line;
     };
-    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'seen_at', 'task_id'];
+    noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
     taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
     assert.deepEqual(lines, [
       ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
@@ -1770,23 +1780,24 @@ test('preview client', async (t) => {
     assert.equal(get('#log-edited').hidden, false);
     get('#log-filter').value = 'sent';
     get('#log-filter').events.change();
-    get('#log-edited').events.click();
+    await get('#log-edited').events.click();
     assert.equal(editedNode.children[1].scrolledIntoView, true);
     assert.equal(get('#log-filter').value, 'all');
     assert.equal(get('#notes-pip').hidden, true);
     await get('#refresh-notes').events.click();
     assert.equal(get('#log-edited').hidden, true, 'an unchanged poll does not notify again');
-    assert.ok([...storage.keys()].some(key => key.endsWith(':seen-edits')));
+    assert.deepEqual(replySeenCalls, [{url: '/api/messages/edited-old/replies/seen', count: 1}], 'viewed reply count is written to the server');
     state.notes[0].replies.push({kind: 'note', text: 'Third block, same second'});
     state.notes[0].replies[1].at = '2026-09-22T00:03:00';
     await get('#refresh-notes').events.click();
     assert.equal(get('#log-edited').hidden, false, 'same-second replies still notify');
     assert.equal(editedNode.children[1].children.length, 3);
     assert.equal(editedNode.children[1].children[2].children[0].textContent, 'Third block, same second', 'a note ack renders as plain text');
-    get('#log-edited').events.click();
+    await get('#log-edited').events.click();
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), {...context});
     await tick();
-    assert.equal(get('#log-edited').hidden, true, 'viewed edits stay viewed after a reload');
+    assert.deepEqual(replySeenCalls.map(call => call.count), [1, 2], 'same-second replies get distinct viewed counts');
+    assert.equal(get('#log-edited').hidden, true, 'the SQLite-backed viewed count survives a reload');
     state.reports = [{id: 'stable', title: 'Stable', updated_at: '2026-09-22T00:00:00', seen_at: '2026-09-22T00:00:01'}];
     await get('#refresh-notes').events.click();
     get('#report-select').value = 'stable';
@@ -1818,6 +1829,7 @@ test('preview client', async (t) => {
     assert.match(copied.at(-1), /"id":"notes-only"/);
     assert.equal(get('#copy-state').dataset.state, 'good');
   });
+
   await t.test('Acknowledgement IDs link to matching messages, reports, and tasks', async () => {
     state = {
       notes: [

@@ -123,6 +123,124 @@ def test_edited_ack_stamp():
         pass
 
 
+def test_reply_seen_persistence():
+  """Persist viewed reply counts for notes and answers, including same-second replies."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / "arena-preview"
+    backup = Path(directory) / "saved-state.ndjson"
+    store = preview.Store(root, create=True, save_path=backup)
+    store.note("edited-note", "Question")
+    store.submission("edited-answer", "form", "REPORT form: answer")
+    ids = ["edited-note", "edited-answer"]
+    with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
+      store.acknowledge(ids, "reply", "First answer")
+    with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
+      store.acknowledge(ids, "reply", "Second answer")
+
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    worker = threading.Thread(target=app.serve_forever, daemon=True)
+    worker.start()
+    headers = {"Content-Type": "application/json"}
+    try:
+      for record_id in ids:
+        status, _, body = request(
+          "POST",
+          f"/api/messages/{record_id}/replies/seen",
+          json.dumps({"count": 1}),
+          headers,
+        )
+        assert status == 200
+        assert json.loads(body) == {"id": record_id, "ack_edited_seen_count": 1}
+
+      # The next two replies share a timestamp with the previous reply. Count, not time,
+      # distinguishes the unseen blocks and keeps the earlier seen marker intact.
+      with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
+        store.acknowledge(ids, "note", "Third answer")
+      note = preview.Store(root).state()["notes"][0]
+      answer = preview.Store(root).submissions()[0]
+      assert len(note["replies"]) == 2 and len(answer["replies"]) == 2
+      assert note["replies"][0]["at"] == note["replies"][1]["at"]
+      assert note["ack_edited_seen_count"] == answer["ack_edited_seen_count"] == 1
+
+      for record_id in ids:
+        status, _, body = request(
+          "POST",
+          f"/api/messages/{record_id}/replies/seen",
+          json.dumps({"count": 2}),
+          headers,
+        )
+        assert status == 200
+        assert json.loads(body)["ack_edited_seen_count"] == 2
+      status, _, body = request(
+        "POST",
+        "/api/messages/edited-note/replies/seen",
+        json.dumps({"count": 1}),
+        headers,
+      )
+      assert status == 200 and json.loads(body)["ack_edited_seen_count"] == 2, (
+        "an older page cannot move the seen count backwards"
+      )
+      assert (
+        request(
+          "POST",
+          "/api/messages/edited-note/replies/seen",
+          json.dumps({"count": 3}),
+          headers,
+        )[0]
+        == 400
+      )
+      assert (
+        request(
+          "POST",
+          "/api/messages/missing/replies/seen",
+          json.dumps({"count": 0}),
+          headers,
+        )[0]
+        == 404
+      )
+      assert (
+        request(
+          "POST",
+          "/api/messages/edited-note/replies/seen",
+          json.dumps({"count": True}),
+          headers,
+        )[0]
+        == 400
+      )
+
+      reopened = preview.Store(root)
+      assert reopened.state()["notes"][0]["ack_edited_seen_count"] == 2
+      assert reopened.submissions()[0]["ack_edited_seen_count"] == 2
+      saved = reopened.save_state({"notes": reopened.state()["notes"]})
+      assert saved["notes"] == 1 and saved["answers"] == 1
+      saved_lines = [json.loads(line) for line in backup.read_text().splitlines()]
+      assert [line["ack_edited_seen_count"] for line in saved_lines] == [2, 2]
+
+      restored_dir = Path(directory) / "restored"
+      preview.Store(restored_dir, create=True)
+      subprocess.run(
+        [
+          sys.executable,
+          preview.__file__,
+          "--state-dir",
+          str(restored_dir),
+          "import-notes",
+          str(backup),
+        ],
+        check=True,
+        capture_output=True,
+      )
+      assert (
+        preview.Store(restored_dir).state()["notes"][0]["ack_edited_seen_count"] == 2
+      )
+      assert preview.Store(restored_dir).submissions()[0]["ack_edited_seen_count"] == 2
+    finally:
+      app.shutdown()
+      app.server_close()
+      worker.join(timeout=5)
+
+
 def test_report_receipt_ids():
   with tempfile.TemporaryDirectory() as receipts_dir:
     receipt_store = preview.Store(receipts_dir, create=True)
