@@ -75,6 +75,7 @@
 
 ## Verification
 
+- Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - Work in several passes; label questions Q1, Q2, …, state the batch total first, restating it before adding one; end every turn reading the steering channel.
 - Confirm a duplicated, garbled, or disowned message in one line before acting, keeping its edit reversible until then; the Arena client resends, truncates, and returns empty results from tools that ran, so treat a repeat as a resend: answer what is pending, restate finished work in one line, NEVER redo or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; grep every caller first, keep hypotheses falsifiable, one variable at a time, NEVER guess, use a fallback, or hide a failure, and revise disproven assumptions.
