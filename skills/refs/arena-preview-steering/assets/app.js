@@ -276,15 +276,13 @@ function time(value) {
   const year = date.getFullYear() === new Date().getFullYear() ? '' : ` ${parts.year}`;
   return `${parts.month} ${parts.day}${year}, ${parts.hour}:${parts.minute}`;
 }
-let seenEdits;
-try { seenEdits = new Map(Object.entries(JSON.parse(stored('seen-edits') || '{}'))); }
-catch { seenEdits = new Map(); }
 let unreadEdits = [];
-// A later ack appends a reply block; the key changes with the newest block, so the pip returns for
-// each one, same-second ones included.
-const editKey = item => JSON.stringify([item.ack_edited_at, (item.replies || []).length, item.ack_text]);
+// SQLite stores the number of reply blocks the page marked as viewed. Counts distinguish two
+// replies with the same second-level timestamp, and survive a page reload.
 function updateEdits(notes) {
-  unreadEdits = notes.filter(item => item.ack_edited_at && seenEdits.get(item.id) !== editKey(item));
+  unreadEdits = notes.filter(item =>
+    item.ack_edited_at && Number(item.ack_edited_seen_count || 0) < (item.replies || []).length
+  );
   $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
   $('#log-edited').textContent = unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
 }
@@ -311,7 +309,7 @@ function linkReferences(html, references) {
     return `<a class="ack-reference" href="#${panel}" data-reference-type="${type}" data-reference-id="${id}"><code>${id}</code></a>`;
   });
 }
-$('#log-edited').addEventListener('click', () => {
+$('#log-edited').addEventListener('click', async () => {
   const item = unreadEdits[0];
   if (!item) return;
   showTab($('#notes-tab'));
@@ -322,9 +320,22 @@ $('#log-edited').addEventListener('click', () => {
   answer.scrollIntoView({block: 'center'});
   answer.setAttribute('tabindex', '-1');
   answer.focus({preventScroll: true});
-  seenEdits.set(item.id, editKey(item));
-  save('seen-edits', JSON.stringify(Object.fromEntries(seenEdits)));
-  updateEdits(lastState.notes);
+  try {
+    const replyCount = (item.replies || []).length;
+    const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
+      method: 'POST',
+      headers: writeHeaders('application/json'),
+      body: JSON.stringify({count: replyCount})
+    });
+    const receipt = await response.json();
+    if (receipt.id !== item.id || !Number.isInteger(receipt.ack_edited_seen_count)) {
+      throw new Error('The viewed-reply receipt was invalid');
+    }
+    item.ack_edited_seen_count = receipt.ack_edited_seen_count;
+    updateEdits(lastState.notes);
+  } catch (error) {
+    status.textContent = `Could not save reply status: ${error.message}`;
+  }
 });
 function showHistory(notes) {
   const signature = JSON.stringify(notes);
@@ -863,7 +874,7 @@ function stamp(value) {
 // display and a restore re-renders from text, the token dies with its server, seq orders one
 // display only, and reports, uploads and the last check have no importer. The stamps arrive
 // from the state poll already cut to seconds, which is all a restore needs.
-const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'seen_at', 'task_id'];
+const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
 const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
 function restoreLine(record, keys) {
   const line = {};
