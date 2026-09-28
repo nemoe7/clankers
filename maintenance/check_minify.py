@@ -33,7 +33,9 @@ def check_preview_path():
     python = home / ".agents/.arena-preview-venv/bin/python"
     python.parent.mkdir(parents=True)
     python.write_text(
-      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$HOME/arena-preview-args"\n',
+      "#!/usr/bin/env bash\n"
+      'case " $*" in *" gate") exit 0 ;; esac\n'
+      'printf \'%s\\n\' "$@" > "$HOME/arena-preview-args"\n',
       encoding="utf-8",
     )
     python.chmod(0o755)

@@ -2742,6 +2742,7 @@ def test_bash_gate():
       [sys.executable, gate_script, "--state-dir", gate_dir, "gate"],
       capture_output=True,
       text=True,
+      check=False,
     )
     assert blocked.returncode == 0
 
