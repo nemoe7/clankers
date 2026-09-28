@@ -288,6 +288,29 @@ function updateEdits(notes) {
   $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
   $('#log-edited').textContent = unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
 }
+const ACK_REFERENCE_PANELS = {note: 'notes-panel', report: 'reports-panel', task: 'tasks-panel'};
+function referenceTypes(state) {
+  const references = new Map();
+  const add = (type, items) => {
+    for (const item of items || []) {
+      if (typeof item.id !== 'string') continue;
+      if (references.has(item.id) && references.get(item.id) !== type) references.set(item.id, null);
+      else references.set(item.id, type);
+    }
+  };
+  add('note', state.notes);
+  add('report', state.reports);
+  add('task', [...(state.tasks?.upcoming || []), ...(state.tasks?.finished || [])]);
+  return references;
+}
+function linkReferences(html, references) {
+  return html.replace(/<code>([^<]+)<\/code>/g, (code, id) => {
+    const type = references.get(id);
+    if (!type) return code;
+    const panel = ACK_REFERENCE_PANELS[type];
+    return `<a class="ack-reference" href="#${panel}" data-reference-type="${type}" data-reference-id="${id}"><code>${id}</code></a>`;
+  });
+}
 $('#log-edited').addEventListener('click', () => {
   const item = unreadEdits[0];
   if (!item) return;
@@ -307,6 +330,7 @@ function showHistory(notes) {
   const signature = JSON.stringify(notes);
   if (signature === historySignature) return;
   historySignature = signature;
+  const references = referenceTypes(lastState || {notes});
   if (notes.length) note.placeholder = clipPlaceholder(notes[notes.length - 1].text);
   const history = $('#history');
   if (messageNodes.size) logPinned = historyAtEnd(history);
@@ -378,7 +402,9 @@ function showHistory(notes) {
         const block = document.createElement('div');
         block.className = 'reply-block';
         block.title = `Replied again ${time(reply.at)}`;
-        if (reply.kind === 'reply' && reply.html !== undefined) block.innerHTML = reply.html;
+        if (reply.kind === 'reply' && reply.html !== undefined) {
+          block.innerHTML = linkReferences(reply.html, references);
+        }
         else {
           const plain = document.createElement('p');
           plain.textContent = reply.text;
@@ -391,7 +417,7 @@ function showHistory(notes) {
         plain.textContent = item.ack_text;
         answer.replaceChildren(plain, ...blocks);
       } else {
-        answer.innerHTML = item.ack_html;
+        answer.innerHTML = linkReferences(item.ack_html, references);
         answer.append(...blocks);
       }
     } else {
@@ -774,6 +800,14 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('click', event => {
   const target = event.target;
+  const reference = target?.closest?.('a.ack-reference') ||
+    (typeof target?.className === 'string' && target.className.split(' ').includes('ack-reference')
+      ? target : null);
+  if (reference) {
+    event.preventDefault();
+    followReference(reference.dataset.referenceType, reference.dataset.referenceId);
+    return;
+  }
   if (!target || typeof target.className !== 'string') return;
   const classes = target.className.split(' ');
   if (classes.includes('copy-code')) copyCode(target);
@@ -1147,6 +1181,43 @@ function showTab(tab) {
     refreshState();
     loadReport();
   } else clearReadTimer();
+}
+function followReference(type, id) {
+  if (!ACK_REFERENCE_PANELS[type] || !lastState) return;
+  if (type === 'note') {
+    if (!(lastState.notes || []).some(item => item.id === id)) return;
+    showTab($('#notes-tab'));
+    $('#log-filter').value = 'all';
+    save('log-filter', 'all');
+    applyLogFilter();
+    const row = messageNodes.get(id);
+    if (!row) return;
+    row.scrollIntoView({block: 'center'});
+    row.setAttribute('tabindex', '-1');
+    row.focus({preventScroll: true});
+    return;
+  }
+  if (type === 'report') {
+    const select = $('#report-select');
+    if (!(lastState.reports || []).some(item => item.id === id)) return;
+    select.value = id;
+    renderReportAcknowledgement();
+    showTab($('#reports-tab'));
+    select.focus();
+    return;
+  }
+  const groups = ['upcoming', 'finished'];
+  if (!groups.some(group => (lastState.tasks?.[group] || []).some(item => item.id === id))) return;
+  showTab($('#tasks-tab'));
+  const row = [
+    ...$('#tasks-current-body').children,
+    ...$('#tasks-upcoming-body').children,
+    ...$('#tasks-finished-body').children
+  ].find(item => item.title === id);
+  const title = row && row.children[0];
+  if (!title) return;
+  title.scrollIntoView({block: 'center'});
+  title.focus({preventScroll: true});
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab));
