@@ -2,6 +2,7 @@
 
 - **Preview CLI PATH command**: `install.sh` adds the active repo's `.agents/skills/arena-preview-steering/scripts` to PATH for new Bash shells. `arena-preview <command>` uses the repo's installed script, venv and state; rerun the installer after a sandbox reset. Tests cover PATH recovery and argument forwarding.
 - **Final task-list check**: require `task-list` before the final reply; continue any unblocked upcoming task. Owner-approved.
+- **Steering prose cleanup**: use `arena-preview` for ARENA inbox reads and the end-turn wait; remove duplicate rules/report text and the primary-skill `--state-dir` line. Keep the raw Python fallback. Owner-approved.
 
 ## 2026-09-27
 
