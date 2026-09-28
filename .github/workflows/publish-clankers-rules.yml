@@ -1,4 +1,4 @@
-name: Publish clankers rules to Gist
+name: Publish Clankers Rules To Gist
 
 on:
   push:
@@ -20,14 +20,15 @@ permissions:
 
 jobs:
   publish:
+    name: Publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out the pushed rules
+      - name: Check Out The Pushed Rules
         uses: actions/checkout@v4
-      - name: Check reconciliation fixtures without GitHub credentials
+      - name: Check Reconciliation Fixtures Without GitHub Credentials
         run: python3 maintenance/check_publish_clankers_rules.py
-      - name: Reconcile secret clankers-rules Gist
+      - name: Reconcile Secret Clankers-Rules Gist
         # GIST_TOKEN needs Gists:write and repository Variables:write. The default
         # GITHUB_TOKEN is used only by checkout; it cannot manage repository variables.
         env:
