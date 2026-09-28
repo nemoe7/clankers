@@ -124,6 +124,7 @@ REMINDERS = (
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
+GATE_THRESHOLD = 50
 
 
 def now():
@@ -1781,6 +1782,16 @@ class Store:
     head = [f"{polls} call/s since user messaged."] if polls and counts else []
     return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
 
+  def gate(self, threshold=GATE_THRESHOLD):
+    """Return False when bash calls must block: a pending inbox at the call threshold."""
+    with closing(self.connect()) as db, db:
+      pending = db.execute(
+        "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL)"
+        " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
+      ).fetchone()[0]
+      polls = meta_number(db, POLLS_SINCE_MESSAGE)
+    return not (pending and polls >= threshold)
+
   def read(self):
     with self.transaction() as db:
       pending = [
@@ -2544,6 +2555,7 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  commands.add_parser("gate")
   poll = commands.add_parser("poll")
   poll.add_argument(
     "--interval",
@@ -2631,6 +2643,15 @@ def main():
     store = Store(
       args.state_dir, create=args.command in {"serve", "init"}, save_path=args.save_path
     )
+    if args.command == "gate":
+      try:
+        allowed = store.gate()
+      except Exception:
+        return 2
+      if not allowed:
+        print("READ INBOX NOW", flush=True)
+        return 1
+      return 0
     print(store.reminder(), file=sys.stderr, flush=True)
     if args.command == "serve":
       require_renderer()
