@@ -1,10 +1,10 @@
 ## 2026-09-28
 
-- **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to four elements on `chatgpt.com`, the Claim offer div, the Free offer div, chat surface toggle, and the Codex sidebar link. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. MutationObserver and interval keep both current. Node checks print `ok`.
-- **Preview CLI PATH command**: `install.sh` adds the active repo's `.agents/skills/arena-preview-steering/scripts` to PATH for new Bash shells. `arena-preview <command>` uses the repo's installed script, venv and state; rerun the installer after a sandbox reset. Tests cover PATH recovery and argument forwarding.
-- **Final task-list check**: require `task-list` before the final reply; continue any unblocked upcoming task. Owner-approved.
-- **Steering prose cleanup**: use `arena-preview` for ARENA inbox reads and the end-turn wait; remove duplicate rules/report text and the primary-skill `--state-dir` line. Keep the raw Python fallback. Owner-approved.
-- **ARENA compaction retention**: request verbatim preservation in context summaries; reread if omitted or changed. This is best-effort; Arena host reinjection is the only guarantee. Owner-approved.
+- **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to the Claim offer div, the Free offer div, the chat surface toggle, and the Codex sidebar link. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. Node checks print `ok`.
+- **Preview CLI PATH command**: `install.sh` adds `.agents/skills/arena-preview-steering/scripts` to PATH for new Bash shells. `arena-preview <command>` uses the repo's script, venv and state. Tests cover PATH recovery and forwarding, so rerun the installer after a sandbox reset.
+- **Final task-list check**: Require `task-list` before the final reply, then continue any unblocked upcoming task.
+- **Steering prose cleanup**: Use `arena-preview` for ARENA inbox reads and the end-turn wait. Drop duplicate rules and report text plus the primary-skill `--state-dir` line. Keep the raw Python fallback.
+- **ARENA compaction retention**: Request verbatim preservation in context summaries. Reread if a summary omits or changes it. Arena host reinjection is the only guarantee, so the request is best-effort.
 
 ## 2026-09-27
 
