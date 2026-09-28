@@ -15,7 +15,7 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-27. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
+Latest measurements as of 2026-09-28. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -30,10 +30,10 @@ Latest measurements as of 2026-09-27. `maintenance/check.py` measures ARENA.md b
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 119 `tok` |
 | `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,216 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 38,496 `B` |
+| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 40,542 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 7,996 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 12,266 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 71,180 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 74,002 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 2,621 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,289 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
