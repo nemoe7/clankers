@@ -19,6 +19,10 @@ Apply to every git/GitHub action, including GitHub connector and scheduled tasks
 - ALWAYS check `.github/workflows/` for a workflow that runs on the PR; with none, say so and skip the wait.
 - No check yet is pending, not green.
 - Poll checks until each has a conclusion; NEVER end early.
+- After every push that changes the PR head, record its SHA and poll that SHA's runs; an older run verifies nothing, and an absent run stays pending.
+- Missing, queued, in-progress or pending is not complete; failed, cancelled or timed-out is not green: repair the branch and repeat from the new head SHA.
+- The PR is green only when every applicable check concludes successfully; an empty status response is not success.
+- NEVER end turn after a push while the new head SHA has no completed run.
 - NEVER litter the PR with multiple commits.
 
 ## Commits

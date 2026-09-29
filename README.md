@@ -42,7 +42,7 @@ Latest measurements as of 2026-09-29. `maintenance/check.py` measures ARENA.md b
 | `gpt-plugins/skills/gpt-quirks/SKILL.md` | `cl100k_base` | 135 `tok` |
 | `gpt-plugins/skills/gpt-handoff/SKILL.md` | `cl100k_base` | 1,061 `tok` |
 | `gpt-plugins/skills/gpt-planning/SKILL.md` | `cl100k_base` | 371 `tok` |
-| `gpt-plugins/skills/gpt-github/SKILL.md` | `cl100k_base` | 327 `tok` |
+| `gpt-plugins/skills/gpt-github/SKILL.md` | `cl100k_base` | 432 `tok` |
 
 Measurements cover complete files, including whitespace and markup. 
 

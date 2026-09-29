@@ -4,6 +4,8 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-29: Accepted without funding. `rules/ARENA.md` +91 `B`, 15,101 to 15,192, for the clause that skips the push after a rebase with no commits. The root copy matches.
 
+2026-09-29: Accepted without funding. `gpt-plugins/skills/gpt-github/SKILL.md` +105 `tok`, 327 to 432, for the owner's CI completion and new-head polling gates. The refs source grows 643 `B`, to 2,285.
+
 2026-09-29: Accepted without funding. `gpt-plugins/skills/gpt-github/SKILL.md` +73 `tok`, 275 to 348, for the owner's verbatim GitHub discovery clause.
 
 2026-09-29: Accepted without funding. `rules/CHATGPT-MORE.txt` +44 `chars`, 1,401 to 1,445, for mandatory Mermaid pipelines and flows with the explicit rendering exception. The wenyan copy adds 20 `chars`, 994 to 1,014. Both fields stay below 1,500 `chars`.

@@ -19,6 +19,10 @@ Apply these rules to every git and GitHub action, including through the GitHub c
 - ALWAYS check `.github/workflows/` for a workflow that runs on the PR; with none, say so and skip the wait.
 - No check yet is pending, not green.
 - Poll checks until each has a conclusion; NEVER end early.
+- After every push that changes the pull request head, record the new head SHA and locate the workflow runs for that SHA; a run for an earlier commit verifies nothing, and an absent run is a pending state.
+- Treat a missing, queued, in-progress or pending check as not complete, and a failed, cancelled or timed-out check as not green; inspect the failure, repair the branch and repeat the poll from the new head SHA.
+- Treat the pull request as green only when every applicable check reaches a successful conclusion; an empty status response is not success.
+- NEVER end turn after a push while the new head SHA has no completed workflow run.
 - NEVER litter the PR with multiple commits.
 
 ## Commits

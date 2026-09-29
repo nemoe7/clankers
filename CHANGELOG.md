@@ -2,6 +2,8 @@
 
 - **Push after a rebase**: ARENA.md pushes only when the branch has commits ahead of `origin/main`. A rebase that leaves nothing to push skips the push.
 
+- **gpt-github CI gates**: Poll the runs for the new head SHA after every push, since an older run verifies nothing. A missing, queued, in-progress or pending check is not complete, and a failed, cancelled or timed-out check is not green. The turn stays open after a push while the new head SHA has no completed run, and the plugin version is `1.4.0`.
+
 - **Rebase rule**: ARENA.md requires a check of `origin/main` before each push and a rebase when main moved. After a push or a sandbox reset, HEAD must equal the remote branch.
 
 - **ChatGPT diagrams rule**: All diagrams use Mermaid, `flowchart TB` by default, no ASCII. The rule no longer limits itself to pipelines and flows.
