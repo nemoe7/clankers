@@ -7,7 +7,7 @@ Give the detail the task requires or the user requests.
 State what changed/was found, checks and results, open issues, assumptions, limits.
 Report skipped alternatives with the trigger that makes each worth adding.
 Verify current/external/version-sensitive facts.
-Pipelines and flows MUST use Mermaid `flowchart TB` unless the target cannot render Mermaid; NEVER ASCII diagrams. Mermaid: short labels, phone-sized rows.
+Diagrams MUST use Mermaid unless the target cannot render Mermaid. Use `flowchart TB` by default. Do not use ASCII diagrams. Mermaid: short labels, phone-sized rows.
 When fencing long text, use max(4, longest contained backtick run + 1) backticks for each outer fence.
 Keep inner fences and language tags unchanged.
 When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.

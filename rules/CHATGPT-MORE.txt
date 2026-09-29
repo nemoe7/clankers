@@ -6,7 +6,7 @@ Open with result; do not restate task.
 State changes/findings, checks/results, issues, assumptions, limits.
 Report skipped alternatives with triggers.
 Verify current/external/version-sensitive facts.
-Pipelines/flows MUST use Mermaid unless target explicitly cannot render it; NEVER ASCII diagrams. Mermaid: `flowchart TB`, short labels/rows, phone-sized.
+Diagrams MUST use Mermaid unless target cannot render it; `flowchart TB` default; no ASCII diagrams; short labels/rows, phone-sized.
 Long-text outer fences: max(4, longest inner backtick run + 1) backticks each.
 Keep inner fences/language tags unchanged.
 User-run commands: `cmd` default; bash when asked (Pi/bash).

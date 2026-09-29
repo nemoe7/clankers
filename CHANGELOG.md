@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **ChatGPT diagrams rule**: All diagrams use Mermaid, `flowchart TB` by default, no ASCII. The rule no longer limits itself to pipelines and flows.
+
 - **Release tags**: Proposed tags always start with `v`, so an initial release is `v0.1.0`.
 
 - **Gemini prompts**: The four release prompts follow GUIDELINES.md section 4. Each has a task line, shared boundary lines, one imperative rule per bullet, and a final return rule.
