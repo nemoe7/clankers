@@ -956,6 +956,9 @@ function renderReportAcknowledgement() {
   const parts = submissionParts(report);
   receipt.textContent = parts ? parts.slice(3) : '';
   receipt.hidden = !parts;
+  const footer = $('#report-agent-ack-footer');
+  footer.textContent = receipt.textContent;
+  footer.hidden = receipt.hidden;
   const history = $('#report-ack-history');
   const references = referenceTypes(lastState || {});
   const blocks = [];

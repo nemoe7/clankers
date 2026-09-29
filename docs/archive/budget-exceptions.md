@@ -116,3 +116,5 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-29: Accepted without funding. `rules/ARENA.md` +173 `B` for the preview-inbox authority clause. Root and live copies match.
 2026-09-29: Accepted without funding. `rules/ARENA.md` +60 `B` for the turn-end task-status clause. Root and live copies match.
 2026-09-29: Accepted without funding. Preview `assets/app.js` +530 `B` for clipboard-image staging and epoch-time filenames. README records the shipped size.
+
+2026-09-29: Accepted without funding. `skills/arena-preview-steering/assets/app.js` +84 `B` and `assets/index.html` +60 `B` to repeat submission status in the report footer without a second live announcement.

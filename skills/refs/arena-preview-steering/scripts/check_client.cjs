@@ -1075,9 +1075,12 @@ test('preview client', async (t) => {
     assert.match(agentAck.textContent, /Submission a123456/);
     assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
     assert.match(agentAck.textContent, /Awaiting ack/);
+    assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
+    assert.equal(get('#report-agent-ack-footer').hidden, agentAck.hidden);
     state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
     await get('#refresh-notes').events.click();
     assert.match(agentAck.textContent, /Acked Sep /);
+    assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
     await get('#refresh-notes').events.click();
     assert.equal(get('#report-ack-history').hidden, false);
@@ -1096,6 +1099,7 @@ test('preview client', async (t) => {
     state.reports = [];
     await get('#refresh-notes').events.click();
     assert.equal(agentAck.hidden, true, 'hide receipts when no report is selected');
+    assert.equal(get('#report-agent-ack-footer').hidden, true);
     assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
   });
 
