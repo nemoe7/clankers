@@ -94,6 +94,7 @@ A proposal is visible text before the question that asks for approval: put its t
 
 ## Skills
 
+- ChatGPT-related skills always go to gpt-plugins.
 - Skills in `skills/` follow the [Agent Skills specification](https://agentskills.io/specification).
 - Every `SKILL.md` needs YAML frontmatter using only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`.
 - `name` matches its directory.
