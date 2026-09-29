@@ -2,6 +2,8 @@
 
 Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
 
+2026-09-29: Accepted without funding. `rules/ARENA.md` +91 `B`, 15,101 to 15,192, for the clause that skips the push after a rebase with no commits. The root copy matches.
+
 2026-09-29: Accepted without funding. `gpt-plugins/skills/gpt-github/SKILL.md` +73 `tok`, 275 to 348, for the owner's verbatim GitHub discovery clause.
 
 2026-09-29: Accepted without funding. `rules/CHATGPT-MORE.txt` +44 `chars`, 1,401 to 1,445, for mandatory Mermaid pipelines and flows with the explicit rendering exception. The wenyan copy adds 20 `chars`, 994 to 1,014. Both fields stay below 1,500 `chars`.
