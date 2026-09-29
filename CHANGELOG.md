@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Turn-end task status**: State in chat that no open tasks remain before the final inbox poll. Keep the final poll and task-list check requirements.
+
 - **Unified state import**: Replace import-notes and task-import with import-state for copied notes, tasks and report answers. Accept a file or stdin, preserve receipts and backups, and roll back the whole import on invalid records. Task replacement requires --replace-tasks.
 
 - **Authoritative steering inbox**: Use the preview inbox for steering instructions, receipts and work status when Arena chat delivery is unreliable. Retain duplicate-message and reversible-edit safeguards.
