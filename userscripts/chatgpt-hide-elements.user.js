@@ -6,8 +6,8 @@
 // @author       nemoe7
 // @license      MIT
 // @match        https://chatgpt.com/*
-// @updateURL    https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/chatgpt-hide-elements.user.js
-// @downloadURL  https://gist.githubusercontent.com/nemoe7/a11743bbe3fdddfa3f483a979d5d1f09/raw/chatgpt-hide-elements.user.js
+// @updateURL    https://raw.githubusercontent.com/nemoe7/clankers/main/userscripts/chatgpt-hide-elements.user.js
+// @downloadURL  https://raw.githubusercontent.com/nemoe7/clankers/main/userscripts/chatgpt-hide-elements.user.js
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
