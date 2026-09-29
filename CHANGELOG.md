@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini evidence input**: The release workflow has an `evidence` choice. `commits-and-diffs` is the default and `commits` sends commit messages only.
+
 - **Gemini HTTP error detail**: A Gemini HTTP failure now shows the status and message from the response body after the HTTP code. The detail stops at 500 characters and the script redacts secrets.
 
 - **Link colour**: Preview anchors use a muted blue, `#6ea3d6`, in both themes instead of the accent colour.

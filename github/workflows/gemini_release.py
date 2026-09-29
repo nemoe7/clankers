@@ -134,13 +134,20 @@ def baseline(rows, tag, target, previous=""):
   return "", ""
 
 
-def history(target, base):
+EVIDENCE_KINDS = ("commits-and-diffs", "commits")
+
+
+def history(target, base, evidence=EVIDENCE_KINDS[0]):
+  if evidence not in EVIDENCE_KINDS:
+    raise RuntimeError("Invalid evidence input")
   revision = f"{base}..{target}" if base else target
   commits = git("rev-list", "--reverse", "--topo-order", revision).splitlines()
   units = []
   for sha in commits:
     parents = git("rev-list", "--parents", "-n", "1", sha).split()[1:]
     units.append((f"{sha}:message", git("show", "-s", "--format=fuller", sha)))
+    if evidence == "commits":
+      continue
     for parent in parents or [""]:
       args = [
         "diff-tree",
@@ -419,7 +426,7 @@ def propose(repo, branch):
   # Refuse ambiguous baselines before sending history to Gemini.
   if previous:
     next_version(version_base, "patch")
-  units = history(target, base)
+  units = history(target, base, os.getenv("EVIDENCE") or EVIDENCE_KINDS[0])
   if not units:
     raise RuntimeError("No commits since the published baseline")
   link = (

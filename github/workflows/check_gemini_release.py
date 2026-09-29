@@ -96,6 +96,10 @@ def check():
     assert root + ":message" not in dict(units)
     assert root + ":message" in dict(all_units)
     assert len([key for key, _ in units if key.startswith(target + ":parent:")]) == 2
+    messages = release.history(target, root, "commits")
+    assert [key.split(":")[1] for key, _ in messages] == ["message"] * len(messages)
+    assert dict(messages)[target + ":message"] == dict(units)[target + ":message"]
+    fails(lambda: release.history(target, root, "everything"), "Invalid evidence input")
     split = release.pieces([("unicode", "é🦀abc" * 20)], size=7)
     assert "".join(p["text"] for p in split) == "é🦀abc" * 20
     os.chdir(original)

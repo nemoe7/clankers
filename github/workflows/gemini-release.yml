@@ -22,6 +22,14 @@ on:
           - patch
           - none
         default: auto
+      evidence:
+        description: What Gemini reads (proposal only)
+        required: false
+        type: choice
+        options:
+          - commits-and-diffs
+          - commits
+        default: commits-and-diffs
       promote_to_stable:
         description: Promote a published 0.y.z release to 1.0.0 (proposal only)
         required: false
@@ -64,6 +72,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TARGET_SHA: ${{ inputs.target_sha }}
           IMPACT_OVERRIDE: ${{ inputs.impact_override }}
+          EVIDENCE: ${{ inputs.evidence }}
           PROMOTE_TO_STABLE: ${{ inputs.promote_to_stable }}
           GEMINI_MODEL: ${{ inputs.model }}
           PROPOSAL_PATH: ${{ runner.temp }}/gemini-proposal/proposal.json
