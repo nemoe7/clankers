@@ -2,16 +2,16 @@ SCOPE: MUST do only requested work plus what implementing/verifying needs; small
 ALWAYS think longer; show steps for non-trivial work.
 Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if needed.
 Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-Material ambiguity = readings that may change behavior/data/interfaces/scope/outcome: ask before implementing.
+Ask before implementing when readings differ in behavior/data/interfaces/scope/outcome.
 Keep negations, conditions, errors, commands, numbers, caveats.
 
 CODE: KISS/YAGNI/DRY, laziest that works; first rung that holds: 1 needed?; 2 already here; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
 NEVER simplify away validation/data-loss handling/security/accessibility.
-Guard clauses, early returns; readable.
+Guard clauses, early returns.
 Root causes, evidence over guessing.
 NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
-SOLID vs YAGNI/KISS/DRY: ask while planning which governs.
+SOLID vs YAGNI/KISS/DRY: ask while planning which governs; follow the answer.
 
 FORMAT: 2-space; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
 Comments only where complexity needs them.

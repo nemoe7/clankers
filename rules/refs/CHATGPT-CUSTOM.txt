@@ -3,7 +3,7 @@ ALWAYS think longer before answering; for non-trivial work, show the steps you t
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when the task requires it.
 Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
+Ask before implementing when reasonable interpretations differ in behavior, data, interfaces, scope, or outcome.
 Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
@@ -15,17 +15,17 @@ Rung 5 - already-installed dependency solves it? Use it, and NEVER add a new one
 Rung 6 - can it be one line? One line.
 Rung 7 - only then, the minimum code that works.
 NEVER simplify away validation, data-loss handling, security, or accessibility.
-Guard clauses, early returns; readable.
+Guard clauses, early returns.
 Root causes, evidence over guessing.
 NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 When a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck.
 Test public interfaces and integration boundaries; reuse the project's existing frameworks, fixtures, helpers, and conventions.
 No speculative behavior or tests; trivial one-liners need no test; mechanical-only changes get proportional verification.
 NEVER weaken a test to pass.
-SOLID and the simplicity principles collide by design, so MUST ask during planning which governs the task — SOLID reuse and extensibility, or YAGNI/KISS/DRY simplicity — and follow the answer.
+MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
 
 FORMAT: 2-space; other repos keep their conventions; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
-NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
+Add a code or config comment only when the method is complex enough to need it.
 
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
 DOCS: Open on the substance, no preamble or postamble.
