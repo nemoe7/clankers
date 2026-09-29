@@ -361,6 +361,7 @@ def test_http_boundaries():
     assert "showReceipt" not in script and 'id="report-agent-ack"' in page
     assert page.index('id="report-ack-history"') < page.index('id="report-form"')
     assert page.index('id="report-agent-ack"') < page.index('id="report-form"')
+    assert page.index('id="report-agent-ack-footer"') > page.index('id="report-submit"')
     # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
     assert "<br" in preview.render("- a\n  b", breaks=True)
     # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline
