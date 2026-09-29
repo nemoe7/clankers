@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import urllib.error
@@ -21,7 +22,15 @@ def run(*args, input=None):
     args, input=input, capture_output=True, check=False, timeout=120
   )
   if result.returncode:
-    raise RuntimeError(f"{args[0]} {args[1]} failed (exit {result.returncode})")
+    detail = result.stderr.decode("utf-8", errors="backslashreplace").strip()
+    message = f"{shlex.join(args)} failed (exit {result.returncode})"
+    if detail:
+      message += f": {detail}"
+    for name in ("GH_TOKEN", "GITHUB_TOKEN", "GEMINI_API_KEY"):
+      secret = os.getenv(name)
+      if secret:
+        message = message.replace(secret, "[REDACTED]")
+    raise RuntimeError(message)
   return result.stdout.decode("utf-8", errors="backslashreplace")
 
 
@@ -51,7 +60,14 @@ def releases(repo):
 
 def tag_sha(tag):
   git("check-ref-format", f"refs/tags/{tag}")
-  return git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}").strip()
+  try:
+    return git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}").strip()
+  except RuntimeError as error:
+    raise RuntimeError(
+      "Cannot resolve the requested tag to a local commit. "
+      "Push that exact tag before dispatch and fetch full history. "
+      f"This workflow does not create tags. {error}"
+    ) from error
 
 
 def remote_tag_sha(repo, tag):

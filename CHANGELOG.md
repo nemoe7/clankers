@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Release command errors**: Include the failed command and stderr in Gemini release errors. Explain the existing-tag requirement when tag resolution fails. Redact configured GitHub and Gemini secrets, and check missing-tag diagnostics offline.
+
 - **Gemini release drafts**: Add reusable GitHub Actions sources under `github/workflows`. Generate draft notes from complete release history with Gemini 3.5 Flash-Lite, a release template and split-and-combine summaries. Keep activation separate from the source library.
 
 - **Report reply position**: Move report acknowledgement history and submission status above the report form. Keep reply history and links unchanged.
