@@ -306,7 +306,7 @@ def test_release_pipeline():
     "impact": "patch",
     "promote": False,
     "version": "0.1.0",
-    "tag": "0.1.0",
+    "tag": "v0.1.0",
     "body": release.INITIAL_TEMPLATE.replace("{{summary}}", "test").replace(
       "{{features}}", "None"
     ),
@@ -347,7 +347,7 @@ def test_release_pipeline():
     if path.endswith("/artifacts?per_page=100"):
       return {"total_count": 1, "artifacts": [artifact]}
     if path.endswith("/git/refs") and method == "POST":
-      assert payload == {"ref": "refs/tags/0.1.0", "sha": "a" * 40}
+      assert payload == {"ref": "refs/tags/v0.1.0", "sha": "a" * 40}
       return {"ref": payload["ref"]}
     raise AssertionError(f"Unexpected API write/read: {path} {method}")
 
@@ -371,7 +371,7 @@ def test_release_pipeline():
   ):
     release.approve("owner/repo", "main")
     assert ref.call_count == 1 and save.call_count == 1
-    assert save.call_args.args == ("owner/repo", "0.1.0", sample["body"], "a" * 40)
+    assert save.call_args.args == ("owner/repo", "v0.1.0", sample["body"], "a" * 40)
     api_run["conclusion"] = "failure"
     fails(lambda: release.approve("owner/repo", "main"), "not a successful")
     assert ref.call_count == 1, "failed run must stop before tag lookup"
@@ -385,7 +385,7 @@ def test_release_pipeline():
     sample["tag"] = "1.0.0"
     fails(lambda: release.approve("owner/repo", "main"), "does not match")
     assert ref.call_count == 1, "altered version must stop before tag lookup"
-    sample["tag"] = "0.1.0"
+    sample["tag"] = "v0.1.0"
     with patch.object(
       release,
       "current_base",
@@ -402,7 +402,7 @@ def test_release_pipeline():
     with patch.object(release, "save_draft", side_effect=RuntimeError("draft failure")):
       fails(lambda: release.approve("owner/repo", "main"), "draft failure")
     with patch.object(
-      release, "releases", return_value=[{"tag_name": "0.1.0", "draft": False}]
+      release, "releases", return_value=[{"tag_name": "v0.1.0", "draft": False}]
     ):
       fails(lambda: release.approve("owner/repo", "main"), "already published")
 
@@ -487,6 +487,8 @@ def test_release_pipeline():
   assert "python .github/workflows/gemini_release.py" in workflow
   assert "python github/workflows" not in workflow
   assert release.version_tag("v0.2.0", "0.2.1") == "v0.2.1"
+  assert release.version_tag("0.2.0", "0.2.1") == "v0.2.1"
+  assert release.version_tag("", "0.1.0") == "v0.1.0"
   assert release.next_version("1.2.3", "major") == "2.0.0"
   assert release.next_version("1.2.3", "minor") == "1.3.0"
   fails(lambda: release.next_version("", "minor", promote=True), "Promotion requires")
@@ -513,7 +515,7 @@ def test_release_pipeline():
     patch.object(release, "release_body", return_value=sample["body"]) as notes,
     patch.object(release, "summary"),
   ):
-    sample["tag"] = "0.1.0"
+    sample["tag"] = "v0.1.0"
     release.propose("owner/repo", "main")
     stored = json.loads(Path(directory, "proposal.json").read_text())
     assert stored["target"] == "a" * 40 and stored["version"] == "0.1.0"

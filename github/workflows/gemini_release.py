@@ -482,10 +482,11 @@ def next_version(previous, impact, promote=False):
 
 
 def version_tag(previous, version):
+  """Tags always carry the `v` prefix; `previous` stays for baselines without one."""
+  del previous
   if not version:
     return None
-  prefix = "v" if previous.startswith("v") else ""
-  return prefix + version
+  return "v" + version
 
 
 def release_version(tag):
