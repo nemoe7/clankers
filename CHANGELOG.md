@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Finished tasks**: Show the last finished task first. Keep upcoming and saved task order unchanged.
+
 - **PR-only validation**: Stop repeat validation after main updates and remove the main-only README measurement commit. Keep PR checks, plugin packaging and rules publishing.
 
 - **DAILIES monitoring**: Use a rolling 24-hour event window without checkpoint writes. Show incomplete coverage, rotate deep audits through three active repositories per day, keep monitoring read-only and separate release drafts from findings. Repository and scheduler copies remain separate.
