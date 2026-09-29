@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.1
+// @version      1.1.2
 // @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -486,16 +486,27 @@
     var frame = null;
     var route = null;
     var resize = null;
+    var shiftHeld = false;
 
     if (typeof document === "undefined") return;
 
     function schedule() {
-      if (frame !== null || !scroller) return;
+      if (shiftHeld || frame !== null || !scroller) return;
       frame = requestAnimationFrame(function () {
         frame = null;
-        if (!scroller || !scroller.isConnected || route !== location.pathname) return;
+        if (shiftHeld || !scroller || !scroller.isConnected || route !== location.pathname) return;
         scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       });
+    }
+
+    function trackShift(event) {
+      shiftHeld = event.shiftKey;
+      if (!shiftHeld) schedule();
+    }
+
+    function releaseShift() {
+      shiftHeld = false;
+      schedule();
     }
 
     function detach() {
@@ -534,10 +545,16 @@
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener("popstate", sync);
+    window.addEventListener("keydown", trackShift, true);
+    window.addEventListener("keyup", trackShift, true);
+    window.addEventListener("blur", releaseShift);
     sync();
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", sync);
+      window.removeEventListener("keydown", trackShift, true);
+      window.removeEventListener("keyup", trackShift, true);
+      window.removeEventListener("blur", releaseShift);
       detach();
     };
   });
