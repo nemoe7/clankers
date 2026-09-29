@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Report ack spacing**: Remove the top line and the extra space above the first reply in the report ack history. Keep the line between later replies.
+
 - **Shift pause**: Arena bundle 1.1.2 pauses transcript follow while you hold Shift. Release Shift to resume while ON. Clear the held-key state on window blur without changing the saved switch.
 
 - **Gemini release proposals**: Classify SemVer impact from complete commit history. Write a version and notes proposal first. Only a separate approved run can create a tag and draft.

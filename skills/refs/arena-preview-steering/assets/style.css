@@ -157,6 +157,8 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 /* Each later ack is one more block under the first answer, parted by a hairline; nothing is replaced. */
 .answer .reply-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .answer .reply-block > p:last-child { margin-bottom: 0; }
+/* The first ack under the toolbar needs no hairline and no extra space. */
+#report-ack-history .reply-block:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
