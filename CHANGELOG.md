@@ -2,7 +2,7 @@
 
 - **Autoscroll toggle button**: Add a toggle to the transcript action row next to Stop generating. The button is pressed while follow is ON and unpressed when OFF. Drop the Shift pause.
 
-- **Report ack spacing**: Remove the top line and the extra space above the first reply in the report ack history. Keep the line between later replies.
+- **Report ack spacing**: Remove the top line and the extra space above the first reply in the report ack history. Zero the container and paragraph top spacing there. Keep the line between later replies.
 
 - **Shift pause**: Arena bundle 1.1.2 pauses transcript follow while you hold Shift. Release Shift to resume while ON. Clear the held-key state on window blur without changing the saved switch.
 
