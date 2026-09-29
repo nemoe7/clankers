@@ -1,6 +1,6 @@
 ## 2026-09-29
 
-- **One pytest**: Test files are `test_*.py` and `*.test.cjs`; `check_*` names stay for gates. A root `pytest.ini` runs the preview and Gemini release tests in one call, and CI now runs the Gemini tests.
+- **One pytest**: Test files are `test_*.py` and `*.test.cjs`. The `check_*` names stay for gates. A root `pytest.ini` runs the preview and Gemini release tests in one call, and CI now runs the Gemini tests.
 
 - **Autoscroll button hover**: Arena bundle 1.1.5 gives each toggle state its own hover fill: surface raised when off, CTA active when on. The on state stays visible under the pointer.
 
