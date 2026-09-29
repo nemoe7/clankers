@@ -22,14 +22,14 @@ Latest measurements as of 2026-09-29. `maintenance/check.py` measures ARENA.md b
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,511 `tok` |
 | `rules/ARENA.md` | `UTF-8 file size` | 14,819 `B` |
-| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,498 `chars` |
-| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,497 `chars` |
+| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,484 `chars` |
+| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,455 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 460 `tok` |
 | `rules/KILO.md` | `cl100k_base` | 87 `tok` |
 | `rules/kilo/code.md` | `cl100k_base` | 223 `tok` |
 | `rules/kilo/debug.md` | `cl100k_base` | 272 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
-| `rules/COMMIT-SPEC.txt` | `cl100k_base` | 119 `tok` |
+| `rules/COMMIT-SPEC.txt` | `cl100k_base` | 95 `tok` |
 | `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 5,999 `B` |
 | `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 41,707 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,117 `B` |
