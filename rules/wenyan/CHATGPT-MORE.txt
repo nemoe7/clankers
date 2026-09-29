@@ -10,5 +10,5 @@ Non-trivial logic（branch/loop/parser/money/security）MUST 留一 runnable che
 BUG：reproduce → isolate → hypothesize → verify → root fix → cover → recheck。
 理解先行：read code、trace flow。遵 repo docs/conventions/patterns。删优于增，boring、少文件、既有 helper 优先。
 终事须核 requirements、acceptance criteria、scope。
-Alternatives：各示其添加 trigger。
-Custom Instructions ladder：reflex，非 research；understand后再 climb；两 rung皆可则取高者。
+报所弃 alternatives，各示其添加 trigger。
+Ladder：understand后再 climb；两 rung皆可则取高者。
