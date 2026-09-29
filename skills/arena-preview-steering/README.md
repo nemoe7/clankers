@@ -19,9 +19,9 @@ Reports keep their first-publish sequence. Schema migrations add nullable column
 
 The NDJSON file tracks notes, tasks, and report answers. It does not contain report snapshots,
 queued jobs, or uploaded/downloaded bytes. Normal note/task/answer writes refresh it.
-Fetch queue writes do not, and the two import commands leave it unchanged.
+Fetch queue writes do not, and the import command leave it unchanged.
 The clipboard Copy state button exports Notes and Tasks, not report answers.
-A restore needs both `import-notes` and `task-import` if the database was lost.
+A restore uses `import-state [FILE]` for notes, tasks and report answers together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It merges by ID in one transaction and leaves the backup unchanged. `--replace-tasks` replaces only tasks.
 Republish surviving report sources after restoring a database without reports.
 
 ## Reports and inputs
