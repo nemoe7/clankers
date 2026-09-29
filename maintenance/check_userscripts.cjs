@@ -4,11 +4,11 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const bundles = {
-  arena: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1 },
-  chatgpt: { "hide-elements": 1, "auto-think": 0 },
+  arena: { features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1 }, baseObservers: 1 },
+  chatgpt: { features: { "hide-elements": 1, "auto-think": 0 }, baseObservers: 0 },
 };
 
-for (const [domain, features] of Object.entries(bundles)) {
+for (const [domain, { features, baseObservers }] of Object.entries(bundles)) {
   const source = fs.readFileSync(
     path.join(__dirname, "../userscripts", `${domain}.user.js`), "utf8",
   );
@@ -64,7 +64,7 @@ for (const [domain, features] of Object.entries(bundles)) {
 
   const defaults = load();
   assert.equal(defaults.menus.size, keys.length);
-  assert.equal(defaults.active.observers, Object.values(features).reduce((a, b) => a + b, 0));
+  assert.equal(defaults.active.observers, Object.values(features).reduce((a, b) => a + b, 0) + baseObservers);
   assert.equal(defaults.active.intervals, domain === "chatgpt" ? 1 : 0);
   assert.equal(defaults.active.clicks, domain === "chatgpt" ? 1 : 0);
   assert.equal(stored.size, 0, "Reading defaults must not overwrite settings");
@@ -94,9 +94,9 @@ for (const [domain, features] of Object.entries(bundles)) {
   for (const menu of [...page.menus.values()]) menu.callback();
   assert.deepEqual([...stored.keys()].sort(), keys.slice().sort());
   assert.ok([...stored.values()].every((value) => value === false));
-  assert.equal(page.active.observers, 0);
+  assert.equal(page.active.observers, baseObservers);
   assert.equal(page.active.intervals, 0);
-  assert.deepEqual(load().active, { observers: 0, intervals: 0, clicks: 0 });
+  assert.deepEqual(load().active, { observers: baseObservers, intervals: 0, clicks: 0 });
 
   const allOff = load();
   refuseWrite = true;
@@ -122,10 +122,31 @@ for (const [domain, features] of Object.entries(bundles)) {
   };
   const content = { parentElement: scroller };
   let message = { parentElement: content, closest() { return scroller; } };
+  const row = {
+    inserted: null,
+    querySelector() { return null; },
+    insertBefore(node) { this.inserted = node; },
+  };
+  const stopButton = {
+    getAttribute(name) { return name === 'aria-label' ? 'Stop generating' : null; },
+    parentElement: row,
+  };
+  const makeElement = (tag) => ({
+    tag, type: '', className: '', attrs: {}, listeners: {}, children: [],
+    setAttribute(name, value) { this.attrs[name] = value; },
+    appendChild(child) { this.children.push(child); },
+    addEventListener(name, fn) { this.listeners[name] = fn; },
+  });
   const context = {
     console, URL,
     location: { pathname: '/agent/one', href: 'https://arena.ai/agent/one' },
-    document: { documentElement: {}, querySelector() { return message; } },
+    document: {
+      documentElement: {},
+      querySelector() { return message; },
+      querySelectorAll(selector) { return selector === 'button[aria-label]' ? [stopButton] : []; },
+      createElement: (tag) => makeElement(tag),
+      createElementNS: (namespace, tag) => makeElement(tag),
+    },
     window: { addEventListener(name, fn) { events.set(name, fn); }, removeEventListener(name) { events.delete(name); } },
     getComputedStyle() { return { overflowY: 'auto' }; },
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} disconnect() {} },
@@ -140,6 +161,9 @@ for (const [domain, features] of Object.entries(bundles)) {
   const flush = () => { for (const [id, fn] of [...frames]) { frames.delete(id); fn(); } };
   vm.runInNewContext(source, context);
   flush();
+  const toggleButton = row.inserted;
+  assert.ok(toggleButton, 'Toggle button is injected into the action row');
+  assert.equal(toggleButton.attrs['aria-pressed'], 'true', 'Button starts pressed while follow is ON');
   scroller.scrollTop = 100;
   events.get('scroll')(); flush();
   assert.equal(scroller.scrollTop, 600, 'Enabled mode immediately returns to bottom');
@@ -162,39 +186,26 @@ for (const [domain, features] of Object.entries(bundles)) {
   scroller.scrollTop = 20;
   observers[0](); flush();
   assert.equal(scroller.scrollTop, 2100, 'Enabled mode follows on navigation');
-  scroller.scrollTop = 80;
-  events.get('scroll')();
-  events.get('keydown')({ key: 'Shift', shiftKey: true });
-  flush();
-  assert.equal(scroller.scrollTop, 80, 'Shift blocks a frame queued before keydown');
-  scroller.scrollHeight = 2800;
-  observers[0](); observers[1](); events.get('scroll')(); flush();
-  assert.equal(scroller.scrollTop, 80, 'Shift pauses mutations, resize and scroll follow');
-  context.location.pathname = '/agent/three';
-  observers[0](); flush();
-  assert.equal(scroller.scrollTop, 80, 'Navigation stays paused while Shift is held');
-  events.get('keyup')({ key: 'A', shiftKey: true }); flush();
-  assert.equal(scroller.scrollTop, 80, 'Other keys do not release Shift pause');
-  events.get('keyup')({ key: 'Shift', shiftKey: true }); flush();
-  assert.equal(scroller.scrollTop, 80, 'The other Shift key still pauses follow');
-  events.get('keyup')({ key: 'Shift', shiftKey: false }); flush();
-  assert.equal(scroller.scrollTop, 2400, 'Releasing Shift resumes follow');
-  assert.equal(enabled, true, 'Shift never changes the saved switch');
-  events.get('keydown')({ key: 'Shift', shiftKey: true });
-  scroller.scrollTop = 90;
-  events.get('blur')(); flush();
-  assert.equal(scroller.scrollTop, 2400, 'Blur clears a missed Shift release');
-  const toggle = () => [...menus].find(([label]) => label.startsWith('Transcript auto-scroll:'))[1]();
-  events.get('keydown')({ key: 'Shift', shiftKey: true });
-  toggle();
+  const toggleMenu = () => [...menus].find(([label]) => label.startsWith('Transcript auto-scroll:'))[1]();
+  toggleButton.listeners.click();
+  assert.equal(enabled, false, 'Button click turns follow off');
+  assert.equal(toggleButton.attrs['aria-pressed'], 'false', 'Button shows unpressed when off');
   assert.equal(events.has('scroll'), false, 'OFF removes the scroll listener');
-  for (const key of ['keydown', 'keyup', 'blur']) assert.equal(events.has(key), false, 'OFF removes Shift listeners');
   scroller.scrollTop = 50; flush();
   assert.equal(scroller.scrollTop, 50, 'OFF cancels pending follow');
-  toggle(); flush();
-  assert.equal(scroller.scrollTop, 2400, 'ON follows immediately without reload');
+  toggleButton.listeners.click();
+  assert.equal(enabled, true, 'Button click turns follow on');
+  assert.equal(toggleButton.attrs['aria-pressed'], 'true', 'Button shows pressed when on');
+  flush();
+  assert.equal(scroller.scrollTop, 2100, 'ON follows immediately without reload');
+  toggleMenu();
+  assert.equal(enabled, false, 'Menu toggle turns follow off');
+  assert.equal(toggleButton.attrs['aria-pressed'], 'false', 'Menu toggle updates the button');
+  toggleMenu();
+  assert.equal(enabled, true, 'Menu toggle restores follow');
+  assert.equal(toggleButton.attrs['aria-pressed'], 'true', 'Button follows the menu toggle back on');
   message = null;
   observers.at(-2)(); flush();
   assert.equal(events.has('scroll'), false, 'Removed transcript releases its listener');
-  console.log('ok auto-scroll: growth, resize, Shift pause/release/blur, navigation, cleanup');
+  console.log('ok auto-scroll: growth, resize, navigation, toggle button, menu sync, cleanup');
 }
