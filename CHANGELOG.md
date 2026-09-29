@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Owner-verbatim scope**: AGENTS.md grants the approval exemption only for the owner's complete clause text. Any other owner directive takes the report route first.
+
 - **CI poll output**: ARENA.md polls the plain `gh pr checks` output. An empty or absent check list is unverified, never a conclusion.
 
 - **ChatGPT hide elements**: The ChatGPT userscript hides the Images sidebar link, the Library sidebar link and the Free badge. The bundle version is `1.2.0`.
