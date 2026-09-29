@@ -2,7 +2,7 @@
 
 - **Publish feedback**: `publish` prints the parsed field count and warns when a `{#id}` marker parsed as prose. A shared-ID refusal suggests `<id>-report` or `<id>-task`.
 
-- **Rules audit**: AGENTS.md, ARENA.md, CLINE.md, the preview SKILL.md and REFERENCE.md lose rationale tails, duplicates and untestable lines. ARENA.md now names every host `AGENTS.md` and wins collisions. The ChatGPT files and COMMIT-SPEC.txt get the same treatment.
+- **Rules audit**: AGENTS.md, ARENA.md, CLINE.md, the preview SKILL.md and REFERENCE.md lose rationale tails, duplicates and untestable lines. ARENA.md now names every host `AGENTS.md` and wins collisions. The same edits apply to the ChatGPT files and COMMIT-SPEC.txt.
 
 - **Tab pip alignment**: Tab buttons centre their label and unread pip with flex and a 6px gap. The pip sits on the text midline. Tabs are 116px wide (98px narrow), so the pip does not widen the row.
 
