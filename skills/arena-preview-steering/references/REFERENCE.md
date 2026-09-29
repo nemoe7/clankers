@@ -23,6 +23,8 @@ Use `scripts/preview.py` relative to the actual installed steering skill. Put `-
 
 Use complete IDs in CLI calls; cite their first seven characters in prose. `read` does not acknowledge an item. Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers. A repeated `ack` on an ID appends one more reply block and keeps the earlier ones. The same on a submission ID appends reply blocks to its receipt. An unknown ID fails the whole receipt batch. Answer later submissions under their own IDs. If the preview is unavailable, use `ACK:` in chat for delivered notes.
 
+Refer to a note in prose by the first seven characters of its ID, NEVER by its sequence number (`seq`) or list position. Use the full ID in CLI calls. Before sending a note reference, check it against the ID returned by `read`.
+
 When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks instead of a generic label such as published report. This overrides seven-character prose shortening for these references. Use IDs unique across notes, reports and tasks so the client can link them.
 
 ## External channel (ntfy)
