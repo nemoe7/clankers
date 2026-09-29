@@ -266,6 +266,11 @@ def test_report_receipt_ids():
     assert report["latest_answer_acknowledged_at"] == preview.clip_stamp(
       receipt_store.submissions()[-1]["acknowledged_at"]
     )
+    receipt_store.acknowledge(["answer-one"], "reply", "Second reply")
+    history = receipt_store.state()["reports"][0]["acknowledgements"]
+    assert history[0]["ack_text"] == "Received"
+    assert history[0]["replies"][0]["text"] == "Second reply"
+    assert "text" not in history[0]
     receipt_store.submission("answer-two", "receipt", "REPORT receipt: No")
     report = receipt_store.state()["reports"][0]
     assert report["latest_answer_id"] == "answer-two", "use the new submission's ID"
