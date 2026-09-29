@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini release proposals**: Classify SemVer impact from complete commit history. Write a version and notes proposal first. Only a separate approved run can create a tag and draft.
+
 - **Report footer status**: Repeat the submission status below the report form. Keep agent replies at the top and only the top status as a live announcement.
 
 - **Release command errors**: Include the failed command and stderr in Gemini release errors. Explain the existing-tag requirement when tag resolution fails. Redact configured GitHub and Gemini secrets, and check missing-tag diagnostics offline.
