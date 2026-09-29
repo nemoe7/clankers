@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Feature switches |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-All five features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle; reload to apply`. The label shows the saved setting, not the active page state.
+All six features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle; reload to apply`. The label shows the saved setting, not the active page state.
 
 Reload manually to apply a change. Other open tabs use saved settings on their next reload. A disabled feature starts no observer or timer.
 
@@ -34,13 +34,19 @@ If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` 
 
 ## Arena Open Steering
 
-On paths with a segment after `/agent/`, the feature waits 1 second, then clicks `{repo} - Steering` on port 8000 once per page.
+On paths with a segment after `/agent/`, the feature waits 1 second, then clicks `{repo} - Steering` on port 8000 once per page. Label and repository-name matching ignore letter case.
 
 ## Arena Hide Composer
 
 On paths with a segment after `/agent/`, a button with `aria-label="Stop generating"` causes the feature to hide `div.editor-content` with the `hidden` attribute, the `hidden` class and `display: none !important`. It restores the editor when that button is gone.
 
 The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its height if another script changes it.
+
+## Arena Transcript Auto-scroll
+
+On `/agent/*`, the transcript follows new messages and resized tool output when it is within 80px of the bottom. Scrolling up pauses follow. Scrolling down to within 80px resumes it.
+
+The feature uses the transcript message marker and its scrollable `role="log"` ancestor. It preserves a reading position when the transcript or session changes. Adjust `BOTTOM_GAP` in the script if needed.
 
 ## ChatGPT Hide Elements
 
@@ -68,4 +74,4 @@ node userscripts/chatgpt.user.js
 node maintenance/check_userscripts.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup and storage errors.
+Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, pause/resume and navigation.
