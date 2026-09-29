@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Acknowledgement reference links**: Require exact report and task IDs in inline code in Markdown acknowledgements instead of generic labels. Retain short prose IDs for other references.
+
 - **Report acknowledgement history**: Show agent replies in the report header with the Messages acknowledgement style. Preserve replies across submissions and repeated acknowledgements, including reference links.
 
 - **Live userscript switches**: Apply all Arena and ChatGPT menu switches without page reload. Stop disabled observers, timers and listeners. Restore script-owned hiding changes without undoing earlier clicks or prompt insertion.
