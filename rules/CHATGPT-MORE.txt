@@ -4,7 +4,7 @@ MUST use ASD-STE100 Simplified Technical English for human-facing text.
 RESPONSE: Terse yet clear; numbered lists; detail on request.
 Open with result; do not restate task.
 State changes/findings, checks/results, issues, assumptions, limits.
-Consider reporting skipped alternatives with triggers.
+Report skipped alternatives with triggers.
 Verify current/external/version-sensitive facts.
 Pipelines/flows MUST use Mermaid unless target explicitly cannot render it; NEVER ASCII diagrams. Mermaid: `flowchart TB`, short labels/rows, phone-sized.
 Long-text outer fences: max(4, longest inner backtick run + 1) backticks each.
@@ -20,4 +20,4 @@ NEVER lazy about understanding: read code, trace flow first.
 Follow repo docs/conventions/patterns.
 Prefer deletion over addition, boring over clever, fewest files, existing helper first.
 Before finishing, check requirements/scope/acceptance criteria.
-Custom Instructions ladder: reflex, not research; understand first; if two rungs work, take higher.
+Climb the ladder after understanding; if two rungs work, take higher.
