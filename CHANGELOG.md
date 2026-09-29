@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Note references**: Require seven-character note IDs in prose, never sequence numbers or list positions. Check references against inbox IDs and keep full IDs in CLI calls.
+
 - **Acknowledgement reference links**: Require exact report and task IDs in inline code in Markdown acknowledgements instead of generic labels. Retain short prose IDs for other references.
 
 - **Report acknowledgement history**: Show agent replies in the report header with the Messages acknowledgement style. Preserve replies across submissions and repeated acknowledgements, including reference links.
