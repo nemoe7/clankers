@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Distribute Gemini release**: `distribute-gemini-release.yml` copies `gemini-release.yml` and `gemini_release.py` to target repositories on dispatch, `nemoe7/daedalus` by default, on the pattern of `distribute-arena.yml`.
+
 - **Gemini release in two files**: The prompts and the release template move into `gemini_release.py` as constants. A target repository installs the YAML and the Python file only.
 
 - **Gemini evidence input**: The release workflow has an `evidence` choice. `commits-and-diffs` is the default and `commits` sends commit messages only.

@@ -1,0 +1,71 @@
+# Dispatch-only distribution of the Gemini release workflow.
+# ARENA_DIST_PAT needs short-lived Contents read/write access to every target.
+# Delivery is not activation: GitHub activates the copied workflow on the target default branch.
+name: Distribute Gemini Release
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: Space-separated owner/repo list; overrides REPOS
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: distribute-gemini-release
+  cancel-in-progress: false
+env:
+  REPOS: "nemoe7/daedalus"
+  SRC_ROOT: github/workflows
+  DEST_ROOT: .github/workflows
+  FILES: "gemini-release.yml gemini_release.py"
+jobs:
+  distribute:
+    name: Distribute
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check Out Source Repository
+        uses: actions/checkout@v4
+      - name: Sync The Gemini Release Workflow To Target Repos
+        env:
+          ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
+          TARGET_REPOS: ${{ inputs.repos }}
+        run: |
+          set -e
+          list="${TARGET_REPOS:-$REPOS}"
+          [ -n "$list" ] || { echo "::error::no target repos configured"; exit 1; }
+          for f in $FILES; do
+            [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
+          done
+          failed=""
+          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
+          for repo in $list; do
+            (
+              set -e
+              work=$(mktemp -d)
+              trap 'rm -rf "$work"' EXIT
+              git clone "https://github.com/$repo.git" "$work"
+              mkdir -p "$work/$DEST_ROOT"
+              for f in $FILES; do
+                cp "$GITHUB_WORKSPACE/$SRC_ROOT/$f" "$work/$DEST_ROOT/$f"
+              done
+              cd "$work"
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              for f in $FILES; do
+                git add "$DEST_ROOT/$f"
+              done
+              git diff --cached --quiet || {
+                git commit -m "chore(release): sync gemini release workflow from nemoe7/clankers"
+                git push -u origin HEAD
+              }
+              for f in $FILES; do
+                git show "HEAD:$DEST_ROOT/$f" | cmp -s - "$GITHUB_WORKSPACE/$SRC_ROOT/$f" || {
+                  echo "::error::$repo: $f differs after sync"; exit 1;
+                }
+              done
+              echo "$repo: gemini release workflow verified"
+            ) || failed="$failed $repo"
+          done
+          [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }
