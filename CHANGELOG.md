@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **DAILIES monitoring**: Use a rolling 24-hour event window without checkpoint writes. Show incomplete coverage, rotate deep audits through three active repositories per day, keep monitoring read-only and separate release drafts from findings. Repository and scheduler copies remain separate.
+
 - **Arena transcript auto-scroll**: The Arena bundle adds an independent saved switch. It follows new messages and resized output near the bottom, pauses on upward scroll and keeps reading positions across session changes. Node checks cover follow, pause, resume and cleanup. Steering label and repository matching now ignore letter case.
 
 - **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
