@@ -1,6 +1,7 @@
 """Run offline release-history, reduction and API-boundary checks."""
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -33,6 +34,10 @@ def check():
     git("commit", "-m", "root change")
     root = git("rev-parse", "HEAD")
     git("tag", "v1")
+    fails(lambda: release.tag_sha("1.0.0"), "refs/tags/1.0.0^{commit}")
+    fails(lambda: release.tag_sha("1.0.0"), "fatal:")
+    fails(lambda: release.tag_sha("1.0.0"), "Push that exact tag before dispatch")
+
     git("checkout", "-b", "side")
     Path("side").write_text("side marker\n")
     git("add", ".")
@@ -68,6 +73,24 @@ def check():
     split = release.pieces([("unicode", "é🦀abc" * 20)], size=7)
     assert "".join(p["text"] for p in split) == "é🦀abc" * 20
     os.chdir(original)
+  secret = "sentinel-secret-do-not-log"
+  with (
+    patch.dict(os.environ, {"GH_TOKEN": secret, "GEMINI_API_KEY": secret}),
+    patch.object(
+      release.subprocess,
+      "run",
+      return_value=subprocess.CompletedProcess(
+        ["gh", "api"], 1, b"", f"fatal: denied {secret}".encode()
+      ),
+    ),
+  ):
+    fails(
+      lambda: release.run("gh", "api", "repos/owner/repo"), "fatal: denied [REDACTED]"
+    )
+    try:
+      release.run("gh", "api", secret)
+    except RuntimeError as error:
+      assert secret not in str(error)
   calls = []
 
   def generate(context, evidence, model):
