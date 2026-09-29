@@ -32,15 +32,17 @@ for (const [domain, features] of Object.entries(bundles)) {
         querySelector() { return null; },
         querySelectorAll(selector) { return selector.includes("__composer-pill") ? [pill] : []; },
       },
-      window: { addEventListener() {} },
+      window: { addEventListener() {}, removeEventListener() {} },
       sessionStorage: { getItem() { return null; } },
       MutationObserver: class {
         observe() { active.observers += 1; }
+        disconnect() { active.observers -= 1; }
       },
       setInterval(callback, ms) {
         assert.equal(ms, 1000);
         active.intervals += 1;
       },
+      clearInterval() { active.intervals -= 1; },
       setTimeout() { throw new Error("No steering button should schedule a click"); },
       clearTimeout() {},
       GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
@@ -79,7 +81,8 @@ for (const [domain, features] of Object.entries(bundles)) {
     const before = { ...page.active };
     menu.callback();
     assert.equal(stored.get(key), true);
-    assert.deepEqual(page.active, before, "Menu clicks must not change the active page");
+    assert.equal(page.active.observers, defaults.active.observers);
+    assert.equal(page.active.intervals, defaults.active.intervals);
     assert.equal(page.menus.size, keys.length, "Menu updates must not accumulate entries");
     assert.ok([...page.menus.values()].every((item) => item.label.includes(": ON")));
     assert.deepEqual(load().active, defaults.active, "Reload must apply the saved switch");
@@ -91,7 +94,8 @@ for (const [domain, features] of Object.entries(bundles)) {
   for (const menu of [...page.menus.values()]) menu.callback();
   assert.deepEqual([...stored.keys()].sort(), keys.slice().sort());
   assert.ok([...stored.values()].every((value) => value === false));
-  assert.deepEqual(page.active, before);
+  assert.equal(page.active.observers, 0);
+  assert.equal(page.active.intervals, 0);
   assert.deepEqual(load().active, { observers: 0, intervals: 0, clicks: 0 });
 
   const allOff = load();
@@ -100,7 +104,7 @@ for (const [domain, features] of Object.entries(bundles)) {
   assert.throws(() => allOff.menus.values().next().value.callback(), /Storage write failed/);
   assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labels);
   assert.ok([...stored.values()].every((value) => value === false));
-  console.log(`ok ${domain}: switches, defaults, storage failure, reload, and disabled startup`);
+  console.log(`ok ${domain}: switches, defaults, storage failure, live switches, and disabled startup`);
 }
 
 {
@@ -108,6 +112,8 @@ for (const [domain, features] of Object.entries(bundles)) {
   const events = new Map();
   const frames = new Map();
   const observers = [];
+  const menus = new Map();
+  let enabled = true;
   let serial = 0;
   const scroller = {
     scrollTop: 600, scrollHeight: 1000, clientHeight: 400, isConnected: true,
@@ -120,18 +126,23 @@ for (const [domain, features] of Object.entries(bundles)) {
     console, URL,
     location: { pathname: '/agent/one', href: 'https://arena.ai/agent/one' },
     document: { documentElement: {}, querySelector() { return message; } },
-    window: { addEventListener(name, fn) { events.set(name, fn); } },
+    window: { addEventListener(name, fn) { events.set(name, fn); }, removeEventListener(name) { events.delete(name); } },
     getComputedStyle() { return { overflowY: 'auto' }; },
-    MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} },
+    MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} disconnect() {} },
     ResizeObserver: class { constructor(fn) { observers.push(fn); } observe() {} unobserve() {} disconnect() {} },
     requestAnimationFrame(fn) { frames.set(++serial, fn); return serial; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    GM_getValue(key) { return key === 'auto-scroll'; },
-    GM_registerMenuCommand() {}, GM_unregisterMenuCommand() {}, GM_setValue() {},
+    GM_getValue(key) { return key === 'auto-scroll' && enabled; },
+    GM_registerMenuCommand(label, fn) { menus.set(label, fn); return label; },
+    GM_unregisterMenuCommand(label) { menus.delete(label); },
+    GM_setValue(key, value) { enabled = value; },
   };
   const flush = () => { for (const [id, fn] of [...frames]) { frames.delete(id); fn(); } };
   vm.runInNewContext(source, context);
   flush();
+  scroller.scrollTop = 100;
+  events.get('scroll')(); flush();
+  assert.equal(scroller.scrollTop, 600, 'Enabled mode immediately returns to bottom');
   scroller.scrollHeight = 1600;
   observers[0](); flush();
   assert.equal(scroller.scrollTop, 1200, 'New content follows while pinned');
@@ -139,20 +150,27 @@ for (const [domain, features] of Object.entries(bundles)) {
   events.get('scroll')();
   scroller.scrollHeight = 2000;
   observers[0](); flush();
-  assert.equal(scroller.scrollTop, 1100, 'Upward scroll pauses follow');
+  assert.equal(scroller.scrollTop, 1600, 'Enabled mode overrides upward scrolling');
   scroller.scrollTop = 1550;
   events.get('scroll')();
   scroller.scrollHeight = 2200;
   observers[1](); flush();
-  assert.equal(scroller.scrollTop, 1800, 'Near-bottom scroll resumes resize follow');
+  assert.equal(scroller.scrollTop, 1800, 'Enabled mode follows resize');
   scroller.scrollHeight = 2500;
   observers[0]();
   context.location.pathname = '/agent/two';
   scroller.scrollTop = 20;
   observers[0](); flush();
-  assert.equal(scroller.scrollTop, 20, 'Navigation preserves a restored reading position');
+  assert.equal(scroller.scrollTop, 2100, 'Enabled mode follows on navigation');
+  const toggle = () => [...menus].find(([label]) => label.startsWith('Transcript auto-scroll:'))[1]();
+  toggle();
+  assert.equal(events.has('scroll'), false, 'OFF removes the scroll listener');
+  scroller.scrollTop = 50; flush();
+  assert.equal(scroller.scrollTop, 50, 'OFF cancels pending follow');
+  toggle(); flush();
+  assert.equal(scroller.scrollTop, 2100, 'ON follows immediately without reload');
   message = null;
-  observers[0](); flush();
+  observers.at(-2)(); flush();
   assert.equal(events.has('scroll'), false, 'Removed transcript releases its listener');
-  console.log('ok auto-scroll: growth, resize, pause, resume, navigation, cleanup');
+  console.log('ok auto-scroll: growth, resize, upward-scroll override, navigation, cleanup');
 }

@@ -1,5 +1,9 @@
 ## 2026-09-29
 
+- **Live userscript switches**: Apply all Arena and ChatGPT menu switches without page reload. Stop disabled observers, timers and listeners. Restore script-owned hiding changes without undoing earlier clicks or prompt insertion.
+
+- **Always-follow transcript switch**: Arena bundle 1.1.1 keeps the transcript at the bottom while enabled. Remove the near-bottom gate and upward-scroll pause. Disable the saved switch to stop follow immediately.
+
 - **Messages tab**: Rename the visible Notes tab to Messages. Keep its data and routes unchanged.
 
 - **PR check polling**: Use exponential delays from 1 to 64 seconds after the initial check, then 64-second intervals. Stop and report command or API errors, including HTTP 401. Pending checks remain distinct from errors.

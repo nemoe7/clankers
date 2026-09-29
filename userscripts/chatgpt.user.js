@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers ChatGPT
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.0.0
+// @version      1.1.0
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -25,13 +25,16 @@
     }
     var enabled = GM_getValue(key, true) !== false;
     var menuId;
+    var stop = null;
 
     function showMenu(value) {
       menuId = GM_registerMenuCommand(
-        label + ": " + (value ? "ON" : "OFF") + " — toggle; reload to apply",
+        label + ": " + (value ? "ON" : "OFF") + " — toggle",
         function () {
           var next = GM_getValue(key, true) === false;
           GM_setValue(key, next);
+          if (stop) stop();
+          stop = next ? run() : null;
           GM_unregisterMenuCommand(menuId);
           showMenu(next);
         },
@@ -40,7 +43,7 @@
 
     showMenu(enabled);
     if (enabled) {
-      run();
+      stop = run();
     }
   }
 
@@ -84,10 +87,13 @@
       return doc.querySelector(HEADER_DIV_SELECTOR);
     }
 
+    var hiddenElements = new Set();
+
     function hideElement(el) {
       if (!el || el.hasAttribute("hidden")) {
         return false;
       }
+      hiddenElements.add(el);
       el.setAttribute("hidden", "");
       return true;
     }
@@ -229,6 +235,12 @@
     });
     window.addEventListener("popstate", sync);
     sync();
+    return function () {
+      observer.disconnect();
+      window.removeEventListener("popstate", sync);
+      hiddenElements.forEach(function (el) { if (el.getAttribute("hidden") === "") el.removeAttribute("hidden"); });
+      hiddenElements.clear();
+    };
   });
 
   runFeature("auto-think", "Auto Think", function () {
@@ -311,9 +323,10 @@
     }
 
     pressThink(document);
-    setInterval(function () {
+    var timer = setInterval(function () {
       pressThink(document);
     }, PRESS_INTERVAL_MS);
+    return function () { clearInterval(timer); };
   });
 
 })();
