@@ -15,7 +15,7 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-09-28. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
+Latest measurements as of 2026-09-29. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ Latest measurements as of 2026-09-28. `maintenance/check.py` measures ARENA.md b
 | `gpt-plugins/skills/gpt-quirks/SKILL.md` | `cl100k_base` | 142 `tok` |
 | `gpt-plugins/skills/gpt-handoff/SKILL.md` | `cl100k_base` | 1,090 `tok` |
 | `gpt-plugins/skills/gpt-planning/SKILL.md` | `cl100k_base` | 398 `tok` |
-| `gpt-plugins/skills/gpt-github/SKILL.md` | `cl100k_base` | 275 `tok` |
+| `gpt-plugins/skills/gpt-github/SKILL.md` | `cl100k_base` | 348 `tok` |
 
 Measurements cover complete files, including whitespace and markup. 
 

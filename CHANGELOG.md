@@ -1,6 +1,8 @@
 ## 2026-09-29
 
 - **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
+- **GitHub repository discovery**: `gpt-github` adds the owner's clause on tree discovery before file reads, known paths, batched calls and tool checks. Source and shipped copies match. Plugin version is `1.3.0`.
+
 ## 2026-09-28
 
 - **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to the Claim offer, Free offer, chat surface toggle, Codex sidebar link and prompt-textarea header elements. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. Node checks print `ok`.
