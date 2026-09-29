@@ -508,19 +508,19 @@
 
   var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
   var AUTO_TOGGLE_CLASS =
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border text-text-primary";
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium border text-text-primary";
 
   function hasToggleClass(classes, name) {
     return classes.split(" ").indexOf(name) !== -1;
   }
 
-  // The on state keeps its own fill under the pointer; hover only lifts the off state.
+  // Each state has its own hover fill, so the on state stays visible under the pointer.
   function autoToggleClasses(on) {
     return (
       AUTO_TOGGLE_CLASS +
       (on
-        ? " bg-interactive-cta-active border-text-primary"
-        : " bg-transparent border-border-medium hover:bg-surface-raised")
+        ? " bg-surface-raised hover:bg-interactive-cta-active"
+        : " bg-transparent hover:bg-surface-raised")
     );
   }
 
@@ -604,6 +604,8 @@
         [hasToggleClass(on, "bg-transparent"), false],
         [hasToggleClass(off, "bg-transparent"), true],
         [hasToggleClass(off, "bg-surface-raised"), false],
+        [hasToggleClass(on, "hover:bg-interactive-cta-active"), true],
+        [hasToggleClass(off, "hover:bg-surface-raised"), true],
         [hasToggleClass(AUTO_TOGGLE_CLASS, "h-8"), true],
         [hasToggleClass(AUTO_TOGGLE_CLASS, "w-8"), true],
       ];

@@ -1,6 +1,6 @@
 ## 2026-09-29
 
-- **Autoscroll button on state**: Arena bundle 1.1.5 fills the pressed autoscroll button with the CTA active colour and a primary border. Hover lifts only the off state, so the on state stays visible under the pointer.
+- **Autoscroll button hover**: Arena bundle 1.1.5 gives each toggle state its own hover fill (off: surface raised, on: CTA active), so the on state stays visible under the pointer.
 
 - **Gemini model ladder**: The release workflow `models` input is a comma-separated ladder. Each request moves to the next model on an HTTP error or blocked output. Default: gemini-3.8-flash to gemini-3.1-flash-lite.
 
