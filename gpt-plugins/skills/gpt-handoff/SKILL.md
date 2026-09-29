@@ -5,7 +5,7 @@ description: "MUST use for audits or reviews of agent-produced work (including c
 
 Create a compact, actionable handoff for the next agent.
 
-Make the output easy to copy and paste as an agent prompt. Use plain text and Markdown. Avoid conversational framing, unnecessary explanation, and formatting that does not copy cleanly.
+Use easily copied plain text and Markdown as an agent prompt. Avoid conversational framing, unnecessary explanation and formatting that copies poorly.
 
 Do not repeat rules the agent already has.
 
@@ -13,7 +13,7 @@ Do not repeat rules the agent already has.
 
 ## Mode
 
-Use `audit` when the user asks for an independent review of existing or proposed work.
+Use `audit` for requested independent reviews of existing or proposed work.
 
 MUST activate `audit` for reviews of agent-produced work (including code and human-facing docs), agent-created branches, agent-created PRs, agent-created commits, agent implementations, and follow-up audits of previously reviewed agent work.
 
@@ -21,7 +21,7 @@ For code audits, MUST follow: GPT Handoff audit → Ponytail code audit/review �
 
 For human-facing docs audits, MUST follow: GPT Handoff audit → Ponytail docs audit/review → GPT Handoff final output.
 
-Use `handoff` when the user asks for implementation direction or a plan.
+Use `handoff` for requested implementation direction or plans.
 
 Use the user's requested outcome over repository state.
 
@@ -38,13 +38,13 @@ Infer from the requested outcome:
 - `docs`, `test`, `config`: primary deliverable
 - `mixed`: multiple primary types
 
-The requested outcome takes priority over file-based inference.
+Requested outcomes outrank file-based inference.
 
 ## Review
 
-Independently verify enough context to assess requirements, implementation, project patterns, tests, scope, and complexity.
+Independently verify context sufficient to assess requirements, implementation, project patterns, tests, scope and complexity.
 
-For existing work, identify defects, missed requirements, unnecessary complexity, missing verification, and scope issues.
+For existing work, identify defects, missed requirements, excess complexity, missing verification and scope issues.
 
 For human-facing docs audits, use `docs:` for actionable findings.
 
@@ -56,7 +56,7 @@ Do not invent requirements.
 
 MUST use **Ponytail** for code audits and human-facing docs audits, including work in agent-created branches, PRs, commits, and implementations, to assess unnecessary complexity, abstraction, indirection, duplication, dependencies, and speculative flexibility.
 
-Use **SOLID** when necessary structure improves responsibility, coupling, or changeability.
+Use **SOLID** when needed structure improves responsibility, coupling or changeability.
 
 Do not apply Ponytail findings or SOLID recommendations mechanically.
 
@@ -64,13 +64,13 @@ Prefer existing patterns and the simpler design when requirements permit.
 
 ## Evidence
 
-Support material findings and decisions with the smallest useful evidence.
+Support material findings/decisions with the smallest useful evidence.
 
 Use requirements, code, project patterns, tests, command results, configuration, or documented behavior.
 
 Do not treat agent claims as evidence.
 
-Verify behavior with tests or direct checks when practical. State limits when verification is not practical.
+Verify behavior with tests or direct checks where practical; otherwise state verification limits.
 
 ## Findings
 
@@ -139,7 +139,7 @@ Omit anything that does not apply.
 
 Do not produce a separate summary.
 
-Before responding, check that only the active mode's permitted sections remain, with no banned audit text or other skill format, and end with `audit-by:` or `handoff-by:` plus the actual model identifier, never the placeholder.
+Before responding, retain only the active mode's permitted sections, no banned audit text or other skill format; end with `audit-by:` or `handoff-by:` and the actual model identifier, never the placeholder.
 
 Do not modify files.
 

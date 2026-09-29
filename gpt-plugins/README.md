@@ -6,7 +6,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 | --- | --- |
 | `plugin.json` | Manifest. The checker checks it against the canonical schema at agent-plugins.org. |
 | `skills/<name>/SKILL.md` | Shipped skill copies. The archive carries these. |
-| `refs/skills/<name>/SKILL.md` | Readable sources. The shipped copies mirror them byte for byte. |
+| `refs/skills/<name>/SKILL.md` | Readable sources. Keep these full. Compress shipped copies without losing rules. |
 | `README.md` | This file. It never ships. |
 
 ## Skills
@@ -20,7 +20,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 
 ## Edit a skill
 
-Skill sources live under `refs/skills/`. Shipped copies must match them. See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
+Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command and heading. Review each clause against its source. Increase the plugin version for every update. See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
 
 ## Package
 

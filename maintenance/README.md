@@ -114,12 +114,11 @@ python3 maintenance/minify.py --update   # write both distributed copies
 
 ## Plugin collection
 
-`gpt-plugins/` is one Agent Plugins collection. It holds `plugin.json` and the shipped skills under `skills/`. The readable skill sources live under `refs/skills/`, and the shipped copies stay byte-identical to them.
+`gpt-plugins/` is one Agent Plugins collection. It holds `plugin.json` and the shipped skills under `skills/`. The readable skill sources live under `refs/skills/`, and the shipped copies use manually compressed wording with the same meaning and headings. Review every clause against refs. Structural checks do not prove semantic parity.
 
 ```bash
 python3 -m pip install jsonschema
 python3 maintenance/check_gpt_plugins.py            # report drift, write nothing
-python3 maintenance/check_gpt_plugins.py --update   # write the shipped copies from refs
 ```
 
 The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, shipped skill names, the Agent Skills frontmatter limits, and the collection tree. `gpt-plugins/README.md` documents the collection and never ships.

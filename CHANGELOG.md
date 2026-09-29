@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **GPT plugin compression**: Keep full refs and compress shipped skill wording without rule changes. Remove the destructive copy command, check matching structure and retain exact archive validation. Raise the plugin version to 1.3.1.
+
 - **Note references**: Require seven-character note IDs in prose, never sequence numbers or list positions. Check references against inbox IDs and keep full IDs in CLI calls.
 
 - **Acknowledgement reference links**: Require exact report and task IDs in inline code in Markdown acknowledgements instead of generic labels. Retain short prose IDs for other references.
