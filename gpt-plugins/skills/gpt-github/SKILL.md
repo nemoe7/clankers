@@ -5,11 +5,11 @@ description: MUST use for every git or GitHub action.
 
 # GPT GitHub
 
-Apply these rules to every git and GitHub action, including through the GitHub connector and in scheduled tasks.
+Apply to every git/GitHub action, including GitHub connector and scheduled tasks.
 
 ## Repository discovery
 
-- Prefer `mcp__GitHub__fetch` to inspect repository trees, directories, and files before using `fetch_file`; do not guess file paths. Use `fetch_file` only after the path is established, and batch discovery where practical to avoid unnecessary connector calls and tool-call limits. Verify available GitHub tools before concluding an operation is unsupported.
+- Prefer `mcp__GitHub__fetch` for repository trees, directories and files before `fetch_file`; NEVER guess paths. Use `fetch_file` only for established paths. Batch discovery where practical to avoid unnecessary connector calls and tool-call limits. Verify available GitHub tools before concluding an operation is unsupported.
 
 ## Pull requests and merges
 
@@ -24,11 +24,11 @@ Apply these rules to every git and GitHub action, including through the GitHub c
 ## Commits
 
 - Atomic task-only commits.
-- Print the planned final commit list, every commit you intend to land with one message per logical change, before committing.
+- Before committing, print the final planned commit list: every intended commit, one message per logical change.
 - Review the diff after each edit.
 
 ## Commit messages
 
-- Follow the project's commit convention when it states one; otherwise Conventional `<type>[optional scope]: description`, imperative, lowercase after ":", no period, <=72 characters, no commit body, with "!" before the colon for a breaking change.
-- Types: `feat fix refactor perf style docs test build chore`; the specification mandates only `feat` and `fix`; prefer the types the project's history already uses.
+- Follow the project's stated commit convention; otherwise Conventional `<type>[optional scope]: description`, imperative, lowercase after ":", no period, <=72 characters, no commit body, with "!" before the colon for a breaking change.
+- Types: `feat fix refactor perf style docs test build chore`; the specification mandates only `feat` and `fix`; prefer the project's historical types.
 - Reuse previous scopes, adding one only when none fits.

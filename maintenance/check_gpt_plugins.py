@@ -3,8 +3,8 @@
 
 The collection ships one Agent Plugins manifest and the skills listed in
 EXPECTED_SKILLS. `gpt-plugins/refs/skills/` holds the readable sources and
-`gpt-plugins/skills/` holds the shipped copies, which stay byte-identical:
-`--update` writes the copies, the default run reports drift as a failure.
+`gpt-plugins/skills/` holds manually compressed copies. Structure checks do not
+prove semantic parity; review every clause against refs.
 Packaging rewrites nothing, so `--archive` compares the zip members with the
 committed bytes and rejects anything the collection does not ship, including
 `refs/`. The manifest is checked against the canonical schema fetched from
@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import shutil
 import sys
 import urllib.request
 import zipfile
@@ -230,11 +229,18 @@ def check_collections(errors: list[str]) -> None:
     if not source.is_file() or not copy.is_file():
       continue
 
-    if source.read_bytes() != copy.read_bytes():
+    ref_text = source.read_text(encoding="utf-8")
+    live_text = copy.read_text(encoding="utf-8")
+    if not matching_structure(ref_text, live_text):
       errors.append(
-        f"{copy.relative_to(ROOT)}: drift from {source.relative_to(ROOT)}, "
-        "run python3 maintenance/check_gpt_plugins.py --update"
+        f"{copy.relative_to(ROOT)}: headings differ or compressed copy exceeds refs size"
       )
+
+
+def matching_structure(reference: str, live: str) -> bool:
+  return re.findall(r"^#+ .+$", reference, re.MULTILINE) == re.findall(
+    r"^#+ .+$", live, re.MULTILINE
+  ) and len(live.encode()) <= len(reference.encode())
 
 
 def check_tree(errors: list[str]) -> None:
@@ -327,7 +333,10 @@ def run_self_check() -> None:
   assert parse_plugin_version("") is None
   assert parse_plugin_version("1.2.a") is None
   assert parse_plugin_version(None) is None
-  print("ok version-check")
+  assert matching_structure("# Skill\nFull wording", "# Skill\nShort")
+  assert not matching_structure("# Skill\nFull wording", "# Other\nShort")
+  assert not matching_structure("# Skill\nShort", "# Skill\nLonger wording")
+  print("ok version and compression-structure checks")
 
 
 def check_archive(archive: Path, errors: list[str]) -> None:
@@ -359,28 +368,6 @@ def check_archive(archive: Path, errors: list[str]) -> None:
         )
 
 
-def update() -> list[str]:
-  """Write the shipped copies from refs and report what changed."""
-  written = []
-
-  for name in EXPECTED_SKILLS:
-    source = REFS / name / "SKILL.md"
-
-    if not source.is_file():
-      continue
-
-    copy = SHIPPED / name / "SKILL.md"
-
-    if copy.is_file() and copy.read_bytes() == source.read_bytes():
-      continue
-
-    copy.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, copy)
-    written.append(str(copy.relative_to(ROOT)))
-
-  return written
-
-
 def main() -> int:
   parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
   parser.add_argument(
@@ -398,18 +385,12 @@ def main() -> int:
     action="store_true",
     help="Run version-parser assertions and exit",
   )
-  parser.add_argument(
-    "--update",
-    action="store_true",
-    help="Write the shipped skill copies from refs, then check",
-  )
   arguments = parser.parse_args()
 
   if arguments.self_check:
     run_self_check()
     return 0
 
-  written = update() if arguments.update else []
   errors: list[str] = []
 
   check_tree(errors)
@@ -422,9 +403,6 @@ def main() -> int:
   if arguments.archive:
     check_archive(Path(arguments.archive), errors)
 
-  for line in written:
-    print(f"Wrote {line}")
-
   if errors:
     for error in errors:
       print(error, file=sys.stderr)
@@ -432,7 +410,7 @@ def main() -> int:
     print(f"gpt-plugins validation failed: {len(errors)} problems", file=sys.stderr)
     return 1
 
-  scope = f"manifest against the canonical schema, refs parity, and all {len(EXPECTED_SKILLS)} skills"
+  scope = f"manifest against the canonical schema, refs structure, and all {len(EXPECTED_SKILLS)} skills"
 
   if arguments.base_manifest:
     scope += ", plus a version bump against the base manifest"
