@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Shift pause**: Arena bundle 1.1.2 pauses transcript follow while you hold Shift. Release Shift to resume while ON. Clear the held-key state on window blur without changing the saved switch.
+
 - **Gemini release proposals**: Classify SemVer impact from complete commit history. Write a version and notes proposal first. Only a separate approved run can create a tag and draft.
 
 - **Report footer status**: Repeat the submission status below the report form. Keep agent replies at the top and only the top status as a live announcement.
