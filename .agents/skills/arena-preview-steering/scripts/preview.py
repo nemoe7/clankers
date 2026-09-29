@@ -463,7 +463,7 @@ class Store:
 		return before[0]if before else None,after[0]if after else None
 	@staticmethod
 	def refuse_shared_id(db,table,other,identity):
-		if db.execute(f"SELECT 1 FROM {other} WHERE id = ?",(identity,)).fetchone():raise ValueError(f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID")
+		if db.execute(f"SELECT 1 FROM {other} WHERE id = ?",(identity,)).fetchone():raise ValueError(f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID, for example {identity}-{table[:-1]}")
 	def amend_task(self,prev_id,task_id):
 		check_task(task_id,None,None);stamp=now()
 		with self.transaction()as db:
@@ -707,11 +707,12 @@ class Store:
 		if source.suffix.lower()!='.md':raise ValueError('Publish a UTF-8 .md source file')
 		with source.open('rb')as stream:data=stream.read(MAX_REPORT+1)
 		if len(data)>MAX_REPORT:raise ValueError('Report exceeds the 2 MB limit; split it into reports')
-		text=data.decode('utf-8');parse_fields(text)
+		text=data.decode('utf-8');fields=parse_fields(text)[1]
 		with self.transaction()as db:
 			answered=db.execute('SELECT count(*) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
 			if answered:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
 			self.refuse_shared_id(db,'reports','tasks',report_id);highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, seq)\n           VALUES (?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),highest+1))
+		return len(fields)
 	def unpublish(self,report_id):
 		identifier(report_id)
 		with self.transaction()as db:
@@ -921,7 +922,9 @@ def main():
 		elif args.command=='ack':
 			if bool(args.reply)==bool(args.note):raise ValueError('Choose exactly one of --reply or --note')
 			kind='reply'if args.reply else'note';store.acknowledge(args.ids,kind,args.reply or args.note);print('Acknowledged: '+', '.join(args.ids));print('If a note asks for work, add it to the task list: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in args.ids))
-		elif args.command=='publish':store.publish(args.id,args.title,args.source);print(f"Published {args.id}; select it in the Reports tab")
+		elif args.command=='publish':
+			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id} with {count} fields; select it in the Reports tab")
+			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed; a `{#id}` marker ends a prompt line and the `- ( ) option` lines follow it',file=sys.stderr)
 		elif args.command=='unpublish':store.unpublish(args.report_id);print(f"Unpublished {args.report_id}; its answers and source file remain")
 		elif args.command=='task':
 			task_id=args.task_id or args.id_arg

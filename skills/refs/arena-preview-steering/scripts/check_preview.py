@@ -2270,7 +2270,10 @@ def test_shared_ids_refused():
     for attempt, message in (
       (lambda: store.write_task("plan", "Plan task"), "already names a report"),
       (lambda: store.amend_task("build", "plan"), "already names a report"),
-      (lambda: store.publish("build", "Build report", source), "already names a task"),
+      (
+        lambda: store.publish("build", "Build report", source),
+        "already names a task; a report needs another ID, for example build-report",
+      ),
     ):
       try:
         attempt()
@@ -2281,6 +2284,19 @@ def test_shared_ids_refused():
     store.write_task("build", "Build it again")
     store.publish("plan", "Plan revised", source)
     assert [task["id"] for task in store.list_tasks()] == ["build"]
+
+
+def test_publish_returns_field_count():
+  # The CLI prints the count so a report with no parsed answer form is visible at publish time.
+  with tempfile.TemporaryDirectory() as shared_dir:
+    store = preview.Store(shared_dir, create=True)
+    source = Path(shared_dir) / "ask.md"
+    source.write_text("# Ask\n\n{#q approve|reject} rows\n", encoding="utf-8")
+    assert store.publish("ask", "Ask", source) == 0
+    source.write_text(
+      "# Ask\n\nrows: {#q}\n\n- ( ) approve\n- ( ) reject\n", encoding="utf-8"
+    )
+    assert store.publish("ask", "Ask", source) == 1
 
 
 def test_task_amend():

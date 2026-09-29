@@ -1395,7 +1395,8 @@ class Store:
     """Fail when `identity` already names a row in `other`: the log links one ID to one panel."""
     if db.execute(f"SELECT 1 FROM {other} WHERE id = ?", (identity,)).fetchone():
       raise ValueError(
-        f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID"
+        f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID,"
+        f" for example {identity}-{table[:-1]}"
       )
 
   def amend_task(self, prev_id, task_id):
@@ -2153,7 +2154,7 @@ class Store:
     # route at render time, so the owner could never open it. Refusing here costs the agent one
     # command and names the offending field; refusing there cost the report and, until the guard
     # below existed, the HTTP connection with it.
-    parse_fields(text)
+    fields = parse_fields(text)[1]
     with self.transaction() as db:
       # Sent answers live in the owner's browser under this report ID, so a republish would
       # reload them pre-filled against fields that no longer match; a new ID starts clean.
@@ -2174,6 +2175,7 @@ class Store:
              seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL""",
         (report_id, title, text, now(), highest + 1),
       )
+    return len(fields)
 
   def unpublish(self, report_id):
     """Delete the report's tab row only; its answers and source file stay.
@@ -2896,8 +2898,15 @@ def main():
         + "; ".join(f'task <id> "<title>" --msg-id {i}' for i in args.ids)
       )
     elif args.command == "publish":
-      store.publish(args.id, args.title, args.source)
-      print(f"Published {args.id}; select it in the Reports tab")
+      count = store.publish(args.id, args.title, args.source)
+      print(f"Published {args.id} with {count} fields; select it in the Reports tab")
+      if not count and "{#" in Path(args.source).read_text("utf-8"):
+        # A `{#id}` marker on its own parses as prose; the owner then sees no answer form.
+        print(
+          "Warning: 0 fields parsed; a `{#id}` marker ends a prompt line and the"
+          " `- ( ) option` lines follow it",
+          file=sys.stderr,
+        )
     elif args.command == "unpublish":
       store.unpublish(args.report_id)
       print(f"Unpublished {args.report_id}; its answers and source file remain")
