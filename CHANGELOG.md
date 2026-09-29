@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini release drafts**: Add reusable GitHub Actions sources under `github/workflows`. Generate draft notes from complete release history with Gemini 3.5 Flash-Lite, a release template and split-and-combine summaries. Keep activation separate from the source library.
+
 - **Report reply position**: Move report acknowledgement history and submission status above the report form. Keep reply history and links unchanged.
 
 - **Clipboard images**: Paste images into the composer as staged attachments with epoch-time filenames. Keep image bytes, native text paste, removable files, the per-file limit and the normal send/retry path.
