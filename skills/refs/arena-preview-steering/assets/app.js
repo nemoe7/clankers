@@ -506,7 +506,7 @@ async function refreshState() {
     if (state.token) writeToken = state.token;
     // The page keeps its own copy of what the poll delivered, so the save button still has something
     // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
-    // from their sources, and the button writes what the two importers can read back.
+    // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
     save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     setConnection('ok', state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet');
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
@@ -858,22 +858,15 @@ function stamp(value) {
   return typeof value === 'string'
     ? value.replace(/\.\d+/, '').replace(/(?:Z|[+-]\d{2}:?\d{2})$/, '') : value;
 }
-// Each tab copies what restores or exports it: the log as the lines import-notes reads back,
-// the shown report as the Markdown publish takes, the tasks as the JSON task-import reads.
+// Copy state exports notes, tasks and report answers for `import-state`.
+// Report source copies remain Markdown for `publish`.
 // The JSON copies are minified on purpose: the agent parses them, and the whitespace only costs tokens.
 // A copied line carries its receipt too, so a restore keeps the time the acknowledgement was
 // actually written instead of the time the restore ran. Every key is present on every line,
-// null where absent, because import-notes refuses a partial receipt rather than filling it in.
-// The save button posts the cached copy to the server, which writes one file at the repository
-// root for the importers to read; the report answers come from the server's own records. It is the only action that puts the page's data on disk, and it is the
-// reason a restore no longer needs the owner to paste anything: the browser is the surviving copy.
-// The log's copy and the tasks' copy are gone, and this button carries the copy on a shift-click
-// as JSON; the reports tab keeps its own button.
-// The shift-click copy carries only what a restore reads back: the note and task lines the
-// save file writes, in the same keys. Nothing derived rides it: the server renders html for
-// display and a restore re-renders from text, the token dies with its server, seq orders one
-// display only, and reports, uploads and the last check have no importer. The stamps arrive
-// from the state poll already cut to seconds, which is all a restore needs.
+// null where absent, because the importer refuses a partial receipt rather than filling it in.
+// Copy state builds NDJSON from cached notes and tasks plus available report answers.
+// It does not write to disk. Report sources, uploads, downloads and display-only fields
+// are not restored by `import-state`; preserve the backup and republish report sources.
 const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
 const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
 function restoreLine(record, keys) {
@@ -908,8 +901,8 @@ copyStateButton.addEventListener('click', async () => {
     catch { answers = null; }
   }
   const lines = state ? stateLines(state, answers || []) : [];
-  // One JSON line per record is the save format accepted by `import-state`. The server supplies the answer lines on click, scoped to the
-  // reports still in the tab.
+  // One JSON line per record is the save format accepted by `import-state`.
+  // The server supplies answer lines for reports still in the tab.
   const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
   await copyFrom(copyStateButton, text, 'state');
   if (state) {
