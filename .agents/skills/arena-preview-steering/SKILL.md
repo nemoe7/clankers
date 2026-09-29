@@ -44,7 +44,7 @@ arena-preview ack <id> --reply <markdown>
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-Run `task-list` at turn start. Before implementation, add approved work with `task <id> "<title>" [details ...]`; put it first with `--order 1` and update status (`upcoming`/`finished` only)/details as work changes. For a task from a note or report answer, use `--msg-id <full-message-id>` and queue/ack it in the same tool block. The task marker does not replace `ack`. Mark it finished only after verification.
+Run `task-list` at turn start. Before implementation, add approved work with `task <kebab-title-id> "<title>" [details ...]`; put it first with `--order 1` and update status (`upcoming`/`finished` only)/details as work changes; backtick task IDs in acks so the log links them. For a task from a note or report answer, use `--msg-id <full-message-id>` and queue/ack it in the same tool block. The task marker does not replace `ack`. Mark it finished only after verification.
 
 ## Publish reports and forms
 

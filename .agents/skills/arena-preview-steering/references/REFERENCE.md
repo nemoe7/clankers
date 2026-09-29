@@ -35,7 +35,7 @@ Read the inbox at turn start, each reasoning boundary, before and after every to
 
 ## Tasks
 
-Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.
+Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit; use a short kebab-case title. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.
 
 | Flag | Use |
 | --- | --- |

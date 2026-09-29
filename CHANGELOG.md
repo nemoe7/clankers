@@ -2,6 +2,8 @@
 
 - **Seen subcommand removed**: `read` and `poll` stamp delivered IDs Seen, so `preview.py seen` goes from the code, the tests and `REFERENCE.md`.
 
+- **Task ID shape**: Task IDs are short kebab-case titles, and acks put task IDs in backticks so the log links them.
+
 - **Autoscroll only while generating**: Arena bundle 1.1.4 follows the transcript only while the Stop generating button exists, the same condition that hides the composer. With the composer shown, the transcript stays where the user put it.
 
 - **Report ack top gap**: The report ack history sits 10px below the toolbar rule instead of touching it.
