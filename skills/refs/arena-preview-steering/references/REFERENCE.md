@@ -23,7 +23,7 @@ Use complete IDs in CLI calls; cite their first seven characters in prose. `read
 
 Refer to a note in prose by the first seven characters of its ID, NEVER by its sequence number (`seq`) or list position. Use the full ID in CLI calls. Before sending a note reference, check it against the ID returned by `read`.
 
-When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks instead of a generic label such as published report. This overrides seven-character prose shortening for these references. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
+When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks; the seven-character shortening applies to note IDs only. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
 
 ## External channel (ntfy)
 
@@ -50,7 +50,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 
 ## Publish reports
 
-A report source is UTF-8 `.md`, at most 2,000,000 bytes. IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters. Source edits do not update a published report: call `publish` again. A report that has answers refuses republishing under the same ID; publish its update under a new ID. Delete a report the owner no longer needs with `unpublish <id>`. The delete touches the tab row alone: sent answers stay in the inbox, the `.md` source under the state directory stays for republishing, and a republish under that ID still fails while answers exist. Verify the rendered report before telling the owner it is available. If an answer is rejected after an update, ask the owner to preserve the draft, reload and review the current report.
+A report source is UTF-8 `.md`, at most 2,000,000 bytes. IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters. Source edits do not update a published report: call `publish` again. A report that has answers refuses republishing under the same ID; publish its update under a new ID. Delete a report the owner no longer needs with `unpublish <id>`; its sent answers and its `.md` source under the state directory stay. Verify the rendered report before telling the owner it is available. If an answer is rejected after an update, ask the owner to preserve the draft, reload and review the current report.
 
 ## Report fields
 
