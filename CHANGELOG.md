@@ -1,5 +1,9 @@
 ## 2026-09-29
 
+- **Gemini release input**: Send only commit messages and text diffs to Gemini. Binary files add one marker line and no patch data.
+
+- **Gemini release path**: Run the Gemini release scripts from `.github/workflows` instead of `github/workflows`.
+
 - **Autoscroll toggle button**: Add a toggle to the transcript action row next to Stop generating. The button shows pressed while follow is ON and unpressed when OFF, and it stays in sync with the menu toggle. Drop the Shift pause.
 
 - **Report ack spacing**: Remove the top line and the extra space above the first reply in the report ack history. Zero the container and paragraph top spacing there. Keep the line between later replies.

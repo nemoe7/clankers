@@ -67,13 +67,13 @@ jobs:
           PROMOTE_TO_STABLE: ${{ inputs.promote_to_stable }}
           GEMINI_MODEL: ${{ inputs.model }}
           PROPOSAL_PATH: ${{ runner.temp }}/gemini-proposal/proposal.json
-        run: python github/workflows/gemini_release.py
+        run: python .github/workflows/gemini_release.py
       - name: Approve Proposal
         if: ${{ inputs.proposal_run_id != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PROPOSAL_RUN_ID: ${{ inputs.proposal_run_id }}
-        run: python github/workflows/gemini_release.py
+        run: python .github/workflows/gemini_release.py
       - name: Upload Proposal
         if: steps.propose.outputs.generated == 'true'
         uses: actions/upload-artifact@v4
