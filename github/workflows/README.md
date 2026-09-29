@@ -21,7 +21,7 @@ Requests send repository history to Google and can incur API costs. The job has 
 ## Check
 
 ```cmd
-python github\workflows\check_gemini_release.py
+python -m pytest github\workflows\test_gemini_release.py
 ```
 
 The check uses temporary Git history and mocked API responses. It does not need API keys or create releases.

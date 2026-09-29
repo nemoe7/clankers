@@ -100,7 +100,7 @@ jobs:
         run: |
           node userscripts/arena.user.js
           node userscripts/chatgpt.user.js
-          node maintenance/check_userscripts.cjs
+          node --test maintenance/userscripts.test.cjs
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20
@@ -141,6 +141,8 @@ jobs:
             .agents/skills/arena-preview-steering \
             maintenance/minify.py \
             maintenance/check_minify.py \
+            github/workflows \
+            pytest.ini \
             package.json \
             package-lock.json \
             .github/workflows/validate.yml)
@@ -174,6 +176,6 @@ jobs:
       - name: Run Preview Tests
         if: steps.preview.outputs.run == 'true'
         run: |
-          python -m pytest skills/refs/arena-preview-steering/scripts/check_preview.py -q -n auto
+          python -m pytest -q -n auto
           python maintenance/check_minify.py
-          node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-preview-steering/scripts/check_client.cjs
+          node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-preview-steering/scripts/client.test.cjs

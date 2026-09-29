@@ -6,7 +6,6 @@ indent-width = 2
 extend-exclude = [
   ".agents/skills",
   "skills/arena-preview-steering/scripts/preview.py",
-  "skills/arena-preview-steering/scripts/check_preview.py",
 ]
 
 [lint]

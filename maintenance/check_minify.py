@@ -188,10 +188,18 @@ with tempfile.TemporaryDirectory() as directory:
     minify.TARGETS[0] / "scripts/preview.py", skill / "scripts/preview.py"
   )
   shutil.copyfile(
-    minify.SOURCE / "scripts/check_preview.py", skill / "scripts/check_preview.py"
+    minify.SOURCE / "scripts/test_preview.py", skill / "scripts/test_preview.py"
   )
   subprocess.run(
-    [sys.executable, "-m", "pytest", str(skill / "scripts/check_preview.py"), "-q"],
+    [
+      sys.executable,
+      "-m",
+      "pytest",
+      str(skill / "scripts/test_preview.py"),
+      "-q",
+      "-p",
+      "no:cacheprovider",
+    ],
     check=True,
   )
 

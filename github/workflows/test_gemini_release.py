@@ -1,4 +1,4 @@
-"""Run offline release-history, reduction and API-boundary checks."""
+"""Offline release-history, reduction and API-boundary tests; `pytest` runs them."""
 
 import hashlib
 import io
@@ -22,7 +22,7 @@ def fails(call, message):
     raise AssertionError(f"Expected error: {message}")
 
 
-def check():
+def test_release_pipeline():
   original = Path.cwd()
   with tempfile.TemporaryDirectory() as directory:
     os.chdir(directory)
@@ -516,4 +516,4 @@ def check():
 
 
 if __name__ == "__main__":
-  check()
+  test_release_pipeline()

@@ -71,7 +71,7 @@ From the repository root:
 ```bash
 node userscripts/arena.user.js
 node userscripts/chatgpt.user.js
-node maintenance/check_userscripts.cjs
+node --test maintenance/userscripts.test.cjs
 ```
 
 Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.

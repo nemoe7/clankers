@@ -91,9 +91,9 @@ The server does not enable CORS or arbitrary file serving.
 Edit readable sources under `skills/refs/arena-preview-steering/` first.
 Build both runtime copies with `python3 maintenance/minify.py --update`.
 Measure budgets with `python3 maintenance/check.py --update` and check drift without `--update`.
-Run `python3 -m pytest skills/refs/arena-preview-steering/scripts/check_preview.py` with `markdown-it-py` and `pytest`.
+Run `python3 -m pytest` with `markdown-it-py` and `pytest`.
 Run `node --check skills/refs/arena-preview-steering/assets/app.js` and
-`node --test skills/refs/arena-preview-steering/scripts/check_client.cjs` when Node is available.
+`node --test skills/refs/arena-preview-steering/scripts/client.test.cjs` when Node is available.
 Run `python3 maintenance/check_minify.py` to check generated parity and parsed behavior.
 Local checks cannot prove actual browser rendering or browser download behavior.
 
