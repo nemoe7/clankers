@@ -29,17 +29,32 @@ def run(*args, input=None, binary=False):
     message = f"{shlex.join(args)} failed (exit {result.returncode})"
     if detail:
       message += f": {detail}"
-    message = re.sub(r"(https?://[^\s\"?]+)\?[^\s\"]+", r"\1?[REDACTED]", message)
-    for name in ("GH_TOKEN", "GITHUB_TOKEN", "GEMINI_API_KEY"):
-      secret = os.getenv(name)
-      if secret:
-        message = message.replace(secret, "[REDACTED]")
-    raise RuntimeError(message)
+    raise RuntimeError(redact(message))
   return (
     result.stdout
     if binary
     else result.stdout.decode("utf-8", errors="backslashreplace")
   )
+
+
+def redact(message):
+  message = re.sub(r"(https?://[^\s\"?]+)\?[^\s\"]+", r"\1?[REDACTED]", message)
+  for name in ("GH_TOKEN", "GITHUB_TOKEN", "GEMINI_API_KEY"):
+    secret = os.getenv(name)
+    if secret:
+      message = message.replace(secret, "[REDACTED]")
+  return message
+
+
+def gemini_error_detail(body):
+  """Return Gemini's own error message from an HTTP error body, or the trimmed body."""
+  text = body.decode("utf-8", errors="backslashreplace").strip()
+  try:
+    error = json.loads(text).get("error", {})
+    text = " ".join(str(error[k]) for k in ("status", "message") if error.get(k))
+  except (ValueError, AttributeError):
+    pass
+  return text[:500]
 
 
 def git(*args):
@@ -189,7 +204,11 @@ def gemini_call(model, action, payload):
     with urllib.request.urlopen(request, timeout=180) as response:
       return json.load(response)
   except urllib.error.HTTPError as exc:
-    raise RuntimeError(f"Gemini {action} failed: HTTP {exc.code}") from None
+    message = f"Gemini {action} failed: HTTP {exc.code}"
+    detail = gemini_error_detail(exc.read())
+    if detail:
+      message += f": {detail}"
+    raise RuntimeError(redact(message)) from None
 
 
 def response_text(data):

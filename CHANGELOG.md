@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini HTTP error detail**: A Gemini HTTP failure now shows the status and message from the response body after the HTTP code. The detail stops at 500 characters and the script redacts secrets.
+
 - **Link colour**: Preview anchors use a muted blue, `#6ea3d6`, in both themes instead of the accent colour.
 
 - **Seen subcommand removed**: `read` and `poll` stamp delivered IDs Seen, so `preview.py seen` goes from the code, the tests and `REFERENCE.md`.

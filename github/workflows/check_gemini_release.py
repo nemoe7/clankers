@@ -183,6 +183,43 @@ def check():
     [(str(n), "x" * 100) for n in range(80)], {}, "test", phased, limit=350
   )
   assert set(phases) == {"chunk", "combine", "release"}
+  quota = json.dumps(
+    {
+      "error": {
+        "code": 429,
+        "message": "Quota exceeded for key AIzaSecret1",
+        "status": "RESOURCE_EXHAUSTED",
+      }
+    }
+  ).encode()
+  assert (
+    release.gemini_error_detail(quota)
+    == "RESOURCE_EXHAUSTED Quota exceeded for key AIzaSecret1"
+  )
+  assert (
+    release.gemini_error_detail(b"<html>bad gateway</html>")
+    == "<html>bad gateway</html>"
+  )
+  assert release.gemini_error_detail(b"") == ""
+  assert len(release.gemini_error_detail(b"x" * 900)) == 500
+  with (
+    patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSecret1"}),
+    patch.object(
+      release.urllib.request,
+      "urlopen",
+      side_effect=release.urllib.error.HTTPError(
+        "https://generativelanguage.googleapis.com/x",
+        429,
+        "Too Many",
+        {},
+        io.BytesIO(quota),
+      ),
+    ),
+  ):
+    fails(
+      lambda: release.gemini_call("m", "generateContent", {}),
+      "HTTP 429: RESOURCE_EXHAUSTED Quota exceeded for key [REDACTED]",
+    )
   for phase in ("chunk", "combine", "release", "version"):
     with patch.object(
       release,
