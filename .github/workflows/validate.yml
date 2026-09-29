@@ -118,6 +118,11 @@ jobs:
       - name: Check The Rules Gist Publisher
         run: python3 maintenance/check_publish_clankers_rules.py
 
+      - name: Check Userscript Bundles
+        run: |
+          node userscripts/arena.user.js
+          node userscripts/chatgpt.user.js
+          node maintenance/check_userscripts.cjs
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20

@@ -1,6 +1,7 @@
 ## 2026-09-29
 
 - **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
+- **Userscript domain bundles**: `arena.user.js` and `chatgpt.user.js` replace the five standalone scripts and keep their feature checks. Each feature has a saved, default-on Tampermonkey menu switch that applies after manual reload. Node integration checks cover switches, persistence, disabled startup and storage errors.
 - **ChatGPT outer fences**: Long fenced text uses at least four outer backticks, with a longer fence when the content requires one. Inner fences and language tags stay unchanged. The English More field uses approved lossless compression of existing lines.
 - **ChatGPT skill location**: Root `AGENTS.md` requires ChatGPT-related skills to go in `gpt-plugins`.
 - **ChatGPT Mermaid requirement**: Pipelines and flows must use Mermaid unless the target explicitly cannot render it. ASCII diagrams stay prohibited, and the top-down, short-label and phone-sized rules stay. Refs, live, wenyan and the platform table match the approved replacement.
