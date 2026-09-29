@@ -240,7 +240,7 @@ def check():
       assert release.generate({"phase": phase}, [], "test") == "notes"
       assert (
         call.call_args_list[1].args[2]["systemInstruction"]["parts"][0]["text"]
-        == (release.HERE / f"gemini-{phase}-prompt.txt").read_text()
+        == release.PROMPTS[phase]
       )
   payload = {
     "id": 2,
@@ -277,9 +277,7 @@ def check():
     "promote": False,
     "version": "0.1.0",
     "tag": "0.1.0",
-    "body": release.HERE.joinpath("gemini-release-template.md")
-    .read_text()
-    .replace("{{summary}}", "test")
+    "body": release.TEMPLATE.replace("{{summary}}", "test")
     .replace("{{features}}", "None")
     .replace("{{fixes}}", "None")
     .replace("{{breaking_changes}}", "None")
@@ -413,11 +411,12 @@ def check():
         lambda item=item: release.download_proposal("owner/repo", item),
         "no valid digest",
       )
-  assert (
-    (release.HERE / "gemini-version-prompt.txt")
-    .read_text()
-    .strip()
-    .startswith("Classify the release impact of the supplied commit messages")
+  assert release.PROMPTS["version"].startswith(
+    "Classify the release impact of the supplied commit messages"
+  )
+  assert set(release.PROMPTS) == {"chunk", "combine", "release", "version"}
+  assert release.TEMPLATE.count("{{") == 6 and release.TEMPLATE.endswith(
+    "{{comparison_url}}\n"
   )
   workflow = (release.HERE / "gemini-release.yml").read_text()
   assert "python .github/workflows/gemini_release.py" in workflow

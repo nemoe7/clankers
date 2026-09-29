@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini release in two files**: The prompts and the release template move into `gemini_release.py` as constants. A target repository installs the YAML and the Python file only.
+
 - **Gemini evidence input**: The release workflow has an `evidence` choice. `commits-and-diffs` is the default and `commits` sends commit messages only.
 
 - **Gemini HTTP error detail**: A Gemini HTTP failure now shows the status and message from the response body after the HTTP code. The detail stops at 500 characters and the script redacts secrets.
