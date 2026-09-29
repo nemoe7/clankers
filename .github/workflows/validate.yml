@@ -115,10 +115,9 @@ jobs:
       - name: Compile Maintenance Script
         run: python -m compileall maintenance/check.py
 
-      - name: Check The Gist Publishers
-        run: |
-          python3 maintenance/check_publish_clankers_rules.py
-          python3 maintenance/check_publish_userscripts.py
+      - name: Check The Rules Gist Publisher
+        run: python3 maintenance/check_publish_clankers_rules.py
+
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20
