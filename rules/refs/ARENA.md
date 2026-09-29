@@ -12,7 +12,7 @@
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 - The user's explicit instructions override this file; confirm the override in one line.
 - Failure to comply with this file results in a negative rating.
-- In Arena, the repository's `AGENTS.md` stays in force beside this file, and where the two collide this file's Arena-specific handling (pushing, pull requests, and merges) wins.
+- In Arena, every `AGENTS.md` in the host repository stays in force beside this file; where any of them collides with this file, this file wins.
 
 ## Constitution
 
@@ -27,7 +27,6 @@
 - After every file edit, grep-verify the change actually landed before building on it.
 - NEVER edit this file nor the preview skill (`arena-preview-steering`, including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
 - Upon any rule violation, ALWAYS suggest an amendment to the rule that failed or that should have prevented it, in the reply that reports the violation.
-- Ask questions in labeled batches that state their total.
 
 ## General
 
@@ -38,7 +37,7 @@
 - Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
 - If the preview did not start, report it and block with one visibility question, asked through `ask_user`, before any work beyond setup; the preview cannot carry its own visibility question. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask; the process tool's live-preview banner is not owner confirmation and does not replace the question.
-- A confirmation NEVER crosses a session boundary: every session's first successful start enters that block, and only a later restart in the same session, after that session's own confirmation, needs no ask; NEVER silently restore ntfy. The historical transport is documented in the skill's migration reference.
+- NEVER silently restore ntfy.
 - After a sandbox reset, run `git fetch origin`, rerun the preview installer, and restart the preview with the same state directory. Do not ask the visibility question again after the reset.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
@@ -50,7 +49,7 @@
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
-- Keep working while tasks remain. End the turn when the work is verified and stopped. No surface reports the remaining token budget to the agent, so NEVER name that budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
+- Keep working while tasks remain. End the turn when the work is verified and stopped. NEVER name the remaining token budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
 - Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) and push only when they pass. Poll the open PR's checks with `gh pr checks` after every push: immediately, then after 1s, 2s, 4s, 8s, 16s, 32s and 64s, then every 64s until conclusion. Stop polling on HTTP 401 or any other command/API error and report it. Pending checks are not command errors. Failed checks remain unfinished work.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
@@ -83,7 +82,7 @@
 - Rung 5 — Already-installed dependency solves it? Use it, and NEVER add a new one for what a few lines can do.
 - Rung 6 — Can it be one line? One line.
 - Rung 7 — Only then, the minimum code that works.
-- The ladder is a reflex, not a research project, and it runs after you understand the problem rather than instead of it: read the task and the code it touches, trace the real flow end to end, then climb; when two rungs work, take the higher one and move on.
+- Climb after you understand the problem: read the task and the code it touches, trace the real flow end to end, then climb; when two rungs work, take the higher one.
 - Two stdlib options of the same size: take the one that is correct on edge cases.
 - For a complex request, ship the lazier version and question the requirement in the same response; NEVER default when material ambiguity exists.
 - NEVER lazy about understanding: read the code and trace the flow first.
@@ -106,7 +105,7 @@
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Run `arena-preview poll` with bash tool timeout 1800s.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
-- The Arena client is unreliable: it resends messages, truncates or drops replies, and returns empty results from tools that did run. Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction — answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
+- Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
 - Before editing, MUST grep every caller of the function you are about to touch.
 - Fix once where all callers route through: one guard in the shared function beats a guard in every caller.
@@ -122,8 +121,7 @@
 - Mechanical changes get proportional checks.
 - Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.
 - Fix in-scope issues, then recheck.
-- ALWAYS criticize documentation, which could be stale, and code, which could be deeply flawed.
-- Criticize in both chat responses and report files.
+- ALWAYS criticize documentation and code, in chat responses and in report files.
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
 - For large function replacements, prefer a scripted splice.
@@ -138,7 +136,7 @@
 - Markdown: defaults + MD060, MD013 off.
 - For a Python project, use Ruff with its default rule selection.
 - Keep architecture; leave unrelated code alone.
-- For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding my conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`, nothing else until flagged).
+- For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding these conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`, nothing else until flagged).
 - For a Python project with no `ruff.toml`, create one with exactly that before running gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
 - NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
@@ -146,12 +144,12 @@
 ## Git
 
 - **Before every commit, without exception, print the planned final commit list first**: every local commit and fix folded into a clean timeline, one message per logical change, the list you intend to land, updated as work lands.
-- Committing without printing it is a violation, not an oversight; if a commit landed unlisted, print the corrected timeline before the next.
+- If a commit landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.
 - Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Follow the project's commit-message convention when the project states one; when it states none, use Conventional Commits.
 - Conventional Commits form: `<type>[optional scope]: <description>`, imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body, with `!` before the colon to mark a breaking change.
-- Types: feat fix refactor perf style docs test build chore; only `feat` and `fix` are mandated by the specification at <https://www.conventionalcommits.org/en/v1.0.0/>, and the rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
+- Types: feat fix refactor perf style docs test build chore; prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
@@ -162,16 +160,15 @@
 - Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
-- `GH_TOKEN` can expire in the middle of a turn with nothing in the repository changed: `gh auth status` then reports `The github.com token in GH_TOKEN is no longer valid`, `git push` fails with `could not read Username for 'https://github.com'`, and `gh auth setup-git` does not help, because the token itself is rejected rather than missing from Git's credential helper.
+- `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
 - Ask through `ask_user` immediately instead of ending the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
-- Prove the recovery with `git ls-remote origin <branch>` before pushing again, since a local commit is not a remote one.
+- Prove the recovery with `git ls-remote origin <branch>` before pushing again.
 - `gh pr edit` may fail on older repos.
 - Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
-- **NEVER `-f body=@path`** — `-f` posts the literal `@path` string.
+- **NEVER `-f body=@path`**.
 - Stage PR text in the workspace, NEVER /tmp.
-- A 200 from a PR PATCH is not proof.
-- After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live.
+- After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.
 - Keep the PR title current with the work; update it alongside the body.
 - PR body is a squashed timeline: group features then fixes, no round headers.
 
@@ -203,7 +200,7 @@
 - NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
-- End a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool. This is for report turns only; it NEVER forces a check mid-task or after a tool-only turn.
+- End a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 
 ## When in doubt
 
