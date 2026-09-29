@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **STE lint in the gate**: `check.py` runs the ASD-STE100 linter over the covered documents (`STE_DOCS`), and CI calls `check.py --ste` with the same list.
+
 - **Re-ack block gap**: Later ack blocks in the Messages tab use 8px around the hairline and drop the first paragraph top margin.
 
 - **One pytest**: Test files are `test_*.py` and `*.test.cjs`. The `check_*` names stay for gates. A root `pytest.ini` runs the preview and Gemini release tests in one call, and CI now runs the Gemini tests.

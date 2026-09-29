@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -88,6 +89,23 @@ EXPECTED_LINTED = (
 # Where the documented markdownlint file count lives, and how to find it. Root AGENTS.md
 # carries the same claim in its own words and is deliberately left out of the check: it is an
 # agent-facing file, and the owner's ruling keeps this script off those.
+# Prose covered by the ASD-STE100 linter. Add a path only when the linter reports 0 violations
+# for it. CI runs `check.py --ste` against this same list, so the local gate and CI agree.
+STE_DOCS = (
+  "maintenance/README.md",
+  "skills/README.md",
+  "README.md",
+  "docs/archive/budget-exceptions.md",
+  "workflows/README.md",
+  ".agents/skills/README.md",
+  "docs/archive/arena-quirks.md",
+  "rules/README.md",
+  "rules/refs/README.md",
+  "gpt-plugins/README.md",
+  "CHANGELOG.md",
+)
+STE_LINT = ".agents/skills/asd-ste100/scripts/ste-lint.py"
+
 LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 
 # Rule refs baselines hold full wording. Live files compress it. Compression may
@@ -115,7 +133,25 @@ def parse_args() -> argparse.Namespace:
     action="store_true",
     help="Update README measurements before validation.",
   )
+  parser.add_argument(
+    "--ste",
+    action="store_true",
+    help="Run only the ASD-STE100 lint over the covered documentation.",
+  )
   return parser.parse_args()
+
+
+def check_ste(errors: list[str]) -> None:
+  """Run the vendored STE linter over the covered prose; any hard violation is an error."""
+  result = subprocess.run(
+    [sys.executable, str(ROOT / STE_LINT), *(str(ROOT / doc) for doc in STE_DOCS)],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  if result.returncode:
+    output = (result.stdout + result.stderr).strip()
+    errors.append(f"STE lint failed:\n{output}")
 
 
 def parse_frontmatter(
@@ -786,7 +822,15 @@ def main() -> int:
       print("README measurements already up to date.")
 
   errors: list[str] = []
+  if args.ste:
+    check_ste(errors)
+    if errors:
+      print(errors[0])
+      return 1
+    print(f"STE lint passed: {len(STE_DOCS)} files.")
+    return 0
   validate(errors)
+  check_ste(errors)
 
   if errors:
     print("Validation failed:")
