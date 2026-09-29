@@ -3040,68 +3040,45 @@ def test_poll_inbox():
 
     def sleeper(seconds):
       sleeps.append(seconds)
-      store.note("poll-1", "arrived during wait")
 
+    assert (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS) == (1, 900)
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      rc = preview.poll_inbox(store, sleeper=sleeper)
+      assert rc == 1
+      assert sleeps == [10, 10]
+      assert store.state()["notes"] == []
+
+      def arriving_sleeper(seconds):
+        sleeps.append(seconds)
+        store.note("poll-1", "arrived during wait")
+
+      sleeps.clear()
+      rc = preview.poll_inbox(store, sleeper=arriving_sleeper)
+      assert rc == 0
+      assert sleeps == [10]
+      assert store.state()["notes"][0]["seen_at"] is not None
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+    store.note("poll-2", "already pending")
     result = subprocess.run(
-      [
-        sys.executable,
-        str(Path(preview.__file__)),
-        "--state-dir",
-        poll_dir,
-        "poll",
-        "--interval",
-        "0",
-        "--max",
-        "1",
-      ],
-      capture_output=True,
-      text=True,
-      check=False,
-    )
-    assert result.returncode == 1
-    listing = json.loads(result.stdout)
-    assert listing["pending"] == []
-    assert store.state()["notes"] == []
-    rc = preview.poll_inbox(store, interval=10, max_loops=3, sleeper=sleeper)
-    assert rc == 0
-    assert sleeps == [10]
-    assert store.state()["notes"][0]["seen_at"] is not None
-    result = subprocess.run(
-      [
-        sys.executable,
-        str(Path(preview.__file__)),
-        "--state-dir",
-        poll_dir,
-        "poll",
-        "--interval",
-        "0",
-        "--max",
-        "2",
-      ],
+      [sys.executable, str(Path(preview.__file__)), "--state-dir", poll_dir, "poll"],
       capture_output=True,
       text=True,
       check=False,
     )
     assert result.returncode == 0
     listing = json.loads(result.stdout)
-    assert [item["id"] for item in listing["pending"]] == ["poll-1"]
-    help_text = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "poll", "--help"],
-      capture_output=True,
-      text=True,
-      check=True,
-    ).stdout
-    assert "default: 1" in help_text and "default: 900" in help_text
-    try:
-      preview.poll_inbox(store, interval=-1, max_loops=1)
-      raise AssertionError("negative interval accepted")
-    except ValueError:
-      pass
-    try:
-      preview.poll_inbox(store, interval=0, max_loops=0)
-      raise AssertionError("zero max_loops accepted")
-    except ValueError:
-      pass
+    assert [item["id"] for item in listing["pending"]] == ["poll-1", "poll-2"]
+    for flag in ("--interval", "--max"):
+      result = subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "poll", flag, "1"],
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert result.returncode == 2 and "unrecognized arguments" in result.stderr
 
 
 def test_notes_only_save():

@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Poll flags removed**: `preview.py poll` takes no `--interval` or `--max`. The wait stays 900 × 1 s in refs, live and installed copies. The test covers the fixed wait and rejects the old flags.
+
 - **Gemini release input**: Send only commit messages and text diffs to Gemini. Binary files add one marker line and no patch data.
 
 - **Gemini release path**: Run the Gemini release scripts from `.github/workflows` instead of `github/workflows`.

@@ -789,22 +789,22 @@ def print_read(store, pretty=False):
   store.mark_seen([item["id"] for item in listing["pending"]])
 
 
-def poll_inbox(store, pretty=False, interval=1, max_loops=900, sleeper=None):
+POLL_INTERVAL = 1
+POLL_MAX_LOOPS = 900
+
+
+def poll_inbox(store, pretty=False, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
-  if interval < 0:
-    raise ValueError("interval must be >= 0")
-  if max_loops < 1:
-    raise ValueError("max_loops must be >= 1")
   listing = {"checked_at": None, "pending": []}
-  for index in range(max_loops):
+  for index in range(POLL_MAX_LOOPS):
     listing = store.read()
     if listing["pending"]:
       print(cli_json(listing, pretty), flush=True)
       store.mark_seen([item["id"] for item in listing["pending"]])
       return 0
-    if index + 1 < max_loops:
-      sleeper(interval)
+    if index + 1 < POLL_MAX_LOOPS:
+      sleeper(POLL_INTERVAL)
   print(cli_json(listing, pretty), flush=True)
   return 1
 
@@ -2774,20 +2774,7 @@ def main():
   commands.add_parser("init")
   commands.add_parser("read")
   commands.add_parser("gate")
-  poll = commands.add_parser("poll")
-  poll.add_argument(
-    "--interval",
-    type=float,
-    default=1,
-    help="Seconds to wait between empty reads (default: 1)",
-  )
-  poll.add_argument(
-    "--max",
-    dest="max_loops",
-    type=int,
-    default=900,
-    help="Empty reads before giving up (default: 900)",
-  )
+  commands.add_parser("poll")
   download = commands.add_parser(
     "download-request",
     help="Request an HTTPS browser download, pending a preview Approve click",
@@ -2876,7 +2863,7 @@ def main():
       print_read(store, args.pretty)
     elif args.command == "poll":
       require_server(store)
-      return poll_inbox(store, args.pretty, args.interval, args.max_loops)
+      return poll_inbox(store, args.pretty)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.
       print(
