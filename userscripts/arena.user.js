@@ -19,7 +19,7 @@
 (function () {
   "use strict";
 
-  function runFeature(key, label, run) {
+  function runFeature(key, label, run, onChange) {
     if (typeof document === "undefined") {
       run();
       return;
@@ -35,6 +35,7 @@
       stop = next ? run() : null;
       GM_unregisterMenuCommand(menuId);
       showMenu(next);
+      if (typeof onChange === "function") onChange();
     }
 
     function showMenu(value) {
@@ -505,6 +506,26 @@
     };
   });
 
+  var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
+  var AUTO_TOGGLE_CLASS =
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium hover:bg-surface-raised border text-text-primary";
+
+  function hasToggleClass(classes, name) {
+    return classes.split(" ").indexOf(name) !== -1;
+  }
+
+  function autoToggleClasses(on) {
+    return AUTO_TOGGLE_CLASS + (on ? " bg-surface-raised" : " bg-transparent");
+  }
+
+  var autoToggleButton = null;
+
+  function setToggleButtonPressed() {
+    if (!autoToggleButton) return;
+    autoToggleButton.className = autoToggleClasses(autoScroll.isOn());
+    autoToggleButton.setAttribute("aria-pressed", autoScroll.isOn() ? "true" : "false");
+  }
+
   var autoScroll = runFeature("auto-scroll", "Transcript auto-scroll", function () {
     var scroller = null;
     var content = null;
@@ -565,19 +586,7 @@
       window.removeEventListener("popstate", sync);
       detach();
     };
-  });
-
-  var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
-  var AUTO_TOGGLE_CLASS =
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium hover:bg-surface-raised border text-text-primary";
-
-  function hasToggleClass(classes, name) {
-    return classes.split(" ").indexOf(name) !== -1;
-  }
-
-  function autoToggleClasses(on) {
-    return AUTO_TOGGLE_CLASS + (on ? " bg-surface-raised" : " bg-transparent");
-  }
+  }, setToggleButtonPressed);
 
   (function () {
     function runChecks() {
@@ -610,18 +619,14 @@
       return;
     }
 
-    function setPressed(button, on) {
-      button.className = autoToggleClasses(on);
-      button.setAttribute("aria-pressed", on ? "true" : "false");
-    }
-
     function createButton() {
       var button = document.createElement("button");
       button.type = "button";
       button.setAttribute(AUTO_TOGGLE_MARK, "true");
       button.setAttribute("aria-label", "Toggle transcript autoscroll");
       button.setAttribute("title", "Toggle transcript autoscroll");
-      setPressed(button, autoScroll.isOn());
+      autoToggleButton = button;
+      setToggleButtonPressed();
       var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("width", "16");
       svg.setAttribute("height", "16");
@@ -642,7 +647,6 @@
       button.appendChild(svg);
       button.addEventListener("click", function () {
         autoScroll.toggle();
-        setPressed(button, autoScroll.isOn());
       });
       return button;
     }

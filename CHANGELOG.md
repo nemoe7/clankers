@@ -1,6 +1,6 @@
 ## 2026-09-29
 
-- **Autoscroll toggle button**: Add a toggle to the transcript action row next to Stop generating. The button is pressed while follow is ON and unpressed when OFF. Drop the Shift pause.
+- **Autoscroll toggle button**: Add a toggle to the transcript action row next to Stop generating. The button shows pressed while follow is ON and unpressed when OFF, and it stays in sync with the menu toggle. Drop the Shift pause.
 
 - **Report ack spacing**: Remove the top line and the extra space above the first reply in the report ack history. Zero the container and paragraph top spacing there. Keep the line between later replies.
 
