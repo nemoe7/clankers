@@ -2785,8 +2785,6 @@ def main():
     action="store_true",
     help="Let the owner opt in to AllOrigins and CodeTabs fallback for this request",
   )
-  seen = commands.add_parser("seen")
-  seen.add_argument("ids", nargs="+")
   ack = commands.add_parser("ack")
   ack.add_argument("ids", nargs="+")
   ack.add_argument("--reply", help="Markdown answer shown in the message log")
@@ -2875,9 +2873,6 @@ def main():
           store.enqueue_fetch(args.url, args.allow_proxy, pending=True), args.pretty
         )
       )
-    elif args.command == "seen":
-      store.mark_seen(args.ids)
-      print("Seen: " + ", ".join(args.ids))
     elif args.command == "ack":
       if bool(args.reply) == bool(args.note):
         raise ValueError("Choose exactly one of --reply or --note")

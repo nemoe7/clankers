@@ -10,7 +10,6 @@ Use `scripts/preview.py` relative to the actual installed steering skill. Put `-
 | `serve --port 8000` | Start the shared preview with a long-lived process tool |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen |
 | `poll` | Wait for a pending inbox item before ending a turn |
-| `seen <ids>` | Mark fully delivered IDs Seen without answering; never use on counts or truncated output |
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line |
 | `task-list` | List tasks and their stored status, order and details |

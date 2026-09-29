@@ -2757,7 +2757,7 @@ def test_bash_gate():
 
 def test_dispatch_reminder():
   # Every dispatch carries a reminder without changing stdout; only a delivered read
-  # or an explicit receipt marks a note seen.
+  # marks a note seen.
   with tempfile.TemporaryDirectory() as reminder_dir:
     reminder_store = preview.Store(reminder_dir, create=True)
     reminder_store.note("reminder-note", "Read this")
@@ -2801,22 +2801,13 @@ def test_dispatch_reminder():
     ):
       assert preview.main() == 1
     assert reminder_store.state()["notes"][0]["seen_at"] == delivered
-    result = subprocess.run(
-      [
-        sys.executable,
-        reminder_script,
-        "--state-dir",
-        reminder_dir,
-        "seen",
-        "reminder-note",
-      ],
+    gone = subprocess.run(
+      [sys.executable, reminder_script, "--state-dir", reminder_dir, "seen", "x"],
       capture_output=True,
       text=True,
-      check=True,
+      check=False,
     )
-    assert "Seen: reminder-note" in result.stdout
-    assert reminder_store.state()["notes"][0]["seen_at"] is not None
-    assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
+    assert gone.returncode == 2, "read and poll stamp Seen; no seen subcommand remains"
     result = subprocess.run(
       [
         sys.executable,
