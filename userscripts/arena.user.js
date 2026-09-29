@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.4
+// @version      1.1.5
 // @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -508,14 +508,20 @@
 
   var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
   var AUTO_TOGGLE_CLASS =
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium hover:bg-surface-raised border text-text-primary";
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border text-text-primary";
 
   function hasToggleClass(classes, name) {
     return classes.split(" ").indexOf(name) !== -1;
   }
 
+  // The on state keeps its own fill under the pointer; hover only lifts the off state.
   function autoToggleClasses(on) {
-    return AUTO_TOGGLE_CLASS + (on ? " bg-surface-raised" : " bg-transparent");
+    return (
+      AUTO_TOGGLE_CLASS +
+      (on
+        ? " bg-interactive-cta-active border-text-primary"
+        : " bg-transparent border-border-medium hover:bg-surface-raised")
+    );
   }
 
   var autoToggleButton = null;

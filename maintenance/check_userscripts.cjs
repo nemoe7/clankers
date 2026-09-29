@@ -190,12 +190,16 @@ for (const [domain, { features, baseObservers }] of Object.entries(bundles)) {
   toggleButton.listeners.click();
   assert.equal(enabled, false, 'Button click turns follow off');
   assert.equal(toggleButton.attrs['aria-pressed'], 'false', 'Button shows unpressed when off');
+  assert.ok(toggleButton.className.includes('hover:bg-surface-raised'), 'Off state lifts on hover');
+  assert.ok(!toggleButton.className.includes('bg-interactive-cta-active border'), 'Off state has no on fill');
   assert.equal(events.has('scroll'), false, 'OFF removes the scroll listener');
   scroller.scrollTop = 50; flush();
   assert.equal(scroller.scrollTop, 50, 'OFF cancels pending follow');
   toggleButton.listeners.click();
   assert.equal(enabled, true, 'Button click turns follow on');
   assert.equal(toggleButton.attrs['aria-pressed'], 'true', 'Button shows pressed when on');
+  assert.ok(toggleButton.className.includes('bg-interactive-cta-active'), 'On state has its own fill');
+  assert.ok(!toggleButton.className.includes('hover:bg-surface-raised'), 'On state does not share the hover fill');
   flush();
   assert.equal(scroller.scrollTop, 2100, 'ON follows immediately without reload');
   toggleMenu();
