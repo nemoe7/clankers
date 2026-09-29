@@ -50,12 +50,15 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## ChatGPT Hide Elements
 
-On any `chatgpt.com` path, the feature adds `hidden` to five elements:
+On any `chatgpt.com` path, the feature adds `hidden` to eight elements:
 
 - The div that holds the Claim offer button.
 - The div that holds the Free offer button.
 - The div that holds the Select chat surface toggle.
 - The Codex sidebar link.
+- The Images sidebar link.
+- The Library sidebar link.
+- The Free badge.
 - The prompt textarea header banner.
 
 A MutationObserver repeats the work when the page changes.

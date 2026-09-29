@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers ChatGPT
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.0
+// @version      1.2.0
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -56,6 +56,10 @@
     var SURFACE_RADIO_SELECTOR = 'div[role="radiogroup"][aria-label="Select chat surface"]';
     var SURFACE_DIV_SELECTOR = "div.start-1\\/2";
     var CODEX_LINK_SELECTOR = 'a[data-sidebar-item][href="/codex"]';
+    var IMAGES_LINK_SELECTOR = 'a[data-sidebar-item][href="/images"]';
+    var LIBRARY_LINK_SELECTOR = 'a[data-sidebar-item][href^="/library"]';
+    var FREE_BADGE_SELECTOR = "span.text-caption-regular.text-token-text-tertiary";
+    var FREE_BADGE_TEXT = "Free";
     var HEADER_DIV_SELECTOR = "div[data-prompt-textarea-header]";
 
     function findClaimDiv(doc) {
@@ -81,6 +85,19 @@
 
     function findCodexLink(doc) {
       return doc.querySelector(CODEX_LINK_SELECTOR);
+    }
+
+    function findImagesLink(doc) {
+      return doc.querySelector(IMAGES_LINK_SELECTOR);
+    }
+
+    function findLibraryLink(doc) {
+      return doc.querySelector(LIBRARY_LINK_SELECTOR);
+    }
+
+    function findFreeBadge(doc) {
+      var badge = doc.querySelector(FREE_BADGE_SELECTOR);
+      return badge && String(badge.textContent || "").trim() === FREE_BADGE_TEXT ? badge : null;
     }
 
     function findHeaderDiv(doc) {
@@ -125,6 +142,12 @@
       var freeDiv = fakeElement();
       var surfaceDiv = fakeElement();
       var codexLink = fakeElement();
+      var imagesLink = fakeElement();
+      var libraryLink = fakeElement();
+      var freeBadge = fakeElement();
+      freeBadge.textContent = " Free ";
+      var paidBadge = fakeElement();
+      paidBadge.textContent = "Plus";
       var headerDiv = fakeElement();
       var claimButton = {
         closest: function (selector) {
@@ -178,6 +201,26 @@
           return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
         },
       };
+      var imagesDoc = {
+        querySelector: function (selector) {
+          return selector === IMAGES_LINK_SELECTOR ? imagesLink : null;
+        },
+      };
+      var libraryDoc = {
+        querySelector: function (selector) {
+          return selector === LIBRARY_LINK_SELECTOR ? libraryLink : null;
+        },
+      };
+      var badgeDoc = {
+        querySelector: function (selector) {
+          return selector === FREE_BADGE_SELECTOR ? freeBadge : null;
+        },
+      };
+      var paidBadgeDoc = {
+        querySelector: function (selector) {
+          return selector === FREE_BADGE_SELECTOR ? paidBadge : null;
+        },
+      };
       var emptyDoc = {
         querySelector: function () {
           return null;
@@ -201,6 +244,13 @@
         [findSurfaceDiv(emptyDoc), null],
         [findCodexLink(codexDoc), codexLink],
         [findCodexLink(emptyDoc), null],
+        [findImagesLink(imagesDoc), imagesLink],
+        [findImagesLink(emptyDoc), null],
+        [findLibraryLink(libraryDoc), libraryLink],
+        [findLibraryLink(emptyDoc), null],
+        [findFreeBadge(badgeDoc), freeBadge],
+        [findFreeBadge(paidBadgeDoc), null],
+        [findFreeBadge(emptyDoc), null],
         [findHeaderDiv(headerDoc), headerDiv],
         [findHeaderDiv(emptyDoc), null],
         [hideElement(claimDiv), true],

@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **ChatGPT hide elements**: The ChatGPT userscript hides the Images sidebar link, the Library sidebar link and the Free badge. The bundle version is `1.2.0`.
+
 - **Push after a rebase**: ARENA.md pushes only when the branch has commits ahead of `origin/main`. A rebase that leaves nothing to push skips the push.
 
 - **gpt-github CI gates**: Poll the runs for the new head SHA after every push, since an older run verifies nothing. A missing, queued, in-progress or pending check is not complete, and a failed, cancelled or timed-out check is not green. The turn stays open after a push while the new head SHA has no completed run, and the plugin version is `1.4.0`.
