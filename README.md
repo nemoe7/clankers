@@ -30,7 +30,7 @@ Latest measurements as of 2026-09-29. `maintenance/check.py` measures ARENA.md b
 | `rules/kilo/debug.md` | `cl100k_base` | 272 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 119 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 5,995 `B` |
+| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,024 `B` |
 | `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 41,707 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,117 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 12,444 `B` |

@@ -2,6 +2,8 @@
 
 - **No init before serve or restore**: `preview.py gate` passes when the state database does not exist, and `import-state` creates a missing database. `init` stays for a manual create.
 
+- **Task status values**: `SKILL.md` names the two `--status` values, `upcoming` and `finished`.
+
 - **Poll flags removed**: `preview.py poll` takes no `--interval` or `--max`. The wait stays 900 × 1 s in refs, live and installed copies. The test covers the fixed wait and rejects the old flags.
 
 - **Gemini release input**: Send only commit messages and text diffs to Gemini. Binary files add one marker line and no patch data.
