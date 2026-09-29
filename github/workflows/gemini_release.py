@@ -71,7 +71,14 @@ TEMPLATE = """\
 
 INPUT_BYTES = 600_000
 PIECE_CHARS = 60_000
-MODEL = "gemini-3.5-flash-lite"
+MODELS = (
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+)
 
 
 def run(*args, input=None, binary=False):
@@ -286,7 +293,34 @@ def response_text(data):
   return text
 
 
+def model_ladder(value):
+  """Split a comma-separated model list; each entry is one fallback rung."""
+  models = [m.strip() for m in value.split(",") if m.strip()]
+  if not models:
+    raise RuntimeError("Model ladder is empty")
+  for model in models:
+    if not re.fullmatch(r"[a-zA-Z0-9._-]+", model):
+      raise RuntimeError(f"Invalid Gemini model ID: {model}")
+  return models
+
+
 def generate(context, evidence, model):
+  """Generate with one model, or walk a ladder of models until one answers."""
+  models = [model] if isinstance(model, str) else list(model)
+  failures = []
+  for rung in models:
+    try:
+      return generate_once(context, evidence, rung)
+    except RuntimeError as exc:
+      if "token allowance" in str(exc):
+        raise
+      failures.append(f"{rung}: {exc}")
+      if rung != models[-1]:
+        summary(f"Gemini model {rung} failed; trying {models[models.index(rung) + 1]}")
+  raise RuntimeError("Every Gemini model failed: " + "; ".join(failures))
+
+
+def generate_once(context, evidence, model):
   context = dict(context)
   phase = context.pop("phase", "release")
   prompt = PROMPTS[phase]
@@ -494,7 +528,7 @@ def propose(repo, branch):
     "comparison_url": link,
     "template": TEMPLATE,
   }
-  model = os.getenv("GEMINI_MODEL", MODEL)
+  model = model_ladder(os.getenv("GEMINI_MODELS") or ",".join(MODELS))
   override = os.getenv("IMPACT_OVERRIDE", "")
   if override == "auto":
     override = ""

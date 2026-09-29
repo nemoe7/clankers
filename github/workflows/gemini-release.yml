@@ -35,9 +35,9 @@ on:
         required: false
         type: boolean
         default: false
-      model:
-        description: Gemini model ID (proposal only)
-        default: gemini-3.5-flash-lite
+      models:
+        description: Comma-separated Gemini model ladder, tried in order (proposal only)
+        default: gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite
         required: true
         type: string
 
@@ -74,7 +74,7 @@ jobs:
           IMPACT_OVERRIDE: ${{ inputs.impact_override }}
           EVIDENCE: ${{ inputs.evidence }}
           PROMOTE_TO_STABLE: ${{ inputs.promote_to_stable }}
-          GEMINI_MODEL: ${{ inputs.model }}
+          GEMINI_MODELS: ${{ inputs.models }}
           PROPOSAL_PATH: ${{ runner.temp }}/gemini-proposal/proposal.json
         run: python .github/workflows/gemini_release.py
       - name: Approve Proposal

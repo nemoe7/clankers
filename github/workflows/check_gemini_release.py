@@ -224,6 +224,36 @@ def check():
       lambda: release.gemini_call("m", "generateContent", {}),
       "HTTP 429: RESOURCE_EXHAUSTED Quota exceeded for key [REDACTED]",
     )
+  # The ladder moves to the next model on an HTTP failure or blocked output, not on
+  # an oversized request, and names every rung when all of them fail.
+  good = {
+    "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "ok"}]}}]
+  }
+  with patch.object(
+    release,
+    "gemini_call",
+    side_effect=[
+      RuntimeError("Gemini countTokens failed: HTTP 404"),
+      {"totalTokens": 1},
+      {"candidates": []},
+      {"totalTokens": 1},
+      good,
+    ],
+  ):
+    assert release.generate({}, [], ["a", "b", "c"]) == "ok"
+  with patch.object(release, "gemini_call", side_effect=RuntimeError("HTTP 503")):
+    fails(
+      lambda: release.generate({}, [], ["a", "b"]),
+      "Every Gemini model failed: a: HTTP 503; b: HTTP 503",
+    )
+  with patch.object(
+    release, "gemini_call", return_value={"totalTokens": 10**7}
+  ) as call:
+    fails(lambda: release.generate({}, [], ["a", "b"]), "token allowance")
+    assert call.call_count == 1
+  assert release.model_ladder(" a-1 , b.2 ") == ["a-1", "b.2"]
+  fails(lambda: release.model_ladder(","), "Model ladder is empty")
+  fails(lambda: release.model_ladder("a b"), "Invalid Gemini model ID: a b")
   for phase in ("chunk", "combine", "release", "version"):
     with patch.object(
       release,

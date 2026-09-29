@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini model ladder**: The release workflow `models` input is a comma-separated ladder. Each request moves to the next model on an HTTP error or blocked output. Default: gemini-3.8-flash to gemini-3.1-flash-lite.
+
 - **Publish feedback**: `publish` prints the parsed field count and warns when a `{#id}` marker parsed as prose. A shared-ID refusal suggests `<id>-report` or `<id>-task`.
 
 - **Rules audit**: AGENTS.md, ARENA.md, CLINE.md, the preview SKILL.md and REFERENCE.md lose rationale tails, duplicates and untestable lines. ARENA.md now names every host `AGENTS.md` and wins collisions. The same edits apply to the ChatGPT files and COMMIT-SPEC.txt.
