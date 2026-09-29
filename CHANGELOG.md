@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **PR check polling**: Use exponential delays from 1 to 64 seconds after the initial check, then 64-second intervals. Stop and report command or API errors, including HTTP 401. Pending checks remain distinct from errors.
+
 - **GPT plugin versions**: Require a version increase in `gpt-plugins/plugin.json` for every update under `gpt-plugins/`, including sources and documentation.
 
 - **Finished tasks**: Show the last finished task first. Keep upcoming and saved task order unchanged.

@@ -111,3 +111,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-28: Accepted without funding. `rules/CHATGPT-CUSTOM.txt` +62 `chars`, 1,436 to 1,498, for the approved DOCS lines and FORMAT compression that funds them against the 1,500-char field cap.
 2026-09-28: Accepted without funding. `scripts/preview.py` +541 `B`, 74,002 to 74,543, for the `gate` subcommand that blocks bash past 50 calls with a pending inbox and prints `READ INBOX NOW` on stdout.
 2026-09-28: Accepted without funding. `scripts/install.sh` +1,042 `B`, 3,504 to 4,546, for the DEBUG-gate block that prints `READ INBOX NOW`, exits 130, and exempts preview, gh, sleep, arena-state, no-op and local-git calls.
+2026-09-29: Accepted without funding. `rules/ARENA.md` +108 `B` for exponential PR-check delays and explicit command/API error handling. The root copy matches byte for byte.
