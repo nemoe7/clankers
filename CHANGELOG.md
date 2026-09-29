@@ -1,6 +1,6 @@
 ## 2026-09-29
 
-- **Link colour**: Preview anchors use `#299bff` in both themes instead of the accent colour.
+- **Link colour**: Preview anchors use a muted blue, `#6ea3d6`, in both themes instead of the accent colour.
 
 - **Seen subcommand removed**: `read` and `poll` stamp delivered IDs Seen, so `preview.py seen` goes from the code, the tests and `REFERENCE.md`.
 
