@@ -204,8 +204,18 @@ for (const [domain, { features, baseObservers }] of Object.entries(bundles)) {
   toggleMenu();
   assert.equal(enabled, true, 'Menu toggle restores follow');
   assert.equal(toggleButton.attrs['aria-pressed'], 'true', 'Button follows the menu toggle back on');
+  const latestSync = observers.at(-2);
+  let generating = true;
+  context.document.querySelectorAll = (selector) => selector === 'button[aria-label]' && generating ? [stopButton] : [];
+  generating = false;
+  scroller.scrollTop = 40;
+  events.get('scroll')(); flush();
+  assert.equal(scroller.scrollTop, 40, 'Idle transcript (no Stop generating) leaves the scroll alone');
+  generating = true;
+  latestSync(); flush();
+  assert.equal(scroller.scrollTop, 2100, 'Stop generating back means follow resumes');
   message = null;
-  observers.at(-2)(); flush();
+  latestSync(); flush();
   assert.equal(events.has('scroll'), false, 'Removed transcript releases its listener');
   console.log('ok auto-scroll: growth, resize, navigation, toggle button, menu sync, cleanup');
 }

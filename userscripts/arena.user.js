@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.3
+// @version      1.1.4
 // @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -540,6 +540,7 @@
       frame = requestAnimationFrame(function () {
         frame = null;
         if (!scroller || !scroller.isConnected || route !== location.pathname) return;
+        if (!findStopGeneratingButton(document)) return;
         scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       });
     }

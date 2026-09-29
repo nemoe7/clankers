@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Autoscroll only while generating**: Arena bundle 1.1.4 follows the transcript only while the Stop generating button exists, the same condition that hides the composer. With the composer shown, the transcript stays where the user put it.
+
 - **Report ack top gap**: The report ack history sits 10px below the toolbar rule instead of touching it.
 
 - **No init before serve or restore**: `preview.py gate` passes when the state database does not exist, and `import-state` creates a missing database. `init` stays for a manual create.

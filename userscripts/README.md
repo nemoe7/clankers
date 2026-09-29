@@ -44,7 +44,7 @@ The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its he
 
 ## Arena Transcript Auto-scroll
 
-On `/agent/*`, ON keeps the transcript at the bottom, including after upward scrolling, new messages, resized tool output and session changes. A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
+On `/agent/*`, ON keeps the transcript at the bottom while the Stop generating button exists. This includes upward scrolling, new messages, resized tool output and session changes. Without that button the composer is visible and the transcript does not follow until the button returns. A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
 
 The feature uses the transcript message marker and its scrollable `role="log"` ancestor.
 
