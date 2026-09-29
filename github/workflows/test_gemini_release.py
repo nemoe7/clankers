@@ -307,12 +307,9 @@ def test_release_pipeline():
     "promote": False,
     "version": "0.1.0",
     "tag": "0.1.0",
-    "body": release.TEMPLATE.replace("{{summary}}", "test")
-    .replace("{{features}}", "None")
-    .replace("{{fixes}}", "None")
-    .replace("{{breaking_changes}}", "None")
-    .replace("{{upgrade_notes}}", "None")
-    .replace("{{comparison_url}}", "https://github.com/owner/repo/commits/" + "a" * 40),
+    "body": release.INITIAL_TEMPLATE.replace("{{summary}}", "test").replace(
+      "{{features}}", "None"
+    ),
   }
   api_run = {
     "id": 42,
@@ -448,6 +445,39 @@ def test_release_pipeline():
   assert release.TEMPLATE.count("{{") == 6 and release.TEMPLATE.endswith(
     "{{comparison_url}}\n"
   )
+  assert release.INITIAL_TEMPLATE.count("{{") == 2
+  # Sections may be dropped, never reordered or duplicated; Summary and the range link stay.
+  full = {"template": release.TEMPLATE, "comparison_url": "https://x/compare/a...b"}
+  release.check_body(
+    "## Summary\n\ns\n\n## Fixes\n\nf\n\n## Commit comparison\n\nhttps://x/compare/a...b\n",
+    full,
+  )
+  fails(lambda: release.check_body("## Summary\n\ns\n", full), "does not match")
+  fails(
+    lambda: release.check_body("## Fixes\n\nf\n\nhttps://x/compare/a...b\n", full),
+    "does not match",
+  )
+  fails(
+    lambda: release.check_body(
+      "## Fixes\n\nf\n\n## Summary\n\ns\n\nhttps://x/compare/a...b\n", full
+    ),
+    "does not match",
+  )
+  initial = {
+    "template": release.INITIAL_TEMPLATE,
+    "comparison_url": "https://x/commits/b",
+  }
+  release.check_body("## Summary\n\ns\n", initial)
+  fails(
+    lambda: release.check_body("## Summary\n\ns\n\n## Fixes\n\nf\n", initial),
+    "does not match",
+  )
+  fails(
+    lambda: release.check_body("## Summary\n\nhttps://x/commits/b\n", initial),
+    "does not match",
+  )
+  assert release.release_template("") is release.INITIAL_TEMPLATE
+  assert release.release_template("abc") is release.TEMPLATE
   workflow = (release.HERE / "gemini-release.yml").read_text()
   assert "python .github/workflows/gemini_release.py" in workflow
   assert "python github/workflows" not in workflow

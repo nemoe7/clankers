@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Release notes sections**: Gemini omits template sections without evidence and always keeps Summary. An initial release shows Summary and Features only, with no commit comparison.
+
 - **STE lint in the gate**: `check.py` runs the ASD-STE100 linter over the covered documents (`STE_DOCS`), and CI calls `check.py --ste` with the same list.
 
 - **Re-ack block gap**: Later ack blocks in the Messages tab use 8px around the hairline and drop the first paragraph top margin.
