@@ -1,6 +1,7 @@
 ## 2026-09-29
 
 - **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
+- **ChatGPT outer fences**: Long fenced text uses at least four outer backticks, with a longer fence when the content requires one. Inner fences and language tags stay unchanged. The English More field uses approved lossless compression of existing lines.
 - **ChatGPT skill location**: Root `AGENTS.md` requires ChatGPT-related skills to go in `gpt-plugins`.
 - **ChatGPT Mermaid requirement**: Pipelines and flows must use Mermaid unless the target explicitly cannot render it. ASCII diagrams stay prohibited, and the top-down, short-label and phone-sized rules stay. Refs, live, wenyan and the platform table match the approved replacement.
 - **GitHub repository discovery**: `gpt-github` adds the owner's clause on tree discovery before file reads, known paths, batched calls and tool checks. Source and shipped copies match. Plugin version is `1.3.0`.

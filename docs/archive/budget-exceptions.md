@@ -6,6 +6,8 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 
 2026-09-29: Accepted without funding. `rules/CHATGPT-MORE.txt` +44 `chars`, 1,401 to 1,445, for mandatory Mermaid pipelines and flows with the explicit rendering exception. The wenyan copy adds 20 `chars`, 994 to 1,014. Both fields stay below 1,500 `chars`.
 
+2026-09-29: Accepted without funding. `rules/CHATGPT-MORE.txt` +52 `chars`, 1,445 to 1,497, for outer-fence and inner-fence rules after approved compression. The wenyan copy adds 103 `chars`, 1,014 to 1,117.
+
 2026-09-28: Accepted without funding. `skills/arena-preview-steering/scripts/install.sh` +883 `B` to expose `arena-preview` through PATH and restore it after a reset.
 
 2026-09-27: Unfunded. `skills/arena-preview-steering/assets/app.js` +14 `B` and `scripts/preview.py` +261 `B` for `ever_seen` on reports, owner request.
