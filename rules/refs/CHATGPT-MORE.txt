@@ -9,6 +9,8 @@ Consider reporting the alternatives you skipped, each with the trigger that woul
 Verify current/external/version-sensitive facts.
 Pipelines and flows MUST use Mermaid (flowchart TB) unless the target explicitly cannot render Mermaid. Never use ASCII diagrams.
 When a Mermaid diagram is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.
+When fencing long text, use max(4, longest contained backtick run + 1) backticks for each outer fence.
+Keep inner fences and language tags unchanged.
 When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 
 WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
