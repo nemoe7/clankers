@@ -2,6 +2,8 @@
 
 Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
 
+2026-09-29: Approved amendment. `rules/ARENA.md` +76 `B`, 15,192 to 15,268, for the plain-output poll clause and the unverified empty list. The root copy matches.
+
 2026-09-29: Accepted without funding. `rules/ARENA.md` +91 `B`, 15,101 to 15,192, for the clause that skips the push after a rebase with no commits. The root copy matches.
 
 2026-09-29: Accepted without funding. `gpt-plugins/skills/gpt-github/SKILL.md` +105 `tok`, 327 to 432, for the owner's CI completion and new-head polling gates. The refs source grows 643 `B`, to 2,285.

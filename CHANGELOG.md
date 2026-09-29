@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **CI poll output**: ARENA.md polls the plain `gh pr checks` output. An empty or absent check list is unverified, never a conclusion.
+
 - **ChatGPT hide elements**: The ChatGPT userscript hides the Images sidebar link, the Library sidebar link and the Free badge. The bundle version is `1.2.0`.
 
 - **Push after a rebase**: ARENA.md pushes only when the branch has commits ahead of `origin/main`. A rebase that leaves nothing to push skips the push.
