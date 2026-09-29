@@ -20,11 +20,11 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-All six features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle; reload to apply`. The label shows the saved setting, not the active page state.
+All six features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
 
-Reload manually to apply a change. Other open tabs use saved settings on their next reload. A disabled feature starts no observer or timer.
+Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
-The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal. A switch change does not reload the page or reset the DOM.
+The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
 ## Arena Prompt Fill
 
@@ -44,9 +44,9 @@ The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its he
 
 ## Arena Transcript Auto-scroll
 
-On `/agent/*`, the transcript follows new messages and resized tool output when it is within 80px of the bottom. Scrolling up pauses follow. Scrolling down to within 80px resumes it.
+On `/agent/*`, ON keeps the transcript at the bottom, including after upward scrolling, new messages, resized tool output and session changes. OFF disables follow. The saved menu setting applies immediately.
 
-The feature uses the transcript message marker and its scrollable `role="log"` ancestor. It preserves a reading position when the transcript or session changes. Adjust `BOTTOM_GAP` in the script if needed.
+The feature uses the transcript message marker and its scrollable `role="log"` ancestor.
 
 ## ChatGPT Hide Elements
 
@@ -74,4 +74,4 @@ node userscripts/chatgpt.user.js
 node maintenance/check_userscripts.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, pause/resume and navigation.
+Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.

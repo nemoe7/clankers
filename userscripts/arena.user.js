@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.0
+// @version      1.1.1
 // @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -26,13 +26,16 @@
     }
     var enabled = GM_getValue(key, true) !== false;
     var menuId;
+    var stop = null;
 
     function showMenu(value) {
       menuId = GM_registerMenuCommand(
-        label + ": " + (value ? "ON" : "OFF") + " — toggle; reload to apply",
+        label + ": " + (value ? "ON" : "OFF") + " — toggle",
         function () {
           var next = GM_getValue(key, true) === false;
           GM_setValue(key, next);
+          if (stop) stop();
+          stop = next ? run() : null;
           GM_unregisterMenuCommand(menuId);
           showMenu(next);
         },
@@ -41,7 +44,7 @@
 
     showMenu(enabled);
     if (enabled) {
-      run();
+      stop = run();
     }
   }
 
@@ -231,6 +234,10 @@
     });
     window.addEventListener("popstate", sync);
     sync();
+    return function () {
+      observer.disconnect();
+      window.removeEventListener("popstate", sync);
+    };
   });
 
   runFeature("open-steering", "Open Steering", function () {
@@ -466,48 +473,33 @@
     });
     window.addEventListener("popstate", sync);
     sync();
+    return function () {
+      observer.disconnect();
+      window.removeEventListener("popstate", sync);
+      clearClickTimer();
+    };
   });
 
   runFeature("auto-scroll", "Transcript auto-scroll", function () {
-    var BOTTOM_GAP = 80;
     var scroller = null;
     var content = null;
-    var following = false;
-    var lastTop = 0;
     var frame = null;
     var route = null;
     var resize = null;
 
-    function nearBottom(element) {
-      return element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_GAP;
-    }
-
-    if (typeof document === "undefined") {
-      var assert = require("node:assert/strict");
-      assert.equal(nearBottom({ scrollHeight: 1000, clientHeight: 400, scrollTop: 520 }), true);
-      assert.equal(nearBottom({ scrollHeight: 1000, clientHeight: 400, scrollTop: 519 }), false);
-      console.log("ok auto-scroll: bottom threshold");
-      return;
-    }
-
-    function onScroll() {
-      if (scroller.scrollTop < lastTop) following = false;
-      else if (nearBottom(scroller)) following = true;
-      lastTop = scroller.scrollTop;
-    }
+    if (typeof document === "undefined") return;
 
     function schedule() {
-      if (frame !== null || !scroller || !following) return;
+      if (frame !== null || !scroller) return;
       frame = requestAnimationFrame(function () {
         frame = null;
-        if (!scroller || !scroller.isConnected || !following || route !== location.pathname) return;
+        if (!scroller || !scroller.isConnected || route !== location.pathname) return;
         scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-        lastTop = scroller.scrollTop;
       });
     }
 
     function detach() {
-      if (scroller) scroller.removeEventListener("scroll", onScroll);
+      if (scroller) scroller.removeEventListener("scroll", schedule);
       if (resize) resize.disconnect();
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
@@ -524,9 +516,7 @@
         route = location.pathname;
         scroller = next;
         if (scroller) {
-          lastTop = scroller.scrollTop;
-          following = nearBottom(scroller);
-          scroller.addEventListener("scroll", onScroll, { passive: true });
+          scroller.addEventListener("scroll", schedule, { passive: true });
           resize = new ResizeObserver(schedule);
           resize.observe(scroller);
         }
@@ -545,6 +535,11 @@
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener("popstate", sync);
     sync();
+    return function () {
+      observer.disconnect();
+      window.removeEventListener("popstate", sync);
+      detach();
+    };
   });
 
   runFeature("hide-composer", "Hide composer", function () {
@@ -555,6 +550,8 @@
     var SPACER_SELECTOR = 'div.shrink-0[style*="height: 24px"]';
     var SPACER_HEIGHT = "24px";
     var fixedSpacers = new WeakSet();
+    var spacerStyles = new Map();
+    var editorStates = new Map();
 
     function parseArenaUrl(urlString) {
       var url;
@@ -605,6 +602,7 @@
       ) {
         return false;
       }
+      if (!spacerStyles.has(spacer)) spacerStyles.set(spacer, [spacer.style.getPropertyValue("height"), spacer.style.getPropertyPriority("height")]);
       spacer.style.setProperty("height", SPACER_HEIGHT, "important");
       return true;
     }
@@ -755,6 +753,7 @@
     }
 
     function hideEditor(editor) {
+      if (!editorStates.has(editor)) editorStates.set(editor, { hidden: editor.getAttribute("hidden"), classHidden: editor.classList.contains("hidden"), display: editor.style.getPropertyValue("display"), priority: editor.style.getPropertyPriority("display") });
       editor.setAttribute("hidden", "");
       editor.classList.add("hidden");
       editor.style.setProperty("display", "none", "important");
@@ -765,10 +764,19 @@
       if (!editor.hasAttribute(HIDE_MARK)) {
         return;
       }
-      editor.removeAttribute("hidden");
-      editor.classList.remove("hidden");
-      editor.style.removeProperty("display");
+      var prior = editorStates.get(editor);
+      if (!prior) return;
+      if (editor.getAttribute("hidden") === "") {
+        if (prior.hidden === null) editor.removeAttribute("hidden");
+        else editor.setAttribute("hidden", prior.hidden);
+      }
+      if (!prior.classHidden) editor.classList.remove("hidden");
+      if (editor.style.getPropertyValue("display") === "none" && editor.style.getPropertyPriority("display") === "important") {
+        if (prior.display) editor.style.setProperty("display", prior.display, prior.priority);
+        else editor.style.removeProperty("display");
+      }
       editor.removeAttribute(HIDE_MARK);
+      editorStates.delete(editor);
     }
 
     function sync() {
@@ -810,12 +818,25 @@
       attributeFilter: ["aria-label", "style"],
       attributeOldValue: true,
     });
-    window.addEventListener("popstate", function () {
+    function onRoute() {
       enforceCurrentSpacerHeight();
       sync();
-    });
+    }
+    window.addEventListener("popstate", onRoute);
     enforceCurrentSpacerHeight();
     sync();
+    return function () {
+      observer.disconnect();
+      window.removeEventListener("popstate", onRoute);
+      editorStates.forEach(function (_, editor) { showEditor(editor); });
+      spacerStyles.forEach(function (prior, spacer) {
+        if (spacer.style.getPropertyValue("height") === SPACER_HEIGHT && spacer.style.getPropertyPriority("height") === "important") {
+          if (prior[0]) spacer.style.setProperty("height", prior[0], prior[1]);
+          else spacer.style.removeProperty("height");
+        }
+      });
+      spacerStyles.clear();
+    };
   });
 
 })();
