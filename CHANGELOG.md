@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Re-ack block gap**: Later ack blocks in the Messages tab use 8px around the hairline and drop the first paragraph top margin.
+
 - **One pytest**: Test files are `test_*.py` and `*.test.cjs`. The `check_*` names stay for gates. A root `pytest.ini` runs the preview and Gemini release tests in one call, and CI now runs the Gemini tests.
 
 - **Autoscroll button hover**: Arena bundle 1.1.5 gives each toggle state its own hover fill: surface raised when off, CTA active when on. The on state stays visible under the pointer.

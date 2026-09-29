@@ -155,7 +155,8 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 .answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
 /* Each later ack is one more block under the first answer, parted by a hairline; nothing is replaced. */
-.answer .reply-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.answer .reply-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.answer .reply-block > p:first-child { margin-top: 0; }
 .answer .reply-block > p:last-child { margin-bottom: 0; }
 /* The first ack under the toolbar needs no hairline; 10px keeps it off the rule. */
 #report-ack-history { margin-top: 10px; }
