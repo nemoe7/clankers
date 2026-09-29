@@ -2836,18 +2836,22 @@ def main():
       return 0
     if not args.command:
       parser.error("a command is required")
-    store = Store(
-      args.state_dir, create=args.command in {"serve", "init"}, save_path=args.save_path
-    )
     if args.command == "gate":
       try:
-        allowed = store.gate()
+        allowed = Store(args.state_dir, save_path=args.save_path).gate()
+      except FileNotFoundError:
+        return 0
       except Exception:
         return 2
       if not allowed:
         print("READ INBOX NOW", flush=True)
         return 1
       return 0
+    store = Store(
+      args.state_dir,
+      create=args.command in {"serve", "init", "import-state"},
+      save_path=args.save_path,
+    )
     print(store.reminder(), file=sys.stderr, flush=True)
     if args.command == "serve":
       require_renderer()

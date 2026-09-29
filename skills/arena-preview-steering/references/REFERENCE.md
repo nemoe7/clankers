@@ -6,7 +6,7 @@ Use `scripts/preview.py` relative to the actual installed steering skill. Put `-
 
 | Command | Use |
 | --- | --- |
-| `init` | Create a missing state database before restoring an NDJSON backup |
+| `init` | Create a missing state database without starting the server |
 | `serve --port 8000` | Start the shared preview with a long-lived process tool |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen |
 | `poll` | Wait for a pending inbox item before ending a turn |
@@ -72,6 +72,6 @@ An agent asks with `download-request <url>`. That queues a pending job. The owne
 
 ## Restore
 
-Run `<skill>/scripts/install.sh` after a sandbox restore, before `git add`, to reinstate the venv, poll hook and ignore rule. Preserve the state directory and report source files. If the database is lost but `saved-state.ndjson` survives, run `init` on that state directory first. Then run `import-state <file>` there to restore notes, tasks and report answers together. Report sources must be republished if their snapshots are lost. Files and unfinished download jobs are not in the NDJSON backup.
+Run `<skill>/scripts/install.sh` after a sandbox restore, before `git add`, to reinstate the venv, poll hook and ignore rule. Preserve the state directory and report source files. If the database is lost but `saved-state.ndjson` survives, run `import-state <file>` on that state directory; it creates the database and restores notes, tasks and report answers together. Report sources must be republished if their snapshots are lost. Files and unfinished download jobs are not in the NDJSON backup.
 
 If a port is occupied, identify its owner or choose another port; do not stop another service. Verify a restore with `read`, `task-list` and rendered reports before discarding backups. Report failed reads or saves; never treat them as empty state or a confirmed save. If the preview stays unavailable, use `ask_user` to ask how to continue. Do not enable an external channel or local report commits without a new choice.

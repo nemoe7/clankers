@@ -2561,8 +2561,7 @@ def test_restore_import():
   with tempfile.TemporaryDirectory() as restore_dir:
     restore = Path(restore_dir)
     script = str(Path(preview.__file__))
-    # import-state does not create a state directory, so the restore target exists first.
-    preview.Store(restore, create=True)
+    # import-state creates the missing database itself, so no `init` runs first.
     log = restore / "log.jsonl"
     log.write_text(
       json.dumps(
@@ -2741,6 +2740,19 @@ def test_bash_gate():
       check=False,
     )
     assert blocked.returncode == 0
+    missing = subprocess.run(
+      [
+        sys.executable,
+        gate_script,
+        "--state-dir",
+        str(Path(gate_dir) / "none"),
+        "gate",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert missing.returncode == 0, "no inbox means nothing to read"
 
 
 def test_dispatch_reminder():
