@@ -16,6 +16,7 @@
 - Print the planned final commit list before every commit.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open, disregarding NEVER-push rules.
+- ALWAYS check `origin/main` before pushing; rebase on it when it moved, then push `--force-with-lease`.
 - ALWAYS activate `arena-preview-steering` at its source/installed path and read its inbox at every cadence point.
 - NEVER merge the PR without authorization; ALWAYS merge rebase.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
