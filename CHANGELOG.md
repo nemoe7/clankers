@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Report ack top gap**: The report ack history sits 10px below the toolbar rule instead of touching it.
+
 - **No init before serve or restore**: `preview.py gate` passes when the state database does not exist, and `import-state` creates a missing database. `init` stays for a manual create.
 
 - **Task status values**: `SKILL.md` names the two `--status` values, `upcoming` and `finished`.
