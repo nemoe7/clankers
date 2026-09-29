@@ -1076,6 +1076,12 @@ test('preview client', async (t) => {
     state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
     await get('#refresh-notes').events.click();
     assert.match(agentAck.textContent, /Acked Sep /);
+    state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#report-ack-history').hidden, false);
+    assert.equal(get('#report-ack-history').children.length, 2);
+    assert.equal(get('#report-ack-history').children[0].innerHTML, '<p>First</p>');
+    assert.equal(get('#report-ack-history').children[1].children[0].textContent, 'Second');
     assert.equal(pip.hidden, false, 'acknowledging an answer does not mark the report read');
     state.reports[0].latest_answer_id = 'b765432-bbbbbbbbbbbbbbbbbbbbbbbbb';
     state.reports[0].latest_answer_at = '2026-09-24T10:02:00';

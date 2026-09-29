@@ -949,6 +949,25 @@ function renderReportAcknowledgement() {
   const parts = submissionParts(report);
   receipt.textContent = parts ? parts.slice(3) : '';
   receipt.hidden = !parts;
+  const history = $('#report-ack-history');
+  const references = referenceTypes(lastState || {});
+  const blocks = [];
+  for (const ack of report?.acknowledgements || []) {
+    for (const reply of [{text: ack.ack_text, html: ack.ack_html, at: ack.acknowledged_at}, ...(ack.replies || [])]) {
+      const block = document.createElement('div');
+      block.className = 'reply-block';
+      block.title = `Submission ${ack.id.slice(0, 7)} · ${time(reply.at)}`;
+      if (reply.html !== undefined) block.innerHTML = linkReferences(reply.html, references);
+      else {
+        const plain = document.createElement('p');
+        plain.textContent = reply.text;
+        block.replaceChildren(plain);
+      }
+      blocks.push(block);
+    }
+  }
+  history.replaceChildren(...blocks);
+  history.hidden = !blocks.length;
 }
 let reportDirty = false;
 $('#report-form').addEventListener('input', () => { reportDirty = true; });

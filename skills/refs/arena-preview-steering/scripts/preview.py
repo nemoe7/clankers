@@ -1184,13 +1184,20 @@ class Store:
       ]
       latest_answers = {
         row["report_id"]: row
-        for row in db.execute(
-          "SELECT id, report_id, at, acknowledged_at FROM submissions ORDER BY seq"
-        )
+        for row in db.execute("SELECT * FROM submissions ORDER BY seq")
       }
       for report in reports:
         answered = report.pop("answered")
         latest = latest_answers.get(report["id"])
+        report["acknowledgements"] = [
+          message_row(row)
+          for row in db.execute(
+            "SELECT * FROM submissions WHERE report_id = ? AND acknowledged_at IS NOT NULL ORDER BY seq",
+            (report["id"],),
+          )
+        ]
+        for ack in report["acknowledgements"]:
+          ack.pop("text", None)
         report["latest_answer_id"] = latest["id"] if latest else None
         report["latest_answer_at"] = clip_stamp(latest["at"]) if latest else None
         report["latest_answer_acknowledged_at"] = (
@@ -2394,11 +2401,14 @@ def handler(store):
           # resistance rather than authentication, and this page already carries it.
           state["token"] = token
           try:
-            for item in state["notes"]:
+            for item in state["notes"] + [
+              ack for report in state["reports"] for ack in report["acknowledgements"]
+            ]:
               # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source
               # carries is the line break. A `<br>` beside it doubled every gap, which is what
               # the owner saw and removed by hand in the browser.
-              item["html"] = render(item["text"])
+              if "text" in item:
+                item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
                 item["ack_html"] = render(item["ack_text"])
               for reply in item.get("replies") or []:
