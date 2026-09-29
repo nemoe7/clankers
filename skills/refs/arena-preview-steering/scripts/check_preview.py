@@ -768,13 +768,13 @@ def test_http_boundaries():
       assert "report-count" not in page
       # The minified sheet splits or reorders merged selectors, so each pip matches its own block.
       assert re.search(
-        r"#report-pip[^{}]*\{display:inline-block;width:7px;height:7px;margin-left:6px;"
-        r"border-radius:50%;background:var\(--accent\);vertical-align:middle",
+        r"#report-pip[^{}]*\{display:inline-block;width:7px;height:7px;"
+        r"border-radius:50%;background:var\(--accent\)",
         page,
       )
       assert re.search(
-        r"#notes-pip[^{}]*\{display:inline-block;width:7px;height:7px;margin-left:6px;"
-        r"border-radius:50%;background:var\(--accent\);vertical-align:middle",
+        r"#notes-pip[^{}]*\{display:inline-block;width:7px;height:7px;"
+        r"border-radius:50%;background:var\(--accent\)",
         page,
       )
       # The pip is given a shape by a display rule, so the sheet's blanket rule is what hides it.

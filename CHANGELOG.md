@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Tab pip alignment**: Tab buttons centre their label and unread pip with flex and a 6px gap. The pip sits on the text midline.
+
 - **Report ack block gap**: Later reply blocks in the report ack history use 8px above and below the hairline and no paragraph top margin.
 
 - **No shared report and task IDs**: `publish` refuses a report ID that a task holds. A new or amended task refuses an ID that a report holds. The ack log links one ID to one panel.
