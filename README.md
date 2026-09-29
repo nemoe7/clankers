@@ -21,7 +21,7 @@ Latest measurements as of 2026-09-29. `maintenance/check.py` measures ARENA.md b
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,589 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 14,917 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 14,983 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,498 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,497 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 501 `tok` |

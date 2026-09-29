@@ -43,7 +43,7 @@
 - Step straight on after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 - ALWAYS take the smallest open task next; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
-- Work while tasks remain. End when verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason. After each push, poll `gh pr checks`: at once, then after 1s, 2s, 4s, 8s, 16s, 32s, 64s, then every 64s to conclusion. Stop and report HTTP 401 or any other command/API error; pending checks are not command errors. Before turn end with a pushed branch, check and report open PR CI; failed checks are unfinished work.
+- Work while tasks remain. End when verified and stopped; no surface reports the remaining token budget, so NEVER name it as the reason. Run the repo's checks locally before every push; push only green. After each push, poll `gh pr checks`: at once, then after 1s, 2s, 4s, 8s, 16s, 32s, 64s, then every 64s to conclusion. Stop and report HTTP 401 or any other command/API error; pending checks are not command errors. Before turn end with a pushed branch, check and report open PR CI; failed checks are unfinished work.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
 ## Scope

@@ -51,7 +51,7 @@
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
 - Keep working while tasks remain. End the turn when the work is verified and stopped. No surface reports the remaining token budget to the agent, so NEVER name that budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
-- Poll the open PR's checks with `gh pr checks` after every push: immediately, then after 1s, 2s, 4s, 8s, 16s, 32s and 64s, then every 64s until conclusion. Stop polling on HTTP 401 or any other command/API error and report it. Pending checks are not command errors. Failed checks remain unfinished work.
+- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) and push only when they pass. Poll the open PR's checks with `gh pr checks` after every push: immediately, then after 1s, 2s, 4s, 8s, 16s, 32s and 64s, then every 64s until conclusion. Stop polling on HTTP 401 or any other command/API error and report it. Pending checks are not command errors. Failed checks remain unfinished work.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
