@@ -550,6 +550,16 @@ test('preview client', async (t) => {
     assert.equal(get('#tasks-upcoming').hidden, false);
   });
 
+  await t.test("Finished tasks display newest first without changing saved order", async () => {
+    const original = state.tasks.finished.slice();
+    state.tasks.finished.push({ id: 'latest', title: 'Latest finished', details: [], status: 'finished', order: 2 });
+    await get('#refresh-notes').events.click();
+    assert.deepEqual(get('#tasks-finished-body').children.map(row => row.title), ['latest', 'shipped']);
+    assert.deepEqual(state.tasks.finished.map(task => task.id), ['shipped', 'latest']);
+    state.tasks.finished = original;
+    await get('#refresh-notes').events.click();
+  });
+
   await t.test("A hostile title is text in the current row, because a row is built with textContent", async () => {
     // A hostile title is text in the current row, because a row is built with textContent
     // rather than innerHTML. The head renders in a div of its own and stays out of Upcoming.

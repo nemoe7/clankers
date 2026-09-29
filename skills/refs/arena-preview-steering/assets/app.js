@@ -1100,7 +1100,7 @@ function renderTasks(tasks) {
   const head = tasks.upcoming[0];
   $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
   current.hidden = !head;
-  $('#tasks-finished-body').replaceChildren(...tasks.finished.map(task => taskRow(task)));
+  $('#tasks-finished-body').replaceChildren(...tasks.finished.slice().reverse().map(task => taskRow(task)));
   // The head already renders in its own div above; re-listing it in Upcoming duplicates it.
   $('#tasks-upcoming-body').replaceChildren(...tasks.upcoming.slice(1).map(task => taskRow(task)));
   finished.hidden = false;
