@@ -52,7 +52,7 @@
               <span class="composer-label"><label for="note">Your message</label><span id="staged-files" role="status" hidden></span></span>
               <span class="row tight"><input id="upload-file" type="file" multiple aria-label="Choose files to attach" hidden><button id="attach-file" class="icon-button" type="button" aria-label="Choose files to attach" title="Choose files to attach">＋</button><button id="preview-note" type="button" aria-pressed="false" aria-controls="draft-preview">MD 👁</button></span>
             </div>
-            <textarea id="note" name="note" rows="3" maxlength="15000" placeholder="What should happen next?"></textarea>
+            <textarea id="note" name="note" rows="3" placeholder="What should happen next?"></textarea>
             <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
             <div class="row">
               <div class="stack">
@@ -107,13 +107,13 @@
           <form id="fetch-form">
             <label for="fetch-url">HTTPS file URL</label>
             <div class="row fetch-controls">
-              <input id="fetch-url" type="url" maxlength="2048" autocomplete="off" placeholder="https://example.org/file.zip" required>
+              <input id="fetch-url" type="url" autocomplete="off" placeholder="https://example.org/file.zip" required>
               <button id="fetch-add" type="submit">Queue URL</button>
             </div>
             <label class="fetch-opt-in" for="fetch-proxy"><input id="fetch-proxy" type="checkbox">If direct access fails, try AllOrigins then CodeTabs for this URL</label>
           </form>
           <p id="workspace-use" class="muted" role="status">Measuring workspace files.</p>
-          <p class="muted">Up to 102.4 MB per URL. Keep this page open while transfers run. Your URLs queue at once; agent requests need approval below.</p>
+          <p class="muted">Agent requests: up to 102.4 MB per URL. Keep this page open while transfers run. Your URLs queue at once; agent requests need approval below.</p>
           <section class="fetch-approval" aria-labelledby="fetch-approval-title">
             <h3 id="fetch-approval-title">Agent requests · approval needed</h3>
             <p id="fetch-approval-count" class="muted" role="status">No requests awaiting approval.</p>

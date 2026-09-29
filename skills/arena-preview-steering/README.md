@@ -36,6 +36,10 @@ Report answers live in a separate `submissions` table and appear as `kind: repor
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.
 
+Owner notes, draft rendering and form answers have no application length cap. Agent replies, reports, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
+
+Finished tasks display in reverse completion order. Upcoming tasks keep their stored order.
+
 ## Note attachments
 
 The composer sends one note plus files through `/api/notes/with-file`.
@@ -44,9 +48,9 @@ Files stay outside SQLite in `<state-dir>/uploads/`. Each is at most 50MB.
 Name stored files with the note ID's first seven characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
 Only duplicate names add `-2`, `-3`, and so on after the timestamp. Keep existing files unchanged.
 Legacy `/api/uploads` can still create a separate upload note.
-Records keep the original filename. `present` reports if bytes exist.
+Long names use a short disk name when required by the filesystem. Records keep the original filename. `present` reports if bytes exist.
 Identical retries repair missing bytes without changing the note receipt or file order.
-The server limits multipart bodies and rejects files above the cap with HTTP 413.
+Multipart uploads stream each file to temporary storage without a total request cap. Each file keeps its 50 MB cap. The server rejects incomplete transfers before it saves the note.
 
 ## Browser download queue
 
@@ -58,7 +62,7 @@ The browser fetches directly first. The owner can allow AllOrigins, then CodeTab
 for that URL only. Both proxies see the full URL. The URL validator rejects embedded credentials.
 The server holds `fetch_jobs` rows and five-minute claims. An active browser renews its claim.
 An abandoned claim returns to the queue. Jobs run one at a time in each open browser.
-The browser checks declared and streamed bytes against the 102,400,000-byte cap.
+Agent-requested downloads keep the 102,400,000-byte cap after approval. Owner-queued downloads have no application byte cap. Stored origin controls both browser and server checks. Older jobs retain the cap because their origin is unknown.
 That cap is 80% of the documented 128,000,000-byte snapshot figure.
 The figure is not measured.
 It came from a workspace without GitHub.

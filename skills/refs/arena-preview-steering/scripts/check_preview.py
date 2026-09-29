@@ -442,7 +442,7 @@ def test_http_boundaries():
       assert 'id="staged-files"' in page
       assert 'id="uploads-list"' not in page and 'id="uploads-history"' not in page
       assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
-      assert "102.4 MB per URL" in page
+      assert "Agent requests: up to 102.4 MB per URL" in page
       assert "Keep this page open while transfers run." in page
       assert "not measured" not in page
       assert 'id="workspace-use"' in page
@@ -476,13 +476,12 @@ def test_http_boundaries():
       assert (
         len(json.dumps({"id": "x", "text": "x" * preview.MAX_NOTE})) < preview.MAX_BODY
       )
-      assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
+      assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 400
       for body in (
         "{",
         "[]",
         '{"id":"x","text":3}',
         '{"id":"x","text":" "}',
-        json.dumps({"id": "x", "text": "x" * (preview.MAX_NOTE + 1)}),
       ):
         assert request("POST", "/api/notes", body, auth)[0] == 400
       assert store.read()["pending"] == []
@@ -658,7 +657,7 @@ def test_http_boundaries():
       assert 'data-label="Other"' in served["html"]
       assert 'data-custom="Other"' in served["html"]
       assert 'class="custom-text"' in served["html"]
-      assert 'maxlength="2000"' in served["html"]
+      assert "maxlength=" not in served["html"]
       assert "<textarea" in served["html"] and 'placeholder="Other:"' in served["html"]
       assert "> Other: <" not in served["html"]
       status, _, page_text = request("GET", "/")
@@ -943,7 +942,6 @@ def test_http_boundaries():
         {"id": "s1", "answers": {"name": "x", "nope": "unknown"}},
         {"id": "s1", "answers": {"severity": "extreme"}},
         {"id": "s1", "answers": {"pick-the-areas": ["ui", "core"]}},
-        {"id": "s1", "answers": {"name": "x" * 2001}},
         {"id": "s1", "answers": "nope"},
       ):
         assert (
@@ -1017,7 +1015,7 @@ def test_http_boundaries():
       assert preview.custom_answer(verdict, "Other: make it blue")
       assert not preview.custom_answer(verdict, "Other:   ")
       assert preview.custom_answer(verdict, "Other: " + "x" * 2000)
-      assert not preview.custom_answer(verdict, "Other: " + "x" * 2001)
+      assert preview.custom_answer(verdict, "Other: " + "x" * 2001)
       assert not preview.custom_answer(verdict, "nonsense")
       assert not preview.custom_answer(verdict, 7)
       record = store.submit(
@@ -1105,12 +1103,8 @@ def test_http_boundaries():
       assert len(full) > preview.MAX_BODY, (
         "the case has to exceed the limit it is testing"
       )
-      assert len(full) < preview.MAX_SUBMISSION_BODY, (
-        "and stay inside the one that replaced it"
-      )
       assert request("POST", "/api/reports/wide/submit", full, auth)[0] == 201
-      # The application limit is untouched: an answer over the 2,000 a text field takes is still a
-      # 400 from the validator, not something the wider body limit waves through.
+      # Owner answers above the former cap are accepted.
       assert (
         request(
           "POST",
@@ -1124,13 +1118,13 @@ def test_http_boundaries():
           ),
           auth,
         )[0]
-        == 400
+        == 201
       )
       # Past the body limit, so HTTP refuses it before the answers are parsed at all.
-      over_body = "x" * (preview.MAX_SUBMISSION_BODY + 1)
-      assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 413
+      over_body = "x" * (1_000_001)
+      assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 400
       # Notes keep the smaller limit; report answers take the wider one.
-      assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 413
+      assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 400
       # The note schema carries no author column: a record is just the message and its receipt.
       note = store.note("plain-note", "no author field")
       assert "origin" not in note
@@ -1957,7 +1951,7 @@ def test_download_queue():
           proxy_headers,
         ),
       ):
-        status, _, problem = request(
+        status, _, _problem = request(
           "POST",
           path,
           b"x",
@@ -1968,7 +1962,7 @@ def test_download_queue():
             "Content-Length": str(limit + 2),
           },
         )
-        assert status == 413 and f"{limit:,}" in json.loads(problem)["error"]
+        assert status == (413 if path.startswith("/api/uploads") else 409)
       assert preview.MAX_UPLOAD == 50_000_000
       assert preview.MAX_FETCH == 102_400_000
       exact = queue_store.save_upload(
@@ -2384,16 +2378,10 @@ def test_wide_report_fields():
     assert record["text"].count("x" * 2000) == 50
     stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
     assert stored and stored[0]["text"] == record["text"]
-    oversized = "z" * (preview.MAX_SUBMISSION + 1)
+    oversized = "z" * 150_001
+    assert preview.submission_text(oversized) == oversized
+    assert wide_store.submission("s-huge", "wide", oversized)["text"] == oversized
     wide_rejections = (
-      (
-        lambda: preview.submission_text(oversized),
-        "An oversized submission was accepted",
-      ),
-      (
-        lambda: wide_store.submission("s-huge", "wide", oversized),
-        "An oversized one was stored",
-      ),
       (lambda: preview.submission_text("   "), "An empty submission was accepted"),
       (lambda: preview.submission_text(None), "A non-string submission was accepted"),
     )
@@ -3139,3 +3127,90 @@ def test_workspace_usage():
   assert usage["documented_cap_bytes"] == 128_000_000
   assert usage["download_cap_bytes"] == preview.MAX_FETCH == 102_400_000
   assert preview.MAX_UPLOAD == 50_000_000
+
+
+def test_owner_limits_and_streams():
+  import io
+
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    text = "👋" * 150_001
+    assert store.note("long-owner", text)["text"] == text
+    try:
+      store.acknowledge(["long-owner"], "reply", "a" * 15_001)
+      raise AssertionError("Agent reply cap was removed")
+    except ValueError:
+      pass
+    url = "https://example.com/" + "a" * 3000
+    owner = store.enqueue_fetch(url, False)
+    assert owner["origin"] == "owner"
+    try:
+      store.enqueue_fetch(url, False, pending=True)
+      raise AssertionError("Agent URL cap was removed")
+    except ValueError:
+      pass
+    claim = store.claim_fetch()
+    with patch.object(preview, "MAX_FETCH", 4):
+      saved = store.complete_fetch(
+        owner["id"],
+        claim["claim"],
+        "x" * 300 + ".txt",
+        "text/plain",
+        "direct",
+        b"12345",
+      )
+      assert Path(saved["path"]).read_bytes() == b"12345"
+      agent = store.enqueue_fetch("https://example.com/a", False, pending=True)
+      store.decide_fetch(agent["id"], "approved")
+      claim = store.claim_fetch()
+      try:
+        store.complete_fetch(
+          agent["id"], claim["claim"], "a.txt", "text/plain", "direct", b"12345"
+        )
+        raise AssertionError("Approval removed the agent limit")
+      except ValueError:
+        pass
+    blob = b"a" * 65525 + b"\r\n--boundaryX!" + b"\x00\xff"
+    parts = [
+      ("id", None, b"streamed"),
+      ("text", None, text.encode()),
+      ("file", "a" * 300 + ".bin", blob),
+    ]
+    raw = b""
+    for name, filename, data in parts:
+      header = f'Content-Disposition: form-data; name="{name}"'
+      if filename:
+        header += f'; filename="{filename}"'
+      raw += b"--boundary\r\n" + header.encode() + b"\r\n\r\n" + data + b"\r\n"
+    raw += b"--boundary--\r\n"
+
+    class Chunks(io.BytesIO):
+      def read(self, size=-1):
+        assert 0 <= size <= 65536
+        return super().read(min(size, 113))
+
+    with preview.stream_note_attachments(
+      "multipart/form-data; boundary=boundary", Chunks(raw), len(raw)
+    ) as parsed:
+      body = parsed[2][0][2]
+      assert isinstance(body, preview.FileBody)
+      record = store.note_with_uploads(*parsed)
+      assert record["text"] == text
+      assert Path(record["attachments"][0]["path"]).read_bytes() == blob
+    assert body.stream.closed
+    for data, length in ((raw[:-10], len(raw)), (raw[:-10], len(raw) - 10)):
+      try:
+        with preview.stream_note_attachments(
+          "multipart/form-data; boundary=boundary", Chunks(data), length
+        ):
+          raise AssertionError("Incomplete multipart accepted")
+      except ValueError:
+        pass
+    with patch.object(preview, "MAX_UPLOAD", 4):
+      try:
+        with preview.stream_note_attachments(
+          "multipart/form-data; boundary=boundary", Chunks(raw), len(raw)
+        ):
+          raise AssertionError("Per-file upload cap removed")
+      except ValueError:
+        pass

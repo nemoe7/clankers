@@ -7,12 +7,14 @@ import json
 import os
 import re
 import secrets
+import shutil
 import socket
 import sqlite3
 import sys
+import tempfile
 import time
 import uuid
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
@@ -30,21 +32,10 @@ except ImportError:
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 MAX_REPORT = 2_000_000
-# A note is capped in characters. A report holds at most 50 fields of at most 2000 characters
-# each, so its answers legitimately reach past that cap and take their own bound, with room to
-# spare for the prompts and wrapper around them. Both refuse rather than truncate.
 MAX_NOTE = 15_000
-MAX_SUBMISSION = 150_000
-# A body is limited in bytes and its text in characters, and the two are not the same size: each
-# character can be six bytes once escaped as \uXXXX, so a body limit below that makes the
-# documented maximum unreachable over HTTP, which is what a single 32 KiB limit for every POST
-# did. The note cap now sets the general bound, and submissions take the wider one.
 MAX_BODY = 96_000
-MAX_SUBMISSION_BODY = 1_000_000
 # Owner uploads keep a 50 MB (decimal) per-file ceiling.
 MAX_UPLOAD = 50_000_000
-# A composed note may carry files; bound the multipart body instead of a file count.
-MAX_NOTE_UPLOAD = 250_000_000
 # Documented snapshot cap, not a measured limit. The 128 MB figure was for a workspace
 # without GitHub. One session reported 512 MB. Downloads use 80% of the documented figure.
 SNAPSHOT_CAP_BYTES = 128_000_000
@@ -170,6 +161,12 @@ def identifier(value):
   return value
 
 
+def owner_text(text):
+  if not isinstance(text, str) or not text.strip():
+    raise ValueError("Enter a nonblank note")
+  return text
+
+
 def note_text(text):
   if not isinstance(text, str) or not text.strip() or len(text) > MAX_NOTE:
     raise ValueError(f"Enter a note of 1–{MAX_NOTE} characters")
@@ -263,14 +260,9 @@ def restore_reply_seen_count(value, replies):
 
 
 def submission_text(text):
-  """Report answers are not notes, so they carry their own cap and their own wording."""
+  """Validate the flattened owner answers."""
   if not isinstance(text, str) or not text.strip():
     raise ValueError("A report submission carries at least one answer")
-  if len(text) > MAX_SUBMISSION:
-    raise ValueError(
-      f"A report submission must be under {MAX_SUBMISSION:,} characters;"
-      " answer fewer fields or shorten them"
-    )
   return text
 
 
@@ -308,7 +300,7 @@ def custom_answer(field, value):
     if label is None or not value.startswith(f"{label}: "):
       continue
     typed = value[len(label) + 2 :]
-    if typed.strip() and len(typed) <= 2000:
+    if typed.strip():
       return True
   return False
 
@@ -396,7 +388,7 @@ def field_html(question):
   body += f'<small class="question-id">Question ID: <code>{name}</code></small>'
   if question["type"] == "text":
     return (
-      f'{body}<textarea class="answer-text" rows="2" maxlength="2000" '
+      f'{body}<textarea class="answer-text" rows="2" '
       f'placeholder="Answer" aria-label="{prompt}"></textarea></div>'
     )
   control = "radio" if question["type"] == "choice" else "checkbox"
@@ -415,7 +407,7 @@ def field_html(question):
     group += (
       f'<label class="option"><input type="{control}" name="{name}" '
       f'value="{value}"{checked} data-label="{named}" aria-label="{named}">'
-      f'<textarea class="custom-text" rows="1" maxlength="2000" data-custom="{named}" '
+      f'<textarea class="custom-text" rows="1" data-custom="{named}" '
       f'placeholder="{named}:" aria-label="{named}, your own answer"></textarea></label>'
     )
   return f"{body}{group}</div></div>"
@@ -522,16 +514,14 @@ def upload_name(name):
   cleaned = Path(str(name or "")).name.strip()
   if not cleaned:
     raise ValueError("An upload needs a file name")
-  if len(cleaned) > 200:
-    raise ValueError("A file name must be 200 characters or fewer")
   if any(ord(char) < 32 or ord(char) == 127 for char in cleaned):
     raise ValueError("A file name must not contain control characters")
   return cleaned
 
 
-def fetch_url(value):
+def fetch_url(value, *, agent=True):
   """Accept one HTTPS URL without credentials or control characters; the server never fetches it."""
-  if not isinstance(value, str) or not value.strip() or len(value) > 2048:
+  if not isinstance(value, str) or not value.strip() or (agent and len(value) > 2048):
     raise ValueError("Enter one HTTPS URL of at most 2048 characters")
   value = value.strip()
   if any(ord(char) < 33 or ord(char) == 127 for char in value):
@@ -565,40 +555,184 @@ def upload_type(content_type):
   return cleaned or "application/octet-stream"
 
 
-def parse_note_attachments(content_type, data):
-  """Read one ID and note, plus its binary files, from a bounded multipart body."""
-  if len(content_type) > 200 or any(char in content_type for char in "\r\n"):
-    raise ValueError("Invalid multipart boundary")
-  prefix = (
-    b"MIME-Version: 1.0\r\nContent-Type: " + content_type.encode("ascii") + b"\r\n\r\n"
+class FileBody:
+  def __init__(self, stream):
+    self.stream = stream
+    self.path = None
+    self.size = 0
+    self.hash = hashlib.sha256()
+
+  def __len__(self):
+    return self.size
+
+  def write(self, chunk):
+    self.stream.write(chunk)
+    self.size += len(chunk)
+    self.hash.update(chunk)
+
+  def digest(self):
+    return self.hash.hexdigest()
+
+  def save(self, target):
+    source = self.path.open("rb") if self.path else self.stream
+    with closing(source) if self.path else nullcontext(source):
+      source.seek(0)
+      with target.open("wb") as output:
+        shutil.copyfileobj(source, output, 65536)
+
+
+def body_digest(data):
+  return (
+    data.digest() if isinstance(data, FileBody) else hashlib.sha256(data).hexdigest()
   )
-  message = BytesParser(policy=policy.default).parsebytes(prefix + data)
-  if not message.is_multipart() or message.defects:
-    raise ValueError("Send files with a valid multipart boundary")
-  parts = list(message.iter_parts())
-  fields, files = {}, []
-  for part in parts:
-    name = part.get_param("name", header="content-disposition")
-    if part.get_content_disposition() != "form-data" or name not in {
-      "id",
-      "text",
-      "file",
-    }:
-      raise ValueError("Unexpected note attachment field")
-    if part.defects or part.is_multipart() or (name != "file" and name in fields):
-      raise ValueError("Duplicate or invalid note attachment field")
-    body = part.get_payload(decode=True)
-    if body is None:
-      raise ValueError("Invalid note attachment bytes")
-    if name == "file":
-      files.append((part.get_filename(), part.get_content_type(), body))
+
+
+def save_body(target, data):
+  # Replace only a complete file, including repairs after a restore.
+  with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as staged:
+    temporary = Path(staged.name)
+  try:
+    if isinstance(data, FileBody):
+      data.save(temporary)
     else:
-      if part.get_filename() is not None:
-        raise ValueError("Only file may have a filename")
-      fields[name] = body.decode("utf-8")
-  if set(fields) != {"id", "text"} or not files:
-    raise ValueError("Send one note ID, text and at least one file")
-  return fields["id"], fields["text"], files
+      temporary.write_bytes(data)
+    temporary.chmod(0o600)
+    os.replace(temporary, target)
+  finally:
+    temporary.unlink(missing_ok=True)
+
+
+class RequestBody:
+  def __init__(self, stream, length):
+    self.stream = stream
+    self.remaining = length
+    self.buffer = b""
+
+  def fill(self):
+    if self.remaining == 0:
+      return False
+    chunk = self.stream.read(min(65536, self.remaining))
+    if not chunk:
+      raise ValueError("Incomplete request body")
+    self.remaining -= len(chunk)
+    self.buffer += chunk
+    return True
+
+  def take(self, size):
+    while len(self.buffer) < size:
+      if not self.fill():
+        raise ValueError("Incomplete multipart body")
+    result, self.buffer = self.buffer[:size], self.buffer[size:]
+    return result
+
+  def until(self, marker, write, boundary=False):
+    while True:
+      index = self.buffer.find(marker)
+      if index >= 0:
+        end = index + len(marker)
+        if boundary:
+          while len(self.buffer) < end + 2 and self.fill():
+            pass
+          if self.buffer[end : end + 2] not in {b"\r\n", b"--"}:
+            write(self.buffer[: index + 1])
+            self.buffer = self.buffer[index + 1 :]
+            continue
+        write(self.buffer[:index])
+        self.buffer = self.buffer[end:]
+        return
+      keep = len(marker) - 1
+      if len(self.buffer) > keep:
+        write(self.buffer[:-keep])
+        self.buffer = self.buffer[-keep:]
+      if not self.fill():
+        raise ValueError("Incomplete multipart body")
+
+
+@contextmanager
+def stream_note_attachments(content_type, stream, length):
+  if any(char in content_type for char in "\r\n"):
+    raise ValueError("Invalid multipart boundary")
+  header = BytesParser(policy=policy.default).parsebytes(
+    b"Content-Type: " + content_type.encode("ascii") + b"\r\n\r\n"
+  )
+  boundary = header.get_boundary()
+  if (
+    not boundary
+    or not re.fullmatch(r"[0-9A-Za-z'()+_,./:=? -]{1,70}", boundary)
+    or boundary.endswith(" ")
+  ):
+    raise ValueError("Invalid multipart boundary")
+  reader = RequestBody(stream, length)
+  delimiter = b"--" + boundary.encode("ascii")
+  if reader.take(len(delimiter) + 2) != delimiter + b"\r\n":
+    raise ValueError("Invalid multipart opening")
+  with tempfile.TemporaryDirectory() as staging:
+    fields, files = {}, []
+    while True:
+      headers = bytearray()
+      reader.until(b"\r\n\r\n", headers.extend)
+      part = BytesParser(policy=policy.default).parsebytes(bytes(headers) + b"\r\n\r\n")
+      for key in ("Content-Disposition", "Content-Type", "Content-Transfer-Encoding"):
+        if len(part.get_all(key, [])) > 1:
+          raise ValueError("Duplicate attachment header")
+      encoding = str(part.get("Content-Transfer-Encoding", "binary")).strip().lower()
+      if encoding not in {"binary", "8bit"}:
+        raise ValueError("Unsupported attachment transfer encoding")
+      name = part.get_param("name", header="content-disposition")
+      if (
+        part.defects
+        or part.is_multipart()
+        or part.get_content_disposition() != "form-data"
+        or name not in {"id", "text", "file"}
+      ):
+        raise ValueError("Unexpected note attachment field")
+      if name != "file" and (name in fields or part.get_filename() is not None):
+        raise ValueError("Duplicate or invalid note attachment field")
+      if name == "file":
+        path = Path(staging) / str(len(files))
+        stream = path.open("wb")
+        body = FileBody(stream)
+        body.path = path
+
+        def write(chunk, body=body):
+          if len(body) + len(chunk) > MAX_UPLOAD:
+            raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
+          body.write(chunk)
+
+        with stream:
+          reader.until(b"\r\n" + delimiter, write, boundary=True)
+        if not body:
+          raise ValueError("An upload must not be empty")
+        files.append((part.get_filename(), part.get_content_type(), body))
+      else:
+        value = bytearray()
+        reader.until(b"\r\n" + delimiter, value.extend, boundary=True)
+        fields[name] = value.decode("utf-8")
+      ending = reader.take(2)
+      if ending == b"--":
+        if (reader.buffer or reader.remaining) and reader.take(2) != b"\r\n":
+          raise ValueError("Invalid closing multipart delimiter")
+        # Consume the remainder to detect a short body, even after a closing delimiter.
+        while reader.fill():
+          reader.buffer = b""
+        break
+      if ending != b"\r\n":
+        raise ValueError("Invalid multipart delimiter")
+    if set(fields) != {"id", "text"} or not files:
+      raise ValueError("Send one note ID, text and at least one file")
+    yield fields["id"], fields["text"], files
+
+
+def parse_note_attachments(content_type, data):
+  """Compatibility parser for callers with a complete byte buffer."""
+  import io
+
+  with stream_note_attachments(content_type, io.BytesIO(data), len(data)) as parsed:
+    note_id, text, files = parsed
+    result = []
+    for name, kind, body in files:
+      result.append((name, kind, body.path.read_bytes()))
+    return note_id, text, result
 
 
 def upload_row(row, directory):
@@ -897,6 +1031,10 @@ class Store:
           "ALTER TABLE fetch_jobs ADD COLUMN approval TEXT NOT NULL DEFAULT 'approved'"
           " CHECK (approval IN ('pending', 'approved', 'denied'))"
         )
+      if "origin" not in columns:
+        db.execute(
+          "ALTER TABLE fetch_jobs ADD COLUMN origin TEXT NOT NULL DEFAULT 'agent'"
+        )
     if not existed:
       self.path.chmod(0o600)
 
@@ -930,7 +1068,7 @@ class Store:
     changes nothing.
     """
     identifier(note_id)
-    note_text(text)
+    owner_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
     more = restore_replies(replies, receipt[0])
     seen_reply_count = restore_reply_seen_count(ack_edited_seen_count, more)
@@ -1333,7 +1471,7 @@ class Store:
     position=None,
   ):
     """Keep raw bytes beside SQLite, with a stable note link and distinct file record."""
-    if not isinstance(data, (bytes, bytearray)):
+    if not isinstance(data, (bytes, bytearray, FileBody)):
       raise TypeError("An upload is bytes")
     if not data:
       raise ValueError("An upload must not be empty")
@@ -1341,7 +1479,7 @@ class Store:
       raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
     cleaned = upload_name(name)
     kind = upload_type(content_type)
-    digest = hashlib.sha256(data).hexdigest()
+    digest = body_digest(data)
     upload_id = identifier(upload_id) if upload_id is not None else new_id()
     note_id = identifier(note_id) if note_id is not None else upload_id
     if position is not None and (not isinstance(position, int) or position < 1):
@@ -1368,7 +1506,7 @@ class Store:
           not target.is_file()
           or hashlib.sha256(target.read_bytes()).hexdigest() != digest
         ):
-          target.write_bytes(bytes(data))
+          save_body(target, data)
           target.chmod(0o600)
         return upload_row(existing, self.path.parent)
       duplicate_count = db.execute(
@@ -1384,14 +1522,14 @@ class Store:
         stem = f"{note_id[:7]}-{timestamp}{duplicate}-{filename_stem}"
         target = directory / f"{stem}{extension}"
         if len(os.fsencode(target.name)) > 255:
-          raise ValueError("A stored file name exceeds the filesystem limit")
+          target = directory / f"{upload_id}{duplicate}{extension}"
         collision = db.execute(
           "SELECT 1 FROM uploads WHERE file = ?", (target.name,)
         ).fetchone()
         if not collision and not target.exists():
           break
         number += 1
-      target.write_bytes(bytes(data))
+      save_body(target, data)
       target.chmod(0o600)
       db.execute(
         "INSERT INTO uploads (id, note_id, name, type, size, sha256, file, at)"
@@ -1404,7 +1542,7 @@ class Store:
   def note_with_uploads(self, note_id, text, files):
     """Store several linked files and one note in one transaction; identical retries are safe."""
     identifier(note_id)
-    note_text(text)
+    owner_text(text)
     if not isinstance(files, (list, tuple)) or len(files) < 1:
       raise ValueError("Attach at least one file to a note")
     prepared = []
@@ -1412,14 +1550,20 @@ class Store:
       if not isinstance(file, (list, tuple)) or len(file) != 3:
         raise ValueError("Each attachment needs a name, type and bytes")
       name, content_type, data = file
-      if not isinstance(data, (bytes, bytearray)):
+      if not isinstance(data, (bytes, bytearray, FileBody)):
         raise TypeError("An upload is bytes")
       if not data or len(data) > MAX_UPLOAD:
         raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
-      prepared.append((upload_name(name), upload_type(content_type), bytes(data)))
+      prepared.append(
+        (
+          upload_name(name),
+          upload_type(content_type),
+          data if isinstance(data, FileBody) else bytes(data),
+        )
+      )
     created = []
     try:
-      with self.transaction() as db:
+      with self.transaction(autosave=False) as db:
         db.execute("BEGIN IMMEDIATE")
         existing = db.execute(
           "SELECT text FROM notes WHERE id = ?", (note_id,)
@@ -1432,7 +1576,7 @@ class Store:
         if rows:
           if len(rows) != len(prepared) or any(
             (row["name"], row["type"], row["size"], row["sha256"])
-            != (name, kind, len(data), hashlib.sha256(data).hexdigest())
+            != (name, kind, len(data), body_digest(data))
             for row, (name, kind, data) in zip(rows, prepared)
           ):
             raise ValueError("This note ID already belongs to different files")
@@ -1445,7 +1589,7 @@ class Store:
               or hashlib.sha256(target.read_bytes()).hexdigest() != row["sha256"]
             ):
               target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-              target.write_bytes(data)
+              save_body(target, data)
               target.chmod(0o600)
           records = [upload_row(row, self.path.parent) for row in rows]
         else:
@@ -1465,11 +1609,13 @@ class Store:
             records.append(record)
             created.append(Path(record["path"]))
         note = self.note(note_id, text, shared=db)
-        return add_note_attachments(note, records)
+        result = add_note_attachments(note, records)
     except Exception:
       for path in created:
         path.unlink(missing_ok=True)
       raise
+    self.autosave()
+    return result
 
   def note_with_upload(self, note_id, text, name, content_type, data):
     """Keep the one-file call compatible with linked notes from the earlier preview."""
@@ -1482,7 +1628,7 @@ class Store:
     return [fetch_row(row, self.path.parent) for row in rows]
 
   def enqueue_fetch(self, url, allow_proxy, *, pending=False):
-    url = fetch_url(url)
+    url = fetch_url(url, agent=pending)
     if not isinstance(allow_proxy, bool):
       raise TypeError("Proxy fallback must be true or false for this URL")
     if not isinstance(pending, bool):
@@ -1490,8 +1636,8 @@ class Store:
     job_id, stamp = new_id(), now()
     with self.transaction(autosave=False) as db:
       db.execute(
-        "INSERT INTO fetch_jobs (id, url, allow_proxy, status, approval, at, updated_at)"
-        " VALUES (?, ?, ?, 'queued', ?, ?, ?)",
+        "INSERT INTO fetch_jobs (id, url, allow_proxy, status, approval, at, updated_at, origin)"
+        " VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)",
         (
           job_id,
           url,
@@ -1499,6 +1645,7 @@ class Store:
           "pending" if pending else "approved",
           stamp,
           stamp,
+          "agent" if pending else "owner",
         ),
       )
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
@@ -1615,8 +1762,8 @@ class Store:
     return fetch_row(row, self.path.parent)
 
   def complete_fetch(self, job_id, claim, name, content_type, source, data):
-    if not data or len(data) > MAX_FETCH:
-      raise ValueError(f"A download must be 1–{MAX_FETCH:,} bytes")
+    if not data:
+      raise ValueError("A download must not be empty")
     if source not in {"direct", "allorigins", "codetabs"}:
       raise ValueError("Unknown download source")
     cleaned = upload_name(name)
@@ -1625,12 +1772,14 @@ class Store:
     try:
       with self.transaction(autosave=False) as db:
         row = self.claimed_fetch(db, job_id, claim)
+        if row["origin"] != "owner" and len(data) > MAX_FETCH:
+          raise ValueError(f"A download must be 1–{MAX_FETCH:,} bytes")
         if source != "direct" and not row["allow_proxy"]:
           raise ValueError("Proxy fallback was not enabled for this URL")
         directory = self.path.parent / FETCH_DIR
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         target = directory / f"{job_id}{Path(cleaned).suffix[:16]}"
-        target.write_bytes(data)
+        save_body(target, data)
         target.chmod(0o600)
         stamp = now()
         db.execute(
@@ -1642,7 +1791,7 @@ class Store:
             cleaned,
             file_type,
             len(data),
-            hashlib.sha256(data).hexdigest(),
+            body_digest(data),
             target.name,
             stamp,
             job_id,
@@ -2073,8 +2222,8 @@ class Store:
       if field["type"] == "text":
         if value is None:
           rendered = "(skipped)"
-        elif not isinstance(value, str) or len(value) > 2000:
-          raise ValueError(f"{field_id}: text answers are 1–2000 characters")
+        elif not isinstance(value, str):
+          raise ValueError(f"{field_id}: text answers must be strings")
         else:
           rendered = value if value.strip() else "(skipped)"
       elif value is None:
@@ -2372,7 +2521,7 @@ def handler(store):
       # if not secrets.compare_digest(supplied, token.encode("ascii")):
       #   self.problem(403, "Reload the preview, then retry; your draft is kept")
       #   return
-      # A composed note carries its files and text in one bounded multipart request.
+      # A composed note carries its files and text in one multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:
         if not content_type.lower().startswith("multipart/form-data;"):
@@ -2382,19 +2531,20 @@ def handler(store):
         self.problem(415, "Expected application/json")
         return
       try:
+        if (
+          self.headers.get("Transfer-Encoding")
+          or len(self.headers.get_all("Content-Length", [])) != 1
+        ):
+          raise ValueError("Send one Content-Length and no Transfer-Encoding")
         length = int(self.headers.get("Content-Length", "0"))
-        limit = (
-          MAX_NOTE_UPLOAD + MAX_BODY
-          if note_upload
-          else MAX_UPLOAD
-          if upload_post
-          else MAX_FETCH
-          if fetch_result
-          else MAX_SUBMISSION_BODY
-          if report_submit
-          else MAX_BODY
-        )
-        if not 0 < length <= limit:
+        limit = MAX_UPLOAD if upload_post else None
+        if fetch_result:
+          with closing(store.connect()) as db:
+            job = store.claimed_fetch(
+              db, fetch_post.group(1), self.headers.get("X-Fetch-Claim", "")
+            )
+            limit = MAX_FETCH if job["origin"] != "owner" else None
+        if length <= 0 or (limit is not None and length > limit):
           subject = (
             "Upload"
             if upload_post or note_upload
@@ -2404,23 +2554,52 @@ def handler(store):
           )
           # Discard at most one byte over the limit in chunks. Clients sending a wider body get
           # the 413 without forcing this server to buffer or read all of it.
-          remaining = length if 0 < length <= limit + 1 else 0
+          remaining = length if limit is not None and 0 < length <= limit + 1 else 0
           while remaining > 0:
             chunk = self.rfile.read(min(65536, remaining))
             if not chunk:
               break
             remaining -= len(chunk)
-          self.problem(413, f"{subject} must be 1–{limit:,} bytes")
+          self.problem(
+            413,
+            f"{subject} has an invalid length"
+            if limit is None
+            else f"{subject} must be 1–{limit:,} bytes",
+          )
+          return
+        if note_upload:
+          with stream_note_attachments(content_type, self.rfile, length) as parsed:
+            note = store.note_with_uploads(*parsed)
+          for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
+            note[key] = clip_stamp(note[key])
+          self.reply(201, json.dumps(note, ensure_ascii=False))
+          return
+        if fetch_result:
+          with tempfile.TemporaryFile() as stream:
+            data = FileBody(stream)
+            remaining = length
+            while remaining:
+              chunk = self.rfile.read(min(65536, remaining))
+              if not chunk:
+                raise ValueError("Incomplete request body")
+              data.write(chunk)
+              remaining -= len(chunk)
+            name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
+            record = store.complete_fetch(
+              fetch_post.group(1),
+              self.headers.get("X-Fetch-Claim", ""),
+              name,
+              self.headers.get("Content-Type", ""),
+              self.headers.get("X-Fetch-Source", ""),
+              data,
+            )
+          for key in ("at", "updated_at"):
+            record[key] = clip_stamp(record[key])
+          self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         data = self.rfile.read(length)
         if len(data) != length:
           self.problem(400, "Incomplete request body; retry the upload or request")
-          return
-        if note_upload:
-          note = store.note_with_uploads(*parse_note_attachments(content_type, data))
-          for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
-            note[key] = clip_stamp(note[key])
-          self.reply(201, json.dumps(note, ensure_ascii=False))
           return
         if upload_post:
           # The file name rides the query string because the body is the file itself. The bytes are
@@ -2435,20 +2614,6 @@ def handler(store):
             record["id"],
             f"Upload: {record['name']} ({record['size']} B, {record['type'] or 'unknown type'}) saved to {record['path']}",
           )
-          self.reply(201, json.dumps(record, ensure_ascii=False))
-          return
-        if fetch_result:
-          name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
-          record = store.complete_fetch(
-            fetch_post.group(1),
-            self.headers.get("X-Fetch-Claim", ""),
-            name,
-            self.headers.get("Content-Type", ""),
-            self.headers.get("X-Fetch-Source", ""),
-            data,
-          )
-          for key in ("at", "updated_at"):
-            record[key] = clip_stamp(record[key])
           self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         payload = json.loads(data)
@@ -2483,7 +2648,7 @@ def handler(store):
         if path == "/api/markdown":
           self.reply(
             200,
-            render(note_text(payload.get("text")), breaks=True),
+            render(owner_text(payload.get("text")), breaks=True),
             "text/html; charset=utf-8",
           )
           return
