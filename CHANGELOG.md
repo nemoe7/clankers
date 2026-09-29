@@ -2,7 +2,7 @@
 
 - **Rules audit**: AGENTS.md, ARENA.md, CLINE.md, the preview SKILL.md and REFERENCE.md lose rationale tails, duplicates and untestable lines. ARENA.md now names every host `AGENTS.md` and wins collisions.
 
-- **Tab pip alignment**: Tab buttons centre their label and unread pip with flex and a 6px gap. The pip sits on the text midline.
+- **Tab pip alignment**: Tab buttons centre their label and unread pip with flex and a 6px gap. The pip sits on the text midline. Tabs are 116px wide (98px narrow), so the pip does not widen the row.
 
 - **Report ack block gap**: Later reply blocks in the report ack history use 8px above and below the hairline and no paragraph top margin.
 
