@@ -114,3 +114,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-29: Accepted without funding. `rules/ARENA.md` +108 `B` for exponential PR-check delays and explicit command/API error handling. The root copy matches byte for byte.
 2026-09-29: Accepted without funding. Preview assets and runtime grow for report acknowledgement history and the Messages tab label. README records the measured sizes.
 2026-09-29: Accepted without funding. `rules/ARENA.md` +173 `B` for the preview-inbox authority clause. Root and live copies match.
+2026-09-29: Accepted without funding. `rules/ARENA.md` +60 `B` for the turn-end task-status clause. Root and live copies match.

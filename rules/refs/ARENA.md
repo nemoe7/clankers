@@ -103,7 +103,7 @@
 - Before asking questions, state the total number of questions that batch will hold and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same batch without first stating the updated total.
 - Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
-- ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Run `arena-preview poll` with bash tool timeout 1800s.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
 - The Arena client is unreliable: it resends messages, truncates or drops replies, and returns empty results from tools that did run. Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction — answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
