@@ -113,3 +113,4 @@ Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../
 2026-09-28: Accepted without funding. `scripts/install.sh` +1,042 `B`, 3,504 to 4,546, for the DEBUG-gate block that prints `READ INBOX NOW`, exits 130, and exempts preview, gh, sleep, arena-state, no-op and local-git calls.
 2026-09-29: Accepted without funding. `rules/ARENA.md` +108 `B` for exponential PR-check delays and explicit command/API error handling. The root copy matches byte for byte.
 2026-09-29: Accepted without funding. Preview assets and runtime grow for report acknowledgement history and the Messages tab label. README records the measured sizes.
+2026-09-29: Accepted without funding. `rules/ARENA.md` +173 `B` for the preview-inbox authority clause. Root and live copies match.

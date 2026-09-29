@@ -106,7 +106,7 @@
 - ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Run `arena-preview poll` with bash tool timeout 1800s.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
-- The Arena client is unreliable: it resends messages, truncates or drops replies, and returns empty results from tools that did run. Treat a repeated or identical message as a resend rather than a new instruction — answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
+- The Arena client is unreliable: it resends messages, truncates or drops replies, and returns empty results from tools that did run. Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction — answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
 - Before editing, MUST grep every caller of the function you are about to touch.
 - Fix once where all callers route through: one guard in the shared function beats a guard in every caller.
