@@ -1,6 +1,6 @@
 ## 2026-09-29
 
-- **Rebase rule**: ARENA.md requires a check of `origin/main` before each push and a rebase when main moved.
+- **Rebase rule**: ARENA.md requires a check of `origin/main` before each push and a rebase when main moved. After a push or a sandbox reset, HEAD must equal the remote branch.
 
 - **ChatGPT diagrams rule**: All diagrams use Mermaid, `flowchart TB` by default, no ASCII. The rule no longer limits itself to pipelines and flows.
 
