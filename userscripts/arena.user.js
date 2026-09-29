@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.2
+// @version      1.1.3
 // @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -28,17 +28,19 @@
     var menuId;
     var stop = null;
 
+    function toggle() {
+      var next = GM_getValue(key, true) === false;
+      GM_setValue(key, next);
+      if (stop) stop();
+      stop = next ? run() : null;
+      GM_unregisterMenuCommand(menuId);
+      showMenu(next);
+    }
+
     function showMenu(value) {
       menuId = GM_registerMenuCommand(
         label + ": " + (value ? "ON" : "OFF") + " — toggle",
-        function () {
-          var next = GM_getValue(key, true) === false;
-          GM_setValue(key, next);
-          if (stop) stop();
-          stop = next ? run() : null;
-          GM_unregisterMenuCommand(menuId);
-          showMenu(next);
-        },
+        toggle,
       );
     }
 
@@ -46,6 +48,29 @@
     if (enabled) {
       stop = run();
     }
+    return {
+      isOn: function () {
+        return stop !== null;
+      },
+      toggle: toggle,
+    };
+  }
+
+  function isStopGeneratingLabel(value) {
+    return String(value || "").trim().toLowerCase() === "stop generating";
+  }
+
+  function findStopGeneratingButton(doc) {
+    var buttons = doc.querySelectorAll("button[aria-label]");
+    var i;
+    var button;
+    for (i = 0; i < buttons.length; i += 1) {
+      button = buttons[i];
+      if (isStopGeneratingLabel(button.getAttribute("aria-label"))) {
+        return button;
+      }
+    }
+    return null;
   }
 
   runFeature("prompt-fill", "Prompt fill", function () {
@@ -480,33 +505,22 @@
     };
   });
 
-  runFeature("auto-scroll", "Transcript auto-scroll", function () {
+  var autoScroll = runFeature("auto-scroll", "Transcript auto-scroll", function () {
     var scroller = null;
     var content = null;
     var frame = null;
     var route = null;
     var resize = null;
-    var shiftHeld = false;
 
     if (typeof document === "undefined") return;
 
     function schedule() {
-      if (shiftHeld || frame !== null || !scroller) return;
+      if (frame !== null || !scroller) return;
       frame = requestAnimationFrame(function () {
         frame = null;
-        if (shiftHeld || !scroller || !scroller.isConnected || route !== location.pathname) return;
+        if (!scroller || !scroller.isConnected || route !== location.pathname) return;
         scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       });
-    }
-
-    function trackShift(event) {
-      shiftHeld = event.shiftKey;
-      if (!shiftHeld) schedule();
-    }
-
-    function releaseShift() {
-      shiftHeld = false;
-      schedule();
     }
 
     function detach() {
@@ -545,19 +559,105 @@
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener("popstate", sync);
-    window.addEventListener("keydown", trackShift, true);
-    window.addEventListener("keyup", trackShift, true);
-    window.addEventListener("blur", releaseShift);
     sync();
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", sync);
-      window.removeEventListener("keydown", trackShift, true);
-      window.removeEventListener("keyup", trackShift, true);
-      window.removeEventListener("blur", releaseShift);
       detach();
     };
   });
+
+  var AUTO_TOGGLE_MARK = "data-clankers-autoscroll-toggle";
+  var AUTO_TOGGLE_CLASS =
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium hover:bg-surface-raised border text-text-primary";
+
+  function hasToggleClass(classes, name) {
+    return classes.split(" ").indexOf(name) !== -1;
+  }
+
+  function autoToggleClasses(on) {
+    return AUTO_TOGGLE_CLASS + (on ? " bg-surface-raised" : " bg-transparent");
+  }
+
+  (function () {
+    function runChecks() {
+      var on = autoToggleClasses(true);
+      var off = autoToggleClasses(false);
+      var cases = [
+        [hasToggleClass(on, "bg-surface-raised"), true],
+        [hasToggleClass(on, "bg-transparent"), false],
+        [hasToggleClass(off, "bg-transparent"), true],
+        [hasToggleClass(off, "bg-surface-raised"), false],
+        [hasToggleClass(AUTO_TOGGLE_CLASS, "h-8"), true],
+        [hasToggleClass(AUTO_TOGGLE_CLASS, "w-8"), true],
+      ];
+      var failed = 0;
+      var i;
+      for (i = 0; i < cases.length; i += 1) {
+        if (cases[i][0] !== cases[i][1]) {
+          console.error("check fail", i, cases[i][0], cases[i][1]);
+          failed += 1;
+        }
+      }
+      if (failed) {
+        throw new Error(failed + " checks failed");
+      }
+      console.log("ok " + cases.length);
+    }
+
+    if (typeof document === "undefined") {
+      runChecks();
+      return;
+    }
+
+    function setPressed(button, on) {
+      button.className = autoToggleClasses(on);
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+
+    function createButton() {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute(AUTO_TOGGLE_MARK, "true");
+      button.setAttribute("aria-label", "Toggle transcript autoscroll");
+      button.setAttribute("title", "Toggle transcript autoscroll");
+      setPressed(button, autoScroll.isOn());
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "16");
+      svg.setAttribute("height", "16");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke-width", "1.5");
+      svg.setAttribute("color", "currentColor");
+      var paths = ["M12 4v12", "M6 10l6 6 6-6", "M5 20h14"];
+      var i;
+      for (i = 0; i < paths.length; i += 1) {
+        var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", paths[i]);
+        path.setAttribute("stroke", "currentColor");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        svg.appendChild(path);
+      }
+      button.appendChild(svg);
+      button.addEventListener("click", function () {
+        autoScroll.toggle();
+        setPressed(button, autoScroll.isOn());
+      });
+      return button;
+    }
+
+    function ensureButton() {
+      var stopButton = findStopGeneratingButton(document);
+      var row = stopButton && stopButton.parentElement;
+      if (!row || row.querySelector("[" + AUTO_TOGGLE_MARK + "]")) return;
+      row.insertBefore(createButton(), stopButton);
+    }
+
+    var observer = new MutationObserver(ensureButton);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    ensureButton();
+  })();
 
   runFeature("hide-composer", "Hide composer", function () {
 
@@ -587,10 +687,6 @@
     function isSessionUrl(urlString) {
       var url = parseArenaUrl(urlString);
       return Boolean(url) && url.pathname.indexOf("/agent/") === 0 && url.pathname.length > 7;
-    }
-
-    function isStopGeneratingLabel(value) {
-      return String(value || "").trim().toLowerCase() === "stop generating";
     }
 
     function shouldHideComposer(session, stopGenerating) {
@@ -742,19 +838,6 @@
     if (typeof document === "undefined") {
       runChecks();
       return;
-    }
-
-    function findStopGeneratingButton(doc) {
-      var buttons = doc.querySelectorAll("button[aria-label]");
-      var i;
-      var button;
-      for (i = 0; i < buttons.length; i += 1) {
-        button = buttons[i];
-        if (isStopGeneratingLabel(button.getAttribute("aria-label"))) {
-          return button;
-        }
-      }
-      return null;
     }
 
     function findEditorContent(doc, stopButton) {
