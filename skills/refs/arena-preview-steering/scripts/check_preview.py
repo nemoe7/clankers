@@ -78,7 +78,7 @@ def test_edited_ack_stamp():
         preview.__file__,
         "--state-dir",
         str(restored_dir),
-        "import-notes",
+        "import-state",
         str(saved),
       ],
       check=True,
@@ -225,7 +225,7 @@ def test_reply_seen_persistence():
           preview.__file__,
           "--state-dir",
           str(restored_dir),
-          "import-notes",
+          "import-state",
           str(backup),
         ],
         check=True,
@@ -1220,7 +1220,7 @@ def test_http_boundaries():
       assert answer_line["task_id"] == "saved-task"
       # A note line keeps its task marker too, so the marker the receipt shows survives a restore.
       assert lines_by_id["saved-note"]["task_id"] == "saved-task"
-      # One file, one reader for both kinds: `import-notes` restores the note and the answer, and
+      # One file, one reader for both kinds: `import-state` restores the note and the answer, and
       # the answer keeps its receipt, its read stamp and its task marker.
       round_trip = Path(directory) / "round-trip"
       preview.Store(round_trip, create=True)
@@ -1230,15 +1230,15 @@ def test_http_boundaries():
           str(Path(preview.__file__)),
           "--state-dir",
           str(round_trip),
-          "import-notes",
+          "import-state",
           str(save_file),
         ],
         capture_output=True,
         text=True,
         check=True,
       ).stdout
-      assert "1 notes" in imported
-      assert f"{written['answers']} report answers" in imported
+      assert json.loads(imported)["notes"] == 1
+      assert json.loads(imported)["answers"] == written["answers"]
       restored_store = preview.Store(round_trip)
       answers = {row["id"]: row for row in restored_store.submissions()}
       assert answers["saved-answer"]["text"] == "REPORT first First:\n  a: yes"
@@ -2459,14 +2459,14 @@ def test_shared_save_import():
         script,
         "--state-dir",
         str(mixed_root),
-        "import-notes",
+        "import-state",
         str(mixed),
       ],
       capture_output=True,
       text=True,
       check=True,
     ).stdout
-    assert "Imported 1 notes" in notes_out and "1 report answers" in notes_out
+    assert json.loads(notes_out) == {"notes": 1, "answers": 1, "tasks": 1}
     # A restore reads this file twice, so the first import leaves the task lines in it.
     assert any(
       "title" in json.loads(line)
@@ -2479,15 +2479,15 @@ def test_shared_save_import():
         script,
         "--state-dir",
         str(mixed_root),
-        "task-import",
+        "import-state",
         str(mixed),
       ],
       capture_output=True,
       text=True,
       check=True,
     ).stdout
-    assert json.loads(tasks_out)["imported"] == 1
-    # Writer and reader move together: what `task-list` prints is what `task-import` reads back, so
+    assert json.loads(tasks_out)["tasks"] == 1
+    # Writer and reader move together: what `task-list` prints is what `import-state` reads back, so
     # minifying the output cannot strand the importer.
     script_again = str(Path(preview.__file__))
     listed = subprocess.run(
@@ -2504,15 +2504,15 @@ def test_shared_save_import():
         script_again,
         "--state-dir",
         str(mixed_root),
-        "task-import",
-        "--replace",
+        "import-state",
+        "--replace-tasks",
       ],
       input=listed,
       capture_output=True,
       text=True,
       check=True,
     ).stdout.strip()
-    assert json.loads(reimport)["imported"] == 1
+    assert json.loads(reimport)["tasks"] == 1
     read_out = subprocess.run(
       [sys.executable, script_again, "--state-dir", str(mixed_root), "read"],
       capture_output=True,
@@ -2558,7 +2558,7 @@ def test_restore_import():
   with tempfile.TemporaryDirectory() as restore_dir:
     restore = Path(restore_dir)
     script = str(Path(preview.__file__))
-    # import-notes does not create a state directory, so the restore target exists first.
+    # import-state does not create a state directory, so the restore target exists first.
     preview.Store(restore, create=True)
     log = restore / "log.jsonl"
     log.write_text(
@@ -2602,12 +2602,12 @@ def test_restore_import():
       encoding="utf-8",
     )
     imported = subprocess.run(
-      [sys.executable, script, "--state-dir", str(restore), "import-notes", str(log)],
+      [sys.executable, script, "--state-dir", str(restore), "import-state", str(log)],
       capture_output=True,
       text=True,
       check=True,
     ).stdout
-    assert "Imported 3 notes, 1 with a receipt restored verbatim" in imported
+    assert json.loads(imported)["notes"] == 3
     rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
     # The receipt comes back as it was written: the original stamp, not the time of the import,
     # and the state surface shows it cut to seconds.
@@ -2692,7 +2692,7 @@ def test_restore_import():
         script,
         "--state-dir",
         str(restore),
-        "import-notes",
+        "import-state",
         str(partial),
       ],
       capture_output=True,
@@ -2709,12 +2709,12 @@ def test_restore_import():
     }
     # Importing the same log again changes nothing: a stored ID keeps the record it has.
     again = subprocess.run(
-      [sys.executable, script, "--state-dir", str(restore), "import-notes", str(log)],
+      [sys.executable, script, "--state-dir", str(restore), "import-state", str(log)],
       capture_output=True,
       text=True,
       check=True,
     ).stdout
-    assert "existing IDs are not duplicated" in again
+    assert json.loads(again)["notes"] == 3
     # Three restored notes, and a re-import adds none of them twice.
     assert len(preview.Store(restore).state()["notes"]) == 3
 
@@ -3219,3 +3219,36 @@ def test_owner_limits_and_streams():
           raise AssertionError("Per-file upload cap removed")
       except ValueError:
         pass
+
+
+def test_unified_import_atomicity():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    payload = {
+      "notes": [{"id": "restored", "text": "hello"}],
+      "tasks": {
+        "upcoming": [{"id": "task", "title": "Task", "status": "upcoming"}],
+        "finished": [],
+      },
+    }
+    assert store.import_state(json.dumps(payload)) == {
+      "notes": 1,
+      "answers": 0,
+      "tasks": 1,
+    }
+    backup = store.save_path.read_bytes() if store.save_path.exists() else None
+    invalid = [
+      {"id": "new-task", "title": "New"},
+      {"id": "new-note", "text": "new"},
+      {"id": "bad", "text": ""},
+    ]
+    try:
+      store.import_state(json.dumps(invalid), replace_tasks=True)
+      raise AssertionError("Invalid import accepted")
+    except ValueError:
+      pass
+    assert [t["id"] for t in store.list_tasks()] == ["task"]
+    assert [n["id"] for n in store.state()["notes"]] == ["restored"]
+    assert (
+      store.save_path.read_bytes() if store.save_path.exists() else None
+    ) == backup

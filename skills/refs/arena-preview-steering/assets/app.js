@@ -908,8 +908,7 @@ copyStateButton.addEventListener('click', async () => {
     catch { answers = null; }
   }
   const lines = state ? stateLines(state, answers || []) : [];
-  // One JSON line per record is the save file's own format, so a paste lands in `import-notes` and
-  // `task-import` without editing. The server supplies the answer lines on click, scoped to the
+  // One JSON line per record is the save format accepted by `import-state`. The server supplies the answer lines on click, scoped to the
   // reports still in the tab.
   const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
   await copyFrom(copyStateButton, text, 'state');

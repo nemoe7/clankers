@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Unified state import**: Replace import-notes and task-import with import-state for copied notes, tasks and report answers. Accept a file or stdin, preserve receipts and backups, and roll back the whole import on invalid records. Task replacement requires --replace-tasks.
+
 - **Authoritative steering inbox**: Use the preview inbox for steering instructions, receipts and work status when Arena chat delivery is unreliable. Retain duplicate-message and reversible-edit safeguards.
 
 - **GPT plugin compression**: Keep full refs and compress shipped skill wording without rule changes. Remove the destructive copy command, check matching structure and retain exact archive validation. Raise the plugin version to 1.3.1.

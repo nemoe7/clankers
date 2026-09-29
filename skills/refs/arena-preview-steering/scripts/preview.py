@@ -810,6 +810,31 @@ def poll_inbox(store, pretty=False, interval=1, max_loops=900, sleeper=None):
   return 1
 
 
+def parse_state_import(text):
+  try:
+    value = json.loads(text)
+  except json.JSONDecodeError:
+    value = [json.loads(line) for line in text.splitlines() if line.strip()]
+  if isinstance(value, dict) and "notes" in value:
+    notes = value["notes"]
+    tasks = value.get("tasks", {})
+    if tasks is None:
+      tasks = {}
+    answers = value.get("submissions", [])
+    if isinstance(tasks, dict):
+      tasks = tasks.get("upcoming", []) + tasks.get("finished", [])
+    if not all(isinstance(items, list) for items in (notes, tasks, answers)):
+      raise ValueError("State collections must be arrays")
+    value = notes + tasks + answers
+  elif isinstance(value, dict):
+    value = [value]
+  if not isinstance(value, list) or not all(isinstance(r, dict) for r in value):
+    raise ValueError("Import JSON records or copied state")
+  if not value:
+    raise ValueError("Nothing to import")
+  return value
+
+
 def parse_task_import(text):
   """Accept either a JSON array of tasks or one task per line."""
   stripped = text.strip()
@@ -1111,7 +1136,7 @@ class Store:
   ):
     """Record report answers apart from user messages; the log never shows them.
 
-    `import-notes` restores a saved answer through here too, receipt and all, for the same
+    `import-state` restores a saved answer through here too, receipt and all, for the same
     reason a note keeps its own: the save file exists so a restore returns what the owner
     sent, and an answer that comes back unread was read when the agent read it (report
     submission c0fcfad9, note 120fe358). An ID already stored keeps its record.
@@ -1822,7 +1847,44 @@ class Store:
     self.autosave()  # the completion wrote an inbox note; unfinished queue rows stay only in SQLite
     return fetch_row(result, self.path.parent)
 
-  def import_tasks(self, records, replace=False, autosave=True):
+  def import_state(self, text, replace_tasks=False):
+    records = parse_state_import(text)
+    tasks = [r for r in records if "title" in r and "text" not in r]
+    messages = [r for r in records if r not in tasks]
+    with self.transaction(autosave=False) as db:
+      db.execute("BEGIN IMMEDIATE")
+      self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
+      for record in messages:
+        if "text" not in record or "title" in record:
+          raise ValueError("Each record must be a note, task or report answer")
+        options = {
+          key: record.get(key)
+          for key in (
+            "acknowledged_at",
+            "ack_kind",
+            "ack_text",
+            "ack_edited_at",
+            "seen_at",
+            "task_id",
+            "replies",
+            "ack_edited_seen_count",
+          )
+        }
+        args = [record["id"]]
+        writer = self.note
+        if "report_id" in record:
+          writer = self.submission
+          args.append(record["report_id"])
+        writer(
+          *args, record["text"], record.get("at"), shared=db, autosave=False, **options
+        )
+    return {
+      "notes": sum("report_id" not in r for r in messages),
+      "answers": sum("report_id" in r for r in messages),
+      "tasks": len(tasks),
+    }
+
+  def import_tasks(self, records, replace=False, autosave=True, shared=None):
     """Rebuild a list from the JSON a copy button or task-list produced.
 
     Every record is validated before anything is written, and the whole import is one
@@ -1854,7 +1916,7 @@ class Store:
           record.get("order") or index,
         )
       )
-    with self.transaction(autosave=autosave) as db:
+    with self.transaction(shared, autosave=autosave) as db:
       if replace:
         # A replacement makes every record new, so a title cannot be inherited from a stored
         # row. Refusing before the delete names the offending record; refusing after it would
@@ -2794,18 +2856,9 @@ def main():
   task_remove = commands.add_parser("task-remove")
   task_remove.add_argument("task_id")
   commands.add_parser("task-list")
-  task_import = commands.add_parser("task-import")
-  task_import.add_argument(
-    "source",
-    nargs="?",
-    type=Path,
-    help="JSON array or one task per line; stdin if omitted",
-  )
-  task_import.add_argument(
-    "--replace", action="store_true", help="Clear the stored list before importing"
-  )
-  legacy = commands.add_parser("import-notes")
-  legacy.add_argument("source", type=Path)
+  state_import = commands.add_parser("import-state")
+  state_import.add_argument("source", nargs="?", type=Path)
+  state_import.add_argument("--replace-tasks", action="store_true")
   args = parser.parse_args()
   try:
     if args.reminder:
@@ -2908,93 +2961,12 @@ def main():
       print(cli_json(echo_task(store.remove_task(args.task_id)), args.pretty))
     elif args.command == "task-list":
       print(cli_json(store.list_tasks(), args.pretty))
-    elif args.command == "task-import":
+    elif args.command == "import-state":
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
-      written = store.import_tasks(
-        [
-          record
-          for record in parse_task_import(text)
-          # The same file the log writes carries notes as well; a task line has a title, and a note
-          # line is skipped here the way a task line is skipped by the importer above.
-          if not (
-            isinstance(record, dict) and "text" in record and "title" not in record
-          )
-        ],
-        args.replace,
-        autosave=False,
-      )
-      print(
-        cli_json(
-          {
-            "imported": len(written),
-            "replaced": args.replace,
-            "ids": [item["id"] for item in written],
-          },
-          args.pretty,
-        )
-      )
-    elif args.command == "import-notes":
-      saved = [
-        json.loads(line)
-        for line in args.source.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-      ]
-      # A save file holds three kinds of line, and one reader takes two of them. A task carries a
-      # title and no text; a note carries text and no report ID; the owner's report answers carry
-      # a report ID. Each line is then validated by the writer it belongs to, so a restore cannot
-      # store a shape the preview itself would refuse.
-      answers = [
-        record for record in saved if isinstance(record, dict) and "report_id" in record
-      ]
-      records = [
-        record
-        for record in saved
-        if not (
-          isinstance(record, dict)
-          and (("title" in record and "text" not in record) or "report_id" in record)
-        )
-      ]
-      # An import leaves the export alone: a restore reads this file twice, once for the
-      # notes and once for the tasks, and a refresh between the two drops the task lines.
-      for record in answers:
-        store.submission(
-          record["id"],
-          record["report_id"],
-          record["text"],
-          record.get("at"),
-          acknowledged_at=record.get("acknowledged_at"),
-          ack_kind=record.get("ack_kind"),
-          ack_text=record.get("ack_text"),
-          ack_edited_at=record.get("ack_edited_at"),
-          seen_at=record.get("seen_at"),
-          task_id=record.get("task_id"),
-          autosave=False,
-          replies=record.get("replies"),
-          ack_edited_seen_count=record.get("ack_edited_seen_count"),
-        )
-      for record in records:
-        store.note(
-          record["id"],
-          record["text"],
-          record.get("at"),
-          acknowledged_at=record.get("acknowledged_at"),
-          ack_kind=record.get("ack_kind"),
-          ack_text=record.get("ack_text"),
-          ack_edited_at=record.get("ack_edited_at"),
-          seen_at=record.get("seen_at"),
-          task_id=record.get("task_id"),
-          autosave=False,
-          replies=record.get("replies"),
-          ack_edited_seen_count=record.get("ack_edited_seen_count"),
-        )
-      receipts = sum(1 for record in records if record.get("acknowledged_at"))
-      print(
-        f"Imported {len(records)} notes, {receipts} with a receipt restored verbatim,"
-        f" {len(answers)} report answers;"
-        " existing IDs are not duplicated and keep the receipt they have"
-      )
+      print(cli_json(store.import_state(text, args.replace_tasks), args.pretty))
+
   except (
     OSError,
     ValueError,

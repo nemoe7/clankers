@@ -16,10 +16,9 @@ Use `scripts/preview.py` relative to the actual installed steering skill. Put `-
 | `task-list` | List tasks and their stored status, order and details |
 | `task ID TITLE [DETAIL ...]` | Add or update a task; use `--msg-id` for note-born and report-born tasks |
 | `task-remove ID` | Remove a task entered by mistake |
-| `task-import [FILE]` | Restore task records from JSON, a file or stdin; `--replace` clears first |
+| `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; `--replace-tasks` replaces only tasks |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
 | `unpublish <id>` | Remove a report from the tab; its answers and source survive |
-| `import-notes <notes.ndjson>` | Restore note and report-answer records from an export |
 
 Use complete IDs in CLI calls; cite their first seven characters in prose. `read` does not acknowledge an item. Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers. A repeated `ack` on an ID appends one more reply block and keeps the earlier ones. The same on a submission ID appends reply blocks to its receipt. An unknown ID fails the whole receipt batch. Answer later submissions under their own IDs. If the preview is unavailable, use `ACK:` in chat for delivered notes.
 
@@ -48,7 +47,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 | `--msg-id <full-message-id>` | Link a note or report answer to its task; still call `ack` |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |
 
-`task-import` merges by ID. Use `--replace` only after you check the input. Never infer a finished task from a commit alone.
+`import-state` merges by ID and preserves existing message receipts. Use `--replace-tasks` only after checking the input. Never infer a finished task from a commit alone.
 
 ## Publish reports
 
@@ -73,6 +72,6 @@ An agent asks with `download-request <url>`. That queues a pending job. The owne
 
 ## Restore
 
-Run `<skill>/scripts/install.sh` after a sandbox restore, before `git add`, to reinstate the venv, poll hook and ignore rule. Preserve the state directory and report source files. If the database is lost but `saved-state.ndjson` survives, run `init` on that state directory first. Then run `import-notes <file>` and `task-import <file>` there; neither import alone restores both notes and tasks. Report sources must be republished if their snapshots are lost. Files and unfinished download jobs are not in the NDJSON backup.
+Run `<skill>/scripts/install.sh` after a sandbox restore, before `git add`, to reinstate the venv, poll hook and ignore rule. Preserve the state directory and report source files. If the database is lost but `saved-state.ndjson` survives, run `init` on that state directory first. Then run `import-state <file>` there to restore notes, tasks and report answers together. Report sources must be republished if their snapshots are lost. Files and unfinished download jobs are not in the NDJSON backup.
 
 If a port is occupied, identify its owner or choose another port; do not stop another service. Verify a restore with `read`, `task-list` and rendered reports before discarding backups. Report failed reads or saves; never treat them as empty state or a confirmed save. If the preview stays unavailable, use `ask_user` to ask how to continue. Do not enable an external channel or local report commits without a new choice.
