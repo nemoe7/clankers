@@ -1165,7 +1165,7 @@ def test_http_boundaries():
         seen_at="2026-09-21T09:03:00",
         task_id="saved-task",
       )
-      # Autosave writes what the database holds, in one file both importers can read. The page's
+      # Autosave writes what the database holds, in one file the importer can read. The page's
       # copy button posts nothing, so this drives the writer the way a committed mutation does.
       written = store.save_state(
         {
@@ -2298,15 +2298,15 @@ def test_task_amend():
     backup = json.dumps(amend_store.list_tasks())
     (Path(amend_dir) / "restored").mkdir()
     fresh = preview.Store(Path(amend_dir) / "restored", create=True)
-    written = fresh.import_tasks(preview.parse_task_import(backup))
+    written = fresh.import_tasks(preview.parse_state_import(backup))
     assert [item["id"] for item in written] == ["docs-archive", "minify"]
     assert fresh.state()["tasks"]["upcoming"][0]["details"] == ["one", "two"]
     lines = "\n".join(json.dumps(item) for item in amend_store.list_tasks())
     (Path(amend_dir) / "lines").mkdir()
     other = preview.Store(Path(amend_dir) / "lines", create=True)
-    assert len(other.import_tasks(preview.parse_task_import(lines))) == 2
+    assert len(other.import_tasks(preview.parse_state_import(lines))) == 2
     other.write_task("extra", "Extra")
-    other.import_tasks(preview.parse_task_import(backup), replace=True)
+    other.import_tasks(preview.parse_state_import(backup), replace=True)
     assert [item["id"] for item in other.list_tasks()] == ["docs-archive", "minify"]
     # A --replace that meets an invalid record must cost nothing. The delete and the writes are one
     # transaction, so the list that was there is still there afterwards and nothing is half applied;
@@ -2340,18 +2340,18 @@ def test_task_amend():
     )
     assert [item["id"] for item in other.list_tasks()] == ["first", "second"]
     # One bare object is JSONL of a single record, so it parses and fails on the missing ID.
-    assert preview.parse_task_import('{"id": "solo", "title": "Solo"}') == [
+    assert preview.parse_state_import('{"id": "solo", "title": "Solo"}') == [
       {"id": "solo", "title": "Solo"}
     ]
     for call, message in (
-      (lambda: preview.parse_task_import("   "), "An empty import was accepted"),
-      (lambda: preview.parse_task_import("[1, 2]"), "A list of numbers was accepted"),
+      (lambda: preview.parse_state_import("   "), "An empty import was accepted"),
+      (lambda: preview.parse_state_import("[1, 2]"), "A list of numbers was accepted"),
       (
         lambda: other.import_tasks([{"title": "no id"}]),
         "A task with no ID was imported",
       ),
       (
-        lambda: other.import_tasks(preview.parse_task_import('{"title": "Solo"}')),
+        lambda: other.import_tasks(preview.parse_state_import('{"title": "Solo"}')),
         "A record with no ID was imported",
       ),
     ):
@@ -2406,8 +2406,7 @@ def test_wide_report_fields():
 
 
 def test_shared_save_import():
-  # One file, two readers: the same saved-state file feeds both importers, each skipping the other's
-  # lines, which is what makes one path enough for the owner's restore.
+  # One saved-state file feeds the unified importer for notes, tasks and report answers.
   with tempfile.TemporaryDirectory() as mixed_dir:
     mixed_root = Path(mixed_dir)
     preview.Store(mixed_root, create=True)
@@ -2435,8 +2434,7 @@ def test_shared_save_import():
         }
       )
       + "\n"
-      # An answer line rides the same file: the notes reader restores it, and the task reader
-      # skips it the way the notes reader skips a task line.
+      # An answer line rides the same file as notes and tasks.
       + json.dumps(
         {
           "id": "saved-answer",
@@ -2453,7 +2451,7 @@ def test_shared_save_import():
       encoding="utf-8",
     )
     script = str(Path(preview.__file__))
-    notes_out = subprocess.run(
+    imported = subprocess.run(
       [
         sys.executable,
         script,
@@ -2466,14 +2464,14 @@ def test_shared_save_import():
       text=True,
       check=True,
     ).stdout
-    assert json.loads(notes_out) == {"notes": 1, "answers": 1, "tasks": 1}
-    # A restore reads this file twice, so the first import leaves the task lines in it.
+    assert json.loads(imported) == {"notes": 1, "answers": 1, "tasks": 1}
+    # The import does not overwrite its source; reimport merges by ID without duplicates.
     assert any(
       "title" in json.loads(line)
       for line in mixed.read_text(encoding="utf-8").splitlines()
       if line.strip()
     )
-    tasks_out = subprocess.run(
+    again = subprocess.run(
       [
         sys.executable,
         script,
@@ -2486,7 +2484,9 @@ def test_shared_save_import():
       text=True,
       check=True,
     ).stdout
-    assert json.loads(tasks_out)["tasks"] == 1
+    assert json.loads(again) == {"notes": 1, "answers": 1, "tasks": 1}
+    assert len(preview.Store(mixed_root).state()["notes"]) == 1
+    assert len(preview.Store(mixed_root).submissions()) == 1
     # Writer and reader move together: what `task-list` prints is what `import-state` reads back, so
     # minifying the output cannot strand the importer.
     script_again = str(Path(preview.__file__))
@@ -3236,11 +3236,45 @@ def test_unified_import_atomicity():
       "answers": 0,
       "tasks": 1,
     }
-    backup = store.save_path.read_bytes() if store.save_path.exists() else None
+    assert not store.save_path.exists(), "Import must not overwrite the source backup"
+    receipt_at = "2026-09-20T22:05:11+00:00"
+    store.note("already-here", "Existing message")
+    store.acknowledge(["already-here"], "reply", "Existing answer")
+    existing = next(n for n in store.state()["notes"] if n["id"] == "already-here")
+    imported = [
+      {
+        "id": "already-here",
+        "text": "Existing message",
+        "acknowledged_at": receipt_at,
+        "ack_kind": "note",
+        "ack_text": "Stale answer",
+      },
+      {
+        "id": "new-answer",
+        "report_id": "form",
+        "text": "Report answer",
+        "acknowledged_at": receipt_at,
+        "ack_kind": "reply",
+        "ack_text": "Received",
+      },
+    ]
+    assert store.import_state(json.dumps(imported))["answers"] == 1
+    assert (
+      next(n for n in store.state()["notes"] if n["id"] == "already-here") == existing
+    )
+    assert store.submissions()[0]["ack_text"] == "Received"
+    backup = store.save_path.read_bytes()
     invalid = [
       {"id": "new-task", "title": "New"},
       {"id": "new-note", "text": "new"},
-      {"id": "bad", "text": ""},
+      {
+        "id": "bad",
+        "report_id": "form",
+        "text": "",
+        "acknowledged_at": receipt_at,
+        "ack_kind": "reply",
+        "ack_text": "Invalid answer",
+      },
     ]
     try:
       store.import_state(json.dumps(invalid), replace_tasks=True)
@@ -3248,7 +3282,8 @@ def test_unified_import_atomicity():
     except ValueError:
       pass
     assert [t["id"] for t in store.list_tasks()] == ["task"]
-    assert [n["id"] for n in store.state()["notes"]] == ["restored"]
+    assert {n["id"] for n in store.state()["notes"]} == {"restored", "already-here"}
+    assert {a["id"] for a in store.submissions()} == {"new-answer"}
     assert (
       store.save_path.read_bytes() if store.save_path.exists() else None
     ) == backup

@@ -420,9 +420,8 @@ MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
 ECHO_DETAIL = 200
 TASK_COLUMNS = "id, title, details, status, position, updated_at"
-# The save button writes one file the importers read: a note line carries `text`, a task line
-# carries `title`, an answer line carries `report_id`, and each importer takes its own lines and
-# skips the rest. Keys are named here so the writer and the readers cannot drift apart.
+# The save file carries note, task and answer lines through one importer. Keys are named
+# here so the writer and reader cannot drift apart.
 #
 # The default path is `saved-state.ndjson` inside the state directory, which the installer
 # ignores through `core.excludesFile`. `--save-path` moves it.
@@ -833,23 +832,6 @@ def parse_state_import(text):
   if not value:
     raise ValueError("Nothing to import")
   return value
-
-
-def parse_task_import(text):
-  """Accept either a JSON array of tasks or one task per line."""
-  stripped = text.strip()
-  if not stripped:
-    raise ValueError("Nothing to import")
-  records = (
-    json.loads(stripped)
-    if stripped.startswith("[")
-    else [json.loads(line) for line in stripped.splitlines() if line.strip()]
-  )
-  if not isinstance(records, list) or not all(
-    isinstance(item, dict) for item in records
-  ):
-    raise ValueError("Import a JSON array of task objects, or one task object per line")
-  return records
 
 
 def check_task(task_id, title, details):
@@ -1438,7 +1420,7 @@ class Store:
       print(f"preview: autosave failed: {error}", file=sys.stderr)
 
   def save_state(self, payload):
-    """Write the current state to the save file, in the shape the importers read.
+    """Write the current state to the save file, in the shape the importer reads.
 
     Autosave calls this after every committed mutation, so the file follows the database with no
     button press. The page copies its own state to the clipboard instead of posting it.
@@ -1850,7 +1832,7 @@ class Store:
   def import_state(self, text, replace_tasks=False):
     records = parse_state_import(text)
     tasks = [r for r in records if "title" in r and "text" not in r]
-    messages = [r for r in records if r not in tasks]
+    messages = [r for r in records if "title" not in r or "text" in r]
     with self.transaction(autosave=False) as db:
       db.execute("BEGIN IMMEDIATE")
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
@@ -1893,8 +1875,7 @@ class Store:
     half applied, which is data loss rather than an error.
     """
     if not isinstance(records, list):
-      # parse_task_import already refuses anything but a list of objects, so this only fires
-      # for a caller that skipped it, and a wrong type is not a value problem.
+      # The importer also calls this directly, so reject malformed records here.
       raise TypeError("Import a list of task objects")
     prepared = []
     for index, record in enumerate(records, 1):

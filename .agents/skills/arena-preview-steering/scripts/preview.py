@@ -323,12 +323,6 @@ def parse_state_import(text):
 	if not isinstance(value,list)or not all(isinstance(r,dict)for r in value):raise ValueError('Import JSON records or copied state')
 	if not value:raise ValueError('Nothing to import')
 	return value
-def parse_task_import(text):
-	stripped=text.strip()
-	if not stripped:raise ValueError('Nothing to import')
-	records=json.loads(stripped)if stripped.startswith('[')else[json.loads(line)for line in stripped.splitlines()if line.strip()]
-	if not isinstance(records,list)or not all(isinstance(item,dict)for item in records):raise ValueError('Import a JSON array of task objects, or one task object per line')
-	return records
 def check_task(task_id,title,details):
 	if not TASK_ID.match(task_id or''):raise ValueError('A task ID is 1-64 characters of lowercase letters, digits and hyphens, and starts with a letter or digit')
 	if title is not None and len(title)>MAX_TASK_TITLE:raise ValueError(f"A task title must be {MAX_TASK_TITLE} characters or fewer")
@@ -612,7 +606,7 @@ class Store:
 			raise
 		self.autosave();return fetch_row(result,self.path.parent)
 	def import_state(self,text,replace_tasks=False):
-		records=parse_state_import(text);tasks=[r for r in records if'title'in r and'text'not in r];messages=[r for r in records if r not in tasks]
+		records=parse_state_import(text);tasks=[r for r in records if'title'in r and'text'not in r];messages=[r for r in records if'title'not in r or'text'in r]
 		with self.transaction(autosave=False)as db:
 			db.execute('BEGIN IMMEDIATE');self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
 			for record in messages:
