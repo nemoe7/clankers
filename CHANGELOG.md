@@ -4,6 +4,8 @@
 
 - **PR-only validation**: Stop repeat validation after main updates and remove the main-only README measurement commit. Keep PR checks, plugin packaging and rules publishing.
 
+- **Owner input limits**: Remove note, answer, submission and total request caps. Keep the 50 MB per-file upload cap and current timeouts. Stream multipart files and download results to temporary storage. Agent replies, reports, tasks and agent-requested downloads retain their limits.
+
 - **DAILIES monitoring**: Use a rolling 24-hour event window without checkpoint writes. Show incomplete coverage, rotate deep audits through three active repositories per day, keep monitoring read-only and separate release drafts from findings. Repository and scheduler copies remain separate.
 
 - **Arena transcript auto-scroll**: The Arena bundle adds an independent saved switch. It follows new messages and resized output near the bottom, pauses on upward scroll and keeps reading positions across session changes. Node checks cover follow, pause, resume and cleanup. Steering label and repository matching now ignore letter case.

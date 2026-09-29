@@ -1356,6 +1356,7 @@ function renderFetchIfChanged(jobs) {
 }
 
 async function fetchRemote(job) {
+  const limit = job.origin === 'owner' ? Infinity : MAX_FETCH;
   const candidates = [{ source: 'direct', label: 'Direct', url: job.url }];
   if (job.allow_proxy) candidates.push(
     { source: 'allorigins', label: 'AllOrigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(job.url)}` },
@@ -1373,7 +1374,7 @@ async function fetchRemote(job) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (new URL(response.url).protocol !== 'https:') throw new Error('Redirect did not end at HTTPS');
       const declared = Number(response.headers.get('content-length') || 0);
-      if (declared > MAX_FETCH) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
+      if (declared > limit) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
       if (!response.body || typeof response.body.getReader !== 'function') {
         throw new Error('This browser cannot stream a response to check its size');
       }
@@ -1385,7 +1386,7 @@ async function fetchRemote(job) {
           const { done, value } = await reader.read();
           if (done) break;
           size += value.byteLength;
-          if (size > MAX_FETCH) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
+          if (size > limit) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
           chunks.push(value);
         }
       } catch (error) {

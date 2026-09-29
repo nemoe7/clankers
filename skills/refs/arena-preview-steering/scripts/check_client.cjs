@@ -182,7 +182,7 @@ const context = {
       const payload = JSON.parse(options.body);
       const record = {
         id: `fetch-${queuedCalls.length + 1}`, url: payload.url, allow_proxy: payload.allow_proxy,
-        status: 'queued', approval: 'approved', source: null, error: null, name: null, size: null, sha256: null,
+        status: 'queued', approval: 'approved', origin: 'owner', source: null, error: null, name: null, size: null, sha256: null,
         file: null, present: false, at: '2026-09-22T00:00:00+00:00'
       };
       queuedCalls.push({ ...record });
@@ -1733,26 +1733,36 @@ test('preview client', async (t) => {
     assert.equal(resultCalls.at(-1).source, 'codetabs');
     assert.equal(remoteCalls.at(-1).url, codeTabs);
 
+    // Owner-origin responses pass the old declared and streamed size thresholds.
     tooLarge = 'https://files.example.org/too-large.bin';
-    remoteBehaviors.set(tooLarge, { declared: 102_400_001 });
-    callsBeforeLimit = remoteCalls.length;
-    resultsBeforeLimit = resultCalls.length;
+    remoteBehaviors.set(tooLarge, { declared: 102_400_001, chunks: [Uint8Array.from([1])] });
     get('#fetch-url').value = tooLarge;
-    get('#fetch-proxy').checked = true;
     await get('#fetch-form').events.submit(event({}));
-    await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
-    assert.equal(remoteCalls.length, callsBeforeLimit + 1, 'a declared oversize file never reaches proxies');
-    assert.equal(resultCalls.length, resultsBeforeLimit, 'oversize bytes never reach the preview');
-    assert.match(state.fetch_jobs[0].error, /102,400,000 bytes/);
+    await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
+    assert.equal(state.fetch_jobs[0].origin, 'owner');
 
     streamed = 'https://files.example.org/stream.bin';
     streamBehavior = { chunks: [{ byteLength: 102_400_001 }] };
     remoteBehaviors.set(streamed, streamBehavior);
     get('#fetch-url').value = streamed;
     await get('#fetch-form').events.submit(event({}));
-    await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
-    assert.equal(streamBehavior.cancelled, true, 'oversize streams are cancelled');
-    assert.equal(resultCalls.length, resultsBeforeLimit);
+    await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
+    assert.notEqual(streamBehavior.cancelled, true);
+
+    // Approved agent and legacy jobs must still enforce both byte checks.
+    for (const [suffix, behavior] of [['declared', { declared: 102_400_001 }], ['stream', { chunks: [{ byteLength: 102_400_001 }] }]]) {
+      const url = `https://files.example.org/agent-${suffix}.bin`;
+      remoteBehaviors.set(url, behavior);
+      state.fetch_jobs.unshift({ id: `agent-${suffix}`, url, origin: suffix === 'declared' ? 'agent' : undefined, status: 'queued', approval: 'approved', allow_proxy: true });
+      callsBeforeLimit = remoteCalls.length;
+      resultsBeforeLimit = resultCalls.length;
+      await get('#refresh-notes').events.click();
+      await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
+      assert.equal(remoteCalls.length, callsBeforeLimit + 1);
+      assert.equal(resultCalls.length, resultsBeforeLimit);
+      assert.match(state.fetch_jobs[0].error, /102,400,000 bytes/);
+      if (suffix === 'stream') assert.equal(behavior.cancelled, true);
+    }
     lost = 'https://files.example.org/lost.bin';
     remoteBehaviors.set(lost, { chunks: [Uint8Array.from([1])] });
     beforeLost = queuedCalls.length;
