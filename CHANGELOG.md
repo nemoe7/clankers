@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Gemini prompts**: The four release prompts follow GUIDELINES.md section 4: a task line, shared boundary lines, one imperative rule per bullet, and a final return rule.
+
 - **Release notes sections**: Gemini omits template sections without evidence and always keeps Summary. An initial release shows Summary and Features only, with no commit comparison.
 
 - **STE lint in the gate**: `check.py` runs the ASD-STE100 linter over the covered documents (`STE_DOCS`), and CI calls `check.py --ste` with the same list.

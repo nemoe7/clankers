@@ -439,8 +439,13 @@ def test_release_pipeline():
         "no valid digest",
       )
   assert release.PROMPTS["version"].startswith(
-    "Classify the release impact of the supplied commit messages"
+    "Task: classify the release impact of the supplied commit messages"
   )
+  # GUIDELINES.md section 4: one rule per line, each a bullet, boundaries in every prompt.
+  for prompt in release.PROMPTS.values():
+    lines = prompt.strip().splitlines()
+    assert lines[0].startswith("Task: ") and all(l.startswith("- ") for l in lines[1:])
+    assert release.BOUNDARY in prompt and lines[-1].startswith("- Return only")
   assert set(release.PROMPTS) == {"chunk", "combine", "release", "version"}
   assert release.TEMPLATE.count("{{") == 6 and release.TEMPLATE.endswith(
     "{{comparison_url}}\n"
