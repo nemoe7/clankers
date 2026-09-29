@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.0.0
-// @description  Prompt fill, Steering preview, and composer hiding with saved feature switches
+// @version      1.1.0
+// @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
 // @author       nemoe7
 // @license      MIT
 // @match        https://arena.ai/*
@@ -237,7 +237,7 @@
 
     var BAR_SELECTOR =
       "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
-    var STEERING_LABEL_RE = /^(\S+) - Steering$/;
+    var STEERING_LABEL_RE = /^(\S+) - Steering$/i;
     var SLUG_KEY = "clankers-arena-agent-slug";
     var CLICK_DELAY_MS = 1000;
 
@@ -288,7 +288,7 @@
       if (!slug || !isSteeringPort(port)) {
         return false;
       }
-      if (expectedSlug && slug !== expectedSlug) {
+      if (expectedSlug && slug.toLowerCase() !== expectedSlug.toLowerCase()) {
         return false;
       }
       return true;
@@ -314,6 +314,8 @@
         [steeringSlugFromLabel("daedalus - Steering"), "daedalus"],
         [steeringSlugFromLabel("clankers - Steering"), "clankers"],
         [steeringSlugFromLabel("daedalus - Website"), null],
+        [buttonMatchesSteering("CLANKERS - steering", ":8000", "clankers"), true],
+        [buttonMatchesSteering("clankers - STEERING", ":8001", "CLANKERS"), false],
         [isSteeringPort(":8000"), true],
         [isSteeringPort("8000"), false],
         [buttonMatchesSteering("daedalus - Steering", ":8000", null), true],
@@ -462,6 +464,85 @@
       childList: true,
       characterData: true,
     });
+    window.addEventListener("popstate", sync);
+    sync();
+  });
+
+  runFeature("auto-scroll", "Transcript auto-scroll", function () {
+    var BOTTOM_GAP = 80;
+    var scroller = null;
+    var content = null;
+    var following = false;
+    var lastTop = 0;
+    var frame = null;
+    var route = null;
+    var resize = null;
+
+    function nearBottom(element) {
+      return element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_GAP;
+    }
+
+    if (typeof document === "undefined") {
+      var assert = require("node:assert/strict");
+      assert.equal(nearBottom({ scrollHeight: 1000, clientHeight: 400, scrollTop: 520 }), true);
+      assert.equal(nearBottom({ scrollHeight: 1000, clientHeight: 400, scrollTop: 519 }), false);
+      console.log("ok auto-scroll: bottom threshold");
+      return;
+    }
+
+    function onScroll() {
+      if (scroller.scrollTop < lastTop) following = false;
+      else if (nearBottom(scroller)) following = true;
+      lastTop = scroller.scrollTop;
+    }
+
+    function schedule() {
+      if (frame !== null || !scroller || !following) return;
+      frame = requestAnimationFrame(function () {
+        frame = null;
+        if (!scroller || !scroller.isConnected || !following || route !== location.pathname) return;
+        scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        lastTop = scroller.scrollTop;
+      });
+    }
+
+    function detach() {
+      if (scroller) scroller.removeEventListener("scroll", onScroll);
+      if (resize) resize.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = null;
+      scroller = content = null;
+    }
+
+    function sync() {
+      var message = location.pathname.indexOf("/agent/") === 0
+        ? document.querySelector('[data-agent-transcript-message="true"]') : null;
+      var next = message && message.closest('[role="log"]');
+      if (next && !/^(auto|scroll)$/.test(getComputedStyle(next).overflowY)) next = null;
+      if (next !== scroller || route !== location.pathname) {
+        detach();
+        route = location.pathname;
+        scroller = next;
+        if (scroller) {
+          lastTop = scroller.scrollTop;
+          following = nearBottom(scroller);
+          scroller.addEventListener("scroll", onScroll, { passive: true });
+          resize = new ResizeObserver(schedule);
+          resize.observe(scroller);
+        }
+      }
+      var nextContent = message;
+      while (nextContent && nextContent.parentElement !== scroller) nextContent = nextContent.parentElement;
+      if (scroller && nextContent !== content) {
+        if (content) resize.unobserve(content);
+        content = nextContent;
+        if (content) resize.observe(content);
+      }
+      schedule();
+    }
+
+    var observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     window.addEventListener("popstate", sync);
     sync();
   });
