@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Link colour**: Preview anchors use `#299bff` in both themes instead of the accent colour.
+
 - **Seen subcommand removed**: `read` and `poll` stamp delivered IDs Seen, so `preview.py seen` goes from the code, the tests and `REFERENCE.md`.
 
 - **Task ID shape**: Task IDs are short kebab-case titles, and acks put task IDs in backticks so the log links them.

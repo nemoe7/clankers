@@ -191,7 +191,7 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 }
 #copy-report, #refresh-report, #unpublish-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
-a { color: var(--accent); text-underline-offset: 3px; }
+a { color: #299bff; text-underline-offset: 3px; }
 .report, .message-text { overflow-wrap: anywhere; overflow-x: auto; }
 .report :is(h1, h2, h3, h4, h5, h6), .message-text :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }
 .report > :first-child, .message-text > :first-child { margin-top: 0; }
