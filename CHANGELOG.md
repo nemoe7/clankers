@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **No shared report and task IDs**: `publish` refuses a report ID that a task holds. A new or amended task refuses an ID that a report holds. The ack log links one ID to one panel.
+
 - **Local checks before push**: ARENA.md requires the repository checks to pass locally before every push, then the PR CI poll.
 
 - **Distribute Gemini release**: `distribute-gemini-release.yml` copies `gemini-release.yml` and `gemini_release.py` to target repositories on dispatch, `nemoe7/daedalus` by default, on the pattern of `distribute-arena.yml`.

@@ -1305,6 +1305,8 @@ class Store:
       stored = task_row(row) if row else None
       if stored is None and title is None:
         raise ValueError("A new task needs a title")
+      if stored is None:
+        self.refuse_shared_id(db, "tasks", "reports", task_id)
       title = title if title is not None else stored["title"]
       if details is None:
         details = stored["details"] if stored else []
@@ -1388,6 +1390,14 @@ class Store:
       ).fetchone()
     return (before[0] if before else None, after[0] if after else None)
 
+  @staticmethod
+  def refuse_shared_id(db, table, other, identity):
+    """Fail when `identity` already names a row in `other`: the log links one ID to one panel."""
+    if db.execute(f"SELECT 1 FROM {other} WHERE id = ?", (identity,)).fetchone():
+      raise ValueError(
+        f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID"
+      )
+
   def amend_task(self, prev_id, task_id):
     """Move a stored task to a new ID and keep the rest, so a typo costs no deletion."""
     check_task(task_id, None, None)
@@ -1401,6 +1411,7 @@ class Store:
         raise ValueError(f"No task is stored under {prev_id}")
       if db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone():
         raise ValueError(f"A task is already stored under {task_id}")
+      self.refuse_shared_id(db, "tasks", "reports", task_id)
       db.execute("DELETE FROM tasks WHERE id = ?", (prev_id,))
       db.execute(
         "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -2153,6 +2164,7 @@ class Store:
         raise ValueError(
           f"Report {report_id} has submitted answers; publish the update under a new ID"
         )
+      self.refuse_shared_id(db, "reports", "tasks", report_id)
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
         """INSERT INTO reports (id, title, markdown, updated_at, seq)

@@ -23,7 +23,7 @@ Use complete IDs in CLI calls; cite their first seven characters in prose. `read
 
 Refer to a note in prose by the first seven characters of its ID, NEVER by its sequence number (`seq`) or list position. Use the full ID in CLI calls. Before sending a note reference, check it against the ID returned by `read`.
 
-When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks instead of a generic label such as published report. This overrides seven-character prose shortening for these references. Use IDs unique across notes, reports and tasks so the client can link them.
+When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks instead of a generic label such as published report. This overrides seven-character prose shortening for these references. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
 
 ## External channel (ntfy)
 

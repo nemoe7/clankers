@@ -2259,6 +2259,30 @@ def test_task_list():
     )
 
 
+def test_shared_ids_refused():
+  # One backticked ID links to one panel, so a task and a report never share an ID.
+  with tempfile.TemporaryDirectory() as shared_dir:
+    store = preview.Store(shared_dir, create=True)
+    source = Path(shared_dir) / "plan.md"
+    source.write_text("# Plan\n", encoding="utf-8")
+    store.publish("plan", "Plan", source)
+    store.write_task("build", "Build it")
+    for attempt, message in (
+      (lambda: store.write_task("plan", "Plan task"), "already names a report"),
+      (lambda: store.amend_task("build", "plan"), "already names a report"),
+      (lambda: store.publish("build", "Build report", source), "already names a task"),
+    ):
+      try:
+        attempt()
+        raise AssertionError("shared ID accepted")
+      except ValueError as error:
+        assert message in str(error), str(error)
+    # Existing rows keep updating under their own IDs.
+    store.write_task("build", "Build it again")
+    store.publish("plan", "Plan revised", source)
+    assert [task["id"] for task in store.list_tasks()] == ["build"]
+
+
 def test_task_amend():
   with tempfile.TemporaryDirectory() as amend_dir:
     amend_store = preview.Store(amend_dir, create=True)
