@@ -43,6 +43,7 @@ Finished tasks display in reverse completion order. Upcoming tasks keep their st
 ## Note attachments
 
 The composer sends one note plus files through `/api/notes/with-file`.
+Pasted clipboard images join staged attachments with epoch-millisecond names, image extensions and numeric suffixes for collisions. Text paste stays native. Images keep the same per-file limit and retry path.
 Each note has one ID and acknowledgement. `read` lists files in `attachments[]`.
 Files stay outside SQLite in `<state-dir>/uploads/`. Each is at most 50MB.
 Name stored files with the note ID's first seven characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
