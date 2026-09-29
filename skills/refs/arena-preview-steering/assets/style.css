@@ -161,6 +161,9 @@ code.note-id[data-copied="bad"] { color: #ef4444; }
 #report-ack-history { margin-top: 10px; }
 #report-ack-history .reply-block:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 #report-ack-history .reply-block:first-child > p { margin-top: 0; }
+/* Later acks in the report history: one 8px gap each side of the hairline, no paragraph margin on top. */
+#report-ack-history .reply-block + .reply-block { margin-top: 8px; padding-top: 8px; }
+#report-ack-history .reply-block > p:first-child { margin-top: 0; }
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
