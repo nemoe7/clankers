@@ -74,12 +74,12 @@
           <button id="unpublish-report" class="icon-button" type="button" aria-label="Delete this report (two clicks)" title="Delete this report (two clicks)">✕</button>
           <p id="report-status" role="status" aria-live="polite">The agent can publish several reports here.</p>
         </div>
+        <div id="report-ack-history" class="answer reply message-text" hidden></div>
+        <p id="report-agent-ack" class="receipt" role="status" aria-live="polite" hidden></p>
         <form id="report-form">
           <article id="report" class="report" aria-label="Selected report"></article>
           <button id="report-submit" type="submit" hidden>Send answers</button>
         </form>
-        <div id="report-ack-history" class="answer reply message-text" hidden></div>
-        <p id="report-agent-ack" class="receipt" role="status" aria-live="polite" hidden></p>
         <small>Answers reach the agent inbox as one note; resending creates a new one.</small>
       </div>
     </section>

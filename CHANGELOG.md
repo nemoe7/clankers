@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **Report reply position**: Move report acknowledgement history and submission status above the report form. Keep reply history and links unchanged.
+
 - **Clipboard images**: Paste images into the composer as staged attachments with epoch-time filenames. Keep image bytes, native text paste, removable files, the per-file limit and the normal send/retry path.
 
 - **Turn-end task status**: State in chat that no open tasks remain before the final inbox poll. Keep the final poll and task-list check requirements.
