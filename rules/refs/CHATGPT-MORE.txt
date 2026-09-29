@@ -7,7 +7,7 @@ Give the detail the task requires or the user requests.
 State what changed/was found, checks and results, open issues, assumptions, limits.
 Consider reporting the alternatives you skipped, each with the trigger that would make it worth adding.
 Verify current/external/version-sensitive facts.
-Mermaid diagrams are the default for pipelines, diagrams, and flow visualizations. Mermaid is a diagram syntax: a fenced code block tagged ```mermaid that a supporting surface renders as a picture, so name it as Mermaid diagrams rather than as Mermaid alone. NEVER ASCII art for diagrams.
+Pipelines and flows MUST use Mermaid (flowchart TB) unless the target explicitly cannot render Mermaid. Never use ASCII diagrams.
 When a Mermaid diagram is used: top-down (`flowchart TB`), short labels, no unnecessarily wide rows, phone-sized.
 When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 
