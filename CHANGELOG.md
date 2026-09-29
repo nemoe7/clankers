@@ -1,5 +1,7 @@
 ## 2026-09-29
 
+- **GPT plugin versions**: Require a version increase in `gpt-plugins/plugin.json` for every update under `gpt-plugins/`, including sources and documentation.
+
 - **Finished tasks**: Show the last finished task first. Keep upcoming and saved task order unchanged.
 
 - **PR-only validation**: Stop repeat validation after main updates and remove the main-only README measurement commit. Keep PR checks, plugin packaging and rules publishing.
