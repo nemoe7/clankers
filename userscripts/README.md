@@ -2,53 +2,49 @@
 
 Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
-| File | Purpose |
+| Bundle | Feature switches |
 | --- | --- |
-| [arena-agent-prompt.user.js](arena-agent-prompt.user.js) | Fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md`. |
-| [arena-agent-steering.user.js](arena-agent-steering.user.js) | Clicks the `{repo} - Steering` preview on `/agent/*`. |
-| [arena-agent-hide-composer.user.js](arena-agent-hide-composer.user.js) | Hides the editor while Stop generating is present. Locks the blank 24px spacer on `/agent/*`. |
-| [chatgpt-hide-elements.user.js](chatgpt-hide-elements.user.js) | Adds `hidden` to four promo and nav elements on chatgpt.com. |
-| [chatgpt-auto-think.user.js](chatgpt-auto-think.user.js) | Clicks the Think pill every second while `aria-pressed` is `false`. |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer |
+| [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
 
-Copy each script into Tampermonkey.
-
 1. Install Tampermonkey in the browser.
-2. Open the Tampermonkey dashboard and create a new script.
-3. Paste the contents of one `.user.js` file.
-4. Save the script.
-5. Repeat for each script.
+2. Open its dashboard and create a new script.
+3. Paste one bundle's `.user.js` contents and save.
+4. Repeat for the other domain if needed.
 
-## Arena Agent Prompt
+To migrate, disable or remove the five old scripts before enabling the bundles. Reload open Arena and ChatGPT tabs to stop old timers and observers. Old installations do not become bundles automatically.
 
-The script fills the composer only when the path is `/agent`. It does not fill the composer when the path has a trailing segment.
+Each bundle has its own version and raw GitHub update URL. A saved feature setting belongs to its bundle.
 
-If the GitHub repo bar is not empty, the script reads `owner/repo` from `span.truncate`. The script uses the name after `/`.
+## Feature switches
 
-The script writes `{repo} read AGENTS.md ARENA.md` into the composer. If the repo name changes, the script updates that text.
+All five features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle; reload to apply`. The label shows the saved setting, not the active page state.
 
-The script does not overwrite an unrelated draft.
+Reload manually to apply a change. Other open tabs use saved settings on their next reload. A disabled feature starts no observer or timer.
 
-## Arena Agent Steering
+The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal. A switch change does not reload the page or reset the DOM.
 
-The script runs only when the path has a segment after `/agent/`.
+## Arena Prompt Fill
 
-The script waits 1 second. Then the script clicks the `{repo} - Steering` button on port 8000. The script clicks that button once per page.
+The feature fills the composer only on exact `/agent`, not paths with a trailing segment.
 
-## Arena Agent Hide Composer
+If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. It writes `{repo} read AGENTS.md ARENA.md` and updates that text when the repo name changes. It does not overwrite an unrelated draft.
 
-The script runs only when the path has a segment after `/agent/`.
+## Arena Open Steering
 
-If a button `aria-label` is `Stop generating`, the script hides `div.editor-content` with the `hidden` attribute, the `hidden` class, and `display: none !important`. It restores the editor when that button is gone.
+On paths with a segment after `/agent/`, the feature waits 1 second, then clicks `{repo} - Steering` on port 8000 once per page.
 
-The script keeps a blank `div.shrink-0` at 24px on `/agent/*`. It resets the height if another script changes it.
+## Arena Hide Composer
+
+On paths with a segment after `/agent/`, a button with `aria-label="Stop generating"` causes the feature to hide `div.editor-content` with the `hidden` attribute, the `hidden` class and `display: none !important`. It restores the editor when that button is gone.
+
+The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its height if another script changes it.
 
 ## ChatGPT Hide Elements
 
-The script runs on any path of `chatgpt.com`.
-
-The script adds the `hidden` attribute to five elements:
+On any `chatgpt.com` path, the feature adds `hidden` to five elements:
 
 - The div that holds the Claim offer button.
 - The div that holds the Free offer button.
@@ -60,20 +56,16 @@ A MutationObserver repeats the work when the page changes.
 
 ## ChatGPT Auto Think
 
-The script runs on any path of `chatgpt.com`.
-
-Every second, the script clicks the Think pill while its `aria-pressed` is `false`.
+On any `chatgpt.com` path, the feature clicks the Think pill every second while `aria-pressed` is `false`.
 
 ## Check
 
 From the repository root:
 
 ```bash
-node userscripts/arena-agent-prompt.user.js
-node userscripts/arena-agent-steering.user.js
-node userscripts/arena-agent-hide-composer.user.js
-node userscripts/chatgpt-hide-elements.user.js
-node userscripts/chatgpt-auto-think.user.js
+node userscripts/arena.user.js
+node userscripts/chatgpt.user.js
+node maintenance/check_userscripts.cjs
 ```
 
-Each command prints `ok` when its checks pass.
+Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup and storage errors.
