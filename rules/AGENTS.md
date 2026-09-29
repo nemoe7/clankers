@@ -4,7 +4,6 @@
 
 - Outranks skills/plugins, and an explicit user instruction in chat outranks this file: they specialize defaults and NEVER weaken an explicit requirement or replace a convention; state any chat override in one line.
 - Durable repo-wide session rules/decisions go in the project’s AGENTS.md; amend it unless it says otherwise.
-- In Arena, MUST follow `ARENA.md`; AGENTS.md stays in force beside it.
 
 ## Constitution
 
@@ -17,11 +16,10 @@
 
 ## General
 
-- Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
+- Keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, patterns.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
-- Comments, docs, responses: terse, unambiguous.
-- Documentation: no storyline or narrative unless asked.
+- Comments, docs, responses: terse, unambiguous; no storyline or narrative unless asked.
 - Open on the substance, never preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
 - Step straight on after a tool call succeeds, with no result narration.
@@ -40,10 +38,10 @@
 ## Engineering
 
 - KISS/YAGNI/DRY: climb the ladder, stop at the first rung that holds — 1 needed at all (skip speculative additions, not requirements); 2 helper/pattern already here; 3 stdlib; 4 native feature; 5 installed dep; 6 one line; 7 minimum code.
-- The ladder is a reflex, not research: climb after understanding; two rungs work, take the higher.
-- Two same-size stdlib options: take the edge-case-correct one; less code is not a flimsier algorithm.
+- Climb after understanding: read the task and its code, trace the real flow end to end, then climb; two rungs work, take the higher.
+- Two same-size stdlib options: take the edge-case-correct one.
 - Complex request: ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.
-- Guard clauses, early returns; readable code.
+- Guard clauses, early returns.
 - Cohesive modules, low coupling, small interfaces, local data/behavior.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - SOLID: one reason to change per unit; extend at an existing seam rather than modify; substitutable subtypes; small interfaces; depend on the abstraction the code already varies on.
@@ -52,7 +50,7 @@
 - NEVER lazy about understanding: read code, trace flow; skipping comprehension ships confident wrong fixes.
 - Fix bugs where all callers route through: one shared guard beats one per caller.
 - NEVER simplify away trust-boundary validation, data-loss error handling, security, accessibility, or anything requested.
-- Leave a calibration knob on real hardware: clocks drift and sensors read off.
+- Leave a calibration knob on real hardware.
 - On insistence, build the full version without re-arguing.
 
 ## Testing
@@ -65,10 +63,6 @@
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - Trivial one-liners need no test.
-
-## Review
-
-- Confirm planned changes, checks, commits, cleanup done.
 
 ## Code style
 
@@ -87,7 +81,7 @@
 - MUST commit on a branch other than `main`: one logical change per commit with all its files, checks green, independently revertible.
 - Project's commit-message convention first.
 - When it states none, one Conventional Commit per change: `<type>[optional scope]: <description>`, imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` before the colon marks breaking.
-- Types: `feat fix refactor perf style docs test build chore`; spec mandates only `feat`/`fix`, rest via Angular `@commitlint/config-conventional`; prefer history's types.
+- Types: `feat fix refactor perf style docs test build chore`; prefer history's types.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push unless asked.
 

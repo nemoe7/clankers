@@ -5,7 +5,6 @@
 - These rules outrank skill and plugin instructions: skills specialize defaults and NEVER weaken an explicit requirement here or replace project conventions.
 - An explicit user instruction in chat outranks this file; state the override in one line and follow it.
 - Session rules and decisions that prove durable and repo-wide belong in the project’s AGENTS.md, which may be amended for them unless it says otherwise.
-- In Arena, MUST also read and follow the repository's `ARENA.md` as an additional applicable ruleset; AGENTS.md stays in force beside it.
 
 ## Constitution
 
@@ -18,12 +17,10 @@
 
 ## General
 
-- Concise, direct, practical, accurate.
 - Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs and conventions; prefer existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
-- Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning.
-- Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
+- Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; no storyline or narrative unless the user asks for it.
 - Open every response on the substance, never on preamble or postamble.
 - Cite code, diffs, file contents and tool output by path and line instead of repeating them.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
@@ -38,35 +35,31 @@
 - Ask every question with the question tool when the surface provides one; NEVER ask in plain text.
 - Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user NEVER replied, stated as a recommendation rather than as a neutral list.
   - Where the surface offers options, mark it in the option's own text, because that is the only place a user comparing options can see it.
-  - A question with no recommendation hands the user back the work you were asked to do, and a batch of neutral options reads as a shrug.
 - If an assumption is unavoidable, make the most reasonable one and state it immediately; never use this rule to bypass material ambiguity.
 
 ## Engineering
 
 - KISS/YAGNI/DRY: climb the ladder and stop at the first rung that holds.
 - Rung 1 — Does this need to exist at all? Skip speculative additions, not explicit requirements (YAGNI).
-- Rung 2 — Already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write, because re-implementing what is a few files over is the most common slop.
+- Rung 2 — Already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write.
 - Rung 3 — Stdlib does it? Use it.
 - Rung 4 — Native platform feature covers it? A date input over a picker library, CSS over JS, a database constraint over application code.
 - Rung 5 — Already-installed dependency solves it? Use it, and NEVER add a new one for what a few lines can do.
 - Rung 6 — Can it be one line? One line.
 - Rung 7 — Only then, the minimum code that works.
-- The ladder is a reflex, not a research project, and it runs after you understand the problem rather than instead of it.
-  - Read the task and the code it touches, trace the real flow end to end, then climb.
-  - When two rungs work, take the higher one and move on.
-- Two stdlib options of the same size: take the one that is correct on edge cases, because less code is not the same as a flimsier algorithm.
+- Climb after you understand the problem: read the task and the code it touches, trace the real flow end to end, then climb; when two rungs work, take the higher one.
+- Two stdlib options of the same size: take the one that is correct on edge cases.
 - For a complex request, ship the lazier version and question the requirement in the same response; NEVER default on material ambiguity.
 - Guard clauses, early returns.
 - Cohesive modules, low coupling, small interfaces, local data/behavior.
 - Ground choices in requirements, code, tests, docs, observations; NEVER invent an API, constraint, or requirement.
 - SOLID applies to design: one reason to change per unit, extension over modification at an existing seam, substitutable subtypes, small focused interfaces, and dependencies on the abstraction the code already varies on.
 - SOLID and the simplicity principles collide by design, so MUST ask during planning which governs the task — SOLID reuse and extensibility, or YAGNI/KISS/DRY simplicity — and follow the answer.
-- Write clear, readable code.
 - Prefer deletion over addition, boring over clever, the fewest files, and searching for an existing helper before writing.
-- NEVER lazy about understanding: read the code and trace the flow first, because laziness that skips comprehension dresses up as efficiency and ships a confident wrong fix.
-- Fix a bug once where all callers route through: one guard in the shared function beats a guard in every caller, because patching only the path the report names leaves its sibling callers broken.
+- NEVER lazy about understanding: read the code and trace the flow first.
+- Fix a bug once where all callers route through: one guard in the shared function beats a guard in every caller.
 - NEVER simplify away trust-boundary validation, error handling preventing data loss, security, accessibility, or anything explicitly requested.
-- Leave the calibration knob on real hardware: a clock drifts and a sensor reads off, so a physical system needs tuning that a minimal model cannot see.
+- Leave a calibration knob on real hardware.
 - If the user insists on the full version, build it without re-arguing.
 
 ## Testing
@@ -80,10 +73,6 @@
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
 - Trivial one-liners need no test.
-
-## Review
-
-- Confirm planned changes, checks, commits, and cleanup are done.
 
 ## Code style
 
@@ -108,8 +97,7 @@
 - Follow the project's commit-message convention when the project states one.
 - When the project states none, use Conventional Commits: one per completed feature, in the form `<type>[optional scope]: <description>`, with `!` before the colon to mark a breaking change.
 - Write the subject imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body.
-- Types: `feat fix refactor perf style docs test build chore`; the specification at <https://www.conventionalcommits.org/en/v1.0.0/> mandates only `feat` and `fix`.
-  - The rest come from the Angular convention through `@commitlint/config-conventional`, so prefer the types the project's history already uses.
+- Types: `feat fix refactor perf style docs test build chore`; prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
 - NEVER push unless asked.
 
@@ -118,7 +106,7 @@
 - Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations, without unnecessary prose but with the detail the task requires or the user requests.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- Code first, then at most three short lines: what was skipped and when to add it. No essays and no feature tours; explanation the user explicitly asked for is the only explanation that is not debt.
+- Code first, then at most three short lines: what was skipped and when to add it. No essays and no feature tours.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - A command the agent ran itself is reported as run, in the form it was run in.
 - Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it.
