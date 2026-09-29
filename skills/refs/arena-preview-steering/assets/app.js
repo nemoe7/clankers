@@ -132,7 +132,7 @@ note.addEventListener('input', () => {
 });
 
 // File bytes stay in this browser tab, not in localStorage. Every staged file has its own removal
-// control beside "Your message"; the picker and drop add files before one atomic note send.
+// control beside "Your message"; picker, drop and paste stage files before one atomic send.
 let stagedFiles = [];
 const picker = $('#upload-file');
 const compose = $('#compose');
@@ -193,6 +193,21 @@ function stageFiles(files) {
 }
 $('#attach-file').addEventListener('click', () => picker.click());
 picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
+compose.addEventListener('paste', event => {
+  if (send.disabled) return;
+  const images = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith('image/'));
+  if (!images.length) return;
+  if (!event.clipboardData.getData('text/plain')) event.preventDefault();
+  const stamp = Date.now();
+  const names = new Set(stagedFiles.map(file => file.name));
+  stageFiles(images.map(file => {
+    const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.slice(6).split('+')[0].replace(/[^a-z0-9]/gi, '') || 'img';
+    let name = `${stamp}.${extension}`;
+    for (let index = 2; names.has(name); index++) name = `${stamp}-${index}.${extension}`;
+    names.add(name);
+    return new File([file], name, { type: file.type, lastModified: stamp });
+  }));
+});
 const hasDraggedFile = event => Array.from((event.dataTransfer || {}).types || []).includes('Files');
 for (const type of ['dragenter', 'dragover']) compose.addEventListener(type, event => {
   if (!hasDraggedFile(event)) return;

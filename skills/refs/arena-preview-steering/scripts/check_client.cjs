@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { File } = require('node:buffer');
 
 class Element {
   // textContent reads through to children, the way a browser does, so a receipt built from
@@ -127,6 +128,7 @@ const context = {
   crypto: { randomUUID: () => `${String(++counter).padStart(8, '0')}-0000-4000-8000-000000000000` },
   AbortController,
   Blob,
+  File,
   FormData: FormDataStub,
   URL,
   setTimeout,
@@ -1621,6 +1623,54 @@ test('preview client', async (t) => {
     assert.equal(sent.length, sendsBeforeFile);
     assert.equal(get('#staged-files').hidden, true);
 
+  });
+
+  await t.test("Clipboard images stage with epoch filenames, preserve bytes and use the normal send", async () => {
+    const paste = get('#compose').events.paste;
+    assert.equal(typeof paste, 'function');
+    const before = uploadCalls.length;
+    const stamp = 1790674492000;
+    context.Date = class extends Date { static now() { return stamp; } };
+    const image = new File([new Uint8Array([137, 80, 78, 71])], 'image.png', { type: 'image/png' });
+    const jpeg = new File(['jpeg bytes'], 'image.jpeg', { type: 'image/jpeg' });
+    const pasteEvent = files => event({ clipboardData: { files, getData: () => '' } });
+    try {
+      get('#note').value = 'Review this image';
+      const plain = event({ clipboardData: { files: [], getData: () => 'text' } });
+      paste(plain);
+      assert.equal(plain.prevented, undefined, 'native text paste is untouched');
+      paste(event({ clipboardData: null }));
+      paste(pasteEvent([new File(['x'], 'notes.txt', { type: 'text/plain' })]));
+      assert.equal(get('#staged-files').hidden, true, 'non-images do not become attachments');
+      const images = pasteEvent([image, image, jpeg]);
+      paste(images);
+      assert.equal(images.prevented, true);
+      assert.deepEqual(chips(), [`${stamp}.png`, `${stamp}-2.png`, `${stamp}.jpg`]);
+      const mixed = event({ clipboardData: { files: [image], getData: () => 'caption' } });
+      paste(mixed);
+      assert.equal(mixed.prevented, undefined, 'mixed text still uses native paste');
+      assert.deepEqual(chips(), [`${stamp}.png`, `${stamp}-2.png`, `${stamp}.jpg`, `${stamp}-3.png`]);
+      assert.equal(get('#note').value, 'Review this image');
+      assert.equal(uploadCalls.length, before, 'pasting only stages files');
+      get('#send').disabled = true;
+      paste(pasteEvent([image]));
+      get('#send').disabled = false;
+      assert.equal(chips().length, 4, 'sending does not accept more files');
+      paste(pasteEvent([new File([], 'empty.png', { type: 'image/png' })]));
+      assert.match(get('#send-status').textContent, /is empty/);
+      const oversized = new File([new Uint8Array(50_000_001)], 'large.png', { type: 'image/png' });
+      paste(pasteEvent([oversized]));
+      assert.match(get('#send-status').textContent, /ceiling is 50,000,000/);
+      assert.equal(chips().length, 4, 'invalid paste keeps existing attachments');
+      await get('#form').events.submit(event({}));
+      assert.equal(uploadCalls.length, before + 1);
+      const files = uploadCalls.at(-1).files;
+      assert.deepEqual(files.map(file => file.name), [`${stamp}.png`, `${stamp}-2.png`, `${stamp}.jpg`, `${stamp}-3.png`]);
+      assert.equal(files[0].type, 'image/png');
+      assert.equal(files[0].lastModified, stamp);
+      assert.deepEqual(new Uint8Array(await files[0].arrayBuffer()), new Uint8Array(await image.arrayBuffer()));
+      assert.equal(get('#staged-files').hidden, true);
+    } finally { delete context.Date; get('#send').disabled = false; }
   });
 
   await t.test("The queue records per-job opt-in and a browser worker claims one URL at a time", async () => {
