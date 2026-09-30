@@ -1,5 +1,7 @@
 ## 2026-09-30
 
+- **Custom answers**: AGENTS.md requires a fresh proposal of the new wording after a custom answer. The line lands only after that proposal is approved.
+
 - **Clause proposals**: AGENTS.md requires a proposal on the initial refs wording of every clause change. Owner-supplied text is no exception, and the live mirrors follow the approved line.
 
 - **ChatGPT long-text fences**: The `More about you` field scans for the longest inner backtick run and sets the outer fence to `max(4, run + 1)`. The fence stays strictly longer than every inner run and holds at least 4 backticks.
