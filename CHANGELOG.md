@@ -46,6 +46,10 @@
 
 - **Newest steering row**: Open Steering takes the newest matching row, so a stale card from an earlier turn no longer shadows the live preview. The version moves to `1.1.12`.
 
+- **Steering row ranks**: Open Steering ranks a running row above a `Start …` history card. The newest row wins inside a rank, so the click lands on the live preview. The version moves to `1.1.13`.
+
+- **Emoji hold**: The title holds the last action emoji for five seconds after the live row leaves. A gap between calls no longer flashes the title. The version moves to `1.1.13`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

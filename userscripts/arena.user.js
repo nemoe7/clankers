@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.12
+// @version      1.1.13
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -402,8 +402,12 @@
           "clankers"), "clankers - Steering :8000"],
         [steeringRowText([["Website", ":3000"], ["arena-preview-steering", ":8000"]], "clankers"),
           "arena-preview-steering :8000"],
-        // A stale card from an earlier turn sits above the live one, which wins.
+        // The live row (no start verb) wins over history cards, wherever they sit.
         [steeringRowText([["Start clankers - Steering", ":8000"], ["clankers - Steering", ":8000"]],
+          "clankers"), "clankers - Steering :8000"],
+        [steeringRowText([["clankers - Steering", ":8000"], ["Start clankers - Steering", ":8000"]],
+          "clankers"), "clankers - Steering :8000"],
+        [steeringRowText([["clankers - Steering", ":8000"], ["Start preview", ":8000"]],
           "clankers"), "clankers - Steering :8000"],
         // A newer row for another project does not steal the turn from this project's row.
         [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
@@ -501,31 +505,48 @@
       return { label: label, slug: steeringSlugFromLabel(label), port: port };
     }
 
+    // Rank, best first: a running row that names this project, a running row with no name, a
+    // history card for this project, another project's running row, then the remaining cards.
+    // Agent turns leave history cards behind, and a click on one opens nothing.
+    function steeringRank(label, slug, expectedSlug) {
+      var start = /^start\b/i.test(String(label || ""));
+      var matches = Boolean(expectedSlug && slug && slug.toLowerCase() === expectedSlug.toLowerCase());
+      var other = Boolean(expectedSlug && slug && slug.toLowerCase() !== expectedSlug.toLowerCase());
+      if (!start && matches) {
+        return 0;
+      }
+      if (!start && !other) {
+        return 1;
+      }
+      if (start && matches) {
+        return 2;
+      }
+      if (!start) {
+        return 3;
+      }
+      return other ? 5 : 4;
+    }
+
     function findSteeringButton(doc, expectedSlug) {
       var buttons = doc.querySelectorAll('button[type="button"]');
-      var newest = null;
-      var newestSlug = null;
-      var newestNamed = null;
+      var best = null;
+      var bestRank = 6;
       var i;
       var parsed;
-      // Old cards from earlier turns stay in the transcript, so the newest match is the live row.
-      // A row that names another project keeps its turn only while no newer row answers.
+      var rank;
       for (i = 0; i < buttons.length; i += 1) {
         parsed = parseSteeringButton(buttons[i]);
         if (!parsed || !buttonMatchesSteering(parsed.label, parsed.port, null)) {
           continue;
         }
-        newest = buttons[i];
-        newestSlug = parsed.slug;
-        if (expectedSlug && parsed.slug && parsed.slug.toLowerCase() === expectedSlug.toLowerCase()) {
-          newestNamed = buttons[i];
+        rank = steeringRank(parsed.label, parsed.slug, expectedSlug);
+        // Equal ranks keep the newest row, which is the live one.
+        if (rank <= bestRank) {
+          best = buttons[i];
+          bestRank = rank;
         }
       }
-      if (!newest) {
-        return null;
-      }
-      var other = expectedSlug && newestSlug && newestSlug.toLowerCase() !== expectedSlug.toLowerCase();
-      return other && newestNamed ? newestNamed : newest;
+      return best;
     }
 
     function sync() {
@@ -1037,6 +1058,10 @@
       ["wait", "\uD83D\uDCA4"],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
+    // A gap between two calls blinks the live row away; the last mark holds the title steady.
+    var EMOJI_HOLD_MS = 5000;
+    var heldEmoji = null;
+    var heldEmojiAt = 0;
     var WAITING_EMOJI = "\uD83D\uDCA4";
     // Any preview command that ends in poll: full paths, the extensionless script, the .py form.
     var POLL_RE = /preview[\s\S]{0,60}poll/;
@@ -1209,12 +1234,26 @@
       return lastRepo && path === lastPath ? lastRepo : null;
     }
 
+    function heldEmojiFor(doc) {
+      var emoji = emojiForRow(liveRow(doc));
+      if (emoji) {
+        heldEmoji = emoji;
+        heldEmojiAt = Date.now();
+        return emoji;
+      }
+      if (heldEmoji && Date.now() - heldEmojiAt < EMOJI_HOLD_MS) {
+        return heldEmoji;
+      }
+      heldEmoji = null;
+      return null;
+    }
+
     function desiredTitle(doc) {
       var name = repoForTitle(doc);
       if (!name) {
         return null;
       }
-      var emoji = emojiForRow(liveRow(doc));
+      var emoji = heldEmojiFor(doc);
       return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
     }
 
@@ -1294,6 +1333,11 @@
       }
       function rememberRepo() {
         return repoForTitle(setDoc);
+      }
+      // The hold expires five seconds after the last live row, so the checks can wind it down.
+      function expireHold() {
+        heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1;
+        return null;
       }
       function divMessage(text, shimmer) {
         var label = { textContent: text };
@@ -1448,6 +1492,10 @@
         [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
         [syncTitle(busyDoc), true],
         [busyDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+        [syncTitle(idleDoc), true],
+        [idleDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+        [expireHold(), null],
+        [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
         [syncTitle(idleDoc), true],
         [idleDoc.title, TITLE_PREFIX + "clankers"],
       ];

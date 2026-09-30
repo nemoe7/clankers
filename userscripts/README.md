@@ -34,7 +34,7 @@ If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` 
 
 ## Arena Open Steering
 
-After `/agent/`, the feature waits 1 second, then clicks the port 8000 row whose label mentions `steering` or `preview`, once per page. The newest matching row wins, because older cards stay in the transcript. A row naming the repository wins over a renamed row, and matching ignores letter case.
+After `/agent/`, the feature waits 1 second, then clicks the port 8000 row whose label mentions `steering` or `preview`, once per page. A running row outranks the `Start …` cards that earlier turns leave behind, a row naming the repository outranks a renamed row, and the newest row breaks a tie. Matching ignores letter case.
 
 ## Arena Hide Composer
 
@@ -50,7 +50,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait 💤, and ⚙️ for anything else. `Bash` and `command` count as running, so `using Bash` and `Ran commands` show 🖥️. A row whose command is any form of the preview poll, bare, full path or `preview.py`, shows 💤, because the agent waits on you. The emoji clears when the turn ends. The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait 💤, and ⚙️ for anything else. `Bash` and `command` count as running, so `using Bash` and `Ran commands` show 🖥️. A row whose command is any form of the preview poll, bare, full path or `preview.py`, shows 💤, because the agent waits on you. The emoji holds for five seconds after the live row leaves, so a gap between calls does not flash the title, and it clears once the turn ends. The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
 
 ## ChatGPT Hide Elements
 
