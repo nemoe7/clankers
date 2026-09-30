@@ -9,6 +9,7 @@
 ### git
 
 - **Commit-message hook**: The preview installer replaces the local hook with a validator for `rules/COMMIT-SPEC.txt`. It checks the subject format, rejects a body, and adds no co-author trailer.
+- **Commit types**: The specification adds `ci` and `revert`. The installer reads the allowed types from `rules/COMMIT-SPEC.txt`.
 
 ### userscripts
 

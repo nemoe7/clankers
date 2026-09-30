@@ -52,9 +52,12 @@ def main():
       "feat(git): install a project commit hook\n",
       "fix!: remove the old behavior\n",
       "docs: clarify commit message rules\n",
+      "ci: validate commit messages\n",
+      "revert: restore earlier behavior\n",
       "docs: " + "a" * 66 + "\n",
     ]
     invalid = [
+      "unknown: reject this type\n",
       "Feature: add a hook\n",
       "fix: Add a hook\n",
       "fix: add a hook.\n",
