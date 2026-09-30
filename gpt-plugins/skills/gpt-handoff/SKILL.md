@@ -72,6 +72,12 @@ Do not treat agent claims as evidence.
 
 Verify behavior with tests or direct checks where practical; otherwise state verification limits.
 
+Include a direct URL for every material external claim and every repository-specific reference, beside the claim it supports.
+
+Do not drop a link because tool output already showed the evidence, and do not turn evidence into unsupported prose.
+
+Use plain Markdown links, and prefer direct source URLs over search-result URLs.
+
 ## Findings
 
 Use when applicable:
@@ -94,6 +100,14 @@ Never claim a check passed without verification.
 
 Produce only the actionable handoff.
 
+Make the handoff one Markdown fenced block, directly copyable as an agent prompt, with all content inside it and no prose before or after it.
+
+Do not use a writing block for handoffs.
+
+Keep Markdown headings, lists, code, commands and links inside the block.
+
+Apply the same single-block rule to `audit`.
+
 For `audit`, include only:
 
 - findings
@@ -108,7 +122,7 @@ For `handoff`, include only:
 - design direction
 - minimum checks
 - material evidence
-- unresolved questions
+- unresolved questions, only when material
 - next actions
 - `handoff-by`
 

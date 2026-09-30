@@ -1,3 +1,7 @@
+## 2026-09-30
+
+- **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.
+
 ## 2026-09-29
 
 - **Owner-verbatim scope**: AGENTS.md grants the approval exemption only for the owner's complete clause text. Any other owner directive takes the report route first.
