@@ -25,16 +25,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set Up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           # Keep minifier output stable across interpreter releases.
           python-version: "3.11"
 
       - name: Cache Pip Downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # There is no requirements file: the pins live in this workflow and in ruff.toml, so the
           # workflow itself is the honest cache key and any dependency change busts it.
@@ -48,7 +48,7 @@ jobs:
           python -m pip install tiktoken markdown-it-py python-minifier==3.3.0 "ruff==$VERSION"
 
       - name: Set Up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -89,7 +89,7 @@ jobs:
           node --test maintenance/userscripts.checks.cjs maintenance/userscripts.test.cjs
 
       - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@v20
+        uses: DavidAnson/markdownlint-cli2-action@v24
 
   preview-tests:
     name: Preview Tests
@@ -99,7 +99,7 @@ jobs:
       contents: read
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -142,13 +142,13 @@ jobs:
 
       - name: Set Up Python
         if: steps.preview.outputs.run == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Set Up Node
         if: steps.preview.outputs.run == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm

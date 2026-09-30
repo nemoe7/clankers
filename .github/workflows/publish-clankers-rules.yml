@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check Out The Pushed Rules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Check Reconciliation Fixtures Without GitHub Credentials
         run: python3 maintenance/check_publish_clankers_rules.py
       - name: Reconcile Secret Clankers-Rules Gist

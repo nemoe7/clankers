@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -36,13 +36,13 @@ jobs:
         run: git fetch --no-tags origin "${{ github.base_ref }}"
 
       - name: Set Up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           # Keep the manifest validation on the interpreter the other workflows use.
           python-version: "3.11"
 
       - name: Cache Pip Downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # There is no requirements file: the pins live in this workflow, so the workflow
           # itself is the honest cache key and any dependency change busts it.
@@ -129,16 +129,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set Up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           # Keep the manifest validation on the interpreter the other workflows use.
           python-version: "3.11"
 
       - name: Cache Pip Downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # There is no requirements file: the pins live in this workflow, so the workflow
           # itself is the honest cache key and any dependency change busts it.

@@ -64,6 +64,10 @@
 
 - **No Start click**: Open Steering never clicks a `Start …` transcript card, because a click on one opens nothing. With no running row it clicks nothing. The version moves to `1.1.16`.
 
+### workflows
+
+- **Action versions**: Every workflow pins the latest stable action majors: `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7`, `actions/cache@v6`, `actions/upload-artifact@v7` and `DavidAnson/markdownlint-cli2-action@v24`. The shipped `github/workflows/gemini-release.yml` carries the same pins.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

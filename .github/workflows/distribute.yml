@@ -35,7 +35,7 @@ jobs:
       LEGACY_SKILLS: "arena-live-steering arena-preview-reporting"
     steps:
       - name: Check Out Source Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Sync ARENA.md And The Preview Skill To Target Repos
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
@@ -129,7 +129,7 @@ jobs:
       FILES: "gemini-release.yml gemini_release.py"
     steps:
       - name: Check Out Source Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Sync The Gemini Release Workflow To Target Repos
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
