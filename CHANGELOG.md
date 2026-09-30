@@ -2,6 +2,8 @@
 
 ### rules
 
+- **CI watch**: ARENA.md watches the PR checks with `gh pr checks <PR> --watch` on a Bash call with timeout 1800s. The sleep ladder leaves the refs and live lines.
+
 - **Ledger prose**: AGENTS.md bans narrative, rationale and story in the ledger. The budget exceptions file drops reasons from its fill rule and every entry.
 - **Custom answers**: AGENTS.md requires a fresh proposal of the new wording after a custom answer. The line lands only after approval of that proposal.
 - **Clause proposals**: AGENTS.md requires a proposal on the initial refs wording of every clause change. Owner-supplied text is no exception, and the live mirrors follow the approved line.
