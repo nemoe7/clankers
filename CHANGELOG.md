@@ -100,6 +100,10 @@
 
 ### workflows
 
+- **Workflows README**: The Gemini release page keeps the install steps, the proposal and approval run, and four operating facts. The intermediate mechanics leave, and the page drops from 217 to 120 words by the linter count.
+
+
+
 - **Distribution secret**: The dispatch workflow reads `CLANKERS_DIST_PAT` in both jobs, and the workflows README names the same secret.
 
 

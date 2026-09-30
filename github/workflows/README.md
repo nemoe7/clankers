@@ -4,19 +4,13 @@ Reusable GitHub Actions sources, with no instruction budget. This directory does
 
 ## Gemini release proposal and draft
 
-Copy two files to `.github/workflows/` on the target repository's default branch: [gemini-release.yml](gemini-release.yml) and [gemini_release.py](gemini_release.py). The Python file contains the prompts and the release template. The check script stays in this repository. The dispatch-only job in `.github/workflows/distribute-arena.yml` copies the two files to the target repositories, `nemoe7/daedalus` by default, with the `CLANKERS_DIST_PAT` secret. That token needs Workflows write access because the copy changes `.github/workflows/`.
+Copy [gemini-release.yml](gemini-release.yml) and [gemini_release.py](gemini_release.py) to `.github/workflows/` on the target repository's default branch, and add `GEMINI_API_KEY` as an Actions secret. The dispatch job in `.github/workflows/distribute-arena.yml` copies both files, `nemoe7/daedalus` by default, with the `CLANKERS_DIST_PAT` secret. That token needs Workflows write access because the copy changes `.github/workflows/`.
 
-Add `GEMINI_API_KEY` as an Actions secret. Run **Gemini Release Draft** from the default branch with no proposal run ID to propose a release. The `models` input is a comma-separated ladder. Each Gemini request tries the models in order and moves to the next on an HTTP error or blocked output. The default ladder is `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`. The workflow needs Contents write and Actions read permissions. The proposal run creates **no tag or release**. It shows the version, SHA and notes in the Actions summary. It uploads `gemini-release-proposal`. Review the notes and target. Run the workflow again with the **successful proposal run ID** to create the tag and draft. This run uses the saved notes and does not call Gemini. An expired artifact needs a new proposal. Use a new dispatch, not a proposal rerun: approval rejects rerun proposal IDs. Approval retries can reuse the original proposal ID.
+Run **Gemini Release Draft** with no proposal run ID to propose a release. The proposal shows the version, SHA and notes in the Actions summary, and it creates no tag or release. Review the notes and target, then run the workflow again with the successful proposal run ID. That run reuses the saved notes and does not call Gemini.
 
-The target defaults to the default-branch commit checked out at dispatch. You can supply a full commit SHA reachable from the default branch. The script does not execute target code. Default-branch workflow code and its writers must be trusted. The baseline is the latest published release reachable from the target, including prereleases and excluding drafts. With no published release, input includes all reachable history. A published prerelease baseline stops the proposal pending a new decision. A missing or moved baseline tag, shallow history or API error stops the run.
-
-Gemini classifies release impact under [SemVer 2.0.0](https://semver.org/), not commit prefixes. You can set the proposal-only override to `major`, `minor`, `patch` or `none`. `none` creates no artifact unless you also request promotion. An uncertain classification stops the run for review. The first release is `v0.1.0`. A major impact below `1.0.0` raises the minor version. Use `promote_to_stable` in the proposal run to choose `1.0.0` from a published `0.y.z` release. Later bumps use standard major, minor and patch arithmetic. Tags are `v` plus the stable numeric version, whatever the baseline tag's form.
-
-The `evidence` input selects what Gemini reads: `commits-and-diffs` (default) sends commit messages and each commit's text diffs against every parent, including root. `commits` sends the messages only. Binary files add one marker line and no patch data. Merge patches can repeat changes, and reverted changes remain in the history. Non-UTF-8 bytes use escaped text. Large inputs are split without truncation. Gemini summarizes each part and combines summaries until they fit the final request. Coverage checks track every fragment, not model accuracy. Failed, blocked, incomplete or non-shrinking output stops the proposal. The notes keep the Summary section and omit any other template section without evidence. An initial release, one with no published baseline, shows Summary and Features only and has no commit comparison.
-
-Approval checks the source run, artifact ID and digest, version, target, baseline and tag before writing. Approval ignores proposal-only inputs and uses the saved values. It never moves a tag or edits a published release. A matching existing tag supports retry after draft failure. Tag creation and draft saving are separate writes: if saving fails, the tag stays in place. External tag moves or publication can race these checks. The API has no atomic draft-only update. Review the draft against the comparison before publication.
-
-Requests send repository history to Google and can incur API costs. The job has a 60-minute timeout. `INPUT_BYTES`, `PIECE_CHARS` and the `models` input are calibration controls, not instruction budgets. No live API run is part of the offline check.
+- The baseline is the latest published release reachable from the target. The first release is `v0.1.0`, and SemVer decides the bump. The `override` input forces `major`, `minor`, `patch` or `none`, and `promote_to_stable` takes `1.0.0` from a published `0.y.z`.
+- The `evidence` input selects commits and diffs (default) or commit messages alone.
+- The job has a 60-minute timeout. Gemini requests send repository history to Google and can incur API costs.
 
 ## Check
 
@@ -24,4 +18,4 @@ Requests send repository history to Google and can incur API costs. The job has 
 python -m pytest github\workflows\test_gemini_release.py
 ```
 
-The check uses temporary Git history and mocked API responses. It does not need API keys or create releases.
+The check uses temporary Git history and mocked API responses. It needs no API keys and creates no releases.
