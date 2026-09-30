@@ -966,11 +966,12 @@
       ["search", "\uD83D\uDD0D"],
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
-      ["wait", "\u23F3"],
+      ["wait", "\uD83D\uDCA4"],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
-    var WAITING_EMOJI = "\u23F3";
-    var POLL_MARK = "preview poll";
+    var WAITING_EMOJI = "\uD83D\uDCA4";
+    // Any preview command that ends in poll: full paths, the extensionless script, the .py form.
+    var POLL_RE = /preview[\s\S]{0,60}poll/;
 
     function repoFromLink(link) {
       if (!link) {
@@ -1020,13 +1021,21 @@
       return ACTION_FALLBACK;
     }
 
-    // A poll row means the agent waits on the owner, whatever the row label says.
+    // A poll command means the agent waits on the owner, whatever the row label says.
+    // Only the command panel counts: command output often mentions poll in prose.
+    function rowCommand(row) {
+      if (!row || typeof row.querySelector !== "function") {
+        return "";
+      }
+      var panel = row.querySelector("pre");
+      return panel ? String(panel.textContent || "") : "";
+    }
+
     function emojiForRow(row) {
       if (!row) {
         return null;
       }
-      var rowText = String(row.textContent || "").toLowerCase();
-      if (rowText.indexOf(POLL_MARK) !== -1) {
+      if (POLL_RE.test(rowCommand(row).toLowerCase())) {
         return WAITING_EMOJI;
       }
       return actionEmoji(liveLabel(row));
@@ -1080,17 +1089,19 @@
           },
         };
       }
-      function liveMessage(text, rowText) {
+      function liveMessage(text, command) {
         var label = { textContent: text };
         var button = {
           querySelector: function (selector) {
             return selector === "p" ? label : null;
           },
         };
+        var panel = { textContent: command || "" };
         var row = {
-          textContent: rowText || "",
           querySelector: function (selector) {
-            return selector === "button" ? button : null;
+            if (selector === "button") return button;
+            if (selector === "pre") return command === null ? null : panel;
+            return null;
           },
         };
         button.parentElement = row;
@@ -1123,8 +1134,13 @@
       var setDoc = docWith(repoLink, "ChatGPT");
       var keepDoc = docWith(null, "ChatGPT");
       var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
-      var busyMessage = liveMessage("  running\n Bash  ", "command $ npm test");
-      var pollMessage = liveMessage("running Bash", "command $ arena-preview poll stderr Waiting");
+      var busyMessage = liveMessage("  running\n Bash  ", "$ npm test");
+      var pollMessage = liveMessage("running Bash", "$ arena-preview poll");
+      var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll");
+      var pyMessage = liveMessage("running Bash", "$ python skills/refs/arena-preview-steering/scripts/preview.py poll");
+      var chainMessage = liveMessage("running Bash", "$ git fetch origin && arena-preview poll");
+      var readMessage = liveMessage("running Bash", "Read the inbox");
+      readMessage.row.textContent = "stderr End the turn with `poll` to wait for more work.";
       var busyDoc = actionDoc(repoLink, busyMessage);
       var idleDoc = actionDoc(repoLink, null);
       priorTitle = "ChatGPT";
@@ -1146,14 +1162,18 @@
         [liveLabel(busyMessage.row), "running Bash"],
         [liveLabel(null), null],
         [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
-        [emojiForRow(pollMessage.row), "\u23F3"],
+        [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
+        [emojiForRow(pathMessage.row), "\uD83D\uDCA4"],
+        [emojiForRow(pyMessage.row), "\uD83D\uDCA4"],
+        [emojiForRow(chainMessage.row), "\uD83D\uDCA4"],
+        [emojiForRow(readMessage.row), "\uD83D\uDDA5\uFE0F"],
         [emojiForRow(null), null],
         [actionEmoji("running Bash"), "\uD83D\uDDA5\uFE0F"],
         [actionEmoji("Reading files"), "\uD83D\uDCD6"],
         [actionEmoji("Editing"), "\u270F\uFE0F"],
         [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
         [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
-        [actionEmoji("Waiting"), "\u23F3"],
+        [actionEmoji("Waiting"), "\uD83D\uDCA4"],
         [actionEmoji("Doing something"), "\u2699\uFE0F"],
         [actionEmoji(null), null],
         [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],

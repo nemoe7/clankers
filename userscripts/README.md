@@ -50,7 +50,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action from the last agent message, such as `Arena | clankers 🖥️`. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait ⏳, and ⚙️ for anything else. A row that runs `preview poll` shows ⏳, because the agent waits on you. The emoji clears when the turn ends. The feature holds the title against the rewrites that Arena makes on navigation, and it restores the earlier title when the link leaves the page.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action from the last agent message, such as `Arena | clankers 🖥️`. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait 💤, and ⚙️ for anything else. A row whose command is any form of the preview poll, bare, full path or `preview.py`, shows 💤, because the agent waits on you. The emoji clears when the turn ends. The feature holds the title against the rewrites that Arena makes on navigation, and it restores the earlier title when the link leaves the page.
 
 ## ChatGPT Hide Elements
 
