@@ -4,10 +4,10 @@
 The collection ships one Agent Plugins manifest and the skills listed in
 EXPECTED_SKILLS. `gpt-plugins/refs/skills/` holds the readable sources and
 `gpt-plugins/skills/` holds manually compressed copies. Structure checks do not
-prove semantic parity; review every clause against refs.
+prove semantic parity. Review every clause against refs.
 Packaging rewrites nothing, so `--archive` compares the zip members with the
 committed bytes and rejects anything the collection does not ship, including
-`refs/`. The manifest is checked against the canonical schema fetched from
+`refs/`. The check compares the manifest against the canonical schema fetched from
 agent-plugins.org, never a vendored copy.
 """
 

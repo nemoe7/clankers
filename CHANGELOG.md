@@ -26,6 +26,10 @@
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.
 
+### maintenance
+
+- **Lint cleanup**: Both prose gates report zero violations. The passive and semicolon findings leave `maintenance/check.py`, `maintenance/check_gpt_plugins.py` and `skills/squash/SKILL.md`, the CHANGELOG bullets cap at three sentences, and the preview skill README drops the synonym rotation.
+
 ### docs
 
 - **CHANGELOG domains**: Every date groups its changes under domain headings. The headings are rules, preview, gpt-plugins, userscripts, workflows, automations, maintenance and docs. AGENTS.md requires the shape.
@@ -41,7 +45,7 @@
 ### preview
 
 - **Owner-verbatim scope**: AGENTS.md grants the approval exemption only for the owner's complete clause text. Any other owner directive takes the report route first.
-- **CI poll output**: ARENA.md polls the plain `gh pr checks` output. An empty or absent check list is unverified, never a conclusion.
+- **CI poll output**: ARENA.md polls the plain `gh pr checks` output. An empty or absent check list stays unverified, never a conclusion.
 - **ChatGPT hide elements**: The ChatGPT userscript hides the Images sidebar link, the Library sidebar link and the Free badge. The bundle version is `1.2.0`.
 - **Push after a rebase**: ARENA.md pushes only when the branch has commits ahead of `origin/main`. A rebase that leaves nothing to push skips the push.
 - **Re-ack block gap**: Later ack blocks in the Messages tab use 8px around the hairline and drop the first paragraph top margin.
@@ -78,8 +82,8 @@
 - **PR check polling**: Use exponential delays from 1 to 64 seconds after the initial check, then 64-second intervals. Stop and report command or API errors, including HTTP 401. Pending checks remain distinct from errors.
 - **Finished tasks**: Show the last finished task first. Keep upcoming and saved task order unchanged.
 - **PR-only validation**: Stop repeat validation after main updates and remove the main-only README measurement commit. Keep PR checks, plugin packaging and rules publishing.
-- **Owner input limits**: Remove note, answer, submission and total request caps. Keep the 50 MB per-file upload cap and current timeouts. Stream multipart files and download results to temporary storage. Agent replies, reports, tasks and agent-requested downloads retain their limits.
-- **Arena transcript auto-scroll**: The Arena bundle adds an independent saved switch. It follows new messages and resized output near the bottom, pauses on upward scroll and keeps reading positions across session changes. Node checks cover follow, pause, resume and cleanup. Steering label and repository matching now ignore letter case.
+- **Owner input limits**: Remove note, answer, submission and total request caps. Keep the 50 MB per-file upload cap and current timeouts. Stream multipart files and download results to temporary storage while agent replies, reports, tasks and agent-requested downloads retain their limits.
+- **Arena transcript auto-scroll**: The Arena bundle adds an independent saved switch. It follows new messages and resized output near the bottom, pauses on upward scroll and keeps reading positions across session changes. Node checks cover follow, pause, resume and cleanup, and steering label and repository matching now ignore letter case.
 
 ### gpt-plugins
 

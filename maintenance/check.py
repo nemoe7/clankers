@@ -113,8 +113,8 @@ LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md", "KILO.md")
 PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT-SPEC.txt")
 
-# Kilo mode overrides live under a directory on both sides, so they are paired by
-# name and compared the plain way: live compresses wording, never adds rules.
+# Kilo mode overrides live under a directory on both sides, so the check pairs them by
+# name and compares them the plain way: live compresses wording, never adds rules.
 KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 
 # ChatGPT's Personalization offers two instruction fields, `Custom Instructions`
@@ -142,7 +142,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def check_ste(errors: list[str]) -> None:
-  """Run the vendored STE linter over the covered prose; any hard violation is an error."""
+  """Run the vendored STE linter over the covered prose. Any hard violation is an error."""
   result = subprocess.run(
     [sys.executable, str(ROOT / STE_LINT), *(str(ROOT / doc) for doc in STE_DOCS)],
     capture_output=True,
@@ -446,7 +446,7 @@ def expand_ignore_pattern(pattern: str) -> set[Path]:
 
   ``Path.glob`` resolves a trailing ``**`` to directories only, while
   markdownlint's globby excludes everything below a matched directory, so
-  directory matches are expanded recursively here.
+  this check expands directory matches recursively.
   """
   matched: set[Path] = set()
 
