@@ -33,6 +33,8 @@
 
 ### userscripts
 
+- **Action label forms**: The tab-title emoji map adds `Write` to the edit mark and `Explored` to the read mark. Every label in the owner's editing and reading groups maps. The version moves to `1.1.22`.
+
 - **Trim granularity**: The Transcript trim menu takes `<messages>,<rows>` and shows the live plan with the running removed count, such as `1 message, 50 rows (12 removed) — set`. The trim keeps the newest messages whole and cuts each older message to its row count. Every message root stays in place, because Arena complains when a `#chat-message-*` element leaves. The trim waits for a quiet window and a settled page, so a running turn no longer races it. The version moves to `1.1.21`.
 
 - **Arena tab title**: The Arena bundle gains a Tab title switch. It sets the tab title from the repository link in the session header and clears the emoji when the turn ends. The title adds an emoji for the live action, such as `Arena | clankers 🖥️`, or 💤 while the agent waits on a poll.
