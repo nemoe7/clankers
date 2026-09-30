@@ -969,6 +969,8 @@
       ["wait", "\u23F3"],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
+    var WAITING_EMOJI = "\u23F3";
+    var POLL_MARK = "preview poll";
 
     function repoFromLink(link) {
       if (!link) {
@@ -988,11 +990,17 @@
     }
 
     // The last agent message carries the live action in its pulsing status row.
-    function liveLabel(doc) {
+    function liveRow(doc) {
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
       var last = messages.length ? messages[messages.length - 1] : null;
-      var icons = last ? last.querySelectorAll(LIVE_ICON_SELECTOR) : [];
-      var button = icons.length ? icons[icons.length - 1].closest("button") : null;
+      var icons = last && typeof last.querySelectorAll === "function" ? last.querySelectorAll(LIVE_ICON_SELECTOR) : [];
+      var icon = icons.length ? icons[icons.length - 1] : null;
+      var button = icon && typeof icon.closest === "function" ? icon.closest("button") : null;
+      return button && button.parentElement ? button.parentElement : null;
+    }
+
+    function liveLabel(row) {
+      var button = row && typeof row.querySelector === "function" ? row.querySelector("button") : null;
       var label = button ? button.querySelector("p") : null;
       var text = label ? String(label.textContent || "").replace(/\s+/g, " ").trim() : "";
       return text || null;
@@ -1012,12 +1020,24 @@
       return ACTION_FALLBACK;
     }
 
+    // A poll row means the agent waits on the owner, whatever the row label says.
+    function emojiForRow(row) {
+      if (!row) {
+        return null;
+      }
+      var rowText = String(row.textContent || "").toLowerCase();
+      if (rowText.indexOf(POLL_MARK) !== -1) {
+        return WAITING_EMOJI;
+      }
+      return actionEmoji(liveLabel(row));
+    }
+
     function desiredTitle(doc) {
       var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR));
       if (!name) {
         return null;
       }
-      var emoji = actionEmoji(liveLabel(doc));
+      var emoji = emojiForRow(liveRow(doc));
       return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
     }
 
@@ -1060,19 +1080,27 @@
           },
         };
       }
-      function liveMessage(text) {
+      function liveMessage(text, rowText) {
         var label = { textContent: text };
         var button = {
           querySelector: function (selector) {
             return selector === "p" ? label : null;
           },
         };
+        var row = {
+          textContent: rowText || "",
+          querySelector: function (selector) {
+            return selector === "button" ? button : null;
+          },
+        };
+        button.parentElement = row;
         var icon = {
           closest: function (selector) {
             return selector === "button" ? button : null;
           },
         };
         return {
+          row: row,
           querySelectorAll: function (selector) {
             return selector === LIVE_ICON_SELECTOR ? [icon] : [];
           },
@@ -1095,7 +1123,9 @@
       var setDoc = docWith(repoLink, "ChatGPT");
       var keepDoc = docWith(null, "ChatGPT");
       var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
-      var busyDoc = actionDoc(repoLink, liveMessage("  running\n Bash  "));
+      var busyMessage = liveMessage("  running\n Bash  ", "command $ npm test");
+      var pollMessage = liveMessage("running Bash", "command $ arena-preview poll stderr Waiting");
+      var busyDoc = actionDoc(repoLink, busyMessage);
       var idleDoc = actionDoc(repoLink, null);
       priorTitle = "ChatGPT";
       var cases = [
@@ -1113,8 +1143,11 @@
         [syncTitle(goneDoc), true],
         [goneDoc.title, "ChatGPT"],
         [syncTitle(goneDoc), false],
-        [liveLabel(busyDoc), "running Bash"],
-        [liveLabel(idleDoc), null],
+        [liveLabel(busyMessage.row), "running Bash"],
+        [liveLabel(null), null],
+        [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
+        [emojiForRow(pollMessage.row), "\u23F3"],
+        [emojiForRow(null), null],
         [actionEmoji("running Bash"), "\uD83D\uDDA5\uFE0F"],
         [actionEmoji("Reading files"), "\uD83D\uDCD6"],
         [actionEmoji("Editing"), "\u270F\uFE0F"],
