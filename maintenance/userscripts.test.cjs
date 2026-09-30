@@ -4,11 +4,12 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const bundles = {
-  arena: { features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "tab-title": 1 }, baseObservers: 1 },
-  chatgpt: { features: { "hide-elements": 1, "auto-think": 0 }, baseObservers: 0 },
+  arena: { features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "tab-title": 1 }, baseObservers: 1, featureIntervals: { "tab-title": 1 } },
+  chatgpt: { features: { "hide-elements": 1, "auto-think": 0 }, baseObservers: 0, featureIntervals: { "auto-think": 1 } },
 };
 
-for (const [domain, { features, baseObservers }] of Object.entries(bundles)) {
+for (const [domain, { features, baseObservers, featureIntervals }] of Object.entries(bundles)) {
+  const intervals = Object.values(featureIntervals).reduce((a, b) => a + b, 0);
   const source = fs.readFileSync(
     path.join(__dirname, "../userscripts", `${domain}.user.js`), "utf8",
   );
@@ -65,7 +66,7 @@ for (const [domain, { features, baseObservers }] of Object.entries(bundles)) {
   const defaults = load();
   assert.equal(defaults.menus.size, keys.length);
   assert.equal(defaults.active.observers, Object.values(features).reduce((a, b) => a + b, 0) + baseObservers);
-  assert.equal(defaults.active.intervals, domain === "chatgpt" ? 1 : 0);
+  assert.equal(defaults.active.intervals, intervals);
   assert.equal(defaults.active.clicks, domain === "chatgpt" ? 1 : 0);
   assert.equal(stored.size, 0, "Reading defaults must not overwrite settings");
 
@@ -74,7 +75,7 @@ for (const [domain, { features, baseObservers }] of Object.entries(bundles)) {
     stored.set(key, false);
     const page = load();
     assert.equal(page.active.observers, defaults.active.observers - features[key]);
-    assert.equal(page.active.intervals, key === "auto-think" ? 0 : defaults.active.intervals);
+    assert.equal(page.active.intervals, defaults.active.intervals - (featureIntervals[key] || 0));
     assert.equal(page.active.clicks, key === "auto-think" ? 0 : defaults.active.clicks);
     const menu = [...page.menus.values()].find((item) => item.label.includes(": OFF"));
     assert.ok(menu, `Missing disabled menu for ${key}`);

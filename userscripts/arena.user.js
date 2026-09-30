@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.7
+// @version      1.1.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1084,8 +1084,25 @@
       return actionEmoji(liveLabel(row));
     }
 
-    function desiredTitle(doc) {
+    function currentPath() {
+      return typeof location !== "undefined" ? String(location.pathname || "") : "";
+    }
+
+    // The session header re-renders and can take the link with it, so the last name on this page
+    // holds until the page changes.
+    function repoForTitle(doc) {
       var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR));
+      var path = currentPath();
+      if (name) {
+        lastRepo = name;
+        lastPath = path;
+        return name;
+      }
+      return lastRepo && path === lastPath ? lastRepo : null;
+    }
+
+    function desiredTitle(doc) {
+      var name = repoForTitle(doc);
       if (!name) {
         return null;
       }
@@ -1095,6 +1112,8 @@
 
     var appliedTitle = null;
     var priorTitle = null;
+    var lastRepo = null;
+    var lastPath = null;
 
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
@@ -1160,6 +1179,14 @@
           },
         };
       }
+      // A page change drops the remembered name, and the next good read puts it back.
+      function forgetPath() {
+        lastPath = "/elsewhere";
+        return null;
+      }
+      function rememberRepo() {
+        return repoForTitle(setDoc);
+      }
       function actionDoc(element, message) {
         return {
           title: "ChatGPT",
@@ -1187,21 +1214,31 @@
       var busyDoc = actionDoc(repoLink, busyMessage);
       var idleDoc = actionDoc(repoLink, null);
       priorTitle = "ChatGPT";
+      lastRepo = null;
+      lastPath = null;
       var cases = [
         [repoFromLink(repoLink), "clankers"],
         [repoFromLink(labelOnly), "clankers"],
         [repoFromLink(emptyLink), null],
         [repoFromLink(null), null],
         [desiredTitle(setDoc), TITLE_PREFIX + "clankers"],
-        [desiredTitle(keepDoc), null],
+        // The header can drop the link on a re-render; the name holds while the page stays put.
+        [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
         [syncTitle(setDoc), true],
         [setDoc.title, TITLE_PREFIX + "clankers"],
         [syncTitle(setDoc), false],
-        [syncTitle(keepDoc), false],
-        [keepDoc.title, "ChatGPT"],
-        [syncTitle(goneDoc), true],
-        [goneDoc.title, "ChatGPT"],
+        [syncTitle(keepDoc), true],
+        [keepDoc.title, TITLE_PREFIX + "clankers"],
         [syncTitle(goneDoc), false],
+        [goneDoc.title, TITLE_PREFIX + "clankers"],
+        // Another page drops the memory, and the next good read puts it back.
+        [forgetPath(), null],
+        [desiredTitle(keepDoc), null],
+        [syncTitle(keepDoc), true],
+        [keepDoc.title, "ChatGPT"],
+        [syncTitle(keepDoc), false],
+        [rememberRepo(), "clankers"],
+        [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
         [liveLabel(busyMessage.row), "running Bash"],
         [liveLabel(null), null],
         [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
@@ -1244,22 +1281,40 @@
       return;
     }
 
-    // Arena rewrites the tab title on navigation, so the observer re-applies it.
     priorTitle = document.title;
-    syncTitle(document);
+    var observedRoot = null;
     var observer = new MutationObserver(function () {
       syncTitle(document);
     });
-    observer.observe(document.documentElement, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-    });
+    function observeRoot() {
+      if (observedRoot) {
+        observer.disconnect();
+      }
+      observedRoot = document.documentElement;
+      observer.observe(observedRoot, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+      });
+    }
+    observeRoot();
+    syncTitle(document);
+    // Arena writes its own title from its renders and a full remount detaches the observer, so the
+    // title is re-asserted every second; a write happens only when the value differs.
+    var titleTimer = setInterval(function () {
+      if (document.documentElement !== observedRoot) {
+        observeRoot();
+      }
+      syncTitle(document);
+    }, 1000);
     function onRoute() {
+      lastRepo = null;
+      lastPath = null;
       syncTitle(document);
     }
     window.addEventListener("popstate", onRoute);
     return function () {
+      clearInterval(titleTimer);
       observer.disconnect();
       window.removeEventListener("popstate", onRoute);
       if (appliedTitle && document.title === appliedTitle) {

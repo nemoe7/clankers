@@ -36,6 +36,8 @@
 
 - **Steering row words**: Open Steering finds the row by the words `steering` or `preview`, case-insensitive, and prefers the row that names the repository. The version moves to `1.1.7`.
 
+- **Tab title hold**: The title re-asserts each second and holds the last repository name on the page. A turn end no longer drops it. The version moves to `1.1.8`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.
