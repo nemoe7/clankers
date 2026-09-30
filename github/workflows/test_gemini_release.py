@@ -74,15 +74,32 @@ def test_release_pipeline():
       fails(lambda: release.current_base("owner/repo", target), "prerelease")
     with (
       patch.object(
-        release, "releases", return_value=[{**rows[0], "id": 5, "prerelease": False}]
+        release,
+        "releases",
+        return_value=[
+          {**rows[0], "id": 5, "prerelease": False, "body": "Previous release notes"}
+        ],
       ),
       patch.object(release, "remote_tag_sha", return_value=root),
     ):
       assert release.current_base("owner/repo", target) == (
         "v1",
         root,
-        {"id": 5, "published_at": rows[0]["published_at"]},
+        {
+          "id": 5,
+          "published_at": rows[0]["published_at"],
+          "body": "Previous release notes",
+        },
       )
+    with (
+      patch.object(
+        release,
+        "releases",
+        return_value=[{**rows[0], "id": 5, "prerelease": False, "body": []}],
+      ),
+      patch.object(release, "remote_tag_sha", return_value=root),
+    ):
+      fails(lambda: release.current_base("owner/repo", target), "notes are invalid")
     fails(lambda: release.baseline(rows, "v2", target, "absent"), "no published")
     units = release.history(target, root)
     all_units = release.history(target, "")
@@ -447,6 +464,8 @@ def test_release_pipeline():
     assert lines[0].startswith("Task: ") and all(l.startswith("- ") for l in lines[1:])
     assert release.BOUNDARY in prompt and lines[-1].startswith("- Return only")
   assert set(release.PROMPTS) == {"chunk", "combine", "release", "version"}
+  assert "style reference" in release.PROMPTS["release"]
+  assert "NEVER use them as evidence" in release.PROMPTS["release"]
   assert release.TEMPLATE.count("{{") == 6 and release.TEMPLATE.endswith(
     "{{comparison_url}}\n"
   )
@@ -457,6 +476,19 @@ def test_release_pipeline():
     "## Summary\n\ns\n\n## Fixes\n\nf\n\n## Commit comparison\n\nhttps://x/compare/a...b\n",
     full,
   )
+  empty_feature = (
+    "## Summary\n\ns\n\n## Features\n\n\n"
+    "## Commit comparison\n\nhttps://x/compare/a...b\n"
+  )
+  normalized = release.omit_empty_sections(empty_feature, release.TEMPLATE)
+  assert (
+    normalized == "## Summary\n\ns\n\n## Commit comparison\n\nhttps://x/compare/a...b\n"
+  )
+  release.check_body(normalized, full)
+  fails(lambda: release.check_body(empty_feature, full), "does not match")
+  empty_summary = "## Summary\n\n\n## Commit comparison\n\nhttps://x/compare/a...b\n"
+  assert "## Summary" in release.omit_empty_sections(empty_summary, release.TEMPLATE)
+  fails(lambda: release.check_body(empty_summary, full), "does not match")
   fails(lambda: release.check_body("## Summary\n\ns\n", full), "does not match")
   fails(
     lambda: release.check_body("## Fixes\n\nf\n\nhttps://x/compare/a...b\n", full),
@@ -495,6 +527,9 @@ def test_release_pipeline():
   fails(
     lambda: release.next_version("1.2.3", "patch", promote=True), "Promotion requires"
   )
+  empty_feature_body = release.INITIAL_TEMPLATE.replace("{{summary}}", "test").replace(
+    "{{features}}", ""
+  )
   with (
     tempfile.TemporaryDirectory() as directory,
     patch.dict(
@@ -507,24 +542,52 @@ def test_release_pipeline():
     ),
     patch.object(release, "target_commit", return_value="a" * 40),
     patch.object(release, "check_remote_target"),
-    patch.object(release, "current_base", return_value=("", "", None)),
+    patch.object(release, "current_base", return_value=("", "", None)) as base,
     patch.object(release, "api", side_effect=AssertionError("Proposal made API write")),
     patch.object(release, "history", return_value=[("id", "diff")]),
     patch.object(release, "releases", return_value=[]),
     patch.object(release, "remote_ref", return_value=None),
-    patch.object(release, "release_body", return_value=sample["body"]) as notes,
+    patch.object(release, "release_body", return_value=empty_feature_body) as notes,
     patch.object(release, "summary"),
   ):
     sample["tag"] = "v0.1.0"
     release.propose("owner/repo", "main")
     stored = json.loads(Path(directory, "proposal.json").read_text())
     assert stored["target"] == "a" * 40 and stored["version"] == "0.1.0"
+    assert stored["body"] == "## Summary\n\ntest\n\n"
     assert notes.call_count == 1, "the override avoids a classifier call"
     with patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "2"}):
       fails(lambda: release.propose("owner/repo", "main"), "reruns are not allowed")
     with patch.dict(os.environ, {"IMPACT_OVERRIDE": "none"}):
       release.propose("owner/repo", "main")
       assert not Path(directory, "proposal.json").exists(), "none must not upload"
+    previous_notes = "Previous release body."
+    baseline_record = {
+      "id": 5,
+      "published_at": "2026-01-01T00:00:00Z",
+      "body": previous_notes,
+    }
+    base.return_value = ("v0.1.0", "b" * 40, baseline_record)
+    compare_url = f"https://github.com/owner/repo/compare/{'b' * 40}...{'a' * 40}"
+    notes.return_value = (
+      f"## Summary\n\nnew change\n\n## Commit comparison\n\n{compare_url}\n"
+    )
+    version_context = []
+
+    def capture_classification(_units, context, _model):
+      version_context.append(dict(context))
+      return "patch"
+
+    with (
+      patch.dict(os.environ, {"IMPACT_OVERRIDE": "auto"}),
+      patch.object(release, "classify", side_effect=capture_classification),
+    ):
+      release.propose("owner/repo", "main")
+    assert notes.call_args.args[1]["previous_release_notes"] == previous_notes
+    assert len(version_context) == 1
+    assert "previous_release_notes" not in version_context[0]
+    stored = json.loads(Path(directory, "proposal.json").read_text())
+    assert stored["baseline_release"] == baseline_record
   with patch.object(release, "release_body", return_value="minor"):
     assert release.classify([("id", "diff")], {}, "test") == "minor"
   with patch.object(release, "release_body", return_value="maybe minor"):
