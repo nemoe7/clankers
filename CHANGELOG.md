@@ -52,6 +52,8 @@
 
 - **Transcript trim**: The Arena bundle gains a Transcript trim switch, off by default. It removes the oldest transcript messages and keeps a count set from the menu, from 20 up. The version moves to `1.1.14`.
 
+- **Bundle checks**: The bundles carry runtime code only. Outside a browser each feature publishes its helpers, and `maintenance/userscripts.checks.cjs` runs the feature checks. Arena moves to `1.1.15`, ChatGPT to `1.2.2`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers ChatGPT
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.1
+// @version      1.2.2
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -17,6 +17,18 @@
 
 (function () {
   "use strict";
+
+  // Outside a browser each feature publishes its helpers, so the checks live in
+  // maintenance/ instead of shipping inside this bundle.
+  function exposeChecks(name, api) {
+    if (typeof document !== "undefined") {
+      return false;
+    }
+    var store = globalThis.CLANKERS_CHECKS || {};
+    store[name] = api;
+    globalThis.CLANKERS_CHECKS = store;
+    return true;
+  }
 
   function runFeature(key, label, run) {
     if (typeof document === "undefined") {
@@ -130,191 +142,28 @@
       syncDocument(document);
     }
 
-    function fakeElement() {
-      return {
-        hidden: false,
-        hasAttribute: function (name) {
-          return name === "hidden" && this.hidden;
-        },
-        setAttribute: function (name) {
-          if (name === "hidden") {
-            this.hidden = true;
-          }
-        },
-      };
-    }
-
-    function runChecks() {
-      var claimDiv = fakeElement();
-      var freeDiv = fakeElement();
-      var surfaceDiv = fakeElement();
-      var codexLink = fakeElement();
-      var imagesLink = fakeElement();
-      var libraryLink = fakeElement();
-      var freeBadge = fakeElement();
-      freeBadge.textContent = " Free ";
-      var paidBadge = fakeElement();
-      paidBadge.textContent = "Plus";
-      var headerDiv = fakeElement();
-      var claimButton = {
-        closest: function (selector) {
-          return selector === CLAIM_DIV_SELECTOR ? claimDiv : null;
-        },
-      };
-      var bareButton = {
-        closest: function () {
-          return null;
-        },
-      };
-      var freeButton = {
-        textContent: " Free offer ",
-        closest: function (selector) {
-          return selector === FREE_OFFER_DIV_SELECTOR ? freeDiv : null;
-        },
-      };
-      var otherButton = {
-        textContent: "Free trial",
-        closest: function () {
-          return freeDiv;
-        },
-      };
-      var radio = {
-        closest: function (selector) {
-          return selector === SURFACE_DIV_SELECTOR ? surfaceDiv : null;
-        },
-      };
-      var claimDoc = {
-        querySelector: function (selector) {
-          return selector === CLAIM_BUTTON_SELECTOR ? claimButton : null;
-        },
-      };
-      var bareDoc = {
-        querySelector: function (selector) {
-          return selector === CLAIM_BUTTON_SELECTOR ? bareButton : null;
-        },
-      };
-      var surfaceDoc = {
-        querySelector: function (selector) {
-          return selector === SURFACE_RADIO_SELECTOR ? radio : null;
-        },
-      };
-      var codexDoc = {
-        querySelector: function (selector) {
-          return selector === CODEX_LINK_SELECTOR ? codexLink : null;
-        },
-      };
-      var headerDoc = {
-        querySelector: function (selector) {
-          return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
-        },
-      };
-      var imagesDoc = {
-        querySelector: function (selector) {
-          return selector === IMAGES_LINK_SELECTOR ? imagesLink : null;
-        },
-      };
-      var libraryDoc = {
-        querySelector: function (selector) {
-          return selector === LIBRARY_LINK_SELECTOR ? libraryLink : null;
-        },
-      };
-      var badgeDoc = {
-        querySelector: function (selector) {
-          return selector === FREE_BADGE_SELECTOR ? freeBadge : null;
-        },
-      };
-      var paidBadgeDoc = {
-        querySelector: function (selector) {
-          return selector === FREE_BADGE_SELECTOR ? paidBadge : null;
-        },
-      };
-      var emptyDoc = {
-        querySelector: function () {
-          return null;
-        },
-        querySelectorAll: function () {
-          return [];
-        },
-      };
-      var freeDoc = {
-        querySelectorAll: function () {
-          return [otherButton, freeButton];
-        },
-      };
-      // One document answers every selector, so the sync pass itself is under test:
-      // a finder left out of syncDocument leaves its element unhidden here.
-      var fullDoc = {
-        querySelector: function (selector) {
-          if (selector === CLAIM_BUTTON_SELECTOR) return claimButton;
-          if (selector === SURFACE_RADIO_SELECTOR) return radio;
-          if (selector === CODEX_LINK_SELECTOR) return codexLink;
-          if (selector === IMAGES_LINK_SELECTOR) return imagesLink;
-          if (selector === LIBRARY_LINK_SELECTOR) return libraryLink;
-          if (selector === FREE_BADGE_SELECTOR) return freeBadge;
-          if (selector === HEADER_DIV_SELECTOR) return headerDiv;
-          return null;
-        },
-        querySelectorAll: function (selector) {
-          return selector === "button" ? [freeButton] : [];
-        },
-      };
-      var cases = [
-        [findClaimDiv(claimDoc), claimDiv],
-        [findClaimDiv(bareDoc), null],
-        [findClaimDiv(emptyDoc), null],
-        [findFreeOfferDiv(freeDoc), freeDiv],
-        [findFreeOfferDiv(emptyDoc), null],
-        [findSurfaceDiv(surfaceDoc), surfaceDiv],
-        [findSurfaceDiv(emptyDoc), null],
-        [findCodexLink(codexDoc), codexLink],
-        [findCodexLink(emptyDoc), null],
-        [findImagesLink(imagesDoc), imagesLink],
-        [findImagesLink(emptyDoc), null],
-        [findLibraryLink(libraryDoc), libraryLink],
-        [findLibraryLink(emptyDoc), null],
-        [findFreeBadge(badgeDoc), freeBadge],
-        [findFreeBadge(paidBadgeDoc), null],
-        [findFreeBadge(emptyDoc), null],
-        [findHeaderDiv(headerDoc), headerDiv],
-        [findHeaderDiv(emptyDoc), null],
-        [hideElement(claimDiv), true],
-        [claimDiv.hasAttribute("hidden"), true],
-        [hideElement(claimDiv), false],
-        [hideElement(null), false],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      syncDocument(fullDoc);
-      var synced = [
-        claimDiv,
-        freeDiv,
-        surfaceDiv,
-        codexLink,
-        imagesLink,
-        libraryLink,
-        freeBadge,
-        headerDiv,
-      ];
-      for (i = 0; i < synced.length; i += 1) {
-        if (!synced[i].hasAttribute("hidden")) {
-          console.error("sync fail", i);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + (cases.length + synced.length));
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("hideElements", {
+      CLAIM_BUTTON_SELECTOR: CLAIM_BUTTON_SELECTOR,
+      CLAIM_DIV_SELECTOR: CLAIM_DIV_SELECTOR,
+      FREE_OFFER_DIV_SELECTOR: FREE_OFFER_DIV_SELECTOR,
+      SURFACE_DIV_SELECTOR: SURFACE_DIV_SELECTOR,
+      SURFACE_RADIO_SELECTOR: SURFACE_RADIO_SELECTOR,
+      CODEX_LINK_SELECTOR: CODEX_LINK_SELECTOR,
+      IMAGES_LINK_SELECTOR: IMAGES_LINK_SELECTOR,
+      LIBRARY_LINK_SELECTOR: LIBRARY_LINK_SELECTOR,
+      FREE_BADGE_SELECTOR: FREE_BADGE_SELECTOR,
+      HEADER_DIV_SELECTOR: HEADER_DIV_SELECTOR,
+      findClaimDiv: findClaimDiv,
+      findFreeOfferDiv: findFreeOfferDiv,
+      findSurfaceDiv: findSurfaceDiv,
+      findCodexLink: findCodexLink,
+      findImagesLink: findImagesLink,
+      findLibraryLink: findLibraryLink,
+      findFreeBadge: findFreeBadge,
+      findHeaderDiv: findHeaderDiv,
+      hideElement: hideElement,
+      syncDocument: syncDocument,
+    })) {
       return;
     }
 
@@ -360,56 +209,12 @@
       return true;
     }
 
-    function runChecks() {
-      var thinkPill = {
-        textContent: " Think ",
-        clicked: 0,
-        click: function () {
-          this.clicked += 1;
-        },
-      };
-      var otherPill = {
-        textContent: "Deep research",
-        clicked: 0,
-        click: function () {
-          this.clicked += 1;
-        },
-      };
-      var fullDoc = {
-        querySelectorAll: function (selector) {
-          return selector === THINK_PILL_SELECTOR ? [otherPill, thinkPill] : [];
-        },
-      };
-      var emptyDoc = {
-        querySelectorAll: function () {
-          return [];
-        },
-      };
-      var cases = [
-        [findThinkPill(fullDoc), thinkPill],
-        [findThinkPill(emptyDoc), null],
-        [pressThink(fullDoc), true],
-        [thinkPill.clicked, 1],
-        [otherPill.clicked, 0],
-        [pressThink(emptyDoc), false],
-        [PRESS_INTERVAL_MS, 1000],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("autoThink", {
+      THINK_PILL_SELECTOR: THINK_PILL_SELECTOR,
+      PRESS_INTERVAL_MS: PRESS_INTERVAL_MS,
+      findThinkPill: findThinkPill,
+      pressThink: pressThink,
+    })) {
       return;
     }
 

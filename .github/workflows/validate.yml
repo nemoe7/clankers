@@ -86,7 +86,7 @@ jobs:
         run: |
           node userscripts/arena.user.js
           node userscripts/chatgpt.user.js
-          node --test maintenance/userscripts.test.cjs
+          node --test maintenance/userscripts.checks.cjs maintenance/userscripts.test.cjs
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v20

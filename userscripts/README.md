@@ -24,7 +24,7 @@ Seven features default to On. Transcript trim ships OFF, because it removes mess
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
-The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
+The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and they hold no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
 ## Arena Prompt Fill
 
@@ -86,7 +86,8 @@ From the repository root:
 ```bash
 node userscripts/arena.user.js
 node userscripts/chatgpt.user.js
+node --test maintenance/userscripts.checks.cjs
 node --test maintenance/userscripts.test.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundles retain the five feature checks. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.
+Each command prints `ok` when its checks pass. The bundles carry runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `maintenance/userscripts.checks.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.

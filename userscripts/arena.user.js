@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.14
+// @version      1.1.15
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -18,6 +18,18 @@
 
 (function () {
   "use strict";
+
+  // Outside a browser each feature publishes its helpers, so the checks live in
+  // maintenance/ instead of shipping inside this bundle.
+  function exposeChecks(name, api) {
+    if (typeof document !== "undefined") {
+      return false;
+    }
+    var store = globalThis.CLANKERS_CHECKS || {};
+    store[name] = api;
+    globalThis.CLANKERS_CHECKS = store;
+    return true;
+  }
 
   function runFeature(key, label, run, onChange, defaultOn) {
     if (typeof document === "undefined") {
@@ -140,44 +152,12 @@
       }
     }
 
-    function runChecks() {
-      var cases = [
-        [isComposerUrl("https://arena.ai/agent"), true],
-        [isComposerUrl("https://www.arena.ai/agent"), true],
-        [isComposerUrl("https://arena.ai/agent?x=1"), true],
-        [isComposerUrl("https://arena.ai/agent#x"), true],
-        [isComposerUrl("https://arena.ai/agent/"), false],
-        [isComposerUrl("https://arena.ai/agent/foo"), false],
-        [isComposerUrl("https://other.example/agent"), false],
-        [slugFromOwnerRepo("nemoe7/clankers"), "clankers"],
-        [slugFromOwnerRepo("  org/repo  "), "repo"],
-        [slugFromOwnerRepo("main"), null],
-        [slugFromOwnerRepo("a/"), null],
-        [slugFromOwnerRepo("/b"), null],
-        [slugFromOwnerRepo("a/b/c"), null],
-        [promptForSlug("clankers"), "clankers read AGENTS.md ARENA.md"],
-        [shouldWrite("", "clankers", null), true],
-        [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null), false],
-        [shouldWrite("draft", "clankers", null), false],
-        [shouldWrite("clankers read AGENTS.md ARENA.md", "other", "clankers"), true],
-        [shouldWrite("draft", "clankers", "clankers"), false],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("promptFill", {
+      isComposerUrl: isComposerUrl,
+      slugFromOwnerRepo: slugFromOwnerRepo,
+      promptForSlug: promptForSlug,
+      shouldWrite: shouldWrite,
+    })) {
       return;
     }
 
@@ -354,87 +334,16 @@
       }
     }
 
-    function steeringRowText(rows, expectedSlug) {
-      var buttons = rows.map(function (row) {
-        return {
-          textContent: row[0] + " " + row[1],
-          querySelectorAll: function (selector) {
-            return selector === "span" ? [{ textContent: row[0] }, { textContent: row[1] }] : [];
-          },
-        };
-      });
-      var doc = {
-        querySelectorAll: function () {
-          return buttons;
-        },
-      };
-      var found = findSteeringButton(doc, expectedSlug);
-      return found ? found.textContent : null;
-    }
-
-    function runChecks() {
-      var cases = [
-        [isSessionUrl("https://arena.ai/agent/foo"), true],
-        [isSessionUrl("https://www.arena.ai/agent/foo/bar"), true],
-        [isSessionUrl("https://arena.ai/agent/foo?x=1"), true],
-        [isSessionUrl("https://arena.ai/agent"), false],
-        [isSessionUrl("https://arena.ai/agent/"), false],
-        [isSessionUrl("https://other.example/agent/foo"), false],
-        [slugFromOwnerRepo("nemoe7/clankers"), "clankers"],
-        [steeringSlugFromLabel("daedalus - Steering"), "daedalus"],
-        [steeringSlugFromLabel("clankers - preview"), "clankers"],
-        [steeringSlugFromLabel("clankers preview"), "clankers"],
-        [steeringSlugFromLabel("arena-preview-steering"), null],
-        [steeringSlugFromLabel("Steering"), null],
-        [steeringSlugFromLabel("daedalus - Website"), null],
-        [isSteeringLabel("CLANKERS - PREVIEW"), true],
-        [isSteeringLabel("daedalus - Website"), false],
-        [buttonMatchesSteering("CLANKERS - steering", ":8000", "clankers"), true],
-        [buttonMatchesSteering("Steering", ":8000", "clankers"), true],
-        [buttonMatchesSteering("daedalus - Steering", ":8000", "clankers"), false],
-        [buttonMatchesSteering("clankers - STEERING", ":8001", "CLANKERS"), false],
-        [buttonMatchesSteering("daedalus - Preview", ":8000", null), true],
-        [buttonMatchesSteering("daedalus - Website", ":8000", null), false],
-        [isSteeringPort(":8000"), true],
-        [isSteeringPort("8000"), false],
-        [steeringRowText([["Website", ":3000"], ["daedalus - Steering", ":8000"]], "clankers"),
-          "daedalus - Steering :8000"],
-        [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
-          "clankers"), "clankers - Steering :8000"],
-        [steeringRowText([["Website", ":3000"], ["arena-preview-steering", ":8000"]], "clankers"),
-          "arena-preview-steering :8000"],
-        // The live row (no start verb) wins over history cards, wherever they sit.
-        [steeringRowText([["Start clankers - Steering", ":8000"], ["clankers - Steering", ":8000"]],
-          "clankers"), "clankers - Steering :8000"],
-        [steeringRowText([["clankers - Steering", ":8000"], ["Start clankers - Steering", ":8000"]],
-          "clankers"), "clankers - Steering :8000"],
-        [steeringRowText([["clankers - Steering", ":8000"], ["Start preview", ":8000"]],
-          "clankers"), "clankers - Steering :8000"],
-        // A newer row for another project does not steal the turn from this project's row.
-        [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
-          "clankers"), "Start clankers - Steering :8000"],
-        // The newest row wins even when it is renamed, which is the live-preview case.
-        [steeringRowText([["Start clankers - Steering", ":8000"],
-          ["daedalus - preview", ":8000"], ["arena-preview-steering", ":8000"]], "clankers"),
-          "arena-preview-steering :8000"],
-        [CLICK_DELAY_MS, 1000],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("openSteering", {
+      isSessionUrl: isSessionUrl,
+      slugFromOwnerRepo: slugFromOwnerRepo,
+      steeringSlugFromLabel: steeringSlugFromLabel,
+      isSteeringLabel: isSteeringLabel,
+      isSteeringPort: isSteeringPort,
+      buttonMatchesSteering: buttonMatchesSteering,
+      findSteeringButton: findSteeringButton,
+      CLICK_DELAY_MS: CLICK_DELAY_MS,
+    })) {
       return;
     }
 
@@ -594,10 +503,6 @@
   var AUTO_TOGGLE_CLASS =
     "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium border text-text-primary";
 
-  function hasToggleClass(classes, name) {
-    return classes.split(" ").indexOf(name) !== -1;
-  }
-
   // Each state has its own hover fill, so the on state stays visible under the pointer.
   function autoToggleClasses(on) {
     return (
@@ -680,35 +585,10 @@
   }, setToggleButtonPressed);
 
   (function () {
-    function runChecks() {
-      var on = autoToggleClasses(true);
-      var off = autoToggleClasses(false);
-      var cases = [
-        [hasToggleClass(on, "bg-surface-raised"), true],
-        [hasToggleClass(on, "bg-transparent"), false],
-        [hasToggleClass(off, "bg-transparent"), true],
-        [hasToggleClass(off, "bg-surface-raised"), false],
-        [hasToggleClass(on, "hover:bg-interactive-cta-active"), true],
-        [hasToggleClass(off, "hover:bg-surface-raised"), true],
-        [hasToggleClass(AUTO_TOGGLE_CLASS, "h-8"), true],
-        [hasToggleClass(AUTO_TOGGLE_CLASS, "w-8"), true],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("autoScrollToggle", {
+      AUTO_TOGGLE_CLASS: AUTO_TOGGLE_CLASS,
+      autoToggleClasses: autoToggleClasses,
+    })) {
       return;
     }
 
@@ -788,56 +668,12 @@
       return removed;
     }
 
-    function runChecks() {
-      function rows(count) {
-        var list = [];
-        var i;
-        for (i = 0; i < count; i += 1) {
-          list.push({
-            parentElement: {},
-            removed: false,
-            remove: function () {
-              this.removed = true;
-              this.parentElement = null;
-            },
-          });
-        }
-        return list;
-      }
-      var five = rows(5);
-      var detached = rows(4);
-      detached[0].parentElement = null;
-      var cases = [
-        [trimRows(five, 3), 2],
-        [five[0].removed, true],
-        [five[1].removed, true],
-        [five[2].removed, false],
-        [trimRows(rows(3), 3), 0],
-        [trimRows(rows(2), 10), 0],
-        [trimRows(detached, 2), 1],
-        [normalizeKeep("150"), 150],
-        [normalizeKeep("150.7"), 150],
-        [normalizeKeep("5"), null],
-        [normalizeKeep("later"), null],
-        [normalizeKeep(null), null],
-        [MIN_KEEP <= DEFAULT_KEEP, true],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("transcriptTrim", {
+      normalizeKeep: normalizeKeep,
+      trimRows: trimRows,
+      MIN_KEEP: MIN_KEEP,
+      DEFAULT_KEEP: DEFAULT_KEEP,
+    })) {
       return;
     }
 
@@ -996,89 +832,16 @@
       }
     }
 
-    function runChecks() {
-      var styleState = { height: SPACER_HEIGHT, priority: "", writes: 0 };
-      var spacerStyle = {
-        getPropertyValue: function (name) {
-          return name === "height" ? styleState.height : "";
-        },
-        getPropertyPriority: function (name) {
-          return name === "height" ? styleState.priority : "";
-        },
-        setProperty: function (name, value, priority) {
-          if (name === "height") {
-            styleState.height = value;
-            styleState.priority = priority;
-            styleState.writes += 1;
-          }
-        },
-      };
-      var spacer = {
-        tagName: "DIV",
-        classList: { contains: function (name) { return name === "shrink-0"; } },
-        textContent: "",
-        style: spacerStyle,
-        getAttribute: function (name) {
-          return name === "style" ? "height: 24px;" : null;
-        },
-      };
-      var spacerDoc = {
-        querySelectorAll: function (selector) {
-          return selector === SPACER_SELECTOR ? [spacer] : [];
-        },
-      };
-      var candidate = isSpacerElement(spacer) && hasSpacerHeight(spacer.getAttribute("style"));
-      enforceSpacerHeight(spacerDoc);
-      var initialPriority = styleState.priority;
-      styleState.height = "18px";
-      styleState.priority = "";
-      enforceSpacerHeight(spacerDoc, [
-        {
-          type: "attributes",
-          attributeName: "style",
-          oldValue: "height: 24px !important;",
-          target: spacer,
-        },
-      ]);
-      var cases = [
-        [isSessionUrl("https://arena.ai/agent/foo"), true],
-        [isSessionUrl("https://www.arena.ai/agent/foo/bar"), true],
-        [isSessionUrl("https://arena.ai/agent/foo?x=1"), true],
-        [isSessionUrl("https://arena.ai/agent"), false],
-        [isSessionUrl("https://arena.ai/agent/"), false],
-        [isSessionUrl("https://other.example/agent/foo"), false],
-        [isStopGeneratingLabel("Stop generating"), true],
-        [isStopGeneratingLabel("Stop Generating"), true],
-        [isStopGeneratingLabel("stop generating"), true],
-        [isStopGeneratingLabel("Send"), false],
-        [shouldHideComposer(true, true), true],
-        [shouldHideComposer(true, false), false],
-        [shouldHideComposer(false, true), false],
-        [candidate, true],
-        [hasSpacerHeight("height: 24px;"), true],
-        [hasSpacerHeight("height: 24px !important;"), true],
-        [hasSpacerHeight("height: 25px;"), false],
-        [initialPriority, "important"],
-        [styleState.height, SPACER_HEIGHT],
-        [styleState.priority, "important"],
-        [styleState.writes, 2],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("hideComposer", {
+      isSessionUrl: isSessionUrl,
+      isStopGeneratingLabel: isStopGeneratingLabel,
+      shouldHideComposer: shouldHideComposer,
+      isSpacerElement: isSpacerElement,
+      hasSpacerHeight: hasSpacerHeight,
+      enforceSpacerHeight: enforceSpacerHeight,
+      SPACER_SELECTOR: SPACER_SELECTOR,
+      SPACER_HEIGHT: SPACER_HEIGHT,
+    })) {
       return;
     }
 
@@ -1426,241 +1189,25 @@
       return false;
     }
 
-    function runChecks() {
-      function link(href, label) {
-        return {
-          getAttribute: function (name) {
-            if (name === "href") return href;
-            if (name === "aria-label") return label;
-            return null;
-          },
-        };
-      }
-      function docWith(element, title) {
-        return {
-          title: title,
-          querySelector: function (selector) {
-            return selector === REPO_LINK_SELECTOR ? element : null;
-          },
-        };
-      }
-      function liveMessage(text, command) {
-        var label = { textContent: text };
-        var button = {
-          querySelector: function (selector) {
-            return selector === "p" ? label : null;
-          },
-        };
-        var panel = { textContent: command || "" };
-        var row = {
-          querySelector: function (selector) {
-            if (selector === "button") return button;
-            if (selector === "pre") return command === null ? null : panel;
-            return null;
-          },
-        };
-        button.parentElement = row;
-        var icon = {
-          closest: function (selector) {
-            return selector === "button" ? button : null;
-          },
-        };
-        return {
-          row: row,
-          querySelectorAll: function (selector) {
-            return selector === LIVE_ICON_SELECTOR ? [icon] : [];
-          },
-        };
-      }
-      // A page change drops the remembered name, and the next good read puts it back.
-      function forgetPath() {
-        lastPath = "/elsewhere";
-        return null;
-      }
-      function rememberRepo() {
-        return repoForTitle(setDoc);
-      }
-      // The hold expires five seconds after the last live row, so the checks can wind it down.
-      function expireHold() {
-        heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1;
-        return null;
-      }
-      function divMessage(text, shimmer) {
-        var label = { textContent: text };
-        var row = {
-          textContent: text,
-          querySelector: function (selector) {
-            return selector === "p" ? label : null;
-          },
-          querySelectorAll: function (selector) {
-            return selector === LIVE_LABEL_SELECTOR && shimmer ? [label] : [];
-          },
-        };
-        var icon = {
-          parentElement: row,
-          closest: function () {
-            return null;
-          },
-        };
-        if (shimmer) {
-          label.parentElement = row;
-        }
-        return {
-          row: row,
-          label: label,
-          querySelectorAll: function (selector) {
-            return selector === LIVE_ICON_SELECTOR ? [icon] : [];
-          },
-        };
-      }
-      function pulseDoc(messages, stray) {
-        return {
-          title: "ChatGPT",
-          querySelectorAll: function (selector) {
-            if (selector === MESSAGE_SELECTOR) return messages;
-            return selector === LIVE_ICON_SELECTOR ? (stray ? [stray] : []) : [];
-          },
-          querySelector: function () {
-            return null;
-          },
-        };
-      }
-      function actionDoc(element, message) {
-        return {
-          title: "ChatGPT",
-          querySelectorAll: function (selector) {
-            return selector === MESSAGE_SELECTOR && message ? [message] : [];
-          },
-          querySelector: function (selector) {
-            return selector === REPO_LINK_SELECTOR ? element : null;
-          },
-        };
-      }
-      var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
-      var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
-      var emptyLink = link("", "");
-      var setDoc = docWith(repoLink, "ChatGPT");
-      var keepDoc = docWith(null, "ChatGPT");
-      var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
-      var busyMessage = liveMessage("  running\n Bash  ", "$ npm test");
-      var pollMessage = liveMessage("running Bash", "$ arena-preview poll");
-      var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll");
-      var pyMessage = liveMessage("running Bash", "$ python skills/refs/arena-preview-steering/scripts/preview.py poll");
-      var chainMessage = liveMessage("running Bash", "$ git fetch origin && arena-preview poll");
-      var readMessage = liveMessage("running Bash", "Read the inbox");
-      readMessage.row.textContent = "stderr End the turn with `poll` to wait for more work.";
-      var busyDoc = actionDoc(repoLink, busyMessage);
-      var idleDoc = actionDoc(repoLink, null);
-      var thinkingMessage = divMessage("Thinking\u2026", true);
-      var thinkingDoc = pulseDoc([thinkingMessage], null);
-      var shimmerDoc = {
-        title: "ChatGPT",
-        querySelectorAll: function (selector) {
-          return selector === LIVE_LABEL_SELECTOR ? [thinkingMessage.label] : [];
-        },
-        querySelector: function () {
-          return null;
-        },
-      };
-      var strayRow = {
-        textContent: "Loading the sidebar",
-        querySelector: function (selector) {
-          return selector === "p" ? { textContent: "Loading the sidebar" } : null;
-        },
-        querySelectorAll: function () {
-          return [];
-        },
-      };
-      var strayIcon = {
-        parentElement: strayRow,
-        closest: function () {
-          return null;
-        },
-      };
-      var strayDoc = pulseDoc([], strayIcon);
-      var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
-      priorTitle = "ChatGPT";
-      lastRepo = null;
-      lastPath = null;
-      var cases = [
-        [repoFromLink(repoLink), "clankers"],
-        [repoFromLink(labelOnly), "clankers"],
-        [repoFromLink(emptyLink), null],
-        [repoFromLink(null), null],
-        [desiredTitle(setDoc), TITLE_PREFIX + "clankers"],
-        // The header can drop the link on a re-render; the name holds while the page stays put.
-        [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
-        [syncTitle(setDoc), true],
-        [setDoc.title, TITLE_PREFIX + "clankers"],
-        [syncTitle(setDoc), false],
-        [syncTitle(keepDoc), true],
-        [keepDoc.title, TITLE_PREFIX + "clankers"],
-        [syncTitle(goneDoc), false],
-        [goneDoc.title, TITLE_PREFIX + "clankers"],
-        // Another page drops the memory, and the next good read puts it back.
-        [forgetPath(), null],
-        [desiredTitle(keepDoc), null],
-        [syncTitle(keepDoc), true],
-        [keepDoc.title, "ChatGPT"],
-        [syncTitle(keepDoc), false],
-        [rememberRepo(), "clankers"],
-        [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
-        [liveLabel(busyMessage.row), "running Bash"],
-        [liveLabel(null), null],
-        // A thinking row is not a button; the label still arrives, and a stray pulse does not.
-        [liveLabel(thinkingMessage.row), "Thinking\u2026"],
-        [emojiForRow(liveRow(thinkingDoc)), "\uD83D\uDCAD"],
-        // A thinking row shows the shimmer label and no pulsing icon.
-        [emojiForRow(liveRow(shimmerDoc)), "\uD83D\uDCAD"],
-        [liveRow(strayDoc), null],
-        [emojiForRow(liveRow(olderPulseDoc)), "\uD83D\uDDA5\uFE0F"],
-        [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
-        [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
-        [emojiForRow(pathMessage.row), "\uD83D\uDCA4"],
-        [emojiForRow(pyMessage.row), "\uD83D\uDCA4"],
-        [emojiForRow(chainMessage.row), "\uD83D\uDCA4"],
-        [emojiForRow(readMessage.row), "\uD83D\uDDA5\uFE0F"],
-        [emojiForRow(null), null],
-        [actionEmoji("running Bash"), "\uD83D\uDDA5\uFE0F"],
-        [actionEmoji("using Bash"), "\uD83D\uDDA5\uFE0F"],
-        [actionEmoji("used Bash"), "\uD83D\uDDA5\uFE0F"],
-        [actionEmoji("Running commands"), "\uD83D\uDDA5\uFE0F"],
-        [actionEmoji("Ran commands"), "\uD83D\uDDA5\uFE0F"],
-        [actionEmoji("Reading files"), "\uD83D\uDCD6"],
-        [actionEmoji("Editing"), "\u270F\uFE0F"],
-        [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
-        [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
-        [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
-        [actionEmoji("Re-thinking"), "\uD83D\uDCAD"],
-        [actionEmoji("Waiting"), "\uD83D\uDCA4"],
-        [actionEmoji("Doing something"), "\u2699\uFE0F"],
-        [actionEmoji(null), null],
-        [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
-        [syncTitle(busyDoc), true],
-        [busyDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
-        [syncTitle(idleDoc), true],
-        [idleDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
-        [expireHold(), null],
-        [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
-        [syncTitle(idleDoc), true],
-        [idleDoc.title, TITLE_PREFIX + "clankers"],
-      ];
-      var failed = 0;
-      var i;
-      for (i = 0; i < cases.length; i += 1) {
-        if (cases[i][0] !== cases[i][1]) {
-          console.error("check fail", i, cases[i][0], cases[i][1]);
-          failed += 1;
-        }
-      }
-      if (failed) {
-        throw new Error(failed + " checks failed");
-      }
-      console.log("ok " + cases.length);
-    }
-
-    if (typeof document === "undefined") {
-      runChecks();
+    if (exposeChecks("tabTitle", {
+      repoFromLink: repoFromLink,
+      repoForTitle: repoForTitle,
+      desiredTitle: desiredTitle,
+      syncTitle: syncTitle,
+      liveLabel: liveLabel,
+      liveRow: liveRow,
+      emojiForRow: emojiForRow,
+      actionEmoji: actionEmoji,
+      TITLE_PREFIX: TITLE_PREFIX,
+      EMOJI_HOLD_MS: EMOJI_HOLD_MS,
+      MESSAGE_SELECTOR: MESSAGE_SELECTOR,
+      LIVE_ICON_SELECTOR: LIVE_ICON_SELECTOR,
+      LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
+      REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
+      expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
+      forgetPath: function () { lastPath = "/elsewhere"; },
+      setPriorTitle: function (value) { priorTitle = value; },
+    })) {
       return;
     }
 
