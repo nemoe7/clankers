@@ -50,11 +50,13 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## Arena Transcript Trim
 
-This switch ships OFF. On `/agent/*`, ON removes the oldest transcript rows. It keeps the newest `1` message whole and cuts the rest of that message to its last `50` rows. Every older message root leaves. The row count never drops below `20`.
+This switch ships OFF. On `/agent/*`, ON removes the oldest transcript rows. It keeps the newest `1` message whole and cuts it to its last `50` rows. Older messages empty out, and every message root stays on the page. The row count never drops below `20`.
 
 The menu command reads `Transcript trim: 1 message, 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 1 message, 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes a new plan as `<messages>,<rows>`; one number sets the rows alone. An empty or too small answer keeps the old plan.
 
 A row is a part inside a message: text, a tool call, a thinking line or a status line. Only rows still on the page count, and the oldest attached row leaves first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you delete the message there.
+
+The message root itself never leaves. Arena complains when a `#chat-message-*` element disappears, and this switch runs inside its tree.
 
 ## Arena Tab Title
 

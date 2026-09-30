@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.19
+// @version      1.1.20
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -715,20 +715,18 @@
       return rows;
     }
 
-    // Older messages leave whole; the newest one keeps its last rows. The count is the
-    // number of rows that left the page, not the number of removed nodes.
+    // Rows leave, message roots stay: the newest messages keep their last rows and the
+    // older ones empty out. Arena crashes on a removed `#chat-message-*` root, and this
+    // switch runs inside its tree. The count is the number of rows that left the page.
     function trimPlan(doc, plan) {
       var kept = planParts(plan);
       var roots = messageRoots(doc);
-      var older = roots.slice(0, Math.max(0, roots.length - kept.messages));
+      var first = Math.max(0, roots.length - kept.messages);
       var removed = 0;
       var i;
-      for (i = 0; i < older.length; i += 1) {
-        removed += trimRows(rowsOfRoot(older[i]), 0);
-        if (older[i].parentElement) older[i].remove();
-      }
-      if (older.length < roots.length) {
-        removed += trimRows(rowsOfRoot(roots[roots.length - 1]), kept.rows);
+      for (i = 0; i < roots.length; i += 1) {
+        var rows = rowsOfRoot(roots[i]);
+        removed += trimRows(rows, i < first ? 0 : kept.rows);
       }
       return removed;
     }

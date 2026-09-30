@@ -254,6 +254,9 @@ function checkTranscriptTrim(api) {
   var five = rows(5);
   var detached = rows(4);
   detached[0].parentElement = null;
+  var rootNodes = [messageRoot([rowBox(rows(5))]), messageRoot([rowBox(rows(5))])];
+  var rootDoc = logDoc(rootNodes, true);
+  var rootRowsRemoved = trimPlan(rootDoc, "1,50");
   var cases = [
     [trimRows(five, 3), 2],
     [five[0].removed, true],
@@ -287,10 +290,14 @@ function checkTranscriptTrim(api) {
     [messageRoots(logDoc([messageRoot([])], true)).length, 1],
     [messageRoots(logDoc([messageRoot([])], false)).length, 1],
     [messageRoots(logDoc([], true)).length, 0],
-    // Older messages leave whole; the newest one keeps its last rows.
+    // The newest messages keep their last rows and older ones empty out.
     [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "1,50"), 0],
     [trimPlan(logDoc([messageRoot([rowBox(rows(5))]), messageRoot([rowBox(rows(5))])], true), "1,50"), 5],
     [trimPlan(logDoc([messageRoot([rowBox(rows(3))]), messageRoot([rowBox(rows(4))]), messageRoot([rowBox(rows(60))])], true), "1,20"), 47],
+    // The roots stay: Arena crashes on a removed #chat-message-* element.
+    [rootRowsRemoved, 5],
+    [rootNodes[0].parentElement !== null, true],
+    [rootNodes[1].parentElement !== null, true],
   ];
   var failed = 0;
   var i;
