@@ -19,6 +19,7 @@
 
 
 - **Preview reminders**: The rotation names the `task-list` timing and bans an open-task turn end. It adds the edit grep check, the pre-push rebase and the pushed-turn CI check.
+- **CLI short form**: The skill guide calls the CLI as `arena-preview`, never the full script path.
 - **Report agent receipt**: A read or a poll that delivers an answer stamps the parent report read by the agent. The report line shows the receipt beside Sent and Acked, an ack implies the read, and the owner's unread star keeps its own field.
 
 ### gpt-plugins
