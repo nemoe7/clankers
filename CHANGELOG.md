@@ -44,6 +44,8 @@
 
 - **Bash label forms**: The emoji map covers `Bash` and `command`, so `using Bash`, `used Bash`, `Running commands` and `Ran commands` show 🖥️. The version moves to `1.1.11`.
 
+- **Newest steering row**: Open Steering takes the newest matching row, so a stale card from an earlier turn no longer shadows the live preview. The version moves to `1.1.12`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

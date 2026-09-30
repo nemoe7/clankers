@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.11
+// @version      1.1.12
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -318,8 +318,13 @@
       if (!match) {
         return null;
       }
-      var head = trimmed.slice(0, match.index).replace(/[\s\-:|]+$/, "");
-      var words = head.split(/[\s\-:|]+/).filter(function (word) {
+      var head = trimmed.slice(0, match.index);
+      // A name needs a spaced separator before the term: `clankers - Steering` has one, while
+      // `arena-preview-steering` is a single name and carries no separate slug.
+      if (!/\s[-:|]?\s*$/.test(head)) {
+        return null;
+      }
+      var words = head.replace(/[\s\-:|]+$/, "").split(/[\s\-:|]+/).filter(function (word) {
         return Boolean(word);
       });
       return words.length ? words[words.length - 1] : null;
@@ -378,7 +383,7 @@
         [steeringSlugFromLabel("daedalus - Steering"), "daedalus"],
         [steeringSlugFromLabel("clankers - preview"), "clankers"],
         [steeringSlugFromLabel("clankers preview"), "clankers"],
-        [steeringSlugFromLabel("arena-preview-steering"), "arena"],
+        [steeringSlugFromLabel("arena-preview-steering"), null],
         [steeringSlugFromLabel("Steering"), null],
         [steeringSlugFromLabel("daedalus - Website"), null],
         [isSteeringLabel("CLANKERS - PREVIEW"), true],
@@ -396,6 +401,16 @@
         [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
           "clankers"), "clankers - Steering :8000"],
         [steeringRowText([["Website", ":3000"], ["arena-preview-steering", ":8000"]], "clankers"),
+          "arena-preview-steering :8000"],
+        // A stale card from an earlier turn sits above the live one, which wins.
+        [steeringRowText([["Start clankers - Steering", ":8000"], ["clankers - Steering", ":8000"]],
+          "clankers"), "clankers - Steering :8000"],
+        // A newer row for another project does not steal the turn from this project's row.
+        [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+          "clankers"), "Start clankers - Steering :8000"],
+        // The newest row wins even when it is renamed, which is the live-preview case.
+        [steeringRowText([["Start clankers - Steering", ":8000"],
+          ["daedalus - preview", ":8000"], ["arena-preview-steering", ":8000"]], "clankers"),
           "arena-preview-steering :8000"],
         [CLICK_DELAY_MS, 1000],
       ];
@@ -488,25 +503,29 @@
 
     function findSteeringButton(doc, expectedSlug) {
       var buttons = doc.querySelectorAll('button[type="button"]');
-      var fallback = null;
+      var newest = null;
+      var newestSlug = null;
+      var newestNamed = null;
       var i;
       var parsed;
+      // Old cards from earlier turns stay in the transcript, so the newest match is the live row.
+      // A row that names another project keeps its turn only while no newer row answers.
       for (i = 0; i < buttons.length; i += 1) {
         parsed = parseSteeringButton(buttons[i]);
         if (!parsed || !buttonMatchesSteering(parsed.label, parsed.port, null)) {
           continue;
         }
-        // The row that names this repository wins; a row that names nothing, or something else,
-        // opens only when no better row exists. Agents rename the process, and the preview still
-        // has to open.
-        if (!expectedSlug || (parsed.slug && parsed.slug.toLowerCase() === expectedSlug.toLowerCase())) {
-          return buttons[i];
-        }
-        if (!fallback) {
-          fallback = buttons[i];
+        newest = buttons[i];
+        newestSlug = parsed.slug;
+        if (expectedSlug && parsed.slug && parsed.slug.toLowerCase() === expectedSlug.toLowerCase()) {
+          newestNamed = buttons[i];
         }
       }
-      return fallback;
+      if (!newest) {
+        return null;
+      }
+      var other = expectedSlug && newestSlug && newestSlug.toLowerCase() !== expectedSlug.toLowerCase();
+      return other && newestNamed ? newestNamed : newest;
     }
 
     function sync() {
