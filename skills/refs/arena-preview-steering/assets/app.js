@@ -971,7 +971,14 @@ function submissionReceipt(report) {
   dot.setAttribute('role', 'img');
   dot.setAttribute('aria-label', submissionStateWord(report));
   dot.title = submissionStateWord(report);
-  return [stamp, separator, dot];
+  const nodes = [stamp, separator, dot];
+  if (report.latest_answer_acknowledged_at) {
+    // The ack time stays on the line after the dot, as the log prints its dot then its time.
+    const acked = document.createElement('span');
+    acked.textContent = ` · ${time(report.latest_answer_acknowledged_at)}`;
+    nodes.push(acked);
+  }
+  return nodes;
 }
 function renderReportAcknowledgement() {
   const report = lastState?.reports.find(item => item.id === $('#report-select').value);

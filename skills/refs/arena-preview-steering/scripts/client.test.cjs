@@ -1089,6 +1089,8 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.equal(part(agentAck, 'state-dot').dataset.state, 'said');
     assert.match(part(agentAck, 'state-dot').title, /^Acked Sep /);
+    assert.match(agentAck.textContent, / · Sep 24, 10:01$/,
+      'the ack time rides the line after the dot, as the log prints it');
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
     await get('#refresh-notes').events.click();
