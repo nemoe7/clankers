@@ -50,7 +50,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds the live action from the last agent message, such as `Arena | clankers — running Bash`, and the label caps at 60 characters. The suffix clears when the turn ends. The feature holds the title against the rewrites that Arena makes on navigation, and it restores the earlier title when the link leaves the page.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action from the last agent message, such as `Arena | clankers 🖥️`. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait ⏳, and ⚙️ for anything else. The emoji clears when the turn ends. The feature holds the title against the rewrites that Arena makes on navigation, and it restores the earlier title when the link leaves the page.
 
 ## ChatGPT Hide Elements
 

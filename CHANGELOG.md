@@ -27,7 +27,7 @@
 
 ### userscripts
 
-- **Arena tab title**: The Arena bundle gains a Tab title switch. It sets the tab title from the repository link in the session header, and clears the action suffix at turn end. While the agent works, the title adds the live action from the last agent message, such as `Arena | clankers — running Bash`.
+- **Arena tab title**: The Arena bundle gains a Tab title switch. It sets the tab title from the repository link in the session header. The title adds an emoji for the live action, such as `Arena | clankers 🖥️`, and the emoji clears when the turn ends.
 
 
 - **ChatGPT hide wiring**: The Images link, Library link and Free badge finders join the sync pass, so all eight elements hide. The self-check drives `syncDocument`, and the version moves to `1.2.1`.

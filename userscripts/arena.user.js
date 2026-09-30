@@ -957,8 +957,18 @@
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
-    var LABEL_CAP = 60;
     var TITLE_PREFIX = "Arena | ";
+    // The live status row names the action; the emoji carries it in the title.
+    var ACTION_EMOJI = [
+      ["running", "\uD83D\uDDA5\uFE0F"],
+      ["read", "\uD83D\uDCD6"],
+      ["edit", "\u270F\uFE0F"],
+      ["search", "\uD83D\uDD0D"],
+      ["think", "\uD83D\uDCAD"],
+      ["thought", "\uD83D\uDCAD"],
+      ["wait", "\u23F3"],
+    ];
+    var ACTION_FALLBACK = "\u2699\uFE0F";
 
     function repoFromLink(link) {
       if (!link) {
@@ -978,17 +988,28 @@
     }
 
     // The last agent message carries the live action in its pulsing status row.
-    function liveAction(doc) {
+    function liveLabel(doc) {
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
       var last = messages.length ? messages[messages.length - 1] : null;
       var icons = last ? last.querySelectorAll(LIVE_ICON_SELECTOR) : [];
       var button = icons.length ? icons[icons.length - 1].closest("button") : null;
       var label = button ? button.querySelector("p") : null;
       var text = label ? String(label.textContent || "").replace(/\s+/g, " ").trim() : "";
-      if (!text) {
+      return text || null;
+    }
+
+    function actionEmoji(label) {
+      if (!label) {
         return null;
       }
-      return text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1).trim() + "\u2026" : text;
+      var text = label.toLowerCase();
+      var i;
+      for (i = 0; i < ACTION_EMOJI.length; i += 1) {
+        if (text.indexOf(ACTION_EMOJI[i][0]) !== -1) {
+          return ACTION_EMOJI[i][1];
+        }
+      }
+      return ACTION_FALLBACK;
     }
 
     function desiredTitle(doc) {
@@ -996,8 +1017,8 @@
       if (!name) {
         return null;
       }
-      var action = liveAction(doc);
-      return action ? TITLE_PREFIX + name + " \u2014 " + action : TITLE_PREFIX + name;
+      var emoji = actionEmoji(liveLabel(doc));
+      return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
     }
 
     var appliedTitle = null;
@@ -1039,9 +1060,6 @@
           },
         };
       }
-      var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
-      var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
-      var emptyLink = link("", "");
       function liveMessage(text) {
         var label = { textContent: text };
         var button = {
@@ -1071,14 +1089,14 @@
           },
         };
       }
+      var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
+      var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
+      var emptyLink = link("", "");
       var setDoc = docWith(repoLink, "ChatGPT");
       var keepDoc = docWith(null, "ChatGPT");
       var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
       var busyDoc = actionDoc(repoLink, liveMessage("  running\n Bash  "));
       var idleDoc = actionDoc(repoLink, null);
-      var longDoc = actionDoc(repoLink, liveMessage("x".repeat(80)));
-      var actionCase = desiredTitle(busyDoc);
-      var cappedCase = desiredTitle(longDoc);
       priorTitle = "ChatGPT";
       var cases = [
         [repoFromLink(repoLink), "clankers"],
@@ -1095,13 +1113,19 @@
         [syncTitle(goneDoc), true],
         [goneDoc.title, "ChatGPT"],
         [syncTitle(goneDoc), false],
-        [liveAction(busyDoc), "running Bash"],
-        [liveAction(idleDoc), null],
-        [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \u2014 running Bash"],
-        [cappedCase === TITLE_PREFIX + "clankers \u2014 " + "x".repeat(59) + "\u2026", true],
-        [cappedCase.length, TITLE_PREFIX.length + "clankers".length + 3 + LABEL_CAP],
+        [liveLabel(busyDoc), "running Bash"],
+        [liveLabel(idleDoc), null],
+        [actionEmoji("running Bash"), "\uD83D\uDDA5\uFE0F"],
+        [actionEmoji("Reading files"), "\uD83D\uDCD6"],
+        [actionEmoji("Editing"), "\u270F\uFE0F"],
+        [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
+        [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
+        [actionEmoji("Waiting"), "\u23F3"],
+        [actionEmoji("Doing something"), "\u2699\uFE0F"],
+        [actionEmoji(null), null],
+        [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
         [syncTitle(busyDoc), true],
-        [busyDoc.title, TITLE_PREFIX + "clankers \u2014 running Bash"],
+        [busyDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
         [syncTitle(idleDoc), true],
         [idleDoc.title, TITLE_PREFIX + "clankers"],
       ];
