@@ -38,6 +38,8 @@
 
 - **Tab title hold**: The title re-asserts each second and holds the last repository name on the page. A turn end no longer drops it. The version moves to `1.1.8`.
 
+- **Thinking row**: The tab title takes the live row from any message with a pulse. It reads the label even when that row is not a button, so a `Thinking…` row shows 💭. The version moves to `1.1.9`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

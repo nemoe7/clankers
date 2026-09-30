@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.8
+// @version      1.1.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1033,21 +1033,83 @@
       return name || null;
     }
 
-    // The last agent message carries the live action in its pulsing status row.
+    function collapsed(node) {
+      return node ? String(node.textContent || "").replace(/\s+/g, " ").trim() : "";
+    }
+
+    // Thinking rows are not always buttons, so the row is the nearest ancestor that carries text.
+    function rowFromIcon(icon) {
+      if (!icon) {
+        return null;
+      }
+      var button = typeof icon.closest === "function" ? icon.closest("button") : null;
+      if (button) {
+        return button.parentElement ? button.parentElement : button;
+      }
+      var node = icon.parentElement || null;
+      var depth = 0;
+      while (node && depth < 4) {
+        if (collapsed(node)) {
+          return node;
+        }
+        node = node.parentElement || null;
+        depth += 1;
+      }
+      return null;
+    }
+
+    // The pulsing row sits in the newest message that has one; a pulse outside the transcript
+    // counts only when its label names a known action, so a stray spinner adds no emoji.
     function liveRow(doc) {
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var last = messages.length ? messages[messages.length - 1] : null;
-      var icons = last && typeof last.querySelectorAll === "function" ? last.querySelectorAll(LIVE_ICON_SELECTOR) : [];
-      var icon = icons.length ? icons[icons.length - 1] : null;
-      var button = icon && typeof icon.closest === "function" ? icon.closest("button") : null;
-      return button && button.parentElement ? button.parentElement : null;
+      var i;
+      var icons;
+      var row;
+      for (i = messages.length - 1; i >= 0; i -= 1) {
+        icons = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(LIVE_ICON_SELECTOR) : [];
+        row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
+        if (row) {
+          return row;
+        }
+      }
+      icons = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_ICON_SELECTOR) : [];
+      row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
+      return row && knownLabel(liveLabel(row)) ? row : null;
+    }
+
+    function knownLabel(text) {
+      var lower = String(text || "").toLowerCase();
+      var i;
+      for (i = 0; i < ACTION_EMOJI.length; i += 1) {
+        if (lower.indexOf(ACTION_EMOJI[i][0]) !== -1) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function liveLabel(row) {
-      var button = row && typeof row.querySelector === "function" ? row.querySelector("button") : null;
-      var label = button ? button.querySelector("p") : null;
-      var text = label ? String(label.textContent || "").replace(/\s+/g, " ").trim() : "";
-      return text || null;
+      if (!row || typeof row.querySelector !== "function") {
+        return null;
+      }
+      var button = row.querySelector("button");
+      var text = collapsed(button && typeof button.querySelector === "function" ? button.querySelector("p") : null);
+      if (text) {
+        return text;
+      }
+      var buttons = typeof row.querySelectorAll === "function" ? row.querySelectorAll("button") : [];
+      var i;
+      for (i = 0; i < buttons.length; i += 1) {
+        text = collapsed(typeof buttons[i].querySelector === "function" ? buttons[i].querySelector("p") : null);
+        if (text) {
+          return text;
+        }
+      }
+      text = collapsed(row.querySelector("p"));
+      if (text) {
+        return text;
+      }
+      return collapsed(button) || null;
     }
 
     function actionEmoji(label) {
@@ -1187,6 +1249,42 @@
       function rememberRepo() {
         return repoForTitle(setDoc);
       }
+      function divMessage(text) {
+        var label = { textContent: text };
+        var row = {
+          textContent: text,
+          querySelector: function (selector) {
+            return selector === "p" ? label : null;
+          },
+          querySelectorAll: function () {
+            return [];
+          },
+        };
+        var icon = {
+          parentElement: row,
+          closest: function () {
+            return null;
+          },
+        };
+        return {
+          row: row,
+          querySelectorAll: function (selector) {
+            return selector === LIVE_ICON_SELECTOR ? [icon] : [];
+          },
+        };
+      }
+      function pulseDoc(messages, stray) {
+        return {
+          title: "ChatGPT",
+          querySelectorAll: function (selector) {
+            if (selector === MESSAGE_SELECTOR) return messages;
+            return selector === LIVE_ICON_SELECTOR ? (stray ? [stray] : []) : [];
+          },
+          querySelector: function () {
+            return null;
+          },
+        };
+      }
       function actionDoc(element, message) {
         return {
           title: "ChatGPT",
@@ -1213,6 +1311,25 @@
       readMessage.row.textContent = "stderr End the turn with `poll` to wait for more work.";
       var busyDoc = actionDoc(repoLink, busyMessage);
       var idleDoc = actionDoc(repoLink, null);
+      var thinkingMessage = divMessage("Thinking\u2026");
+      var thinkingDoc = pulseDoc([thinkingMessage], null);
+      var strayRow = {
+        textContent: "Loading the sidebar",
+        querySelector: function (selector) {
+          return selector === "p" ? { textContent: "Loading the sidebar" } : null;
+        },
+        querySelectorAll: function () {
+          return [];
+        },
+      };
+      var strayIcon = {
+        parentElement: strayRow,
+        closest: function () {
+          return null;
+        },
+      };
+      var strayDoc = pulseDoc([], strayIcon);
+      var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
       priorTitle = "ChatGPT";
       lastRepo = null;
       lastPath = null;
@@ -1241,6 +1358,11 @@
         [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
         [liveLabel(busyMessage.row), "running Bash"],
         [liveLabel(null), null],
+        // A thinking row is not a button; the label still arrives, and a stray pulse does not.
+        [liveLabel(thinkingMessage.row), "Thinking\u2026"],
+        [emojiForRow(liveRow(thinkingDoc)), "\uD83D\uDCAD"],
+        [liveRow(strayDoc), null],
+        [emojiForRow(liveRow(olderPulseDoc)), "\uD83D\uDDA5\uFE0F"],
         [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
         [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
         [emojiForRow(pathMessage.row), "\uD83D\uDCA4"],
