@@ -955,6 +955,9 @@
   runFeature("tab-title", "Tab title", function () {
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
+    var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
+    var LIVE_ICON_SELECTOR = "svg.animate-pulse";
+    var LABEL_CAP = 60;
     var TITLE_PREFIX = "Arena | ";
 
     function repoFromLink(link) {
@@ -974,9 +977,27 @@
       return name || null;
     }
 
+    // The last agent message carries the live action in its pulsing status row.
+    function liveAction(doc) {
+      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+      var last = messages.length ? messages[messages.length - 1] : null;
+      var icons = last ? last.querySelectorAll(LIVE_ICON_SELECTOR) : [];
+      var button = icons.length ? icons[icons.length - 1].closest("button") : null;
+      var label = button ? button.querySelector("p") : null;
+      var text = label ? String(label.textContent || "").replace(/\s+/g, " ").trim() : "";
+      if (!text) {
+        return null;
+      }
+      return text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1).trim() + "\u2026" : text;
+    }
+
     function desiredTitle(doc) {
       var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR));
-      return name ? TITLE_PREFIX + name : null;
+      if (!name) {
+        return null;
+      }
+      var action = liveAction(doc);
+      return action ? TITLE_PREFIX + name + " \u2014 " + action : TITLE_PREFIX + name;
     }
 
     var appliedTitle = null;
@@ -1021,9 +1042,43 @@
       var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
       var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
       var emptyLink = link("", "");
+      function liveMessage(text) {
+        var label = { textContent: text };
+        var button = {
+          querySelector: function (selector) {
+            return selector === "p" ? label : null;
+          },
+        };
+        var icon = {
+          closest: function (selector) {
+            return selector === "button" ? button : null;
+          },
+        };
+        return {
+          querySelectorAll: function (selector) {
+            return selector === LIVE_ICON_SELECTOR ? [icon] : [];
+          },
+        };
+      }
+      function actionDoc(element, message) {
+        return {
+          title: "ChatGPT",
+          querySelectorAll: function (selector) {
+            return selector === MESSAGE_SELECTOR && message ? [message] : [];
+          },
+          querySelector: function (selector) {
+            return selector === REPO_LINK_SELECTOR ? element : null;
+          },
+        };
+      }
       var setDoc = docWith(repoLink, "ChatGPT");
       var keepDoc = docWith(null, "ChatGPT");
       var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
+      var busyDoc = actionDoc(repoLink, liveMessage("  running\n Bash  "));
+      var idleDoc = actionDoc(repoLink, null);
+      var longDoc = actionDoc(repoLink, liveMessage("x".repeat(80)));
+      var actionCase = desiredTitle(busyDoc);
+      var cappedCase = desiredTitle(longDoc);
       priorTitle = "ChatGPT";
       var cases = [
         [repoFromLink(repoLink), "clankers"],
@@ -1040,6 +1095,15 @@
         [syncTitle(goneDoc), true],
         [goneDoc.title, "ChatGPT"],
         [syncTitle(goneDoc), false],
+        [liveAction(busyDoc), "running Bash"],
+        [liveAction(idleDoc), null],
+        [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \u2014 running Bash"],
+        [cappedCase === TITLE_PREFIX + "clankers \u2014 " + "x".repeat(59) + "\u2026", true],
+        [cappedCase.length, TITLE_PREFIX.length + "clankers".length + 3 + LABEL_CAP],
+        [syncTitle(busyDoc), true],
+        [busyDoc.title, TITLE_PREFIX + "clankers \u2014 running Bash"],
+        [syncTitle(idleDoc), true],
+        [idleDoc.title, TITLE_PREFIX + "clankers"],
       ];
       var failed = 0;
       var i;
