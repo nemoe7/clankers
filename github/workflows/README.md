@@ -4,7 +4,7 @@ Reusable GitHub Actions sources, with no instruction budget. This directory does
 
 ## Gemini release proposal and draft
 
-Copy [gemini-release.yml](gemini-release.yml) and [gemini_release.py](gemini_release.py) to `.github/workflows/` on the target repository's default branch, and add `GEMINI_API_KEY` as an Actions secret. The dispatch job in `.github/workflows/distribute-arena.yml` copies both files, `nemoe7/daedalus` by default, with the `CLANKERS_DIST_PAT` secret. That token needs Workflows write access because the copy changes `.github/workflows/`.
+Copy [gemini-release.yml](gemini-release.yml) and [gemini_release.py](gemini_release.py) to `.github/workflows/` on the target repository's default branch, and add `GEMINI_API_KEY` as an Actions secret.
 
 Run **Gemini Release Draft** with no proposal run ID to propose a release. The proposal shows the version, SHA and notes in the Actions summary, and it creates no tag or release. Review the notes and target, then run the workflow again with the successful proposal run ID. That run reuses the saved notes and does not call Gemini.
 
