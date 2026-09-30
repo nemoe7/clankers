@@ -42,6 +42,8 @@
 
 - **Live label anchor**: The action text comes from the shimmering status label, so a thinking row with no pulsing icon still shows 💭. The version moves to `1.1.10`.
 
+- **Bash label forms**: The emoji map covers `Bash` and `command`, so `using Bash`, `used Bash`, `Running commands` and `Ran commands` show 🖥️. The version moves to `1.1.11`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

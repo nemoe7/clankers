@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.10
+// @version      1.1.11
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1006,6 +1006,10 @@
     // The live status row names the action; the emoji carries it in the title.
     var ACTION_EMOJI = [
       ["running", "\uD83D\uDDA5\uFE0F"],
+      // The Bash label changes with the call: running Bash, using Bash, used Bash,
+      // Running commands, Ran commands.
+      ["bash", "\uD83D\uDDA5\uFE0F"],
+      ["command", "\uD83D\uDDA5\uFE0F"],
       ["read", "\uD83D\uDCD6"],
       ["edit", "\u270F\uFE0F"],
       ["search", "\uD83D\uDD0D"],
@@ -1409,6 +1413,10 @@
         [emojiForRow(readMessage.row), "\uD83D\uDDA5\uFE0F"],
         [emojiForRow(null), null],
         [actionEmoji("running Bash"), "\uD83D\uDDA5\uFE0F"],
+        [actionEmoji("using Bash"), "\uD83D\uDDA5\uFE0F"],
+        [actionEmoji("used Bash"), "\uD83D\uDDA5\uFE0F"],
+        [actionEmoji("Running commands"), "\uD83D\uDDA5\uFE0F"],
+        [actionEmoji("Ran commands"), "\uD83D\uDDA5\uFE0F"],
         [actionEmoji("Reading files"), "\uD83D\uDCD6"],
         [actionEmoji("Editing"), "\u270F\uFE0F"],
         [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
