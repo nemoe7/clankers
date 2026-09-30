@@ -6,6 +6,10 @@
 - **Gemini release reference**: The draft receives previous published release notes as style-only context. The prompt forbids their use as evidence. Version classification does not receive them.
 - **Gemini retry diagnostics**: The workflow reports model HTTP status and sanitized API errors, with immediate console flush. A draft that fails template validation receives one same-model correction attempt.
 
+### git
+
+- **Commit-message hook**: The preview installer replaces the local hook with a validator for `rules/COMMIT-SPEC.txt`. It checks the subject format, rejects a body, and adds no co-author trailer.
+
 ### userscripts
 
 - **Transcript trim**: The menu takes one global row limit. The trim removes oldest rows and action containers from trimmed or empty roots while keeping message roots. The Arena bundle moves to `1.1.23`.
