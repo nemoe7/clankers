@@ -888,12 +888,12 @@ test('preview client', async (t) => {
     stateFails = false;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
-    // A running agent poll turns the dot blue, and the state clears it again.
+    // A running agent poll turns the dot blue and leaves the text alone.
     state.polling = true;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'polling');
-    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Agent polling');
-    assert.equal(get('#connection-text').textContent, 'Agent is polling the inbox \u00b7 3 messages saved');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
+    assert.equal(get('#connection-text').textContent, '3 messages saved');
     state.polling = false;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');

@@ -68,9 +68,8 @@ function label(button, text) {
 }
 
 function connectionLabel(state) {
-  if (state === 'ok') return 'Connected';
-  // The blue dot says the agent is waiting on this page right now.
-  return state === 'polling' ? 'Agent polling' : 'Disconnected';
+  // A poll shows as the blue dot alone, so its text keeps the normal reading.
+  return state === 'down' ? 'Disconnected' : 'Connected';
 }
 function setConnection(state, text) {
   const dot = $('#connection-dot');
@@ -529,11 +528,8 @@ async function refreshState() {
     // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
     save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     const saved = state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet';
-    if (state.polling) setConnection('polling', `Agent is polling the inbox · ${saved}`);
-    else {
-      setConnection('ok', saved);
-      if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
-    }
+    setConnection(state.polling ? 'polling' : 'ok', saved);
+    if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
