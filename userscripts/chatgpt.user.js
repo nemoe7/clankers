@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers ChatGPT
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.0
+// @version      1.2.1
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -115,12 +115,19 @@
       return true;
     }
 
+    function syncDocument(doc) {
+      hideElement(findClaimDiv(doc));
+      hideElement(findFreeOfferDiv(doc));
+      hideElement(findSurfaceDiv(doc));
+      hideElement(findCodexLink(doc));
+      hideElement(findImagesLink(doc));
+      hideElement(findLibraryLink(doc));
+      hideElement(findFreeBadge(doc));
+      hideElement(findHeaderDiv(doc));
+    }
+
     function sync() {
-      hideElement(findClaimDiv(document));
-      hideElement(findFreeOfferDiv(document));
-      hideElement(findSurfaceDiv(document));
-      hideElement(findCodexLink(document));
-      hideElement(findHeaderDiv(document));
+      syncDocument(document);
     }
 
     function fakeElement() {
@@ -234,6 +241,23 @@
           return [otherButton, freeButton];
         },
       };
+      // One document answers every selector, so the sync pass itself is under test:
+      // a finder left out of syncDocument leaves its element unhidden here.
+      var fullDoc = {
+        querySelector: function (selector) {
+          if (selector === CLAIM_BUTTON_SELECTOR) return claimButton;
+          if (selector === SURFACE_RADIO_SELECTOR) return radio;
+          if (selector === CODEX_LINK_SELECTOR) return codexLink;
+          if (selector === IMAGES_LINK_SELECTOR) return imagesLink;
+          if (selector === LIBRARY_LINK_SELECTOR) return libraryLink;
+          if (selector === FREE_BADGE_SELECTOR) return freeBadge;
+          if (selector === HEADER_DIV_SELECTOR) return headerDiv;
+          return null;
+        },
+        querySelectorAll: function (selector) {
+          return selector === "button" ? [freeButton] : [];
+        },
+      };
       var cases = [
         [findClaimDiv(claimDoc), claimDiv],
         [findClaimDiv(bareDoc), null],
@@ -266,10 +290,27 @@
           failed += 1;
         }
       }
+      syncDocument(fullDoc);
+      var synced = [
+        claimDiv,
+        freeDiv,
+        surfaceDiv,
+        codexLink,
+        imagesLink,
+        libraryLink,
+        freeBadge,
+        headerDiv,
+      ];
+      for (i = 0; i < synced.length; i += 1) {
+        if (!synced[i].hasAttribute("hidden")) {
+          console.error("sync fail", i);
+          failed += 1;
+        }
+      }
       if (failed) {
         throw new Error(failed + " checks failed");
       }
-      console.log("ok " + cases.length);
+      console.log("ok " + (cases.length + synced.length));
     }
 
     if (typeof document === "undefined") {

@@ -18,6 +18,10 @@
 
 - **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.
 
+### userscripts
+
+- **ChatGPT hide wiring**: The Images link, Library link and Free badge finders join the sync pass, so all eight elements hide. The self-check drives `syncDocument`, and the version moves to `1.2.1`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.
