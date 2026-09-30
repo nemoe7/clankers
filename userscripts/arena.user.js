@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.21
+// @version      1.1.22
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1073,7 +1073,10 @@
       ["bash", "\uD83D\uDDA5\uFE0F"],
       ["command", "\uD83D\uDDA5\uFE0F"],
       ["read", "\uD83D\uDCD6"],
+      // Explored, Exploring: the read group covers what a read-only pass reports.
+      ["explor", "\uD83D\uDCD6"],
       ["edit", "\u270F\uFE0F"],
+      ["write", "\u270F\uFE0F"],
       ["search", "\uD83D\uDD0D"],
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],

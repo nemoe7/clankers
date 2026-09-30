@@ -626,6 +626,14 @@ function checkTabTitle(api) {
     [actionEmoji("Ran commands"), "\uD83D\uDDA5\uFE0F"],
     [actionEmoji("Reading files"), "\uD83D\uDCD6"],
     [actionEmoji("Editing"), "\u270F\uFE0F"],
+    // The owner's editing group: Edit, Editing, Editing files, Write.
+    [actionEmoji("Edit"), "\u270F\uFE0F"],
+    [actionEmoji("Editing files"), "\u270F\uFE0F"],
+    [actionEmoji("Write"), "\u270F\uFE0F"],
+    // The owner's reading group: Explored, Read.
+    [actionEmoji("Explored"), "\uD83D\uDCD6"],
+    [actionEmoji("Exploring"), "\uD83D\uDCD6"],
+    [actionEmoji("Read"), "\uD83D\uDCD6"],
     [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
     [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
     [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
