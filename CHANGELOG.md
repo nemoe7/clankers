@@ -1,160 +1,129 @@
 ## 2026-09-30
 
+### rules
+
 - **Ledger prose**: AGENTS.md bans narrative, rationale and story in the ledger. The budget exceptions file drops reasons from its fill rule and every entry.
-
 - **Custom answers**: AGENTS.md requires a fresh proposal of the new wording after a custom answer. The line lands only after approval of that proposal.
-
 - **Clause proposals**: AGENTS.md requires a proposal on the initial refs wording of every clause change. Owner-supplied text is no exception, and the live mirrors follow the approved line.
-
 - **ChatGPT long-text fences**: The `More about you` field scans for the longest inner backtick run and sets the outer fence to `max(4, run + 1)`. The fence stays strictly longer than every inner run and holds at least 4 backticks.
+
+### preview
 
 - **Preview reminders**: The rotation names the `task-list` timing and bans an open-task turn end. It adds the edit grep check, the pre-push rebase and the pushed-turn CI check.
 
+### gpt-plugins
+
 - **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.
+
+### docs
+
+- **CHANGELOG domains**: Every date groups its changes under domain headings. The headings are rules, preview, gpt-plugins, userscripts, workflows, automations, maintenance and docs. AGENTS.md requires the shape.
+
 
 ## 2026-09-29
 
-- **Owner-verbatim scope**: AGENTS.md grants the approval exemption only for the owner's complete clause text. Any other owner directive takes the report route first.
-
-- **CI poll output**: ARENA.md polls the plain `gh pr checks` output. An empty or absent check list is unverified, never a conclusion.
-
-- **ChatGPT hide elements**: The ChatGPT userscript hides the Images sidebar link, the Library sidebar link and the Free badge. The bundle version is `1.2.0`.
-
-- **Push after a rebase**: ARENA.md pushes only when the branch has commits ahead of `origin/main`. A rebase that leaves nothing to push skips the push.
-
-- **gpt-github CI gates**: Poll the runs for the new head SHA after every push, since an older run verifies nothing. A missing, queued, in-progress or pending check is not complete, and a failed, cancelled or timed-out check is not green. The turn stays open after a push while the new head SHA has no completed run, and the plugin version is `1.4.0`.
-
-- **Rebase rule**: ARENA.md requires a check of `origin/main` before each push and a rebase when main moved. After a push or a sandbox reset, HEAD must equal the remote branch.
+### rules
 
 - **ChatGPT diagrams rule**: All diagrams use Mermaid, `flowchart TB` by default, no ASCII. The rule no longer limits itself to pipelines and flows.
+- **ChatGPT outer fences**: Long fenced text uses at least four outer backticks, with a longer fence when the content requires one. Inner fences and language tags stay unchanged. The English More field uses approved lossless compression of existing lines.
+- **ChatGPT Mermaid requirement**: Pipelines and flows must use Mermaid unless the target explicitly cannot render it. ASCII diagrams stay prohibited, and the top-down, short-label and phone-sized rules stay. Refs, live, wenyan and the platform table match the approved replacement.
 
-- **Release tags**: Proposed tags always start with `v`, so an initial release is `v0.1.0`.
+### preview
 
-- **Gemini prompts**: The four release prompts follow GUIDELINES.md section 4. Each has a task line, shared boundary lines, one imperative rule per bullet, and a final return rule.
-
-- **Release notes sections**: Gemini omits template sections without evidence and always keeps Summary. An initial release shows Summary and Features only, with no commit comparison.
-
-- **STE lint in the gate**: `check.py` runs the ASD-STE100 linter over the covered documents (`STE_DOCS`), and CI calls `check.py --ste` with the same list.
-
+- **Owner-verbatim scope**: AGENTS.md grants the approval exemption only for the owner's complete clause text. Any other owner directive takes the report route first.
+- **CI poll output**: ARENA.md polls the plain `gh pr checks` output. An empty or absent check list is unverified, never a conclusion.
+- **ChatGPT hide elements**: The ChatGPT userscript hides the Images sidebar link, the Library sidebar link and the Free badge. The bundle version is `1.2.0`.
+- **Push after a rebase**: ARENA.md pushes only when the branch has commits ahead of `origin/main`. A rebase that leaves nothing to push skips the push.
 - **Re-ack block gap**: Later ack blocks in the Messages tab use 8px around the hairline and drop the first paragraph top margin.
-
-- **One pytest**: Test files are `test_*.py` and `*.test.cjs`. The `check_*` names stay for gates. A root `pytest.ini` runs the preview and Gemini release tests in one call, and CI now runs the Gemini tests.
-
 - **Autoscroll button hover**: Arena bundle 1.1.5 gives each toggle state its own hover fill: surface raised when off, CTA active when on. The on state stays visible under the pointer.
-
-- **Gemini model ladder**: The release workflow `models` input is a comma-separated ladder. Each request moves to the next model on an HTTP error or blocked output. Default: gemini-3.8-flash to gemini-3.1-flash-lite.
-
 - **Publish feedback**: `publish` prints the parsed field count and warns when a `{#id}` marker parsed as prose. A shared-ID refusal suggests `<id>-report` or `<id>-task`.
-
 - **Rules audit**: AGENTS.md, ARENA.md, CLINE.md, the preview SKILL.md and REFERENCE.md lose rationale tails, duplicates and untestable lines. ARENA.md now names every host `AGENTS.md` and wins collisions. The same edits apply to the ChatGPT files and COMMIT-SPEC.txt.
-
 - **Tab pip alignment**: Tab buttons centre their label and unread pip with flex and a 6px gap. The pip sits on the text midline. Tabs are 116px wide (98px narrow), so the pip does not widen the row.
-
 - **Report ack block gap**: Later reply blocks in the report ack history use 8px above and below the hairline and no paragraph top margin.
-
 - **No shared report and task IDs**: `publish` refuses a report ID that a task holds. A new or amended task refuses an ID that a report holds. The ack log links one ID to one panel.
-
 - **Local checks before push**: ARENA.md requires the repository checks to pass locally before every push, then the PR CI poll.
-
-- **Distribute Gemini release**: `distribute-gemini-release.yml` copies `gemini-release.yml` and `gemini_release.py` to target repositories on dispatch, `nemoe7/daedalus` by default, on the pattern of `distribute-arena.yml`.
-
-- **Gemini release in two files**: The prompts and the release template move into `gemini_release.py` as constants. A target repository installs the YAML and the Python file only.
-
-- **Gemini evidence input**: The release workflow has an `evidence` choice. `commits-and-diffs` is the default and `commits` sends commit messages only.
-
-- **Gemini HTTP error detail**: A Gemini HTTP failure now shows the status and message from the response body after the HTTP code. The detail stops at 500 characters and the script redacts secrets.
-
 - **Link colour**: Preview anchors use a muted blue, `#6ea3d6`, in both themes instead of the accent colour.
-
 - **Seen subcommand removed**: `read` and `poll` stamp delivered IDs Seen, so `preview.py seen` goes from the code, the tests and `REFERENCE.md`.
-
 - **Task ID shape**: Task IDs are short kebab-case titles, and acks put task IDs in backticks so the log links them.
-
 - **Autoscroll only while generating**: Arena bundle 1.1.4 follows the transcript only while the Stop generating button exists, the same condition that hides the composer. With the composer shown, the transcript stays where the user put it.
-
 - **Report ack top gap**: The report ack history sits 10px below the toolbar rule instead of touching it.
-
 - **No init before serve or restore**: `preview.py gate` passes when the state database does not exist, and `import-state` creates a missing database. `init` stays for a manual create.
-
 - **Task status values**: `SKILL.md` names the two `--status` values, `upcoming` and `finished`.
-
 - **Poll flags removed**: `preview.py poll` takes no `--interval` or `--max`. The wait stays 900 × 1 s in refs, live and installed copies. The test covers the fixed wait and rejects the old flags.
-
-- **Gemini release input**: Send only commit messages and text diffs to Gemini. Binary files add one marker line and no patch data.
-
-- **Gemini release path**: Run the Gemini release scripts from `.github/workflows` instead of `github/workflows`.
-
 - **Autoscroll toggle button**: Add a toggle to the transcript action row next to Stop generating. The button shows pressed while follow is ON and unpressed when OFF, and it stays in sync with the menu toggle. Drop the Shift pause.
-
 - **Report ack spacing**: Remove the top line and the extra space above the first reply in the report ack history. Zero the container and paragraph top spacing there. Keep the line between later replies.
-
 - **Shift pause**: Arena bundle 1.1.2 pauses transcript follow while you hold Shift. Release Shift to resume while ON. Clear the held-key state on window blur without changing the saved switch.
-
-- **Gemini release proposals**: Classify SemVer impact from complete commit history. Write a version and notes proposal first. Only a separate approved run can create a tag and draft.
-
 - **Report footer status**: Repeat the submission status below the report form. Keep agent replies at the top and only the top status as a live announcement.
-
-- **Release command errors**: Include the failed command and stderr in Gemini release errors. Explain the existing-tag requirement when tag resolution fails. Redact configured GitHub and Gemini secrets, and check missing-tag diagnostics offline.
-
-- **Gemini release drafts**: Add reusable GitHub Actions sources under `github/workflows`. Generate draft notes from complete release history with Gemini 3.5 Flash-Lite, a release template and split-and-combine summaries. Keep activation separate from the source library.
-
 - **Report reply position**: Move report acknowledgement history and submission status above the report form. Keep reply history and links unchanged.
-
 - **Clipboard images**: Paste images into the composer as staged attachments with epoch-time filenames. Keep image bytes, native text paste, removable files, the per-file limit and the normal send/retry path.
-
 - **Turn-end task status**: State in chat that no open tasks remain before the final inbox poll. Keep the final poll and task-list check requirements.
-
 - **Unified state import**: Replace import-notes and task-import with import-state for copied notes, tasks and report answers. Accept a file or stdin, preserve receipts and backups, and roll back the whole import on invalid records. Task replacement requires --replace-tasks.
-
 - **Authoritative steering inbox**: Use the preview inbox for steering instructions, receipts and work status when Arena chat delivery is unreliable. Retain duplicate-message and reversible-edit safeguards.
-
-- **GPT plugin compression**: Keep full refs and compress shipped skill wording without rule changes. Remove the destructive copy command, check matching structure and retain exact archive validation. Raise the plugin version to 1.3.1.
-
 - **Note references**: Require seven-character note IDs in prose, never sequence numbers or list positions. Check references against inbox IDs and keep full IDs in CLI calls.
-
 - **Acknowledgement reference links**: Require exact report and task IDs in inline code in Markdown acknowledgements instead of generic labels. Retain short prose IDs for other references.
-
 - **Report acknowledgement history**: Show agent replies in the report header with the Messages acknowledgement style. Preserve replies across submissions and repeated acknowledgements, including reference links.
-
 - **Live userscript switches**: Apply all Arena and ChatGPT menu switches without page reload. Stop disabled observers, timers and listeners. Restore script-owned hiding changes without undoing earlier clicks or prompt insertion.
-
 - **Messages tab**: Rename the visible Notes tab to Messages. Keep its data and routes unchanged.
-
 - **Always-follow transcript switch**: Arena bundle 1.1.1 keeps the transcript at the bottom while enabled. Remove the near-bottom gate and upward-scroll pause. Disable the saved switch to stop follow immediately.
-
 - **PR check polling**: Use exponential delays from 1 to 64 seconds after the initial check, then 64-second intervals. Stop and report command or API errors, including HTTP 401. Pending checks remain distinct from errors.
-
-- **GPT plugin versions**: Require a version increase in `gpt-plugins/plugin.json` for every update under `gpt-plugins/`, including sources and documentation.
-
 - **Finished tasks**: Show the last finished task first. Keep upcoming and saved task order unchanged.
-
 - **PR-only validation**: Stop repeat validation after main updates and remove the main-only README measurement commit. Keep PR checks, plugin packaging and rules publishing.
-
 - **Owner input limits**: Remove note, answer, submission and total request caps. Keep the 50 MB per-file upload cap and current timeouts. Stream multipart files and download results to temporary storage. Agent replies, reports, tasks and agent-requested downloads retain their limits.
-
-- **DAILIES monitoring**: Use a rolling 24-hour event window without checkpoint writes. Show incomplete coverage, rotate deep audits through three active repositories per day, keep monitoring read-only and separate release drafts from findings. Repository and scheduler copies remain separate.
-
 - **Arena transcript auto-scroll**: The Arena bundle adds an independent saved switch. It follows new messages and resized output near the bottom, pauses on upward scroll and keeps reading positions across session changes. Node checks cover follow, pause, resume and cleanup. Steering label and repository matching now ignore letter case.
 
-- **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
-- **Userscript domain bundles**: `arena.user.js` and `chatgpt.user.js` replace the five standalone scripts and keep their feature checks. Each feature has a saved, default-on Tampermonkey menu switch that applies after manual reload. Node integration checks cover switches, persistence, disabled startup and storage errors.
-- **ChatGPT outer fences**: Long fenced text uses at least four outer backticks, with a longer fence when the content requires one. Inner fences and language tags stay unchanged. The English More field uses approved lossless compression of existing lines.
+### gpt-plugins
+
+- **gpt-github CI gates**: Poll the runs for the new head SHA after every push, since an older run verifies nothing. A missing, queued, in-progress or pending check is not complete, and a failed, cancelled or timed-out check is not green. The turn stays open after a push while the new head SHA has no completed run, and the plugin version is `1.4.0`.
+- **Rebase rule**: ARENA.md requires a check of `origin/main` before each push and a rebase when main moved. After a push or a sandbox reset, HEAD must equal the remote branch.
+- **GPT plugin compression**: Keep full refs and compress shipped skill wording without rule changes. Remove the destructive copy command, check matching structure and retain exact archive validation. Raise the plugin version to 1.3.1.
+- **GPT plugin versions**: Require a version increase in `gpt-plugins/plugin.json` for every update under `gpt-plugins/`, including sources and documentation.
 - **ChatGPT skill location**: Root `AGENTS.md` requires ChatGPT-related skills to go in `gpt-plugins`.
-- **ChatGPT Mermaid requirement**: Pipelines and flows must use Mermaid unless the target explicitly cannot render it. ASCII diagrams stay prohibited, and the top-down, short-label and phone-sized rules stay. Refs, live, wenyan and the platform table match the approved replacement.
 - **GitHub repository discovery**: `gpt-github` adds the owner's clause on tree discovery before file reads, known paths, batched calls and tool checks. Source and shipped copies match. Plugin version is `1.3.0`.
+
+### userscripts
+
+- **Userscript domain bundles**: `arena.user.js` and `chatgpt.user.js` replace the five standalone scripts and keep their feature checks. Each feature has a saved, default-on Tampermonkey menu switch that applies after manual reload. Node integration checks cover switches, persistence, disabled startup and storage errors.
+
+### workflows
+
+- **Release tags**: Proposed tags always start with `v`, so an initial release is `v0.1.0`.
+- **Gemini prompts**: The four release prompts follow GUIDELINES.md section 4. Each has a task line, shared boundary lines, one imperative rule per bullet, and a final return rule.
+- **Release notes sections**: Gemini omits template sections without evidence and always keeps Summary. An initial release shows Summary and Features only, with no commit comparison.
+- **STE lint in the gate**: `check.py` runs the ASD-STE100 linter over the covered documents (`STE_DOCS`), and CI calls `check.py --ste` with the same list.
+- **One pytest**: Test files are `test_*.py` and `*.test.cjs`. The `check_*` names stay for gates. A root `pytest.ini` runs the preview and Gemini release tests in one call, and CI now runs the Gemini tests.
+- **Gemini model ladder**: The release workflow `models` input is a comma-separated ladder. Each request moves to the next model on an HTTP error or blocked output. Default: gemini-3.8-flash to gemini-3.1-flash-lite.
+- **Distribute Gemini release**: `distribute-gemini-release.yml` copies `gemini-release.yml` and `gemini_release.py` to target repositories on dispatch, `nemoe7/daedalus` by default, on the pattern of `distribute-arena.yml`.
+- **Gemini release in two files**: The prompts and the release template move into `gemini_release.py` as constants. A target repository installs the YAML and the Python file only.
+- **Gemini evidence input**: The release workflow has an `evidence` choice. `commits-and-diffs` is the default and `commits` sends commit messages only.
+- **Gemini HTTP error detail**: A Gemini HTTP failure now shows the status and message from the response body after the HTTP code. The detail stops at 500 characters and the script redacts secrets.
+- **Gemini release input**: Send only commit messages and text diffs to Gemini. Binary files add one marker line and no patch data.
+- **Gemini release path**: Run the Gemini release scripts from `.github/workflows` instead of `github/workflows`.
+- **Gemini release proposals**: Classify SemVer impact from complete commit history. Write a version and notes proposal first. Only a separate approved run can create a tag and draft.
+- **Release command errors**: Include the failed command and stderr in Gemini release errors. Explain the existing-tag requirement when tag resolution fails. Redact configured GitHub and Gemini secrets, and check missing-tag diagnostics offline.
+- **Gemini release drafts**: Add reusable GitHub Actions sources under `github/workflows`. Generate draft notes from complete release history with Gemini 3.5 Flash-Lite, a release template and split-and-combine summaries. Keep activation separate from the source library.
+- **DAILIES monitoring**: Use a rolling 24-hour event window without checkpoint writes. Show incomplete coverage, rotate deep audits through three active repositories per day, keep monitoring read-only and separate release drafts from findings. Repository and scheduler copies remain separate.
+
+### maintenance
+
+- **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
 
 ## 2026-09-28
 
-- **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to the Claim offer, Free offer, chat surface toggle, Codex sidebar link and prompt-textarea header elements. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. Node checks print `ok`.
+### preview
+
 - **Preview CLI PATH command**: `install.sh` adds `.agents/skills/arena-preview-steering/scripts` to PATH for new Bash shells. `arena-preview <command>` uses the repo's script, venv and state. Tests cover PATH recovery and forwarding, so rerun the installer after a sandbox reset.
 - **Final task-list check**: Require `task-list` before the final reply, then continue any unblocked upcoming task.
 - **Steering prose cleanup**: Use `arena-preview` for ARENA inbox reads and the end-turn wait. Drop duplicate rules and report text plus the primary-skill `--state-dir` line. Keep the raw Python fallback.
 - **ARENA compaction retention**: Request verbatim preservation in context summaries. Reread if a summary omits or changes it. Arena host reinjection is the only guarantee, so the request is best-effort.
 
+### userscripts
+
+- **ChatGPT userscripts**: `userscripts/chatgpt-hide-elements.user.js` adds `hidden` to the Claim offer, Free offer, chat surface toggle, Codex sidebar link and prompt-textarea header elements. `userscripts/chatgpt-auto-think.user.js` clicks the Think pill every second while `aria-pressed` is `false`. Node checks print `ok`.
+
 ## 2026-09-27
 
-- **Steering click delay**: `userscripts/arena-agent-steering.user.js` waits 1 second, then clicks `{repo} - Steering` once per page.
-- **Hide editor-content**: `userscripts/arena-agent-hide-composer.user.js` hides `div.editor-content` while Stop generating is present, not the outer composer shell.
+### preview
+
 - **Turn-end poll**: `preview.py poll` waits for a pending inbox item. Refs, live and root drop the sleep-10 / 100-loop wait. The default wait is 1 second, 300 times (5 min).
 - **Poll wait 15 min**: `preview.py poll` waits 900 × 1 s (15 min), from 300 × 1 s (5 min), in refs and live copies.
 - **Report 120 line dropped**: The line "Reports MUST allow lines up to 120 characters (MD013 at 120)." leaves refs, live and root `ARENA.md`. One squash attempt on the live Style gates line keeps "gates: `ruff check`, `ruff format`, no CLI overrides."
@@ -164,23 +133,85 @@
 - **Five-file cap dropped**: The composer stage, the multipart note route and the skill docs lose the five-file count. The 50MB per-file ceiling and the multipart body bound stay (`MAX_NOTE_UPLOAD` 250,000,000 + `MAX_BODY`). Six-file HTTP and chip tests added.
 - **Skill prose trimmed**: Twelve approved rows leave `SKILL.md` and `references/REFERENCE.md`: ceilings, browser-page facts, proxy names, the tab X detail, filename receipts and the venv-install line. Live, refs and `.agents` copies stay byte-identical where mirrored.
 
+### userscripts
+
+- **Steering click delay**: `userscripts/arena-agent-steering.user.js` waits 1 second, then clicks `{repo} - Steering` once per page.
+- **Hide editor-content**: `userscripts/arena-agent-hide-composer.user.js` hides `div.editor-content` while Stop generating is present, not the outer composer shell.
+
 ## 2026-09-26
 
-- **Composer hide vs flex**: `userscripts/arena-agent-hide-composer.user.js` sets the `hidden` class and inline `display: none !important` so Tailwind `flex` cannot keep the composer open.
-- **Form-wait inbox poll**: Drop `ask_user` while a report form awaits answers. Loop `sleep 10` and inbox `read`. Break on a new message or after 100 loops.
-- **Hide composer while generating**: On `/agent/*`, `userscripts/arena-agent-hide-composer.user.js` adds `hidden` to the outermost composer shell when a button `aria-label` is `Stop generating`. It removes the hidden state when that button is gone.
-- **Userscripts split**: The steering click moves to `userscripts/arena-agent-steering.user.js`. `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer only.
-- **gpt-plugins package split**: `.github/workflows/package-gpt-plugins.yml` runs on pull requests only. A PR that changes shipped plugin files must raise the `plugin.json` version above the base. Package and artifact upload stay on `main`, and `maintenance/check_gpt_plugins.py` gains `--base-manifest` and `--self-check`.
-- **Steering preview auto-click**: On `/agent/*`, `userscripts/arena-agent-prompt.user.js` clicks the `{repo} - Steering` button on port 8000 once per page. Composer fill stays on exact `/agent`.
-- **userscripts README**: Root README lists `userscripts/`. `userscripts/README.md` covers Tampermonkey install, `/agent` fill behavior and the node check. No budget-table row.
-- **Arena agent prompt userscript**: `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md` when the GitHub repo bar is present. It updates the text when the repo slug changes.
+### rules
+
 - **Force-with-lease clause dropped**: The line "Rewrite remotes with `--force-with-lease`, NEVER plain `--force`." leaves refs, live and root `ARENA.md`. The matrix Git/Hub Arena cell drops "`--force-with-lease` only."
 - **Setup gate**: The `Use` section of refs, live and root `ARENA.md` requires the 10-4 line, the preview start and the visibility question. It applies before the first tool call that is not a read of a rule or skill file.
 - **Re-read clause**: The `Use` section of refs, live and root `ARENA.md` tells the agent to read the file end-to-end at each turn start. It applies when the full text is not in context, summary or truncation included. The re-read comes before the first tool call.
 - **Gist index links**: The Files table in `#clankers-rules.md` links each file to its anchor on the gist page, for example `[AGENTS.md](#file-agents-md)`. `publish_clankers_rules.py` gains `gist_anchor`, and the contract check asserts the linked rows.
+
+### preview
+
+- **Form-wait inbox poll**: Drop `ask_user` while a report form awaits answers. Loop `sleep 10` and inbox `read`. Break on a new message or after 100 loops.
 - **Answers ride the copy**: The copy button's NDJSON gains the answers of every report still in the tab. A new `GET /api/submissions` endpoint serves them filtered to live reports, and the copy click merges them in. The receipt reads Copied N messages, A answers and T tasks as NDJSON, and `import-notes` restores them as before.
 
+### gpt-plugins
+
+- **gpt-plugins package split**: `.github/workflows/package-gpt-plugins.yml` runs on pull requests only. A PR that changes shipped plugin files must raise the `plugin.json` version above the base. Package and artifact upload stay on `main`, and `maintenance/check_gpt_plugins.py` gains `--base-manifest` and `--self-check`.
+
+### userscripts
+
+- **Composer hide vs flex**: `userscripts/arena-agent-hide-composer.user.js` sets the `hidden` class and inline `display: none !important` so Tailwind `flex` cannot keep the composer open.
+- **Hide composer while generating**: On `/agent/*`, `userscripts/arena-agent-hide-composer.user.js` adds `hidden` to the outermost composer shell when a button `aria-label` is `Stop generating`. It removes the hidden state when that button is gone.
+- **Userscripts split**: The steering click moves to `userscripts/arena-agent-steering.user.js`. `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer only.
+- **Steering preview auto-click**: On `/agent/*`, `userscripts/arena-agent-prompt.user.js` clicks the `{repo} - Steering` button on port 8000 once per page. Composer fill stays on exact `/agent`.
+- **userscripts README**: Root README lists `userscripts/`. `userscripts/README.md` covers Tampermonkey install, `/agent` fill behavior and the node check. No budget-table row.
+- **Arena agent prompt userscript**: `userscripts/arena-agent-prompt.user.js` fills the `/agent` composer with `{repo} read AGENTS.md ARENA.md` when the GitHub repo bar is present. It updates the text when the repo slug changes.
+
 ## 2026-09-25
+
+### rules
+
+- **Matrix order fix**: The Questions-row restore had left the Recommendation row twice, and one copy goes. The row order matches the list: Git/Hub, Questions, Mermaid Diagrams, Recommendation, Platform Specific.
+- **Platform Specific squashed**: Every item caps at five words. Merge authorization joins the Git/Hub Arena cell as "NEVER merge unauthorized." The investigation stop drops.
+- **Core rules refinement**: The list drops the platform-specific and redundant lines, keeping seven. The Questions and Recommendation rows stay in the matrix. The remaining compress to Ask if ambiguous, YAGNI/KISS/DRY, Always add tests, NEVER weaken one.
+- **Core rules section**: A dash list of the core clauses before the matrix, ten words a line, hard words kept. The matrix's Rule area column becomes Domain and Core becomes Agents. Rows rename to Git/Hub, Questions, Mermaid Diagrams, Recommendation, Platform Specific.
+- **Contents table**: The heading loses "and activation". The "How to use" column leaves the table. The purpose cells stay as they were.
+- **Platform specific de-git**: Merge, commit list, force push, and GitHub auth leave the Arena cell. The Git and GitHub row carries them. Merge authorization stays put, since its NEVER has no other home.
+- **Git and GitHub as lists**: The row takes each platform's git duties as bulleted lists, with CI included and five words an item. Platform specific keeps the non-git items.
+- **Arena dependency approval drop**: The per-case sentence leaves live and refs. The shared NEVER sentence stays. Ask on ambiguity leaves the matrix, identical on all three.
+- **Matrix squashed**: The remaining cells cap at five words each, keeping the keyword. Smaller scope, Tests and Dependency approval drop. ChatGPT and core carry the same clause after the alignment, and the ladder rung took the dependency one.
+- **Report lines and allowlist**: The report head, footnote and send receipt use the log's receipt grammar: object, then state, then time, joined by dots. The `Reports` tab says Acked where the log says Said. Report prose allows `ul`, `ol` and `li` alone on their lines while other HTML keeps escaping, and the matrix row renders its bullets.
+- **Matrix intro and Terseness row**: The intro is one sentence on why the surfaces differ, and the Terseness row leaves the matrix. The refs share T1 to T3 on core and Arena.
+- **Dependency sentence drops**: The line "NEVER add a dependency for a few lines' work" leaves live and refs on all three platforms. The ladder rung already carries it, so Arena keeps the per-case approval sentence and the matrix cell follows the rung.
+- **Matrix rows**: Docs narrative and SOLID governs leave the matrix. Their summary was the same on all three platforms, and the intro now says such rules are not listed.
+- **ChatGPT Tests and turn end**: The Tests line takes the core wording that starts "Add tests for every new behavior and fix". The lines "NEVER end turn until tests are green." and the simplicity tail of the WORK line leave `CHATGPT-MORE.txt`. The `gpt-github` skill carries the CI rule for every git task, and refs, wenyan and matrix follow.
+- **Two Arena cuts**: "NEVER ASCII art" leaves the mermaid line, and "no skill or linter" leaves the short chat reports line. Live, refs and the matrix cells follow.
+- **Two owner cuts**: "and NEVER go cryptic" leaves the T2 terseness line in core and Arena, refs and live, and the two matrix cells. The ChatGPT unattended sentence leaves `CHATGPT-CUSTOM.txt` and the Ask on ambiguity cell.
+- **Terseness T1 live line**: `rules/AGENTS.md` and `rules/ARENA.md` share one ASD-STE100 line: MUST use ASD-STE100 for all human-facing text: responses, comments, docs. The refs already share T1 to T3, and T4 short chat reports stays Arena-only by decision.
+- **Core ASD-STE100 in the matrix**: The core already carries the ASD-STE100 MUST on `rules/AGENTS.md` L22, and the Terseness Core cell now shows it. Six more cells gain the NEVER or MUST of their rule area: Smaller scope, Terseness Arena, Tests, Smallest task, Open tasks and the `gpt-github` bullet. The ChatGPT Mermaid cell says "NEVER ASCII art" like its source.
+- **ChatGPT ambiguity clause**: `CHATGPT-CUSTOM.txt` L5 takes material-ambiguity wording: readings that change behavior, data, interfaces, scope or outcome, with an ask before implementing. The assume-nothing sentence leaves refs, live and wenyan while the Unattended sentence stays. Refs `CHATGPT-MORE.txt` L4 gains "detail when asked", which the live line already had.
+- **Core push rule**: `rules/AGENTS.md` and its refs say "NEVER push unless asked." Pull requests belong to Arena and the `gpt-github` skill only. The matrix Core cell and the publisher check follow.
+- **Matrix collapse**: The 17 rows that one platform alone carries fold into one Platform specific row, skill cells not counted. 13 rows remain. Each cell of that row is an inline bulleted list, one clause per bullet.
+- **Steering bullet split**: The 2,701-char constitution bullet in refs `ARENA.md` becomes one constitution line plus eight one-rule General bullets, wording kept. The block mechanics of the read cadence move to the steering skill reference, section Read cadence, in refs, live and `.agents`.
+- **Question channel split**: The one question-channel bullet in refs and live `ARENA.md` becomes five one-rule bullets, wording unchanged (Guidelines 4.1).
+- **Plain adverbs**: "NEVER came up" becomes "did not start" in refs and live `ARENA.md`. Refs "if the user NEVER replied" becomes "on silence" as in the core. NEVER now marks only rules.
+- **GitHub reconnect**: A dead `GH_TOKEN` now ends in an `ask_user` reconnect question, not a fielded report, and the `ask_user` exception list names that case. Refs, live and root `ARENA.md` take it, and the matrix cells follow.
+- **Matrix keywords**: Matrix summaries keep MUST, NEVER and ALWAYS where the source rule carries them, 19 rows. Plain-case cells mean the source has no hard keyword, and the ChatGPT Smaller scope cell follows `CHATGPT-MORE.txt` L12.
+- **Keyword case**: Every standalone never, always and must under `rules/` is uppercase, 73 words in 10 files. The root `ARENA.md` mirrors.
+- **Matrix summaries**: The `rules/README.md` platform matrix gives the behavior each rule instills instead of the quoted clause, 29 rows in short sentences. The intro sentence follows.
+- **Arena storyline ban**: `rules/refs/ARENA.md` takes the core refs sentence, and `rules/ARENA.md` plus the root copy take the core live line. It reads: Documentation, no storyline or narrative unless asked, after the terse clause. The matrix Arena cell follows.
+- **ChatGPT refill**: The space the git block freed takes four core clauses. Refs `CHATGPT-CUSTOM.txt` gains the full core sentences, and the live and wenyan files gain the SCOPE, CODE and FORMAT lines plus a new DOCS label. The unrelated-findings line stayed out for the SOLID line, and the `rules/README.md` matrix gains the Docs narrative and SOLID governs rows.
+- **Investigation stop**: `rules/refs/ARENA.md` replaces the investigate-just-enough clause with the owner sentence. Live `rules/ARENA.md` and the root copy take that sentence in place of the compressed fragment.
+- **Owner-verbatim clauses**: Root `AGENTS.md` says a clause the owner amends or adds verbatim does not need to pass thru approval.
+- **Platform matrix**: `rules/README.md` aligns the stale cells and adds the missing platform diffs, and periods replace semicolons. The tests purpose word and its synonym exception stay in code spans because the STE synonym gate would reject them in prose. The contents line uses `fix` so the tests row can quote that verb.
+- **Gist index**: The publisher no longer copies `rules/README.md` into `#clankers-rules.md`. The gist file lists only the files that publish, including the wenyan files, and keeps the platform matrix. The installer, refs, lint scope and changelog pointer stay out, and the CI job runs the publisher contract.
+- **Visibility block**: The preview carried its own visibility question, so a hidden preview hid the question too. ARENA's `ask_user` ban covered an unconfirmed preview, so ARENA and `SKILL.md` now ask through `ask_user` with Yes, No, ntfy and Continue without steering. Work stays blocked until the owner answers the question, and `ask_user` is also allowed when no steering channel is visible.
+- **Recommended answers**: Core and ARENA require a recommended answer only for questions with three or more options or an open choice. Yes/no and approval questions carry none.
+- **Approval format**: House proposals group rows under each refs file, and each ID takes approve, squash, reject or custom. Code changes need no proposal. Proposals come before tasks.
+- **Visibility question alone**: ARENA asks the visibility question alone, and after Yes all other questions go by fielded report. A house `squash` decision now means re-propose a line squashed with the `squash` skill, not land it.
+- **ChatGPT alignment**: ChatGPT takes the core wording on asking, big briefs and user-run commands, and it gains the core testing details and formatting rules. It drops the unrequested-abstraction pair and the no-preamble line, which the terse clause covers. The house cascade adds `rules/wenyan/`, and the wenyan fields follow.
+- **Per-clause options**: House proposals put each clause's options directly under its row, with a new table per clause under the file heading.
+- **No ID column**: House proposal rows drop the ID, and each clause takes its own options.
+
+### preview
 
 - **Write-token check dropped**: The preview server no longer refuses writes without the token. The check stays commented out in refs `preview.py` with the original reload clause as its comment, and minify strips both from the compact copies. The reload lines leave `SKILL.md` and `REFERENCE.md`, so page and API writes pass without the header.
 - **Negative-rating clause**: "Failure to ack immediately earns a negative rating." joins the ack cadence paragraph in all three `SKILL.md` copies.
@@ -195,105 +226,74 @@
 - **Audit F4 splits and F5b drop**: Six long bullets split at sentence boundaries in refs and live `ARENA.md`, one rule per line, wording kept. The HTML export story leaves both files, and the root copy matches.
 - **Gist index fix**: `publish_clankers_rules.py` reads the Contents section and emits File and Purpose only, so the gist's Files table shows real purposes again.
 - **Audit fixes**: The Arena Git/Hub cell gains "Planned list before commits." and "GitHub reconnect after one retry". Both are live Arena clauses that earlier squashes lost.
-- **Matrix order fix**: The Questions-row restore had left the Recommendation row twice, and one copy goes. The row order matches the list: Git/Hub, Questions, Mermaid Diagrams, Recommendation, Platform Specific.
-- **Platform Specific squashed**: Every item caps at five words. Merge authorization joins the Git/Hub Arena cell as "NEVER merge unauthorized." The investigation stop drops.
 - **CI poll backoff**: `ARENA.md` and refs gain the CI poll rule. After a push, poll PR checks at once, then 10s, 20s, 30s, and every 30s to a conclusion. The Git/Hub Arena cell gains "Backoff polls for PR checks."
-- **Core rules refinement**: The list drops the platform-specific and redundant lines, keeping seven. The Questions and Recommendation rows stay in the matrix. The remaining compress to Ask if ambiguous, YAGNI/KISS/DRY, Always add tests, NEVER weaken one.
-- **Core rules section**: A dash list of the core clauses before the matrix, ten words a line, hard words kept. The matrix's Rule area column becomes Domain and Core becomes Agents. Rows rename to Git/Hub, Questions, Mermaid Diagrams, Recommendation, Platform Specific.
-- **Contents table**: The heading loses "and activation". The "How to use" column leaves the table. The purpose cells stay as they were.
-- **Platform specific de-git**: Merge, commit list, force push, and GitHub auth leave the Arena cell. The Git and GitHub row carries them. Merge authorization stays put, since its NEVER has no other home.
-- **Platform specific trims**: The `gpt-github` rebase-merge bullet leaves the ChatGPT cell. The Git and GitHub row already carries those three clauses.
-- **Git and GitHub as lists**: The row takes each platform's git duties as bulleted lists, with CI included and five words an item. Platform specific keeps the non-git items.
 - **Re-ack clause**: `SKILL.md` and the reference now say a second `ack` appends a reply block. The earlier sentence said it replaces. The rule and code agree since 01220f0.
-- **Arena dependency approval drop**: The per-case sentence leaves live and refs. The shared NEVER sentence stays. Ask on ambiguity leaves the matrix, identical on all three.
-- **Matrix squashed**: The remaining cells cap at five words each, keeping the keyword. Smaller scope, Tests and Dependency approval drop. ChatGPT and core carry the same clause after the alignment, and the ladder rung took the dependency one.
-- **Matrix git row**: Push and PR and Turn-end tests merge into one Git and GitHub row. The matrix intro drops the CHANGELOG pointer and the gpt-github cell names. The previous commit dropped the Terseness row.
-- **Report lines and allowlist**: The report head, footnote and send receipt use the log's receipt grammar: object, then state, then time, joined by dots. The `Reports` tab says Acked where the log says Said. Report prose allows `ul`, `ol` and `li` alone on their lines while other HTML keeps escaping, and the matrix row renders its bullets.
-- **Matrix intro and Terseness row**: The intro is one sentence on why the surfaces differ, and the Terseness row leaves the matrix. The refs share T1 to T3 on core and Arena.
-- **Dependency sentence drops**: The line "NEVER add a dependency for a few lines' work" leaves live and refs on all three platforms. The ladder rung already carries it, so Arena keeps the per-case approval sentence and the matrix cell follows the rung.
-- **Matrix rows**: Docs narrative and SOLID governs leave the matrix. Their summary was the same on all three platforms, and the intro now says such rules are not listed.
-- **ChatGPT Tests and turn end**: The Tests line takes the core wording that starts "Add tests for every new behavior and fix". The lines "NEVER end turn until tests are green." and the simplicity tail of the WORK line leave `CHATGPT-MORE.txt`. The `gpt-github` skill carries the CI rule for every git task, and refs, wenyan and matrix follow.
 - **Re-ack appends**: A second `ack` on the same ID adds a reply block under the first answer. The block keeps its own kind and stamp, so the earlier answer stays. The database, save file, shift-click copy and restore all carry the blocks, and the log shows "Replied again" with a "New reply" pip.
-- **Two Arena cuts**: "NEVER ASCII art" leaves the mermaid line, and "no skill or linter" leaves the short chat reports line. Live, refs and the matrix cells follow.
-- **Two owner cuts**: "and NEVER go cryptic" leaves the T2 terseness line in core and Arena, refs and live, and the two matrix cells. The ChatGPT unattended sentence leaves `CHATGPT-CUSTOM.txt` and the Ask on ambiguity cell.
-- **Terseness T1 live line**: `rules/AGENTS.md` and `rules/ARENA.md` share one ASD-STE100 line: MUST use ASD-STE100 for all human-facing text: responses, comments, docs. The refs already share T1 to T3, and T4 short chat reports stays Arena-only by decision.
-- **Core ASD-STE100 in the matrix**: The core already carries the ASD-STE100 MUST on `rules/AGENTS.md` L22, and the Terseness Core cell now shows it. Six more cells gain the NEVER or MUST of their rule area: Smaller scope, Terseness Arena, Tests, Smallest task, Open tasks and the `gpt-github` bullet. The ChatGPT Mermaid cell says "NEVER ASCII art" like its source.
-- **ChatGPT ambiguity clause**: `CHATGPT-CUSTOM.txt` L5 takes material-ambiguity wording: readings that change behavior, data, interfaces, scope or outcome, with an ask before implementing. The assume-nothing sentence leaves refs, live and wenyan while the Unattended sentence stays. Refs `CHATGPT-MORE.txt` L4 gains "detail when asked", which the live line already had.
-- **Core push rule**: `rules/AGENTS.md` and its refs say "NEVER push unless asked." Pull requests belong to Arena and the `gpt-github` skill only. The matrix Core cell and the publisher check follow.
 - **Arena trims**: The six web-path bullets leave refs and live `ARENA.md`. They served web research, not the steering skill. The self-loading sentence leaves the Use section, since an agent that reads the line has already loaded the file.
-- **Matrix collapse**: The 17 rows that one platform alone carries fold into one Platform specific row, skill cells not counted. 13 rows remain. Each cell of that row is an inline bulleted list, one clause per bullet.
-- **Steering bullet split**: The 2,701-char constitution bullet in refs `ARENA.md` becomes one constitution line plus eight one-rule General bullets, wording kept. The block mechanics of the read cadence move to the steering skill reference, section Read cadence, in refs, live and `.agents`.
-- **Question channel split**: The one question-channel bullet in refs and live `ARENA.md` becomes five one-rule bullets, wording unchanged (Guidelines 4.1).
-- **Plain adverbs**: "NEVER came up" becomes "did not start" in refs and live `ARENA.md`. Refs "if the user NEVER replied" becomes "on silence" as in the core. NEVER now marks only rules.
-- **gpt-planning keywords**: The two completion-gate lines start with NEVER instead of "Do not".
-- **GitHub reconnect**: A dead `GH_TOKEN` now ends in an `ask_user` reconnect question, not a fielded report, and the `ask_user` exception list names that case. Refs, live and root `ARENA.md` take it, and the matrix cells follow.
-- **Matrix keywords**: Matrix summaries keep MUST, NEVER and ALWAYS where the source rule carries them, 19 rows. Plain-case cells mean the source has no hard keyword, and the ChatGPT Smaller scope cell follows `CHATGPT-MORE.txt` L12.
-- **Matrix skill cells**: Empty ChatGPT cells that the `gpt-github` skill covers name it: Push and PR, Merge, Commit list. Turn-end tests adds the PR-check poll.
-- **Keyword case**: Every standalone never, always and must under `rules/` is uppercase, 73 words in 10 files. The root `ARENA.md` mirrors.
-- **Matrix summaries**: The `rules/README.md` platform matrix gives the behavior each rule instills instead of the quoted clause, 29 rows in short sentences. The intro sentence follows.
-- **Arena storyline ban**: `rules/refs/ARENA.md` takes the core refs sentence, and `rules/ARENA.md` plus the root copy take the core live line. It reads: Documentation, no storyline or narrative unless asked, after the terse clause. The matrix Arena cell follows.
-- **PR checks**: The `gpt-github` skill gains three lines after the CI line. ALWAYS check `.github/workflows/` for a workflow that runs on the PR and, with none, say so and skip the wait. No check yet is pending, not green: poll until each check concludes and NEVER end early.
 - **Double quotes**: Root `AGENTS.md` says to quote clauses in double quotes, never backticks, in proposals, acks and reports, because backticks break the front-end rendering.
-- **ChatGPT refill**: The space the git block freed takes four core clauses. Refs `CHATGPT-CUSTOM.txt` gains the full core sentences, and the live and wenyan files gain the SCOPE, CODE and FORMAT lines plus a new DOCS label. The unrelated-findings line stayed out for the SOLID line, and the `rules/README.md` matrix gains the Docs narrative and SOLID governs rows.
-- **gpt-github**: The ChatGPT `GITHUB:` block leaves the three CHATGPT files and becomes the `gpt-plugins` skill `gpt-github`. The description reads MUST use for every git or GitHub action. The body keeps five refs lines, two owner lines and three core Git lines, and `plugin.json` moves to 1.2.0.
 - **Re-ack clause**: Both steering `SKILL.md` copies and the refs baseline say a second ack replaces the earlier answer.
 - **Preview prose trim**: The Downloads tab keeps the 102,400,000-byte ceiling, the keep-page-open line and the Approve line. The cap rationale, the 512 MB anecdote and the CORS, proxy, SQLite and restore sentences go. The Reports tab answers note and report-loaded status each keep one sentence, and `check_preview.py` asserts the new page line.
-- **Investigation stop**: `rules/refs/ARENA.md` replaces the investigate-just-enough clause with the owner sentence. Live `rules/ARENA.md` and the root copy take that sentence in place of the compressed fragment.
-- **Owner-verbatim clauses**: Root `AGENTS.md` says a clause the owner amends or adds verbatim does not need to pass thru approval.
-- **Platform matrix**: `rules/README.md` aligns the stale cells and adds the missing platform diffs, and periods replace semicolons. The tests purpose word and its synonym exception stay in code spans because the STE synonym gate would reject them in prose. The contents line uses `fix` so the tests row can quote that verb.
-- **Gist index**: The publisher no longer copies `rules/README.md` into `#clankers-rules.md`. The gist file lists only the files that publish, including the wenyan files, and keeps the platform matrix. The installer, refs, lint scope and changelog pointer stay out, and the CI job runs the publisher contract.
 - **Preview checks**: `check_preview.py` is 26 pytest tests, and `check_client.cjs` is 45 ordered `node:test` checks. `validate.yml` names its two jobs, and the test job skips when preview paths did not change. `check_minify.py` runs pytest on the generated runtime with `pytest==9.1.1` installed in that job only.
 - **Downloads**: The `download-request` skill names the flow, the owner approves or denies the pending job, and `--allow-proxy` stays a per-URL opt-in. The download ceiling is 102,400,000 bytes, 80% of the documented 128,000,000-byte snapshot cap, while uploads stay at 50,000,000 bytes. The page says the cap is not measured, and one session reported 512 MB.
-- **Visibility block**: The preview carried its own visibility question, so a hidden preview hid the question too. ARENA's `ask_user` ban covered an unconfirmed preview, so ARENA and `SKILL.md` now ask through `ask_user` with Yes, No, ntfy and Continue without steering. Work stays blocked until the owner answers the question, and `ask_user` is also allowed when no steering channel is visible.
-- **Recommended answers**: Core and ARENA require a recommended answer only for questions with three or more options or an open choice. Yes/no and approval questions carry none.
 - **Ack reminders**: `ack` prints a `task ... --msg-id` reminder, and `SKILL.md` says to queue each work note. An ack that empties the inbox resets the call count at once.
-- **Approval format**: House proposals group rows under each refs file, and each ID takes approve, squash, reject or custom. Code changes need no proposal. Proposals come before tasks.
-- **Visibility question alone**: ARENA asks the visibility question alone, and after Yes all other questions go by fielded report. A house `squash` decision now means re-propose a line squashed with the `squash` skill, not land it.
-- **ChatGPT alignment**: ChatGPT takes the core wording on asking, big briefs and user-run commands, and it gains the core testing details and formatting rules. It drops the unrequested-abstraction pair and the no-preamble line, which the terse clause covers. The house cascade adds `rules/wenyan/`, and the wenyan fields follow.
-- **Per-clause options**: House proposals put each clause's options directly under its row, with a new table per clause under the file heading.
 - **Pending-form block**: With a report form awaiting answers and no unblocked work left, ARENA blocks with `ask_user` naming that report. It reads the inbox instead of ending the turn, and the `ask_user` exceptions list this case.
-- **No ID column**: House proposal rows drop the ID, and each clause takes its own options.
+
+### gpt-plugins
+
+- **Platform specific trims**: The `gpt-github` rebase-merge bullet leaves the ChatGPT cell. The Git and GitHub row already carries those three clauses.
+- **Matrix git row**: Push and PR and Turn-end tests merge into one Git and GitHub row. The matrix intro drops the CHANGELOG pointer and the gpt-github cell names. The previous commit dropped the Terseness row.
+- **gpt-planning keywords**: The two completion-gate lines start with NEVER instead of "Do not".
+- **Matrix skill cells**: Empty ChatGPT cells that the `gpt-github` skill covers name it: Push and PR, Merge, Commit list. Turn-end tests adds the PR-check poll.
+- **PR checks**: The `gpt-github` skill gains three lines after the CI line. ALWAYS check `.github/workflows/` for a workflow that runs on the PR and, with none, say so and skip the wait. No check yet is pending, not green: poll until each check concludes and NEVER end early.
+- **gpt-github**: The ChatGPT `GITHUB:` block leaves the three CHATGPT files and becomes the `gpt-plugins` skill `gpt-github`. The description reads MUST use for every git or GitHub action. The body keeps five refs lines, two owner lines and three core Git lines, and `plugin.json` moves to 1.2.0.
+
 - Gates green.
 
 ## 2026-09-24
 
-- **Direct plugin artifact**: `.github/workflows/package-gpt-plugins.yml` keeps the collection and ZIP checks, then uses `actions/upload-artifact@v7` with `archive: false` to publish `gpt-plugins.zip` directly. The workflow-definition check pins the direct mode and the effective file name, and the plugin and maintenance READMEs name the new download.
+### preview
+
 - **Preview download queue**: Add a SQLite-backed browser queue for HTTPS files with direct access first and per-job opt-in AllOrigins and CodeTabs fallback. Fetched files and manual uploads cap at 50,000,000 bytes, and claims expire after five minutes without renewal. Successful jobs save the bytes plus inbox path notes, and the change updates both shipped copies with the trust warning kept.
-- **GPT Handoff audits**: Activate audit mode for reviews of agent-produced work: code, human-facing docs, agent-created branches, PRs, commits, implementations and follow-up audits. Always route code and docs audits through Ponytail, then produce only the GPT Handoff format. Keep SOLID conditional on need, exclude audit setup and methodology, check the actual-model marker, and skip the skill for a normal non-agent task.
 - **Preview task reminder**: Rotate the reminder text that warns against ending a turn while tasks stay open. Add a source test and rebuild both runtime copies.
 - **Preview operator docs**: The shipped `SKILL.md` and bundled reference shrink while keeping operating steps, current attachments and owner-entered Downloads. Implementation notes move to the source-only `skills/arena-preview-steering/README.md`, excluded from both dispatch file lists. General preview trust warnings go, and readable and installed copies stay aligned.
+
+### gpt-plugins
+
+- **Direct plugin artifact**: `.github/workflows/package-gpt-plugins.yml` keeps the collection and ZIP checks, then uses `actions/upload-artifact@v7` with `archive: false` to publish `gpt-plugins.zip` directly. The workflow-definition check pins the direct mode and the effective file name, and the plugin and maintenance READMEs name the new download.
+- **GPT Handoff audits**: Activate audit mode for reviews of agent-produced work: code, human-facing docs, agent-created branches, PRs, commits, implementations and follow-up audits. Always route code and docs audits through Ponytail, then produce only the GPT Handoff format. Keep SOLID conditional on need, exclude audit setup and methodology, check the actual-model marker, and skip the skill for a normal non-agent task.
+
 - Gates green.
 
 ## 2026-09-23
 
-- **Restore survival, measured**: Restores and two probe sets settle what survives: tracked content as diffs against the base, unignored in-repo files and pushed commits. `/tmp`, `/var/tmp`, `/dev/shm`, `/usr/local/share` and the whole home directory reset, and `.git/info/exclude` returns to its default content. `docs/archive/arena-quirks.md` carries the rule: no sandbox path is restore-proof, so autosave cannot replace a push.
-- **Restore removal list**: A probe experiment settles what a mid-turn restore removes, and a second probe tests `.git/info/exclude`. A file ignored only through `core.excludesFile` survived, as did an untracked file no ignore matched, while a file under a `.gitignore` path did not. The restore also removes `~/.gitconfig` and the global excludes file, and `docs/archive/arena-quirks.md` records the rule: survive a restore by staying pushed or untracked and unmatched.
-- **CHANGELOG format**: Every entry becomes one bullet with its bold lead, and the 13 measurement tables become single Measurements bullets. Check-command bullets, standalone verification sentences, harness internals, restore mechanics, measurement chains and redundant parentheticals leave, since Git history carries them. Each date keeps one Gates green line as its verification result, and the file ends with 15 date entries and 833 bullets intact.
-- **Exceptions ledger, second pass**: `docs/archive/budget-exceptions.md` keeps only the accounting facts: date, budgeted file, delta, reason and funding status. Rows that gave a delta beside before-and-after pairs now give the delta alone, chains collapse to endpoints, and unbudgeted deltas leave since no budget applies. The header states the row contract, and all 44 rows survive with their funding statuses unchanged.
-- **Quirks archive, second pass**: `docs/archive/arena-quirks.md` drops the experiment and recovery detail that survived the first cut. The two token-death entries merge into one section with the observation, the sample and the rule. The restore, refresh and duplicate-message entries keep their durable rules, and the token-budget and tiktoken entries drop their probes and numbers.
-- **Init-docs consolidation**: `workflows/init-docs.md` gives each repeated guardrail one home. Uncertainty keeps the stop-and-ask procedure and interactive-versus-unattended behaviour, while Execution Mode keeps only the instruction to establish the mode up front. PLAN and APPLY obligations become prose, Core Rules keeps the cross-cutting nevers, and the catalog drops rules the sections already carry.
-- **Composer limit**: The composer caps a note at 15,000 characters, up from 4,000, end to end. `scripts/preview.py` carries the cap in a new `MAX_NOTE` constant that the validator and its error message read, and the composer textarea takes maxlength=15000. The request-body limit rises to 96,000 bytes because a fully escaped 15,000-character note can reach 90,000 bytes.
-- **Quirks archive**: `docs/archive/arena-quirks.md` reduces each incident to its durable observation, consequence and current rule. The restore chronology collapses to one entry, the refresh and token-budget sections keep their rules, and the Chromium procedure keeps its steps. Session-local branch names and one note ID leave the file under the artifact ban.
+### rules
+
 - **Exceptions ledger**: Every date, budgeted file, delta, reason and funding status stays, and the 2026-09-17 residual chronicle collapses to its final entry. The header drops Per item 6, and the save-state row drops a session-local report ID.
 - **Install prose**: `skills/README.md` drops the vendor-and-version explanation from the discovery notes and keeps the constraint: check each path and its precedence against the installed release. The maintainer lead-in and the Antigravity scope note tighten to the same meaning. Every constraint survives: read-only installed copies, whole-folder copies, one active copy, no shell-execution syntax, and the post-setup check.
 - **Compression procedure**: `README.md` drops the six generic squash steps the `squash` skill already carries. The Clankers rules stay as bullets: refs first, the clause budgets, restructuring as an amendment, remove words never rules, and the bookkeeping. The `README.md#compression` anchor that root `AGENTS.md` L124 cites still resolves.
 - **Session artifact citation**: `rules/README.md` L94 drops a report ID that does not persist between sessions. It keeps the approval: the pinned minifier manifest is the one exception on the approved answers.
 - **Arena activation narrative**: `rules/README.md` L103 drops the dated verifications and narrative observations. The contract stays: exploration does not gate activation, activation is a human step, and delivery is not activation. The workflow distributes while `rules/apply.py` does not install, and the exact line goes in the first message and the custom-instructions field.
 - **Commit-discipline table**: `rules/README.md` drops the Commit disciplines section: rows restating the commit, list and merge rules each rule file already carries. It made a second source of truth, and no link pointed at its anchor.
+- **Session-local artifacts**: `rules/refs/ARENA.md` L141 broadens the citation ban to every session-local artifact: note, report, submission or task IDs, or any identifier minted for one session. Live `rules/ARENA.md` L83 takes the compressed form (note, report, submission, task ID), and the root copy matches.
+- **Per-date ledger**: 109 dated sections merge into 15 per-date entries: one heading per date, bodies in file order, and eight repeated Date lines drop. Session-local citations leave: 20 preview-report IDs, 18 old-format note IDs and one note sequence reference, each becoming a neutral phrase that keeps the fact.
+- **Turn end**: `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy replace the awaiting-owner condition with the approved wording: never end a turn while tasks are open. A blocked task receives a published fielded report and then waits for input. The old line said when a turn may end awaiting the owner and never said a turn may not end while work remained.
+- **Read cadence**: `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy state that a count moving inside a block means read now, not at the next boundary. The steering skill carries the same rule on its polling bullet. The reminder prints only a count, so a rising count meant notes sat unread until the next block.
+- **Squash fixtures table**: `skills/squash/SKILL.md` requires a fixtures table when one change covers several files. The table carries before, after and percentage saved per file plus the average.
+- **Ledger neutrality**: 136 lines in the pre-2026-09-23 entries now name actions, files and numbers instead of an actor. No line names the owner or the agent, and every fact, date and command stays. `workflows/init-docs.md` L260 drops the phrase along the way for gains skill.
+- **Compression cut**: Strip storytelling, narrative and per-event framing from ledger and archive prose: every entry now states actions, files and numbers only. The pass removes no facts, dates, sizes or commands.
+- **Editorial pass on 2026-09-12**: 52 bullets become 51 as cut lists keep counts and lose enumerations. The positive-phrasing rewrite keeps which seven clauses changed, the constitution keeps its count instead of its eight rules, and ruff.toml settings go back to `ruff.toml`. Every audit finding stays.
+
+### preview
+
+- **Composer limit**: The composer caps a note at 15,000 characters, up from 4,000, end to end. `scripts/preview.py` carries the cap in a new `MAX_NOTE` constant that the validator and its error message read, and the composer textarea takes maxlength=15000. The request-body limit rises to 96,000 bytes because a fully escaped 15,000-character note can reach 90,000 bytes.
 - **Idle reminder**: `Store.reminder()` prints the call-since-read segment only beside a pending count. An idle line carries the rotating tail alone while the counter still advances on every hook poll. `SKILL.md` L35 moves the call count behind the pending counts in all three copies.
 - **Task-link requirement**: `SKILL.md` L49 turns the `--msg-id` guidance into a requirement: every task born from a note or report carries `--msg-id <full-message-id>`. An unlinked task is a violation, and refs keeps the full wording. The live copy squashes it to the short form.
 - **Rotating reminder**: `Store.reminder()` draws its tail from a module-level `REMINDERS` tuple via a cursor in `meta`, so every string appears once per cycle. It prints the hook polls since the last `read` as the first segment. Only `--reminder`, the hook's interface, advances the count, and `read` clears it beside the `last_check` stamp.
-- **Session-local artifacts**: `rules/refs/ARENA.md` L141 broadens the citation ban to every session-local artifact: note, report, submission or task IDs, or any identifier minted for one session. Live `rules/ARENA.md` L83 takes the compressed form (note, report, submission, task ID), and the root copy matches.
-- **Per-date ledger**: 109 dated sections merge into 15 per-date entries: one heading per date, bodies in file order, and eight repeated Date lines drop. Session-local citations leave: 20 preview-report IDs, 18 old-format note IDs and one note sequence reference, each becoming a neutral phrase that keeps the fact.
 - **Ack nudge**: `scripts/preview.py` appends `ACK ASAP.` to the stderr reminder whenever messages, form answers or uploads await action, and `skills/arena-preview-steering/SKILL.md` states the same contract.
 - **Reminder emphasis**: The stderr reminder prefixes `DO NOT IGNORE.` before `ACK ASAP.` whenever anything is pending, and both SKILL.md copies state it.
 - **Steering prose audit**: The audit answers apply every steering row. The read clause drops the stale `filters` claim since `read` takes no arguments, and the ntfy transport spec moves behind a pointer into `references/REFERENCE.md`. Setup item 5, the duplicate and owner-side sentences go, and the stale `check_preview.py` pointer now names the refs tree that ships the harness.
 - **Reporting merge**: The same audit answers merge `arena-preview-reporting` into `arena-preview-steering` 3.0.0. One entry point now covers steering and reports, and a Publishing reports section absorbs the reporting skill's unique procedure and content rules. The three reporting trees go, the rule files drop the reporting pointers, and dispatch retires the installed reporting skill.
 - **Republish guard**: `publish` refuses a report ID with submitted answers, so an update goes out under a new ID against changed fields. The refusal covers the CLI and every caller of the same method, exits 1 and names the report. The marker harness covers the refusal, the fresh-ID publish and the CLI error, and both SKILL.md copies and the references state the new contract.
-- **Docs audit fixes**: The audit answers approve all eight rows. `rules/README.md` L103 drops the actor narrative and the exploration metaphor while keeping both verification dates. `arena-quirks.md` turns the recovery steps into proper sentences and drops the stray period, the actor narrative and one aphorism.
-- **CHANGELOG neutrality pass**: The audit answers order C1-C6, the same pass on the remaining flagged lines, and the extension to owner and session mentions. The six C rows land as tabled, and lines 141, 505, 529, 537, 540, 601 and 605 take the same treatment. Narrative owner and session mentions on 23 further lines turn into actions and facts, and three first-person remnants turn neutral.
-- **Note-ID sweep**: Nine session-local note-ID mentions leave the changelog: one violation parenthetical, three clause parentheticals and five receipt-format examples, each becoming a neutral placeholder. The twelve other short hex tokens stay since each resolves as a commit. `ARENA.md` bans citing session-local note IDs in repository files because they do not persist between sessions.
-- **Turn end**: `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy replace the awaiting-owner condition with the approved wording: never end a turn while tasks are open. A blocked task receives a published fielded report and then waits for input. The old line said when a turn may end awaiting the owner and never said a turn may not end while work remained.
 - **Violation receipts**: The same three files pin the suggested amendment to the reply that reports the violation. The old line required a suggestion without saying when, so it could land after the turn it amends.
 - **Report path**: The same three files gain `ALL reports MUST go through the preview skill`. It went into `ARENA.md` and not `AGENTS.md` L76, which keeps its fits-in-chat line and loses to `ARENA.md` where the two disagree.
 - **Clause audit**: Both steering `SKILL.md` copies drop three clauses. One stamps Seen after the write succeeds, one requires a note-ID citation, and one points at `scripts/check_preview.py`. The live copy falls under its baseline, so no exception covers it.
@@ -302,41 +302,78 @@
 - **Approval gate**: Narrow the root `AGENTS.md` edit gate from every file to clause changes: no rule-file clause changes until the owner approves its report. Edits that change no clause, like a squash that removes no rule, a typo or a re-measure, need no report. `scripts` stays outside the gate.
 - **Hook paths**: Bake the absolute repository root into `~/.arena-preview-hook.sh` at install time so the poll reminder runs from any working directory. The previous hook resolved paths against the caller's cwd, and the setup verifies from `/` and `/tmp` in a login shell.
 - **Save-state note**: The `/api/save-state` route writes an inbox note naming the file and its note, task and answer counts, so the next `read` delivers it. The file landed untracked at the repository root and nothing else signalled a save-state press.
-- **Read cadence**: `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy state that a count moving inside a block means read now, not at the next boundary. The steering skill carries the same rule on its polling bullet. The reminder prints only a count, so a rising count meant notes sat unread until the next block.
 - **Save-state clause**: The refs `SKILL.md` gains a Save state section, and both `REFERENCE.md` copies record that `POST /api/save-state` also writes an inbox note. The live SKILL.md stays unchanged by request. Both steering `SKILL.md` copies gain the clause Markup needs `--reply`.
-- **Squash fixtures table**: `skills/squash/SKILL.md` requires a fixtures table when one change covers several files. The table carries before, after and percentage saved per file plus the average.
-- **Ledger neutrality**: 136 lines in the pre-2026-09-23 entries now name actions, files and numbers instead of an actor. No line names the owner or the agent, and every fact, date and command stays. `workflows/init-docs.md` L260 drops the phrase along the way for gains skill.
-- **Unshipped harness**: `check_preview.py` and `check_client.cjs` leave the distributed copies since nothing loads them at runtime. `check_minify.py` now runs the harness from the readable refs tree against the generated runtime. `minify.py` builds four files instead of six.
-- **Compression cut**: Strip storytelling, narrative and per-event framing from ledger and archive prose: every entry now states actions, files and numbers only. The pass removes no facts, dates, sizes or commands.
 - **AGENTS.md amendment**: Two report clauses land in root `AGENTS.md`: neutral wording with no who-did-what narrative, one terse entry per event. Refs gains documentation stays terse but unambiguous, no storyline unless asked, and live takes the compressed form.
 - **Read order**: Change the first steering read from optional before discovery and startup to required after startup. Before the first `serve` there is no inbox, and a missing state file then is no failed read. The Arena refs baseline, live Arena rules, root `ARENA.md`, steering skill refs baseline, compressed live skill and installed mirror all update.
 - **Auto-seen**: Make a CLI `read` stamp Seen for exactly the IDs it printed once its output write succeeds. A failed write stays unseen, and pending stays the acknowledgement queue, so a stamped note prints again until answered. Update the refs runtime and harness, rebuild both distributed copies, and reword the steering contract and reference.
 - **Answers survive republish**: Compute a report's `needs_answer` from the existence of any form answer instead of one newer than the last publish. An agent republish never asks the owner the same form twice, and the republish still clears the read stamp so changed text shows unread.
 - **Poll cadence**: Amend the steering cadence: end every bash call with a poll, replacing always include a poll in bash calls. Update the Arena refs baseline, live Arena rules, root `ARENA.md`, steering skill refs baseline, compressed live skill and installed mirror.
 - **Auto-poll hook**: Install an idempotent hook: one installer creates the venv, writes `~/.arena-preview-hook.sh` and adds the EXIT trap to `~/.bash_profile`. The hook polls after every Arena bash call, prints the unacked counts to stderr and marks nothing seen. `--reminder` is its CLI interface, `require_server` names a down server, `serve` records its port, and the change removes the manual cadence.
-- Gates green.
 - **Steering state location**: Move the steering state out of `reports/arena-preview` into `arena-state/` and exclude it only through `core.excludesFile`. The save file defaults beside the database, and a sandbox restore removes every path the repository ignores plus every home-directory file. A `.gitignore` rule destroyed the state on five restores while a globally ignored path survives as untracked and unmatched.
 - **Ack contract**: Amend the steering skill and its reference: one answer per call, and never the same text to two messages. The rule came from three notes acked with one copied sentence.
-- **gpt-plugins collection**: Add the gpt-plugins Agent Plugins 1.0.0 collection with `plugin.json` against the canonical schema, `gpt-quirks` and `gpt-handoff` shipped byte-identical, and a non-shipping README. `.github/workflows/package-gpt-plugins.yml` packages `gpt-plugins.zip` from `plugin.json` and `skills/` only, and uploads it on pushes to main, on pull requests and on demand. `check_gpt_plugins.py` gains `--update`, `--schema` and `--archive`, and local runs use `--schema` with a downloaded copy since the sandbox cannot reach agent-plugins.org.
 - **Reminder tally**: Change the reminder tally to count only while something is pending: an idle inbox showed "111 call/s since read" beside a message. An empty `--reminder` poll clears the tally, and the segment reads N call/s waiting. The number counts the bash calls the pending items waited, and both SKILL.md clauses follow.
 - **Task-list rule**: Amend the steering task-list clause: ack and queue in one call, and a work note receives its task immediately. A verified item moves to finished in the call that verifies it. The rule came from a work note acked and done without a task record, which left the queue behind reality.
 - **Live steering sync**: Sync the live steering docs with refs and close a drift no gate watches. `minify.py` distributes JavaScript, CSS, HTML and Python only, so four refs amendments never reached the shipped `SKILL.md` or `REFERENCE.md`. The first sync loop compared a tree with itself, and refs and live markdown parity for skills stays unchecked.
 - **State autosave**: Every committed mutation rewrites `saved-state.ndjson` beside the database, where the export once waited on a browser button. Nine mutators route through `transaction`, which refreshes the file after the commit, while construction, `set_meta`, `reminder` and both imports do not. A poll cursor is not state, a fresh database must not overwrite an older export, and a restore reads the file twice.
 - **Unreachable-host quirk**: Two more hosts join the quirk: `agent-plugins.org` refuses a TLS handshake, and the Actions artifact blob host ends a signed download with EOF. `api.github.com`, PyPI and npm still answer. A schema-loading checker needs a local-copy override here, and an uploaded artifact verifies on the runner instead of downloading.
 - **Practice-only rule**: Root `AGENTS.md` Skills section gains the preview skill's practice-only rule, and the first pass applies it. The state-directory clause keeps its prohibition and drops the restore rationale, and the renderer sentence drops its justification. Refs and both live twins carry it file by file.
-- **Minify strips docstrings**: `maintenance/minify.py` sets `remove_literal_statements=True`, and its Python parity check drops bare string statements from both trees before comparing them. The only runtime consumer was argparse's `description=__doc__`, so the help text moves to a `CLI_DESCRIPTION` constant that survives the build in both distributed copies.
 - **Markdown parity declined**: Skip the markdown parity gate: the workflow handles the live twins, so copying them by hand stays optional. `distribute-arena.yml` rewrites the `.agents/skills/arena-preview-steering/` copy in every target repository on dispatch, and `maintenance/README.md` records why the gate stays out.
 - **Task-detail replacement**: A `task` call that passes one `--task-details` line replaces the whole stored list, since `repeatable` reads as append. Two finished tasks lost their details to that behavior. `references/REFERENCE.md` now states that passed detail lines replace the stored list, in refs and both live twins.
 - **Copy state replaces Save state**: Turn the page's Save state button into Copy state and drop `/api/save-state`, since autosave rewrites `saved-state.ndjson` after every mutation. One click copies the cached notes and tasks as NDJSON, one JSON line per record, so a paste lands in `import-notes` and `task-import`. Report answers stay out, and the route's inbox note and shift-click glyph machinery go with it.
 - **Editorial pass on 2026-09-21**: 304 fragmented bullets become 60, and the four-line summary shape merges into single bullets with bold leads kept. Raw asks go since they restate the entry above and some carried session-local note IDs, along with repeated boilerplate copies. The rewrites keep each change, its reason, its limits and its history, and only this section differs from its pre-pass state.
 - **Editorial pass on 2026-09-13**: 61 bullets become 56 as correction chains and repeated recovery detail collapse into single bullets. Each keeps the change with its evidence, its questions or its reason. Every rule change and its reason stay.
-- **Editorial pass on 2026-09-12**: 52 bullets become 51 as cut lists keep counts and lose enumerations. The positive-phrasing rewrite keeps which seven clauses changed, the constitution keeps its count instead of its eight rules, and ruff.toml settings go back to `ruff.toml`. Every audit finding stays.
 - **Editorial pass on 2026-09-16**: 40 bullets become 38 as discoveries merge with what they surfaced, and gate lists collapse to four gates plus `compileall`. The token chain keeps its deltas, the seeding command returns to `maintenance/README.md`, and the retired `assets/steer.html` entry keeps what the page proved. The egress map, live-run defects, recorded hazards and eighteen-check demo scope stay.
 - **Editorial pass on 2026-09-20**: 60 bullets become 20 as four-line entries merge into one bullet each and three divider titles become bold leads. Three asks keep facts only they hold: the fielded-report ask, the AMEND export-reference instruction and the markdown-it-py approval. Counting bullets caught a merge that swallowed the neighbouring PR entry, and it split back.
+
+### gpt-plugins
+
+- **gpt-plugins collection**: Add the gpt-plugins Agent Plugins 1.0.0 collection with `plugin.json` against the canonical schema, `gpt-quirks` and `gpt-handoff` shipped byte-identical, and a non-shipping README. `.github/workflows/package-gpt-plugins.yml` packages `gpt-plugins.zip` from `plugin.json` and `skills/` only, and uploads it on pushes to main, on pull requests and on demand. `check_gpt_plugins.py` gains `--update`, `--schema` and `--archive`, and local runs use `--schema` with a downloaded copy since the sandbox cannot reach agent-plugins.org.
+
+### workflows
+
+- **Init-docs consolidation**: `workflows/init-docs.md` gives each repeated guardrail one home. Uncertainty keeps the stop-and-ask procedure and interactive-versus-unattended behaviour, while Execution Mode keeps only the instruction to establish the mode up front. PLAN and APPLY obligations become prose, Core Rules keeps the cross-cutting nevers, and the catalog drops rules the sections already carry.
+
+### maintenance
+
+- **Unshipped harness**: `check_preview.py` and `check_client.cjs` leave the distributed copies since nothing loads them at runtime. `check_minify.py` now runs the harness from the readable refs tree against the generated runtime. `minify.py` builds four files instead of six.
+- **Minify strips docstrings**: `maintenance/minify.py` sets `remove_literal_statements=True`, and its Python parity check drops bare string statements from both trees before comparing them. The only runtime consumer was argparse's `description=__doc__`, so the help text moves to a `CLI_DESCRIPTION` constant that survives the build in both distributed copies.
+
+### docs
+
+- **Restore survival, measured**: Restores and two probe sets settle what survives: tracked content as diffs against the base, unignored in-repo files and pushed commits. `/tmp`, `/var/tmp`, `/dev/shm`, `/usr/local/share` and the whole home directory reset, and `.git/info/exclude` returns to its default content. `docs/archive/arena-quirks.md` carries the rule: no sandbox path is restore-proof, so autosave cannot replace a push.
+- **Restore removal list**: A probe experiment settles what a mid-turn restore removes, and a second probe tests `.git/info/exclude`. A file ignored only through `core.excludesFile` survived, as did an untracked file no ignore matched, while a file under a `.gitignore` path did not. The restore also removes `~/.gitconfig` and the global excludes file, and `docs/archive/arena-quirks.md` records the rule: survive a restore by staying pushed or untracked and unmatched.
+- **CHANGELOG format**: Every entry becomes one bullet with its bold lead, and the 13 measurement tables become single Measurements bullets. Check-command bullets, standalone verification sentences, harness internals, restore mechanics, measurement chains and redundant parentheticals leave, since Git history carries them. Each date keeps one Gates green line as its verification result, and the file ends with 15 date entries and 833 bullets intact.
+- **Exceptions ledger, second pass**: `docs/archive/budget-exceptions.md` keeps only the accounting facts: date, budgeted file, delta, reason and funding status. Rows that gave a delta beside before-and-after pairs now give the delta alone, chains collapse to endpoints, and unbudgeted deltas leave since no budget applies. The header states the row contract, and all 44 rows survive with their funding statuses unchanged.
+- **Quirks archive, second pass**: `docs/archive/arena-quirks.md` drops the experiment and recovery detail that survived the first cut. The two token-death entries merge into one section with the observation, the sample and the rule. The restore, refresh and duplicate-message entries keep their durable rules, and the token-budget and tiktoken entries drop their probes and numbers.
+- **Quirks archive**: `docs/archive/arena-quirks.md` reduces each incident to its durable observation, consequence and current rule. The restore chronology collapses to one entry, the refresh and token-budget sections keep their rules, and the Chromium procedure keeps its steps. Session-local branch names and one note ID leave the file under the artifact ban.
+- **Docs audit fixes**: The audit answers approve all eight rows. `rules/README.md` L103 drops the actor narrative and the exploration metaphor while keeping both verification dates. `arena-quirks.md` turns the recovery steps into proper sentences and drops the stray period, the actor narrative and one aphorism.
+- **CHANGELOG neutrality pass**: The audit answers order C1-C6, the same pass on the remaining flagged lines, and the extension to owner and session mentions. The six C rows land as tabled, and lines 141, 505, 529, 537, 540, 601 and 605 take the same treatment. Narrative owner and session mentions on 23 further lines turn into actions and facts, and three first-person remnants turn neutral.
+- **Note-ID sweep**: Nine session-local note-ID mentions leave the changelog: one violation parenthetical, three clause parentheticals and five receipt-format examples, each becoming a neutral placeholder. The twelve other short hex tokens stay since each resolves as a commit. `ARENA.md` bans citing session-local note IDs in repository files because they do not persist between sessions.
+
+- Gates green.
+
 ## 2026-09-22
 
+### rules
+
+- **Rule and preview compression**: A full live pass preserves refs baselines, constraints, code spans, numbers, links and headings, with no governing budget growing. Supporting references shrink, and the ChatGPT, Kilo overlay and Wenyan text stay unchanged where no safe cut exists.
+- **Approved follow-up**: Remove merge policy from the generic core while Arena and ChatGPT keep platform-specific merge rules, and omit the proposed loading-path matrix cell. Add the final inbox-read requirement, preview-restart notice and no-mermaid rule for preview reports, while Arena keeps its PR CI check before turn end. Steering 2.1.0 prints unacknowledged counts and the task-list duty on stderr, and the runtime harness covers the reminder, JSON compatibility and count behavior.
+- **Matrix and report**: The second correction round lands as dispositions 7 to 10, and disposition 6 records the house-rule resolution. `rules/README.md` gains the scope line: automations are prompts, not rules.
+- **Rule change**: `rules/refs/ARENA.md` first, then `rules/ARENA.md` and its byte-identical root copy: merge by rebase only, rebase onto the target then merge, with no merge commit. The core joins after the row-2 correction: `rules/refs/AGENTS.md` first, then `rules/AGENTS.md` with merge by rebase only, and the question-tool clauses name `ask_user`. `rules/README.md` takes the matching commit-disciplines row, the Arena-file sentence and a new 13-row Platform difference matrix.
+- **Resquash**: The token-budgeted live files show no further safe pass. The wenyan experiment files restore the dropped refs clauses: rung-1 explicit requirements, the final commit list, skip-restating-task, the Mermaid naming and the failing-check minimum. Both wenyan files stay under the 1,500-character field and beat the live English fields.
+- **Rule change**: `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy. End a turn awaiting the owner only after publishing its fielded report and queueing the blocked task. `rules/refs/README.md` loses the sentence that named the dropped Cline section.
+- **Ignored reports**: The parity audit, the platform matrix and the text-field form live under `reports/` as ignored sources, republished with dispositions.
+- **Rule change**: Before suggesting any amendment, read `rules/refs/GUIDELINES.md` and draft the line to its section 4, one rule per line, imperative and testable. The prior one-liner only required writing rule files to the standard.
+- **Visibility-question origin**: A session started the steering server and continued without the visibility question after mistaking the process tool's LIVE PREVIEW banner for confirmation. A steering note recorded that the preview only became visible at turn end.
+- **Rule change**: `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy. A preview that never came up blocks with one visibility question before any work beyond setup. The first successful start enters the block: name the preview in chat, then ask, since the banner is not confirmation.
+- **Rule change**: `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy. When `GH_TOKEN` dies mid-turn, block with the question tool instead of ending the turn in silence. The question asks how to proceed, never for a credential, and a new turn carries a fresh token for the next push.
+- **Rule change**: The same three files take a second rule: NEVER cite a session-local note ID in a repository file. Each session mints its own IDs, so citations go to the durable record: the CHANGELOG entry, the report source or the commit. The rule sits in the Git section, root `AGENTS.md` drops the amendment-origin rule that put note IDs here, and this file stays the only ledger.
+- **ChatGPT change**: `rules/refs/CHATGPT-CUSTOM.txt` takes the think-longer clause in full wording, and the squashed live file takes its compressed form.
+- **Resquash**: The compression procedure runs across `rules/` with a waiver of its line-scoped rule. `COMMIT-SPEC.txt` gives back nothing since its refs baseline exempts it from compression, and `CLINE.md` and `ARENA.md` sit near their floors. The wenyan experiment keeps its lead under the live fields, and the pass restores four lost clauses, among them the think-longer rule.
+
+### preview
+
 - **Cadence update**: Change the steering check cadence from appending a read to the last shell command to always including a poll in bash calls. Update the steering skill refs baseline, live skill, installed mirror, Arena refs and live rules and root `ARENA.md`.
-- **Chromium**: Move the standalone guide into `docs/archive/arena-quirks.md` with its environment variable and font limit labeled, and remove `docs/chromium-e2e.md`. Add the approved npm and extracted-runtime rule to the Arena refs, live and root copies. Only the new rule line compresses, and the owner approved the growth.
 - **Seen fix**: Reproduce a failed inbox-output write that still stamped Seen, then make `read` non-marking with atomic per-ID `seen` receipts after full delivery. Counts and browser polls stay read-only, and acknowledgements still imply Seen. Cover failed delivery, rollback, late arrivals, report answers, repeat receipts and CLI dispatch, and update the skill contract.
 - **Task status**: Remove the extra explanation after the updated timestamp. The client regression failed before the change and passed after it.
 - **Composer preview**: Preserve paragraph newlines with scoped `white-space: pre-wrap`, without adding double-spaced `<br>` tags. Both the Python regression and real Chromium check failed before the CSS change, then passed. npm `@sparticuz/chromium` 153.0.0 supplied the binary and runtime.
@@ -351,74 +388,64 @@
 - **Unanswered forms**: Keep the report star and tab dot until the owner submits the form, even after reading, and let optional blanks count. Server state preserves markers across devices, and republishing requires a fresh answer. Plain reports stay read-only, and invalid legacy fields remain visible as errors without breaking the state endpoint.
 - **Documentation compression**: Two reviewed passes reduce nine maintained README and docs files by 14.6%, with code spans, numeric values and link targets intact. No third-party prose changes, and historical observations stay with their retractions.
 - **Documentation corrections**: Align renderer startup requirements, Markdown report delivery, field-only questionnaires, assert-based checks, platform-specific merge rules and the one-second read-delay comment with current code. Apply the approved corrections to refs, live files and installed mirrors.
-- **Rule and preview compression**: A full live pass preserves refs baselines, constraints, code spans, numbers, links and headings, with no governing budget growing. Supporting references shrink, and the ChatGPT, Kilo overlay and Wenyan text stay unchanged where no safe cut exists.
 - **Reporting dependencies**: Preauthorize `markdown-it-py` installation for the reporting skill in a workspace venv, with no separate approval. Keep skill-only packages out of application manifests and generated `requirements.txt` unless the application independently needs them. Ref, live and installed instructions agree.
 - **Audit L8**: Update CI coverage in the rules README and house instructions: main-branch pushes and PRs targeting any branch, subject to ignored-path exclusions. Only qualifying main pushes commit refreshed README measurements.
 - **Audit M5**: Reject incomplete HTTP bodies before parsing or saving them. Half-closed uploads with partial or empty bodies receive HTTP 400 and create no file, upload record or inbox note. Exact-size uploads remain covered.
 - **Audit M6**: Save notes before the first task exists. Normalize absent or null task lists to empty groups in the server save path while rejecting malformed values. The client now permits notes-only saves, with coverage for persistence, malformed-task rejection and the save button.
 - **Audit H3**: Require the full revision from rendered report responses on form submissions, then check it and save the answer in one write transaction. Reject stale forms with HTTP 409 and missing revisions with HTTP 400, while keeping unsent entries during automatic updates. An explicit refresh loads the new form for review, with coverage for revisions, retries, transaction boundaries, payload binding and retained entries.
-- **Approved follow-up**: Remove merge policy from the generic core while Arena and ChatGPT keep platform-specific merge rules, and omit the proposed loading-path matrix cell. Add the final inbox-read requirement, preview-restart notice and no-mermaid rule for preview reports, while Arena keeps its PR CI check before turn end. Steering 2.1.0 prints unacknowledged counts and the task-list duty on stderr, and the runtime harness covers the reminder, JSON compatibility and count behavior.
 - **Inbox-poll lapse**: A turn ended without an inbox poll, so 13 items, two violation call-outs and eleven directives, never arrived mid-turn. The rule changes went into a fielded report with one queue task per blocked item.
 - **Preview fix**: The `#send-status` save line formats the server stamp through the client's `time()` helper, which pins a seconds-only ISO stamp to UTC. The status line then reads the viewer's timezone instead of the server's wall clock.
 - **Rule change**: Root `AGENTS.md` Git says merges MUST be rebase merges: rebase onto the target, then merge, with no merge commit. GitHub restricts the repo to rebase merge only, and the line matches the core and Arena copies.
-- **Matrix and report**: The second correction round lands as dispositions 7 to 10, and disposition 6 records the house-rule resolution. `rules/README.md` gains the scope line: automations are prompts, not rules.
 - **Pending amendments**: A fielded report proposes A1 to A9 with answers Q1 to Q9. The list covers turn-end read hardening, the restart notice, the Arena turn-end PR CI check, the Arena mermaid split and preview no-mermaid. It also carries the core merge-authorization clause, the terse line, the row-7 cell mapping and the CLI inbox reminder per subcommand.
 - **Upload notice origin**: A lost-upload incident caused the change: the uploads list renders only in the browser, so no signal showed that bytes arrived.
 - **Upload notes**: `preview.py` writes an inbox note after every successful `Store.save_upload`, naming the file, size, content type and stored path under the upload's ID. Only a token-authenticated upload creates the note, while a refused one creates neither record nor note, and the harness pins its ID and text.
 - **Uploads docs**: A new Uploads section in the steering SKILL.md records the read-then-ack contract, and `references/REFERENCE.md` takes the Uploads-tab paragraph.
 - **Correction origin**: The round applies form corrections for rows 2, 5 and 7 plus a steering note on the `.state-dot` margin. This entry reconstructs the ignored reports lost with sandbox state, with the corrections applied.
-- **Rule change**: `rules/refs/ARENA.md` first, then `rules/ARENA.md` and its byte-identical root copy: merge by rebase only, rebase onto the target then merge, with no merge commit. The core joins after the row-2 correction: `rules/refs/AGENTS.md` first, then `rules/AGENTS.md` with merge by rebase only, and the question-tool clauses name `ask_user`. `rules/README.md` takes the matching commit-disciplines row, the Arena-file sentence and a new 13-row Platform difference matrix.
-- **Resquash**: The token-budgeted live files show no further safe pass. The wenyan experiment files restore the dropped refs clauses: rung-1 explicit requirements, the final commit list, skip-restating-task, the Mermaid naming and the failing-check minimum. Both wenyan files stay under the 1,500-character field and beat the live English fields.
 - **Rule change**: Preview confirmation is session-scoped: every session's first successful start blocks, and only a same-session restart after its own confirmation needs no ask. Refs take the full wording first, then live, then the byte-identical root copy.
 - **Preview fix**: The Upcoming list no longer re-renders the head task, which already has its own Current div. The client refs take `upcoming.slice(1)`, the harness pin flips to a two-task fixture, and minify rebuilds both distributed copies.
 - **Amendment-drafting rule**: The house rejected a too-specific draft, so the house rule now requires `GUIDELINES.md` before any amendment suggestion. The record also fixes why root `AGENTS.md` differs from the core, why `.agents/skills` needs no squash mirror and why `web-interface-guidelines` has no refs baseline.
-- **Rule change**: `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy. End a turn awaiting the owner only after publishing its fielded report and queueing the blocked task. `rules/refs/README.md` loses the sentence that named the dropped Cline section.
-- **Ignored reports**: The parity audit, the platform matrix and the text-field form live under `reports/` as ignored sources, republished with dispositions.
-- **Rule change**: Before suggesting any amendment, read `rules/refs/GUIDELINES.md` and draft the line to its section 4, one rule per line, imperative and testable. The prior one-liner only required writing rule files to the standard.
-- **Visibility-question origin**: A session started the steering server and continued without the visibility question after mistaking the process tool's LIVE PREVIEW banner for confirmation. A steering note recorded that the preview only became visible at turn end.
-- **Rule change**: `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy. A preview that never came up blocks with one visibility question before any work beyond setup. The first successful start enters the block: name the preview in chat, then ask, since the banner is not confirmation.
 - **Origin-task note**: Some preview times ignored the user timezone, and `origin` leaves the preview skills' JSON schema entirely while `SKILL.md` `metadata.origin` stays.
 - **Timezone fix**: The state surface cuts stamps to seconds and drops the UTC offset, so `Date` read those digits as local time outside UTC. `time()` pins a seconds-only ISO stamp to UTC before the local formatter sees it, so receipts, last-check, tasks and uploads convert into the viewer's timezone. The header clock needed no change, since it formats through `toISOString()`.
 - **Origin removed from notes**: The note schema loses `origin` end to end: `Store.note()` drops the author, `NOTE_LINE_KEYS` drops the key and the CREATE statement drops the column. A migration removes a leftover `origin` on reopen, and the client stops rendering the uppercase agent tag so receipts read ID, state, time and task. `import-notes` ignores the key an older save carries, and the references record the removal in both directions.
 - **Null-tasks copy fix**: `Store.tasks()` returns `None` before any task exists, so `/api/state` sends `"tasks": null` while a session holds notes only. The page cached that value and the shift-click guard blocked the copy, so `restoreCopy` defaults the queue to two empty divs. The client harness mocked the empty queue and crashed on the empty clipboard, which was the red gate on the parent branch.
-- **Rule change**: `rules/refs/ARENA.md` first, then squashed `rules/ARENA.md` and its byte-identical root copy. When `GH_TOKEN` dies mid-turn, block with the question tool instead of ending the turn in silence. The question asks how to proceed, never for a credential, and a new turn carries a fresh token for the next push.
-- **Rule change**: The same three files take a second rule: NEVER cite a session-local note ID in a repository file. Each session mints its own IDs, so citations go to the durable record: the CHANGELOG entry, the report source or the commit. The rule sits in the Git section, root `AGENTS.md` drops the amendment-origin rule that put note IDs here, and this file stays the only ledger.
-- **ChatGPT change**: `rules/refs/CHATGPT-CUSTOM.txt` takes the think-longer clause in full wording, and the squashed live file takes its compressed form.
-- **Evidence**: `docs/archive/arena-quirks.md` takes two observations: a same-turn retry does not bring a dead token back, and the token returns with the next turn. Context exhaustion loses every unpushed commit, which is why this branch pushes after each commit.
-- **Resquash**: The compression procedure runs across `rules/` with a waiver of its line-scoped rule. `COMMIT-SPEC.txt` gives back nothing since its refs baseline exempts it from compression, and `CLINE.md` and `ARENA.md` sit near their floors. The wenyan experiment keeps its lead under the live fields, and the pass restores four lost clauses, among them the think-longer rule.
 - **Skill change**: The preview process takes one standard name, `{repo} - Steering`, so every session labels the same preview the same way.
 - **Note IDs**: `assets/app.js` mints a note ID as seven hex characters, a hyphen, then the remaining 25. A cited prefix is now a whole visible segment.
+
+### docs
+
+- **Chromium**: Move the standalone guide into `docs/archive/arena-quirks.md` with its environment variable and font limit labeled, and remove `docs/chromium-e2e.md`. Add the approved npm and extracted-runtime rule to the Arena refs, live and root copies. Only the new rule line compresses, and the owner approved the growth.
+- **Evidence**: `docs/archive/arena-quirks.md` takes two observations: a same-turn retry does not bring a dead token back, and the token returns with the next turn. Context exhaustion loses every unpushed commit, which is why this branch pushes after each commit.
 - **Rule amendments**: The core takes two rules: no unnecessary code or config comment, and terse but unambiguous comments, docs and responses. `ARENA.md` makes the smallest-task-first rule unconditional and ends a turn when the work passes verification and stops, since no surface reports the remaining budget. Root `AGENTS.md` defines house as this repository and requires every `README.md` and `docs/` file to be squashed, with the refs baselines exempt.
+
 - Gates green.
+
 ## 2026-09-21
 
-- Small preview interface changes, each verified by the client or runtime harness. They cover receipts, state dots, theme and focus borders, composer growth, log spacing, filters, report scroll, copy buttons, task-list presentation, uploads, chips and edited-reply markers. Git history carries the per-change costs.
-- Editorial passes bring every covered file to zero ASD-STE100 violations, and the CI gate grows as each file lands. The covered files are `docs/archive/arena-quirks.md`, `.agents/skills/README.md`, `rules/README.md`, `rules/refs/README.md` and the budget-exceptions and workflow READMEs. Dates, commands, numbers and filenames survive each pass, and the vendored `.agents/skills/asd-ste100/README.md` stays outside the gate.
+### rules
+
 - **Loader-rule dedup and the preview state copy**: `rules/CLINE.md` loses its `Use` section, `rules/AGENTS.md` its description line, and `rules/KILO.md` keeps `Tools`, since loaders restate those sections. The refs baselines mirror the wording, and `skills/squash/SKILL.md` takes the register line Terse but unambiguous. The preview reply gains a coloured left bar and seconds-only stamps, and the shift-click copy matches the save file's keys.
 - **PowerShell rule for Kilo**: `rules/refs/KILO.md` gains the shell rule under Tools and `rules/KILO.md` carries it compressed: run shell commands in PowerShell (`pwsh`), not Bash. No mode override or installed rule changes. The live rule grows, and the README measurement and the ledger record the accepted growth.
-- **Script minification**: `minify.py` builds all three scripts and the assets with pinned minifiers, and the approval covers the installed mirror. Terser handles CommonJS, and Python minification removes ordinary comments and excess whitespace with every AST transform off, so names, annotations, docstrings, assertions and shebangs survive. A Python 3.10 grammar check, parsed-tree equality and compilation gate the outputs before any write, and CI pins Python 3.11 while keeping Ruff on refs.
+- **Turn rule**: `rules/ARENA.md` gains one General rule: keep working while budget remains, and end the turn only on budget exhaustion or strict attention. The turn says in one line which it was, and `rules/refs/ARENA.md` carries the full wording with the waiting-report and queued-task reasons. The root copy follows byte-identical.
+- `rules/README.md` is rewritten in ASD-STE100 and joins the CI gate, which then names eight clean files, with every command, path and number surviving. The root `AGENTS.md` gains a second answer: a third-party copy stays outside the linter's scope, so the vendored README is never rewritten. The chain-linking rule on word pairs forced one wording change: the file points at `.github/workflows/` as a directory rather than naming its file.
+- Fifteen bullets over 220 characters, five in `rules/refs/AGENTS.md` and ten in root `AGENTS.md`, now lead with their rule and carry the rest as sub-bullets. The approval declined section renames and ceiling markers, so only the wrapping changed: no rule gained, lost or moved meaning. The compressed live mirror `rules/AGENTS.md` takes no change, so refs and live parity holds.
+- The house copies `danyuchn/asd-ste100-skill` at `7d4a135` into `.agents/skills/asd-ste100/` under its MIT licence, recorded as a third-party audit tool. `ruff.toml` excludes the directory, because the house copies vendored code verbatim and never reformats it, and markdownlint's scope already stops at `rules/**/*.md`. The linter runs report-only per the approved scope, and its first run flags a 46-word sentence in root `AGENTS.md` alone.
+- **Summary**: `rules/ARENA.md` gains one General rule: with several tasks open, do the smallest first, a user-stated priority outranks size, and re-sort whenever a task arrives. `rules/refs/ARENA.md` carries the full wording, which adds that a large task never blocks a small one. The root copy follows byte-identical, as `.github/workflows/distribute-arena.yml` expects.
+- **Summary**: The steering bullet in `rules/ARENA.md` gains two clauses beside the ack contract: the receipt leaves in the read's own tool block. The receipt covers work that outlives the block as in progress, runs one to three lines and names the change and its commit. `rules/refs/ARENA.md` takes both in full wording, and the root copy follows byte-identical.
+- **Summary**: `rules/ARENA.md` gains one Git rule: `GH_TOKEN` can expire inside a turn, `gh auth status` calls it invalid and pushes fail. Retry once, never loop and never ask for credentials, then end the turn, because the next turn carries a fresh token. Prove recovery with `git ls-remote origin <branch>` before pushing again, while `rules/refs/ARENA.md` carries the full wording and the root copy follows byte-identical.
+
+### preview
+
+- Small preview interface changes, each verified by the client or runtime harness. They cover receipts, state dots, theme and focus borders, composer growth, log spacing, filters, report scroll, copy buttons, task-list presentation, uploads, chips and edited-reply markers. Git history carries the per-change costs.
 - **Steering reference compressed**: The distributed reference drops 83% and keeps invocation and state, read and ack, task commands, links, report publishing and recovery. `--msg-id` verifies against the CLI and `Store.mark_task`: task and link writes share a transaction, and an unknown ID fails both. Both delivered copies match, and the guide no longer asks agents to run the string-pinning check against minified assets, which stays in refs and CI.
 - **Queue-rule amendment**: Two bullets land after instruction precedence in the steering entry point: read `task-list` at turn start and record approved work before implementing. Update the queue on scope or status change, finish with `--status finished` and route inbox work through `--msg-id <full-message-id>`. Queued stays neither acknowledged nor complete, so `ack` remains required, and the comparison shows only the two approved clauses landed.
 - **Copy buttons consolidated**: The log copy button and the tasks copy button go away, and the save button carries the copy instead. A shift-click puts the page's cached state on the clipboard as minified JSON, and the reports tab keeps its own export copy. Neither path nor file leaves the page, and the harness pins the minified JSON, the empty-cache message and a copy that restores the button name.
 - **Four preview fixes together**: `/api/state` hands the page its write token, so the save button lands after a sandbox reset with no browser refresh. The retry's page reader accepts either quote style because the build ships minified, and the token rides the page as an HTML attribute. The log filter drops the native dropdown chrome, a code block carries its background wherever markdown renders, and a paragraph carries no `<br>`.
 - **Receipt dot and task marker**: The receipt line gains the requested ASCII dot after the ID, so it reads `<id> · ● · Sep 21, 18:51`. A message that became a task says ` · Task added` with the task ID in the marker's title, and `task` takes `--msg-id <message id>`. Task and marker land in one transaction, so an unmatched message ID never creates a task.
-- **Asset minification**: The approved scope is JavaScript, CSS and HTML only, with a pinned minifier per language and a size budget per file. `minify.py` builds the three assets from readable refs baselines into both distributed directories, and the build refuses JavaScript that Node cannot parse. The client harness passes against the shipped minified build, and markup that loses an id or a visible word never lands.
-- **Turn rule**: `rules/ARENA.md` gains one General rule: keep working while budget remains, and end the turn only on budget exhaustion or strict attention. The turn says in one line which it was, and `rules/refs/ARENA.md` carries the full wording with the waiting-report and queued-task reasons. The root copy follows byte-identical.
 - **Two restores in one turn**: The pasted log imported as 51 notes and the task list came back to 54 records, one per ask. One ask never landed: a turn-rule amendment never reached `ARENA.md`, and a fielded report carries the wording for approval. An upload through the new tab verified byte for byte, and a save-state press produced `saved-state.ndjson` that imported into a fresh state directory.
-- `rules/refs/README.md` is the ninth file in the CI gate and the last covered file the agent can clean. Every `README.md` and everything under `docs/` now reports zero violations except the vendored `.agents/skills/asd-ste100/README.md`, which an approved answer exempted. The refs index loses three semicolons and two sentences over the cap, and it keeps every filename, commit, section number and platform note.
-- `rules/README.md` is rewritten in ASD-STE100 and joins the CI gate, which then names eight clean files, with every command, path and number surviving. The root `AGENTS.md` gains a second answer: a third-party copy stays outside the linter's scope, so the vendored README is never rewritten. The chain-linking rule on word pairs forced one wording change: the file points at `.github/workflows/` as a directory rather than naming its file.
-- The Simplified Technical English clause binds new and edited text now, and each covered file joins the CI gate once a pass clears it. `maintenance/README.md` led the path from 10 violations to 0, and the workflow grows its file list one clean file at a time. The remaining five stayed report-only until their own pass, with first-run counts of 13, 7, 56, 11 and 68.
-- Root `AGENTS.md` names the vendored ASD-STE100 linter and its scope, on an approved answer: `docs/` and every `README.md`, and nothing else. The clause binds text written or edited in those files from here, and older prose keeps its wording until someone touches it. Rules, skills and agent-facing files stay outside the linter's scope, which leaves the 46-word sentence in this file out of it as well.
-- The house copies `DietrichGebert/ponytail` at `e3ba2aa` (MIT) verbatim into `.agents/skills/ponytail/`, six skills and licence included. It lives under `.agents/skills/` only, because it audits this repository rather than belonging to it, and takes no part in the parity gates. The audit tool is `.agents/skills/ponytail/skills/ponytail-audit/SKILL.md`.
-- Fifteen bullets over 220 characters, five in `rules/refs/AGENTS.md` and ten in root `AGENTS.md`, now lead with their rule and carry the rest as sub-bullets. The approval declined section renames and ceiling markers, so only the wrapping changed: no rule gained, lost or moved meaning. The compressed live mirror `rules/AGENTS.md` takes no change, so refs and live parity holds.
-- The house copies `danyuchn/asd-ste100-skill` at `7d4a135` into `.agents/skills/asd-ste100/` under its MIT licence, recorded as a third-party audit tool. `ruff.toml` excludes the directory, because the house copies vendored code verbatim and never reformats it, and markdownlint's scope already stops at `rules/**/*.md`. The linter runs report-only per the approved scope, and its first run flags a 46-word sentence in root `AGENTS.md` alone.
-- The documented markdownlint file count had two carriers, and `LINT_COUNT_CLAIMS` cross-checked both against the files markdownlint actually covers. The root entry is gone, which keeps `check.py` off agent-facing files, and the gate still fails when the scope itself moves. What goes is the second copy of the claim, so the "— 10 files," wording in root `AGENTS.md` is now wording nothing checks.
 - **One poll path**: Notes read and answered while their dot stayed gray, since ad-hoc paths counted pending without marking seen. The settled design gives one CLI command charge: it is the only poll and the only path that stamps `seen_at`. `REFERENCE.md` gains the same fact, and the limit is that an instruction is not enforcement: nothing stops the next agent from calling `state()` directly.
 - **A retraction kept beside its claim**: An entry shipped as `dad5ce1` claimed a reset variant Arena never performed, and a duplicate arrived again. The sub-entry becomes a record of the mis-inference instead of a deletion, keeping the verified parts: the identical-HEAD checks, the durable-source recovery and `mergeable=UNKNOWN`. The added rule is about evidence: when a message is the only evidence for a behaviour, ask whether it is the evidence or the event.
-- **A runnable `check.py`**: The gate stayed unrunnable since the first restore, and `maintenance/README.md` held the seed path: the `cl100k_base` cache comes from a byte-identical mirror. Seeding from `niieani/gpt-tokenizer` through the GitHub API with the raw accept header fetched 1,681,126 bytes, and the validator passed on the first attempt. The repo keeps `.tiktoken-cache/` out of history, and the mirror stays neither vendored nor pinned: an upstream change fails the hash and stops the gate.
 - **Five restored notes answered**: Three are layout: `#history-title` stands alone with `#connection` and `#last-check` stacked to its right, so the header drops to two rows. The composer's first and last rows lose their margin, and the requested `:nth-child` selectors landed as `:first-child` and `:last-child`. A fourth note amended the archive around refresh-caused sandbox resets, and a fifth warned that Arena may duplicate a message.
 - **Summary**: The tasks copy drops pretty-printed JSON for minified JSON, because the agent parses it and whitespace costs tokens. The log copy needed nothing, since it was already one minified object per line in the shape `import-notes` reads, and the reports tab copies Markdown. `REFERENCE.md` now records the choice beside the button descriptions, and an older pretty-printed backup still restores.
-- **Summary**: The approved docs restructure is in: `docs/archive/` now holds `budget-exceptions.md`, moved with `git mv` so its history follows, and `arena-quirks.md` with eight hosting behaviours. `README.md` and `AGENTS.md` name the exceptions file by its new path, every relative link under `docs/` resolves, and undated observations say so. No budget covers these two, and the quirks file stays a record rather than a control, with no archive index saying what belongs there.
 - **Summary**: The live agent task list arrives as its own tab with two divs, finished and upcoming, beside Notes and Reports. `preview.py tasks <source.md>` replaces both sections from one Markdown file whose `## Finished` and `## Upcoming` headings are both required in either order. Each section renders at write time into the `meta` table, and `/api/state` carries the pair so the tab refreshes on the three-second poll.
 - **Summary**: The accent bar and muted colour return from `.message` to `.answer.reply`, and the message block keeps its original padding and radius. The reply carries the bar it had plus the colour from the plain-note class, and every acknowledgement is a reply since the answer classes collapsed. Plain text still goes into a `<p>`, an unanswered message carries no bar, and nothing pins the visual result beyond the rule text.
 - **Summary**: Two follow-ups to the log styling. Inline code takes a new `--chip` colour, one step off every surface, and the receipt ID opts out by class. The two answer styles collapse into one: `.answer.note` goes away, every acknowledgement renders as answer reply, and plain text goes into a `<p>`.
@@ -441,18 +468,49 @@
 - **Summary**: Every fenced code block now has a Copy button in its top-right corner, and `add_copy_buttons()` holds its text in `data-code`. One delegated click handler reads that attribute, tries `navigator.clipboard.writeText` and falls back to `execCommand`, flashing Copied or Select and copy for 1.5 seconds. The block becomes the positioning context and its `pre` keeps 62px of right padding so code does not run under the button.
 - **Summary**: Inside `li.message` the second and third children swap roles on approval: the answer sits under the user's note, receipt last. Two assignments in `assets/app.js` carry the change, and spacing follows: `.answer` takes 8px above instead of 10px, `.receipt` gains 8px. A hidden answer still holds its place in the DOM, so the receipt's gap never collapses against the message text.
 - **Summary**: The chip rule loses its `.report` scope, so raw messages, field options and the composer's draft preview chip like a published report. The message-log receipt IDs are the one exclusion: `.receipt code` keeps its monospace face and drops the background and padding, and it needs no `!important`. Code inside a `pre` still takes no chip of its own, the block carrying the background.
-- **Summary**: The house removes `check_skill_refs_parity` from `maintenance/check.py` on approval, together with its call in `validate()`, so nothing compares `skills/refs/<skill>/` against `skills/<skill>/` byte for byte. `skills/README.md` amends its wording to the new contract: supporting files keep their refs form and compress or minify to live. Rule refs and live parity and the root `ARENA.md` byte identity take no change, and `maintenance/README.md` needed no change.
-- **Summary**: `--focus` in the dark theme becomes `#524d47`, replacing `#f4ca93`, so `:focus-visible` changes a resting `#56504a` border into a nearly equal value. The light theme keeps `#8f5b13`, which the request did not name. The page carries no focus outline, so this border is the only focus cue it offers.
 - **Summary**: `p#report-status` moves inside `div.report-toolbar` on its own row with the muted 13px face, so it can no longer pass as the report's first line. It also carries the submitted state: Answers sent `<time>` with a stored answer record, and Report loaded with N fields before one exists. The post-submit message shares that wording and the single `time()` formatter, replacing a `toLocaleTimeString()` call that printed seconds and a 12-hour clock.
 - **Summary**: `#preview-note` inverts its states on approval: dim with the draft preview shut, lit while it opens, and a lit button means the preview shows. The pencil keeps the opposite mapping, grayed while the composer is hidden, because a hidden composer is the state worth marking there. `aria-pressed` and the `MD 👁` label stay the same, so the state stays available to a screen reader.
 - **Summary**: The steering skill's ack contract gains one rule: name a note by its ID's first seven characters, never by its sequence number. `ack` takes the full ID that `read` prints, and `references/REFERENCE.md` records the convention with one exception: reports keep their earlier title numbering. Seven characters of a UUID collide only after some 16 million notes, and the full ID stays the key in `ack` and storage.
 - **Summary**: Inline code in reports and rendered log messages now chips with the bubble background, 1px by 5px of padding and a 4px radius. That also fixes the reported bug: a fence closed on its opening line becomes an inline code span that never reaches the `pre` background. Code inside a `pre` keeps no background of its own, and the receipt's monospaced ID sits outside any `.report` element, so it takes no chip.
-- **Summary**: `rules/ARENA.md` gains one General rule: with several tasks open, do the smallest first, a user-stated priority outranks size, and re-sort whenever a task arrives. `rules/refs/ARENA.md` carries the full wording, which adds that a large task never blocks a small one. The root copy follows byte-identical, as `.github/workflows/distribute-arena.yml` expects.
 - **Summary**: Rendered Markdown keeps one heading rhythm: all levels take 10px above and 6px below, with the report's first child flush to the top. `.report pre` padding drops from 16px to 10px. One margin for every level means a deep ladder no longer reads as stepped by spacing, only by font size.
 - **Summary**: The message-log receipt rewrites on approval: the 7-character ID leads, monospaced in a `code` element, then one state word and the delivery time. A waiting note reads `<id> · Delivered` and an acknowledged one `<id> · Seen`, while the ACK-ed pair and separate ack timestamp are gone. The last-check line reads Last checked `<time>` or Not checked yet, without naming the agent, and Seen carries the delivery time.
-- **Summary**: The steering bullet in `rules/ARENA.md` gains two clauses beside the ack contract: the receipt leaves in the read's own tool block. The receipt covers work that outlives the block as in progress, runs one to three lines and names the change and its commit. `rules/refs/ARENA.md` takes both in full wording, and the root copy follows byte-identical.
-- **Summary**: `rules/ARENA.md` gains one Git rule: `GH_TOKEN` can expire inside a turn, `gh auth status` calls it invalid and pushes fail. Retry once, never loop and never ask for credentials, then end the turn, because the next turn carries a fresh token. Prove recovery with `git ls-remote origin <branch>` before pushing again, while `rules/refs/ARENA.md` carries the full wording and the root copy follows byte-identical.
+
+### maintenance
+
+- **Script minification**: `minify.py` builds all three scripts and the assets with pinned minifiers, and the approval covers the installed mirror. Terser handles CommonJS, and Python minification removes ordinary comments and excess whitespace with every AST transform off, so names, annotations, docstrings, assertions and shebangs survive. A Python 3.10 grammar check, parsed-tree equality and compilation gate the outputs before any write, and CI pins Python 3.11 while keeping Ruff on refs.
+- **Asset minification**: The approved scope is JavaScript, CSS and HTML only, with a pinned minifier per language and a size budget per file. `minify.py` builds the three assets from readable refs baselines into both distributed directories, and the build refuses JavaScript that Node cannot parse. The client harness passes against the shipped minified build, and markup that loses an id or a visible word never lands.
+- The Simplified Technical English clause binds new and edited text now, and each covered file joins the CI gate once a pass clears it. `maintenance/README.md` led the path from 10 violations to 0, and the workflow grows its file list one clean file at a time. The remaining five stayed report-only until their own pass, with first-run counts of 13, 7, 56, 11 and 68.
+- The documented markdownlint file count had two carriers, and `LINT_COUNT_CLAIMS` cross-checked both against the files markdownlint actually covers. The root entry is gone, which keeps `check.py` off agent-facing files, and the gate still fails when the scope itself moves. What goes is the second copy of the claim, so the "— 10 files," wording in root `AGENTS.md` is now wording nothing checks.
+- **A runnable `check.py`**: The gate stayed unrunnable since the first restore, and `maintenance/README.md` held the seed path: the `cl100k_base` cache comes from a byte-identical mirror. Seeding from `niieani/gpt-tokenizer` through the GitHub API with the raw accept header fetched 1,681,126 bytes, and the validator passed on the first attempt. The repo keeps `.tiktoken-cache/` out of history, and the mirror stays neither vendored nor pinned: an upstream change fails the hash and stops the gate.
+- **Summary**: The house removes `check_skill_refs_parity` from `maintenance/check.py` on approval, together with its call in `validate()`, so nothing compares `skills/refs/<skill>/` against `skills/<skill>/` byte for byte. `skills/README.md` amends its wording to the new contract: supporting files keep their refs form and compress or minify to live. Rule refs and live parity and the root `ARENA.md` byte identity take no change, and `maintenance/README.md` needed no change.
+- **Summary**: `--focus` in the dark theme becomes `#524d47`, replacing `#f4ca93`, so `:focus-visible` changes a resting `#56504a` border into a nearly equal value. The light theme keeps `#8f5b13`, which the request did not name. The page carries no focus outline, so this border is the only focus cue it offers.
+
+### docs
+
+- Editorial passes bring every covered file to zero ASD-STE100 violations, and the CI gate grows as each file lands. The covered files are `docs/archive/arena-quirks.md`, `.agents/skills/README.md`, `rules/README.md`, `rules/refs/README.md` and the budget-exceptions and workflow READMEs. Dates, commands, numbers and filenames survive each pass, and the vendored `.agents/skills/asd-ste100/README.md` stays outside the gate.
+- `rules/refs/README.md` is the ninth file in the CI gate and the last covered file the agent can clean. Every `README.md` and everything under `docs/` now reports zero violations except the vendored `.agents/skills/asd-ste100/README.md`, which an approved answer exempted. The refs index loses three semicolons and two sentences over the cap, and it keeps every filename, commit, section number and platform note.
+- Root `AGENTS.md` names the vendored ASD-STE100 linter and its scope, on an approved answer: `docs/` and every `README.md`, and nothing else. The clause binds text written or edited in those files from here, and older prose keeps its wording until someone touches it. Rules, skills and agent-facing files stay outside the linter's scope, which leaves the 46-word sentence in this file out of it as well.
+- The house copies `DietrichGebert/ponytail` at `e3ba2aa` (MIT) verbatim into `.agents/skills/ponytail/`, six skills and licence included. It lives under `.agents/skills/` only, because it audits this repository rather than belonging to it, and takes no part in the parity gates. The audit tool is `.agents/skills/ponytail/skills/ponytail-audit/SKILL.md`.
+- **Summary**: The approved docs restructure is in: `docs/archive/` now holds `budget-exceptions.md`, moved with `git mv` so its history follows, and `arena-quirks.md` with eight hosting behaviours. `README.md` and `AGENTS.md` name the exceptions file by its new path, every relative link under `docs/` resolves, and undated observations say so. No budget covers these two, and the quirks file stays a record rather than a control, with no archive index saying what belongs there.
+
 ## 2026-09-20
+
+### rules
+
+- **ASD-STE100 becomes MUST**: The rules require it everywhere they define it — `rules/CHATGPT-MORE.txt`, `AGENTS.md`, `ARENA.md`, `rules/AGENTS.md`, `rules/ARENA.md`, both refs originals and `rules/wenyan/CHATGPT-MORE.txt`. `ARENA.md`'s Git bullet loses the "offer portable HTML" clause.
+- **Export**: Export wording leaves `ARENA.md`, `rules/ARENA.md`, `rules/refs/ARENA.md` and `AGENTS.md`.
+- **ntfy transport by selection**: The visibility question gains an external-channel option. On selection the retired ntfy transport runs with topic `<repo>-<branch>-<8-char unguessable secret>`, posts notes and polls `https://ntfy.sh/<topic>/json?poll=1&since=<marker>` at every read. The first poll uses `since=all`.
+- **Root AGENTS compressed to lines**: Three multi-sentence lines compress per `rules/refs/GUIDELINES.md`. L61 drops both rationales, L67 moves to its own line with the file's `NEVER` cap and L95 loses its `so` and `because` clauses.
+- Every rule, negation and fact survives, and `rules/` and its refs stay untouched.
+- **Wenyan experiment**: `rules/wenyan/` gains hybrid-Wenyan ChatGPT candidates built from live English as the character-count baseline and full refs as the semantic baseline. The experiment stays unvalidated and non-authoritative with no production rules, refs or validator changes. It measures Unicode characters only.
+- **PR, rebase merge, green tests**: ChatGPT custom rules require a PR, a rebase merge and green tests before any turn ends. They replace the conditional PR rule that contradicted them.
+- **Origin**: The 2026-09-20 chat asked for `NEVER end turn until tests are green`, `ALWAYS PR` and `ALWAYS rebase merge`.
+- Project history runs newest first, one entry per pull request with the open entry extended until merge. Each entry opens with at most three summary bullets — change and deferred. Entries below 2026-09-12 keep their older form.
+- [README.md](README.md#instruction-budgets) carries current measurements.
+- **Merge wording**: The approved Arena merge wording becomes `fast-forward/rebase`, with merge authorization and rebase-first-on-divergence unchanged.
+- `ARENA.md` refs, live and root plus root `AGENTS.md` adopt the preview inbox and report pipeline with work-boundary reads and literal `ACK:`. Setup starts the server, blocks on the visibility question, then reads the answer, and a visible preview reuses without asking. Failed reads error instead of reading empty, acknowledgement records only visible-chat IDs, and the experiment's 21 saved notes import without ID changes.
+
+### preview
 
 - **Chat surface**: The page drops its `h1` and eyebrow. Tabs, the theme button and the collapse toggle move to a viewport-pinned top bar. The log sits above the composer.
 - **Log behaviour**: The log fills the height between bar and composer, scrolls oldest-first in place and pins to the newest message unless scrolled up. It re-pins when the composer reopens, and a second toggle hides the composer.
@@ -463,76 +521,79 @@
 - **Stored receipts**: Notes store `ack_kind`/`ack_text`, `/api/state` serves `ack_html`, and a repeat keeps its first timestamp. Report answers leave the log for a `submissions` table. `read` merges them as `kind: report`, `ack` accepts either table's IDs, and `/api/state` serves notes only.
 - **Report questions**: The Reports tab shows a `✓ Sent` receipt. Questions go to fielded reports, and every shell block ends with a read.
 - **Sent report answers stay on screen**: The client stores `{answers, at}` under `answers:<report id>` and pre-fills that report. It shows `✓ Sent <time>` beside Send answers, and `.report h1` margins tighten to 8/12.
-- **ASD-STE100 becomes MUST**: The rules require it everywhere they define it — `rules/CHATGPT-MORE.txt`, `AGENTS.md`, `ARENA.md`, `rules/AGENTS.md`, `rules/ARENA.md`, both refs originals and `rules/wenyan/CHATGPT-MORE.txt`. `ARENA.md`'s Git bullet loses the "offer portable HTML" clause.
 - **Forms fold into Reports**: The JSON path leaves — `publish-form`, the `forms` table, form routes, the Forms tab, the `FORM` note header and the 2–20-option floor. A questionnaire is now a fielded report whose answers arrive as `REPORT` notes.
 - **Folding details**: `Store.validate_form` becomes `Store.validate_fields`, `submit` drops its label, the note textarea keeps its own placeholder, and the page retitles to Notes & reports.
-- **Export**: Export wording leaves `ARENA.md`, `rules/ARENA.md`, `rules/refs/ARENA.md` and `AGENTS.md`.
 - **Fields in report sources**: `parse_fields` splits prose and fields: `- ()` radio, `- [ ]` checkbox, `Label: ___` text, `(x)`/`[x]` preselect. The prompt comes from the line above or an explicit `{#id}`, and fenced code stays literal.
 - **Routes**: `GET /api/reports/<id>/html` returns JSON (`html`, `fields`). A token-protected `POST /api/reports/<id>/submit` writes one `REPORT` note, and the tab renders one Send answers button.
 - **Export subcommand leaves**: The standalone HTML export subcommand, route, builder and docs leave because sandbox attachment downloads never showed a file.
 - **JSON forms, first cut**: `publish-form <form.json>` checks 1–50 questions of `text`/`choice`/`checkbox`, prompt ≤500 chars, 2–20 options ≤200 chars and file ≤256 KB.
 - **Form answers**: The Forms tab posts token-protected answers (text ≤2000, one choice, checkbox subset) as one `FORM` note with `(skipped)` gaps. Bad answers return 400 and keep input.
 - `check_preview.py` and `node scripts/check_client.cjs` stay green.
-- **ntfy transport by selection**: The visibility question gains an external-channel option. On selection the retired ntfy transport runs with topic `<repo>-<branch>-<8-char unguessable secret>`, posts notes and polls `https://ntfy.sh/<topic>/json?poll=1&since=<marker>` at every read. The first poll uses `since=all`.
 - **Quiet cases**: Quiet cases, the signature-error ladder (retry once, fresh topic, turn pause) and the JSON-to-HTML fallback restore from commit a50d3c5. The preview server and inbox stay up, and the choice is that session's approval.
-- **Root AGENTS compressed to lines**: Three multi-sentence lines compress per `rules/refs/GUIDELINES.md`. L61 drops both rationales, L67 moves to its own line with the file's `NEVER` cap and L95 loses its `so` and `because` clauses.
-- Every rule, negation and fact survives, and `rules/` and its refs stay untouched.
-- **Wenyan experiment**: `rules/wenyan/` gains hybrid-Wenyan ChatGPT candidates built from live English as the character-count baseline and full refs as the semantic baseline. The experiment stays unvalidated and non-authoritative with no production rules, refs or validator changes. It measures Unicode characters only.
-- **PR, rebase merge, green tests**: ChatGPT custom rules require a PR, a rebase merge and green tests before any turn ends. They replace the conditional PR rule that contradicted them.
-- **Origin**: The 2026-09-20 chat asked for `NEVER end turn until tests are green`, `ALWAYS PR` and `ALWAYS rebase merge`.
-- Project history runs newest first, one entry per pull request with the open entry extended until merge. Each entry opens with at most three summary bullets — change and deferred. Entries below 2026-09-12 keep their older form.
-- [README.md](README.md#instruction-budgets) carries current measurements.
 - **Preview-steering 2.0**: `arena-live-steering` becomes `arena-preview-steering` 2.0.0 beside new `arena-preview-reporting` 1.0.0. One server exposes Notes and Reports tabs, persistent messages with receipts, duplicate-safe retries, Enter-to-send with Shift+Enter/IME and a default-dark theme. Named reports ship with standalone HTML export.
-- **Merge wording**: The approved Arena merge wording becomes `fast-forward/rebase`, with merge authorization and rebase-first-on-divergence unchanged.
 - The visible proposal authorized `markdown-it-py`, installed-copy migration, report-commit removal and historical documentation.
 - The ntfy transport with page-fetch polling and local ingestion logs retires. So does the report pipeline's force-added local `chore(reports): hold the local records` commit that never pushed and undid itself next turn.
 - Both remain history in the migration reference and Git, neither a fallback nor a ban. Reports, exports, inboxes and receipts now stay ignored and uncommitted.
-- `ARENA.md` refs, live and root plus root `AGENTS.md` adopt the preview inbox and report pipeline with work-boundary reads and literal `ACK:`. Setup starts the server, blocks on the visibility question, then reads the answer, and a visible preview reuses without asking. Failed reads error instead of reading empty, acknowledgement records only visible-chat IDs, and the experiment's 21 saved notes import without ID changes.
 - The runtime uses stdlib HTTP and SQLite. Only `markdown-it-py` renders Markdown, installed in a workspace venv and never in the app manifest. An owner-approved Write / Preview toggle reuses it for unsaved drafts with the last-message placeholder and Send confirmation intact.
 - Raw HTML stays off, report paths register explicitly, submissions bound, retries dedupe, and no secrets belong in the inbox.
 - The tracked `.agents/skills` mirrors migrate with approval and match their sources without baselines. The dispatch workflow distributes both siblings and removes the retired directory. Input repo names pass through an environment variable rather than shell interpolation, with no external repository changes.
 - Markdown links open with `target="_blank"` and `rel="noopener noreferrer"`, and the log renders Markdown with stored text unchanged plus a raw-text warning when the renderer is absent. Browser attachment downloads returned 200 with no visible file, so a diagnostic question removed the browser download and source controls while agent-side export stayed. The browser restriction stays unconfirmed, and forms stay a named follow-up with no implementation.
 - The budget generator rebuilds its table from `EXPECTED_BUDGETS`, handling added and retired skills without hand-edited rows. CI also runs the stdlib preview integration check and the dependency-free simulated-DOM client check.
 - Page-fetch reads the owner's CSS paths where sandbox curl fails at TLS. Only the supplied palette loads, not Arena's stylesheet or fonts. The two-path verification rule survives, and the image path stays untested.
+
 ## 2026-09-19
 
+### rules
+
 - **ARENA pull cadence**: The Constitution states pulls per tool-call block. A block without a pull violates, except the first block's topic link and a block whose only call blocks.
+- Every question carries a recommended answer marked among the options. `validate.yml` narrows its push trigger to `[main]`.
+- Another session found an unreproducible route, so it withdraws. Nothing gates `.agents/skills/` against its source, and `validate.yml` keeps `pull_request: branches: ['**']`. The recommended-answer clause mirrors into `rules/ARENA.md` because ARENA stands alone in an Arena session, and reverting takes one line.
+- House order: `rules/refs/ARENA.md` first, compressed mirror into `rules/ARENA.md`, `cp` to the root copy. `BASELINE.md` first, squashed into `SKILL.md`, mechanics in `references/REFERENCE.md`, then `cp` to `.agents/skills/arena-live-steering` for every distributed file, which no longer includes the baseline.
+- **NEVER-edit clauses**: `rules/ARENA.md` Constitution gains NEVER edit this file or the live steering skill, only suggest amendments, and on a violation ALWAYS suggest an amendment. Root `AGENTS.md` Glossary maps core = all, arena = ARENA.md. `rules/kilo/plan.md` replaces `open_plan` with `submit_plan`, and root `AGENTS.md` waives the NEVER-edit clause across refs, live, root and the skill.
+- **Deferred**: the portable `skills/squash` line still says to compress the rest of the text and house `AGENTS.md` outranks it. Live ARENA still omits nine full-wording refs items, from `since=all` scope to the never-edit coverage.
+- House order: `rules/refs/ARENA.md` first with full wording, compressed mirror into `rules/ARENA.md`, then `cp` to root `ARENA.md`. The waiver sits in root `AGENTS.md` beside the ARENA pointer so the Arena-handling-wins line cannot void it.
+- Compression item 5 in the README, the constitution, maintenance item 10 and both Baselines paragraphs drop the rest-of-file squash wording. Historical exception notes that name the old item 5 stand as the record.
+- New-line squash on the live ARENA bullets drops `Upon` to `On`. Gates green.
+
+### preview
+
 - **Activation line**: The activation line becomes literal `10-4: ARENA.md loaded`, and the ack literal `ACK:` in both ARENA files, `SKILL.md`, `BASELINE.md` and `references/REFERENCE.md`.
 - **Topic retry**: On the first `SignatureDoesNotMatch` the skill posts a fresh topic in one line, resets `STEERING_NTFY_TOPIC` and polls `since=all`. It stops only if the fresh topic repeats the error.
 - Root `AGENTS.md` gains visible-proposal-before-question and amendment-origin-in-CHANGELOG rules. `distribute-arena.yml` excludes `BASELINE.md` through `$SKILL_EXCLUDE`, so the pre-run clear removes stray baselines.
-- Every question carries a recommended answer marked among the options. `validate.yml` narrows its push trigger to `[main]`.
-- Budget exceptions leave the front page for `BUDGET-EXCEPTIONS.md`, which item 6 of the compression procedure and root `AGENTS.md` point at.
 - **Deferred**: the Playwright/Chromium finding stays out of rules — npm opens, every Chromium host dies after Client Hello, `PLAYWRIGHT_DOWNLOAD_HOST` 404s and `@sparticuz/chromium` misses `libnspr4.so`/`libnss3.so`/`libnssutil3.so`.
-- Another session found an unreproducible route, so it withdraws. Nothing gates `.agents/skills/` against its source, and `validate.yml` keeps `pull_request: branches: ['**']`. The recommended-answer clause mirrors into `rules/ARENA.md` because ARENA stands alone in an Arena session, and reverting takes one line.
-- House order: `rules/refs/ARENA.md` first, compressed mirror into `rules/ARENA.md`, `cp` to the root copy. `BASELINE.md` first, squashed into `SKILL.md`, mechanics in `references/REFERENCE.md`, then `cp` to `.agents/skills/arena-live-steering` for every distributed file, which no longer includes the baseline.
 - Origins: the cadence came from the chat task, the activation literal from a steering note and body-over-status from three notes escalated by a fourth.
 - The visible-proposal gate came from a violation report. The ack prefix came from two notes renamed by a third. Origin, baseline-exclusion, recommended-answer, push-trigger and exceptions-file rules came from steering notes, and two further notes sharpen the prefix rule's "and nothing else".
-- The exclude line ran against `git ls-files` (five files, baseline absent), both workflow files parse as YAML, and `maintenance/check.py` stays green after the exceptions moved.
 - **Live steering 1.8/1.9**: Production docs never name the skill, its directory, `SKILL.md` or its scripts. Exceptions are the skill's own files, the topic link and `10-4:` acks, which replace `STEER RECEIVED:`.
 - 1.9.0 sets topic form `<branch>-<secret>` and requires the ack line to interpret rather than restate. It also records that the JSON renderer removes `<>`, so a full check walks `since=` and reads the HTML topic page.
 - **Mirrors**: `BASELINE.md` takes full wording, `SKILL.md` the squash, `REFERENCE.md` the mechanics, and the tracked `.agents` copy stays byte-identical.
 - The production clause governs product docs, not this repository's CHANGELOG, skill files and rule files, which still name the skill.
 - Topic form sanitizes the branch to `[A-Za-z0-9_-]` then appends a random token. A truncated JSON body is a malformed pull: tell the user, then fall back to HTML instead of ingesting it.
-- **NEVER-edit clauses**: `rules/ARENA.md` Constitution gains NEVER edit this file or the live steering skill, only suggest amendments, and on a violation ALWAYS suggest an amendment. Root `AGENTS.md` Glossary maps core = all, arena = ARENA.md. `rules/kilo/plan.md` replaces `open_plan` with `submit_plan`, and root `AGENTS.md` waives the NEVER-edit clause across refs, live, root and the skill.
-- **Funding changes**: A new clause squashes only on the new line, an amended clause only on the affected line. A deletion tries one squash and keeps the lower budget.
 - **Later same-PR adds**: Chat-omitted reports, short chat replies under ASD-STE100, first-read before the link, topic `<repo>-<pr>-<random>` (1.7.0) and local reports commits via `git add -f reports && git commit --no-verify`, never pushed.
-- **Deferred**: the portable `skills/squash` line still says to compress the rest of the text and house `AGENTS.md` outranks it. Live ARENA still omits nine full-wording refs items, from `since=all` scope to the never-edit coverage.
-- House order: `rules/refs/ARENA.md` first with full wording, compressed mirror into `rules/ARENA.md`, then `cp` to root `ARENA.md`. The waiver sits in root `AGENTS.md` beside the ARENA pointer so the Arena-handling-wins line cannot void it.
-- Compression item 5 in the README, the constitution, maintenance item 10 and both Baselines paragraphs drop the rest-of-file squash wording. Historical exception notes that name the old item 5 stand as the record.
-- New-line squash on the live ARENA bullets drops `Upon` to `On`. Gates green.
+
+### maintenance
+
+- Budget exceptions leave the front page for `BUDGET-EXCEPTIONS.md`, which item 6 of the compression procedure and root `AGENTS.md` point at.
+- The exclude line ran against `git ls-files` (five files, baseline absent), both workflow files parse as YAML, and `maintenance/check.py` stays green after the exceptions moved.
+- **Funding changes**: A new clause squashes only on the new line, an amended clause only on the affected line. A deletion tries one squash and keeps the lower budget.
+
 ## 2026-09-18
 
-- **Validation paths-ignore**: `.github/workflows/validate.yml` skips `push` and `pull_request` runs for `.github/workflows/distribute-arena.yml`, `.gitignore`, `apply.bat`, `automations/**`, `CHANGELOG.md` and `maintenance/README.md`. Project history, scheduler prompts, launcher wrappers, exclusions, manual dispatch workflows and tooling docs triggered runs without touching checked assets. No budgets move, and `YAML parse`, `maintenance/check.py`, `markdownlint`, `ruff check` and `ruff format` stay green.
+### rules
+
 - **ARENA two-read-path rule, live 1.5.0**: `rules/ARENA.md` adds a Verification rule querying websites with both read paths. Page-fetch renders JS and reaches hosts the sandbox closes to curl.
-- Curl reports status, headers, TLS SAN and RDAP, and either failure or 404 stands until the other checks it. The same rule names `scripts/ntfy_steering.py` and its anchor as operational.
-- **Live 1.5.0**: `skills/arena-live-steering` goes 1.5.0 with four areas. Co-issue the pull inside every batched block, inform the chat when the channel comes back mangled, stamp every check into `STEERING_LOG.md` even on empty bodies. Activation becomes observable through that log line.
 - **Mirrors**: `BASELINE.md` and `rules/refs/ARENA.md` take full wording first, and mirrors plus the tracked `.agents` copy stay byte-identical.
 - **Deferred**: The `routify-file-proxy-sg.oss-ap-southeast-1.aliyuncs.com` `SignatureDoesNotMatch` stays a session-level tooling fault with no repository fallback. The GitHub PR-comment fallback tested (comment 5735924529 posted, read back with ETag, 304 verified) stays outside skill scope on instruction. Generic `rules/AGENTS.md` waits until other harnesses need the rule.
-- Steering cadence lapsed for four causes. The live bullet never named the ingest script, and "before and after every tool call" cannot run on a batching surface. Consecutive fetch failures decayed silently, and empty runs left no disk anchor.
 - **Amendment A**: Where calls batch into one block, the pull joins the block as a parallel call and reads again once the block returns. Batching never lowers the pull rate. Full wording sits at `BASELINE.md` line 61, the compressed mirror at `SKILL.md` line 57.
+- **Amendment D**: `rules/refs/ARENA.md` line 17 names `scripts/ntfy_steering.py` and its log/anchor generation. `rules/ARENA.md` line 15 adds `pass each body to the skill's ingest script and anchor the next pull on the log's last id`.
+- `rules/refs/ARENA.md` line 17 takes the amendment in full wording, `rules/ARENA.md` line 15 the mirror, root refreshed by `cp`. The read path states the live negation once, and `curl` stays named in refs and the skill.
+
+### preview
+
+- Curl reports status, headers, TLS SAN and RDAP, and either failure or 404 stands until the other checks it. The same rule names `scripts/ntfy_steering.py` and its anchor as operational.
+- **Live 1.5.0**: `skills/arena-live-steering` goes 1.5.0 with four areas. Co-issue the pull inside every batched block, inform the chat when the channel comes back mangled, stamp every check into `STEERING_LOG.md` even on empty bodies. Activation becomes observable through that log line.
+- Steering cadence lapsed for four causes. The live bullet never named the ingest script, and "before and after every tool call" cannot run on a batching surface. Consecutive fetch failures decayed silently, and empty runs left no disk anchor.
 - **Amendment B**: Quiet channels stay silent, but a mangled return — fetch error, `SignatureDoesNotMatch`, unparseable body — earns one chat line naming the error. The error passes to ingest as `STEERING_NTFY_ERROR` so the log's check line records it. Owner instruction later replaced the wording.
 - **Amendment C**: The empty-body path of `scripts/ntfy_steering.py` appends `--- <UTC> [ntfy <topic> checked, 0 delivered] ---` to `LOG_FILE`, creating it if absent and carrying `STEERING_NTFY_ERROR` or `(no messages in the body)`. It stamps no `id=`, so `pull_url()` forges no anchor and keeps printing `since=all` until real messages arrive.
-- **Amendment D**: `rules/refs/ARENA.md` line 17 names `scripts/ntfy_steering.py` and its log/anchor generation. `rules/ARENA.md` line 15 adds `pass each body to the skill's ingest script and anchor the next pull on the log's last id`.
 - **Amendment E**: `SKILL.md`, `BASELINE.md` and `REFERENCE.md` make activation observable on disk: the first reply posts the topic and the first block stamps a `STEERING_LOG.md` check line. A session without the log never ran the skill.
 - `metadata.version` 1.4.0 → 1.5.0 in `SKILL.md`, `BASELINE.md` and the tracked `.agents/skills/arena-live-steering` mirror, with `diff -r` byte-identical parity.
 - The owner's steer replaced wording and arithmetic: T5 went over T3, W3 (credential finding) and W6 (proxy-CA caveat). The dropped clauses stay in refs, where W3 is bullet 3 and W6 is bullet 5, and refs keep six bullets per `GUIDELINES.md` 4.1.
@@ -562,45 +623,59 @@
 - `scripts/ntfy_steering.py` turns `load_seen` into `log_ids` (delivery-order ids serving dedup and anchor). `pull_url` walks backwards to the newest id, printing `Next pull: <url>` on empty and delivery paths alike, including after a `current` hold. A message without an ntfy id stamps `digest-...`, which the server cannot resolve, so it never anchors and the anchor stays put.
 - `BASELINE.md` carries the unsquashed wording first per house order — step-3 URL, log dual role, unconditional cadence, script bullet, Limits entry, `Next pull:` example, ack bullet. `SKILL.md` mirrors squashed. `REFERENCE.md` gains anchor mechanics, the docs citation, the source clause, the moved-log note, the `since=all` escape and the anchored-empty-read note.
 - The ack clause names the medium: `SKILL.md` opens "Acknowledge every note in chat" and lists reasoning, tool calls and `STEERING.md` as non-places. `BASELINE.md` says nothing the user cannot see counts. `references/REFERENCE.md` argues a silent agent is indistinguishable from a dropped channel, and only a delivered note earns `STEER RECEIVED:`.
-- `rules/refs/ARENA.md` line 17 takes the amendment in full wording, `rules/ARENA.md` line 15 the mirror, root refreshed by `cp`. The read path states the live negation once, and `curl` stays named in refs and the skill.
 - `metadata.version` 1.2.0 → 1.3.0 with the anchor change and → 1.4.0 with the ack clause, both inside one pull request. `.agents/skills/arena-live-steering` follows byte for byte, and gates stay green.
+
+### automations
+
+- **Validation paths-ignore**: `.github/workflows/validate.yml` skips `push` and `pull_request` runs for `.github/workflows/distribute-arena.yml`, `.gitignore`, `apply.bat`, `automations/**`, `CHANGELOG.md` and `maintenance/README.md`. Project history, scheduler prompts, launcher wrappers, exclusions, manual dispatch workflows and tooling docs triggered runs without touching checked assets. No budgets move, and `YAML parse`, `maintenance/check.py`, `markdownlint`, `ruff check` and `ruff format` stay green.
+
 ## 2026-09-17
 
-- **Link-first activation, live 1.2.0**: `skills/arena-live-steering` step 1 requires the ntfy link as the first line of the reply. The fetch fails until the user posts, because the agent cannot publish (`GET`-only fetch, TLS-killed POSTs).
-- An empty topic reads as HTTP 500, so expect that first failure. The full wording copies to a new `BASELINE.md`, and the live entry point squashes back in the same change.
+### rules
+
 - `rules/ARENA.md` (refs, live, root) requires the first reply to open with the one-line ruleset confirmation plus the channel link. `rules/README.md` records the counter-example that exploration is a bet, and root `AGENTS.md` gains the matching first-action rule.
 - `skills/arena-live-steering/BASELINE.md` is new: the `SKILL.md` copied verbatim with Agent Skills frontmatter and the `metadata.baseline` marker, the amend-first baseline that mirrors `rules/refs/` and `skills/squash/BASELINE.md`. The squash makes ten cuts of restated wording and adds the Files-manifest row, keeping every command, code block, filename, number, negation and caveat.
 - `references/REFERENCE.md` states that the chat carries the channel before the first read and that a fresh topic's first 500 is no fault. `skills/README.md` notes the second skill carrying a `BASELINE.md`. `metadata.version` 1.1.0 → 1.2.0, and the `.agents` copy follows byte for byte including the new baseline.
 - The activation clause lands in house order — `rules/refs/ARENA.md` line 7 full wording, `rules/ARENA.md` line 6 mirror, root `ARENA.md` by `cp`. Root `AGENTS.md` line 8 opens with read end-to-end before any edit, folding the Arena read of `ARENA.md` into that first read.
 - The 2026-09-17 counter-example records a session that explored the skill subtree and pushed twice before reading the rulesets. Exploration is a bet, not a gate. The custom-instructions field, not the first message, is the only injection path that survives a forgotten bootstrap line.
-- The channel carried its first message during the change — "no report needed just amend and merge". The ingester delivered it 1/1, checking channel and ingest path live.
 - **Kilo live counterparts**: `rules/kilo/{plan,code,debug}.md` mirror their `rules/refs/kilo/` baselines and join the budget table. A new `KILO_PAIRS` gate in `maintenance/check.py` fails when a live override states more rules than its refs baseline. The shell-check rule leaves `rules/ARENA.md` for the core because Arena sessions do not choose a terminal, and ARENA squashes again to absorb both changes.
 - Lint scope stays 10 files with `rules/kilo/**` ignored beside `rules/refs/kilo/**` for MD001 and MD041.
 - `rules/README.md` and `rules/refs/README.md` stop calling the overrides refs-only and name both ignored directories. The live Kilo overrides keep their required shape — empty first line, `### Native <mode> Agent Overrides`, then the conflict clause.
 - **Core slimming, skill ntfy-only**: Planning and execution clauses move to `rules/refs/kilo/{plan,code,debug}.md`. Each opens with a blank line, the `###` heading and a clause that beats a native reminder. `rules/refs/KILO.md` plus live `rules/KILO.md` carry the Kilo-only tool rules.
 - The Lazy Ladder returns inline at full intensity with no skill artifact, intensity switch or marker after a first pass removed every trace. The questionnaire that would re-add the rest defers.
-- `skills/arena-live-steering` removes `scripts/dns_steering.py`, `scripts/ntfy_relay.py` and the `dns-txt` metadata. It checks at every reasoning block, every three tool calls and the turn end, and never reads immediately before a blocking call.
 - markdownlint scope moves 8 → 10 files with `rules/refs/kilo/**` excluded for MD001 and MD041.
 - **Deferred**: a session answered the ponytail questionnaire on 2026-09-17 — every unomitted item inline, recorded in `reports/PONYTAIL-REINCORPORATION-QUESTIONNAIRE.md` — and P12's fix-once half restored with it. Still open: the ARENA resquash, the `rules/ARENA.md` MD013 contradiction, and the dropped `.doc/.ppt` line.
 - SOLID joins Engineering in both cores: SOLID pulls against YAGNI/KISS/DRY, so planning MUST ask which governs — reusable and extensible, or simple. The collision stays stated, and Kilo's plan override asks where drafting happens.
 - `rules/refs/AGENTS.md` loses its generic preamble, plan and execution clauses and three ambiguity rules. It gains the shell check, tool-call batching, minimum-comment, single `nemoe7` scope, question-tool-only ask, and a test clause rewritten to match TDD. `rules/refs/ARENA.md` keeps its plan and execution clauses because it ships alone to four repositories and gains the collision clause as the core's mirror.
 - `rules/refs/KILO.md` and `rules/KILO.md` hold `kilo_memory_save`, `todowrite`/`todoread` and the commit step in every TODO list, never repeating the core. `rules/refs/kilo/plan.md` requires `submit_plan`, forbids `plan_exit` or turn end before approval. `code.md` and `debug.md` consult and update the approved plan, and `debug.md` adds the bug explanation, no-edit-before-approval and a web search when the bug is puzzling.
-- The DNS relay leaves as measured and removed rather than dropped: the page-fetch path reads the topic directly at the new cadence. A relay needs an unreliable preview tab that fails silently. `check_steering.py` defaults `STEERING_FILE` to `reports/STEERING.md` instead of a hardcoded `/home/user` path.
 - Root `AGENTS.md` gains `Reports and approval` — a `Current`/`Amended`/`Reason` table with line numbers, truncate but never omit, edit nothing before approval. `maintenance/check.py` gains `rules/KILO.md` in budget and lint tables while `.markdownlint-cli2.jsonc` ignores the mode overrides.
 
+### preview
+
+- **Link-first activation, live 1.2.0**: `skills/arena-live-steering` step 1 requires the ntfy link as the first line of the reply. The fetch fails until the user posts, because the agent cannot publish (`GET`-only fetch, TLS-killed POSTs).
+- An empty topic reads as HTTP 500, so expect that first failure. The full wording copies to a new `BASELINE.md`, and the live entry point squashes back in the same change.
+- The channel carried its first message during the change — "no report needed just amend and merge". The ingester delivered it 1/1, checking channel and ingest path live.
+- `skills/arena-live-steering` removes `scripts/dns_steering.py`, `scripts/ntfy_relay.py` and the `dns-txt` metadata. It checks at every reasoning block, every three tool calls and the turn end, and never reads immediately before a blocking call.
+- The DNS relay leaves as measured and removed rather than dropped: the page-fetch path reads the topic directly at the new cadence. A relay needs an unreliable preview tab that fails silently. `check_steering.py` defaults `STEERING_FILE` to `reports/STEERING.md` instead of a hardcoded `/home/user` path.
+
 ## 2026-09-16
+
+### rules
+
+- The blocked set's first half: `ntfy.sh`, `ntfy.envs.net`, `ntfy.tilde.team`, `cl1p.net`, `kvdb.io`, `paste.rs`, `0x0.st`, `api.telegram.org`, `discord.com`, `matrix.org`, `script.google.com`, `docs.google.com`. Second half: `googleapis.com`, `webhook.site`, `jsonblob.com`, `textdb.online`, `hastebin.com`, `dpaste.org`, `ix.io`, `api.pushover.net`, `api.pushbullet.com`, `hooks.slack.com`, `e2b.app`, `arena.ai`. Four peers stay reachable: `github.com`, `api.github.com`, `pypi.org` and `registry.npmjs.org`.
+- A half-applied amendment exposed a gate that cannot see it: the turn-ending steering check existed in `rules/refs/ARENA.md` but not the live file. The parity rule accepts that by construction, since a refs-only addition satisfies it. Mirrored now in both places, with the root byte-identical copy refreshed.
+
+### preview
 
 - **Registration, house voice, one channel**: `skills/arena-live-steering/` landed unregistered, so `maintenance/check.py` failed its `skills/README.md` coverage gate and both Ruff gates failed on the scripts. This change registers the skill and turns all three gates green. It rewrites the `ALWAYS USE` / `DO NOT USE` activation wording into house voice on request, keeping every trigger.
 - The channel rebuilt from measurement: `ntfy.sh` and 25 other HTTP hosts are TLS-closed in an Arena sandbox. A GitHub transport built and verified live, then declined, and DNS proved unfiltered. `scripts/dns_steering.py` reads one TXT record over UDP/53 into notes with no service, repository or HTTP.
 - On instruction the failed and declined transports are gone. The skill ships one channel, `scripts/steering_notes.py` holds the shared note writer, and root `AGENTS.md` records the `tiktoken` cache route and egress map.
-- No other measured file changes, and `maintenance/check.py` gains the matching `EXPECTED_BUDGETS` key.
 - **Deferred**: the surviving ntfy route keeps two defects the new ones avoided. It overwrites `STEERING.md` instead of appending, and anyone who learns the topic can read and steer. DNS checks pass only against sandbox-readable records, not a zone the user edits, so the human end waits on a real name.
 - Moving detail into `references/` was the plan, and removing the channels did it instead.
 - The coverage gate now sees a purpose row and a selection row. The upstream-sources paragraph says plainly that `squash` marks `metadata.origin` while `arena-live-steering` does not yet. Root `README.md`'s `skills/` bullet names the third subject beside UI reviews and text compression.
 - All four scripts went mode `100755`, and `ruff format` re-indents them plus the fenced Python in `SKILL.md` and `REFERENCE.md` to the pinned `indent-width = 2`.
 - The activation wording keeps its triggers and loses its shout: `description` and `compatibility` still carry Arena-only scope, mid-turn correction, cross-device steering and an unreliable client. `metadata` drops `always-use` and `priority: always` as duplicates and keeps `arena-only` and `use-when` as facts.
 - The egress map decided every channel: 26 hosts close TLS from an Arena sandbox (curl exit 35, HTTP 000) or fail to resolve.
-- The blocked set's first half: `ntfy.sh`, `ntfy.envs.net`, `ntfy.tilde.team`, `cl1p.net`, `kvdb.io`, `paste.rs`, `0x0.st`, `api.telegram.org`, `discord.com`, `matrix.org`, `script.google.com`, `docs.google.com`. Second half: `googleapis.com`, `webhook.site`, `jsonblob.com`, `textdb.online`, `hastebin.com`, `dpaste.org`, `ix.io`, `api.pushover.net`, `api.pushbullet.com`, `hooks.slack.com`, `e2b.app`, `arena.ai`. Four peers stay reachable: `github.com`, `api.github.com`, `pypi.org` and `registry.npmjs.org`.
 - TCP to `ntfy.sh:443` connects and the handshake is then cut, so the filter is deliberate and no proxy variable takes effect. An egress allowlist is a security control, not an obstacle to route around.
 - DNS is the opening the shipped channel uses: a hand-rolled TXT query over UDP/53 with stdlib `socket` and `struct` returns `_dmarc.gmail.com` correctly at about 1 ms. Only the resolver in `/etc/resolv.conf` answers. 8.8.8.8 works while 1.1.1.1, 8.8.4.4, 9.9.9.9 and a zone's own authorities time out, which is what makes the channel one-way.
 - `scripts/dns_steering.py` therefore reads that file, with `DNS_RESOLVER` as override and 8.8.8.8 as fallback.
@@ -618,7 +693,6 @@
 - A GitHub transport arrived, verified live, then removed on instruction: it watched an issue or pull request through `api.github.com` by default via description edit. Opt-in comment mode joined `If-None-Match` polling against the 5,400-request hourly limit and a prefix diff shared with the DNS poller.
 - It ran on pull request 13 (description edit to note in 12s) and 148 real comments on `octocat/Hello-World#1`. Permissions outlive it: installation tokens read issues but receive 403 creating them, read and write PR descriptions, and write contents. Both gist hosts are TLS-closed, and `api.github.com/gists` answers 403 for `GET`, `POST` and `PATCH` alike.
 - The dropped skill's ntfy channel left with it. `REFERENCE.md` keeps a table of every channel measured and not shipped with the evidence. It records that `pypi.org` and `registry.npmjs.org` would work as carriers but lost on one publish per steer.
-- Root `AGENTS.md` records the venv install under PEP 668 and the `TIKTOKEN_CACHE_DIR` seeding route through `niieani/gpt-tokenizer`, with `maintenance/README.md` carrying the command.
 - `assets/steer.html` gave the user a page: a textarea autosaving 1.2s after typing stops and a sync light driven by DNS-over-HTTPS rather than the provider API. The light samples Google and Cloudflare resolvers, goes amber when they disagree, tells NXDOMAIN apart from no-TXT and falls back to a copyable `curl`.
 - The token stays in browser `localStorage`, and TXT parsing is unit-tested against eleven payload shapes including a 255-octet split and `\DDD` escapes. This sandbox never exercised it, and the section removes it later.
 - The channel took itself down: after 500 queries of one name in 25 minutes, every name under the zone answered NOERROR with no records. Apex and SOA included, while control zones still resolved, and the user removed nothing.
@@ -629,7 +703,6 @@
 - Ntfy's JSON form stays reachable-but-unproven after its empty-topic 500. That fetch surfaced two directives — a `STEER RECEIVED` clause and a ban on agreeing with everything — now clauses in `SKILL.md`.
 - The distribution workflow now carries the skill: `distribute-arena.yml` mirrors tracked `skills/arena-live-steering` files into each target's `.agents/skills` and clears the destination first. It lists files from `git ls-files` and verifies list and bytes after each push.
 - The rules it already delivered said to activate a skill no target had. Tested against a seeded local target: stale file removed, seven files identical, second run committed nothing.
-- A half-applied amendment exposed a gate that cannot see it: the turn-ending steering check existed in `rules/refs/ARENA.md` but not the live file. The parity rule accepts that by construction, since a refs-only addition satisfies it. Mirrored now in both places, with the root byte-identical copy refreshed.
 - `scripts/ntfy_relay.py` gave ntfy continuous capture without sandbox contact: the preview page subscribes to the topic stream and forwards messages to the server with id dedup. It falls back to 10s polling when CORS refuses the stream, and a closed tab costs nothing because ntfy holds 12 hours under `since=all`. Tested live: a POST delivered, a repeat id skipped, an NDJSON keepalive plus titled message delivered one note intact.
 - `skills/arena-live-steering/SKILL.md` measures in bytes rather than `cl100k_base` tokens on instruction: bytes need no tokenizer and survive an unseedable `tiktoken` cache. Tokens are what a model pays — roughly four to one for English prose, so the other rows keep the dependency.
 - The dailies automation drops LiteLLM per its own section 4: the tracked-PR section, its section-1 row, the `Watched` columns and example leave. The prose count falls to ten, sections renumber 5 → 4, and the work order becomes `1, 2, 3` with the expensive audit last.
@@ -651,27 +724,26 @@
 - Stdin would append a newline, and the nsupdate zone comes from the provider, not the last three labels.
 - Verification ran the skill rather than reading it: four repository gates plus `compileall`, and the `validate` workflow on every pushed commit. The DNS transport carries an 18-check assert over read path, change and failure semantics, round trip, digest recovery and the startup probe. Only the provider's write API stays unexercised, documented from its specification rather than a call this sandbox could make.
 
+### maintenance
+
+- No other measured file changes, and `maintenance/check.py` gains the matching `EXPECTED_BUDGETS` key.
+- Root `AGENTS.md` records the venv install under PEP 668 and the `TIKTOKEN_CACHE_DIR` seeding route through `niieani/gpt-tokenizer`, with `maintenance/README.md` carrying the command.
+
 ## 2026-09-15
 
+### rules
+
 - **Deferred resquash lands**: The Python-project scoping and project-first commit convention mirrors from `rules/refs/` into `rules/AGENTS.md` and `rules/ARENA.md`. That covers spec-aligned `<type>[optional scope]: <description>`, the `!` marker and history-preferred types. The FORMAT line moves into `rules/CHATGPT-CUSTOM.txt`.
-- The two parity failures that broke validation leave: a live `Debugging` line and a live `When in doubt` line each duplicating a Constitution rule. `.github/workflows/distribute-arena.yml` targets `nemoe7/wiki` beside the three existing repos.
 - A follow-up hardens the ChatGPT diagram rule with `NEVER ASCII art` and routes the report-turn closer through the question tool. The removed `workflows/init-docs.md` returns fully rewritten, and `rules/ARENA.md` prefers read/write tools over shell for file work.
 - Every addition funds in-change: four core lines and five ARENA lines of constitution/body redundancy and a micro-trim pass. The `-f body=@path` war story cuts to its mechanism. The narrowed ask amendment rides along, closer through the question tool with plain text as fallback, amended in refs first and mirrored compressed.
 - **Deferred**: the `GITHUB` commit-format line in `rules/CHATGPT-CUSTOM.txt` keeps its wording.
 - The parity gate failed on `main`: live `Debugging` held 6 rule lines against refs' 5 (a `MUST grep every caller` repeat). Live `When in doubt` held 2 against 1. The round removes both repeats, and each rule survives once.
 - The core's Code style now scopes all three Ruff lines to Python projects, prefers the project's own `ruff.toml` and drops the E4/E7/E9/F codes. Its Git section leads with the project's convention, fixes the Conventional form and prefers history's types with the spec-mandated `feat`/`fix` provenance kept. ARENA's Style and Git take the same mirror with the provenance trimmed to a parenthetical.
-- Testing and verification lines now name the project's frameworks, fixtures, helpers and conventions in both cores. The new ARENA report-turn rule sits last in Response: refs full two sentences with the plain-text fallback, live one line: `End report turns with an open question via question tool; never mid-task or tool-only.`
 - `rules/refs/CHATGPT-MORE.txt` gains `NEVER ASCII art for diagrams` on the mermaid line, mirrored as `; NEVER ASCII art`. `nemoe7/wiki` joins `REPOS` in `distribute-arena.yml`. The `ARENA_DIST_PAT` PAT needs Contents read/write there before the next dispatch, and access arrived since.
-- `workflows/init-docs.md` rewrites as the universal docs starting point: a tiered catalog — baseline, community bundle, SRS outcome contract, time-axis pair, ADRs and design proposals.
-- Also: Diátaxis quadrants, formal SDD and gated business docs, a no-docs bootstrap, client choice beyond baseline, worked classifications and FAQ dissolution. Plus an unattended-run policy, no third category beyond evidence and open questions, and `llms.txt` kept out as proposal not standard. Its section 10 states the home rule: repo-wide rules live in the project's `AGENTS.md`, session scratch stays out.
 - `rules/refs/ARENA.md` Verification gains the file-tools-over-shell rule with the batching rationale, mirrored live. ARENA.md records the harness limits measured 2026-09-11: 100 cheap calls per block, the ceiling is result tokens not count, and verification runs next message. Hard caps: 10 speech clips and image-search `count <= 5`.
 - Full findings sit in refs, with two compressed lines live.
 - Root `AGENTS.md` takes the durable-amend rule (amend when durable and repo-wide) and the nesting rule (a nearer file wins). It stays out of `rules/refs/AGENTS.md` by decision, so the core keeps its wording and its precedence gap stays open.
 - Refs and live Use gain the delegation rule: durable session rules go in the project's `AGENTS.md`, amendable unless it says otherwise.
-- The harness findings compress to one summary line each in refs and live: 2 CPU workers cap shell parallelism. File work stays on read/write tools. Nesting moves outward — root drops its line for this flat repo and `workflows/init-docs.md` section 10 teaches bootstrapped repos instead.
-- It reverts the unfundable GITHUB line.
-- Not mirrored for size, with refs still holding them: the spec URL in both cores and the `@commitlint/config-conventional` citation in ARENA.
-- **Planning and init-docs retired, squash baseline born**: `skills/planning/` and `workflows/init-docs.md` are gone on request.
 - Two skills leave, and `workflows/` keeps its framework and README without shipping an ownerless workflow. `skills/squash/BASELINE.md` is new, the unsquashed original of that skill with Agent Skills frontmatter, documented in `skills/README.md` as the skill-side counterpart of `rules/refs/`.
 - The four refs baselines amend so Python tooling rules apply to Python projects. The commit convention defers to the project's own before defaulting to Conventional, and the E4/E7/E9/F codes drop as already covered by Ruff defaults.
 - Every amendment lands in `rules/refs/` only — the live mirrors keep pre-amendment wording on request until a later resquash. Refs and live disagree there by design, and the parity check cannot see it, since it compares headings and rule counts.
@@ -683,23 +755,30 @@
 - The Python amendments split one rule into four in `rules/refs/AGENTS.md` — Ruff selection, `ruff.toml` conventions, create-if-missing, pre-commit gates — each opening `For a Python project`. `rules/refs/ARENA.md` scopes its four Ruff lines, and `rules/refs/CHATGPT-CUSTOM.txt` restates FORMAT as `Python projects: use Ruff with its default rule selection`. The project's own config counts as such when present, so an existing `ruff.toml` stays untouched.
 - Testing rules take the same treatment: check with the project's own tests, linters, formatters and builds, and reuse the project's frameworks and fixtures. The discipline stays global while its target is project-scoped. The commit amendment adds one rule ahead of the format: follow the project's convention when it states one.
 - The round fixes the format itself against <https://www.conventionalcommits.org/en/v1.0.0/> — `<type>[optional scope]: <description>`, scope in parentheses, `!` before the colon — replacing the `<type>(scope): <subject>` form these files carried. The type list stays with provenance: the spec mandates only `feat` and `fix`, the rest arrive via Angular through `@commitlint/config-conventional`, so the project's history wins.
-- `workflows/README.md` loses both tables and states in prose that the directory holds no workflows. Its Format section still defines what a new workflow must meet. Root `AGENTS.md` keeps its Workflows section and read-first link.
 - `skills/squash/BASELINE.md` restates the whole skill in complete sentences: unit table, five-step resolution, no silent proxy units and simultaneous budgets with conflicts reported. Also: seven survivors, six safe cuts, six-step method, four structural constraints, funded-in-change and reporting contract. It closes with a `When in doubt` section like the rules baselines.
 - `skills/README.md`'s install example copies `squash` instead of `planning`, and its Format section gains a bullet defining `BASELINE.md` and the amend-then-squash order.
 
+### preview
+
+- Testing and verification lines now name the project's frameworks, fixtures, helpers and conventions in both cores. The new ARENA report-turn rule sits last in Response: refs full two sentences with the plain-text fallback, live one line: `End report turns with an open question via question tool; never mid-task or tool-only.`
+
+### workflows
+
+- The two parity failures that broke validation leave: a live `Debugging` line and a live `When in doubt` line each duplicating a Constitution rule. `.github/workflows/distribute-arena.yml` targets `nemoe7/wiki` beside the three existing repos.
+- `workflows/init-docs.md` rewrites as the universal docs starting point: a tiered catalog — baseline, community bundle, SRS outcome contract, time-axis pair, ADRs and design proposals.
+- Also: Diátaxis quadrants, formal SDD and gated business docs, a no-docs bootstrap, client choice beyond baseline, worked classifications and FAQ dissolution. Plus an unattended-run policy, no third category beyond evidence and open questions, and `llms.txt` kept out as proposal not standard. Its section 10 states the home rule: repo-wide rules live in the project's `AGENTS.md`, session scratch stays out.
+- The harness findings compress to one summary line each in refs and live: 2 CPU workers cap shell parallelism. File work stays on read/write tools. Nesting moves outward — root drops its line for this flat repo and `workflows/init-docs.md` section 10 teaches bootstrapped repos instead.
+- It reverts the unfundable GITHUB line.
+- Not mirrored for size, with refs still holding them: the spec URL in both cores and the `@commitlint/config-conventional` citation in ARENA.
+- **Planning and init-docs retired, squash baseline born**: `skills/planning/` and `workflows/init-docs.md` are gone on request.
+- `workflows/README.md` loses both tables and states in prose that the directory holds no workflows. Its Format section still defines what a new workflow must meet. Root `AGENTS.md` keeps its Workflows section and read-first link.
+
 ## 2026-09-13
 
-- **Automations and Arena enforcement**: A new top-level `automations/` holds `DAILIES.md`, the combined daily monitoring prompt. It rewrites to `rules/refs/GUIDELINES.md` as a self-contained file, then refits for the ChatGPT scheduled task that runs it.
-- The same pull request closes the gap that left `ARENA.md` unenforced: an in-file rule requires an Arena agent to open it before its first edit. A validator gate covers the root copy. The fixed loading premise carries a recorded bootstrap line, and post-sync verification joins the distribution workflow.
-- `automations/DAILIES.md` stays untracked by request, with its size history in Git.
-- **Deferred**: no `automations/` README, no `check.py` validation of `DAILIES.md`, no root read-first link or Automations section. Distribution stays dispatch-only, so a repository between dispatches receives `ARENA.md` only when added to `REPOS`. The ask-discipline set is the voted one: prefer the question tool, ask before implementing, never block an unattended run.
-- The embedded-datetime MUST stays by design with its timing amended on request, and every other opened item closes inside this entry.
+### rules
+
 - The prompt leaves run-on prose for rules without losing one: a `## Use` preamble, a nine-rule `## Constitution`, five numbered sections and a closing `## When in doubt`. The `## Use` preamble says what it is, applies every run and outranks skills and plugins. An explicit run-prompt instruction outranks it, and sections 1–4 feed section 5's shapes.
 - The Constitution carries the embedded `2026-09-12 17:40:00` UTC+8 datetime beside its two rules: update on EVERY RUN before monitoring, leave it when merely edited. Then: actionable-only output, the NEVER on no-change entries, first-run baselines unreported, ephemeral items until purpose-complete, the exact section-5 contract and output-nothing when nothing is actionable.
-- Section 1's 11 items bind to one source each in a two-column table: `MacroDroid` and `Idle Obelisk Miner` to developer channels, `Tailscale` to its changelog, `Arena.ai` to its product changelog. `OpenGym` binds to GitLab releases, the rest to GitHub releases. No URL embeds, because the report's `Source` cell must carry the direct official link found at run time.
-- Section 3's 30 rules keep their order under four `###` groups: Release baseline, Release recommendation, Findings table, Branch audit. The report's 1-to-5 numbering holds.
-- Commit-history-first stays a MUST, commits and diffs stay primary with aggregates only checking, and aggregate file counts stay NEVER. The private-repo rule keeps public-plus-wiki recommendation with NEVER-public.
-- Section 4 keeps two LiteLLM identifiers distinct: merged PR #39157 tracks by head commit `9e7cfee8d7cba55dbf11b61d2d2fdce94c70037e`. The merge commit `59da6e75a50024dcca1af5efa90e4eec340b89b` stays referenceable but untracked, and notification waits on an official stable release.
 - A `simplified:` marker in `## Use` caps scope at the 11 software items and `nemoe7` repositories, and the file is self-contained on request. It keeps the guidelines' shape — Use, Constitution, numbered domains, When in doubt — with no cross-reference or dependency, without them at run time.
 - `rules/ARENA.md` and its ref gain the activation rule in Use, refs first: no platform loads the file. An agent without it in context MUST open it at the repository root before its first edit and say so in one line. The live file compresses to `No platform loads this file: if it is not in your context, MUST open it at the repo root before your first edit and confirm in one line.`
 - The rise funds in-change by two passes that remove words never rules, and root `ARENA.md` re-copies byte-identical.
@@ -708,26 +787,9 @@
 - That also ends the clash with `never assume a filename alone enables loading`. The contents row and Arena section carry the exact bootstrap line for a first message or custom-instructions field and state that delivery is not activation. They split into three paragraphs: condensing, activation and the root copy.
 - Root `AGENTS.md` aligns its Arena pointer — `also follow` becomes `MUST also read and follow... before your first edit`. It leaves both bold clauses untouched.
 - `.github/workflows/distribute-arena.yml` verifies its own work: resolve the source once, fail before the loop when `rules/ARENA.md` is missing. Each push compares `git show HEAD:$DEST` with the source into the existing `sync failed for:` list. The header records dispatch-only scope and that delivery is not activation.
-- A critique pass against the real runtime preceded the refit: the prompt targeted a file-based coding agent. It demanded state a scheduled task lacks, tools it does not have and two sources that publish otherwise.
-- Findings 1, 6–9, 11 and 12 amend here. Findings 4 and 5 answered with facts. Findings 13 and 14 rejected: the file stays self-contained and one combined run.
-- Finding 2 stays as written, and 3 stands disputed with evidence below.
-- State anchors to automation metadata instead of memory: `## Run state and evidence` reads `last_run`, `next_run`, `updated`, `timezone`, `schedule`, `enabled`, `paused_count`, `completed_count`, and sections 1 and 3 say `inside the comparison window`.
-- Evidence then reversed part of the refit: runs sometimes edit the prompt, stamp landings vary, metadata itself errs. The embedded datetime is the running record.
-- The window starts at the later of it and `last_run` and widens on lag or paused growth. A metadata-less run falls back to the embedded stamp alone. Disagreements name themselves in Coverage.
 - The Constitution gains two rules from the critique: metadata beats the embedded datetime when both exist. The second: NEVER state a version, tag, date or SHA absent from content fetched this run or claim a check you did not run. The embedded-datetime rules stay verbatim since a run cannot edit its own prompt, and the precedence line resolves the collision instead of removing either.
 - Coverage becomes the one sanctioned exception to actionable-only: appended after `## 4. Watched`, it carries sources and repos reached, misses with reasons and incomplete sections.
 - Unreachable sources are actionable and must not be suppressed. The stop rule works sections 1, 4, 2, 3 so the expensive audit runs last, outputting what completed rather than inferring gaps.
-- Section 1's eleven URLs were each verified before writing: five GitHub releases pages through the API, `https://tailscale.com/changelog` and both Play listings fetched live. `https://arena.ai/company/product-changelog` came from its page, and the GitLab path for OpenGym builds from release-mirror reports since `gitlab.com` is unreachable — the one unfetched URL here. Headroom stays `unresolved:` with three candidate repos inline, because guessing would put a fabricated source in a monitoring prompt.
-- The two Play rows then became the official version channels the evidence showed exist: MacroDroid's listing shows `Updated on Sep 8, 2026` with no version. Idle Obelisk Miner's carries `v2.2.15` in What's new, so the store reports per-app differ and full history lives off-store.
-- `https://idleobeliskminer.com/patchnotes` publishes release by release (v2.2.21/v2.2.20 in September 2026, v2.2.15/v2.2.14 on 31 August). MacroDroid's forum board `macrodroid-news-and-announcements.3` is the developer's stable `[UPDATE] 5.x` channel, so `version history` wording is gone rather than reworded.
-- Section 5 now defines what it left to the model: empty-run output on a surface that cannot send nothing. Also: a 🔴 High legend for blocking or secret-exposing findings with 🟠 and 🟡 as assigned.
-- One-line meanings for `Ver.`, `Source`, `Evidence`, `Docs`, `Section`, `Why` and `Latest checked version`, plus a closed `Status` enum. Its four example rows use `example.invalid` and `v0.0.0` on purpose. A file a model copies must hold no value it could mistake for a finding.
-- Section 4 gains its completion path: a stable release containing the tracked commit, a revert, or an official not-shipping statement. After that the item stops the check and asks in one line for removal.
-- Section 3 gains the honesty valve: where the connector cannot prove ancestry, CI or PR state, the `Evidence` cell says so instead of inferring. Section 2 scopes to `nemoe7`'s public repositories capped at five recommendations per run.
-- A request amended the stamp timing: `before monitoring` becomes `after the report is written, using this run's actual start time`. A dying run then leaves the previous stamp, and the next re-covers the window instead of swallowing it. The prompt states that a re-covered window may repeat an item, because repeating costs less than missing a release.
-- Section 1's sources now resolve — `headroomlabs-ai/headroom`, `maziggy/bambuddy`, `DuarteSantos8/opengym`. The `unresolved:` row and skip rule are gone, and all eleven items carry one fetched-or-mirrored URL.
-- The `### Tracking a new item` section adds eight embedded rules for onboarding. One: a row with a proven URL, releases preferred over store or feed, the shown version or date as first-run baseline. Two: a stable-channel definition, `ephemeral` marking, `nemoe7` scope, the `simplified:` count matched to the table and removal only on instruction.
-- Two traps encode with the swap: MacroDroid's `Beta Releases` board exists because Play review times are long. The announcements board is the only stable source named. Play's `Updated on` shifted `Sep 11, 2026` at `?hl=en` against `31 Aug 2026` at `?hl=en-SG`, so a listing pinned `&hl=en` may corroborate but never sources a version.
 - The rule files gain the voted ask discipline, refs first and mirrored compressed: Arena's Verification prefers the question tool globally instead of fallback-only. Both cores' Scope require the ask before implementing. The generic core plus `rules/CHATGPT-CUSTOM.txt` carry the carve-out that unattended runs record the question, assume and proceed.
 - The carve-out is absent from `rules/ARENA.md` by design: the core carries it under Arena's always-loaded `AGENTS.md`, and Arena has no unattended surface.
 - The record rejected the broader alternative: stop-and-ask before every edit, command and commit would contradict the materiality threshold and assume-and-state branch. It would deadlock unattended runs, turn one-line fixes into two-turn exchanges and wear the signal out. The observed failure — improvising past material ambiguity — is what the timing clause addresses.
@@ -739,15 +801,11 @@
 - So the field binds unconditional instructions across topics, deweights judgment triggers when unrelated and carries work rules where needed.
 - That result paid the 2026-09-13 ponytail entry's deferred debt: the seven-rung ladder replaces field one's four-step ladder in `Custom Instructions`. The three MUST upgrades plus the reflex caveat join a `WORK:` label in `More about you`. They are: propose smaller scope, leave one runnable check, grep every caller.
 - The caveat names the field the rungs live in rather than saying above, because the halves paste into different boxes. Both refs baselines take full wording first.
-- `maintenance/check.py`'s parity gate caught a placement error in this round: the unattended-run rule sat live in Constitution while refs has it in Scope. The rule moved to Scope, because a live file may merge lines but never add rules.
 - A request renamed the two ChatGPT files to name their fields: `rules/CHATGPT.txt` → `rules/CHATGPT-CUSTOM.txt`, `rules/CHATGPT_RESPONSE.txt` → `rules/CHATGPT-MORE.txt`, refs baselines with them. Eight references followed across `maintenance/check.py`, `README.md`, root `AGENTS.md`, `rules/README.md` and `rules/refs/README.md`. Older entries here keep the names they were accurate under.
 - Ten more core rules then moved into `rules/CHATGPT-MORE.txt` once canaries proved the field binds: chat-outranks precedence, open with the result and the full debug cycle. Then: never lazy about understanding, build full when insisted, follow repo docs, prefer deletion and boring, check requirements before finishing. Report skipped alternatives with add-when triggers and `simplified:` corner-cut comments.
 - The precedence rule sits above both blocks, response rules join `RESPONSE:` and work rules join `WORK:`. Poor-value-per-character candidates stay out — plan MUSTs, `ruff.toml` specifics, review-the-diff, cohesive modules, merge and scope-reuse.
 - Three nits closed: `rules/AGENTS.md` capitalizes `NEVER block an unattended run` to match refs and its caps-for-irreversible rules convention at zero token cost. Root `AGENTS.md` gains `## Automations` beside Rules, Skills and Workflows, stating that prompts are scheduler-owned self-contained text running on web search and the GitHub connector.
-- It carries no repo-edit reach. `automations/DAILIES.md` relabels its stamp `Last completed run started (UTC+8, Asia/Manila)` so no editor rewrites it to now and destroys the coverage window.
-- Two items defer by choice: `automations/README.md`, worth writing once a second automation exists, and the narrow `DAILIES.md` validator. Its scope: `simplified:` count against section-1 rows, section-5 names, one URL per row, parseable stamp. Later cost and rationale dropped it.
 - `distribute-arena.yml` stays dispatch-only by decision, because a cron would ship a broken `rules/ARENA.md` to every target and compare-before-push gives idempotency not correctness.
-- A correction fixed the runtime facts on account, superseding what `DAILIES.md` and root `AGENTS.md` claimed: the task runs at most daily plus on request. The GitHub connector reads and writes this account's repository, and a terminal with local files exists when the task chooses it. The old `no shell and no git` was wrong, and `no repo access` too absolute.
 - No rule followed, because pushes, branches and PRs are already gated by `rules/CHATGPT-CUSTOM.txt` on every request. Only documentation changed, reports stay in the chat response, and `automations/` stays ungated and unbudgeted. A gate would watch the repo copy, not the live paste, and its editor edits only itself.
 - `rules/CHATGPT-MORE.txt` now says `Mermaid diagrams` rather than the bare name — `Default to Mermaid diagrams for pipelines/flows`. Refs carries the explanation (a fenced `mermaid` block a supporting surface renders as a picture), and the core's line still reads `Default to mermaid for pipelines, diagrams, and flows` per the amendment's scope.
 - `rules/COMMIT_SPEC.txt` became `rules/COMMIT-SPEC.txt` with its baseline in lockstep — the hyphen being the repository's other multiword separator. Seven referencing places across five files followed: `EXPECTED_BUDGETS`, `PLAIN_PAIRS`, the README table, three `rules/README.md` spots and `rules/refs/README.md`.
@@ -760,34 +818,69 @@
 - The full seven-rung ladder lands for the first time. `rules/ARENA.md` gains a client-unreliability clause.
 - **Deferred**: `rules/CHATGPT.txt` stays untouched — no ultra content to remove.
 - Per-part decisions land in `rules/refs/` first, then mirror compressed: scope-challenge returns as a MUST with the how-never-what guardrail. Shaping and decision heuristics return whole as `Prefer` lines. Grep-callers returns as the hard rule with `Fix once where all callers route through` and its Constitution echo.
-- Skipped/add-when reporting returns soft as `Consider` in both Responses.
-- The ladder is new to the rule files: both refs carry all seven rungs in full upstream wording. The rungs: needed at all, already here, stdlib, native feature, installed dependency, one line, minimum code, plus the reflex-not-a-research caveat and the two-rungs-take-the-higher tie-break. Live compresses to one enumerated list and one caveat.
 - Rung 4's example stays prose because MD033 forbids inline HTML under the markdownlint defaults covering `rules/`.
 - `rules/ARENA.md` and its ref gain the client-unreliability clause beside the garbled-message rule: the client resends, truncates and drops, and empties tools that ran. A repeat is a resend: answer what is pending, restate completed work in one line, never treat it as authorization to redo or widen.
 - Root `ARENA.md` re-copies byte-identical. `rules/CHATGPT.txt` and its ref stay unchanged, greps for the ten ultra terms finding zero matches.
 - Removals: `skills/ponytail/` and `skills/frontend-design/` leave with their references: three `skills/README.md` tables and the root README line. `web-interface-guidelines`' pointer now reads "in place of design work".
 - Historical CHANGELOG mentions stay as the record of incorporation, when and at what cost.
 
+### preview
+
+- Section 1's 11 items bind to one source each in a two-column table: `MacroDroid` and `Idle Obelisk Miner` to developer channels, `Tailscale` to its changelog, `Arena.ai` to its product changelog. `OpenGym` binds to GitLab releases, the rest to GitHub releases. No URL embeds, because the report's `Source` cell must carry the direct official link found at run time.
+- Section 3's 30 rules keep their order under four `###` groups: Release baseline, Release recommendation, Findings table, Branch audit. The report's 1-to-5 numbering holds.
+- Commit-history-first stays a MUST, commits and diffs stay primary with aggregates only checking, and aggregate file counts stay NEVER. The private-repo rule keeps public-plus-wiki recommendation with NEVER-public.
+- Section 4 keeps two LiteLLM identifiers distinct: merged PR #39157 tracks by head commit `9e7cfee8d7cba55dbf11b61d2d2fdce94c70037e`. The merge commit `59da6e75a50024dcca1af5efa90e4eec340b89b` stays referenceable but untracked, and notification waits on an official stable release.
+- Section 1's eleven URLs were each verified before writing: five GitHub releases pages through the API, `https://tailscale.com/changelog` and both Play listings fetched live. `https://arena.ai/company/product-changelog` came from its page, and the GitLab path for OpenGym builds from release-mirror reports since `gitlab.com` is unreachable — the one unfetched URL here. Headroom stays `unresolved:` with three candidate repos inline, because guessing would put a fabricated source in a monitoring prompt.
+- The two Play rows then became the official version channels the evidence showed exist: MacroDroid's listing shows `Updated on Sep 8, 2026` with no version. Idle Obelisk Miner's carries `v2.2.15` in What's new, so the store reports per-app differ and full history lives off-store.
+- `https://idleobeliskminer.com/patchnotes` publishes release by release (v2.2.21/v2.2.20 in September 2026, v2.2.15/v2.2.14 on 31 August). MacroDroid's forum board `macrodroid-news-and-announcements.3` is the developer's stable `[UPDATE] 5.x` channel, so `version history` wording is gone rather than reworded.
+- Section 5 now defines what it left to the model: empty-run output on a surface that cannot send nothing. Also: a 🔴 High legend for blocking or secret-exposing findings with 🟠 and 🟡 as assigned.
+- One-line meanings for `Ver.`, `Source`, `Evidence`, `Docs`, `Section`, `Why` and `Latest checked version`, plus a closed `Status` enum. Its four example rows use `example.invalid` and `v0.0.0` on purpose. A file a model copies must hold no value it could mistake for a finding.
+- Section 4 gains its completion path: a stable release containing the tracked commit, a revert, or an official not-shipping statement. After that the item stops the check and asks in one line for removal.
+- Section 3 gains the honesty valve: where the connector cannot prove ancestry, CI or PR state, the `Evidence` cell says so instead of inferring. Section 2 scopes to `nemoe7`'s public repositories capped at five recommendations per run.
+- A request amended the stamp timing: `before monitoring` becomes `after the report is written, using this run's actual start time`. A dying run then leaves the previous stamp, and the next re-covers the window instead of swallowing it. The prompt states that a re-covered window may repeat an item, because repeating costs less than missing a release.
+- Section 1's sources now resolve — `headroomlabs-ai/headroom`, `maziggy/bambuddy`, `DuarteSantos8/opengym`. The `unresolved:` row and skip rule are gone, and all eleven items carry one fetched-or-mirrored URL.
+- The `### Tracking a new item` section adds eight embedded rules for onboarding. One: a row with a proven URL, releases preferred over store or feed, the shown version or date as first-run baseline. Two: a stable-channel definition, `ephemeral` marking, `nemoe7` scope, the `simplified:` count matched to the table and removal only on instruction.
+- Two traps encode with the swap: MacroDroid's `Beta Releases` board exists because Play review times are long. The announcements board is the only stable source named. Play's `Updated on` shifted `Sep 11, 2026` at `?hl=en` against `31 Aug 2026` at `?hl=en-SG`, so a listing pinned `&hl=en` may corroborate but never sources a version.
+- A correction fixed the runtime facts on account, superseding what `DAILIES.md` and root `AGENTS.md` claimed: the task runs at most daily plus on request. The GitHub connector reads and writes this account's repository, and a terminal with local files exists when the task chooses it. The old `no shell and no git` was wrong, and `no repo access` too absolute.
+- Skipped/add-when reporting returns soft as `Consider` in both Responses.
+- The ladder is new to the rule files: both refs carry all seven rungs in full upstream wording. The rungs: needed at all, already here, stdlib, native feature, installed dependency, one line, minimum code, plus the reflex-not-a-research caveat and the two-rungs-take-the-higher tie-break. Live compresses to one enumerated list and one caveat.
+
+### automations
+
+- **Automations and Arena enforcement**: A new top-level `automations/` holds `DAILIES.md`, the combined daily monitoring prompt. It rewrites to `rules/refs/GUIDELINES.md` as a self-contained file, then refits for the ChatGPT scheduled task that runs it.
+- The same pull request closes the gap that left `ARENA.md` unenforced: an in-file rule requires an Arena agent to open it before its first edit. A validator gate covers the root copy. The fixed loading premise carries a recorded bootstrap line, and post-sync verification joins the distribution workflow.
+- `automations/DAILIES.md` stays untracked by request, with its size history in Git.
+- **Deferred**: no `automations/` README, no `check.py` validation of `DAILIES.md`, no root read-first link or Automations section. Distribution stays dispatch-only, so a repository between dispatches receives `ARENA.md` only when added to `REPOS`. The ask-discipline set is the voted one: prefer the question tool, ask before implementing, never block an unattended run.
+- The embedded-datetime MUST stays by design with its timing amended on request, and every other opened item closes inside this entry.
+- A critique pass against the real runtime preceded the refit: the prompt targeted a file-based coding agent. It demanded state a scheduled task lacks, tools it does not have and two sources that publish otherwise.
+- Findings 1, 6–9, 11 and 12 amend here. Findings 4 and 5 answered with facts. Findings 13 and 14 rejected: the file stays self-contained and one combined run.
+- Finding 2 stays as written, and 3 stands disputed with evidence below.
+- State anchors to automation metadata instead of memory: `## Run state and evidence` reads `last_run`, `next_run`, `updated`, `timezone`, `schedule`, `enabled`, `paused_count`, `completed_count`, and sections 1 and 3 say `inside the comparison window`.
+- Evidence then reversed part of the refit: runs sometimes edit the prompt, stamp landings vary, metadata itself errs. The embedded datetime is the running record.
+- The window starts at the later of it and `last_run` and widens on lag or paused growth. A metadata-less run falls back to the embedded stamp alone. Disagreements name themselves in Coverage.
+- It carries no repo-edit reach. `automations/DAILIES.md` relabels its stamp `Last completed run started (UTC+8, Asia/Manila)` so no editor rewrites it to now and destroys the coverage window.
+- Two items defer by choice: `automations/README.md`, worth writing once a second automation exists, and the narrow `DAILIES.md` validator. Its scope: `simplified:` count against section-1 rows, section-5 names, one URL per row, parseable stamp. Later cost and rationale dropped it.
+
+### maintenance
+
+- `maintenance/check.py`'s parity gate caught a placement error in this round: the unattended-run rule sat live in Constitution while refs has it in Scope. The rule moved to Scope, because a live file may merge lines but never add rules.
+
 ## 2026-09-12
 
+### rules
+
 - **September amendments land**: Every September amendment now lands, including 4 and 7 once ChatGPT opened its second custom-instruction field. The instruction set aligned to `rules/refs/GUIDELINES.md` behind a full audit, two CI gates and a validator pass.
-- Deferred: nothing.
 - `rules/CHATGPT.txt` takes amendments 1, 2, 3, 5, 6 and 8 inside its 1,500-char limit: RESPONSE avoids unnecessary prose while allowing detail when required. Mermaid becomes the default for pipelines/diagrams/flow with `flowchart TB`, short labels and no wide rows. SCOPE covers requested work plus strictly necessary implementation with `NEVER add tests unless requested/needed to verify`.
 - CODE names a lazier alternative only when relevant, and GITHUB prints the planned final commit list.
 - Amendments 4 and 7 define material ambiguity covers readings that could change behavior, data, interfaces, scope or outcome. Non-material resolves by the most reasonable assumption, stated when material. They defer from ChatGPT, which keeps `Ask only on material ambiguity.` while `rules/AGENTS.md`, `rules/ARENA.md` and all refs take them in full.
 - Add them when ChatGPT spare frees up.
 - `rules/AGENTS.md` gains the Arena clause (MUST also read and follow the repo's `ARENA.md`, supplements, NEVER replaces) plus the generally applicable amendments. These: strict-necessary scope, the test gate, material-ambiguity definition, relevance-conditioned lazier alternative, Mermaid where the surface renders it and `no unnecessary prose; detail when the task or user requires`.
 - `rules/ARENA.md` mirrors those amendments and adds two Arena-only clauses: Verification requires stating a question batch's total with Q1/Q2 labels. NEVER add one without restating the total.
-- Verification also ends blocks with an open prompt. Response requires reporting changes in the final reply at a high level after the task, not during execution.
-- Git's bold clause reads `print the planned final commit list`. Mermaid stays banned because Arena cannot render it.
 - Root `ARENA.md` re-copies byte-identical, matching what `distribute-arena.yml` pushes. The round amended `rules/refs/` first per Baselines: `refs/AGENTS.md`, `refs/ARENA.md` and `refs/CHATGPT.txt` hold full uncompressed wording, including `before committing` and `no unnecessarily wide rows` where live compresses. Refs/CHATGPT omits 4 and 7 so its baseline mirrors its live file.
 - `rules/README.md` renames the printed list in the Emphasis note and commit-disciplines table so the spec stays truthful about amendment 6. `rules/CLINE.md`, `rules/COMMIT_SPEC.txt` and root `AGENTS.md` stay untouched: the overlay is platform-specific and the spec carries no list rule. The Arena clause belongs to the distributed core by decision.
 - Every cut removes illustration only with rules kept whole in refs.
-- Style specs reorder on request across AGENTS, ARENA, root and both refs. The `ruff.toml` spec reads Ruff defaults first, then indent, lint ignores and safe-fix extensions with `required-version` last. Markdownlint stays `defaults + MD060, MD013 off` after naming MD007 proved redundant against its default indent of 2.
-- `ruff.toml` and `.markdownlint-cli2.jsonc` stay unchanged.
 - `rules/refs/GUIDELINES.md` is new: the user's `Guidelines: writing an AGENTS.md` saved verbatim as the audit standard, no provenance header per direction, in eight sections. They cover what AGENTS.md is, the threat model, structure, rules that survive, precedence and scope, size and economy, skeleton and checklist. It stays a reference, never a baseline: indexed in `rules/refs/README.md`, `rules/README.md`, root `README.md` and root `AGENTS.md`'s read-first list, with markdownlint at 8 files and 0 issues.
 - A request removes the guidelines' `Lint and test` section: the STE CI linter, read-as-the-agent-sees-it check and compaction probes go. `Skeleton` and `Checklist` renumber 8/9 → 7/8, and their two orphaned checklist items go with them. The file lands 81 lines from 90.
-- CI plans no STE linter, and the gates stay markdownlint plus `maintenance/check.py`.
 - The round clarifies the refs workflow where it contradicted itself. Amend `rules/refs/` first, mirror the amendment compressed into the live file, then squash that live file under budget. Refs stay unsquashed as baseline.
 - That replaces `amend refs and the live rule together` in maintenance item 10 and Baselines, stated in `rules/refs/README.md`, root `AGENTS.md` and root `README.md`.
 - `rules/refs/AGENTS.md` audited to the skeleton: a leading `## Use` (what it is, covers all code agents and sessions, outranks skills and plugins, explicit chat instruction outranks it). Its Arena clause names `ARENA.md` as collision winner for push and PR. It gains a 9-rule `## Constitution` restating existing rules one per line with none invented, and a closing `## When in doubt`.
@@ -795,7 +888,6 @@
 - Guideline 4.1 reflows `Debugging`, `Testing` and `Code style` from paragraphs to bullets in refs and live with live `Review` following. It fixes the stray blank line splitting `Engineering`. Guideline 4.7 rewrites seven non-dangerous negations positively while NEVER stays on irreversible, dangerous and honesty rules.
 - The NEVER list: dependency for a few lines, trust-boundary validation, data-loss handling, security, accessibility, inventing an API and arbitrary fallback. Then hidden failure, unrevised assumption, weakened test, unrun-check claims and unasked push or PR. `rules/README.md`'s Emphasis note and `rules/refs/README.md` record the split.
 - Root `AGENTS.md` takes the same skeleton and ends its contradiction with `rules/ARENA.md`: the `Never push or open a pull request unless asked` clause drops on request. `## Use` states Arena's handling — including push and PR — wins there. It gains an 8-line `## Constitution` and a `## Verification` listing the four gates in run order plus what `validate.yml` runs.
-- It gains `## Repository type`, `## Style`, `## Boundaries` and `## When in doubt`, keeping every repository-specific fact from read-first list to the two bold clauses. Its markdownlint claim matches the configured globs.
 - The hold on `rules/refs/ARENA.md` and `rules/refs/CLINE.md` lifts on request and both take the skeleton. `rules/CHATGPT.txt` still cannot hold `Use`, Constitution or `When in doubt` headings inside 1,500 chars, so it carries one rule per plain line. A ceiling, not an oversight.
 - The full guideline audit found and fixed the violations. Guideline 4.1 ranked largest: refs ARENA held one 1,790-char line in a 12-line file, refs AGENTS a 544-char line, refs CHATGPT five long lines.
 - So all files are one rule per line: refs move 56 → 167 lines (ARENA), 97 → 135 (AGENTS) and 9 → 30 (CHATGPT). Live mirrors compressed.
@@ -806,38 +898,54 @@
 - It agrees with ARENA's existing `--force-with-lease` rule and lands in AGENTS, ARENA, root copies and root `AGENTS.md`. It skips `rules/CHATGPT.txt` per direction while CLINE inherits and COMMIT_SPEC stays a format reference. `rules/README.md` records it in the Arena note and commit-disciplines table.
 - `rules/CLINE.md` and its ref drop `## MCPs` on request — `tokensave`, `context7`, `memory` — taking the orphaned `tokensave` mention and the `Use only if installed/configured; NEVER invent tool names` lead. `rules/README.md` Formatting loses its stale markdownlint claim, since the globs lint 8 files including all five in `rules/refs/`.
 - Full audit against `rules/refs/GUIDELINES.md` and this repository's specification, every finding grepped or measured rather than recalled. It also caught the constitution inversion this pull request introduced. Refs AGENTS held 11 compound lines where live carried 14 atomic rules.
-- The three — `Stage only task-related files; ...`, `Fix root causes, not symptoms; ...` and `Ground every choice ...` — each split in two per guideline 4.1.
 - The round fixes refs workflow wording in six places. The phrase `copy the amended baseline onto its live counterpart, then squash` becomes `mirror the amendment into its live counterpart in compressed form, then squash that file` across `rules/README.md`, `rules/refs/README.md`, root `AGENTS.md` and root `README.md`.
 - README Compression item 4 rescripts to the squash step: keep `the section headings and order the refs baseline already has`. Restructuring is an amendment made in refs first. The old wording contradicted it against this round's own renames (`Repo type`, `Markdown`, `Lightweight repo`) and new sections.
 - The same pass disambiguates the `squash` skill as an extraction of the compression rules, not of the guidelines.
 - Emphasis cap scoped and inventory fixed in `rules/README.md`: two bold clauses apply to deployed rule files and refs baselines, not spec, skills or workflows. The inventory names what is actually bold: honesty rule, planned final commit list, `STOP` and self-assignment ban, two markdownlint settings. The redundant MD007 pin leaves `.markdownlint-cli2.jsonc` with its bolded clause, markdownlint staying clean over all 8 files.
 - MD060 sits at default `any`, MD007 at default indent 2.
 - `rules/refs/README.md` names the guidelines parts describing a platform this repository does not use — section 1.2's Kilo loading and `<system-reminder>` wrapping, section 2.1's `kilo/enforce-rules-plugin/` pointer. The guidelines text stays verbatim per direction.
-- `maintenance/check.py` gains two gates, each proven by breaking the invariant. First: markdownlint scope recomputed from `.markdownlint-cli2.jsonc` (globs minus ignores, `/**` patterns expanded recursively since `Path.glob` resolves trailing `**` to directories only) against the recorded list and documented counts.
-- Second: refs/live parity requires identical sections in order with each live section at or below its refs rule lines. The same relation holds for CHATGPT and COMMIT_SPEC.
 - The lint scope went stale by hand twice, and the parity gate reproduces the inversion that prompted it. A third gate — root ARENA byte identity — came and went on direction, since `cp rules/ARENA.md ARENA.md` needs no validator.
-- `.github/workflows/validate.yml` installs Ruff at the version `ruff.toml` pins, parsed from that file, and runs `ruff check.` then `ruff format --diff.` after the README maintenance commit. The rules mandated both gates while CI enforced neither. A style regression once merged green, and this round explicitly authorized adding CI.
 - Validation lives in root `AGENTS.md`, `maintenance/README.md` and a `rules/README.md` note. No rule-file budget changed, the only content edit being the unbudgeted refs constitution split.
 - Two audit findings resolve on direction so they stay closed: ARENA.md must keep duplicating the core because Arena loads it without `AGENTS.md`. It stands alone rather than overlaying. Root `ARENA.md` stays a plain copy refreshed by `cp` after every amendment for `distribute-arena.yml` to push.
-- New ARENA rule on request: report and audit artifacts mark each finding's disposition where recorded, striking through resolved findings. A re-read then shows what stands.
 - Full wording sits in refs, compressed live and root. `rules/ARENA.md` gains it with constitution 11 → 8 rules kept for irreversible, honesty-bearing or historically violated duty.
 - The three dropped headlines stay in body sections, and all 11 remain in refs. A lossless squash funds the rest: Use tail, one open-prompt example, the ladder's `helper/pattern already here`, the Ruff frame, `is a violation, not an oversight` and the PR-body fold. Then the `@/tmp/pr_body.md` example, the PATCH re-fetch, `always commit locally` and the merge rule's redundant tail.
 - `workflows/init-docs.md` section 10 rewrites to this repository's skeleton so it no longer ships a template failing its own standard. The standard: Use with scope and precedence, a constitution, one testable rule per line, exact commands, a closer, plain requirements instead of mixed modals. A request reverted its funding squash.
 - Templates keep their readable form. README Compression marks the file an accepted baseline rather than deferred debt.
 - Remaining audit findings record as recommendations: ChatGPT amendments 4 and 7, the missing `skills/web-interface-guidelines` license and persona-style rules marked deliberate. ARENA emphasis lands on the one violated rule. Also a three-line CHANGELOG summary convention and the two session-failure rules that belong in ARENA alone as Arena-client behaviors.
 - ChatGPT then uses both fields: the RESPONSE block moves to `rules/CHATGPT_RESPONSE.txt`. Refs carry each field uncompressed and `maintenance/check.py` measures, parity-checks and enforces the 1,500-char limit on both.
-- `skills/web-interface-guidelines` bundles its upstream license — `LICENSE.txt`, MIT, Copyright (c) 2025 Vercel Labs, fetched upstream, declared in frontmatter. `maintenance/check.py` fails any skill recording `metadata.upstream` without `license` or with a missing file, verified by deletion. `skills/README.md` loses its now-false no-bundled-license claim.
 - `rules/ARENA.md` gains the two Arena-only session-failure rules under Verification: question tool failing or partial falls back to plain text with same labels and totals. Duplicated or disowned messages receive a one-line confirmation before acting, amended in refs first. ARENA emphasis moves to the rule that failed: `Report honestly...` keeps its `NEVER` and loses bold, while `NEVER use the -f body=@<path> form; pass --arg-built JSON on stdin` gains it, with the inventory following.
 - This round records persona rules as deliberate, not rewritten: `Concise, direct, practical, accurate`, `Write clear, readable code`, `Never lazy about understanding`, `Criticize all` state voice. Per guidelines 2.3 and 4.8. `rules/README.md` gains a Persona rules subsection so audits read them as marked corner cuts.
 - This changelog adopts the summary convention recorded in its header, and entries below 2026-09-12 predate it and keep their form.
 
+### preview
+
+- Verification also ends blocks with an open prompt. Response requires reporting changes in the final reply at a high level after the task, not during execution.
+- Git's bold clause reads `print the planned final commit list`. Mermaid stays banned because Arena cannot render it.
+- The three — `Stage only task-related files; ...`, `Fix root causes, not symptoms; ...` and `Ground every choice ...` — each split in two per guideline 4.1.
+- New ARENA rule on request: report and audit artifacts mark each finding's disposition where recorded, striking through resolved findings. A re-read then shows what stands.
+
+### workflows
+
+- `.github/workflows/validate.yml` installs Ruff at the version `ruff.toml` pins, parsed from that file, and runs `ruff check.` then `ruff format --diff.` after the README maintenance commit. The rules mandated both gates while CI enforced neither. A style regression once merged green, and this round explicitly authorized adding CI.
+
+### maintenance
+
+- Style specs reorder on request across AGENTS, ARENA, root and both refs. The `ruff.toml` spec reads Ruff defaults first, then indent, lint ignores and safe-fix extensions with `required-version` last. Markdownlint stays `defaults + MD060, MD013 off` after naming MD007 proved redundant against its default indent of 2.
+- `ruff.toml` and `.markdownlint-cli2.jsonc` stay unchanged.
+- CI plans no STE linter, and the gates stay markdownlint plus `maintenance/check.py`.
+- It gains `## Repository type`, `## Style`, `## Boundaries` and `## When in doubt`, keeping every repository-specific fact from read-first list to the two bold clauses. Its markdownlint claim matches the configured globs.
+- `maintenance/check.py` gains two gates, each proven by breaking the invariant. First: markdownlint scope recomputed from `.markdownlint-cli2.jsonc` (globs minus ignores, `/**` patterns expanded recursively since `Path.glob` resolves trailing `**` to directories only) against the recorded list and documented counts.
+- Second: refs/live parity requires identical sections in order with each live section at or below its refs rule lines. The same relation holds for CHATGPT and COMMIT_SPEC.
+- `skills/web-interface-guidelines` bundles its upstream license — `LICENSE.txt`, MIT, Copyright (c) 2025 Vercel Labs, fetched upstream, declared in frontmatter. `maintenance/check.py` fails any skill recording `metadata.upstream` without `license` or with a missing file, verified by deletion. `skills/README.md` loses its now-false no-bundled-license claim.
+
+- Deferred: nothing.
+
 ## 2026-09-11
 
+### rules
+
 - `rules/ARENA.md` replaces Use with the Arena-agent preamble (every chat, task, first message, explicit-override `confirm`) and appends Engineering per-case dependency approval. Verification gains `grep-verify` with scripted splice and repo validation entrypoints. Style takes `ruff.toml` conventions plus Ruff gates.
-- Git takes local-only report commits with REST PR updates and squashed-timeline bodies, and Deliverables regenerates doc sections.
-- Added `ruff.toml` with exactly the amended conventions
 - `rules/ARENA.md` gains criticism duties (`Criticize everything: docs may be stale; code may be wrong`) and the local-only report workflow with `NEVER push` and next-turn undo. It compresses in two squash passes: preamble, punctuation, Engineering, Verification, Style, Git, Deliverables and pass-2 trims.
-- Pass 3 found no safe cuts. `.gitignore` gains `reports/` so artifacts live in an ignored dir, force-added to a local-only end-of-turn commit for the diff viewer.
 - `rules/ARENA.md` fixes the REST PATCH snippet (`--arg title <title>`, `repos/<owner>/<repo>` prefix), sets criticism venue to chat and reports, and caps reports at MD013 120. `rules/AGENTS.md` drops the squashed commit list (generic agents commit directly) and gains the Ruff style rules.
 - `rules/COMMIT_SPEC.txt` drops its MUST-print clause, and ChatGPT keeps its list.
 - `rules/CHATGPT.txt` strengthens inside 1,500 chars: NEVER mermaid unless asked, NEVER filler or essays, spelled-out Conventional `<type>(scope): subject`. `maintenance/check.py --update` manages the README date (UTC) with timezone-aware DTZ011 fixed. `rules/apply.py` gains `--yes`/`--dry-run` and a missing-source guard, and `apply.bat` forwards args.
@@ -855,20 +963,36 @@
 - `rules/refs/README.md` drops the `deleted-rules` audit-trail sentence per direction with baselines unchanged.
 - Fixed `rules/refs/AGENTS.md`: dropped the MUST-print bullet the rebuild resurrected. Generic agents are exempt, the deletion stands, and the baseline matches its own methodology note.
 
+### preview
+
+- Git takes local-only report commits with REST PR updates and squashed-timeline bodies, and Deliverables regenerates doc sections.
+- Added `ruff.toml` with exactly the amended conventions
+- Pass 3 found no safe cuts. `.gitignore` gains `reports/` so artifacts live in an ignored dir, force-added to a local-only end-of-turn commit for the diff viewer.
+
 ## 2026-09-10
 
+### rules
+
 - The squash trims `replace a convention` to `convention`, `behavior or tests` to `tests`, `corrected` to `fixed`, `per completed feature` to `per change`, `root cause not the symptom` to `root cause` and dropping `step-by-step`. `rules/ARENA.md` condenses the same rule as `Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible`, gaining the completeness half the core had.
-- The `workflows/` directory integrates: a new `workflows/README.md` index describes the portable single-file format. Root README gains a layout bullet, root `AGENTS.md` a read-first link. The Workflows section gains updated validator notes, the rules spec gains a contents row with a selection table, and `maintenance/README.md` describes the new checks.
-- `maintenance/check.py` checks the workflows listing against `workflows/README.md`, requires a `description` frontmatter field per workflow, checks internal links in the index, and budgets `workflows/init-docs.md` in `cl100k_base` tokens. The lightweight-repo rule now prohibits further CI workflows, since the old wording read as banning the new directory. No budgeted file changed.
 - Added a disabled `distribute-arena` workflow template (`.github/workflows/distribute-arena.yml.disabled`): manual dispatch pushes `rules/ARENA.md` to each listed repo over HTTPS with a short-expiry `ARENA_DIST_PAT`. It amends the prior sync commit when HEAD is one and commits only on change. The default list holds `nemoe7/clankers`, a dispatch input overrides it, and renaming to `.yml` enables it.
 - Squashed `workflows/init-docs.md` over four passes, merging same-subject bullets and cutting filler with headings, order, lists and code blocks. Every rule, condition and identifier stays preserved. `rules/ARENA.md` gains a handoff clause in Workspace: MUST maintain a handoff document (goal, done, next, key files/decisions) updated as work lands.
-- The handoff clause pins its lifecycle (NEVER commit or gitignore: untracked, local, downloadable). Scope's ask rule becomes MUST stop and ask on deviating reasoning or material ambiguity only.
-- The document then names its contents (goal, requirements fulfilled, done, next, decisions, key files) and must resume work without re-asking.
 - Scratched the handoff document: `rules/ARENA.md` now always pushes the branch and keeps a PR open so work survives limits. It folds fixes into the squashed atomic timeline, matches the PR body to it and rewrites remotes with `--force-with-lease` never plain `--force`. The rules spec records the intentional push/PR divergence from the core.
 - `rules/ARENA.md` now disregards never-push rules (Arena controlled edits make pushing safe, judged safe for now) and NEVER merges the PR until authorized.
 - Gates stay green.
 
+### preview
+
+- The handoff clause pins its lifecycle (NEVER commit or gitignore: untracked, local, downloadable). Scope's ask rule becomes MUST stop and ask on deviating reasoning or material ambiguity only.
+- The document then names its contents (goal, requirements fulfilled, done, next, decisions, key files) and must resume work without re-asking.
+
+### maintenance
+
+- The `workflows/` directory integrates: a new `workflows/README.md` index describes the portable single-file format. Root README gains a layout bullet, root `AGENTS.md` a read-first link. The Workflows section gains updated validator notes, the rules spec gains a contents row with a selection table, and `maintenance/README.md` describes the new checks.
+- `maintenance/check.py` checks the workflows listing against `workflows/README.md`, requires a `description` frontmatter field per workflow, checks internal links in the index, and budgets `workflows/init-docs.md` in `cl100k_base` tokens. The lightweight-repo rule now prohibits further CI workflows, since the old wording read as banning the new directory. No budgeted file changed.
+
 ## 2026-09-09
+
+### rules
 
 - `rules/AGENTS.md` Engineering carries ponytail at `lite` intensity inline: the ladder (needed at all, existing helper/pattern, stdlib, native feature, installed dependency, one line, minimum code). Build-what-is-asked follows with the lazier alternative named in one line. Also: the never-lazy caveat, the never-simplify list (trust-boundary validation, data-loss error handling, security, accessibility), a `simplified:` corner-cut comment and no-unrequested-abstraction rules.
 - No rule file loads or names the skill: the marker is `simplified:` not `ponytail:`. The spec's skill table records that the rules no longer load it. The skill stays in `skills/ponytail/` for `full` or `ultra`.
@@ -879,7 +1003,6 @@
 - `rules/ARENA.md` tracks the core again: ponytail-lite ladder, never-simplify list and `simplified:` comment. It gains an Arena rule to work in passes and ask for feedback with the question tool. It asks before another round and ends with an open question.
 - The squash merges General, Scope and Verification lists into paragraphs.
 - Fixed stale documentation: `maintenance/` is not dependency-free: root README, spec and `maintenance/README.md` state `check.py` needs `markdown-it-py` and `tiktoken` with an install command. The installer is `rules/apply.py` not `apply_rules.py`. With `.github/workflows/validate.yml` existing, the no-CI claims go and the lightweight rule reads `no further workflows`.
-- The workflow stops hardcoding lint globs, leaving `.markdownlint-cli2.jsonc` the single lint-scope definition, and drops the dead `templates/` exclusion.
 - Every rule file marks hard rules with `MUST`/`NEVER` and rations bold to exactly two clauses: the honesty rule and the squashed commit list. In CLINE the two are stopping after a requested command and never self-assigning. `rules/AGENTS.md` is the core the others mirror, and the spec records maintenance rule 5: emphasize the rules most often violated.
 - A third bold clause requires a demotion.
 - ChatGPT gains ponytail at `lite lite`: ladder compressed to `reuse what's here > stdlib/native > installed dep > minimal code`, no dependency for a few lines' work and no unrequested abstraction. It adds build then name the lazier alternative and the never-simplify list, costing the `Prefer write-block for full markdown` UI note and the `Corrections: error and fix` line. SCOPE's dependency clause folds into CODE's.
@@ -890,20 +1013,22 @@
 - The clauses rose `rules/AGENTS.md` over budget with compression declined (+41).
 - AGENTS.md makes committing mandatory (atomic, Conventional, off `main`) by folding the push/PR allowance into the commit clause. It removes the only-when-required permission, scoped to AGENTS.md only. It squashes with the `squash` skill (`belonging to it` → `in it`, `characters` → `chars`).
 
+### maintenance
+
+- The workflow stops hardcoding lint globs, leaving `.markdownlint-cli2.jsonc` the single lint-scope definition, and drops the dead `templates/` exclusion.
+
 ## 2026-09-08
 
-- Pull requests open only when the user requires it. Commits still follow atomic Conventional rules, and Arena also outputs a squashed commit list before committing. Local commits and fixes fold into a clean timeline, updated as work lands.
-- Generic rules call for a mermaid diagram when structure or flow beats prose and the surface renders it. Shape it for a narrow viewport: top-down, short labels, no wide rows. ARENA.md excludes mermaid because Arena cannot render it, and CHATGPT.txt keeps its guidance in the same wording.
-- CHATGPT.txt mirrors AGENTS.md structure with a SCOPE section inside its 1,500-character limit, and ARENA.md drops the platform-precedence restatement because Arena applies platform instructions regardless.
-- The root README documents the compression procedure beside the budgets it maintains. Iterate and re-measure, never drop a constraint, keep headings, and compress the rest of a file when a new rule exceeds its budget. Generic rules require repository hygiene: scratch files, scripts and command output stay outside the repo or die once used.
-- `CLINE.md` drops its duplicate, Arena relies on workspace-size rules and ChatGPT stays out of scope.
+### rules
+
+- Squashed this changelog and `rules/README.md` with that skill: wording only, every claim, number and table preserved. Rule and skill files are no longer hard-wrapped: each paragraph and list item is one line, with licenses keeping their original wrapping.
+- The rule installer previews unified diffs and asks once before changing either destination.
+
+### preview
+
 - Added the `squash` skill: iterative text compression against an explicit unit — tokens, words, characters or bytes. It preserves every claim, negation, condition, number, name and caveat. It resolves units by precedence and accepts several budgets as simultaneous constraints with conflicts reported rather than resolved.
 - Its description triggers on sizing specific text, not bare `shorten` or `trim`, and it depends on nothing in this repository.
 - Added `skills/README.md` listing every skill and purpose so the spec links an index instead of a bare directory. Refreshed frontend-design and ponytail from upstream, re-applying the local `Precedence` section that keeps explicit requirements and project conventions ahead of each skill's preferences. Adapted skills now record `metadata.upstream`, first-party skills `metadata.origin`, with `skills/README.md` documenting the requirements and every upstream.
-- Ponytail bundles the MIT license it declares, attributed upstream. All six skills conform to the Agent Skills specification, with `argument-hint` moved under `metadata` where web-design-guidelines already kept it.
-- Upstream renamed `web-design-guidelines` to `web-interface-guidelines`, and the skill rewrote against the current command: full rule coverage named, terse `file:line` output, the fetched slash command's `$ARGUMENTS` explained. No reviewing from memory when the fetch fails.
-- Squashed this changelog and `rules/README.md` with that skill: wording only, every claim, number and table preserved. Rule and skill files are no longer hard-wrapped: each paragraph and list item is one line, with licenses keeping their original wrapping.
-- The rule installer previews unified diffs and asks once before changing either destination.
 - Planning and agent-handoff include MIT license files, planning also declaring its license in metadata. Response rules prefer numbered lists for multiple points. Agents may commit without separate authorization when commits are atomic, conventional, task-only and off `main`.
 - ChatGPT still requires it because its integration writes directly to `main`.
 - Arena keeps open-PR history reviewable by folding iterative fixes when safe and using lease-protected rewrites. Generic rules always load `agent-handoff` and select other skills when domains fit. Arena and Cline hold no handoff-specific policy, and skills carry no platform exemptions or cross-skill planning requirements.
@@ -914,3 +1039,19 @@
 - Moved `implementation_plan.md` conventions from the generic planning skill to Cline. Generic file-backed plans still require a handoff-update step. Task work and handoff checkpoints require atomic commits with separate identities and explicit reporting of blocked commits.
 - Moved installation guidance to the human-facing rules specification. Agents report missing or incompatible skills instead of changing installed copies, and the count lists only changed instruction files.
 - Tracking covers only agent-facing rule files and `SKILL.md` entry points: documentation, references, templates, scripts, configs and licenses stay out. Counts exclude files a skill loads on demand.
+
+### gpt-plugins
+
+- Ponytail bundles the MIT license it declares, attributed upstream. All six skills conform to the Agent Skills specification, with `argument-hint` moved under `metadata` where web-design-guidelines already kept it.
+- Upstream renamed `web-design-guidelines` to `web-interface-guidelines`, and the skill rewrote against the current command: full rule coverage named, terse `file:line` output, the fetched slash command's `$ARGUMENTS` explained. No reviewing from memory when the fetch fails.
+
+### maintenance
+
+- The root README documents the compression procedure beside the budgets it maintains. Iterate and re-measure, never drop a constraint, keep headings, and compress the rest of a file when a new rule exceeds its budget. Generic rules require repository hygiene: scratch files, scripts and command output stay outside the repo or die once used.
+- `CLINE.md` drops its duplicate, Arena relies on workspace-size rules and ChatGPT stays out of scope.
+
+### docs
+
+- Pull requests open only when the user requires it. Commits still follow atomic Conventional rules, and Arena also outputs a squashed commit list before committing. Local commits and fixes fold into a clean timeline, updated as work lands.
+- Generic rules call for a mermaid diagram when structure or flow beats prose and the surface renders it. Shape it for a narrow viewport: top-down, short labels, no wide rows. ARENA.md excludes mermaid because Arena cannot render it, and CHATGPT.txt keeps its guidance in the same wording.
+- CHATGPT.txt mirrors AGENTS.md structure with a SCOPE section inside its 1,500-character limit, and ARENA.md drops the platform-precedence restatement because Arena applies platform instructions regardless.
