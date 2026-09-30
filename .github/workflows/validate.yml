@@ -71,6 +71,9 @@ jobs:
           TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/tiktoken
         run: python maintenance/check.py --update
 
+      - name: Test Commit Message Hook
+        run: python maintenance/test_commit_msg.py
+
       - name: Lint And Format-Check Python
         run: |
           ruff check .
