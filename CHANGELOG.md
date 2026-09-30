@@ -38,6 +38,9 @@
 
 ### maintenance
 
+- **Rename follow-up**: The `validate.yml` skip list, `maintenance/README.md`, `maintenance/check.py` and the preview skill README name `.github/workflows/distribute.yml`, the owner's renamed file.
+
+
 - **Lint cleanup**: Both prose gates report zero violations. The passive and semicolon findings leave `maintenance/check.py`, `maintenance/check_gpt_plugins.py`, and `skills/squash/SKILL.md`. The CHANGELOG bullets cap at three sentences, and the preview skill README drops the synonym rotation.
 
 ### docs

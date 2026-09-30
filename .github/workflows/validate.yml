@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: ['**']
     paths-ignore:
-      - '.github/workflows/distribute-arena.yml'
+      - '.github/workflows/distribute.yml'
       - '.gitignore'
       - 'apply.bat'
       - 'automations/**'

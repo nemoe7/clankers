@@ -97,6 +97,6 @@ Run `node --check skills/refs/arena-preview-steering/assets/app.js` and
 Run `python3 maintenance/check_minify.py` to check generated parity and parsed behavior.
 Local checks cannot prove actual browser rendering or browser download behavior.
 
-`.github/workflows/distribute-arena.yml` copies tracked skill files to target repositories.
+`.github/workflows/distribute.yml` copies tracked skill files to target repositories.
 It must exclude this root `README.md` in both its copy list and its verification list.
 A manual whole-folder copy may include the README unless the human omits it.

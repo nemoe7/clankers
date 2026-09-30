@@ -64,7 +64,7 @@ EXPECTED_BUDGETS = {
   "gpt-plugins/skills/gpt-github/SKILL.md": "cl100k_base",
 }
 
-# Root `ARENA.md` is the copy `.github/workflows/distribute-arena.yml` pushes to
+# Root `ARENA.md` is the copy `.github/workflows/distribute.yml` pushes to
 # the target repositories, so it must stay byte-identical to its source.
 ROOT_COPIES = ("ARENA.md",)
 
