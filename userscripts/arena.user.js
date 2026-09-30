@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.9
+// @version      1.1.10
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1000,6 +1000,8 @@
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
+    // The live status text shimmers; a thinking row carries no pulsing icon, so its label leads.
+    var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var TITLE_PREFIX = "Arena | ";
     // The live status row names the action; the emoji carries it in the title.
     var ACTION_EMOJI = [
@@ -1058,13 +1060,27 @@
       return null;
     }
 
-    // The pulsing row sits in the newest message that has one; a pulse outside the transcript
-    // counts only when its label names a known action, so a stray spinner adds no emoji.
+    function rowFromLabel(label) {
+      if (!label) {
+        return null;
+      }
+      var button = typeof label.closest === "function" ? label.closest("button") : null;
+      if (button) {
+        return button.parentElement ? button.parentElement : button;
+      }
+      return label.parentElement || label;
+    }
+
+    // The live status text is the strongest anchor: a thinking row has it and no pulsing icon.
     function liveRow(doc) {
+      var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
+      var row = rowFromLabel(labels.length ? labels[labels.length - 1] : null);
+      if (row) {
+        return row;
+      }
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
       var i;
       var icons;
-      var row;
       for (i = messages.length - 1; i >= 0; i -= 1) {
         icons = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(LIVE_ICON_SELECTOR) : [];
         row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
@@ -1091,6 +1107,13 @@
     function liveLabel(row) {
       if (!row || typeof row.querySelector !== "function") {
         return null;
+      }
+      var shimmer = typeof row.querySelectorAll === "function" ? row.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
+      if (shimmer.length) {
+        var text = collapsed(shimmer[shimmer.length - 1]);
+        if (text) {
+          return text;
+        }
       }
       var button = row.querySelector("button");
       var text = collapsed(button && typeof button.querySelector === "function" ? button.querySelector("p") : null);
@@ -1249,15 +1272,15 @@
       function rememberRepo() {
         return repoForTitle(setDoc);
       }
-      function divMessage(text) {
+      function divMessage(text, shimmer) {
         var label = { textContent: text };
         var row = {
           textContent: text,
           querySelector: function (selector) {
             return selector === "p" ? label : null;
           },
-          querySelectorAll: function () {
-            return [];
+          querySelectorAll: function (selector) {
+            return selector === LIVE_LABEL_SELECTOR && shimmer ? [label] : [];
           },
         };
         var icon = {
@@ -1266,8 +1289,12 @@
             return null;
           },
         };
+        if (shimmer) {
+          label.parentElement = row;
+        }
         return {
           row: row,
+          label: label,
           querySelectorAll: function (selector) {
             return selector === LIVE_ICON_SELECTOR ? [icon] : [];
           },
@@ -1311,8 +1338,17 @@
       readMessage.row.textContent = "stderr End the turn with `poll` to wait for more work.";
       var busyDoc = actionDoc(repoLink, busyMessage);
       var idleDoc = actionDoc(repoLink, null);
-      var thinkingMessage = divMessage("Thinking\u2026");
+      var thinkingMessage = divMessage("Thinking\u2026", true);
       var thinkingDoc = pulseDoc([thinkingMessage], null);
+      var shimmerDoc = {
+        title: "ChatGPT",
+        querySelectorAll: function (selector) {
+          return selector === LIVE_LABEL_SELECTOR ? [thinkingMessage.label] : [];
+        },
+        querySelector: function () {
+          return null;
+        },
+      };
       var strayRow = {
         textContent: "Loading the sidebar",
         querySelector: function (selector) {
@@ -1361,6 +1397,8 @@
         // A thinking row is not a button; the label still arrives, and a stray pulse does not.
         [liveLabel(thinkingMessage.row), "Thinking\u2026"],
         [emojiForRow(liveRow(thinkingDoc)), "\uD83D\uDCAD"],
+        // A thinking row shows the shimmer label and no pulsing icon.
+        [emojiForRow(liveRow(shimmerDoc)), "\uD83D\uDCAD"],
         [liveRow(strayDoc), null],
         [emojiForRow(liveRow(olderPulseDoc)), "\uD83D\uDDA5\uFE0F"],
         [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],

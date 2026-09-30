@@ -40,6 +40,8 @@
 
 - **Thinking row**: The tab title takes the live row from any message with a pulse. It reads the label even when that row is not a button, so a `Thinking…` row shows 💭. The version moves to `1.1.9`.
 
+- **Live label anchor**: The action text comes from the shimmering status label, so a thinking row with no pulsing icon still shows 💭. The version moves to `1.1.10`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.
