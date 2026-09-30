@@ -2187,6 +2187,66 @@ def test_read_stamps_on_delivery():
     assert [row["id"] for row in printed.read()["pending"]] == ["answer-2"]
 
 
+def test_report_agent_seen_receipt():
+  # A read or a poll that delivers an answer stamps the parent report's agent receipt;
+  # the owner's unread stamp stays its own field, and a stale receipt waits for the new answer.
+  with tempfile.TemporaryDirectory() as receipt_dir:
+    receipt = preview.Store(receipt_dir, create=True)
+    source = Path(receipt_dir) / "form.md"
+    source.write_text("Choice?\n- ( ) Yes\n- ( ) No\n\nCustom response: ___\n")
+    receipt.publish("form", "Form", source)
+    with patch.object(preview, "now", return_value="2026-09-30T04:05:00"):
+      receipt.submit_report(
+        "form", "answer-1", {}, receipt.report("form")["updated_at"]
+      )
+    assert receipt.state()["reports"][0]["agent_seen_at"] is None
+    with patch.object(preview, "now", return_value="2026-09-30T04:10:00"):
+      preview.print_read(receipt)
+    row = receipt.state()["reports"][0]
+    assert row["agent_seen_at"] == "2026-09-30T04:10:00"
+    assert row["seen_at"] is None and row["ever_seen"] == 0
+    # An answer newer than the receipt hides it until a read delivers that answer.
+    with receipt.connect() as db, db:
+      db.execute(
+        "UPDATE submissions SET at = '2099-01-01T00:00:00' WHERE id = 'answer-1'"
+      )
+    assert receipt.state()["reports"][0]["agent_seen_at"] is None
+    with receipt.connect() as db, db:
+      db.execute(
+        "UPDATE submissions SET at = '2026-09-30T04:00:00' WHERE id = 'answer-1'"
+      )
+    with patch.object(preview, "now", return_value="2026-09-30T04:11:00"):
+      preview.poll_inbox(receipt, sleeper=lambda seconds: None)
+    assert receipt.state()["reports"][0]["agent_seen_at"] == "2026-09-30T04:11:00"
+    # An ack implies the read: the receipt moves forward with it and the answer gains Seen.
+    with patch.object(preview, "now", return_value="2026-09-30T04:12:00"):
+      receipt.acknowledge(["answer-1"], "reply", "Read and answered")
+    assert receipt.state()["reports"][0]["agent_seen_at"] == "2026-09-30T04:12:00"
+    assert receipt.submissions()[0]["seen_at"] is not None
+
+
+def test_report_agent_seen_migration():
+  # An older reports table gains the receipt column, and a fresh row reports nothing.
+  with tempfile.TemporaryDirectory() as receipt_migration_dir:
+    old_db = Path(receipt_migration_dir) / "state.sqlite3"
+    with sqlite3.connect(old_db) as db:
+      db.execute(
+        "CREATE TABLE reports (id TEXT PRIMARY KEY, title TEXT NOT NULL,"
+        " markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT,"
+        " ever_seen INTEGER NOT NULL DEFAULT 0)"
+      )
+      db.execute(
+        "INSERT INTO reports (id, title, markdown, updated_at, seq) VALUES (?, ?, ?, ?, ?)",
+        ("old", "Old", "Text", "2026-09-20T00:00:00+00:00", 1),
+      )
+    migrated = preview.Store(receipt_migration_dir)
+    assert migrated.report("old")["agent_seen_at"] is None
+    migrated.mark_reports_agent_seen(["old"])
+    # The row keeps the receipt; the state hides it while no answer exists to read.
+    assert migrated.report("old")["agent_seen_at"] is not None
+    assert migrated.state()["reports"][0]["agent_seen_at"] is None
+
+
 def test_task_list():
   with tempfile.TemporaryDirectory() as tasks_dir:
     tasks_store = preview.Store(tasks_dir, create=True)

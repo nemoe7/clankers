@@ -531,7 +531,7 @@ async function refreshState() {
     renderFetchIfChanged(state.fetch_jobs || []);
     showWorkspace(state.workspace);
     queueReady = true;
-    const signature = JSON.stringify(state.reports);
+    const signature = reportsSignature(state.reports);
     if (signature !== listSignature) {
       listSignature = signature;
       const select = $('#report-select');
@@ -946,6 +946,7 @@ function savedAnswers(id) {
 function submissionParts(report) {
   if (!report?.latest_answer_at) return '';
   return ` · Submission ${report.latest_answer_id.slice(0, 7)} · Sent ${time(report.latest_answer_at)}` +
+    (report.agent_seen_at ? ` · Read ${time(report.agent_seen_at)}` : '') +
     (report.latest_answer_acknowledged_at
       ? ` · Acked ${time(report.latest_answer_acknowledged_at)}`
       : ' · Awaiting ack');
@@ -1141,6 +1142,11 @@ const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#downloads
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
 // storage, so it survives a cleared browser, holds across browsers, and tells the agent the
 // report was read instead of leaving it to infer one.
+// The agent receipt moves on the server side while the owner reads, and a moved signature
+// would rebuild the select under them, so the signature leaves agent_seen_at out.
+function reportsSignature(reports) {
+  return JSON.stringify(reports, (key, value) => key === 'agent_seen_at' ? undefined : value);
+}
 function reportLabel(report, position) {
   return `${position + 1}.${report.seen_at ? '' : ' *'} ${report.title}`;
 }
@@ -1185,7 +1191,7 @@ async function markReportRead(id) {
   const report = reports.find(item => item.id === id);
   if (!report) return;
   report.seen_at = stamped.seen_at || new Date().toISOString();
-  listSignature = JSON.stringify(reports);
+  listSignature = reportsSignature(reports);
   updateReportPip(reports);
   const option = [...$('#report-select').children].find(item => item.value === id);
   if (option) option.textContent = reportLabel(report, reports.indexOf(report));

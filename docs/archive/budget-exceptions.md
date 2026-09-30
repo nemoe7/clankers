@@ -1,6 +1,8 @@
 # Budget exceptions
 
-Budget growth, oldest first, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
+Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
+
+2026-09-30: Approved amendment. `skills/arena-preview-steering/scripts/preview.py` +1,007 `B`, 79,212 to 80,219. `assets/app.js` +151 `B`, 41,707 to 41,858 and `SKILL.md` +48 `B`, 5,999 to 6,047. Both distributed copies follow.
 
 2026-09-30: Accepted without funding. `rules/CHATGPT-MORE.txt` +42 `chars`, 1,433 to 1,475. Wenyan copy -5 `chars`, 1,058 to 1,053.
 

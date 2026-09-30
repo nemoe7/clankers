@@ -158,6 +158,13 @@ def clip_stamp(value):
   return value[:19] if value else value
 
 
+def at_or_after(value, other):
+  """True when a stored stamp is at or after another; equal seconds count."""
+  if not value or not other:
+    return False
+  return clip_stamp(value) >= clip_stamp(other)
+
+
 def identifier(value):
   if not isinstance(value, str) or not IDENTIFIER.fullmatch(value):
     raise ValueError("ID must contain 1–80 letters, digits, underscores or hyphens")
@@ -790,6 +797,7 @@ def print_read(store, pretty=False):
   listing = store.read()
   print(cli_json(listing, pretty), flush=True)
   store.mark_seen([item["id"] for item in listing["pending"]])
+  store.mark_reports_agent_seen([item.get("report_id") for item in listing["pending"]])
 
 
 POLL_INTERVAL = 1
@@ -805,6 +813,9 @@ def poll_inbox(store, pretty=False, sleeper=None):
     if listing["pending"]:
       print(cli_json(listing, pretty), flush=True)
       store.mark_seen([item["id"] for item in listing["pending"]])
+      store.mark_reports_agent_seen(
+        [item.get("report_id") for item in listing["pending"]]
+      )
       return 0
     if index + 1 < POLL_MAX_LOOPS:
       sleeper(POLL_INTERVAL)
@@ -939,7 +950,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
           markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT,
-          ever_seen INTEGER NOT NULL DEFAULT 0
+          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
@@ -1028,6 +1039,8 @@ class Store:
           "ALTER TABLE reports ADD COLUMN ever_seen INTEGER NOT NULL DEFAULT 0"
         )
         db.execute("UPDATE reports SET ever_seen = 1 WHERE seen_at IS NOT NULL")
+      if "agent_seen_at" not in columns:
+        db.execute("ALTER TABLE reports ADD COLUMN agent_seen_at TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(uploads)")}
       if "note_id" not in columns:
         db.execute("ALTER TABLE uploads ADD COLUMN note_id TEXT")
@@ -1187,7 +1200,7 @@ class Store:
       reports = [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, updated_at, seq, seen_at, ever_seen, markdown, EXISTS("
+          "SELECT id, title, updated_at, seq, seen_at, ever_seen, agent_seen_at, markdown, EXISTS("
           "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
           "FROM reports ORDER BY seq, id"
         )
@@ -1212,6 +1225,12 @@ class Store:
         report["latest_answer_at"] = clip_stamp(latest["at"]) if latest else None
         report["latest_answer_acknowledged_at"] = (
           clip_stamp(latest["acknowledged_at"]) if latest else None
+        )
+        agent_seen = report.pop("agent_seen_at", None)
+        report["agent_seen_at"] = (
+          clip_stamp(agent_seen)
+          if latest is not None and at_or_after(agent_seen, latest["at"])
+          else None
         )
         try:
           report["needs_answer"] = (
@@ -2050,6 +2069,22 @@ class Store:
         else:
           raise ValueError(f"Unknown note: {record_id}; no Seen receipts written")
 
+  def mark_reports_agent_seen(self, report_ids):
+    """Stamp the parent report when a read or an ack delivers its answer.
+
+    The receipt sits beside the owner's seen_at, so the unread star keeps its
+    meaning, and the latest read wins so the line describes the current answer.
+    """
+    stamp = now()
+    with self.transaction() as db:
+      for report_id in report_ids or []:
+        if not report_id:
+          continue
+        identifier(report_id)
+        db.execute(
+          "UPDATE reports SET agent_seen_at = ? WHERE id = ?", (stamp, report_id)
+        )
+
   def mark_replies_seen(self, record_id, count):
     """Persist the number of appended replies this page actually displayed as viewed."""
     identifier(record_id)
@@ -2126,6 +2161,12 @@ class Store:
             db.execute(
               f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",
               (json.dumps(more, ensure_ascii=False), stamp, record_id),
+            )
+          if table == "submissions":
+            db.execute(
+              "UPDATE reports SET agent_seen_at = ?"
+              " WHERE id = (SELECT report_id FROM submissions WHERE id = ?)",
+              (stamp, record_id),
             )
           break
         else:
