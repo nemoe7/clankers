@@ -888,6 +888,16 @@ test('preview client', async (t) => {
     stateFails = false;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
+    // A running agent poll turns the dot blue, and the state clears it again.
+    state.polling = true;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'polling');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Agent polling');
+    assert.equal(get('#connection-text').textContent, 'Agent is polling the inbox \u00b7 3 messages saved');
+    state.polling = false;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'ok');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
     reportFields = 3;
     storage.set('arena-preview-v1:answers:r1', JSON.stringify({ answers: { name: 'ada', areas: ['ui'], verdict: 'Other: make it blue' }, at: '2026-09-20T12:00:00.000Z' }));

@@ -88,6 +88,8 @@ An unconfirmed write stays a failure and leaves the draft available for another 
 Server responses set no-sniff and a restrictive CSP.
 The server does not enable CORS or arbitrary file serving.
 
+A running `poll` stamps a heartbeat once a second. The state payload carries `polling`, and the page shows its connection dot blue with the text `Agent is polling the inbox`. The flag clears when the poll returns, and the freshness window expires it five seconds after a killed poll.
+
 Edit readable sources under `skills/refs/arena-preview-steering/` first.
 Build both runtime copies with `python3 maintenance/minify.py --update`.
 Measure budgets with `python3 maintenance/check.py --update` and check drift without `--update`.

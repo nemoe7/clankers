@@ -23,6 +23,8 @@
 - **CLI short form**: The skill guide calls the CLI as `arena-preview`, never the full script path.
 - **Report agent receipt**: A read or a poll that delivers an answer stamps the parent report read by the agent. The report line shows the receipt beside Sent and Acked, an ack implies the read, and the owner's unread star keeps its own field.
 
+- **Polling dot**: A running `poll` stamps a heartbeat once a second, and the state payload carries `polling`. The page shows its connection dot blue while the agent waits, and the freshness window expires the flag five seconds after a killed poll.
+
 ### gpt-plugins
 
 - **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.

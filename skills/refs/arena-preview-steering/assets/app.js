@@ -67,10 +67,15 @@ function label(button, text) {
   button.title = text;
 }
 
+function connectionLabel(state) {
+  if (state === 'ok') return 'Connected';
+  // The blue dot says the agent is waiting on this page right now.
+  return state === 'polling' ? 'Agent polling' : 'Disconnected';
+}
 function setConnection(state, text) {
   const dot = $('#connection-dot');
   dot.dataset.state = state;
-  dot.setAttribute('aria-label', state === 'ok' ? 'Connected' : 'Disconnected');
+  dot.setAttribute('aria-label', connectionLabel(state));
   $('#connection-text').textContent = text;
 }
 function scrollHistory(force) {
@@ -523,8 +528,12 @@ async function refreshState() {
     // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
     // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
     save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
-    setConnection('ok', state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet');
-    if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+    const saved = state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet';
+    if (state.polling) setConnection('polling', `Agent is polling the inbox · ${saved}`);
+    else {
+      setConnection('ok', saved);
+      if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+    }
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);

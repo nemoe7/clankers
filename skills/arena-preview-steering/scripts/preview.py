@@ -57,6 +57,10 @@ def reset_poll_count(db):
 	if unacked==1:db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 def meta_number(db,key):row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();value=str(row[0])if row else'';return int(value)if value.isdigit()else 0
 def new_id():hexed=uuid.uuid4().hex;return f"{hexed[:7]}-{hexed[7:]}"
+def seconds_since(value):
+	if not value:return None
+	try:return(datetime.now(timezone.utc)-datetime.fromisoformat(value)).total_seconds()
+	except ValueError:return None
 def clip_stamp(value):return value[:19]if value else value
 def at_or_after(value,other):
 	if not value or not other:return False
@@ -304,13 +308,17 @@ def require_server(store):
 def print_read(store,pretty=False):listing=store.read();print(cli_json(listing,pretty),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
 POLL_INTERVAL=1
 POLL_MAX_LOOPS=900
+POLLING_META='polling_at'
+POLLING_FRESH_SECONDS=5.
 def poll_inbox(store,pretty=False,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]}
-	for index in range(POLL_MAX_LOOPS):
-		listing=store.read()
-		if listing['pending']:print(cli_json(listing,pretty),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']]);return 0
-		if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL)
+	listing={'checked_at':None,'pending':[]};store.stamp_polling()
+	try:
+		for index in range(POLL_MAX_LOOPS):
+			listing=store.read()
+			if listing['pending']:print(cli_json(listing,pretty),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']]);return 0
+			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
+	finally:store.clear_polling()
 	print(cli_json(listing,pretty),flush=True);return 1
 def parse_state_import(text):
 	try:value=json.loads(text)
@@ -421,7 +429,7 @@ class Store:
 			if tasks is not None:
 				for item in tasks['finished']+tasks['upcoming']:item['updated_at']=clip_stamp(item['updated_at'])
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
-			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check'))}
+			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':self.polling()}
 	def tasks(self):
 		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id").fetchall()
 		records=[task_row(row)for row in rows]
@@ -645,6 +653,11 @@ class Store:
 			for(position,row)in enumerate(rows,1):db.execute('UPDATE tasks SET position = ? WHERE id = ?',(position,row[0]))
 	def meta_value(self,key):
 		with closing(self.connect())as db:row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();return row[0]if row else None
+	def stamp_polling(self):
+		with closing(self.connect())as db,db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLING_META,now()))
+	def clear_polling(self):
+		with closing(self.connect())as db,db:db.execute('DELETE FROM meta WHERE key = ?',(POLLING_META,))
+	def polling(self):age=seconds_since(self.meta_value(POLLING_META));return age is not None and 0<=age<POLLING_FRESH_SECONDS
 	def set_meta(self,key,value):
 		with closing(self.connect())as db,db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(key,str(value)))
 	def reminder(self,advance=False):

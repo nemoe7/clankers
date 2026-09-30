@@ -154,6 +154,16 @@ def new_id():
   return f"{hexed[:7]}-{hexed[7:]}"
 
 
+def seconds_since(value):
+  """Seconds between one stored stamp and now, or None when it will not parse."""
+  if not value:
+    return None
+  try:
+    return (datetime.now(timezone.utc) - datetime.fromisoformat(value)).total_seconds()
+  except ValueError:
+    return None
+
+
 def clip_stamp(value):
   """Cut an ISO stamp to seconds; a restore needs no milliseconds or offset."""
   return value[:19] if value else value
@@ -803,23 +813,32 @@ def print_read(store, pretty=False):
 
 POLL_INTERVAL = 1
 POLL_MAX_LOOPS = 900
+POLLING_META = "polling_at"
+# The page shows its polling dot while a poll heartbeat is no older than this.
+POLLING_FRESH_SECONDS = 5.0
 
 
 def poll_inbox(store, pretty=False, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   listing = {"checked_at": None, "pending": []}
-  for index in range(POLL_MAX_LOOPS):
-    listing = store.read()
-    if listing["pending"]:
-      print(cli_json(listing, pretty), flush=True)
-      store.mark_seen([item["id"] for item in listing["pending"]])
-      store.mark_reports_agent_seen(
-        [item.get("report_id") for item in listing["pending"]]
-      )
-      return 0
-    if index + 1 < POLL_MAX_LOOPS:
-      sleeper(POLL_INTERVAL)
+  # One heartbeat a second, so the page can light its dot while the agent waits here.
+  store.stamp_polling()
+  try:
+    for index in range(POLL_MAX_LOOPS):
+      listing = store.read()
+      if listing["pending"]:
+        print(cli_json(listing, pretty), flush=True)
+        store.mark_seen([item["id"] for item in listing["pending"]])
+        store.mark_reports_agent_seen(
+          [item.get("report_id") for item in listing["pending"]]
+        )
+        return 0
+      if index + 1 < POLL_MAX_LOOPS:
+        sleeper(POLL_INTERVAL)
+        store.stamp_polling()
+  finally:
+    store.clear_polling()
   print(cli_json(listing, pretty), flush=True)
   return 1
 
@@ -1265,6 +1284,7 @@ class Store:
         "fetch_jobs": fetch_jobs,
         "workspace": workspace_usage(),
         "last_check": clip_stamp(meta.get("last_check")),
+        "polling": self.polling(),
       }
 
   def tasks(self):
@@ -1960,6 +1980,25 @@ class Store:
     with closing(self.connect()) as db:
       row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
       return row[0] if row else None
+
+  def stamp_polling(self):
+    """Record that an agent poll runs now.
+
+    The poll stamps once a second and clears the stamp when it stops. A killed poll
+    leaves the stamp behind, and the freshness window expires it.
+    """
+    with closing(self.connect()) as db, db:
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLING_META, now()))
+
+  def clear_polling(self):
+    """Drop the poll heartbeat, so the page returns to its connected dot."""
+    with closing(self.connect()) as db, db:
+      db.execute("DELETE FROM meta WHERE key = ?", (POLLING_META,))
+
+  def polling(self):
+    """True while a poll heartbeat sits inside the freshness window."""
+    age = seconds_since(self.meta_value(POLLING_META))
+    return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
   def set_meta(self, key, value):
     """Record one meta value, replacing any previous one."""

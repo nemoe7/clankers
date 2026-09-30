@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -3162,6 +3163,31 @@ def test_poll_inbox():
       assert rc == 1
       assert sleeps == [10, 10]
       assert store.state()["notes"] == []
+
+      # The page lights its blue dot on a fresh poll heartbeat, and the poll clears it.
+      heartbeats = []
+
+      def watching_sleeper(seconds):
+        heartbeats.append(store.polling())
+        sleeps.append(seconds)
+
+      sleeps.clear()
+      rc = preview.poll_inbox(store, sleeper=watching_sleeper)
+      assert rc == 1
+      assert heartbeats == [True, True]
+      assert store.polling() is False
+      assert store.state()["polling"] is False
+
+      store.stamp_polling()
+      assert store.polling() is True
+      assert store.state()["polling"] is True
+      stale = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+      store.set_meta(preview.POLLING_META, stale)
+      assert store.polling() is False
+      store.set_meta(preview.POLLING_META, "not a stamp")
+      assert store.polling() is False
+      store.clear_polling()
+      assert store.polling() is False
 
       def arriving_sleeper(seconds):
         sleeps.append(seconds)
