@@ -2866,7 +2866,9 @@ def test_dispatch_reminder():
 
     def tails(remaining):
       """Return the visible rotating tails, in order, for that task count."""
-      filled = (preview.fill_reminder(candidate, remaining) for candidate in preview.REMINDERS)
+      filled = (
+        preview.fill_reminder(candidate, remaining) for candidate in preview.REMINDERS
+      )
       return [text for text in filled if text]
 
     def reminder_tail(line, remaining):
@@ -2879,8 +2881,12 @@ def test_dispatch_reminder():
 
     pending_prefix = "1 message/s. DO NOT IGNORE. ACK ASAP. "
     assert preview.fill_reminder(preview.TASK_REMINDER, 0) is None
-    assert preview.fill_reminder(preview.TASK_REMINDER, 1) == "You have 1 task remaining."
-    assert preview.fill_reminder(preview.TASK_REMINDER, 4) == "You have 4 tasks remaining."
+    assert (
+      preview.fill_reminder(preview.TASK_REMINDER, 1) == "You have 1 task remaining."
+    )
+    assert (
+      preview.fill_reminder(preview.TASK_REMINDER, 4) == "You have 4 tasks remaining."
+    )
     # No open task hides that entry, so the line carries the next reminder instead.
     task_at = preview.REMINDERS.index(preview.TASK_REMINDER)
     assert preview.reminder_tail(task_at, 0) == preview.REMINDERS[task_at + 1]
