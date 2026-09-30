@@ -204,6 +204,23 @@ def test_release_pipeline():
     [(str(n), "x" * 100) for n in range(80)], {}, "test", phased, limit=350
   )
   assert set(phases) == {"chunk", "combine", "release"}
+  selected_models = []
+
+  def tracked(context, evidence, model, on_success):
+    on_success("gemini-3.7-flash")
+    return "draft"
+
+  assert (
+    release.release_body(
+      [("id", "diff")],
+      {},
+      ["gemini-3.8-flash", "gemini-3.7-flash"],
+      tracked,
+      on_success=selected_models.append,
+    )
+    == "draft"
+  )
+  assert selected_models == ["gemini-3.7-flash"]
   quota = json.dumps(
     {
       "error": {
@@ -223,6 +240,40 @@ def test_release_pipeline():
   )
   assert release.gemini_error_detail(b"") == ""
   assert len(release.gemini_error_detail(b"x" * 900)) == 500
+
+  class HttpResponse(io.BytesIO):
+    def __init__(self, body, status):
+      super().__init__(body)
+      self.status = status
+
+    def __enter__(self):
+      return self
+
+    def __exit__(self, *_):
+      self.close()
+
+  with (
+    patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSecret1"}),
+    patch.object(
+      release.urllib.request,
+      "urlopen",
+      return_value=HttpResponse(b'{"ok": true}', 200),
+    ),
+    patch.object(release, "summary") as status_log,
+  ):
+    assert release.gemini_call("gemini-3.7-flash", "generateContent", {}) == {
+      "ok": True
+    }
+  assert status_log.call_args.args == (
+    "Gemini model gemini-3.7-flash generateContent HTTP 200",
+  )
+  with (
+    patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}),
+    patch("builtins.print") as print_output,
+  ):
+    release.summary("retry detail")
+  print_output.assert_called_once_with("retry detail", flush=True)
+
   with (
     patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSecret1"}),
     patch.object(
@@ -246,18 +297,25 @@ def test_release_pipeline():
   good = {
     "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "ok"}]}}]
   }
-  with patch.object(
-    release,
-    "gemini_call",
-    side_effect=[
-      RuntimeError("Gemini countTokens failed: HTTP 404"),
-      {"totalTokens": 1},
-      {"candidates": []},
-      {"totalTokens": 1},
-      good,
-    ],
+  selected_model = []
+  with (
+    patch.object(
+      release,
+      "gemini_call",
+      side_effect=[
+        RuntimeError("Gemini countTokens failed: HTTP 404"),
+        {"totalTokens": 1},
+        {"candidates": []},
+        {"totalTokens": 1},
+        good,
+      ],
+    ),
+    patch.object(release, "summary") as progress,
   ):
-    assert release.generate({}, [], ["a", "b", "c"]) == "ok"
+    assert release.generate({}, [], ["a", "b", "c"], selected_model.append) == "ok"
+  assert selected_model == ["c"]
+  assert "HTTP 404" in progress.call_args_list[0].args[0]
+  assert "trying b" in progress.call_args_list[0].args[0]
   with patch.object(release, "gemini_call", side_effect=RuntimeError("HTTP 503")):
     fails(
       lambda: release.generate({}, [], ["a", "b"]),
@@ -271,7 +329,7 @@ def test_release_pipeline():
   assert release.model_ladder(" a-1 , b.2 ") == ["a-1", "b.2"]
   fails(lambda: release.model_ladder(","), "Model ladder is empty")
   fails(lambda: release.model_ladder("a b"), "Invalid Gemini model ID: a b")
-  for phase in ("chunk", "combine", "release", "version"):
+  for phase in ("chunk", "combine", "release", "repair", "version"):
     with patch.object(
       release,
       "gemini_call",
@@ -463,7 +521,7 @@ def test_release_pipeline():
     lines = prompt.strip().splitlines()
     assert lines[0].startswith("Task: ") and all(l.startswith("- ") for l in lines[1:])
     assert release.BOUNDARY in prompt and lines[-1].startswith("- Return only")
-  assert set(release.PROMPTS) == {"chunk", "combine", "release", "version"}
+  assert set(release.PROMPTS) == {"chunk", "combine", "release", "repair", "version"}
   assert "style reference" in release.PROMPTS["release"]
   assert "NEVER use them as evidence" in release.PROMPTS["release"]
   assert release.TEMPLATE.count("{{") == 6 and release.TEMPLATE.endswith(
@@ -489,6 +547,49 @@ def test_release_pipeline():
   empty_summary = "## Summary\n\n\n## Commit comparison\n\nhttps://x/compare/a...b\n"
   assert "## Summary" in release.omit_empty_sections(empty_summary, release.TEMPLATE)
   fails(lambda: release.check_body(empty_summary, full), "does not match")
+  invalid_body = "## Summary\n\ns\n\n## Features\n\nf\n"
+  repaired_body = (
+    "## Summary\n\ns\n\n## Features\n\nf\n\n## Commit comparison\n\n"
+    "https://x/compare/a...b\n"
+  )
+  repair_calls = []
+
+  def repair(context, evidence, model):
+    repair_calls.append((context, evidence, model))
+    return repaired_body
+
+  with patch.object(release, "summary") as retry_log:
+    assert (
+      release.validated_body(
+        invalid_body,
+        {**full, "previous_release_notes": "style only"},
+        "gemini-3.7-flash",
+        repair,
+      )
+      == repaired_body
+    )
+  repair_context, repair_evidence, repair_model = repair_calls[0]
+  assert repair_context["phase"] == "repair"
+  assert repair_context["validation_error"]
+  assert repair_context["draft"] == invalid_body
+  assert "previous_release_notes" not in repair_context
+  assert repair_evidence == []
+  assert repair_model == "gemini-3.7-flash"
+  assert "retrying same model once" in retry_log.call_args.args[0]
+  invalid_calls = []
+
+  def repair_still_invalid(context, evidence, model):
+    invalid_calls.append((context, evidence, model))
+    return invalid_body
+
+  with patch.object(release, "summary"):
+    fails(
+      lambda: release.validated_body(
+        invalid_body, full, "gemini-3.7-flash", repair_still_invalid
+      ),
+      "does not match",
+    )
+  assert len(invalid_calls) == 1
   fails(lambda: release.check_body("## Summary\n\ns\n", full), "does not match")
   fails(
     lambda: release.check_body("## Fixes\n\nf\n\nhttps://x/compare/a...b\n", full),

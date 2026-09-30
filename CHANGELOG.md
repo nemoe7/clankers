@@ -4,6 +4,7 @@
 
 - **Gemini release sections**: The proposal removes optional sections with no text. The approval check rejects empty sections. The Summary section stays required.
 - **Gemini release reference**: The draft receives previous published release notes as style-only context. The prompt forbids their use as evidence. Version classification does not receive them.
+- **Gemini retry diagnostics**: The workflow reports model HTTP status and sanitized API errors, with immediate console flush. A draft that fails template validation receives one same-model correction attempt.
 
 ### userscripts
 
