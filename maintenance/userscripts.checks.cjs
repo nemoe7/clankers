@@ -194,8 +194,8 @@ function checkTranscriptTrim(api) {
   var trimPlan = api.trimPlan;
   var trimRows = api.trimRows;
   var isSettled = api.isSettled;
+  var ACTION_SELECTOR = api.ACTION_SELECTOR;
   var MIN_ROWS = api.MIN_ROWS;
-  var DEFAULT_ROOTS = api.DEFAULT_ROOTS;
   var DEFAULT_ROWS = api.DEFAULT_ROWS;
 
   function rows(count) {
@@ -213,6 +213,16 @@ function checkTranscriptTrim(api) {
     }
     return list;
   }
+  function actionContainer() {
+    return {
+      removed: false,
+      parentElement: {},
+      remove: function () {
+        this.removed = true;
+        this.parentElement = null;
+      },
+    };
+  }
   var BOX = "div.flex.flex-col.gap-2";
   function rowBox(pageRows, nested) {
     var element = {
@@ -224,7 +234,8 @@ function checkTranscriptTrim(api) {
     };
     return element;
   }
-  function messageRoot(boxes) {
+  function messageRoot(boxes, actions) {
+    actions = actions || [];
     var root = {
       removed: false,
       remove: function () {
@@ -232,7 +243,8 @@ function checkTranscriptTrim(api) {
         this.parentElement = null;
       },
       querySelectorAll: function (selector) {
-        return selector === BOX ? boxes : [];
+        if (selector === BOX) return boxes;
+        return selector === ACTION_SELECTOR ? actions : [];
       },
     };
     root.parentElement = { children: [root] };
@@ -252,54 +264,72 @@ function checkTranscriptTrim(api) {
       },
     };
   }
-  var five = rows(5);
+  var rootActions = [actionContainer(), actionContainer()];
+  var rootRows = [rows(25), rows(25)];
+  var rootNodes = [
+    messageRoot([rowBox(rootRows[0])], [rootActions[0]]),
+    messageRoot([rowBox(rootRows[1])], [rootActions[1]]),
+  ];
+  var rootRowsRemoved = trimPlan(logDoc(rootNodes, true), "20");
+  var emptyAction = actionContainer();
+  var emptyRoot = messageRoot([rowBox([])], [emptyAction]);
+  var emptyTrim = trimPlan(logDoc([emptyRoot], true), "50");
+  var globalActions = [actionContainer(), actionContainer(), actionContainer()];
+  var globalRows = [rows(25), rows(20), rows(25)];
+  var globalNodes = [
+    messageRoot([rowBox(globalRows[0])], [globalActions[0]]),
+    messageRoot([rowBox(globalRows[1])], [globalActions[1]]),
+    messageRoot([rowBox(globalRows[2])], [globalActions[2]]),
+  ];
+  var globalRemoved = trimPlan(logDoc(globalNodes, true), "40");
   var detached = rows(4);
   detached[0].parentElement = null;
-  var rootNodes = [messageRoot([rowBox(rows(5))]), messageRoot([rowBox(rows(5))])];
-  var rootDoc = logDoc(rootNodes, true);
-  var rootRowsRemoved = trimPlan(rootDoc, "1,50");
   var cases = [
-    [trimRows(five, 3), 2],
-    [five[0].removed, true],
-    [five[1].removed, true],
-    [five[2].removed, false],
+    [trimRows(rows(5), 3), 2],
     [trimRows(rows(3), 3), 0],
     [trimRows(rows(2), 10), 0],
     [trimRows(detached, 2), 1],
-    // The plan reads "<messages>,<rows>"; one number sets the rows alone.
-    [normalizePlan("3,80", "1,50"), "3,80"],
-    [normalizePlan("80", "3,50"), "3,80"],
-    [normalizePlan(" 2 rows, 60 ", "1,50"), "2,60"],
-    [normalizePlan("5", "1,50"), null],
-    [normalizePlan("3,5", "1,50"), null],
-    [normalizePlan("0,80", "1,50"), null],
-    [normalizePlan("later", "1,50"), null],
-    [normalizePlan(null, "1,50"), null],
-    [planParts("").messages, DEFAULT_ROOTS],
+    [normalizePlan("50"), "50"],
+    [normalizePlan(" 50 "), "50"],
+    [normalizePlan("5,80"), "80"],
+    [normalizePlan("5"), null],
+    [normalizePlan("5,5"), null],
+    [normalizePlan("0,80"), null],
+    [normalizePlan("80 rows"), null],
+    [normalizePlan("later"), null],
+    [normalizePlan(null), null],
     [planParts("").rows, DEFAULT_ROWS],
-    [planParts("4,75").messages, 4],
     [planParts("4,75").rows, 75],
-    [MIN_ROWS <= DEFAULT_ROWS, true],
-    // The menu shows the work, so a count above the transcript size reads as no change.
-    [countLabel("1,50", 0), "Transcript trim: 1 message, 50 rows \u2014 set"],
-    [countLabel("1,50", 3), "Transcript trim: 1 message, 50 rows (3 removed) \u2014 set"],
-    [countLabel("2,80", 0), "Transcript trim: 2 messages, 80 rows \u2014 set"],
-    // A row is a part inside a message, and only the outermost box counts.
+    [MIN_ROWS, 20],
+    [countLabel("50", 0), "Transcript trim: 50 rows \u2014 set"],
+    [countLabel("50", 3), "Transcript trim: 50 rows (3 removed) \u2014 set"],
+    [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
     [rowsOfRoot(messageRoot([rowBox(rows(2), true)])).length, 0],
-    // Messages inside the log win; a page without the log role still trims.
     [messageRoots(logDoc([messageRoot([])], true)).length, 1],
     [messageRoots(logDoc([messageRoot([])], false)).length, 1],
     [messageRoots(logDoc([], true)).length, 0],
-    // The newest messages keep their last rows and older ones empty out.
-    [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "1,50"), 0],
-    [trimPlan(logDoc([messageRoot([rowBox(rows(5))]), messageRoot([rowBox(rows(5))])], true), "1,50"), 5],
-    [trimPlan(logDoc([messageRoot([rowBox(rows(3))]), messageRoot([rowBox(rows(4))]), messageRoot([rowBox(rows(60))])], true), "1,20"), 47],
-    // The roots stay: Arena crashes on a removed #chat-message-* element.
-    [rootRowsRemoved, 5],
-    [rootNodes[0].parentElement !== null, true],
-    [rootNodes[1].parentElement !== null, true],
-    // The trim waits for the page to settle: no stop button, no pulsing live icon.
+    [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "50"), 0],
+    [rootRowsRemoved, 30],
+    [rootRows[0][24].removed, true],
+    [rootRows[1][0].removed, true],
+    [rootRows[1][5].removed, false],
+    [rootActions[0].removed, true],
+    [rootActions[1].removed, true],
+    [emptyTrim, 0],
+    [emptyAction.removed, true],
+    [emptyRoot.parentElement !== null, true],
+    [globalRemoved, 30],
+    [globalRows[0][24].removed, true],
+    [globalRows[1][4].removed, true],
+    [globalRows[1][5].removed, false],
+    [globalRows[2][0].removed, false],
+    [globalActions[0].removed, true],
+    [globalActions[1].removed, true],
+    [globalActions[2].removed, false],
+    [globalNodes[0].parentElement !== null, true],
+    [globalNodes[1].parentElement !== null, true],
+    [globalNodes[2].parentElement !== null, true],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), true],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), false],

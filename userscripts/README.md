@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-Seven features default to On. Transcript trim ships OFF, because it removes messages from the page. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
+Seven features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
@@ -50,17 +50,15 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## Arena Transcript Trim
 
-This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows come back. On `/agent/*`, ON removes the oldest transcript rows. It keeps the newest `1` message whole and cuts it to its last `50` rows. Older messages empty out, and every message root stays on the page. The row count never drops below `20`.
+This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. It also removes the sibling action container, `div.mt-3.flex.flex-col.gap-3`, from each message that loses rows or has no attached rows. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree. The row limit cannot fall below `20`.
 
-The menu command reads `Transcript trim: 1 message, 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 1 message, 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes a new plan as `<messages>,<rows>`; one number sets the rows alone. An empty or too small answer keeps the old plan.
+The menu command reads `Transcript trim: 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
 
-The trim waits for the page to settle. It touches nothing while a turn streams or a live icon pulses, and it waits for a quiet window after the last change. A row is a part inside a message: text, a tool call, a thinking line or a status line. Only rows still on the page count, and the oldest attached row leaves first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you delete the message there.
-
-The message root itself never leaves. Arena complains when a `#chat-message-*` element disappears, and this switch runs inside its tree.
+The trim waits for the page to settle. It touches nothing while a turn streams or a live icon pulses, and it waits for a quiet window after the last change. A row is a child of the outermost `div.flex.flex-col.gap-2` block. It can hold text, a tool call, a thinking line or a status line. Only attached rows count, and the oldest rows leave first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you remove the message there.
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait 💤, and ⚙️ for anything else. Reading covers `Read` and `Explored`, and editing covers `Edit`, `Editing files` and `Write`. `Bash` and `command` count as running, so `using Bash` and `Ran commands` show 🖥️. A row whose command is any form of the preview poll, bare, full path or `preview.py`, shows 💤, because the agent waits on you. The emoji holds for five seconds after the live row leaves, so a gap between calls does not flash the title, and it clears once the turn ends. The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon. The map is running 🖥️, read 📖, edit ✏️, search 🔍, think 💭, wait 💤, and ⚙️ for anything else. Reading covers `Read` and `Explored`, and editing covers `Edit`, `Editing files` and `Write`. `Bash` and `command` count as running, so `using Bash` and `Ran commands` show 🖥️. A row whose command is any form of the preview poll, bare, full path or `preview.py`, shows 💤, because the agent waits on you. The emoji holds for five seconds after the live row leaves, so a gap between calls does not flash the title. It clears once the turn ends. The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
 
 ## ChatGPT Hide Elements
 

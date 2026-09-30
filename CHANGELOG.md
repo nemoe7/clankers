@@ -5,6 +5,10 @@
 - **Gemini release sections**: The proposal removes optional sections with no text. The approval check rejects empty sections. The Summary section stays required.
 - **Gemini release reference**: The draft receives previous published release notes as style-only context. The prompt forbids their use as evidence. Version classification does not receive them.
 
+### userscripts
+
+- **Transcript trim**: The menu takes one global row limit. The trim removes oldest rows and action containers from trimmed or empty roots while keeping message roots. The Arena bundle moves to `1.1.23`.
+
 ## 2026-09-30
 
 ### rules

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.22
+// @version      1.1.23
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -631,57 +631,41 @@
 
   runFeature("transcript-trim", "Transcript trim", function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
-    var DEFAULT_ROOTS = 1;
     var DEFAULT_ROWS = 50;
     var MIN_ROWS = 20;
     var LOG_SELECTOR = '[role="log"]';
     var MESSAGE_SELECTOR = '[data-agent-transcript-message="true"]';
     var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
+    var ACTION_SELECTOR = ":scope > div > div > div.mt-3.flex.flex-col.gap-3";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
     var SETTLE_MS = 1200;
 
-    // The switch keeps the newest messages whole and trims the rest: the plan reads
-    // "<messages>,<rows>". One number sets the rows alone.
-    function planParts(plan) {
-      var parts = String(plan == null ? "" : plan).split(/[^0-9]+/);
-      var numbers = [];
-      var i;
-      for (i = 0; i < parts.length; i += 1) {
-        if (parts[i] !== "") numbers.push(Number(parts[i]));
+    // The plan keeps one global tail of transcript rows; old saved plans keep their row value.
+    function normalizePlan(value) {
+      var text = String(value == null ? "" : value).trim();
+      var legacy = /^(\d+)\s*,\s*(\d+)$/.exec(text);
+      var rows;
+      if (legacy) {
+        if (Number(legacy[1]) < 1) return null;
+        rows = Number(legacy[2]);
+      } else if (/^\d+$/.test(text)) {
+        rows = Number(text);
+      } else {
+        return null;
       }
-      if (!numbers.length) {
-        return { messages: DEFAULT_ROOTS, rows: DEFAULT_ROWS };
-      }
-      if (numbers.length === 1) {
-        return { messages: DEFAULT_ROOTS, rows: numbers[0] };
-      }
-      return { messages: numbers[0], rows: numbers[1] };
+      if (!isFinite(rows) || rows < MIN_ROWS) return null;
+      return String(rows);
     }
 
-    function normalizePlan(value, current) {
-      var parts = String(value == null ? "" : value).split(/[^0-9]+/);
-      var numbers = [];
-      var kept = planParts(current);
-      var messages = kept.messages;
-      var rows;
-      var i;
-      for (i = 0; i < parts.length; i += 1) {
-        if (parts[i] !== "") numbers.push(Math.floor(Number(parts[i])));
-      }
-      if (!numbers.length) return null;
-      rows = numbers[numbers.length - 1];
-      if (numbers.length > 1) messages = numbers[0];
-      if (!isFinite(rows) || rows < MIN_ROWS) return null;
-      if (!isFinite(messages) || messages < 1) return null;
-      return messages + "," + rows;
+    function planParts(plan) {
+      var normalized = normalizePlan(plan);
+      return { rows: Number(normalized === null ? DEFAULT_ROWS : normalized) };
     }
 
     function countLabel(plan, removed) {
       var kept = planParts(plan);
       return (
         "Transcript trim: " +
-        kept.messages +
-        (kept.messages === 1 ? " message, " : " messages, ") +
         kept.rows +
         " rows" +
         (removed ? " (" + removed + " removed)" : "") +
@@ -717,18 +701,46 @@
       return rows;
     }
 
-    // Rows leave, message roots stay: the newest messages keep their last rows and the
-    // older ones empty out. Arena crashes on a removed `#chat-message-*` root, and this
-    // switch runs inside its tree. The count is the number of rows that left the page.
+    function removeActionSibling(root) {
+      var actions = root.querySelectorAll(ACTION_SELECTOR);
+      var i;
+      for (i = 0; i < actions.length; i += 1) {
+        if (actions[i].parentElement) actions[i].remove();
+      }
+    }
+
+    // Remove the oldest rows across roots, and keep each message root in Arena's tree.
     function trimPlan(doc, plan) {
-      var kept = planParts(plan);
       var roots = messageRoots(doc);
-      var first = Math.max(0, roots.length - kept.messages);
+      var rootRows = [];
+      var total = 0;
+      var excess;
       var removed = 0;
       var i;
       for (i = 0; i < roots.length; i += 1) {
         var rows = rowsOfRoot(roots[i]);
-        removed += trimRows(rows, i < first ? 0 : kept.rows);
+        var rootAttached = 0;
+        var j;
+        rootRows.push(rows);
+        for (j = 0; j < rows.length; j += 1) {
+          if (rows[j].parentElement) {
+            total += 1;
+            rootAttached += 1;
+          }
+        }
+        if (!rootAttached) removeActionSibling(roots[i]);
+      }
+      excess = Math.max(0, total - planParts(plan).rows);
+      for (i = 0; i < roots.length && excess > 0; i += 1) {
+        var attached = 0;
+        var rootList = rootRows[i];
+        for (j = 0; j < rootList.length; j += 1) {
+          if (rootList[j].parentElement) attached += 1;
+        }
+        var removedFromRoot = trimRows(rootList, Math.max(0, attached - excess));
+        removed += removedFromRoot;
+        excess -= removedFromRoot;
+        if (removedFromRoot) removeActionSibling(roots[i]);
       }
       return removed;
     }
@@ -767,8 +779,8 @@
       trimPlan: trimPlan,
       trimRows: trimRows,
       isSettled: isSettled,
+      ACTION_SELECTOR: ACTION_SELECTOR,
       MIN_ROWS: MIN_ROWS,
-      DEFAULT_ROOTS: DEFAULT_ROOTS,
       DEFAULT_ROWS: DEFAULT_ROWS,
     })) {
       return;
@@ -783,8 +795,10 @@
 
     function keepPlan() {
       var stored = String(GM_getValue(KEEP_KEY, "") || "");
-      if (!stored) return DEFAULT_ROOTS + "," + DEFAULT_ROWS;
-      return normalizePlan(stored, null) || DEFAULT_ROOTS + "," + DEFAULT_ROWS;
+      var normalized = normalizePlan(stored);
+      if (!normalized) return String(DEFAULT_ROWS);
+      if (normalized !== stored) GM_setValue(KEEP_KEY, normalized);
+      return normalized;
     }
 
     function registerCount() {
@@ -803,9 +817,12 @@
 
     function setCount() {
       if (typeof prompt !== "function") return;
-      var answer = prompt("Messages and rows to keep", keepPlan());
-      if (answer === null) return;
-      var next = normalizePlan(answer, keepPlan());
+      var answer = prompt("Transcript rows to keep", keepPlan());
+      if (answer === null) {
+        registerCount();
+        return;
+      }
+      var next = normalizePlan(answer);
       if (next === null) return;
       GM_setValue(KEEP_KEY, next);
       registerCount();

@@ -142,28 +142,28 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("row"));
     assert.ok(findCount(), "Missing the transcript trim count menu");
     assert.ok(
-      findCount().label.includes("1 message, 50 rows"),
-      "The count menu shows the default plan",
+      findCount().label.includes("50 rows"),
+      "The count menu shows the default row limit",
     );
     findCount().callback();
-    assert.equal(stored.has(countKey), false, "A cancel keeps the plan");
-    promptAnswer = "2,120";
+    assert.equal(stored.has(countKey), false, "A cancel keeps the plan unset");
+    stored.set(countKey, "2,120");
     findCount().callback();
-    assert.equal(stored.get(countKey), "2,120");
-    assert.ok(findCount().label.includes("2 messages, 120 rows"));
+    assert.equal(stored.get(countKey), "120", "A saved legacy plan keeps its row limit");
+    assert.ok(findCount().label.includes("120 rows"));
     promptAnswer = "100";
     findCount().callback();
-    assert.equal(stored.get(countKey), "2,100", "One number sets the rows alone");
-    assert.ok(findCount().label.includes("2 messages, 100 rows"));
+    assert.equal(stored.get(countKey), "100", "One value sets the global row limit");
+    assert.ok(findCount().label.includes("100 rows"));
     promptAnswer = "5";
     findCount().callback();
-    assert.equal(stored.get(countKey), "2,100", "Rows below the floor keep the old plan");
+    assert.equal(stored.get(countKey), "100", "Rows below the floor keep the old plan");
     promptAnswer = "0,100";
     findCount().callback();
-    assert.equal(stored.get(countKey), "2,100", "Zero messages keeps the old plan");
+    assert.equal(stored.get(countKey), "100", "An invalid legacy plan keeps the old plan");
     promptAnswer = "later";
     findCount().callback();
-    assert.equal(stored.get(countKey), "2,100", "A bad plan keeps the old plan");
+    assert.equal(stored.get(countKey), "100", "A bad plan keeps the old plan");
     promptAnswer = null;
   }
 
