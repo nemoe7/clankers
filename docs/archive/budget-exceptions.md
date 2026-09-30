@@ -2,6 +2,8 @@
 
 Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
 
+2026-10-01: Accepted without funding. `skills/arena-preview-steering/scripts/install.sh` +16 `B`, 7,320 to 7,336. `rules/COMMIT-SPEC.txt` -4 `tok`, 95 to 91.
+
 2026-10-01: Accepted without funding. `skills/arena-preview-steering/scripts/install.sh` +2,774 `B`, 4,546 to 7,320.
 
 2026-09-30: Owner suggestion. `skills/arena-preview-steering/scripts/preview.py` +61 `B`, 80,219 to 80,280. Both distributed copies follow.

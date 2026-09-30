@@ -72,7 +72,10 @@ try:
 except OSError as error:
   reject(f"cannot read commit rules or message: {error}")
 
-types_match = re.search(r"\btypes ([a-z]+(?:[ \t]+[a-z]+)*),", specification)
+types_match = re.search(
+  r"\ballowed types: ([a-z]+(?:[ \t]+[a-z]+)*);",
+  specification,
+)
 length_match = re.search(r"<=\s*(\d+)\s+chars\b", specification)
 if not types_match or not length_match:
   reject("cannot read allowed types or subject limit from rules/COMMIT-SPEC.txt")
