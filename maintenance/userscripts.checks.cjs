@@ -186,12 +186,16 @@ function checkAutoScrollToggle(api) {
 }
 
 function checkTranscriptTrim(api) {
-  var normalizeKeep = api.normalizeKeep;
+  var normalizePlan = api.normalizePlan;
+  var planParts = api.planParts;
   var countLabel = api.countLabel;
-  var rowsToTrim = api.rowsToTrim;
+  var messageRoots = api.messageRoots;
+  var rowsOfRoot = api.rowsOfRoot;
+  var trimPlan = api.trimPlan;
   var trimRows = api.trimRows;
-  var MIN_KEEP = api.MIN_KEEP;
-  var DEFAULT_KEEP = api.DEFAULT_KEEP;
+  var MIN_ROWS = api.MIN_ROWS;
+  var DEFAULT_ROOTS = api.DEFAULT_ROOTS;
+  var DEFAULT_ROWS = api.DEFAULT_ROWS;
 
   function rows(count) {
     var list = [];
@@ -208,18 +212,41 @@ function checkTranscriptTrim(api) {
     }
     return list;
   }
-  function logDoc(pageRows, withLog) {
+  var BOX = "div.flex.flex-col.gap-2";
+  function rowBox(pageRows, nested) {
+    var element = {
+      children: pageRows,
+      closest: function (selector) {
+        if (selector !== BOX) return null;
+        return nested || element;
+      },
+    };
+    return element;
+  }
+  function messageRoot(boxes) {
+    var root = {
+      removed: false,
+      remove: function () {
+        this.removed = true;
+        this.parentElement = null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === BOX ? boxes : [];
+      },
+    };
+    root.parentElement = { children: [root] };
+    return root;
+  }
+  function logDoc(roots, withLog) {
     var log = {
       querySelectorAll: function (selector) {
-        return selector === '[data-agent-transcript-message="true"]' ? pageRows : [];
+        return selector === '[data-agent-transcript-message="true"]' ? roots : [];
       },
     };
     return {
       querySelectorAll: function (selector) {
         if (selector === '[role="log"]') return withLog ? [log] : [];
-        if (selector === '[data-agent-transcript-message="true"]') {
-          return withLog ? [] : pageRows;
-        }
+        if (selector === '[data-agent-transcript-message="true"]') return withLog ? [] : roots;
         return [];
       },
     };
@@ -235,19 +262,35 @@ function checkTranscriptTrim(api) {
     [trimRows(rows(3), 3), 0],
     [trimRows(rows(2), 10), 0],
     [trimRows(detached, 2), 1],
-    [normalizeKeep("150"), 150],
-    [normalizeKeep("150.7"), 150],
-    [normalizeKeep("5"), null],
-    [normalizeKeep("later"), null],
-    [normalizeKeep(null), null],
-    [MIN_KEEP <= DEFAULT_KEEP, true],
+    // The plan reads "<messages>,<rows>"; one number sets the rows alone.
+    [normalizePlan("3,80", "1,50"), "3,80"],
+    [normalizePlan("80", "3,50"), "3,80"],
+    [normalizePlan(" 2 rows, 60 ", "1,50"), "2,60"],
+    [normalizePlan("5", "1,50"), null],
+    [normalizePlan("3,5", "1,50"), null],
+    [normalizePlan("0,80", "1,50"), null],
+    [normalizePlan("later", "1,50"), null],
+    [normalizePlan(null, "1,50"), null],
+    [planParts("").messages, DEFAULT_ROOTS],
+    [planParts("").rows, DEFAULT_ROWS],
+    [planParts("4,75").messages, 4],
+    [planParts("4,75").rows, 75],
+    [MIN_ROWS <= DEFAULT_ROWS, true],
     // The menu shows the work, so a count above the transcript size reads as no change.
-    [countLabel(200, 0), "Transcript trim: keep 200 \u2014 set"],
-    [countLabel(20, 3), "Transcript trim: keep 20 (3 removed) \u2014 set"],
-    // Rows inside the log win; a page without the log role still trims.
-    [rowsToTrim(logDoc(rows(4), true)).length, 4],
-    [rowsToTrim(logDoc(rows(2), false)).length, 2],
-    [rowsToTrim(logDoc([], true)).length, 0],
+    [countLabel("1,50", 0), "Transcript trim: 1 message, 50 rows \u2014 set"],
+    [countLabel("1,50", 3), "Transcript trim: 1 message, 50 rows (3 removed) \u2014 set"],
+    [countLabel("2,80", 0), "Transcript trim: 2 messages, 80 rows \u2014 set"],
+    // A row is a part inside a message, and only the outermost box counts.
+    [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
+    [rowsOfRoot(messageRoot([rowBox(rows(2), true)])).length, 0],
+    // Messages inside the log win; a page without the log role still trims.
+    [messageRoots(logDoc([messageRoot([])], true)).length, 1],
+    [messageRoots(logDoc([messageRoot([])], false)).length, 1],
+    [messageRoots(logDoc([], true)).length, 0],
+    // Older messages leave whole; the newest one keeps its last rows.
+    [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "1,50"), 0],
+    [trimPlan(logDoc([messageRoot([rowBox(rows(5))]), messageRoot([rowBox(rows(5))])], true), "1,50"), 5],
+    [trimPlan(logDoc([messageRoot([rowBox(rows(3))]), messageRoot([rowBox(rows(4))]), messageRoot([rowBox(rows(60))])], true), "1,20"), 47],
   ];
   var failed = 0;
   var i;

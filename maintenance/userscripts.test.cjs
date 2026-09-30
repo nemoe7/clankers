@@ -16,7 +16,7 @@ const bundles = {
     },
     offByDefault: ["transcript-trim"],
     extraMenus: { "transcript-trim": 1 },
-    countMenu: "Transcript trim: keep",
+    countMenu: "Transcript trim: ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
     featureIntervals: { "tab-title": 1 },
@@ -81,7 +81,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
       GM_setValue(key, value) {
         if (refuseWrite) throw new Error("Storage write failed");
-        assert.ok(typeof value === "boolean" || Number.isInteger(value), "A saved setting is a switch or a count");
+        assert.ok(
+          typeof value === "boolean" || Number.isInteger(value) || typeof value === "string",
+          "A saved setting is a switch, a count or a plan",
+        );
         stored.set(key, value);
       },
       GM_registerMenuCommand(label, callback) {
@@ -135,21 +138,32 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.ok(toggle.label.includes(": OFF"), "Transcript trim ships OFF");
     toggle.callback();
     assert.equal(stored.get("transcript-trim"), true);
-    const findCount = () => [...counted.menus.values()].find((item) => item.label.startsWith(countMenu));
+    // The plan menu is the one that names rows; the switch menu reads ": ON/OFF".
+    const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("row"));
     assert.ok(findCount(), "Missing the transcript trim count menu");
-    assert.ok(findCount().label.includes("keep 200"), "The count menu shows the default count");
+    assert.ok(
+      findCount().label.includes("1 message, 50 rows"),
+      "The count menu shows the default plan",
+    );
     findCount().callback();
-    assert.equal(stored.has(countKey), false, "A cancel keeps the count");
-    promptAnswer = "150";
+    assert.equal(stored.has(countKey), false, "A cancel keeps the plan");
+    promptAnswer = "2,120";
     findCount().callback();
-    assert.equal(stored.get(countKey), 150);
-    assert.ok(findCount().label.includes("keep 150"));
+    assert.equal(stored.get(countKey), "2,120");
+    assert.ok(findCount().label.includes("2 messages, 120 rows"));
+    promptAnswer = "100";
+    findCount().callback();
+    assert.equal(stored.get(countKey), "2,100", "One number sets the rows alone");
+    assert.ok(findCount().label.includes("2 messages, 100 rows"));
     promptAnswer = "5";
     findCount().callback();
-    assert.equal(stored.get(countKey), 150, "A count below the floor keeps the old count");
+    assert.equal(stored.get(countKey), "2,100", "Rows below the floor keep the old plan");
+    promptAnswer = "0,100";
+    findCount().callback();
+    assert.equal(stored.get(countKey), "2,100", "Zero messages keeps the old plan");
     promptAnswer = "later";
     findCount().callback();
-    assert.equal(stored.get(countKey), 150, "A bad count keeps the old count");
+    assert.equal(stored.get(countKey), "2,100", "A bad plan keeps the old plan");
     promptAnswer = null;
   }
 

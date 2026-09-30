@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.17
+// @version      1.1.19
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -631,40 +631,106 @@
 
   runFeature("transcript-trim", "Transcript trim", function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
-    var DEFAULT_KEEP = 200;
-    var MIN_KEEP = 20;
+    var DEFAULT_ROOTS = 1;
+    var DEFAULT_ROWS = 50;
+    var MIN_ROWS = 20;
     var LOG_SELECTOR = '[role="log"]';
-    var ROW_SELECTOR = '[data-agent-transcript-message="true"]';
+    var MESSAGE_SELECTOR = '[data-agent-transcript-message="true"]';
+    var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
 
-    function normalizeKeep(value) {
-      var number = Number(value);
-      if (!isFinite(number)) return null;
-      number = Math.floor(number);
-      return number >= MIN_KEEP ? number : null;
+    // The switch keeps the newest messages whole and trims the rest: the plan reads
+    // "<messages>,<rows>". One number sets the rows alone.
+    function planParts(plan) {
+      var parts = String(plan == null ? "" : plan).split(/[^0-9]+/);
+      var numbers = [];
+      var i;
+      for (i = 0; i < parts.length; i += 1) {
+        if (parts[i] !== "") numbers.push(Number(parts[i]));
+      }
+      if (!numbers.length) {
+        return { messages: DEFAULT_ROOTS, rows: DEFAULT_ROWS };
+      }
+      if (numbers.length === 1) {
+        return { messages: DEFAULT_ROOTS, rows: numbers[0] };
+      }
+      return { messages: numbers[0], rows: numbers[1] };
     }
 
-    function countLabel(keep, removed) {
+    function normalizePlan(value, current) {
+      var parts = String(value == null ? "" : value).split(/[^0-9]+/);
+      var numbers = [];
+      var kept = planParts(current);
+      var messages = kept.messages;
+      var rows;
+      var i;
+      for (i = 0; i < parts.length; i += 1) {
+        if (parts[i] !== "") numbers.push(Math.floor(Number(parts[i])));
+      }
+      if (!numbers.length) return null;
+      rows = numbers[numbers.length - 1];
+      if (numbers.length > 1) messages = numbers[0];
+      if (!isFinite(rows) || rows < MIN_ROWS) return null;
+      if (!isFinite(messages) || messages < 1) return null;
+      return messages + "," + rows;
+    }
+
+    function countLabel(plan, removed) {
+      var kept = planParts(plan);
       return (
-        "Transcript trim: keep " +
-        keep +
+        "Transcript trim: " +
+        kept.messages +
+        (kept.messages === 1 ? " message, " : " messages, ") +
+        kept.rows +
+        " rows" +
         (removed ? " (" + removed + " removed)" : "") +
         " \u2014 set"
       );
     }
 
-    // The rows sit inside the log on the session page; a page change can take the log role
-    // away, so the whole document answers when no log holds a row.
-    function rowsToTrim(doc) {
+    // The messages sit inside the log on the session page; a page change can take the log
+    // role away, so the whole document answers when no log holds one.
+    function messageRoots(doc) {
       var logs = doc.querySelectorAll(LOG_SELECTOR);
-      var rows = [];
+      var roots = [];
       var i;
       for (i = 0; i < logs.length; i += 1) {
-        rows = rows.concat(Array.prototype.slice.call(logs[i].querySelectorAll(ROW_SELECTOR)));
+        roots = roots.concat(Array.prototype.slice.call(logs[i].querySelectorAll(MESSAGE_SELECTOR)));
       }
-      if (!rows.length) {
-        rows = Array.prototype.slice.call(doc.querySelectorAll(ROW_SELECTOR));
+      if (!roots.length) {
+        roots = Array.prototype.slice.call(doc.querySelectorAll(MESSAGE_SELECTOR));
+      }
+      return roots;
+    }
+
+    // A row is a part inside a message: text, tool call, thinking or status line.
+    // Only the outermost row box counts, so a card inside a message is not split.
+    function rowsOfRoot(root) {
+      var boxes = root.querySelectorAll(ROW_BOX_SELECTOR);
+      var rows = [];
+      var i;
+      for (i = 0; i < boxes.length; i += 1) {
+        if (boxes[i].closest && boxes[i].closest(ROW_BOX_SELECTOR) !== boxes[i]) continue;
+        rows = rows.concat(Array.prototype.slice.call(boxes[i].children));
       }
       return rows;
+    }
+
+    // Older messages leave whole; the newest one keeps its last rows. The count is the
+    // number of rows that left the page, not the number of removed nodes.
+    function trimPlan(doc, plan) {
+      var kept = planParts(plan);
+      var roots = messageRoots(doc);
+      var older = roots.slice(0, Math.max(0, roots.length - kept.messages));
+      var removed = 0;
+      var i;
+      for (i = 0; i < older.length; i += 1) {
+        removed += trimRows(rowsOfRoot(older[i]), 0);
+        if (older[i].parentElement) older[i].remove();
+      }
+      if (older.length < roots.length) {
+        removed += trimRows(rowsOfRoot(roots[roots.length - 1]), kept.rows);
+      }
+      return removed;
     }
 
     // Only the rows still on the page count, and the oldest attached row leaves first.
@@ -686,12 +752,16 @@
     }
 
     if (exposeChecks("transcriptTrim", {
-      normalizeKeep: normalizeKeep,
+      normalizePlan: normalizePlan,
+      planParts: planParts,
       countLabel: countLabel,
-      rowsToTrim: rowsToTrim,
+      messageRoots: messageRoots,
+      rowsOfRoot: rowsOfRoot,
+      trimPlan: trimPlan,
       trimRows: trimRows,
-      MIN_KEEP: MIN_KEEP,
-      DEFAULT_KEEP: DEFAULT_KEEP,
+      MIN_ROWS: MIN_ROWS,
+      DEFAULT_ROOTS: DEFAULT_ROOTS,
+      DEFAULT_ROWS: DEFAULT_ROWS,
     })) {
       return;
     }
@@ -703,14 +773,15 @@
     var labelTimer = null;
     var trimmedTotal = 0;
 
-    function keepCount() {
-      var keep = normalizeKeep(GM_getValue(KEEP_KEY, DEFAULT_KEEP));
-      return keep === null ? DEFAULT_KEEP : keep;
+    function keepPlan() {
+      var stored = String(GM_getValue(KEEP_KEY, "") || "");
+      if (!stored) return DEFAULT_ROOTS + "," + DEFAULT_ROWS;
+      return normalizePlan(stored, null) || DEFAULT_ROOTS + "," + DEFAULT_ROWS;
     }
 
     function registerCount() {
       if (countMenuId) GM_unregisterMenuCommand(countMenuId);
-      countMenuId = GM_registerMenuCommand(countLabel(keepCount(), trimmedTotal), setCount);
+      countMenuId = GM_registerMenuCommand(countLabel(keepPlan(), trimmedTotal), setCount);
     }
 
     // The menu shows the running count, refreshed once a second at most.
@@ -724,9 +795,9 @@
 
     function setCount() {
       if (typeof prompt !== "function") return;
-      var answer = prompt("Messages to keep", String(keepCount()));
+      var answer = prompt("Messages and rows to keep", keepPlan());
       if (answer === null) return;
-      var next = normalizeKeep(answer);
+      var next = normalizePlan(answer, keepPlan());
       if (next === null) return;
       GM_setValue(KEEP_KEY, next);
       registerCount();
@@ -734,7 +805,7 @@
     }
 
     function trim() {
-      var removed = trimRows(rowsToTrim(document), keepCount());
+      var removed = trimPlan(document, keepPlan());
       if (removed) {
         trimmedTotal += removed;
         refreshLabel();
