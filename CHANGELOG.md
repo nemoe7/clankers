@@ -100,6 +100,10 @@
 
 ### workflows
 
+- **Distribution secret**: The dispatch workflow reads `CLANKERS_DIST_PAT` in both jobs, and the workflows README names the same secret.
+
+
+
 - **Distribute consolidation**: One dispatch workflow holds two jobs, `Distribute Arena` and `Distribute Gemini Release`, each with its own target list and its own override input. `REPOS_ARENA` keeps the four repositories and `REPOS_GEMINI` keeps `nemoe7/daedalus`.
 
 

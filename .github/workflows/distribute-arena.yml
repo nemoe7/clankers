@@ -1,6 +1,6 @@
 # Dispatch-only distribution of ARENA.md, the preview skill and the Gemini release workflow.
 # Two jobs, each with its own target list and its own dispatch override.
-# ARENA_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets.
+# CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets.
 # Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
 name: Distribute
 on:
@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Sync ARENA.md And The Preview Skill To Target Repos
         env:
-          ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
+          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
           TARGET_REPOS: ${{ inputs.repos }}
         run: |
           set -e
@@ -52,7 +52,7 @@ jobs:
             }
           done
           failed=""
-          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
+          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
           for repo in $list; do
             (
               set -e
@@ -132,7 +132,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Sync The Gemini Release Workflow To Target Repos
         env:
-          ARENA_DIST_PAT: ${{ secrets.ARENA_DIST_PAT }}
+          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
           TARGET_REPOS: ${{ inputs.gemini_repos }}
         run: |
           set -e
@@ -142,7 +142,7 @@ jobs:
             [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
           done
           failed=""
-          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$ARENA_DIST_PAT"; }; f'
+          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
           for repo in $list; do
             (
               set -e
