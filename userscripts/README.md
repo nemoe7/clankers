@@ -52,7 +52,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 This switch ships OFF. On `/agent/*`, ON removes the oldest transcript messages. It keeps the newest `200` messages by default, and the count never drops below `20`.
 
-The menu command `Transcript trim: keep 200 — set` takes a new count. An empty or too small answer keeps the old count.
+The menu command reads `Transcript trim: keep 200 — set`. After a trim it adds the running total, such as `Transcript trim: keep 200 (12 removed) — set`, so a count above the transcript size reads as no change. The command takes a new count. An empty or too small answer keeps the old count.
 
 Only messages still on the page count. The feature removes the oldest attached message first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you delete the message there.
 

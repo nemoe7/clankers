@@ -187,6 +187,8 @@ function checkAutoScrollToggle(api) {
 
 function checkTranscriptTrim(api) {
   var normalizeKeep = api.normalizeKeep;
+  var countLabel = api.countLabel;
+  var rowsToTrim = api.rowsToTrim;
   var trimRows = api.trimRows;
   var MIN_KEEP = api.MIN_KEEP;
   var DEFAULT_KEEP = api.DEFAULT_KEEP;
@@ -206,6 +208,22 @@ function checkTranscriptTrim(api) {
     }
     return list;
   }
+  function logDoc(pageRows, withLog) {
+    var log = {
+      querySelectorAll: function (selector) {
+        return selector === '[data-agent-transcript-message="true"]' ? pageRows : [];
+      },
+    };
+    return {
+      querySelectorAll: function (selector) {
+        if (selector === '[role="log"]') return withLog ? [log] : [];
+        if (selector === '[data-agent-transcript-message="true"]') {
+          return withLog ? [] : pageRows;
+        }
+        return [];
+      },
+    };
+  }
   var five = rows(5);
   var detached = rows(4);
   detached[0].parentElement = null;
@@ -223,6 +241,13 @@ function checkTranscriptTrim(api) {
     [normalizeKeep("later"), null],
     [normalizeKeep(null), null],
     [MIN_KEEP <= DEFAULT_KEEP, true],
+    // The menu shows the work, so a count above the transcript size reads as no change.
+    [countLabel(200, 0), "Transcript trim: keep 200 \u2014 set"],
+    [countLabel(20, 3), "Transcript trim: keep 20 (3 removed) \u2014 set"],
+    // Rows inside the log win; a page without the log role still trims.
+    [rowsToTrim(logDoc(rows(4), true)).length, 4],
+    [rowsToTrim(logDoc(rows(2), false)).length, 2],
+    [rowsToTrim(logDoc([], true)).length, 0],
   ];
   var failed = 0;
   var i;

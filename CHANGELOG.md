@@ -25,11 +25,15 @@
 
 - **Polling dot**: A running `poll` stamps a heartbeat once a second, and the state payload carries `polling`. The page shows its connection dot blue while the agent waits, and the freshness window expires the flag five seconds after a killed poll.
 
+- **Task-count reminder**: The rotation adds the tail `You have {remaining} tasks remaining.` That entry fills in the unfinished task count, with `1 task` in the singular. With no unfinished task the entry hides itself, and the line shows the next reminder.
+
 ### gpt-plugins
 
 - **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.
 
 ### userscripts
+
+- **Trim readout**: The Transcript trim menu label carries the running removed count, such as `keep 20 (3 removed) — set`. The trim falls back to the transcript rows when the page drops the log role. The version moves to `1.1.17`.
 
 - **Arena tab title**: The Arena bundle gains a Tab title switch. It sets the tab title from the repository link in the session header and clears the emoji when the turn ends. The title adds an emoji for the live action, such as `Arena | clankers 🖥️`, or 💤 while the agent waits on a poll.
 

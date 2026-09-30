@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.16
+// @version      1.1.17
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -643,6 +643,30 @@
       return number >= MIN_KEEP ? number : null;
     }
 
+    function countLabel(keep, removed) {
+      return (
+        "Transcript trim: keep " +
+        keep +
+        (removed ? " (" + removed + " removed)" : "") +
+        " \u2014 set"
+      );
+    }
+
+    // The rows sit inside the log on the session page; a page change can take the log role
+    // away, so the whole document answers when no log holds a row.
+    function rowsToTrim(doc) {
+      var logs = doc.querySelectorAll(LOG_SELECTOR);
+      var rows = [];
+      var i;
+      for (i = 0; i < logs.length; i += 1) {
+        rows = rows.concat(Array.prototype.slice.call(logs[i].querySelectorAll(ROW_SELECTOR)));
+      }
+      if (!rows.length) {
+        rows = Array.prototype.slice.call(doc.querySelectorAll(ROW_SELECTOR));
+      }
+      return rows;
+    }
+
     // Only the rows still on the page count, and the oldest attached row leaves first.
     function trimRows(rows, keep) {
       var attached = 0;
@@ -663,6 +687,8 @@
 
     if (exposeChecks("transcriptTrim", {
       normalizeKeep: normalizeKeep,
+      countLabel: countLabel,
+      rowsToTrim: rowsToTrim,
       trimRows: trimRows,
       MIN_KEEP: MIN_KEEP,
       DEFAULT_KEEP: DEFAULT_KEEP,
@@ -674,6 +700,8 @@
     var timer = null;
     var scheduled = false;
     var observer = null;
+    var labelTimer = null;
+    var trimmedTotal = 0;
 
     function keepCount() {
       var keep = normalizeKeep(GM_getValue(KEEP_KEY, DEFAULT_KEEP));
@@ -682,10 +710,16 @@
 
     function registerCount() {
       if (countMenuId) GM_unregisterMenuCommand(countMenuId);
-      countMenuId = GM_registerMenuCommand(
-        "Transcript trim: keep " + keepCount() + " \u2014 set",
-        setCount,
-      );
+      countMenuId = GM_registerMenuCommand(countLabel(keepCount(), trimmedTotal), setCount);
+    }
+
+    // The menu shows the running count, refreshed once a second at most.
+    function refreshLabel() {
+      if (labelTimer !== null) return;
+      labelTimer = setTimeout(function () {
+        labelTimer = null;
+        registerCount();
+      }, 1000);
     }
 
     function setCount() {
@@ -700,12 +734,12 @@
     }
 
     function trim() {
-      var logs = document.querySelectorAll(LOG_SELECTOR);
-      var keep = keepCount();
-      var i;
-      for (i = 0; i < logs.length; i += 1) {
-        trimRows(logs[i].querySelectorAll(ROW_SELECTOR), keep);
+      var removed = trimRows(rowsToTrim(document), keepCount());
+      if (removed) {
+        trimmedTotal += removed;
+        refreshLabel();
       }
+      return removed;
     }
 
     // A busy transcript mutates often, so the trim waits for a quiet moment.
@@ -725,6 +759,7 @@
     if (location.pathname.indexOf("/agent/") === 0) trim();
     return function () {
       if (timer !== null) clearTimeout(timer);
+      if (labelTimer !== null) clearTimeout(labelTimer);
       observer.disconnect();
       if (countMenuId) GM_unregisterMenuCommand(countMenuId);
     };

@@ -101,6 +101,29 @@ BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
 ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
 # One repeated tail reads as noise, so the reminder rotates through rules an agent most often
 # drops. The cursor lives in meta, so a cycle covers every string before one repeats.
+TASK_REMINDER = "You have {remaining} tasks remaining."
+
+
+def fill_reminder(tail, remaining):
+  """Fill the task-count reminder. One task reads in the singular.
+
+  That entry hides itself with no unfinished task, so its fill is None.
+  """
+  if "{remaining}" in tail and remaining == 0:
+    return None
+  count = f"{remaining} task" if remaining == 1 else f"{remaining} tasks"
+  return tail.replace("{remaining} tasks", count)
+
+
+def reminder_tail(cursor, remaining):
+  """Return the rotating tail at the cursor. A hidden entry yields the next one."""
+  for step in range(len(REMINDERS)):
+    tail = fill_reminder(REMINDERS[(cursor + step) % len(REMINDERS)], remaining)
+    if tail:
+      return tail
+  return REMINDERS[cursor % len(REMINDERS)]
+
+
 REMINDERS = (
   "Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.",
   "Run `task-list` at turn start and update it as work changes.",
@@ -114,6 +137,7 @@ REMINDERS = (
   "Remove stale reports with unpublish.",
   "End the turn with `poll` to wait for more work.",
   "Grep-verify each edit landed.",
+  TASK_REMINDER,
   "Rebase on `origin/main` before pushing.",
   "Check the PR's CI before ending a pushed turn.",
 )
@@ -2028,6 +2052,10 @@ class Store:
       reports = db.execute(
         "SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL"
       ).fetchone()[0]
+      # Unfinished tasks feed the rotation's task-count line.
+      remaining = db.execute(
+        "SELECT count(*) FROM tasks WHERE status <> 'finished'"
+      ).fetchone()[0]
       cursor = meta_number(db, REMINDER_CURSOR)
       # A new user item resets the count. An idle poll clears it; reading does not.
       polls = (
@@ -2053,7 +2081,8 @@ class Store:
     ]
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
     head = [f"{polls} call/s since user messaged."] if polls and counts else []
-    return " ".join([*head, *counts, *ack, REMINDERS[cursor % len(REMINDERS)]])
+    tail = reminder_tail(cursor, remaining)
+    return " ".join([*head, *counts, *ack, tail])
 
   def gate(self, threshold=GATE_THRESHOLD):
     """Return False when bash calls must block: a pending inbox at the call threshold."""

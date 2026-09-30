@@ -2864,16 +2864,31 @@ def test_dispatch_reminder():
     reminder_store.note("reminder-note", "Read this")
     reminder_script = str(Path(preview.__file__))
 
-    def reminder_tail(line):
+    def tails(remaining):
+      """Return the visible rotating tails, in order, for that task count."""
+      filled = (preview.fill_reminder(candidate, remaining) for candidate in preview.REMINDERS)
+      return [text for text in filled if text]
+
+    def reminder_tail(line, remaining):
       """Return the rotating tail one reminder line ends with, or fail."""
       stripped = line.strip()
-      for candidate in preview.REMINDERS:
+      for candidate in tails(remaining):
         if stripped.endswith(candidate):
           return candidate
       raise AssertionError(f"No rotating tail in {stripped!r}")
 
     pending_prefix = "1 message/s. DO NOT IGNORE. ACK ASAP. "
-    for command in (["task-list"], ["task", "reminder-task", "Track work"]):
+    assert preview.fill_reminder(preview.TASK_REMINDER, 0) is None
+    assert preview.fill_reminder(preview.TASK_REMINDER, 1) == "You have 1 task remaining."
+    assert preview.fill_reminder(preview.TASK_REMINDER, 4) == "You have 4 tasks remaining."
+    # No open task hides that entry, so the line carries the next reminder instead.
+    task_at = preview.REMINDERS.index(preview.TASK_REMINDER)
+    assert preview.reminder_tail(task_at, 0) == preview.REMINDERS[task_at + 1]
+    assert "You have 0 tasks remaining." not in tails(0)
+    for command, remaining in (
+      (["task-list"], 0),
+      (["task", "reminder-task", "Track work"], 1),
+    ):
       result = subprocess.run(
         [sys.executable, reminder_script, "--state-dir", reminder_dir, *command],
         capture_output=True,
@@ -2882,7 +2897,7 @@ def test_dispatch_reminder():
       )
       json.loads(result.stdout)
       line = result.stderr.strip()
-      assert line == pending_prefix + reminder_tail(line)
+      assert line == pending_prefix + reminder_tail(line, remaining)
       assert reminder_store.state()["notes"][0]["seen_at"] is None
     result = subprocess.run(
       [sys.executable, reminder_script, "--state-dir", reminder_dir, "read"],
@@ -2892,7 +2907,7 @@ def test_dispatch_reminder():
     )
     json.loads(result.stdout)
     line = result.stderr.strip()
-    assert line == pending_prefix + reminder_tail(line)
+    assert line == pending_prefix + reminder_tail(line, 1)
     delivered = reminder_store.state()["notes"][0]["seen_at"]
     assert delivered is not None
     assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
@@ -2924,12 +2939,12 @@ def test_dispatch_reminder():
       text=True,
       check=True,
     )
-    assert reminder_tail(result.stderr) in preview.REMINDERS
-    assert reminder_store.reminder() in preview.REMINDERS
+    assert reminder_tail(result.stderr, 1) in tails(1)
+    assert reminder_store.reminder() in tails(1)
     reminder_store.submission("form-answer", "form", "REPORT form: yes")
     form_line = reminder_store.reminder()
     form_prefix = "1 form answer/s. DO NOT IGNORE. ACK ASAP. "
-    assert form_line == form_prefix + reminder_tail(form_line)
+    assert form_line == form_prefix + reminder_tail(form_line, 1)
     reminder_store.acknowledge(["form-answer"], "note", "Received")
     for index in range(3):
       reminder_store.note(f"mixed-{index}", "Pending")
@@ -2938,7 +2953,7 @@ def test_dispatch_reminder():
       reminder_store.note(upload["id"], "Uploaded " + name)
     mixed_line = reminder_store.reminder()
     mixed_prefix = "3 message/s. 2 upload/s. DO NOT IGNORE. ACK ASAP. "
-    assert mixed_line == mixed_prefix + reminder_tail(mixed_line)
+    assert mixed_line == mixed_prefix + reminder_tail(mixed_line, 1)
     assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
 
 
@@ -2967,18 +2982,26 @@ def test_reminder_rotation():
     assert "Grep-verify each edit landed." in preview.REMINDERS
     assert "Rebase on `origin/main` before pushing." in preview.REMINDERS
     assert "Check the PR's CI before ending a pushed turn." in preview.REMINDERS
+    assert preview.TASK_REMINDER in preview.REMINDERS
+    # One open task keeps every entry visible for the rotation checks.
+    rotate_store.write_task("rotate-task", "Open work")
+
+    def tail_at(index, remaining=1):
+      return preview.reminder_tail(index, remaining)
+
     span = len(preview.REMINDERS)
     cycle = [rotate_store.reminder() for _ in range(span)]
-    assert cycle == list(preview.REMINDERS)
-    assert rotate_store.reminder() == preview.REMINDERS[0]
+    assert cycle == [tail_at(index) for index in range(span)]
+    assert "You have 0 tasks remaining." not in cycle
+    assert rotate_store.reminder() == tail_at(0)
     # An idle queue carries the tail alone, and its polls do not count: the tally starts with
     # the pending item it reports.
-    assert rotate_store.reminder(advance=True) == preview.REMINDERS[1]
-    assert rotate_store.reminder(advance=True) == preview.REMINDERS[2]
-    assert rotate_store.reminder() == preview.REMINDERS[3]
+    assert rotate_store.reminder(advance=True) == tail_at(1)
+    assert rotate_store.reminder(advance=True) == tail_at(2)
+    assert rotate_store.reminder() == tail_at(3)
     rotate_store.note("rotate-note", "Pending")
     pending = "1 message/s. DO NOT IGNORE. ACK ASAP. "
-    assert rotate_store.reminder() == f"{pending}{preview.REMINDERS[4]}"
+    assert rotate_store.reminder() == f"{pending}{tail_at(4)}"
     offset = span + 5
     for cursor, polls in ((offset, 1), (offset + 1, 2)):
       result = subprocess.run(
@@ -2987,7 +3010,7 @@ def test_reminder_rotation():
         text=True,
         check=True,
       )
-      tail = preview.REMINDERS[cursor % span]
+      tail = tail_at(cursor)
       assert (
         result.stdout.strip() == f"{polls} call/s since user messaged. {pending}{tail}"
       )
@@ -2999,32 +3022,47 @@ def test_reminder_rotation():
       check=True,
     )
     json.loads(result.stdout)
-    tail = preview.REMINDERS[(offset + 2) % span]
+    tail = tail_at(offset + 2)
     assert result.stderr.strip() == f"2 call/s since user messaged. {pending}{tail}"
     # A read does not erase the calls since the first unread message. Only a fresh backlog
     # resets the tally; a message landing on an unacked pile leaves it running.
     rotate_store.read()
     assert rotate_store.reminder() == (
-      f"2 call/s since user messaged. {pending}{preview.REMINDERS[(offset + 3) % span]}"
+      f"2 call/s since user messaged. {pending}{tail_at(offset + 3)}"
     )
     # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
     rotate_store.acknowledge(["rotate-note"], "note", "Done")
     assert rotate_store.meta_value(preview.POLLS_SINCE_MESSAGE) == "0"
-    assert rotate_store.reminder(advance=True) == preview.REMINDERS[(offset + 4) % span]
-    assert rotate_store.reminder(advance=True) == preview.REMINDERS[(offset + 5) % span]
+    assert rotate_store.reminder(advance=True) == tail_at(offset + 4)
+    assert rotate_store.reminder(advance=True) == tail_at(offset + 5)
     rotate_store.note("rotate-later", "Pending again")
     assert rotate_store.reminder(advance=True) == (
-      f"1 call/s since user messaged. {pending}{preview.REMINDERS[(offset + 6) % span]}"
+      f"1 call/s since user messaged. {pending}{tail_at(offset + 6)}"
     )
     rotate_store.note("rotate-newer", "Another user message")
     newer = "2 message/s. DO NOT IGNORE. ACK ASAP. "
     # A second message on an unacked pile keeps the count anchored to the first unread one.
     assert rotate_store.reminder() == (
-      f"1 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 7) % span]}"
+      f"1 call/s since user messaged. {newer}{tail_at(offset + 7)}"
     )
     assert rotate_store.reminder(advance=True) == (
-      f"2 call/s since user messaged. {newer}{preview.REMINDERS[(offset + 8) % span]}"
+      f"2 call/s since user messaged. {newer}{tail_at(offset + 8)}"
     )
+
+
+def test_reminder_hides_task_entry_with_no_open_task():
+  # A finished task stops the count, so that entry yields the next reminder.
+  with tempfile.TemporaryDirectory() as hidden_dir:
+    hidden_store = preview.Store(hidden_dir, create=True)
+    hidden_store.write_task("done-task", "Finished work", status="finished")
+    task_at = preview.REMINDERS.index(preview.TASK_REMINDER)
+    for _ in range(task_at):
+      hidden_store.reminder()
+    assert hidden_store.reminder() == preview.REMINDERS[task_at + 1]
+    hidden_store.write_task("open-task", "Open work")
+    for _ in range(len(preview.REMINDERS) - 1):
+      hidden_store.reminder()
+    assert hidden_store.reminder() == "You have 1 task remaining."
 
 
 def test_ack_task_reminder():
