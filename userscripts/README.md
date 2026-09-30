@@ -50,7 +50,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 ## Arena Transcript Trim
 
-This switch ships OFF. On `/agent/*`, ON removes the oldest transcript rows. It keeps the newest `1` message whole and cuts it to its last `50` rows. Older messages empty out, and every message root stays on the page. The row count never drops below `20`.
+This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows come back. On `/agent/*`, ON removes the oldest transcript rows. It keeps the newest `1` message whole and cuts it to its last `50` rows. Older messages empty out, and every message root stays on the page. The row count never drops below `20`.
 
 The menu command reads `Transcript trim: 1 message, 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 1 message, 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes a new plan as `<messages>,<rows>`; one number sets the rows alone. An empty or too small answer keeps the old plan.
 
