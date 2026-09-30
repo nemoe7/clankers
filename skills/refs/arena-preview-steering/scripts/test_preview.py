@@ -2948,6 +2948,9 @@ def test_reminder_rotation():
     rotate_store = preview.Store(rotate_dir, create=True)
     rotate_script = str(Path(preview.__file__))
     assert (
+      "Refresh context with ARENA.md, SKILL.md and REFERENCE.md." in preview.REMINDERS
+    )
+    assert (
       "Ask questions ASAP through fielded reports; keep other work moving."
       in preview.REMINDERS
     )

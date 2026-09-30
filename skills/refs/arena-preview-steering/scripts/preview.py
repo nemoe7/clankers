@@ -102,6 +102,7 @@ ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
 # One repeated tail reads as noise, so the reminder rotates through rules an agent most often
 # drops. The cursor lives in meta, so a cycle covers every string before one repeats.
 REMINDERS = (
+  "Refresh context with ARENA.md, SKILL.md and REFERENCE.md.",
   "Run `task-list` at turn start and update it as work changes.",
   "Take the smallest open task next.",
   "Always push.",
