@@ -1,5 +1,7 @@
 ## 2026-09-30
 
+- **ChatGPT long-text fences**: The `More about you` field scans for the longest inner backtick run and sets the outer fence to `max(4, run + 1)`. The fence stays strictly longer than every inner run and holds at least 4 backticks.
+
 - **Preview reminders**: The rotation names the `task-list` timing and bans an open-task turn end. It adds the edit grep check, the pre-push rebase and the pushed-turn CI check.
 
 - **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.

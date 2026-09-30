@@ -8,8 +8,10 @@ State what changed/was found, checks and results, open issues, assumptions, limi
 Report skipped alternatives with the trigger that makes each worth adding.
 Verify current/external/version-sensitive facts.
 Diagrams MUST use Mermaid unless the target cannot render Mermaid. Use `flowchart TB` by default. Do not use ASCII diagrams. Mermaid: short labels, phone-sized rows.
-When fencing long text, use max(4, longest contained backtick run + 1) backticks for each outer fence.
-Keep inner fences and language tags unchanged.
+Long-text outer fences: before sending any long fenced artifact, scan its complete content for the longest consecutive backtick run.
+Set the outer fence to max(4, longest run + 1) backticks.
+Preserve all inner fences and language tags exactly.
+Final check: the outer fence MUST be strictly longer than every inner backtick run and MUST contain at least 4 backticks.
 When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 
 WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
