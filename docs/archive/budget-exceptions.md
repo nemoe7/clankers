@@ -2,6 +2,8 @@
 
 Budget growth, oldest first, with dates, numbers and reasons. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta, the reason and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when later compression funds them.
 
+2026-09-30: Approved amendments. `skills/arena-preview-steering/scripts/preview.py` +153 `B`, 79,059 to 79,212, for the five reminder changes. The two distributed copies follow the refs source.
+
 2026-09-30: Accepted without funding. `gpt-plugins/skills/gpt-handoff/SKILL.md` +127 `tok`, 1,061 to 1,188, for the owner's copy-pasteability block, the evidence-link clauses and the audit single-block rule. The refs source grows 878 `B`, to 6,075.
 
 2026-09-29: Approved amendment. `rules/ARENA.md` +76 `B`, 15,192 to 15,268, for the plain-output poll clause and the unverified empty list. The root copy matches.

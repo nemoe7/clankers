@@ -2895,7 +2895,14 @@ def test_reminder_rotation():
     assert "Remove stale reports with unpublish." in preview.REMINDERS
     assert "End the turn with `poll` to wait for more work." in preview.REMINDERS
     assert "Don't forget to publish your reports." in preview.REMINDERS
-    assert "Avoid ending turn if there are unblocked tasks." in preview.REMINDERS
+    assert "Never end a turn with unblocked tasks." in preview.REMINDERS
+    assert (
+      "Run `task-list` at turn start and update it as work changes."
+      in preview.REMINDERS
+    )
+    assert "Grep-verify each edit landed." in preview.REMINDERS
+    assert "Rebase on `origin/main` before pushing." in preview.REMINDERS
+    assert "Check the PR's CI before ending a pushed turn." in preview.REMINDERS
     span = len(preview.REMINDERS)
     cycle = [rotate_store.reminder() for _ in range(span)]
     assert cycle == list(preview.REMINDERS)

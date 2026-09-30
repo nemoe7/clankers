@@ -102,16 +102,19 @@ ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
 # One repeated tail reads as noise, so the reminder rotates through rules an agent most often
 # drops. The cursor lives in meta, so a cycle covers every string before one repeats.
 REMINDERS = (
-  "Manage the task list.",
+  "Run `task-list` at turn start and update it as work changes.",
   "Take the smallest open task next.",
   "Always push.",
   "`ask_user` on GH_TOKEN failure.",
   "Keep docs terse but clear.",
   "Ask questions ASAP through fielded reports; keep other work moving.",
   "Don't forget to publish your reports.",
-  "Avoid ending turn if there are unblocked tasks.",
+  "Never end a turn with unblocked tasks.",
   "Remove stale reports with unpublish.",
   "End the turn with `poll` to wait for more work.",
+  "Grep-verify each edit landed.",
+  "Rebase on `origin/main` before pushing.",
+  "Check the PR's CI before ending a pushed turn.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
