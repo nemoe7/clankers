@@ -54,7 +54,7 @@ This switch ships OFF, and OFF stops the trim: a reload redraws the transcript f
 
 The menu command reads `Transcript trim: 1 message, 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 1 message, 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes a new plan as `<messages>,<rows>`; one number sets the rows alone. An empty or too small answer keeps the old plan.
 
-A row is a part inside a message: text, a tool call, a thinking line or a status line. Only rows still on the page count, and the oldest attached row leaves first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you delete the message there.
+The trim waits for the page to settle. It touches nothing while a turn streams or a live icon pulses, and it waits for a quiet window after the last change. A row is a part inside a message: text, a tool call, a thinking line or a status line. Only rows still on the page count, and the oldest attached row leaves first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you delete the message there.
 
 The message root itself never leaves. Arena complains when a `#chat-message-*` element disappears, and this switch runs inside its tree.
 

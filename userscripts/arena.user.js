@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.20
+// @version      1.1.21
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -637,6 +637,8 @@
     var LOG_SELECTOR = '[role="log"]';
     var MESSAGE_SELECTOR = '[data-agent-transcript-message="true"]';
     var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
+    var LIVE_ICON_SELECTOR = "svg.animate-pulse";
+    var SETTLE_MS = 1200;
 
     // The switch keeps the newest messages whole and trims the rest: the plan reads
     // "<messages>,<rows>". One number sets the rows alone.
@@ -731,6 +733,13 @@
       return removed;
     }
 
+    // Arena redraws the transcript while a turn runs, and a trim mid-redraw breaks it.
+    // The page settles when no turn is streaming and no live icon pulses.
+    function isSettled(doc) {
+      if (findStopGeneratingButton(doc)) return false;
+      return !doc.querySelector(LIVE_ICON_SELECTOR);
+    }
+
     // Only the rows still on the page count, and the oldest attached row leaves first.
     function trimRows(rows, keep) {
       var attached = 0;
@@ -757,6 +766,7 @@
       rowsOfRoot: rowsOfRoot,
       trimPlan: trimPlan,
       trimRows: trimRows,
+      isSettled: isSettled,
       MIN_ROWS: MIN_ROWS,
       DEFAULT_ROOTS: DEFAULT_ROOTS,
       DEFAULT_ROWS: DEFAULT_ROWS,
@@ -811,21 +821,27 @@
       return removed;
     }
 
-    // A busy transcript mutates often, so the trim waits for a quiet moment.
+    // A busy transcript mutates often, so the trim waits for a quiet moment, then for the
+    // page to settle. A turn that keeps changing the page only re-arms the wait.
     function schedule() {
       if (scheduled) return;
       scheduled = true;
       timer = setTimeout(function () {
         scheduled = false;
         timer = null;
-        if (location.pathname.indexOf("/agent/") === 0) trim();
-      }, 250);
+        if (location.pathname.indexOf("/agent/") !== 0) return;
+        if (!isSettled(document)) {
+          schedule();
+          return;
+        }
+        trim();
+      }, SETTLE_MS);
     }
 
     observer = new MutationObserver(schedule);
     observer.observe(document.documentElement, { childList: true, subtree: true });
     registerCount();
-    if (location.pathname.indexOf("/agent/") === 0) trim();
+    if (location.pathname.indexOf("/agent/") === 0 && isSettled(document)) trim();
     return function () {
       if (timer !== null) clearTimeout(timer);
       if (labelTimer !== null) clearTimeout(labelTimer);

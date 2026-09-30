@@ -193,6 +193,7 @@ function checkTranscriptTrim(api) {
   var rowsOfRoot = api.rowsOfRoot;
   var trimPlan = api.trimPlan;
   var trimRows = api.trimRows;
+  var isSettled = api.isSettled;
   var MIN_ROWS = api.MIN_ROWS;
   var DEFAULT_ROOTS = api.DEFAULT_ROOTS;
   var DEFAULT_ROWS = api.DEFAULT_ROWS;
@@ -298,6 +299,11 @@ function checkTranscriptTrim(api) {
     [rootRowsRemoved, 5],
     [rootNodes[0].parentElement !== null, true],
     [rootNodes[1].parentElement !== null, true],
+    // The trim waits for the page to settle: no stop button, no pulsing live icon.
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), true],
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
+    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), false],
+    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), true],
   ];
   var failed = 0;
   var i;
