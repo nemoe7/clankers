@@ -1253,6 +1253,8 @@
         [actionEmoji("Editing"), "\u270F\uFE0F"],
         [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
         [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
+        [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
+        [actionEmoji("Re-thinking"), "\uD83D\uDCAD"],
         [actionEmoji("Waiting"), "\uD83D\uDCA4"],
         [actionEmoji("Doing something"), "\u2699\uFE0F"],
         [actionEmoji(null), null],
