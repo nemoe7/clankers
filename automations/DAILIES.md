@@ -130,14 +130,14 @@ Monitor the official stable release channel of each item below, preferring its G
 
 ## 4. Output
 
-- Title the report `# Dailies — YYYY-MM-DD` when it has actionable findings or Coverage gaps.
+- Title the report `# Dailies — YYYY-MM-DD` when it has actionable findings.
 - Write the report in ASD-STE100 Simplified Technical English.
 - Write the top-level sections exactly, in this order: `## 1. Updates`, `## 2. Wiki`, `## 3. Repo Audit`.
 - Keep Updates to its compact table plus the `### <Software>` headings section 1 allows.
 - Keep Wiki to `### Add` and `### Update/remove`, with the Add table `Repo | Section | Why | Docs`.
 - Keep Repo Audit to its combined table and any verified release drafts.
 - End every report with `## Coverage`. List the window, sources and repositories reached, checks completed, gaps with reasons, deferred deep audits, known missed runs and any unanswered question with the stated assumption. Omit empty task sections.
-- If no finding is actionable but coverage is incomplete, output the dated title and Coverage only. If coverage is complete and there is no finding, send nothing. If the surface cannot send nothing, send `# Dailies — YYYY-MM-DD — no actionable change` and Coverage.
+- When no finding is actionable, send nothing and omit Coverage. If the surface cannot send nothing, send `# Dailies — YYYY-MM-DD — no actionable change` alone.
 
 ### Columns and legend
 

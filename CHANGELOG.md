@@ -15,10 +15,13 @@
 
 - **Handoff output contract**: `gpt-handoff` emits the handoff as one Markdown fenced block with no prose around it. Evidence carries a direct link beside each claim, and `audit` takes the same single-block rule. The plugin version is `1.5.0`.
 
+### automations
+
+- **DAILIES coverage output**: When no finding is actionable, the run sends nothing and omits Coverage. The title line drops the Coverage-gap case.
+
 ### docs
 
 - **CHANGELOG domains**: Every date groups its changes under domain headings. The headings are rules, preview, gpt-plugins, userscripts, workflows, automations, maintenance and docs. AGENTS.md requires the shape.
-
 
 ## 2026-09-29
 
