@@ -4,18 +4,49 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const bundles = {
-  arena: { features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "tab-title": 1 }, baseObservers: 1, featureIntervals: { "tab-title": 1 } },
-  chatgpt: { features: { "hide-elements": 1, "auto-think": 0 }, baseObservers: 0, featureIntervals: { "auto-think": 1 } },
+  arena: {
+    features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1 },
+    labels: {
+      "prompt-fill": "Prompt fill",
+      "open-steering": "Open Steering",
+      "hide-composer": "Hide composer",
+      "auto-scroll": "Transcript auto-scroll",
+      "transcript-trim": "Transcript trim",
+      "tab-title": "Tab title",
+    },
+    offByDefault: ["transcript-trim"],
+    extraMenus: { "transcript-trim": 1 },
+    countMenu: "Transcript trim: keep",
+    countKey: "clankers-arena-trim-keep",
+    baseObservers: 1,
+    featureIntervals: { "tab-title": 1 },
+  },
+  chatgpt: {
+    features: { "hide-elements": 1, "auto-think": 0 },
+    labels: { "hide-elements": "Hide elements", "auto-think": "Auto Think" },
+    baseObservers: 0,
+    featureIntervals: { "auto-think": 1 },
+  },
 };
 
-for (const [domain, { features, baseObservers, featureIntervals }] of Object.entries(bundles)) {
-  const intervals = Object.values(featureIntervals).reduce((a, b) => a + b, 0);
+for (const [domain, bundle] of Object.entries(bundles)) {
+  const { features, labels, countMenu, countKey, baseObservers, featureIntervals } = bundle;
+  const offByDefault = new Set(bundle.offByDefault || []);
+  const extraMenus = bundle.extraMenus || {};
   const source = fs.readFileSync(
     path.join(__dirname, "../userscripts", `${domain}.user.js`), "utf8",
   );
   const keys = Object.keys(features);
   const stored = new Map();
   let refuseWrite = false;
+  let promptAnswer = null;
+
+  function isOn(saved, key) {
+    return offByDefault.has(key) ? saved.get(key) === true : saved.get(key) !== false;
+  }
+  const observersFor = (saved) => baseObservers + keys.reduce((total, key) => total + (isOn(saved, key) ? features[key] : 0), 0);
+  const intervalsFor = (saved) => keys.reduce((total, key) => total + (isOn(saved, key) ? (featureIntervals[key] || 0) : 0), 0);
+  const menusFor = (saved) => keys.length + keys.reduce((total, key) => total + (isOn(saved, key) ? (extraMenus[key] || 0) : 0), 0);
 
   function load() {
     const menus = new Map();
@@ -46,10 +77,11 @@ for (const [domain, { features, baseObservers, featureIntervals }] of Object.ent
       clearInterval() { active.intervals -= 1; },
       setTimeout() { throw new Error("No steering button should schedule a click"); },
       clearTimeout() {},
+      prompt() { return promptAnswer; },
       GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
       GM_setValue(key, value) {
         if (refuseWrite) throw new Error("Storage write failed");
-        assert.equal(typeof value, "boolean");
+        assert.ok(typeof value === "boolean" || Number.isInteger(value), "A saved setting is a switch or a count");
         stored.set(key, value);
       },
       GM_registerMenuCommand(label, callback) {
@@ -63,51 +95,80 @@ for (const [domain, { features, baseObservers, featureIntervals }] of Object.ent
     return { menus, active };
   }
 
+  function menuFor(page, key) {
+    return [...page.menus.values()].find((item) => item.label.startsWith(`${labels[key]}:`) && item.label.endsWith("— toggle"));
+  }
+
   const defaults = load();
-  assert.equal(defaults.menus.size, keys.length);
-  assert.equal(defaults.active.observers, Object.values(features).reduce((a, b) => a + b, 0) + baseObservers);
-  assert.equal(defaults.active.intervals, intervals);
+  assert.equal(defaults.menus.size, menusFor(stored));
+  assert.equal(defaults.active.observers, observersFor(stored));
+  assert.equal(defaults.active.intervals, intervalsFor(stored));
   assert.equal(defaults.active.clicks, domain === "chatgpt" ? 1 : 0);
   assert.equal(stored.size, 0, "Reading defaults must not overwrite settings");
 
   for (const key of keys) {
+    const startsOn = isOn(new Map(), key);
     stored.clear();
-    stored.set(key, false);
+    stored.set(key, !startsOn);
     const page = load();
-    assert.equal(page.active.observers, defaults.active.observers - features[key]);
-    assert.equal(page.active.intervals, defaults.active.intervals - (featureIntervals[key] || 0));
+    assert.equal(page.active.observers, observersFor(stored));
+    assert.equal(page.active.intervals, intervalsFor(stored));
     assert.equal(page.active.clicks, key === "auto-think" ? 0 : defaults.active.clicks);
-    const menu = [...page.menus.values()].find((item) => item.label.includes(": OFF"));
-    assert.ok(menu, `Missing disabled menu for ${key}`);
-    const before = { ...page.active };
+    const menu = menuFor(page, key);
+    assert.ok(menu, `Missing menu for ${key}`);
+    assert.ok(menu.label.includes(startsOn ? ": OFF" : ": ON"), `The ${key} menu shows the saved switch`);
     menu.callback();
-    assert.equal(stored.get(key), true);
-    assert.equal(page.active.observers, defaults.active.observers);
-    assert.equal(page.active.intervals, defaults.active.intervals);
-    assert.equal(page.menus.size, keys.length, "Menu updates must not accumulate entries");
-    assert.ok([...page.menus.values()].every((item) => item.label.includes(": ON")));
+    assert.equal(stored.get(key), startsOn, "A toggle returns the feature to its default");
+    assert.equal(page.active.observers, observersFor(stored));
+    assert.equal(page.active.intervals, intervalsFor(stored));
+    assert.equal(page.menus.size, menusFor(stored));
+    assert.deepEqual(page.active, defaults.active, "The default state returns");
+    assert.ok(menuFor(page, key).label.includes(startsOn ? ": ON" : ": OFF"));
     assert.deepEqual(load().active, defaults.active, "Reload must apply the saved switch");
   }
 
-  stored.clear();
-  const page = load();
-  const before = { ...page.active };
-  for (const menu of [...page.menus.values()]) menu.callback();
-  assert.deepEqual([...stored.keys()].sort(), keys.slice().sort());
-  assert.ok([...stored.values()].every((value) => value === false));
-  assert.equal(page.active.observers, baseObservers);
-  assert.equal(page.active.intervals, 0);
-  assert.deepEqual(load().active, { observers: baseObservers, intervals: 0, clicks: 0 });
+  if (countMenu) {
+    stored.clear();
+    const counted = load();
+    const toggle = menuFor(counted, "transcript-trim");
+    assert.ok(toggle, "Missing the transcript trim toggle");
+    assert.ok(toggle.label.includes(": OFF"), "Transcript trim ships OFF");
+    toggle.callback();
+    assert.equal(stored.get("transcript-trim"), true);
+    const findCount = () => [...counted.menus.values()].find((item) => item.label.startsWith(countMenu));
+    assert.ok(findCount(), "Missing the transcript trim count menu");
+    assert.ok(findCount().label.includes("keep 200"), "The count menu shows the default count");
+    findCount().callback();
+    assert.equal(stored.has(countKey), false, "A cancel keeps the count");
+    promptAnswer = "150";
+    findCount().callback();
+    assert.equal(stored.get(countKey), 150);
+    assert.ok(findCount().label.includes("keep 150"));
+    promptAnswer = "5";
+    findCount().callback();
+    assert.equal(stored.get(countKey), 150, "A count below the floor keeps the old count");
+    promptAnswer = "later";
+    findCount().callback();
+    assert.equal(stored.get(countKey), 150, "A bad count keeps the old count");
+    promptAnswer = null;
+  }
 
+  stored.clear();
+  for (const key of keys) stored.set(key, false);
   const allOff = load();
+  assert.equal(allOff.active.observers, baseObservers);
+  assert.equal(allOff.active.intervals, 0);
+  assert.equal(allOff.menus.size, keys.length);
+  assert.ok([...allOff.menus.values()].every((item) => item.label.includes(": OFF")));
+  assert.deepEqual(allOff.active, { observers: baseObservers, intervals: 0, clicks: 0 });
+
   refuseWrite = true;
-  const labels = [...allOff.menus.values()].map((item) => item.label);
+  const labelsBefore = [...allOff.menus.values()].map((item) => item.label);
   assert.throws(() => allOff.menus.values().next().value.callback(), /Storage write failed/);
-  assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labels);
+  assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labelsBefore);
   assert.ok([...stored.values()].every((value) => value === false));
   console.log(`ok ${domain}: switches, defaults, storage failure, live switches, and disabled startup`);
 }
-
 {
   const source = fs.readFileSync(path.join(__dirname, '../userscripts/arena.user.js'), 'utf8');
   const events = new Map();

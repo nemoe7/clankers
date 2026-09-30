@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Feature switches |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Tab title |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Tab title |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-All seven features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
+Seven features default to On. Transcript trim ships OFF, because it removes messages from the page. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
@@ -47,6 +47,14 @@ The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its he
 On `/agent/*`, ON keeps the transcript at the bottom while the Stop generating button exists. This includes upward scrolling, new messages, resized tool output and session changes. Without that button the composer is visible and the transcript does not follow until the button returns. A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
 
 The feature uses the transcript message marker and its scrollable `role="log"` ancestor.
+
+## Arena Transcript Trim
+
+This switch ships OFF. On `/agent/*`, ON removes the oldest transcript messages. It keeps the newest `200` messages by default, and the count never drops below `20`.
+
+The menu command `Transcript trim: keep 200 — set` takes a new count. An empty or too small answer keeps the old count.
+
+Only messages still on the page count. The feature removes the oldest attached message first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you delete the message there.
 
 ## Arena Tab Title
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.13
+// @version      1.1.14
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -19,17 +19,18 @@
 (function () {
   "use strict";
 
-  function runFeature(key, label, run, onChange) {
+  function runFeature(key, label, run, onChange, defaultOn) {
     if (typeof document === "undefined") {
       run();
       return;
     }
-    var enabled = GM_getValue(key, true) !== false;
+    var fallback = defaultOn !== false;
+    var enabled = GM_getValue(key, fallback) !== false;
     var menuId;
     var stop = null;
 
     function toggle() {
-      var next = GM_getValue(key, true) === false;
+      var next = GM_getValue(key, fallback) === false;
       GM_setValue(key, next);
       if (stop) stop();
       stop = next ? run() : null;
@@ -754,6 +755,151 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
     ensureButton();
   })();
+
+  runFeature("transcript-trim", "Transcript trim", function () {
+    var KEEP_KEY = "clankers-arena-trim-keep";
+    var DEFAULT_KEEP = 200;
+    var MIN_KEEP = 20;
+    var LOG_SELECTOR = '[role="log"]';
+    var ROW_SELECTOR = '[data-agent-transcript-message="true"]';
+
+    function normalizeKeep(value) {
+      var number = Number(value);
+      if (!isFinite(number)) return null;
+      number = Math.floor(number);
+      return number >= MIN_KEEP ? number : null;
+    }
+
+    // Only the rows still on the page count, and the oldest attached row leaves first.
+    function trimRows(rows, keep) {
+      var attached = 0;
+      var excess = 0;
+      var removed = 0;
+      var i;
+      for (i = 0; i < rows.length; i += 1) {
+        if (rows[i].parentElement) attached += 1;
+      }
+      excess = attached - keep;
+      for (i = 0; i < rows.length && removed < excess; i += 1) {
+        if (!rows[i].parentElement) continue;
+        rows[i].remove();
+        removed += 1;
+      }
+      return removed;
+    }
+
+    function runChecks() {
+      function rows(count) {
+        var list = [];
+        var i;
+        for (i = 0; i < count; i += 1) {
+          list.push({
+            parentElement: {},
+            removed: false,
+            remove: function () {
+              this.removed = true;
+              this.parentElement = null;
+            },
+          });
+        }
+        return list;
+      }
+      var five = rows(5);
+      var detached = rows(4);
+      detached[0].parentElement = null;
+      var cases = [
+        [trimRows(five, 3), 2],
+        [five[0].removed, true],
+        [five[1].removed, true],
+        [five[2].removed, false],
+        [trimRows(rows(3), 3), 0],
+        [trimRows(rows(2), 10), 0],
+        [trimRows(detached, 2), 1],
+        [normalizeKeep("150"), 150],
+        [normalizeKeep("150.7"), 150],
+        [normalizeKeep("5"), null],
+        [normalizeKeep("later"), null],
+        [normalizeKeep(null), null],
+        [MIN_KEEP <= DEFAULT_KEEP, true],
+      ];
+      var failed = 0;
+      var i;
+      for (i = 0; i < cases.length; i += 1) {
+        if (cases[i][0] !== cases[i][1]) {
+          console.error("check fail", i, cases[i][0], cases[i][1]);
+          failed += 1;
+        }
+      }
+      if (failed) {
+        throw new Error(failed + " checks failed");
+      }
+      console.log("ok " + cases.length);
+    }
+
+    if (typeof document === "undefined") {
+      runChecks();
+      return;
+    }
+
+    var countMenuId;
+    var timer = null;
+    var scheduled = false;
+    var observer = null;
+
+    function keepCount() {
+      var keep = normalizeKeep(GM_getValue(KEEP_KEY, DEFAULT_KEEP));
+      return keep === null ? DEFAULT_KEEP : keep;
+    }
+
+    function registerCount() {
+      if (countMenuId) GM_unregisterMenuCommand(countMenuId);
+      countMenuId = GM_registerMenuCommand(
+        "Transcript trim: keep " + keepCount() + " \u2014 set",
+        setCount,
+      );
+    }
+
+    function setCount() {
+      if (typeof prompt !== "function") return;
+      var answer = prompt("Messages to keep", String(keepCount()));
+      if (answer === null) return;
+      var next = normalizeKeep(answer);
+      if (next === null) return;
+      GM_setValue(KEEP_KEY, next);
+      registerCount();
+      trim();
+    }
+
+    function trim() {
+      var logs = document.querySelectorAll(LOG_SELECTOR);
+      var keep = keepCount();
+      var i;
+      for (i = 0; i < logs.length; i += 1) {
+        trimRows(logs[i].querySelectorAll(ROW_SELECTOR), keep);
+      }
+    }
+
+    // A busy transcript mutates often, so the trim waits for a quiet moment.
+    function schedule() {
+      if (scheduled) return;
+      scheduled = true;
+      timer = setTimeout(function () {
+        scheduled = false;
+        timer = null;
+        if (location.pathname.indexOf("/agent/") === 0) trim();
+      }, 250);
+    }
+
+    observer = new MutationObserver(schedule);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    registerCount();
+    if (location.pathname.indexOf("/agent/") === 0) trim();
+    return function () {
+      if (timer !== null) clearTimeout(timer);
+      observer.disconnect();
+      if (countMenuId) GM_unregisterMenuCommand(countMenuId);
+    };
+  }, null, false);
 
   runFeature("hide-composer", "Hide composer", function () {
 
