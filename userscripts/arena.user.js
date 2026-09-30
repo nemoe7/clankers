@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.6
+// @version      1.1.7
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -270,7 +270,8 @@
 
     var BAR_SELECTOR =
       "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
-    var STEERING_LABEL_RE = /^(\S+) - Steering$/i;
+    // Agents drift on the process name, so the row is found by its words, not its shape.
+    var STEERING_LABEL_RE = /steering|preview/i;
     var SLUG_KEY = "clankers-arena-agent-slug";
     var CLICK_DELAY_MS = 1000;
 
@@ -307,9 +308,21 @@
       return repo;
     }
 
+    function isSteeringLabel(text) {
+      return STEERING_LABEL_RE.test(String(text || ""));
+    }
+
     function steeringSlugFromLabel(text) {
-      var match = STEERING_LABEL_RE.exec(String(text || "").trim());
-      return match ? match[1] : null;
+      var trimmed = String(text || "").trim();
+      var match = STEERING_LABEL_RE.exec(trimmed);
+      if (!match) {
+        return null;
+      }
+      var head = trimmed.slice(0, match.index).replace(/[\s\-:|]+$/, "");
+      var words = head.split(/[\s\-:|]+/).filter(function (word) {
+        return Boolean(word);
+      });
+      return words.length ? words[words.length - 1] : null;
     }
 
     function isSteeringPort(text) {
@@ -317,11 +330,11 @@
     }
 
     function buttonMatchesSteering(label, port, expectedSlug) {
-      var slug = steeringSlugFromLabel(label);
-      if (!slug || !isSteeringPort(port)) {
+      if (!isSteeringLabel(label) || !isSteeringPort(port)) {
         return false;
       }
-      if (expectedSlug && slug.toLowerCase() !== expectedSlug.toLowerCase()) {
+      var slug = steeringSlugFromLabel(label);
+      if (expectedSlug && slug && slug.toLowerCase() !== expectedSlug.toLowerCase()) {
         return false;
       }
       return true;
@@ -335,6 +348,24 @@
       }
     }
 
+    function steeringRowText(rows, expectedSlug) {
+      var buttons = rows.map(function (row) {
+        return {
+          textContent: row[0] + " " + row[1],
+          querySelectorAll: function (selector) {
+            return selector === "span" ? [{ textContent: row[0] }, { textContent: row[1] }] : [];
+          },
+        };
+      });
+      var doc = {
+        querySelectorAll: function () {
+          return buttons;
+        },
+      };
+      var found = findSteeringButton(doc, expectedSlug);
+      return found ? found.textContent : null;
+    }
+
     function runChecks() {
       var cases = [
         [isSessionUrl("https://arena.ai/agent/foo"), true],
@@ -345,17 +376,27 @@
         [isSessionUrl("https://other.example/agent/foo"), false],
         [slugFromOwnerRepo("nemoe7/clankers"), "clankers"],
         [steeringSlugFromLabel("daedalus - Steering"), "daedalus"],
-        [steeringSlugFromLabel("clankers - Steering"), "clankers"],
+        [steeringSlugFromLabel("clankers - preview"), "clankers"],
+        [steeringSlugFromLabel("clankers preview"), "clankers"],
+        [steeringSlugFromLabel("arena-preview-steering"), "arena"],
+        [steeringSlugFromLabel("Steering"), null],
         [steeringSlugFromLabel("daedalus - Website"), null],
+        [isSteeringLabel("CLANKERS - PREVIEW"), true],
+        [isSteeringLabel("daedalus - Website"), false],
         [buttonMatchesSteering("CLANKERS - steering", ":8000", "clankers"), true],
+        [buttonMatchesSteering("Steering", ":8000", "clankers"), true],
+        [buttonMatchesSteering("daedalus - Steering", ":8000", "clankers"), false],
         [buttonMatchesSteering("clankers - STEERING", ":8001", "CLANKERS"), false],
+        [buttonMatchesSteering("daedalus - Preview", ":8000", null), true],
+        [buttonMatchesSteering("daedalus - Website", ":8000", null), false],
         [isSteeringPort(":8000"), true],
         [isSteeringPort("8000"), false],
-        [buttonMatchesSteering("daedalus - Steering", ":8000", null), true],
-        [buttonMatchesSteering("daedalus - Steering", ":8000", "daedalus"), true],
-        [buttonMatchesSteering("daedalus - Steering", ":8000", "clankers"), false],
-        [buttonMatchesSteering("daedalus - Steering", ":3000", null), false],
-        [buttonMatchesSteering("Website", ":8000", null), false],
+        [steeringRowText([["Website", ":3000"], ["daedalus - Steering", ":8000"]], "clankers"),
+          "daedalus - Steering :8000"],
+        [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+          "clankers"), "clankers - Steering :8000"],
+        [steeringRowText([["Website", ":3000"], ["arena-preview-steering", ":8000"]], "clankers"),
+          "arena-preview-steering :8000"],
         [CLICK_DELAY_MS, 1000],
       ];
       var failed = 0;
@@ -429,41 +470,43 @@
 
     function parseSteeringButton(button) {
       var spans = button.querySelectorAll("span");
-      var slug = null;
       var port = null;
       var i;
       var text;
       for (i = 0; i < spans.length; i += 1) {
         text = spans[i].textContent || "";
-        if (!slug) {
-          slug = steeringSlugFromLabel(text);
-        }
         if (!port && isSteeringPort(text)) {
           port = ":8000";
         }
       }
-      if (!slug || !port) {
+      var label = String(button.textContent || "").trim();
+      if (!port) {
         return null;
       }
-      return { slug: slug, port: port };
+      return { label: label, slug: steeringSlugFromLabel(label), port: port };
     }
 
     function findSteeringButton(doc, expectedSlug) {
       var buttons = doc.querySelectorAll('button[type="button"]');
+      var fallback = null;
       var i;
-      var button;
       var parsed;
       for (i = 0; i < buttons.length; i += 1) {
-        button = buttons[i];
-        parsed = parseSteeringButton(button);
-        if (!parsed) {
+        parsed = parseSteeringButton(buttons[i]);
+        if (!parsed || !buttonMatchesSteering(parsed.label, parsed.port, null)) {
           continue;
         }
-        if (buttonMatchesSteering(parsed.slug + " - Steering", parsed.port, expectedSlug)) {
-          return button;
+        // The row that names this repository wins; a row that names nothing, or something else,
+        // opens only when no better row exists. Agents rename the process, and the preview still
+        // has to open.
+        if (!expectedSlug || (parsed.slug && parsed.slug.toLowerCase() === expectedSlug.toLowerCase())) {
+          return buttons[i];
+        }
+        if (!fallback) {
+          fallback = buttons[i];
         }
       }
-      return null;
+      return fallback;
     }
 
     function sync() {

@@ -34,6 +34,8 @@
 
 - **ChatGPT hide wiring**: The Images link, Library link and Free badge finders join the sync pass, so all eight elements hide. The self-check drives `syncDocument`, and the version moves to `1.2.1`.
 
+- **Steering row words**: Open Steering finds the row by the words `steering` or `preview`, case-insensitive, and prefers the row that names the repository. The version moves to `1.1.7`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.
