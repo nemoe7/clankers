@@ -941,44 +941,55 @@ function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }
 }
-// One grammar for the report lines, matching the log receipts: object and time joined by the dot,
-// no sentences. The state is the same coloured dot the log uses, its word in the title and
-// aria-label; the log keeps Said and the Reports tab reads Acked in the dot's title.
+// One grammar for the report lines, matching the log receipts: object, then the state dot, then
+// the time, all joined by the dot, no sentences. The receipt prints the latest of the three
+// stamps, and the earlier ones wait in the object's title.
 function submissionParts(report) {
   if (!report?.latest_answer_at) return '';
-  return ` · Submission ${report.latest_answer_id.slice(0, 7)} · Sent ${time(report.latest_answer_at)}` +
-    (report.agent_seen_at ? ` · Read ${time(report.agent_seen_at)}` : '');
+  return ` · Submission ${report.latest_answer_id.slice(0, 7)}`;
+}
+// The read stamp is report-level, so it counts only when it lands after the latest answer.
+function submissionSeenAt(report) {
+  const seen = report.agent_seen_at;
+  return seen && seen > report.latest_answer_at ? seen : '';
 }
 function submissionState(report) {
   if (report.latest_answer_acknowledged_at) return 'said';
-  return report.agent_seen_at ? 'seen' : 'sent';
+  return submissionSeenAt(report) ? 'seen' : 'sent';
 }
 function submissionStateWord(report) {
   if (report.latest_answer_acknowledged_at) return `Acked ${time(report.latest_answer_acknowledged_at)}`;
-  return report.agent_seen_at ? 'Awaiting ack' : 'Sent';
+  return submissionSeenAt(report) ? 'Awaiting ack' : 'Sent';
+}
+function submissionStamp(report) {
+  return report.latest_answer_acknowledged_at || submissionSeenAt(report) || report.latest_answer_at;
+}
+function submissionStampTitle(report) {
+  return `Sent ${time(report.latest_answer_at)}` +
+    (submissionSeenAt(report) ? ` · Read ${time(report.agent_seen_at)}` : '') +
+    (report.latest_answer_acknowledged_at ? ` · Acked ${time(report.latest_answer_acknowledged_at)}` : '');
 }
 function submissionReceipt(report) {
   const parts = submissionParts(report);
   if (!parts) return [];
+  const separator = () => {
+    const node = document.createElement('span');
+    node.className = 'receipt-sep';
+    node.textContent = ' · ';
+    return node;
+  };
   const stamp = document.createElement('span');
   stamp.textContent = parts.slice(3);
-  const separator = document.createElement('span');
-  separator.className = 'receipt-sep';
-  separator.textContent = ' · ';
+  stamp.title = submissionStampTitle(report);
   const dot = document.createElement('span');
   dot.className = 'state-dot';
   dot.dataset.state = submissionState(report);
   dot.setAttribute('role', 'img');
   dot.setAttribute('aria-label', submissionStateWord(report));
   dot.title = submissionStateWord(report);
-  const nodes = [stamp, separator, dot];
-  if (report.latest_answer_acknowledged_at) {
-    // The ack time stays on the line after the dot, as the log prints its dot then its time.
-    const acked = document.createElement('span');
-    acked.textContent = ` · ${time(report.latest_answer_acknowledged_at)}`;
-    nodes.push(acked);
-  }
-  return nodes;
+  const when = document.createElement('span');
+  when.textContent = time(submissionStamp(report));
+  return [stamp, separator(), dot, separator(), when];
 }
 function renderReportAcknowledgement() {
   const report = lastState?.reports.find(item => item.id === $('#report-select').value);
@@ -1074,7 +1085,7 @@ $('#report-form').addEventListener('submit', async event => {
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
     $('#report-status').textContent =
-      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)} · Sent ${time(result.at)}`;
+      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)}`;
     const report = lastState?.reports.find(item => item.id === id);
     if (report) {
       report.latest_answer_id = result.id;

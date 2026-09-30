@@ -958,11 +958,14 @@ test('preview client', async (t) => {
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
     assert.match(get('#report-status').textContent, /^Report · /);
-    assert.match(get('#report-status').textContent, / · Sent /);
-    assert.doesNotMatch(get('#report-status').textContent, /Awaiting ack|Acked /,
-      'the state word never rides the status line');
-    assert.equal(part(get('#report-agent-ack'), 'state-dot').dataset.state, 'sent');
-    assert.equal(part(get('#report-agent-ack'), 'state-dot').title, 'Sent');
+    assert.doesNotMatch(get('#report-status').textContent, /Sent |Read |Awaiting ack|Acked /,
+      'the stamps live on the receipt, not the status line');
+    const sentReceipt = get('#report-agent-ack');
+    assert.equal(part(sentReceipt, 'state-dot').dataset.state, 'sent');
+    assert.equal(part(sentReceipt, 'state-dot').title, 'Sent');
+    assert.ok(sentReceipt.children.at(-1).textContent.length > 0, 'the latest stamp ends the line');
+    assert.match(sentReceipt.children[0].title, /^Sent /,
+      'the full stamp breakdown waits in the title');
     assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 7)),
       'show the seven-character ID immediately after sending');
     assert.ok(!get('#report-agent-ack').textContent.includes(sent.at(-1).id),
@@ -971,7 +974,7 @@ test('preview client', async (t) => {
     await get('#refresh-report').events.click();
     await tick();
     assert.match(get('#report-status').textContent, /^Report · 3 fields · Submission /);
-    assert.match(get('#report-status').textContent, / · Sent /);
+    assert.doesNotMatch(get('#report-status').textContent, /Sent /);
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it red');
     otherText.value = '   ';
@@ -1078,7 +1081,10 @@ test('preview client', async (t) => {
     assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
     assert.match(agentAck.textContent, /Submission a123456/);
     assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
-    assert.match(agentAck.textContent, / · Read /);
+    assert.match(agentAck.children[0].title, / · Read Sep 24, 10:00/,
+      'the read stamp waits in the title');
+    assert.match(agentAck.textContent, / · Sep 24, 10:00$/,
+      'the line prints the latest stamp after the dot');
     assert.equal(part(agentAck, 'state-dot').dataset.state, 'seen');
     assert.equal(part(agentAck, 'state-dot').title, 'Awaiting ack',
       'the state is a dot and its word lives in the title, as in the log');
@@ -1090,7 +1096,7 @@ test('preview client', async (t) => {
     assert.equal(part(agentAck, 'state-dot').dataset.state, 'said');
     assert.match(part(agentAck, 'state-dot').title, /^Acked Sep /);
     assert.match(agentAck.textContent, / · Sep 24, 10:01$/,
-      'the ack time rides the line after the dot, as the log prints it');
+      'the ack time is the latest stamp and ends the line');
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
     await get('#refresh-notes').events.click();
@@ -1105,8 +1111,10 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.match(agentAck.textContent, /Submission b765432/);
     assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
-    assert.equal(part(agentAck, 'state-dot').title, 'Awaiting ack',
-      'a previous receipt does not cover a later answer');
+    assert.equal(part(agentAck, 'state-dot').title, 'Sent',
+      'a previous receipt and an earlier read stamp do not cover a later answer');
+    assert.match(agentAck.textContent, / · Sep 24, 10:02$/,
+      'a later answer brings its own stamp');
     state.reports = [];
     await get('#refresh-notes').events.click();
     assert.equal(agentAck.hidden, true, 'hide receipts when no report is selected');
