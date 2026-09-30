@@ -11,7 +11,7 @@
 
 ### preview
 
-- **Context reminder**: The rotation leads with `Refresh context with ARENA.md, SKILL.md and REFERENCE.md.`, so a resumed session refreshes its rules and skill references first.
+- **Context reminder**: The rotation leads with `Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.`, so a resumed session refreshes its rules and skill references first.
 
 
 
@@ -32,7 +32,7 @@
 
 ### maintenance
 
-- **Lint cleanup**: Both prose gates report zero violations. The passive and semicolon findings leave `maintenance/check.py`, `maintenance/check_gpt_plugins.py` and `skills/squash/SKILL.md`, the CHANGELOG bullets cap at three sentences, and the preview skill README drops the synonym rotation.
+- **Lint cleanup**: Both prose gates report zero violations. The passive and semicolon findings leave `maintenance/check.py`, `maintenance/check_gpt_plugins.py`, and `skills/squash/SKILL.md`. The CHANGELOG bullets cap at three sentences, and the preview skill README drops the synonym rotation.
 
 ### docs
 
