@@ -17,7 +17,7 @@
 
 ### automations
 
-- **DAILIES coverage output**: When no finding is actionable, the run sends nothing and omits Coverage. The title line drops the Coverage-gap case.
+- **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.
 
 ### docs
 

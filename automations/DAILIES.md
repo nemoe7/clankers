@@ -136,7 +136,7 @@ Monitor the official stable release channel of each item below, preferring its G
 - Keep Updates to its compact table plus the `### <Software>` headings section 1 allows.
 - Keep Wiki to `### Add` and `### Update/remove`, with the Add table `Repo | Section | Why | Docs`.
 - Keep Repo Audit to its combined table and any verified release drafts.
-- End every report with `## Coverage`. List the window, sources and repositories reached, checks completed, gaps with reasons, deferred deep audits, known missed runs and any unanswered question with the stated assumption. Omit empty task sections.
+- End a report with `## Coverage` only when the report has at least one finding. List the window, sources and repositories reached, checks completed, gaps with reasons, deferred deep audits, known missed runs and any unanswered question with the stated assumption. Omit empty task sections.
 - When no finding is actionable, send nothing and omit Coverage. If the surface cannot send nothing, send `# Dailies — YYYY-MM-DD — no actionable change` alone.
 
 ### Columns and legend
