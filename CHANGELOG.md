@@ -27,6 +27,9 @@
 
 ### userscripts
 
+- **Arena tab title**: The Arena bundle gains a Tab title switch. It reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`.
+
+
 - **ChatGPT hide wiring**: The Images link, Library link and Free badge finders join the sync pass, so all eight elements hide. The self-check drives `syncDocument`, and the version moves to `1.2.1`.
 
 ### automations

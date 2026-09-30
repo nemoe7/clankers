@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Feature switches |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Tab title |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-All six features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
+All seven features default to On. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
@@ -47,6 +47,10 @@ The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its he
 On `/agent/*`, ON keeps the transcript at the bottom while the Stop generating button exists. This includes upward scrolling, new messages, resized tool output and session changes. Without that button the composer is visible and the transcript does not follow until the button returns. A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
 
 The feature uses the transcript message marker and its scrollable `role="log"` ancestor.
+
+## Arena Tab Title
+
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. The feature holds the title against the rewrites that Arena makes on navigation. When the link leaves the page, the feature restores the earlier title.
 
 ## ChatGPT Hide Elements
 

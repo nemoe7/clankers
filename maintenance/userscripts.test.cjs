@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const bundles = {
-  arena: { features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1 }, baseObservers: 1 },
+  arena: { features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "tab-title": 1 }, baseObservers: 1 },
   chatgpt: { features: { "hide-elements": 1, "auto-think": 0 }, baseObservers: 0 },
 };
 

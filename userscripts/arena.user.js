@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.5
-// @description  Prompt fill, Steering preview, composer hiding, and transcript auto-scroll with saved feature switches
+// @version      1.1.6
+// @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
 // @match        https://arena.ai/*
@@ -949,6 +949,139 @@
         }
       });
       spacerStyles.clear();
+    };
+  });
+
+  runFeature("tab-title", "Tab title", function () {
+
+    var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
+    var TITLE_PREFIX = "Arena | ";
+
+    function repoFromLink(link) {
+      if (!link) {
+        return null;
+      }
+      var href = String(link.getAttribute("href") || "");
+      var match = /github\.com\/[^\/]+\/([^\/?#]+)/.exec(href);
+      if (match) {
+        return match[1];
+      }
+      var label = String(link.getAttribute("aria-label") || "")
+        .replace(/^Open /, "")
+        .replace(/ on GitHub$/, "");
+      var parts = label.split("/");
+      var name = parts[parts.length - 1].trim();
+      return name || null;
+    }
+
+    function desiredTitle(doc) {
+      var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR));
+      return name ? TITLE_PREFIX + name : null;
+    }
+
+    var appliedTitle = null;
+    var priorTitle = null;
+
+    function syncTitle(doc) {
+      var desired = desiredTitle(doc);
+      if (desired) {
+        if (doc.title === desired) {
+          return false;
+        }
+        appliedTitle = desired;
+        doc.title = desired;
+        return true;
+      }
+      if (appliedTitle && doc.title === appliedTitle) {
+        doc.title = priorTitle;
+        appliedTitle = null;
+        return true;
+      }
+      return false;
+    }
+
+    function runChecks() {
+      function link(href, label) {
+        return {
+          getAttribute: function (name) {
+            if (name === "href") return href;
+            if (name === "aria-label") return label;
+            return null;
+          },
+        };
+      }
+      function docWith(element, title) {
+        return {
+          title: title,
+          querySelector: function (selector) {
+            return selector === REPO_LINK_SELECTOR ? element : null;
+          },
+        };
+      }
+      var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
+      var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
+      var emptyLink = link("", "");
+      var setDoc = docWith(repoLink, "ChatGPT");
+      var keepDoc = docWith(null, "ChatGPT");
+      var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
+      priorTitle = "ChatGPT";
+      var cases = [
+        [repoFromLink(repoLink), "clankers"],
+        [repoFromLink(labelOnly), "clankers"],
+        [repoFromLink(emptyLink), null],
+        [repoFromLink(null), null],
+        [desiredTitle(setDoc), TITLE_PREFIX + "clankers"],
+        [desiredTitle(keepDoc), null],
+        [syncTitle(setDoc), true],
+        [setDoc.title, TITLE_PREFIX + "clankers"],
+        [syncTitle(setDoc), false],
+        [syncTitle(keepDoc), false],
+        [keepDoc.title, "ChatGPT"],
+        [syncTitle(goneDoc), true],
+        [goneDoc.title, "ChatGPT"],
+        [syncTitle(goneDoc), false],
+      ];
+      var failed = 0;
+      var i;
+      for (i = 0; i < cases.length; i += 1) {
+        if (cases[i][0] !== cases[i][1]) {
+          console.error("check fail", i, cases[i][0], cases[i][1]);
+          failed += 1;
+        }
+      }
+      if (failed) {
+        throw new Error(failed + " checks failed");
+      }
+      console.log("ok " + cases.length);
+    }
+
+    if (typeof document === "undefined") {
+      runChecks();
+      return;
+    }
+
+    // Arena rewrites the tab title on navigation, so the observer re-applies it.
+    priorTitle = document.title;
+    syncTitle(document);
+    var observer = new MutationObserver(function () {
+      syncTitle(document);
+    });
+    observer.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    function onRoute() {
+      syncTitle(document);
+    }
+    window.addEventListener("popstate", onRoute);
+    return function () {
+      observer.disconnect();
+      window.removeEventListener("popstate", onRoute);
+      if (appliedTitle && document.title === appliedTitle) {
+        document.title = priorTitle;
+      }
+      appliedTitle = null;
     };
   });
 
