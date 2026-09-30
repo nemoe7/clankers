@@ -941,24 +941,45 @@ function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }
 }
-// One grammar for the three report lines, matching the log receipts: object, then state, then
-// time, joined by the dot, no sentences. Acked is the Reports tab word; the log keeps Said.
+// One grammar for the report lines, matching the log receipts: object and time joined by the dot,
+// no sentences. The state is the same coloured dot the log uses, its word in the title and
+// aria-label; the log keeps Said and the Reports tab reads Acked in the dot's title.
 function submissionParts(report) {
   if (!report?.latest_answer_at) return '';
   return ` · Submission ${report.latest_answer_id.slice(0, 7)} · Sent ${time(report.latest_answer_at)}` +
-    (report.agent_seen_at ? ` · Read ${time(report.agent_seen_at)}` : '') +
-    (report.latest_answer_acknowledged_at
-      ? ` · Acked ${time(report.latest_answer_acknowledged_at)}`
-      : ' · Awaiting ack');
+    (report.agent_seen_at ? ` · Read ${time(report.agent_seen_at)}` : '');
+}
+function submissionState(report) {
+  if (report.latest_answer_acknowledged_at) return 'said';
+  return report.agent_seen_at ? 'seen' : 'sent';
+}
+function submissionStateWord(report) {
+  if (report.latest_answer_acknowledged_at) return `Acked ${time(report.latest_answer_acknowledged_at)}`;
+  return report.agent_seen_at ? 'Awaiting ack' : 'Sent';
+}
+function submissionReceipt(report) {
+  const parts = submissionParts(report);
+  if (!parts) return [];
+  const stamp = document.createElement('span');
+  stamp.textContent = parts.slice(3);
+  const separator = document.createElement('span');
+  separator.className = 'receipt-sep';
+  separator.textContent = ' · ';
+  const dot = document.createElement('span');
+  dot.className = 'state-dot';
+  dot.dataset.state = submissionState(report);
+  dot.setAttribute('role', 'img');
+  dot.setAttribute('aria-label', submissionStateWord(report));
+  dot.title = submissionStateWord(report);
+  return [stamp, separator, dot];
 }
 function renderReportAcknowledgement() {
   const report = lastState?.reports.find(item => item.id === $('#report-select').value);
   const receipt = $('#report-agent-ack');
-  const parts = submissionParts(report);
-  receipt.textContent = parts ? parts.slice(3) : '';
-  receipt.hidden = !parts;
+  receipt.replaceChildren(...submissionReceipt(report));
+  receipt.hidden = !receipt.children.length;
   const footer = $('#report-agent-ack-footer');
-  footer.textContent = receipt.textContent;
+  footer.replaceChildren(...submissionReceipt(report));
   footer.hidden = receipt.hidden;
   const history = $('#report-ack-history');
   const references = referenceTypes(lastState || {});
@@ -1046,7 +1067,7 @@ $('#report-form').addEventListener('submit', async event => {
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
     $('#report-status').textContent =
-      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)} · Sent ${time(result.at)} · Awaiting ack`;
+      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)} · Sent ${time(result.at)}`;
     const report = lastState?.reports.find(item => item.id === id);
     if (report) {
       report.latest_answer_id = result.id;

@@ -958,8 +958,11 @@ test('preview client', async (t) => {
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
     assert.match(get('#report-status').textContent, /^Report · /);
-    assert.match(get('#report-status').textContent, / · Awaiting ack/);
-    assert.match(get('#report-agent-ack').textContent, /Awaiting ack/);
+    assert.match(get('#report-status').textContent, / · Sent /);
+    assert.doesNotMatch(get('#report-status').textContent, /Awaiting ack|Acked /,
+      'the state word never rides the status line');
+    assert.equal(part(get('#report-agent-ack'), 'state-dot').dataset.state, 'sent');
+    assert.equal(part(get('#report-agent-ack'), 'state-dot').title, 'Sent');
     assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 7)),
       'show the seven-character ID immediately after sending');
     assert.ok(!get('#report-agent-ack').textContent.includes(sent.at(-1).id),
@@ -968,7 +971,7 @@ test('preview client', async (t) => {
     await get('#refresh-report').events.click();
     await tick();
     assert.match(get('#report-status').textContent, /^Report · 3 fields · Submission /);
-    assert.match(get('#report-status').textContent, / · Awaiting ack/);
+    assert.match(get('#report-status').textContent, / · Sent /);
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it red');
     otherText.value = '   ';
@@ -1070,16 +1073,22 @@ test('preview client', async (t) => {
     state.reports[0].latest_answer_id = 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa';
     state.reports[0].latest_answer_at = '2026-09-24T10:00:00';
     state.reports[0].latest_answer_acknowledged_at = null;
+    state.reports[0].agent_seen_at = '2026-09-24T10:00:30';
     await get('#refresh-notes').events.click();
     assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
     assert.match(agentAck.textContent, /Submission a123456/);
     assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
-    assert.match(agentAck.textContent, /Awaiting ack/);
+    assert.match(agentAck.textContent, / · Read /);
+    assert.equal(part(agentAck, 'state-dot').dataset.state, 'seen');
+    assert.equal(part(agentAck, 'state-dot').title, 'Awaiting ack',
+      'the state is a dot and its word lives in the title, as in the log');
+    assert.equal(part(agentAck, 'state-dot').attributes['aria-label'], 'Awaiting ack');
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     assert.equal(get('#report-agent-ack-footer').hidden, agentAck.hidden);
     state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
     await get('#refresh-notes').events.click();
-    assert.match(agentAck.textContent, /Acked Sep /);
+    assert.equal(part(agentAck, 'state-dot').dataset.state, 'said');
+    assert.match(part(agentAck, 'state-dot').title, /^Acked Sep /);
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
     await get('#refresh-notes').events.click();
@@ -1094,7 +1103,7 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.match(agentAck.textContent, /Submission b765432/);
     assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
-    assert.match(agentAck.textContent, /Awaiting ack/,
+    assert.equal(part(agentAck, 'state-dot').title, 'Awaiting ack',
       'a previous receipt does not cover a later answer');
     state.reports = [];
     await get('#refresh-notes').events.click();
