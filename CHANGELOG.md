@@ -66,6 +66,8 @@
 
 ### workflows
 
+- **Action caches**: The preview-tests job caches pip downloads, like the other Python jobs. The `lint-validate-budget` job caches the `cl100k_base` file that `tiktoken` fetches, so a cold run downloads it once instead of on every push. Every other workflow installs nothing and keeps no cache.
+
 - **Action versions**: Every workflow pins the latest stable action majors: `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7`, `actions/cache@v6`, `actions/upload-artifact@v7` and `DavidAnson/markdownlint-cli2-action@v24`. The shipped `github/workflows/gemini-release.yml` carries the same pins.
 
 ### automations
