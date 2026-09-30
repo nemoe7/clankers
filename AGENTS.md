@@ -130,7 +130,6 @@ A proposal is visible text before the question that asks for approval: put its t
 - Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
 - Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100. The covered files are `docs/`, every `README.md`, and `CHANGELOG.md`. The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files. Prose that predates this rule keeps its wording until someone edits it. Rules, skills and agent-facing files such as this one stay outside the linter's scope. A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 
-- Use the serial comma: in a list of three or more items, put a comma before the final `and` or `or`.
 - Squash every `README.md` and every file in `docs/` against the [compression procedure](README.md#compression); prose is not exempt.
 
 ## Git

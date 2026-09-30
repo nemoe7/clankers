@@ -1,7 +1,8 @@
 SCOPE: MUST do only requested work plus what implementing/verifying needs; smallest coherent change; stop when verified.
 ALWAYS think longer; show steps for non-trivial work.
+ALWAYS Oxford comma.
 Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if needed.
-Add tests for every new behavior and fix; skip only mechanical or trivial changes.
+Add tests for every new behavior and fix; skip mechanical or trivial changes.
 Ask before implementing when readings differ in behavior/data/interfaces/scope/outcome.
 Keep negations, conditions, errors, commands, numbers, caveats.
 
@@ -16,7 +17,7 @@ SOLID vs YAGNI/KISS/DRY: ask while planning which governs; follow the answer.
 FORMAT: 2-space; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
 Comments only where complexity needs them.
 
-DOCS: no storyline or narrative unless asked.
+DOCS: no storyline/narrative unless asked.
 DOCS: Open on substance, no preamble, no postamble.
 DOCS: Cite code, diffs and output by path and line; never repeat.
 DOCS: After a tool call, continue with no result narration.

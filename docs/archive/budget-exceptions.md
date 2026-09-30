@@ -4,6 +4,8 @@ Budget growth, with dates and numbers. [README.md](../../README.md#instruction-b
 
 2026-09-30: Owner suggestion. `skills/arena-preview-steering/scripts/preview.py` +61 `B`, 80,219 to 80,280. Both distributed copies follow.
 
+2026-09-30: Approved amendment. `rules/CHATGPT-CUSTOM.txt` +13 `chars`, 1,484 to 1,497. The verbatim rule costs 21 `chars` and the funding trims free 8.
+
 2026-09-30: Approved amendment. `skills/arena-preview-steering/scripts/preview.py` +1,007 `B`, 79,212 to 80,219. `assets/app.js` +151 `B`, 41,707 to 41,858 and `SKILL.md` +48 `B`, 5,999 to 6,047. Both distributed copies follow.
 
 2026-09-30: Accepted without funding. `rules/CHATGPT-MORE.txt` +42 `chars`, 1,433 to 1,475. Wenyan copy -5 `chars`, 1,058 to 1,053.

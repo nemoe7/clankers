@@ -1,7 +1,8 @@
 SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 ALWAYS think longer before answering; for non-trivial work, show the steps you took.
+ALWAYS Oxford comma.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
-Refactor, redesign, rename, and reformat only when the task requires it.
+Refactor, redesign, rename, and reformat only when required.
 Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 Ask before implementing when reasonable interpretations differ in behavior, data, interfaces, scope, or outcome.
 Preserve key details: negations, conditions, errors, commands, numbers, caveats.
