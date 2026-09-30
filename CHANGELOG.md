@@ -54,6 +54,8 @@
 
 - **Bundle checks**: The bundles carry runtime code only. Outside a browser each feature publishes its helpers, and `maintenance/userscripts.checks.cjs` runs the feature checks. Arena moves to `1.1.15`, ChatGPT to `1.2.2`.
 
+- **No Start click**: Open Steering never clicks a `Start …` transcript card, because a click on one opens nothing. With no running row it clicks nothing. The version moves to `1.1.16`.
+
 ### automations
 
 - **DAILIES coverage gate**: A report carries `## Coverage` only when it has at least one finding. A run with no finding sends nothing and omits Coverage, and the title line drops the Coverage-gap case.

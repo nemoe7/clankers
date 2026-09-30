@@ -34,7 +34,7 @@ If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` 
 
 ## Arena Open Steering
 
-After `/agent/`, the feature waits 1 second, then clicks the port 8000 row whose label mentions `steering` or `preview`, once per page. A running row outranks the `Start …` cards that earlier turns leave behind, a row naming the repository outranks a renamed row, and the newest row breaks a tie. Matching ignores letter case.
+After `/agent/`, the feature waits 1 second, then clicks the port 8000 row whose label mentions `steering` or `preview`, once per page. A running row wins over the `Start …` cards that earlier turns leave behind, and those cards are never clicked, because a click on one opens nothing. A row naming the repository outranks a renamed row, and the newest row breaks a tie. Matching ignores letter case.
 
 ## Arena Hide Composer
 

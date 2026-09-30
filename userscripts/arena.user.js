@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.15
+// @version      1.1.16
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -415,32 +415,22 @@
       return { label: label, slug: steeringSlugFromLabel(label), port: port };
     }
 
-    // Rank, best first: a running row that names this project, a running row with no name, a
-    // history card for this project, another project's running row, then the remaining cards.
-    // Agent turns leave history cards behind, and a click on one opens nothing.
+    // Rank a running row, best first: this project's name, then no name, then another project.
+    // A Start row is a transcript card, and a click on one opens nothing, so it never counts.
     function steeringRank(label, slug, expectedSlug) {
-      var start = /^start\b/i.test(String(label || ""));
-      var matches = Boolean(expectedSlug && slug && slug.toLowerCase() === expectedSlug.toLowerCase());
-      var other = Boolean(expectedSlug && slug && slug.toLowerCase() !== expectedSlug.toLowerCase());
-      if (!start && matches) {
+      if (/^start\b/i.test(String(label || ""))) {
+        return null;
+      }
+      if (expectedSlug && slug && slug.toLowerCase() === expectedSlug.toLowerCase()) {
         return 0;
       }
-      if (!start && !other) {
-        return 1;
-      }
-      if (start && matches) {
-        return 2;
-      }
-      if (!start) {
-        return 3;
-      }
-      return other ? 5 : 4;
+      return slug ? 2 : 1;
     }
 
     function findSteeringButton(doc, expectedSlug) {
       var buttons = doc.querySelectorAll('button[type="button"]');
       var best = null;
-      var bestRank = 6;
+      var bestRank = 3;
       var i;
       var parsed;
       var rank;
@@ -450,6 +440,9 @@
           continue;
         }
         rank = steeringRank(parsed.label, parsed.slug, expectedSlug);
+        if (rank === null) {
+          continue;
+        }
         // Equal ranks keep the newest row, which is the live one.
         if (rank <= bestRank) {
           best = buttons[i];

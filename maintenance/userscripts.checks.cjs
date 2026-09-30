@@ -114,17 +114,24 @@ function checkOpenSteering(api) {
       "clankers"), "clankers - Steering :8000"],
     [steeringRowText([["Website", ":3000"], ["arena-preview-steering", ":8000"]], "clankers"),
       "arena-preview-steering :8000"],
-    // The live row (no start verb) wins over history cards, wherever they sit.
+    // A Start row is a transcript card; a click on one opens nothing, so it never counts.
+    [steeringRowText([["Start clankers - Steering", ":8000"]], "clankers"), null],
+    [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+      "clankers"), "daedalus - preview :8000"],
+    // The running row wins over history cards, wherever they sit.
     [steeringRowText([["Start clankers - Steering", ":8000"], ["clankers - Steering", ":8000"]],
       "clankers"), "clankers - Steering :8000"],
     [steeringRowText([["clankers - Steering", ":8000"], ["Start clankers - Steering", ":8000"]],
       "clankers"), "clankers - Steering :8000"],
     [steeringRowText([["clankers - Steering", ":8000"], ["Start preview", ":8000"]],
       "clankers"), "clankers - Steering :8000"],
-    // A newer row for another project does not steal the turn from this project's row.
-    [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
-      "clankers"), "Start clankers - Steering :8000"],
-    // The newest row wins even when it is renamed, which is the live-preview case.
+    // This project's running row outranks a newer row for another project, and a nameless
+    // running row outranks a named one for another project.
+    [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
+      "clankers"), "clankers - Steering :8000"],
+    [steeringRowText([["Steering", ":8000"], ["daedalus - preview", ":8000"]], "clankers"),
+      "Steering :8000"],
+    // A renamed live row still wins, and it is the only running row here.
     [steeringRowText([["Start clankers - Steering", ":8000"],
       ["daedalus - preview", ":8000"], ["arena-preview-steering", ":8000"]], "clankers"),
       "arena-preview-steering :8000"],
