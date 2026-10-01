@@ -163,9 +163,9 @@ def check_preview_path():
     )
     assert event_result.returncode == 0, event_result.stderr
     assert event_result.stderr.count(reminder) == 1, event_result.stderr
-    # A blocking gate must not exit the shell that hosts a long-lived process: the
-    # process is its child and dies with it. Arena runs an agent call as the shell
-    # binary with a command, and hosts each process from a launcher script.
+    # A blocking gate must not exit a shell that hosts a long-lived process, nor
+    # Arena's own probe shells: a killed probe reads as a dead preview or sandbox
+    # while the process it probed stays up. Only an agent call shell is gated.
     python.write_text(
       '#!/usr/bin/env bash\ncase " $*" in *" gate") exit 1 ;; esac\nexit 0\n',
       encoding="utf-8",
@@ -189,9 +189,41 @@ def check_preview_path():
       text=True,
       check=False,
     )
+    probe_shell = subprocess.run(
+      [
+        "bash",
+        "-l",
+        "-c",
+        "(command -v ss >/dev/null 2>&1 && ss -ltnH) || netstat -ltn 2>/dev/null || true",
+      ],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    sweep_shell = subprocess.run(
+      [
+        "bash",
+        "-l",
+        "-c",
+        "for dir in '/tmp/arena-workspace/procs'/*/; do echo \"$dir\"; done",
+      ],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
     assert server.returncode == 0, f"the server shell was gated: {server.returncode}"
     assert worker.returncode == 130, (
-      f"the gate stopped blocking other shells: {worker.returncode}"
+      f"the gate stopped blocking agent calls: {worker.returncode}"
+    )
+    assert probe_shell.returncode == 0, (
+      f"the gate killed a probe shell: {probe_shell.returncode}"
+    )
+    assert sweep_shell.returncode == 0, (
+      f"the gate killed a sweep shell: {sweep_shell.returncode}"
     )
 
   print("PASS: repo-aware PATH install, reset and dispatch")

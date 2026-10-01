@@ -89,6 +89,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Profile blocks**: The installer rewrites all four `~/.bash_profile` blocks on every run. A stale block from an older release no longer survives. A minify check proves it.
 - **Agent call gate**: The gate blocks only a shell that runs a command string, so a launcher-script shell keeps the process it hosts. The earlier command-text guard missed a command that preceded the server start in the same shell.
+- **Platform probe shells**: The gate marks Arena's own probe and bookkeeping shells from their command line and skips them. An exit 130 in one reads as a dead preview or sandbox, while the server stays up.
 - **Image policy**: The page policy adds an image directive. The policy starts at none, so it blocked every report image before this.
 
 #### maintenance
