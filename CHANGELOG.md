@@ -60,6 +60,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Sized report images**: A report image takes a size the agent sets, as `![alt](src =320x200)`. A refused source stays text, and a wide image shrinks to the panel.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
+#### maintenance
+
+- **CSS minifier**: The build uses `clean-css@5.3.3` through a Node runner instead of `clean-css-cli`. The lockfile removes `glob` and `inflight`. Level-2 optimization, relative URLs, warning rejection and shipped CSS bytes stay unchanged.
+
 ### Removed
 
 #### preview

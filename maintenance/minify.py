@@ -40,7 +40,7 @@ PYTHON_SCRIPTS = ("scripts/preview.py",)
 # One job per npm build: the file name, the pinned minifier, and the flags that produce the build.
 JOBS = (
   ("assets/app.js", "terser", ("--compress", "--mangle")),
-  ("assets/style.css", "cleancss", ("-O2",)),
+  ("assets/style.css", "clean-css", ()),
   (
     "assets/index.html",
     "html-minifier-terser",
@@ -51,14 +51,18 @@ JOBS = (
 
 def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
   """Return the minified text of one asset, or raise with the minifier's own error."""
-  executable = BIN / binary
+  executable = (
+    ROOT / "maintenance/minify_css.cjs" if binary == "clean-css" else BIN / binary
+  )
 
   if not executable.exists():
     raise RuntimeError(f"{binary} is missing; run `npm install`")
 
+  command = [str(executable), str(source), *flags]
+  if binary == "clean-css":
+    command.insert(0, "node")
   result = subprocess.run(
-    # The file precedes the flags: terser reads its first positional as the input.
-    [str(executable), str(source), *flags],
+    command,
     capture_output=True,
     text=True,
     check=False,

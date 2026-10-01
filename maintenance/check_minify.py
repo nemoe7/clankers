@@ -189,6 +189,28 @@ def check_preview_path():
   print("PASS: repo-aware PATH install, reset and dispatch")
 
 
+def check_css_library():
+  """Check CSS level 2, relative URLs, warnings, and missing files."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    source = root / "sample.css"
+    source.write_text("a{color:red}a{margin:0}", encoding="utf-8")
+    assert minify.minify(source, "clean-css", ()) == "a{color:red;margin:0}\n"
+    source.write_text('a{background:url("../image.png")}', encoding="utf-8")
+    assert (
+      minify.minify(source, "clean-css", ()) == 'a{background:url("../image.png")}\n'
+    )
+    source.write_text("a{color:red;broken}", encoding="utf-8")
+    for path in (source, root / "missing.css"):
+      try:
+        minify.minify(path, "clean-css", ())
+        raise AssertionError(f"Invalid CSS input was accepted: {path}")
+      except RuntimeError as error:
+        assert "clean-css on" in str(error), error
+  print("PASS: direct CSS library, level 2, relative URLs, warnings and missing files")
+
+
+check_css_library()
 check_preview_path()
 
 sample = '''#!/usr/bin/env python3
