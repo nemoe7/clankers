@@ -2822,6 +2822,24 @@ def test_restore_import():
     assert len(preview.Store(restore).state()["notes"]) == 3
 
 
+def test_missing_inbox_error_instructs():
+  # The error names the commands that rebuild the inbox after a sandbox reset.
+  with tempfile.TemporaryDirectory() as missing_dir:
+    try:
+      preview.Store(Path(missing_dir) / "none", create=False)
+    except FileNotFoundError as error:
+      text = str(error)
+    else:
+      raise AssertionError("a missing inbox must raise")
+    for fragment in (
+      "install.sh",
+      "arena-preview serve",
+      "arena-preview read",
+      "reset",
+    ):
+      assert fragment in text
+
+
 def test_bash_gate():
   # The gate blocks only past the threshold while the inbox stays pending.
   with tempfile.TemporaryDirectory() as gate_dir:

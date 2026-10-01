@@ -22,6 +22,7 @@
 - **Gate prompt**: The blocked bash gate prints `READ INBOX NOW WITH arena-preview read`. The gate test asserts the line and the exit code.
 - **Trap reminders**: The debug trap prints one task-list reminder per shell on `git commit`, `git push`, and `gh pr checks`. The copy check asserts the count.
 - **Composer paste**: A text paste over 2,000 characters stages one attachment named `<lines>-pasted-lines-<epoch>.txt` and leaves the composer text alone. The client test covers both paths.
+- **Missing inbox error**: The error names the installer, the serve command, and the read command, and it names a possible sandbox reset. A test asserts the four fragments.
 
 ## 2026-09-30
 
