@@ -742,7 +742,7 @@
         for (j = 0; j < rootList.length; j += 1) {
           if (rootList[j].parentElement) attached += 1;
         }
-        var removedFromRoot = trimRows(rootList, Math.max(0, attached - excess));
+        var removedFromRoot = trimRows(rootList, Math.max(1, attached - excess));
         removed += removedFromRoot;
         excess -= removedFromRoot;
         if (removedFromRoot) removeActionSibling(roots[i]);
