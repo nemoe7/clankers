@@ -2833,6 +2833,7 @@ def test_missing_inbox_error_instructs():
       raise AssertionError("a missing inbox must raise")
     for fragment in (
       "install.sh",
+      "start_process",
       "arena-preview serve",
       "arena-preview read",
       "reset",

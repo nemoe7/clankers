@@ -981,7 +981,7 @@ class Store:
     existed = self.path.is_file()
     if not create and not existed:
       raise FileNotFoundError(
-        f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the long-lived process tool, then `arena-preview read`."
+        f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the start_process tool, then `arena-preview read`."
       )
     if create and not existed:
       directory.mkdir(parents=True, exist_ok=True, mode=0o700)
