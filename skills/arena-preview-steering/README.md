@@ -56,7 +56,7 @@ Multipart uploads stream each file to temporary storage without a total request 
 ## Browser download queue
 
 The owner enters one HTTPS URL per job. That form queues immediately. An agent can run
-`preview.py --state-dir arena-state download-request <https-url> [--allow-proxy]` to create a
+`preview.py download-request <https-url> [--allow-proxy]` to create a
 `pending` approval record instead. The Downloads tab shows an approval dot and Approve/Deny buttons.
 A pending request cannot be claimed. Approve makes it claimable and Deny prevents retry.
 The browser fetches directly first. The owner can allow AllOrigins, then CodeTabs, as fallback

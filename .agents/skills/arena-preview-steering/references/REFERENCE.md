@@ -1,6 +1,6 @@
 # Preview transport: commands and recovery
 
-Use `scripts/preview.py` relative to the actual installed steering skill. Put `--state-dir <directory>` before every subcommand. Keep the same ignored, persisted directory across CLI calls and server restarts.
+Use `scripts/preview.py` relative to the actual installed steering skill. The state directory is `ARENA_PREVIEW_STATE_DIR` when that is set, and the repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts.
 
 ## Commands
 
