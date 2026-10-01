@@ -6,6 +6,8 @@ const status = $('#send-status');
 const key = 'arena-preview-v1';
 // Browser and server both enforce the decimal 50 MB per-file ceiling.
 const MAX_UPLOAD = 50_000_000;
+// A text paste over this length becomes one attachment instead of filling the composer.
+const PASTE_TEXT_LIMIT = 2000;
 const MAX_FETCH = 102_400_000;
 const BINARY_TIMEOUT = 600_000;
 let pending = null;
@@ -199,9 +201,22 @@ $('#attach-file').addEventListener('click', () => picker.click());
 picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
 compose.addEventListener('paste', event => {
   if (send.disabled) return;
-  const images = Array.from(event.clipboardData?.files || []).filter(file => file.type.startsWith('image/'));
-  if (!images.length) return;
-  if (!event.clipboardData.getData('text/plain')) event.preventDefault();
+  const clip = event.clipboardData;
+  const images = Array.from(clip?.files || []).filter(file => file.type.startsWith('image/'));
+  const text = clip?.getData('text/plain') || '';
+  if (!images.length) {
+    // A long paste becomes one attachment, so a pasted log never fills the composer.
+    if (text.length <= PASTE_TEXT_LIMIT) return;
+    event.preventDefault();
+    const stamp = Date.now();
+    const base = `${text.split('\n').length}-pasted-lines-${stamp}`;
+    const names = new Set(stagedFiles.map(file => file.name));
+    let name = `${base}.txt`;
+    for (let index = 2; names.has(name); index++) name = `${base}-${index}.txt`;
+    stageFiles([new File([text], name, { type: 'text/plain', lastModified: stamp })]);
+    return;
+  }
+  if (!text) event.preventDefault();
   const stamp = Date.now();
   const names = new Set(stagedFiles.map(file => file.name));
   stageFiles(images.map(file => {

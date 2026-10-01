@@ -1706,6 +1706,39 @@ test('preview client', async (t) => {
     } finally { delete context.Date; get('#send').disabled = false; }
   });
 
+  await t.test("A long text paste stages one attachment and leaves the composer alone", async () => {
+    // A paste over the 2000 character limit becomes one text attachment named for its line count and
+    // the epoch, so a pasted log never fills the composer. A short paste stays a native paste.
+    const paste = get('#compose').events.paste;
+    const stamp = 1790674500000;
+    context.Date = class extends Date { static now() { return stamp; } };
+    const lines = 501;
+    const text = 'line\n'.repeat(lines - 1) + 'line';
+    const textEvent = () => event({ clipboardData: { files: [], getData: () => text } });
+    try {
+      get('#note').value = 'Review this log';
+      const shortPaste = event({ clipboardData: { files: [], getData: () => 'short' } });
+      paste(shortPaste);
+      assert.equal(shortPaste.prevented, undefined, 'a short paste stays native');
+      assert.equal(get('#staged-files').hidden, true);
+      const longPaste = textEvent();
+      paste(longPaste);
+      assert.equal(longPaste.prevented, true, 'a long paste never reaches the composer');
+      assert.deepEqual(chips(), [`${lines}-pasted-lines-${stamp}.txt`]);
+      assert.equal(get('#note').value, 'Review this log', 'the draft keeps its own text');
+      paste(textEvent());
+      assert.deepEqual(chips(), [`${lines}-pasted-lines-${stamp}.txt`, `${lines}-pasted-lines-${stamp}-2.txt`]);
+      get('#send').disabled = true;
+      const blocked = textEvent();
+      paste(blocked);
+      assert.equal(blocked.prevented, undefined, 'a disabled send leaves the paste alone');
+    } finally {
+      delete context.Date;
+      get('#send').disabled = false;
+      for (const chip of get('#staged-files').children.slice()) await chip.children[1].events.click();
+    }
+  });
+
   await t.test("The queue records per-job opt-in and a browser worker claims one URL at a time", async () => {
     // The queue records per-job opt-in and a browser worker claims one URL at a time. Remote fetches
     // omit credentials and referrers. None of these mocks assert actual browser CORS behavior.
