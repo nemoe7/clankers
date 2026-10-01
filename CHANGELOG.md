@@ -50,6 +50,10 @@
 - **Image policy**: The page policy adds an image directive. The policy starts at none, so it blocked every report image before this.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
+### maintenance
+
+- **Prose lint**: Comments in `maintenance/check_minify.py` use periods instead of semicolons. `userscripts/README.md` splits a long sentence. The full prose check passes.
+
 ## 2026-09-30
 
 ### rules
