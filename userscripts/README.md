@@ -30,7 +30,9 @@ The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
-If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. It writes `{repo} read AGENTS.md ARENA.md` and updates that text when the repo name changes. It does not overwrite an unrelated draft.
+If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. It writes `{repo} read ARENA.md AGENTS.md` and updates that text when the repo name changes. It does not overwrite an unrelated draft.
+
+The feature then fetches `rules/ARENA.md` from the fixed raw URL of this repository, `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill appends the file under a `here is ARENA.md:` line. A failed fetch leaves the plain prompt, and the feature tries once per page.
 
 ## Arena Open Steering
 

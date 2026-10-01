@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.27
+// @version      1.1.28
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -132,20 +132,6 @@
       return repo;
     }
 
-    function ownerRepoFromText(text) {
-      var trimmed = String(text || "").trim();
-      var slash = trimmed.indexOf("/");
-      if (slash <= 0 || slash === trimmed.length - 1) {
-        return null;
-      }
-      var owner = trimmed.slice(0, slash);
-      var repo = trimmed.slice(slash + 1);
-      if (!owner || !repo || repo.indexOf("/") !== -1 || /\s/.test(trimmed)) {
-        return null;
-      }
-      return trimmed;
-    }
-
     function promptForSlug(slug, arenaMd) {
       var base = slug + " read ARENA.md AGENTS.md";
       if (arenaMd) {
@@ -177,31 +163,37 @@
       }
     }
 
+    // The rules of this repository, at a fixed URL: a session in another repository
+    // still receives them.
+    var ARENA_MD_URL =
+      "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md";
+
     if (exposeChecks("promptFill", {
       isComposerUrl: isComposerUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
-      ownerRepoFromText: ownerRepoFromText,
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
+      ARENA_MD_URL: ARENA_MD_URL,
     })) {
       return;
     }
 
-    var arenaMdCache = {};
+    var arenaMdCache = null;
+    var arenaMdTried = false;
     var pendingFetch = null;
 
-    function fetchArenaMd(ownerRepo) {
-      var url = "https://raw.githubusercontent.com/" + ownerRepo + "/refs/heads/main/rules/ARENA.md";
-      return fetch(url).then(function (r) {
+    function fetchArenaMd() {
+      return fetch(ARENA_MD_URL).then(function (r) {
         if (!r.ok) return null;
         return r.text();
       }).catch(function () { return null; });
     }
 
-    function ensureFetch(ownerRepo) {
-      if (!ownerRepo || ownerRepo in arenaMdCache || pendingFetch) return;
-      pendingFetch = fetchArenaMd(ownerRepo).then(function (content) {
-        arenaMdCache[ownerRepo] = content;
+    function ensureFetch() {
+      if (arenaMdTried || pendingFetch) return;
+      pendingFetch = fetchArenaMd().then(function (content) {
+        arenaMdCache = typeof content === "string" ? content : null;
+        arenaMdTried = true;
         pendingFetch = null;
         sync();
       });
@@ -223,7 +215,7 @@
       for (i = 0; i < spans.length; i += 1) {
         slug = slugFromOwnerRepo(spans[i].textContent || "");
         if (slug) {
-          return {slug: slug, ownerRepo: ownerRepoFromText(spans[i].textContent || "")};
+          return slug;
         }
       }
       return null;
@@ -263,8 +255,8 @@
         lastSlug = null;
         return;
       }
-      var info = readSlug(document);
-      if (!info) {
+      var slug = readSlug(document);
+      if (!slug) {
         var emptyComposer = document.querySelector(COMPOSER_SELECTOR);
         if (emptyComposer && emptyComposer.getAttribute("aria-disabled") !== "true") {
           var emptyText = String(emptyComposer.innerText || "").trim();
@@ -275,8 +267,6 @@
         lastSlug = null;
         return;
       }
-      var slug = info.slug;
-      var ownerRepo = info.ownerRepo;
       rememberSlug(slug);
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
@@ -284,16 +274,14 @@
         return;
       }
       var current = composer.innerText || "";
-      var cached = ownerRepo in arenaMdCache ? arenaMdCache[ownerRepo] : undefined;
-      var arenaMd = typeof cached === "string" ? cached : null;
-      if (!shouldWrite(current, slug, lastSlug, arenaMd)) {
+      if (!shouldWrite(current, slug, lastSlug, arenaMdCache)) {
         lastSlug = slug;
-        ensureFetch(ownerRepo);
+        ensureFetch();
         return;
       }
-      setComposerText(composer, promptForSlug(slug, arenaMd));
+      setComposerText(composer, promptForSlug(slug, arenaMdCache));
       lastSlug = slug;
-      ensureFetch(ownerRepo);
+      ensureFetch();
     }
 
     var observer = new MutationObserver(sync);

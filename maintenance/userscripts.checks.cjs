@@ -18,9 +18,9 @@ function loadChecks(file) {
 function checkPromptFill(api) {
   var isComposerUrl = api.isComposerUrl;
   var slugFromOwnerRepo = api.slugFromOwnerRepo;
-  var ownerRepoFromText = api.ownerRepoFromText;
   var promptForSlug = api.promptForSlug;
   var shouldWrite = api.shouldWrite;
+  var ARENA_MD_URL = api.ARENA_MD_URL;
 
   var cases = [
     [isComposerUrl("https://arena.ai/agent"), true],
@@ -38,12 +38,7 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    [ownerRepoFromText("nemoe7/clankers"), "nemoe7/clankers"],
-    [ownerRepoFromText("  org/repo  "), "org/repo"],
-    [ownerRepoFromText("main"), null],
-    [ownerRepoFromText("a/"), null],
-    [ownerRepoFromText("/b"), null],
-    [ownerRepoFromText("a/b/c"), null],
+    [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
     [promptForSlug("clankers"), "clankers read ARENA.md AGENTS.md"],
     [promptForSlug("clankers", "arena content here"), "clankers read ARENA.md AGENTS.md\nhere is ARENA.md:\narena content here"],
     [shouldWrite("", "clankers", null), true],

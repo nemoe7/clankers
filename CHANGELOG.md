@@ -47,6 +47,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Transcript trim settle**: The settle check also rejects a pending question widget, so the trim waits for the answer. The Arena bundle moves to `1.1.24`.
 - **Prompt fill URL**: The composer match strips trailing slashes, so `/agent/` fills like `/agent`. The Arena bundle moves to `1.1.25`.
 - **Tab title read groups**: The newest group label supplies the emoji while a turn runs, because a read or edit group never pulses. The bundle moves to `1.1.26`.
+- **Prompt fill ARENA.md**: The fill appends `rules/ARENA.md` fetched from the fixed raw URL of this repository. The Arena bundle moves to `1.1.28`.
 
 #### preview
 
