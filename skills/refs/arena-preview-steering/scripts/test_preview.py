@@ -3292,6 +3292,53 @@ def test_poll_inbox():
       assert result.returncode == 2 and "unrecognized arguments" in result.stderr
 
 
+def test_poll_blocked_tasks():
+  """An unblocked upcoming task ends a poll at once; a blocked one lets it wait."""
+  with tempfile.TemporaryDirectory() as poll_dir:
+    store = preview.Store(poll_dir, create=True)
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    printed = []
+
+    def capture(value, **kwargs):
+      printed.append(value)
+
+    def run_poll():
+      sleeps = []
+      original = builtins.print
+      builtins.print = capture
+      try:
+        code = preview.poll_inbox(store, sleeper=sleeps.append)
+      finally:
+        builtins.print = original
+      return code, sleeps
+
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      store.write_task("open-task", "Open work")
+      code, sleeps = run_poll()
+      assert code == 0
+      assert sleeps == [], "unblocked work ends the wait before the first sleep"
+      payload = json.loads(printed[-1])
+      assert [item["id"] for item in payload["tasks"]] == ["open-task"]
+      assert payload["tasks"][0]["blocked"] is False
+      assert payload["pending"] == []
+
+      store.write_task("open-task", blocked=True)
+      assert store.list_tasks()[0]["blocked"] is True
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 1, "a blocked task lets the poll run its loops"
+      assert sleeps == [10, 10]
+      assert "tasks" not in json.loads(printed[-1])
+
+      store.write_task("open-task", blocked=False)
+      assert store.list_tasks()[0]["blocked"] is False
+      code, _ = run_poll()
+      assert code == 0, "clearing the mark makes the next poll return at once"
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
 def test_notes_only_save():
   with tempfile.TemporaryDirectory() as notes_only_dir:
     backup = Path(notes_only_dir) / "saved.ndjson"

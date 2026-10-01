@@ -36,6 +36,7 @@
 - **Composer paste**: A text paste over 2,000 characters stages one attachment named `<lines>-pasted-lines-<epoch>.txt` and leaves the composer text alone. The client test covers both paths.
 - **Missing inbox error**: The error names the installer, the `start_process` tool with the serve command, and the read command. It also names a possible sandbox reset. A test asserts the five fragments.
 - **State directory**: The CLI drops `--state-dir`. It reads `ARENA_PREVIEW_STATE_DIR` when the environment names it, and the repository `arena-state` otherwise. The tests set the variable.
+- **Blocked tasks**: A task carries a `blocked` mark that `--blocked` and `--unblocked` set. A poll returns at once with the task list while an upcoming task is unblocked.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30

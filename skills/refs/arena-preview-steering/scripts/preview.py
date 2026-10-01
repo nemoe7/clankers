@@ -464,7 +464,7 @@ MAX_TASK_TITLE = 200
 MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
 ECHO_DETAIL = 200
-TASK_COLUMNS = "id, title, details, status, position, updated_at"
+TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked"
 # The save file carries note, task and answer lines through one importer. Keys are named
 # here so the writer and reader cannot drift apart.
 #
@@ -511,6 +511,7 @@ def task_row(row):
     "status": row[3],
     "order": row[4],
     "updated_at": row[5],
+    "blocked": bool(row[6]) if len(row) > 6 else False,
   }
 
 
@@ -846,6 +847,17 @@ def poll_inbox(store, pretty=False, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   listing = {"checked_at": None, "pending": []}
+  # Unblocked work outranks waiting: return at once with the list instead of idling.
+  open_tasks = [
+    item
+    for item in store.list_tasks()
+    if item["status"] == "upcoming" and not item["blocked"]
+  ]
+  if open_tasks:
+    listing = store.read()
+    listing["tasks"] = open_tasks
+    print(cli_json(listing, pretty), flush=True)
+    return 0
   # One heartbeat a second, so the page can light its dot while the agent waits here.
   store.stamp_polling()
   try:
@@ -1028,7 +1040,8 @@ class Store:
             CHECK (status IN ('upcoming', 'finished')),
           position INTEGER NOT NULL,
           created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
+          updated_at TEXT NOT NULL,
+          blocked INTEGER NOT NULL DEFAULT 0
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
@@ -1056,6 +1069,9 @@ class Store:
           "UPDATE notes SET seen_at = acknowledged_at"
           " WHERE seen_at IS NULL AND acknowledged_at IS NOT NULL"
         )
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(tasks)")}
+      if "blocked" not in columns:
+        db.execute("ALTER TABLE tasks ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
       if "ack_edited_at" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT")
@@ -1353,7 +1369,14 @@ class Store:
       self.autosave()
 
   def write_task(
-    self, task_id, title=None, details=None, status=None, order=None, shared=None
+    self,
+    task_id,
+    title=None,
+    details=None,
+    status=None,
+    order=None,
+    blocked=None,
+    shared=None,
   ):
     """Insert or update one task and return it as stored.
 
@@ -1380,6 +1403,8 @@ class Store:
       if details is None:
         details = stored["details"] if stored else []
       status = status or (stored["status"] if stored else "upcoming")
+      if blocked is None:
+        blocked = stored["blocked"] if stored else False
       siblings = [
         task_row(item)
         for item in db.execute(
@@ -1395,6 +1420,7 @@ class Store:
         "status": status,
         "order": len(siblings) + 1,
         "updated_at": stamp,
+        "blocked": bool(blocked),
       }
       if order is not None:
         index = max(0, min(order - 1, len(siblings)))
@@ -1405,10 +1431,11 @@ class Store:
       siblings.insert(index, record)
       record["order"] = index + 1
       db.execute(
-        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(id) DO UPDATE SET title = excluded.title,"
         " details = excluded.details, status = excluded.status,"
-        " position = excluded.position, updated_at = excluded.updated_at",
+        " position = excluded.position, updated_at = excluded.updated_at,"
+        " blocked = excluded.blocked",
         (
           task_id,
           title,
@@ -1417,6 +1444,7 @@ class Store:
           index + 1,
           stamp,
           stamp,
+          1 if blocked else 0,
         ),
       )
       # Positions are written from the computed list, because the row just upserted can tie
@@ -1474,7 +1502,8 @@ class Store:
     stamp = now()
     with self.transaction() as db:
       row = db.execute(
-        "SELECT id, title, details, status, position, created_at FROM tasks WHERE id = ?",
+        "SELECT id, title, details, status, position, created_at, blocked FROM tasks"
+        " WHERE id = ?",
         (prev_id,),
       ).fetchone()
       if row is None:
@@ -1484,8 +1513,8 @@ class Store:
       self.refuse_shared_id(db, "tasks", "reports", task_id)
       db.execute("DELETE FROM tasks WHERE id = ?", (prev_id,))
       db.execute(
-        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (task_id, row[1], row[2], row[3], row[4], row[5], stamp),
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (task_id, row[1], row[2], row[3], row[4], row[5], stamp, row[6]),
       )
       self.renumber(db)
 
@@ -1976,6 +2005,7 @@ class Store:
           details,
           status,
           record.get("order") or index,
+          record.get("blocked"),
         )
       )
     with self.transaction(shared, autosave=autosave) as db:
@@ -1984,7 +2014,7 @@ class Store:
         # row. Refusing before the delete names the offending record; refusing after it would
         # still roll back, but the error would arrive with the table emptied inside the
         # transaction and the record that caused it already written.
-        for task_id, title, _, _, _ in prepared:
+        for task_id, title, _, _, _, _ in prepared:
           stored = db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
           if title is None and not stored:
             raise ValueError(f"A new task needs a title: {task_id}")
@@ -2946,6 +2976,19 @@ def main():
     help="One detail line, repeatable; an empty string clears the list",
   )
   task.add_argument(
+    "--blocked",
+    dest="blocked",
+    action="store_true",
+    default=None,
+    help="Mark the task blocked, so a poll may wait",
+  )
+  task.add_argument(
+    "--unblocked",
+    dest="blocked",
+    action="store_false",
+    help="Clear the blocked mark",
+  )
+  task.add_argument(
     "--msg-id",
     help="Message this task answers; marks that message as having a task",
   )
@@ -3055,6 +3098,7 @@ def main():
             details,
             args.status,
             args.order,
+            args.blocked,
             shared=shared,
           )
           store.mark_task(args.msg_id, task_id, shared=shared)
@@ -3065,6 +3109,7 @@ def main():
           details,
           args.status,
           args.order,
+          args.blocked,
         )
       before, after = store.neighbours(task_id)
       echo = echo_task(record, before, after)
