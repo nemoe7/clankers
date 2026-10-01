@@ -28,7 +28,7 @@ def check_preview_path():
       assert installed.read_bytes() == source.read_bytes(), installed
     assert os.access(minify.TARGETS[1] / "scripts" / name, os.X_OK), name
 
-  # The shipped reference stays byte-identical; the minifier never touches it.
+  # The shipped reference stays byte-identical. The minifier never touches it.
   reference = minify.SOURCE / "references/REFERENCE.md"
   for target in minify.TARGETS:
     shipped = target / "references/REFERENCE.md"
@@ -142,7 +142,7 @@ def check_preview_path():
       "1",
     ]
 
-    # A commit, push or checks command reminds once per shell; any other command stays quiet.
+    # A commit, push or checks command reminds once per shell. Any other command stays quiet.
     reminder = "Finished a task? Update your task-list with arena-preview task <id> --status finished."
     event_result = subprocess.run(
       [

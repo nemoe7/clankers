@@ -54,7 +54,11 @@ This switch ships OFF, and OFF stops the trim: a reload redraws the transcript f
 
 The menu command reads `Transcript trim: 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
 
-The trim waits for the page to settle. It touches nothing while a turn streams, a live icon pulses, or a question widget waits for an answer, and it waits for a quiet window after the last change. A row is a child of the outermost `div.flex.flex-col.gap-2` block. It can hold text, a tool call, a thinking line or a status line. Only attached rows count, and the oldest rows leave first. The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you remove the message there.
+The trim waits for the page to settle. It touches nothing while a turn streams, a live icon pulses, or a question widget waits for an answer. It waits for a quiet window after the last change.
+
+A row is a child of the outermost `div.flex.flex-col.gap-2` block. It can hold text, a tool call, a thinking line or a status line. Only attached rows count, and the oldest rows leave first.
+
+The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you remove the message there.
 
 ## Arena Tab Title
 
