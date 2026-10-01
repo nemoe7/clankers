@@ -2617,6 +2617,8 @@ def handler(store):
       self.send_header(
         "Content-Security-Policy",
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+        # Without this, default-src none blocks every image a report carries.
+        "img-src 'self' data: https:; "
         "connect-src 'self' https:; base-uri 'none'; form-action 'self'",
       )
       if filename:

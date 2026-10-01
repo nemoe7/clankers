@@ -471,6 +471,8 @@ def test_http_boundaries():
       assert "frame-ancestors" not in headers["Content-Security-Policy"]
       assert "connect-src 'self' https:" in headers["Content-Security-Policy"]
       assert "default-src 'none'" in headers["Content-Security-Policy"]
+      # default-src none blocks images too, so a report image needs its own directive.
+      assert "img-src 'self' data: https:" in headers["Content-Security-Policy"]
       # The token rides the page as an HTML attribute, so it survives the shipped minified build.
       token = re.search(r'data-token="([^"]+)"', page)[1]
       auth = {"Content-Type": "application/json", "X-Preview-Token": token}

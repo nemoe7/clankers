@@ -45,6 +45,7 @@
 - **Server shell guard**: The gate returns early in a shell that starts the server. The preview is a child of that shell, so an exit took it down.
 - **Two cuts**: The CLI drops the unused save-path flag. One holdout helper now serves both the list markup and the sized images.
 - **Task flags**: The CLI drops the task-id and task-title flags. The two positional arguments do the same work.
+- **Image policy**: The page policy adds an image directive. The policy starts at none, so it blocked every report image before this.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30
