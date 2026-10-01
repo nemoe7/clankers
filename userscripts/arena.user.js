@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.28
+// @version      1.1.29
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -770,7 +770,10 @@
       var removed = 0;
       var i;
       for (i = 0; i < roots.length; i += 1) {
-        var rows = rowsOfRoot(roots[i]);
+        // A redraw drops a root or detaches its rows for a moment. Both states hold
+        // nothing the trim may touch, or the transcript reads as blank until a reload.
+        var live = roots[i].isConnected !== false;
+        var rows = live ? rowsOfRoot(roots[i]) : [];
         var rootAttached = 0;
         var j;
         rootRows.push(rows);
@@ -780,7 +783,7 @@
             rootAttached += 1;
           }
         }
-        if (!rootAttached) removeActionSibling(roots[i]);
+        if (live && !rows.length) removeActionSibling(roots[i]);
       }
       excess = Math.max(0, total - planParts(plan).rows);
       for (i = 0; i < roots.length && excess > 0; i += 1) {

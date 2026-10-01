@@ -83,6 +83,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **Tab title labels**: The group selector drops its button parent. The label falls back to the row's action span, so `Edit`, `Write` and `Explored` map. The bundle moves to `1.1.27`.
+- **Transcript trim redraw**: The trim skips a root the document dropped, and a root whose row nodes sit detached. The redraw after a Stop generating click then keeps the transcript. The Arena bundle moves to `1.1.29`.
 
 #### preview
 

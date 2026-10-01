@@ -243,9 +243,10 @@ function checkTranscriptTrim(api) {
     };
     return element;
   }
-  function messageRoot(boxes, actions) {
+  function messageRoot(boxes, actions, connected) {
     actions = actions || [];
     var root = {
+      isConnected: connected !== false,
       removed: false,
       remove: function () {
         this.removed = true;
@@ -291,6 +292,16 @@ function checkTranscriptTrim(api) {
     messageRoot([rowBox(globalRows[2])], [globalActions[2]]),
   ];
   var globalRemoved = trimPlan(logDoc(globalNodes, true), "40");
+  var staleRows = rows(3);
+  var staleAction = actionContainer();
+  var k;
+  for (k = 0; k < staleRows.length; k += 1) staleRows[k].parentElement = null;
+  var staleRoot = messageRoot([rowBox(staleRows)], [staleAction]);
+  var staleRemoved = trimPlan(logDoc([staleRoot], true), "50");
+  var goneRows = rows(30);
+  var goneAction = actionContainer();
+  var goneRoot = messageRoot([rowBox(goneRows)], [goneAction], false);
+  var goneRemoved = trimPlan(logDoc([goneRoot], true), "20");
   var detached = rows(4);
   detached[0].parentElement = null;
   var cases = [
@@ -337,6 +348,13 @@ function checkTranscriptTrim(api) {
     [globalActions[0].removed, true],
     [globalActions[1].removed, true],
     [globalActions[2].removed, false],
+    [staleRemoved, 0],
+    [staleAction.removed, false],
+    [goneRemoved, 0],
+    [goneRows[0].removed, false],
+    [goneRows[24].removed, false],
+    [goneAction.removed, false],
+    [goneRoot.parentElement !== null, true],
     [globalNodes[0].parentElement !== null, true],
     [globalNodes[1].parentElement !== null, true],
     [globalNodes[2].parentElement !== null, true],
