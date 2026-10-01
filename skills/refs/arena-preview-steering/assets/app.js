@@ -390,7 +390,7 @@ function showHistory(notes) {
     }
     const text = node.children[0];
     text.className = item.html === undefined ? 'raw-message' : 'message-text';
-    if (item.html === undefined) text.textContent = item.text;
+    if (item.html === undefined) text.textContent = item.text.replace(/\\n/g, '\n');
     else text.innerHTML = item.html;
     const receipt = node.children[2];
     receipt.className = 'receipt';
@@ -452,14 +452,14 @@ function showHistory(notes) {
         }
         else {
           const plain = document.createElement('p');
-          plain.textContent = reply.text;
+          plain.textContent = reply.text.replace(/\\n/g, '\n');
           block.replaceChildren(plain);
         }
         return block;
       });
       if (item.ack_html === undefined) {
         const plain = document.createElement('p');
-        plain.textContent = item.ack_text;
+        plain.textContent = item.ack_text.replace(/\\n/g, '\n');
         answer.replaceChildren(plain, ...blocks);
       } else {
         answer.innerHTML = linkReferences(item.ack_html, references);
@@ -1030,7 +1030,7 @@ function renderReportAcknowledgement() {
       if (reply.html !== undefined) block.innerHTML = linkReferences(reply.html, references);
       else {
         const plain = document.createElement('p');
-        plain.textContent = reply.text;
+        plain.textContent = reply.text.replace(/\\n/g, '\n');
         block.replaceChildren(plain);
       }
       blocks.push(block);
