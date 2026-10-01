@@ -28,6 +28,12 @@ def check_preview_path():
       assert installed.read_bytes() == source.read_bytes(), installed
     assert os.access(minify.TARGETS[1] / "scripts" / name, os.X_OK), name
 
+  # The shipped reference stays byte-identical; the minifier never touches it.
+  reference = minify.SOURCE / "references/REFERENCE.md"
+  for target in minify.TARGETS:
+    shipped = target / "references/REFERENCE.md"
+    assert shipped.read_bytes() == reference.read_bytes(), shipped
+
   with tempfile.TemporaryDirectory(prefix="arena-preview-path-") as directory:
     home = Path(directory)
     python = home / ".agents/.arena-preview-venv/bin/python"
