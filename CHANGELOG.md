@@ -8,6 +8,7 @@
 ### rules
 
 - **First read cadence**: ARENA.md orders the first inbox read after the visibility answer. The live and root mirrors follow, and the exceptions file records the growth.
+- **Installed mirror updates**: `AGENTS.md` allows task-related source changes in this repository's installed copies without separate user approval.
 
 ### workflows
 

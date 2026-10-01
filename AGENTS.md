@@ -9,7 +9,7 @@
   - In Arena, MUST also read and follow [ARENA.md](ARENA.md) as an additional ruleset in that same first read, before your first edit.
   - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
-  - This waiver wins that collision; editing installed copies still requires explicit user authorization.
+  - Mirror task-related source changes into installed copies in this repository without separate user authorization.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 ## Glossary
