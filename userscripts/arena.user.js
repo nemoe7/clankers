@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.23
+// @version      1.1.24
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -638,6 +638,7 @@
     var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
     var ACTION_SELECTOR = ":scope > div > div > div.mt-3.flex.flex-col.gap-3";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
+    var QUESTION_SELECTOR = '[role="radiogroup"]';
     var SETTLE_MS = 1200;
 
     // The plan keeps one global tail of transcript rows; old saved plans keep their row value.
@@ -746,9 +747,11 @@
     }
 
     // Arena redraws the transcript while a turn runs, and a trim mid-redraw breaks it.
-    // The page settles when no turn is streaming and no live icon pulses.
+    // The page settles when no turn is streaming, no live icon pulses, and no question
+    // widget waits for an answer: a paused turn still redraws the transcript.
     function isSettled(doc) {
       if (findStopGeneratingButton(doc)) return false;
+      if (doc.querySelector(QUESTION_SELECTOR)) return false;
       return !doc.querySelector(LIVE_ICON_SELECTOR);
     }
 
@@ -780,6 +783,7 @@
       trimRows: trimRows,
       isSettled: isSettled,
       ACTION_SELECTOR: ACTION_SELECTOR,
+      QUESTION_SELECTOR: QUESTION_SELECTOR,
       MIN_ROWS: MIN_ROWS,
       DEFAULT_ROWS: DEFAULT_ROWS,
     })) {

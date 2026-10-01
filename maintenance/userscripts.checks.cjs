@@ -195,6 +195,7 @@ function checkTranscriptTrim(api) {
   var trimRows = api.trimRows;
   var isSettled = api.isSettled;
   var ACTION_SELECTOR = api.ACTION_SELECTOR;
+  var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
   var MIN_ROWS = api.MIN_ROWS;
   var DEFAULT_ROWS = api.DEFAULT_ROWS;
 
@@ -304,6 +305,7 @@ function checkTranscriptTrim(api) {
     [countLabel("50", 0), "Transcript trim: 50 rows \u2014 set"],
     [countLabel("50", 3), "Transcript trim: 50 rows (3 removed) \u2014 set"],
     [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
+    [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
     [rowsOfRoot(messageRoot([rowBox(rows(2), true)])).length, 0],
     [messageRoots(logDoc([messageRoot([])], true)).length, 1],
@@ -332,6 +334,7 @@ function checkTranscriptTrim(api) {
     [globalNodes[2].parentElement !== null, true],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), true],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), false],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), true],
   ];
