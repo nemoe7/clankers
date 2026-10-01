@@ -2,6 +2,8 @@
 
 Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
 
+2026-10-01: Accepted without funding. `skills/arena-preview-steering/scripts/preview.py` +202 `B`, 81,791 to 81,993. `skills/arena-preview-steering/scripts/install.sh` -72 `B`, 7,641 to 7,569.
+
 2026-10-01: Approved amendment. `rules/ARENA.md` +75 `B`, 15,294 to 15,369. The root copy matches.
 
 2026-10-01: Approved amendment. `rules/ARENA.md` +41 `B`, 15,253 to 15,294. The root copy matches. `skills/arena-preview-steering/SKILL.md` +6 `B`, 6,070 to 6,076. Both distributed copies follow.

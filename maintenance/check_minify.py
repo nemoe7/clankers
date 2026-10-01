@@ -101,8 +101,6 @@ def check_preview_path():
     assert command_result.returncode == 0, command_result.stderr
     assert (home / "arena-preview-args").read_text(encoding="utf-8").splitlines() == [
       str(minify.TARGETS[1] / "scripts/preview.py"),
-      "--state-dir",
-      str(minify.ROOT / "arena-state"),
       "poll",
       "--max",
       "1",

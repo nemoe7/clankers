@@ -4,6 +4,7 @@ import builtins
 import hashlib
 import http.client
 import json
+import os
 import re
 import socket
 import sqlite3
@@ -77,13 +78,12 @@ def test_edited_ack_stamp():
       [
         sys.executable,
         preview.__file__,
-        "--state-dir",
-        str(restored_dir),
         "import-state",
         str(saved),
       ],
       check=True,
       capture_output=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restored_dir)},
     )
     assert restored.state()["notes"][0]["ack_edited_at"] == row["ack_edited_at"]
     assert restored.state()["notes"][0]["replies"] == row["replies"], (
@@ -224,13 +224,12 @@ def test_reply_seen_persistence():
         [
           sys.executable,
           preview.__file__,
-          "--state-dir",
-          str(restored_dir),
           "import-state",
           str(backup),
         ],
         check=True,
         capture_output=True,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restored_dir)},
       )
       assert (
         preview.Store(restored_dir).state()["notes"][0]["ack_edited_seen_count"] == 2
@@ -1232,14 +1231,13 @@ def test_http_boundaries():
         [
           sys.executable,
           str(Path(preview.__file__)),
-          "--state-dir",
-          str(round_trip),
           "import-state",
           str(save_file),
         ],
         capture_output=True,
         text=True,
         check=True,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(round_trip)},
       ).stdout
       assert json.loads(imported)["notes"] == 1
       assert json.loads(imported)["answers"] == written["answers"]
@@ -1788,12 +1786,11 @@ def test_download_queue():
       )
       # An agent CLI request is visible, but no browser worker can claim it before the preview
       # receives an Approve click. The owner-entered HTTP form below still queues immediately.
-      command = [
-        sys.executable,
-        preview.__file__,
-        "--state-dir",
-        str(queue_store.path.parent),
-      ]
+      command = [sys.executable, preview.__file__]
+      queue_env = {
+        **os.environ,
+        "ARENA_PREVIEW_STATE_DIR": str(queue_store.path.parent),
+      }
       agent_request = subprocess.run(
         [
           *command,
@@ -1804,6 +1801,7 @@ def test_download_queue():
         capture_output=True,
         text=True,
         check=True,
+        env=queue_env,
       )
       pending = json.loads(agent_request.stdout)
       assert pending["url"] == "https://example.org/review.zip"
@@ -1854,6 +1852,7 @@ def test_download_queue():
         capture_output=True,
         text=True,
         check=False,
+        env=queue_env,
       )
       assert bad_request.returncode != 0 and "HTTPS" in bad_request.stderr
 
@@ -2175,13 +2174,12 @@ def test_read_stamps_on_delivery():
       [
         sys.executable,
         str(Path(preview.__file__)),
-        "--state-dir",
-        str(printed_dir),
         "read",
       ],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(printed_dir)},
     )
     assert printed.state()["notes"][0]["seen_at"] == first
     printed.acknowledge(["p-1"], "note", "answered after the stamp")
@@ -2559,14 +2557,13 @@ def test_shared_save_import():
       [
         sys.executable,
         script,
-        "--state-dir",
-        str(mixed_root),
         "import-state",
         str(mixed),
       ],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout
     assert json.loads(imported) == {"notes": 1, "answers": 1, "tasks": 1}
     # The import does not overwrite its source; reimport merges by ID without duplicates.
@@ -2579,14 +2576,13 @@ def test_shared_save_import():
       [
         sys.executable,
         script,
-        "--state-dir",
-        str(mixed_root),
         "import-state",
         str(mixed),
       ],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout
     assert json.loads(again) == {"notes": 1, "answers": 1, "tasks": 1}
     assert len(preview.Store(mixed_root).state()["notes"]) == 1
@@ -2595,10 +2591,11 @@ def test_shared_save_import():
     # minifying the output cannot strand the importer.
     script_again = str(Path(preview.__file__))
     listed = subprocess.run(
-      [sys.executable, script_again, "--state-dir", str(mixed_root), "task-list"],
+      [sys.executable, script_again, "task-list"],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
     assert "\n" not in listed, "agent-facing JSON is one line"
     assert json.loads(listed)[0]["id"] == "saved-task"
@@ -2606,8 +2603,6 @@ def test_shared_save_import():
       [
         sys.executable,
         script_again,
-        "--state-dir",
-        str(mixed_root),
         "import-state",
         "--replace-tasks",
       ],
@@ -2615,13 +2610,15 @@ def test_shared_save_import():
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
     assert json.loads(reimport)["tasks"] == 1
     read_out = subprocess.run(
-      [sys.executable, script_again, "--state-dir", str(mixed_root), "read"],
+      [sys.executable, script_again, "read"],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
     assert "\n" not in read_out, "read prints one line"
     # The imported note carries its receipt, so `read` has nothing pending; the receipt is what
@@ -2631,14 +2628,13 @@ def test_shared_save_import():
       [
         sys.executable,
         script_again,
-        "--state-dir",
-        str(mixed_root),
         "--pretty",
         "read",
       ],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
     assert "\n" in pretty_out, "--pretty is the human escape hatch"
     restored = preview.Store(mixed_root)
@@ -2705,10 +2701,11 @@ def test_restore_import():
       encoding="utf-8",
     )
     imported = subprocess.run(
-      [sys.executable, script, "--state-dir", str(restore), "import-state", str(log)],
+      [sys.executable, script, "import-state", str(log)],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     ).stdout
     assert json.loads(imported)["notes"] == 3
     rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
@@ -2728,8 +2725,6 @@ def test_restore_import():
       [
         sys.executable,
         script,
-        "--state-dir",
-        str(restore),
         "task",
         "from-note",
         "Answer the note",
@@ -2739,6 +2734,7 @@ def test_restore_import():
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     ).stdout
     assert json.loads(linked)["msg_id"] == "plain"
     assert {
@@ -2748,8 +2744,6 @@ def test_restore_import():
       [
         sys.executable,
         script,
-        "--state-dir",
-        str(restore),
         "task",
         "orphan",
         "No message",
@@ -2759,6 +2753,7 @@ def test_restore_import():
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     )
     assert refused.returncode != 0 and "Unknown note" in refused.stderr
     assert "orphan" not in {item["id"] for item in preview.Store(restore).list_tasks()}
@@ -2793,14 +2788,13 @@ def test_restore_import():
       [
         sys.executable,
         script,
-        "--state-dir",
-        str(restore),
         "import-state",
         str(partial),
       ],
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     )
     assert refused.returncode == 1
     assert "stamp, kind and text" in refused.stderr
@@ -2812,10 +2806,11 @@ def test_restore_import():
     }
     # Importing the same log again changes nothing: a stored ID keeps the record it has.
     again = subprocess.run(
-      [sys.executable, script, "--state-dir", str(restore), "import-state", str(log)],
+      [sys.executable, script, "import-state", str(log)],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(restore)},
     ).stdout
     assert json.loads(again)["notes"] == 3
     # Three restored notes, and a re-import adds none of them twice.
@@ -2852,10 +2847,11 @@ def test_bash_gate():
     assert not gate_store.gate()
     gate_script = str(Path(preview.__file__))
     blocked = subprocess.run(
-      [sys.executable, gate_script, "--state-dir", gate_dir, "gate"],
+      [sys.executable, gate_script, "gate"],
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert blocked.returncode == 1
     # The blocked line names the command that clears the block.
@@ -2863,23 +2859,23 @@ def test_bash_gate():
     gate_store.acknowledge(["gate-note"], "note", "Cleared")
     assert gate_store.gate()
     cleared = subprocess.run(
-      [sys.executable, gate_script, "--state-dir", gate_dir, "gate"],
+      [sys.executable, gate_script, "gate"],
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert cleared.returncode == 0
     missing = subprocess.run(
       [
         sys.executable,
         gate_script,
-        "--state-dir",
-        str(Path(gate_dir) / "none"),
         "gate",
       ],
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(Path(gate_dir) / "none")},
     )
     assert missing.returncode == 0, "no inbox means nothing to read"
 
@@ -2924,20 +2920,22 @@ def test_dispatch_reminder():
       (["task", "reminder-task", "Track work"], 1),
     ):
       result = subprocess.run(
-        [sys.executable, reminder_script, "--state-dir", reminder_dir, *command],
+        [sys.executable, reminder_script, *command],
         capture_output=True,
         text=True,
         check=True,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": reminder_dir},
       )
       json.loads(result.stdout)
       line = result.stderr.strip()
       assert line == pending_prefix + reminder_tail(line, remaining)
       assert reminder_store.state()["notes"][0]["seen_at"] is None
     result = subprocess.run(
-      [sys.executable, reminder_script, "--state-dir", reminder_dir, "read"],
+      [sys.executable, reminder_script, "read"],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": reminder_dir},
     )
     json.loads(result.stdout)
     line = result.stderr.strip()
@@ -2946,24 +2944,24 @@ def test_dispatch_reminder():
     assert delivered is not None
     assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
     with (
-      patch.object(sys, "argv", [reminder_script, "--state-dir", reminder_dir, "read"]),
+      patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": reminder_dir}),
+      patch.object(sys, "argv", [reminder_script, "read"]),
       patch.object(sys.stdout, "write", side_effect=BrokenPipeError("output failed")),
     ):
       assert preview.main() == 1
     assert reminder_store.state()["notes"][0]["seen_at"] == delivered
     gone = subprocess.run(
-      [sys.executable, reminder_script, "--state-dir", reminder_dir, "seen", "x"],
+      [sys.executable, reminder_script, "seen", "x"],
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": reminder_dir},
     )
     assert gone.returncode == 2, "read and poll stamp Seen; no seen subcommand remains"
     result = subprocess.run(
       [
         sys.executable,
         reminder_script,
-        "--state-dir",
-        reminder_dir,
         "ack",
         "reminder-note",
         "--note",
@@ -2972,6 +2970,7 @@ def test_dispatch_reminder():
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": reminder_dir},
     )
     assert reminder_tail(result.stderr, 1) in tails(1)
     assert reminder_store.reminder() in tails(1)
@@ -3039,10 +3038,11 @@ def test_reminder_rotation():
     offset = span + 5
     for cursor, polls in ((offset, 1), (offset + 1, 2)):
       result = subprocess.run(
-        [sys.executable, rotate_script, "--state-dir", rotate_dir, "--reminder"],
+        [sys.executable, rotate_script, "--reminder"],
         capture_output=True,
         text=True,
         check=True,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": rotate_dir},
       )
       tail = tail_at(cursor)
       assert (
@@ -3050,10 +3050,11 @@ def test_reminder_rotation():
       )
       assert result.stderr == ""
     result = subprocess.run(
-      [sys.executable, rotate_script, "--state-dir", rotate_dir, "task-list"],
+      [sys.executable, rotate_script, "task-list"],
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": rotate_dir},
     )
     json.loads(result.stdout)
     tail = tail_at(offset + 2)
@@ -3107,8 +3108,6 @@ def test_ack_task_reminder():
       [
         sys.executable,
         str(Path(preview.__file__)),
-        "--state-dir",
-        ack_dir,
         "ack",
         "ack-work",
         "--note",
@@ -3117,6 +3116,7 @@ def test_ack_task_reminder():
       capture_output=True,
       text=True,
       check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir},
     )
     assert "--msg-id ack-work" in result.stdout
 
@@ -3147,8 +3147,6 @@ def test_report_unread_markers():
       [
         sys.executable,
         str(Path(preview.__file__)),
-        "--state-dir",
-        marker_dir,
         "publish",
         str(marker_source),
         "--id",
@@ -3159,6 +3157,7 @@ def test_report_unread_markers():
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
     )
     assert result.returncode == 1
     assert "submitted answers" in result.stderr
@@ -3274,10 +3273,11 @@ def test_poll_inbox():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
     store.note("poll-2", "already pending")
     result = subprocess.run(
-      [sys.executable, str(Path(preview.__file__)), "--state-dir", poll_dir, "poll"],
+      [sys.executable, str(Path(preview.__file__)), "poll"],
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": poll_dir},
     )
     assert result.returncode == 0
     listing = json.loads(result.stdout)

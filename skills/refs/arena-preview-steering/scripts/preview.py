@@ -2877,9 +2877,19 @@ def handler(store):
   return Handler
 
 
+def resolve_state_dir():
+  """ARENA_PREVIEW_STATE_DIR wins; otherwise the repository arena-state."""
+  configured = os.environ.get("ARENA_PREVIEW_STATE_DIR")
+  if configured:
+    return configured
+  for parent in Path(__file__).resolve().parents:
+    if (parent / ".git").exists():
+      return str(parent / "arena-state")
+  return "arena-state"
+
+
 def main():
   parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
-  parser.add_argument("--state-dir", default="arena-state")
   parser.add_argument(
     "--reminder",
     action="store_true",
@@ -2955,9 +2965,10 @@ def main():
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("--replace-tasks", action="store_true")
   args = parser.parse_args()
+  state_dir = resolve_state_dir()
   try:
     if args.reminder:
-      store = Store(args.state_dir, create=False, save_path=args.save_path)
+      store = Store(state_dir, create=False, save_path=args.save_path)
       require_server(store)
       print(store.reminder(advance=True), flush=True)
       return 0
@@ -2965,7 +2976,7 @@ def main():
       parser.error("a command is required")
     if args.command == "gate":
       try:
-        allowed = Store(args.state_dir, save_path=args.save_path).gate()
+        allowed = Store(state_dir, save_path=args.save_path).gate()
       except FileNotFoundError:
         return 0
       except Exception:
@@ -2975,7 +2986,7 @@ def main():
         return 1
       return 0
     store = Store(
-      args.state_dir,
+      state_dir,
       create=args.command in {"serve", "init", "import-state"},
       save_path=args.save_path,
     )
