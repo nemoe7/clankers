@@ -943,7 +943,7 @@ def main():
 			try:allowed=Store(args.state_dir,save_path=args.save_path).gate()
 			except FileNotFoundError:return 0
 			except Exception:return 2
-			if not allowed:print('READ INBOX NOW',flush=True);return 1
+			if not allowed:print('READ INBOX NOW WITH arena-preview read',flush=True);return 1
 			return 0
 		store=Store(args.state_dir,create=args.command in{'serve','init','import-state'},save_path=args.save_path);print(store.reminder(),file=sys.stderr,flush=True)
 		if args.command=='serve':

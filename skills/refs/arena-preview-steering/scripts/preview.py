@@ -2969,7 +2969,7 @@ def main():
       except Exception:
         return 2
       if not allowed:
-        print("READ INBOX NOW", flush=True)
+        print("READ INBOX NOW WITH arena-preview read", flush=True)
         return 1
       return 0
     store = Store(
