@@ -469,6 +469,7 @@ function checkTabTitle(api) {
   var MESSAGE_SELECTOR = api.MESSAGE_SELECTOR;
   var LIVE_ICON_SELECTOR = api.LIVE_ICON_SELECTOR;
   var LIVE_LABEL_SELECTOR = api.LIVE_LABEL_SELECTOR;
+  var GROUP_LABEL_SELECTOR = api.GROUP_LABEL_SELECTOR;
   var REPO_LINK_SELECTOR = api.REPO_LINK_SELECTOR;
   var setPriorTitle = api.setPriorTitle;
 
@@ -486,6 +487,58 @@ function checkTabTitle(api) {
       title: title,
       querySelector: function (selector) {
         return selector === REPO_LINK_SELECTOR ? element : null;
+      },
+      // liveRow now probes the Stop generating button on every path, as a real document allows.
+      querySelectorAll: function () {
+        return [];
+      },
+    };
+  }
+  // A read or edit group has no shimmer label and no pulsing icon; only the turn bounds it.
+  function groupDoc(stopGenerating) {
+    var button = {
+      textContent: "Explored 2 reads",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+    };
+    var row = {
+      querySelector: function (selector) {
+        return selector === "button" ? button : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === "button" ? [button] : [];
+      },
+    };
+    button.parentElement = row;
+    var label = {
+      textContent: "Explored 2 reads",
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === GROUP_LABEL_SELECTOR) {
+          return [label];
+        }
+        if (selector === "button[aria-label]") {
+          return stopGenerating
+            ? [
+                {
+                  getAttribute: function () {
+                    return "Stop generating";
+                  },
+                },
+              ]
+            : [];
+        }
+        return [];
       },
     };
   }
@@ -685,6 +738,9 @@ function checkTabTitle(api) {
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
     [syncTitle(idleDoc), true],
     [idleDoc.title, TITLE_PREFIX + "clankers"],
+    [GROUP_LABEL_SELECTOR, "button > span.text-text-secondary"],
+    [emojiForRow(liveRow(groupDoc(true))), "\uD83D\uDCD6"],
+    [liveRow(groupDoc(false)), null],
   ];
   var failed = 0;
   var i;

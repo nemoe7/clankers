@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.25
+// @version      1.1.26
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1089,6 +1089,8 @@
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
     // The live status text shimmers; a thinking row carries no pulsing icon, so its label leads.
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
+    // A read or edit group carries no shimmer and no pulse, so its own label is the only anchor.
+    var GROUP_LABEL_SELECTOR = "button > span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The live status row names the action; the emoji carries it in the title.
     var ACTION_EMOJI = [
@@ -1188,6 +1190,17 @@
       }
       icons = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_ICON_SELECTOR) : [];
       row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
+      if (row && knownLabel(liveLabel(row))) {
+        return row;
+      }
+      // A read or edit group never pulses, so while the turn runs its newest label names the
+      // action. The Stop generating button bounds the fallback, so the title clears when the
+      // turn ends and the hold expires.
+      if (!findStopGeneratingButton(doc)) {
+        return null;
+      }
+      var groups = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(GROUP_LABEL_SELECTOR) : [];
+      row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
       return row && knownLabel(liveLabel(row)) ? row : null;
     }
 
@@ -1344,6 +1357,7 @@
       MESSAGE_SELECTOR: MESSAGE_SELECTOR,
       LIVE_ICON_SELECTOR: LIVE_ICON_SELECTOR,
       LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
+      GROUP_LABEL_SELECTOR: GROUP_LABEL_SELECTOR,
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       forgetPath: function () { lastPath = "/elsewhere"; },
