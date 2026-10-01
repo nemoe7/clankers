@@ -107,6 +107,28 @@ def check_preview_path():
       "--max",
       "1",
     ]
+
+    # A commit, push or checks command reminds once per shell; any other command stays quiet.
+    reminder = "Finished a task? Update your task-list with arena-preview task <id> --status finished."
+    event_result = subprocess.run(
+      [
+        "bash",
+        "--noprofile",
+        "--norc",
+        "-c",
+        (
+          'source "$HOME/.bash_profile"; echo git commit; echo git push; '
+          "echo gh pr checks 7; echo plain; trap - EXIT"
+        ),
+      ],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert event_result.returncode == 0, event_result.stderr
+    assert event_result.stderr.count(reminder) == 1, event_result.stderr
   print("PASS: repo-aware PATH install, reset and dispatch")
 
 

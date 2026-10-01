@@ -146,6 +146,14 @@ if ! grep -qF "$GATE_MARKER" "$PROFILE"; then
 
 # arena-preview-gate
 _arena_preview_gate() {
+  case "\$BASH_COMMAND" in
+    *"git commit"*|*"git push"*|*"gh pr checks"*)
+      if [ -z "\${_arena_preview_reminded:-}" ]; then
+        _arena_preview_reminded=1
+        printf '%s\n' "Finished a task? Update your task-list with arena-preview task <id> --status finished." >&2
+      fi
+      ;;
+  esac
   case "\$BASH_COMMAND" in *preview*|*profile*|*bashrc*|*arena-state*|gh*|sleep*|true*|:*|test*|"git status"*|"git diff"*|"git add"*|"git commit"*) return 0 ;; esac
   case "\${_arena_preview_gate_checked:-}" in 1) return 0 ;; esac
   _arena_preview_gate_checked=1
