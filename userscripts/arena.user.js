@@ -92,7 +92,7 @@
     var BAR_SELECTOR =
       "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
     var COMPOSER_SELECTOR = 'div.tiptap.ProseMirror[contenteditable="true"]';
-    var TEMPLATE_RE = /^(\S+) read AGENTS\.md ARENA\.md$/;
+    var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md)/;
     var SLUG_KEY = "clankers-arena-agent-slug";
 
     function parseArenaUrl(urlString) {
@@ -132,12 +132,30 @@
       return repo;
     }
 
-    function promptForSlug(slug) {
-      return slug + " read AGENTS.md ARENA.md";
+    function ownerRepoFromText(text) {
+      var trimmed = String(text || "").trim();
+      var slash = trimmed.indexOf("/");
+      if (slash <= 0 || slash === trimmed.length - 1) {
+        return null;
+      }
+      var owner = trimmed.slice(0, slash);
+      var repo = trimmed.slice(slash + 1);
+      if (!owner || !repo || repo.indexOf("/") !== -1 || /\s/.test(trimmed)) {
+        return null;
+      }
+      return trimmed;
     }
 
-    function shouldWrite(current, slug, lastSlug) {
-      var desired = promptForSlug(slug);
+    function promptForSlug(slug, arenaMd) {
+      var base = slug + " read ARENA.md AGENTS.md";
+      if (arenaMd) {
+        return base + "\nhere is ARENA.md:\n" + arenaMd;
+      }
+      return base;
+    }
+
+    function shouldWrite(current, slug, lastSlug, arenaMd) {
+      var desired = promptForSlug(slug, arenaMd);
       var text = String(current || "").trim();
       if (text === desired) {
         return false;
@@ -145,7 +163,10 @@
       if (lastSlug === null) {
         return text === "" || TEMPLATE_RE.test(text);
       }
-      return slug !== lastSlug;
+      if (slug === lastSlug) {
+        return text === promptForSlug(slug, null);
+      }
+      return true;
     }
 
     function rememberSlug(slug) {
@@ -159,10 +180,31 @@
     if (exposeChecks("promptFill", {
       isComposerUrl: isComposerUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
+      ownerRepoFromText: ownerRepoFromText,
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
     })) {
       return;
+    }
+
+    var arenaMdCache = {};
+    var pendingFetch = null;
+
+    function fetchArenaMd(ownerRepo) {
+      var url = "https://raw.githubusercontent.com/" + ownerRepo + "/refs/heads/main/rules/ARENA.md";
+      return fetch(url).then(function (r) {
+        if (!r.ok) return null;
+        return r.text();
+      }).catch(function () { return null; });
+    }
+
+    function ensureFetch(ownerRepo) {
+      if (!ownerRepo || ownerRepo in arenaMdCache || pendingFetch) return;
+      pendingFetch = fetchArenaMd(ownerRepo).then(function (content) {
+        arenaMdCache[ownerRepo] = content;
+        pendingFetch = null;
+        sync();
+      });
     }
 
     var lastSlug = null;
@@ -181,7 +223,7 @@
       for (i = 0; i < spans.length; i += 1) {
         slug = slugFromOwnerRepo(spans[i].textContent || "");
         if (slug) {
-          return slug;
+          return {slug: slug, ownerRepo: ownerRepoFromText(spans[i].textContent || "")};
         }
       }
       return null;
@@ -199,9 +241,12 @@
         while (el.firstChild) {
           el.removeChild(el.firstChild);
         }
-        var paragraph = document.createElement("p");
-        paragraph.textContent = text;
-        el.appendChild(paragraph);
+        var lines = text.split("\n");
+        for (var j = 0; j < lines.length; j += 1) {
+          var paragraph = document.createElement("p");
+          paragraph.textContent = lines[j];
+          el.appendChild(paragraph);
+        }
         el.dispatchEvent(
           new InputEvent("input", {
             bubbles: true,
@@ -218,10 +263,20 @@
         lastSlug = null;
         return;
       }
-      var slug = readSlug(document);
-      if (!slug) {
+      var info = readSlug(document);
+      if (!info) {
+        var emptyComposer = document.querySelector(COMPOSER_SELECTOR);
+        if (emptyComposer && emptyComposer.getAttribute("aria-disabled") !== "true") {
+          var emptyText = String(emptyComposer.innerText || "").trim();
+          if (emptyText && TEMPLATE_RE.test(emptyText)) {
+            setComposerText(emptyComposer, "");
+          }
+        }
+        lastSlug = null;
         return;
       }
+      var slug = info.slug;
+      var ownerRepo = info.ownerRepo;
       rememberSlug(slug);
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
@@ -229,12 +284,16 @@
         return;
       }
       var current = composer.innerText || "";
-      if (!shouldWrite(current, slug, lastSlug)) {
+      var cached = ownerRepo in arenaMdCache ? arenaMdCache[ownerRepo] : undefined;
+      var arenaMd = typeof cached === "string" ? cached : null;
+      if (!shouldWrite(current, slug, lastSlug, arenaMd)) {
         lastSlug = slug;
+        ensureFetch(ownerRepo);
         return;
       }
-      setComposerText(composer, promptForSlug(slug));
+      setComposerText(composer, promptForSlug(slug, arenaMd));
       lastSlug = slug;
+      ensureFetch(ownerRepo);
     }
 
     var observer = new MutationObserver(sync);

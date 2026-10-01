@@ -18,6 +18,7 @@ function loadChecks(file) {
 function checkPromptFill(api) {
   var isComposerUrl = api.isComposerUrl;
   var slugFromOwnerRepo = api.slugFromOwnerRepo;
+  var ownerRepoFromText = api.ownerRepoFromText;
   var promptForSlug = api.promptForSlug;
   var shouldWrite = api.shouldWrite;
 
@@ -37,12 +38,22 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    [promptForSlug("clankers"), "clankers read AGENTS.md ARENA.md"],
+    [ownerRepoFromText("nemoe7/clankers"), "nemoe7/clankers"],
+    [ownerRepoFromText("  org/repo  "), "org/repo"],
+    [ownerRepoFromText("main"), null],
+    [ownerRepoFromText("a/"), null],
+    [ownerRepoFromText("/b"), null],
+    [ownerRepoFromText("a/b/c"), null],
+    [promptForSlug("clankers"), "clankers read ARENA.md AGENTS.md"],
+    [promptForSlug("clankers", "arena content here"), "clankers read ARENA.md AGENTS.md\nhere is ARENA.md:\narena content here"],
     [shouldWrite("", "clankers", null), true],
-    [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null), false],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null), false],
+    [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null), true],
     [shouldWrite("draft", "clankers", null), false],
-    [shouldWrite("clankers read AGENTS.md ARENA.md", "other", "clankers"), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers"), true],
     [shouldWrite("draft", "clankers", "clankers"), false],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", "clankers", "arena content"), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md\nhere is ARENA.md:\narena content", "clankers", "clankers", "arena content"), false],
   ];
   var failed = 0;
   var i;
