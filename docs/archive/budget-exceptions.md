@@ -6,6 +6,8 @@ Budget growth, with dates and numbers. [README.md](../../README.md#instruction-b
 
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/preview.py` +122 `B`, 82,950 to 83,072. A blocked task refuses the finished status.
 
+2026-10-01: Owner request. `skills/arena-preview-steering/assets/app.js` +48 `B`, 43,300 to 43,348, and `skills/arena-preview-steering/assets/style.css` +50 `B`, 12,700 to 12,750. A blocked task reads in the muted tone.
+
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/install.sh` +312 `B`, 7,569 to 7,881. Every run now rewrites the four profile blocks.
 
 2026-10-01: Accepted without funding. `skills/arena-preview-steering/scripts/preview.py` +202 `B`, 81,791 to 81,993. `skills/arena-preview-steering/scripts/install.sh` -72 `B`, 7,641 to 7,569.

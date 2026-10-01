@@ -903,7 +903,7 @@ function stamp(value) {
 // It does not write to disk. Report sources, uploads, downloads and display-only fields
 // are not restored by `import-state`; preserve the backup and republish report sources.
 const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order'];
+const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order', 'blocked'];
 function restoreLine(record, keys) {
   const line = {};
   for (const key of keys) line[key] = record[key] ?? null;
@@ -1128,6 +1128,10 @@ function taskRow(task) {
   title.className = 'task-title';
   title.textContent = task.title;
   title.dataset.taskId = task.id;
+  // A blocked task reads muted, so the queue shows what the agent can act on next.
+  if (task.blocked) {
+    title.dataset.blocked = 'true';
+  }
   title.tabIndex = 0;
   title.setAttribute('role', 'button');
   title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to copy it`);

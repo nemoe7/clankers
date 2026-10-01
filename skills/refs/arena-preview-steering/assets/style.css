@@ -254,6 +254,8 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-title { cursor: pointer; }
 .task-title[data-copied="good"] { color: var(--dot-said); }
 .task-title[data-copied="bad"] { color: #ef4444; }
+/* A blocked task is not actionable yet, so it drops to the muted tone the details use. */
+.task-title[data-blocked="true"] { color: var(--muted); }
 /* Details sit under the title in the muted face as a real list, and repeat in the row hover. */
 .tasks-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .task-details { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }

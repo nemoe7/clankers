@@ -40,6 +40,7 @@
 - **Profile blocks**: The installer rewrites all four `~/.bash_profile` blocks on every run. A stale block from an older release no longer survives. A minify check proves it.
 - **Reference parity**: A minify check compares the shipped `REFERENCE.md` against the refs baseline. The two copies must stay byte-identical.
 - **Blocked finish**: A task that carries the blocked mark refuses `--status finished`. The error names `--unblocked`.
+- **Blocked color**: A blocked task title reads in `var(--muted)`, so the queue shows what the agent can act on. Both themes share the one variable.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30
