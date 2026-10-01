@@ -3,6 +3,7 @@
 ### system-prompts
 
 - **New directory**: `system-prompts/` holds a refs baseline and a live copy. It opens with the NemoGPT prompt and the vendored writing guidelines.
+- **Live squash**: The live NemoGPT copy compresses from the refs, 34,952 to 28,380 bytes, with every section and rule kept. The squash also removes a duplicated tail fragment that the fourteen additions left behind.
 
 ### rules
 
