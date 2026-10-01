@@ -626,7 +626,7 @@ test('preview client', async (t) => {
       return line;
     };
     noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-    taskKeysHere = ['id', 'title', 'details', 'status', 'order'];
+    taskKeysHere = ['id', 'title', 'details', 'status', 'order', 'blocked'];
     assert.deepEqual(lines, [
       ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
       ...(cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
