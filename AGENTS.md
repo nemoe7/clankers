@@ -42,7 +42,7 @@ Read these first:
 
 ## Repository type
 
-- A rules/skills/workflows repository, not a software project: no build system, package manifest, or test suite.
+- Treat this as a rules/skills/workflows repository with maintenance build tooling and tests.
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
 - It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
   - It also checks the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
