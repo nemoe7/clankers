@@ -494,6 +494,58 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's edit row: the label span sits beside the toggle, and the row holds no p.
+  function editRowDoc(stopGenerating) {
+    var expand = {
+      textContent: "",
+      querySelector: function () {
+        return null;
+      },
+    };
+    var span = {
+      textContent: "Edit",
+      parentElement: null,
+      closest: function () {
+        return null;
+      },
+    };
+    var row = {
+      querySelector: function (selector) {
+        return selector === "button" ? expand : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === "button") {
+          return [expand];
+        }
+        return selector === GROUP_LABEL_SELECTOR ? [span] : [];
+      },
+    };
+    span.parentElement = row;
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === GROUP_LABEL_SELECTOR) {
+          return [span];
+        }
+        if (selector === "button[aria-label]") {
+          return stopGenerating
+            ? [
+                {
+                  getAttribute: function () {
+                    return "Stop generating";
+                  },
+                },
+              ]
+            : [];
+        }
+        return [];
+      },
+    };
+  }
+
   // A read or edit group has no shimmer label and no pulsing icon; only the turn bounds it.
   function groupDoc(stopGenerating) {
     var button = {
@@ -738,9 +790,11 @@ function checkTabTitle(api) {
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
     [syncTitle(idleDoc), true],
     [idleDoc.title, TITLE_PREFIX + "clankers"],
-    [GROUP_LABEL_SELECTOR, "button > span.text-text-secondary"],
+    [GROUP_LABEL_SELECTOR, "span.text-text-secondary"],
     [emojiForRow(liveRow(groupDoc(true))), "\uD83D\uDCD6"],
     [liveRow(groupDoc(false)), null],
+    [emojiForRow(liveRow(editRowDoc(true))), "\u270F\uFE0F"],
+    [liveRow(editRowDoc(false)), null],
   ];
   var failed = 0;
   var i;

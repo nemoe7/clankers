@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.26
+// @version      1.1.27
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1090,7 +1090,7 @@
     // The live status text shimmers; a thinking row carries no pulsing icon, so its label leads.
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     // A read or edit group carries no shimmer and no pulse, so its own label is the only anchor.
-    var GROUP_LABEL_SELECTOR = "button > span.text-text-secondary";
+    var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The live status row names the action; the emoji carries it in the title.
     var ACTION_EMOJI = [
@@ -1240,6 +1240,12 @@
         }
       }
       text = collapsed(row.querySelector("p"));
+      if (text) {
+        return text;
+      }
+      // A read or edit row names its action in a plain span beside the toggle, not in a p.
+      var group = typeof row.querySelectorAll === "function" ? row.querySelectorAll(GROUP_LABEL_SELECTOR) : [];
+      text = collapsed(group.length ? group[group.length - 1] : null);
       if (text) {
         return text;
       }

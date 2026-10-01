@@ -26,6 +26,7 @@
 - **Transcript trim settle**: The settle check also rejects a pending question widget, so the trim waits for the answer. The Arena bundle moves to `1.1.24`.
 - **Prompt fill URL**: The composer match strips trailing slashes, so `/agent/` fills like `/agent`. The Arena bundle moves to `1.1.25`.
 - **Tab title read groups**: The newest group label supplies the emoji while a turn runs, because a read or edit group never pulses. The bundle moves to `1.1.26`.
+- **Tab title labels**: The group selector drops its button parent. The label falls back to the row's action span, so `Edit`, `Write` and `Explored` map. The bundle moves to `1.1.27`.
 
 ### preview
 
@@ -33,7 +34,7 @@
 - **Trap reminders**: The debug trap prints one task-list reminder per shell on `git commit`, `git push`, and `gh pr checks`. The copy check asserts the count.
 - **Composer paste**: A text paste over 2,000 characters stages one attachment named `<lines>-pasted-lines-<epoch>.txt` and leaves the composer text alone. The client test covers both paths.
 - **Missing inbox error**: The error names the installer, the `start_process` tool with the serve command, and the read command. It also names a possible sandbox reset. A test asserts the five fragments.
-- **State directory**: The CLI drops `--state-dir`. It reads `ARENA_PREVIEW_STATE_DIR` when that is set, and the repository `arena-state` otherwise. The tests set the variable.
+- **State directory**: The CLI drops `--state-dir`. It reads `ARENA_PREVIEW_STATE_DIR` when the environment names it, and the repository `arena-state` otherwise. The tests set the variable.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30
