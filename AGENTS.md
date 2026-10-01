@@ -38,7 +38,7 @@ Read these first:
 - Deleted clause: attempt one squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files.
-- Keep one CHANGELOG entry per date, extending it while the date holds. Under the date, group the changes by domain.
+- Keep one CHANGELOG entry per date, extending it while the date holds. Use dates as versions, group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain, and omit Unreleased.
 
 ## Repository type
 
