@@ -15,6 +15,7 @@
 
 - **Transcript trim**: The menu takes one global row limit. The trim removes oldest rows and action containers from trimmed or empty roots while keeping message roots. The Arena bundle moves to `1.1.23`.
 - **Transcript trim settle**: The settle check also rejects a pending question widget, so the trim waits for the answer. The Arena bundle moves to `1.1.24`.
+- **Prompt fill URL**: The composer match strips trailing slashes, so `/agent/` fills like `/agent`. The Arena bundle moves to `1.1.25`.
 
 ### preview
 

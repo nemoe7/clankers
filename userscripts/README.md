@@ -28,7 +28,7 @@ The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 ## Arena Prompt Fill
 
-The feature fills the composer only on exact `/agent`, not paths with a trailing segment.
+The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
 If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. It writes `{repo} read AGENTS.md ARENA.md` and updates that text when the repo name changes. It does not overwrite an unrelated draft.
 

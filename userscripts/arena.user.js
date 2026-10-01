@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.24
+// @version      1.1.25
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -111,7 +111,11 @@
 
     function isComposerUrl(urlString) {
       var url = parseArenaUrl(urlString);
-      return Boolean(url) && url.pathname === "/agent";
+      if (!url) {
+        return false;
+      }
+      // Arena serves the composer on /agent and on /agent/, so trailing slashes do not count.
+      return url.pathname.replace(/\/+$/, "") === "/agent";
     }
 
     function slugFromOwnerRepo(text) {
