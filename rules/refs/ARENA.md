@@ -102,8 +102,8 @@
 ## Verification
 
 - Work in several passes, not one sweep, re-checking after each.
-- Before asking questions, state the total number of questions that batch will hold and label each question sequentially Q1, Q2, and so on.
-- NEVER add another question to the same batch without first stating the updated total.
+- For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
+- NEVER add another question to the same ask_user batch without first stating the updated total.
 - Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Run `arena-preview poll` with bash tool timeout 1800s.
