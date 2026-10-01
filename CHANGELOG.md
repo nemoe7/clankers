@@ -1,5 +1,9 @@
 ## 2026-10-01
 
+### system-prompts
+
+- **New directory**: `system-prompts/` holds a refs baseline and a live copy. It opens with the NemoGPT prompt and the vendored writing guidelines.
+
 ### rules
 
 - **First read cadence**: ARENA.md orders the first inbox read after the visibility answer. The live and root mirrors follow, and the exceptions file records the growth.
