@@ -929,6 +929,33 @@ REPORT_LIST_TAG = re.compile(r"\s*</?(?:ul|ol|li)>\s*", re.IGNORECASE)
 REPORT_LIST_TAGS = re.compile(r"^(?:\s*</?(?:ul|ol|li)>\s*)+$", re.IGNORECASE)
 
 
+def hold_out(markdown, pattern, build, slug):
+  """Replace each match with a placeholder and return the text and what it held.
+
+  Two things must survive the renderer untouched: allowlisted list markup, and an
+  image the agent sized. Both hold the real HTML aside, render, then put it back,
+  so this is one helper rather than two. `build` returns the HTML for a match, or
+  None to leave the match alone.
+  """
+  held = []
+
+  def hold(match):
+    built = build(match)
+    if built is None:
+      return match.group(0)
+    held.append(built)
+    return f" preview{slug}{len(held) - 1}x "
+
+  return re.sub(pattern, hold, markdown), held
+
+
+def put_back(rendered, held, slug):
+  """Swap each placeholder for the HTML it stood in for."""
+  return re.sub(
+    rf"preview{slug}(\d+)x", lambda match: held[int(match.group(1))], rendered
+  )
+
+
 def render_report_block(markdown):
   """Render a markdown chunk, letting allowlisted list markup through the renderer.
 
@@ -937,26 +964,16 @@ def render_report_block(markdown):
   renders inline, so **bold** survives). A tag with an attribute, or any other tag,
   keeps escaping like every other HTML.
   """
-  held = []
-
-  def hold(match):
-    held.append(match.group(0).strip().lower())
-    return f" previewlisttag{len(held) - 1}x "
-
   # A maximal run of list tags with optional whitespace between them is one holdout;
   # the run stays inline so a table cell keeps its structure, and the spaces around
   # let markdown end the paragraph on either side.
-  tagged = re.sub(
-    r"(?:\s*(?:</?(?:ul|ol|li)>)\s*){2,}",
-    hold,
+  tagged, held = hold_out(
     markdown,
+    r"(?:\s*(?:</?(?:ul|ol|li)>)\s*){2,}",
+    lambda match: match.group(0).strip().lower(),
+    "listtag",
   )
-  rendered = render(tagged)
-
-  def restore(match):
-    return held[int(match.group(1))]
-
-  out = re.sub(r"previewlisttag(\d+)x", restore, rendered)
+  out = put_back(render(tagged), held, "listtag")
   # Block tags kept inline sit in the paragraph their text formed: break the paragraph
   # at each block boundary so the list renders as a list, and drop the empty pairs.
   out = re.sub(r"<p>(<(?:ul|ol)>)", r"\1", out)
@@ -2542,28 +2559,21 @@ def drop_paragraph_breaks(rendered):
   return PARAGRAPH.sub(lambda match: PARAGRAPH_BREAK.sub("", match.group(0)), rendered)
 
 
-def hold_sized_images(markdown, validate):
-  """Hold a sized image out of the renderer and return the text and what it held.
+def sized_image(match, validate):
+  """Build the `<img>` for a sized image, or None when the renderer would refuse it.
 
   Commonmark carries no size syntax, so `![alt](src =320x200)` renders as plain text
-  and the agent cannot say how big its image is. Holding the token keeps the size and
-  puts back a real `<img>` afterwards. Both attributes are escaped here, because the
-  renderer never sees them, and a source the renderer would refuse stays as text.
+  and the agent cannot say how big its image is. The attributes are escaped here,
+  because the renderer never sees them.
   """
-  held = []
-
-  def hold(match):
-    alt, source, width, height = match.groups()
-    if not validate(source):
-      return match.group(0)
-    size = f' width="{width}"' + (f' height="{height}"' if height else "")
-    held.append(
-      f'<img src="{html.escape(source, quote=True)}"'
-      f' alt="{html.escape(alt, quote=True)}"{size} />'
-    )
-    return f" previewimage{len(held) - 1}x "
-
-  return re.sub(SIZED_IMAGE, hold, markdown), held
+  alt, source, width, height = match.groups()
+  if not validate(source):
+    return None
+  size = f' width="{width}"' + (f' height="{height}"' if height else "")
+  return (
+    f'<img src="{html.escape(source, quote=True)}"'
+    f' alt="{html.escape(alt, quote=True)}"{size} />'
+  )
 
 
 def render(markdown, breaks=False):
@@ -2579,13 +2589,11 @@ def render(markdown, breaks=False):
     ["table", "strikethrough"]
   )
   parser.add_render_rule("link_open", open_link)
-  tagged, images = hold_sized_images(markdown, validateLink)
+  tagged, images = hold_out(
+    markdown, SIZED_IMAGE, lambda match: sized_image(match, validateLink), "image"
+  )
   rendered = drop_paragraph_breaks(parser.render(unescape_fences(tagged)))
-
-  def restore(match):
-    return images[int(match.group(1))]
-
-  return add_copy_buttons(re.sub(r"previewimage(\d+)x", restore, rendered))
+  return add_copy_buttons(put_back(rendered, images, "image"))
 
 
 def handler(store):
@@ -2962,11 +2970,6 @@ def main():
     help="Print the unacked-count reminder line and exit",
   )
   parser.add_argument(
-    "--save-path",
-    default=None,
-    help="Where the save button writes its file; inside the state directory by default",
-  )
-  parser.add_argument(
     "--pretty",
     action="store_true",
     help="Indent the JSON this CLI prints; agent-facing output is minified by default",
@@ -3047,7 +3050,7 @@ def main():
   state_dir = resolve_state_dir()
   try:
     if args.reminder:
-      store = Store(state_dir, create=False, save_path=args.save_path)
+      store = Store(state_dir, create=False)
       require_server(store)
       print(store.reminder(advance=True), flush=True)
       return 0
@@ -3055,7 +3058,7 @@ def main():
       parser.error("a command is required")
     if args.command == "gate":
       try:
-        allowed = Store(state_dir, save_path=args.save_path).gate()
+        allowed = Store(state_dir).gate()
       except FileNotFoundError:
         return 0
       except Exception:
@@ -3067,7 +3070,6 @@ def main():
     store = Store(
       state_dir,
       create=args.command in {"serve", "init", "import-state"},
-      save_path=args.save_path,
     )
     print(store.reminder(), file=sys.stderr, flush=True)
     if args.command == "serve":

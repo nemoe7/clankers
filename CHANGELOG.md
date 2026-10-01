@@ -43,6 +43,7 @@
 - **Blocked color**: A blocked task title reads in `var(--muted)`, so the queue shows what the agent can act on. Both themes share the one variable.
 - **Sized report images**: A report image takes a size the agent sets, as `![alt](src =320x200)`. A refused source stays text, and a wide image shrinks to the panel.
 - **Server shell guard**: The gate returns early in a shell that starts the server. The preview is a child of that shell, so an exit took it down.
+- **Two cuts**: The CLI drops the unused save-path flag. One holdout helper now serves both the list markup and the sized images.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30
