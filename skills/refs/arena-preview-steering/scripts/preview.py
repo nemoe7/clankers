@@ -2658,10 +2658,10 @@ def handler(store):
               if "text" in item:
                 item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
-                item["ack_html"] = render(item["ack_text"])
+                item["ack_html"] = render(item["ack_text"].replace("\\n", "\n"))
               for reply in item.get("replies") or []:
                 if reply["kind"] == "reply":
-                  reply["html"] = render(reply["text"])
+                  reply["html"] = render(reply["text"].replace("\\n", "\n"))
           except RuntimeError as error:
             state["rendering_error"] = str(error)
           self.reply(200, json.dumps(state, ensure_ascii=False))
