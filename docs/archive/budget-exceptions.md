@@ -4,6 +4,8 @@ Budget growth, with dates and numbers. [README.md](../../README.md#instruction-b
 
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/preview.py` +957 `B`, 81,993 to 82,950. Both distributed copies follow.
 
+2026-10-01: Owner request. `skills/arena-preview-steering/scripts/install.sh` +312 `B`, 7,569 to 7,881. Every run now rewrites the four profile blocks.
+
 2026-10-01: Accepted without funding. `skills/arena-preview-steering/scripts/preview.py` +202 `B`, 81,791 to 81,993. `skills/arena-preview-steering/scripts/install.sh` -72 `B`, 7,641 to 7,569.
 
 2026-10-01: Approved amendment. `rules/ARENA.md` +75 `B`, 15,294 to 15,369. The root copy matches.

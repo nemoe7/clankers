@@ -59,8 +59,38 @@ def check_preview_path():
       assert result.returncode == 0, result.stderr
 
     profile = (home / ".bash_profile").read_text(encoding="utf-8")
-    assert profile.count("# arena-preview-hook") == 1
-    assert profile.count("# arena-preview-path") == 1
+    for marker in (
+      "# arena-preview-hook",
+      "# arena-preview-gate\n",
+      "# arena-preview-path",
+      "# arena-preview-gate-trap",
+    ):
+      assert profile.count(marker) == 1, marker
+
+    # A stale block from an older installer must not survive a fresh run.
+    stale = "# arena-preview-gate\n_arena_preview_stale=1\n"
+    (home / ".bash_profile").write_text(
+      profile.replace("# arena-preview-gate\n", stale, 1), encoding="utf-8"
+    )
+    stale_result = subprocess.run(
+      ["bash", str(install)],
+      cwd=minify.ROOT,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert stale_result.returncode == 0, stale_result.stderr
+    refreshed = (home / ".bash_profile").read_text(encoding="utf-8")
+    assert "_arena_preview_stale" not in refreshed, refreshed
+    for marker in (
+      "# arena-preview-hook",
+      "# arena-preview-gate\n",
+      "# arena-preview-path",
+      "# arena-preview-gate-trap",
+    ):
+      assert refreshed.count(marker) == 1, marker
+    profile = refreshed
     path_result = subprocess.run(
       [
         "bash",

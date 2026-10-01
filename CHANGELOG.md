@@ -37,6 +37,7 @@
 - **Missing inbox error**: The error names the installer, the `start_process` tool with the serve command, and the read command. It also names a possible sandbox reset. A test asserts the five fragments.
 - **State directory**: The CLI drops `--state-dir`. It reads `ARENA_PREVIEW_STATE_DIR` when the environment names it, and the repository `arena-state` otherwise. The tests set the variable.
 - **Blocked tasks**: A task carries a `blocked` mark that `--blocked` and `--unblocked` set. A poll returns at once with the task list while an upcoming task is unblocked.
+- **Profile blocks**: The installer rewrites all four `~/.bash_profile` blocks on every run. A stale block from an older release no longer survives. A minify check proves it.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30
