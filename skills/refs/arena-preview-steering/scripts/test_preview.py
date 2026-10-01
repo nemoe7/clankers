@@ -2358,6 +2358,22 @@ def test_publish_returns_field_count():
     assert store.publish("ask", "Ask", source) == 1
 
 
+def test_task_finish_blocked_refused():
+  with tempfile.TemporaryDirectory() as blocked_dir:
+    blocked_store = preview.Store(blocked_dir, create=True)
+    blocked_store.write_task("await", "Await the owner answer", blocked=True)
+    # A blocked task stays upcoming: finishing it needs the mark cleared first.
+    try:
+      blocked_store.write_task("await", status="finished")
+      raise AssertionError("A blocked task reached the finished div")
+    except ValueError as error:
+      assert "--unblocked" in str(error)
+    assert blocked_store.write_task("await")["status"] == "upcoming"
+    # Clearing the mark in the same command lets the finish through.
+    cleared = blocked_store.write_task("await", status="finished", blocked=False)
+    assert cleared["status"] == "finished" and cleared["blocked"] is False
+
+
 def test_task_amend():
   with tempfile.TemporaryDirectory() as amend_dir:
     amend_store = preview.Store(amend_dir, create=True)

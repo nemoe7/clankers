@@ -1405,6 +1405,10 @@ class Store:
       status = status or (stored["status"] if stored else "upcoming")
       if blocked is None:
         blocked = stored["blocked"] if stored else False
+      if status == "finished" and blocked:
+        raise ValueError(
+          f"Task {task_id} is blocked; clear the mark with --unblocked first"
+        )
       siblings = [
         task_row(item)
         for item in db.execute(
