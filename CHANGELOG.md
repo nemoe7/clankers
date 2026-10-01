@@ -85,7 +85,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Profile blocks**: The installer rewrites all four `~/.bash_profile` blocks on every run. A stale block from an older release no longer survives. A minify check proves it.
-- **Server shell guard**: The gate returns early in a shell that starts the server. The preview is a child of that shell, so an exit took it down.
+- **Agent call gate**: The gate blocks only a shell that runs a command string, so a launcher-script shell keeps the process it hosts. The earlier command-text guard missed a command that preceded the server start in the same shell.
 - **Image policy**: The page policy adds an image directive. The policy starts at none, so it blocked every report image before this.
 
 #### maintenance
