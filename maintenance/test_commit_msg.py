@@ -34,17 +34,14 @@ def run_hook(hook, repo, message_path, message):
 
 
 def main():
+  hook_source = installed_hook_source()
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     repo = root / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
-    (repo / "rules").mkdir()
-    (repo / "rules" / "COMMIT-SPEC.txt").write_text(
-      SPEC.read_text(encoding="utf-8"), encoding="utf-8"
-    )
     hook = repo / ".git" / "hooks" / "commit-msg"
-    hook.write_text(installed_hook_source(), encoding="utf-8")
+    hook.write_text(hook_source, encoding="utf-8")
     hook.chmod(0o755)
     message_path = root / "COMMIT_EDITMSG"
 
@@ -76,7 +73,27 @@ def main():
       assert result.returncode != 0, message
       assert result.stderr.startswith("commit-msg: ")
       assert after == message
-  print("Commit message hook checks passed")
+
+    (repo / "rules").mkdir()
+    (repo / "rules" / "COMMIT-SPEC.txt").write_text(
+      "invalid specification\n", encoding="utf-8"
+    )
+    result, after = run_hook(hook, repo, message_path, valid[0])
+    assert result.returncode == 0, result.stderr
+    assert after == valid[0]
+
+  specification = SPEC.read_text(encoding="utf-8")
+  spec_types = re.search(r"\ballowed types: ([a-z ]+);", specification)
+  hook_types = re.search(
+    r'^allowed_types = "([a-z ]+)"\.split\(\)$', hook_source, re.MULTILINE
+  )
+  spec_limit = re.search(r"<=\s*(\d+)\s+chars\b", specification)
+  hook_limit = re.search(r"^subject_limit = (\d+)$", hook_source, re.MULTILINE)
+  assert spec_types and hook_types, "allowed types must be in the spec and hook"
+  assert spec_types.group(1).split() == hook_types.group(1).split()
+  assert spec_limit and hook_limit, "subject limits must be in the spec and hook"
+  assert int(spec_limit.group(1)) == int(hook_limit.group(1))
+  print("Commit message hook checks passed without a runtime specification")
 
 
 if __name__ == "__main__":
