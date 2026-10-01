@@ -18,6 +18,7 @@
 
 - **Commit-message hook**: The preview installer replaces the local hook with a validator for `rules/COMMIT-SPEC.txt`. It checks the subject format, rejects a body, and adds no co-author trailer.
 - **Commit types**: The specification adds `ci` and `revert`. The installer reads the allowed types from `rules/COMMIT-SPEC.txt`.
+- **Portable hook**: The hook carries its own type list and 72-character limit, so a checkout without `rules/` still checks the message. A test pins both to `rules/COMMIT-SPEC.txt`.
 
 ### userscripts
 
