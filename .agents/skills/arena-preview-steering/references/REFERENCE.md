@@ -41,7 +41,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 | --- | --- |
 | `--status upcoming` or `--status finished` | Set status; new tasks start upcoming |
 | `--order N` | Set 1-based position in the task's status group |
-| `--task-id`, `--task-title`, repeatable `--task-details` | Set supplied fields; detail arguments replace stored details |
+| Repeatable `--task-details` | Set the detail lines; the arguments replace the stored details |
 | `--task-details ""` | Clear stored details |
 | `--msg-id <full-message-id>` | Link a note or report answer to its task; still call `ack` |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |

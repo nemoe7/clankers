@@ -3007,8 +3007,6 @@ def main():
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
   task.add_argument("title_arg", nargs="?", metavar="TASK-TITLE")
   task.add_argument("detail_arg", nargs="*", metavar="TASK-DETAIL")
-  task.add_argument("--task-id", help="The ID the first positional takes")
-  task.add_argument("--task-title", help="The title the second positional takes")
   task.add_argument(
     "--task-details",
     action="append",
@@ -3118,7 +3116,7 @@ def main():
       store.unpublish(args.report_id)
       print(f"Unpublished {args.report_id}; its answers and source file remain")
     elif args.command == "task":
-      task_id = args.task_id or args.id_arg
+      task_id = args.id_arg
       if not task_id:
         raise ValueError("A task needs an ID")
       details = args.task_details
@@ -3132,7 +3130,7 @@ def main():
         with store.transaction() as shared:
           record = store.write_task(
             task_id,
-            args.task_title or args.title_arg,
+            args.title_arg,
             details,
             args.status,
             args.order,
@@ -3143,7 +3141,7 @@ def main():
       else:
         record = store.write_task(
           task_id,
-          args.task_title or args.title_arg,
+          args.title_arg,
           details,
           args.status,
           args.order,

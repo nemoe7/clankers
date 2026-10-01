@@ -10,6 +10,8 @@ Budget growth, with dates and numbers. [README.md](../../README.md#instruction-b
 
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/preview.py` +698 `B`, 83,072 to 83,770, and `skills/arena-preview-steering/assets/style.css` +45 `B`, 12,750 to 12,795. A report image carries the size the agent set.
 
+2026-10-01: Owner request. `skills/arena-preview-steering/scripts/preview.py` -205 `B`, 83,608 to 83,403. Ponytail cut three: the two duplicate task flags.
+
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/preview.py` -162 `B`, 83,770 to 83,608. Two ponytail cuts: the unused save-path flag and one holdout helper.
 
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/install.sh` +193 `B`, 7,881 to 8,074. The gate skips the shell that hosts the server.
