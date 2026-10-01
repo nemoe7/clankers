@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Installed mirror updates**: `AGENTS.md` allows task-related source changes in this repository's installed copies without separate user approval.
 - **Question batches**: `ARENA.md` applies question labels and totals only to `ask_user` batches.
 - **Changelog convention**: The shared AGENTS and ARENA rules use Keep a Changelog unless the repository uses another format. This log uses dates as versions, with change types and domain groups, and no Unreleased section.
+- **Repository type**: `AGENTS.md` identifies the rules/skills/workflows repository and its maintenance build tooling and tests.
 
 #### workflows
 
