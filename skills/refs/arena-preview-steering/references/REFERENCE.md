@@ -50,7 +50,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 
 ## Publish reports
 
-A report source is UTF-8 `.md`, at most 2,000,000 bytes. IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters. Source edits do not update a published report: call `publish` again. A report that has answers refuses republishing under the same ID; publish its update under a new ID. Delete a report the owner no longer needs with `unpublish <id>`; its sent answers and its `.md` source under the state directory stay. Verify the rendered report before telling the owner it is available. If an answer is rejected after an update, ask the owner to preserve the draft, reload and review the current report.
+A report source is UTF-8 `.md`, at most 2,000,000 bytes. IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters. Source edits do not update a published report: call `publish` again. A report that has answers refuses republishing under the same ID; publish its update under a new ID. Delete a report the owner no longer needs with `unpublish <id>`; its sent answers and its `.md` source under the state directory stay. Verify the rendered report before telling the owner it is available. An image renders from its URL. `![alt](src =320x200)` sets its size, and `=320x` scales the height. If an answer is rejected after an update, ask the owner to preserve the draft, reload and review the current report.
 
 ## Report fields
 
