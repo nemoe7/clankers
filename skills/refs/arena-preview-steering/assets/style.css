@@ -64,7 +64,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; wid
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #notes-panel, #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
-.log-card { flex: 1 1 auto; min-height: 200px; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
+.log-card { flex: 1 1 auto; min-height: 500px; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
 .log-card > .row:first-child { margin-block: 0; }
 .card.compose { flex: 0 0 auto; padding: 8px 18px; }
 .compose .row { margin: 6px 0; }
