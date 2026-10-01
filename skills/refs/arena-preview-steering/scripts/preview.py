@@ -923,6 +923,8 @@ def check_task(task_id, title, details):
 # A report can carry one allowlisted list form: report prose is agent-authored, and the
 # matrix's Platform specific row needs real lists (the owner read the raw tags, note 8d4ede2).
 # ul, ol and li only, on their own lines, no attributes; everything else keeps escaping.
+# An image the agent sized: `![alt](src =320x200)`, or `=320x` for a scaled height.
+SIZED_IMAGE = re.compile(r"!\[([^\]\n]*)\]\((\S+?)\s+=(\d+)x(\d*)\)")
 REPORT_LIST_TAG = re.compile(r"\s*</?(?:ul|ol|li)>\s*", re.IGNORECASE)
 REPORT_LIST_TAGS = re.compile(r"^(?:\s*</?(?:ul|ol|li)>\s*)+$", re.IGNORECASE)
 
@@ -2540,9 +2542,34 @@ def drop_paragraph_breaks(rendered):
   return PARAGRAPH.sub(lambda match: PARAGRAPH_BREAK.sub("", match.group(0)), rendered)
 
 
+def hold_sized_images(markdown, validate):
+  """Hold a sized image out of the renderer and return the text and what it held.
+
+  Commonmark carries no size syntax, so `![alt](src =320x200)` renders as plain text
+  and the agent cannot say how big its image is. Holding the token keeps the size and
+  puts back a real `<img>` afterwards. Both attributes are escaped here, because the
+  renderer never sees them, and a source the renderer would refuse stays as text.
+  """
+  held = []
+
+  def hold(match):
+    alt, source, width, height = match.groups()
+    if not validate(source):
+      return match.group(0)
+    size = f' width="{width}"' + (f' height="{height}"' if height else "")
+    held.append(
+      f'<img src="{html.escape(source, quote=True)}"'
+      f' alt="{html.escape(alt, quote=True)}"{size} />'
+    )
+    return f" previewimage{len(held) - 1}x "
+
+  return re.sub(SIZED_IMAGE, hold, markdown), held
+
+
 def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
+    from markdown_it.common.normalize_url import validateLink
   except ImportError as error:
     raise RuntimeError(
       "Markdown rendering needs markdown-it-py. Install it in the preview's venv "
@@ -2552,8 +2579,13 @@ def render(markdown, breaks=False):
     ["table", "strikethrough"]
   )
   parser.add_render_rule("link_open", open_link)
-  rendered = drop_paragraph_breaks(parser.render(unescape_fences(markdown)))
-  return add_copy_buttons(rendered)
+  tagged, images = hold_sized_images(markdown, validateLink)
+  rendered = drop_paragraph_breaks(parser.render(unescape_fences(tagged)))
+
+  def restore(match):
+    return images[int(match.group(1))]
+
+  return add_copy_buttons(re.sub(r"previewimage(\d+)x", restore, rendered))
 
 
 def handler(store):

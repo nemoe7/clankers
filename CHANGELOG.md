@@ -41,6 +41,7 @@
 - **Reference parity**: A minify check compares the shipped `REFERENCE.md` against the refs baseline. The two copies must stay byte-identical.
 - **Blocked finish**: A task that carries the blocked mark refuses `--status finished`. The error names `--unblocked`.
 - **Blocked color**: A blocked task title reads in `var(--muted)`, so the queue shows what the agent can act on. Both themes share the one variable.
+- **Sized report images**: A report image takes a size the agent sets, as `![alt](src =320x200)`. A refused source stays text, and a wide image shrinks to the panel.
 - **Setup step 4**: The skill orders the first read after the visibility answer, in step with the ARENA.md line.
 
 ## 2026-09-30

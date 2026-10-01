@@ -380,6 +380,14 @@ def test_http_boundaries():
     # An escape that is not a fence stays markdown-it's own, so inline text keeps its literal
     # backticks rather than turning into a code block.
     assert "<pre" not in preview.render("a \\`code\\` b")
+    # An image the agent sized keeps that size; commonmark alone prints the syntax.
+    sized = preview.render("![alt](https://example.com/a.png =320x200)")
+    assert 'width="320" height="200"' in sized and 'alt="alt"' in sized
+    assert 'width="320"' in preview.render("![a](https://example.com/a.png =320x)")
+    assert "<img" in preview.render("![a](https://example.com/a.png)")
+    # A source the renderer refuses stays text, and a quote in one stays escaped.
+    assert "<img" not in preview.render("![x](javascript:alert(1) =10x10)")
+    assert "&quot;" in preview.render('![q](https://example.com/a"b.png =10x10)')
     store = preview.Store(root, create=True, save_path=save_file)
     source = root / "report.md"
     source.write_text(
