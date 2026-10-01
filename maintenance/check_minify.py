@@ -163,6 +163,29 @@ def check_preview_path():
     )
     assert event_result.returncode == 0, event_result.stderr
     assert event_result.stderr.count(reminder) == 1, event_result.stderr
+    # A blocking gate must not exit the shell that hosts the long-lived server: the
+    # preview is its child and dies with it. The guard reads the shell's own script.
+    python.write_text(
+      '#!/usr/bin/env bash\ncase " $*" in *" gate") exit 1 ;; esac\nexit 0\n',
+      encoding="utf-8",
+    )
+    python.chmod(0o755)
+    scripts = {"server": "arena-preview serve --port 8000\n", "worker": "echo plain\n"}
+    codes = {}
+    for name, body in scripts.items():
+      script = home / f"{name}.cmd"
+      script.write_text(f'source "$HOME/.bash_profile"\n{body}trap - EXIT\n', "utf-8")
+      codes[name] = subprocess.run(
+        ["bash", str(script)],
+        cwd=minify.ROOT / "skills",
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+      ).returncode
+    assert codes["server"] == 0, f"the server shell was gated: {codes}"
+    assert codes["worker"] == 130, f"the gate stopped blocking other shells: {codes}"
+
   print("PASS: repo-aware PATH install, reset and dispatch")
 
 
