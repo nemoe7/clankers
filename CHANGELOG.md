@@ -21,6 +21,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Commit history**: Four rules hold the pull request history small. Minimize it and keep commits intentional. Never commit intermediate fixes or debugging. Keep unrelated changes separate, with no merge commits. Review the final list and diff before pushing. The rules land in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy.
 
+#### gpt-plugins
+
+- **Handoff verification**: The `gpt-handoff` output tells the receiving agent to check material claims before applying them. The collection version steps to `1.5.1`.
+
 #### workflows
 
 - **CI split**: `validate.yml` becomes `ci.yml`, named CI, with independent `quality`, `tests` and `preview-tests` jobs. It runs on pull requests and after every push to `main`.

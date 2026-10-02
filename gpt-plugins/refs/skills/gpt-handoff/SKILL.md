@@ -106,6 +106,9 @@ Never claim a check passed without verification.
 
 Produce only the actionable handoff.
 
+The receiving agent MUST independently verify material claims in the handoff before applying them.
+
+
 The final handoff MUST be directly copyable as one agent prompt.
 
 Emit exactly one Markdown fenced block.
