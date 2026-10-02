@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.31
+// @version      1.1.32
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1246,13 +1246,14 @@
       if (row && knownLabel(liveLabel(row))) {
         return row;
       }
-      // A read or edit group never pulses, so while the turn runs its newest label names the
-      // action. The Stop generating button bounds the fallback, so the title clears when the
-      // turn ends and the hold expires.
-      if (!findStopGeneratingButton(doc)) {
-        return null;
-      }
-      var groups = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(GROUP_LABEL_SELECTOR) : [];
+      // A read or edit group never pulses, so its newest label names the action. The bound is
+      // the newest transcript message: during a turn it holds the live group, and a new user
+      // message holds none, so the title clears without depending on any button label.
+      var lastMessage = messages.length ? messages[messages.length - 1] : null;
+      var groups =
+        lastMessage && typeof lastMessage.querySelectorAll === "function"
+          ? lastMessage.querySelectorAll(GROUP_LABEL_SELECTOR)
+          : [];
       row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
       return row && knownLabel(liveLabel(row)) ? row : null;
     }

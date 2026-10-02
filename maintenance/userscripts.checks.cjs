@@ -545,12 +545,20 @@ function checkTabTitle(api) {
       },
     };
     span.parentElement = row;
+    var message = {
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR && stopGenerating ? [span] : [];
+      },
+    };
     return {
       title: "ChatGPT",
       querySelector: function () {
         return null;
       },
       querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) {
+          return stopGenerating ? [message] : [];
+        }
         if (selector === GROUP_LABEL_SELECTOR) {
           return [span];
         }
@@ -594,12 +602,20 @@ function checkTabTitle(api) {
         return selector === "button" ? button : null;
       },
     };
+    var message = {
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR && stopGenerating ? [label] : [];
+      },
+    };
     return {
       title: "ChatGPT",
       querySelector: function () {
         return null;
       },
       querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) {
+          return stopGenerating ? [message] : [];
+        }
         if (selector === GROUP_LABEL_SELECTOR) {
           return [label];
         }

@@ -75,6 +75,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **Tab title edit row**: The live anchor matched `svg.animate-pulse` only. A collapsed edit row pulses its label span, so the title never read as editing. The anchor takes any pulsing element. The label reader falls back to the pulsing element text. A class-aware checks case guards both tag forms. Version 1.1.31.
+- **Tab title group bound**: The read and edit group fallback waited on a button whose aria-label reads exactly Stop generating. One label drift therefore silenced every read and write in the title. The fallback now bounds to the newest transcript message, which a new user message clears without any button. Version 1.1.32.
 
 #### userscripts
 
