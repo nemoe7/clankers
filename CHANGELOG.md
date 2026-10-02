@@ -35,6 +35,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Changelog scope**: `changelog` leaves the allowed scope list. Its area was one file, so it could never carry a ledger entry beside the change.
 - **Scope list**: The gate takes any scope in a commit subject and a pull request title, and the frozen 39-name list goes.
 - **Body headings**: The `Breaking Changes` and `Related` headings may stay out of a pull request body when neither holds content. `Summary`, `Changes` and `Validation` stay required and in order.
+- **Placeholder rule**: Angle brackets inside a fenced code block pass the pull request body gate. Every other line keeps the ban, on the owner answer to the `pr-constraints` report.
 
 #### workflows
 

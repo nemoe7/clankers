@@ -74,6 +74,25 @@ def test_extra_section_fails():
   assert failures and "expected the headings" in failures[0]
 
 
+def test_angle_brackets_pass_inside_a_fenced_block():
+  text = VALID_BODY.replace(
+    "Add a gate that validates every pull request commit and the pull request body.\n",
+    "Add a gate that validates every pull request commit and the pull request body.\n"
+    "```\n"
+    "gh pr checks <PR> --watch\n"
+    "```\n",
+  )
+  assert body_failures(text) == []
+
+
+def test_angle_brackets_outside_a_fenced_block_fail():
+  text = VALID_BODY.replace(
+    "Add a gate that validates",
+    "Run gh pr checks <PR> --watch, then add a gate that validates",
+  )
+  assert any("placeholder" in failure for failure in body_failures(text))
+
+
 def test_content_before_the_first_section_fails():
   failures = body_failures("A heading-free sentence.\n\n" + VALID_BODY)
   assert any("content before ## Summary" in failure for failure in failures)

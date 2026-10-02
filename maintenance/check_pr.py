@@ -41,6 +41,7 @@ SUBJECT_RE = re.compile(
 )
 H2_RE = re.compile(r"^##\s+(?P<title>.*\S)\s*$")
 H3_RE = re.compile(r"^###\s+\S")
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
 HTML_COMMENT_RE = re.compile(r"<!--|--!?>")
 PLACEHOLDER_RE = re.compile(r"<[^<>\n]+>")
 LIST_ITEM_RE = re.compile(r"^-\s+(?P<body>\S.*)$")
@@ -115,10 +116,14 @@ def validate_pr_body(text: str) -> list[Failure]:
   """Validate the locked PR body heading order and report each failing line."""
   failures: list[Failure] = []
   lines = text.splitlines()
+  in_fence = False
   for number, line in enumerate(lines, start=1):
+    if FENCE_RE.match(line):
+      in_fence = not in_fence
+      continue
     if HTML_COMMENT_RE.search(line):
       failures.append(Failure("body", "HTML comments are not allowed", number))
-    if PLACEHOLDER_RE.search(line):
+    if not in_fence and PLACEHOLDER_RE.search(line):
       failures.append(Failure("body", "placeholder text is not allowed", number))
     if H3_RE.match(line):
       failures.append(Failure("body", "H3 headings are not allowed", number))
