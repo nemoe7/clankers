@@ -15,6 +15,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Pull request gate**: `pr-check.yml` checks each commit and the pull request title against the Conventional Commit rules that `maintenance/check_pr.py` inlines from `rules/COMMIT-SPEC.txt`. It checks the body heading order and runs the vendored Simplified Technical English linter on it.
 - **Validators**: `maintenance/check_pr.py`, `maintenance/check_workflows.py` and their test modules hold the pull request contract and the workflow set contract. A pull request records its rules in `.github/pull_request_template.md`.
 
+#### preview
+
+- **Report dates**: The report status line shows one date stamp. A report never republished shows its publish time, and the first republish swaps the same place to the edit time. The store keeps the first `published_at` for each id.
+
 ### Changed
 
 #### arena

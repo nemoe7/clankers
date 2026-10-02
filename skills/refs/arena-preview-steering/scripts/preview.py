@@ -1032,7 +1032,8 @@ class Store:
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
-          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, seq INTEGER, seen_at TEXT,
+          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,
+          seq INTEGER, seen_at TEXT,
           ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS submissions (
@@ -1128,6 +1129,14 @@ class Store:
         db.execute("UPDATE reports SET ever_seen = 1 WHERE seen_at IS NOT NULL")
       if "agent_seen_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN agent_seen_at TEXT")
+      columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
+      if "published_at" not in columns:
+        # A store from before this column keeps no first-publish stamp, so the date the
+        # owner sees starts at the row it already had: updated_at of the last republish.
+        db.execute("ALTER TABLE reports ADD COLUMN published_at TEXT")
+        db.execute(
+          "UPDATE reports SET published_at = updated_at WHERE published_at IS NULL"
+        )
       columns = {row["name"] for row in db.execute("PRAGMA table_info(uploads)")}
       if "note_id" not in columns:
         db.execute("ALTER TABLE uploads ADD COLUMN note_id TEXT")
@@ -1287,7 +1296,8 @@ class Store:
       reports = [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, updated_at, seq, seen_at, ever_seen, agent_seen_at, markdown, EXISTS("
+          "SELECT id, title, updated_at, published_at, seq, seen_at, ever_seen,"
+          " agent_seen_at, markdown, EXISTS("
           "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
           "FROM reports ORDER BY seq, id"
         )
@@ -1334,7 +1344,14 @@ class Store:
         add_note_attachments(note, by_note.get(note["id"], []))
       fetch_jobs = self.fetch_jobs()
       for item in notes + reports + uploads + fetch_jobs:
-        for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at", "updated_at"):
+        for key in (
+          "at",
+          "acknowledged_at",
+          "ack_edited_at",
+          "seen_at",
+          "updated_at",
+          "published_at",
+        ):
           if key in item:
             item[key] = clip_stamp(item[key])
         for reply in item.get("replies") or []:
@@ -2349,12 +2366,12 @@ class Store:
       self.refuse_shared_id(db, "reports", "tasks", report_id)
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
-        """INSERT INTO reports (id, title, markdown, updated_at, seq)
-           VALUES (?, ?, ?, ?, ?)
+        """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title,
              markdown = excluded.markdown, updated_at = excluded.updated_at,
              seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL""",
-        (report_id, title, text, now(), highest + 1),
+        (report_id, title, text, now(), now(), highest + 1),
       )
     return len(fields)
 
@@ -2736,6 +2753,8 @@ def handler(store):
                   "html": body,
                   "fields": len(questions),
                   "revision": report["updated_at"],
+                  "published": report["published_at"] or report["updated_at"],
+                  "edited": report["updated_at"],
                 },
                 ensure_ascii=False,
               ),
