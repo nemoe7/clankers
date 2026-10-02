@@ -146,7 +146,7 @@ REMINDERS = (
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
-GATE_THRESHOLD = 50
+GATE_THRESHOLD = 20
 
 
 def now():
