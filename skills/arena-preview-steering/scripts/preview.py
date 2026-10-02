@@ -321,13 +321,13 @@ POLLING_META='polling_at'
 POLLING_FRESH_SECONDS=5.
 def poll_inbox(store,pretty=False,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-	if open_tasks:listing=store.read();listing['tasks']=open_tasks;print(cli_json(listing,pretty),flush=True);return 0
-	store.stamp_polling()
+	listing={'checked_at':None,'pending':[]};store.stamp_polling()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read()
 			if listing['pending']:print(cli_json(listing,pretty),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']]);return 0
+			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
+			if open_tasks:listing['tasks']=open_tasks;print(cli_json(listing,pretty),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
 	print(cli_json(listing,pretty),flush=True);return 1

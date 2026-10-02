@@ -3362,6 +3362,17 @@ def test_poll_inbox():
       store.clear_polling()
       assert store.polling() is False
 
+      # An unblocked task appearing mid-wait breaks the span and prints the list.
+      def tasking_sleeper(seconds):
+        sleeps.append(seconds)
+        store.write_task("mid-wait", "Appears during the wait", status="upcoming")
+
+      sleeps.clear()
+      rc = preview.poll_inbox(store, sleeper=tasking_sleeper)
+      assert rc == 0
+      assert sleeps == [10]
+      store.write_task("mid-wait", status="finished")
+
       def arriving_sleeper(seconds):
         sleeps.append(seconds)
         store.note("poll-1", "arrived during wait")
