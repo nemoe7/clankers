@@ -1369,6 +1369,8 @@ class Store:
         "workspace": workspace_usage(),
         "last_check": clip_stamp(meta.get("last_check")),
         "polling": self.polling(),
+        # The message log header names the bash calls since the owner's last message.
+        "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
       }
 
   def tasks(self):

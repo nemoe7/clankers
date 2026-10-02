@@ -543,7 +543,11 @@ async function refreshState() {
     // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
     save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     const saved = state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet';
-    setConnection(state.polling ? 'polling' : 'ok', saved);
+    // The header carries the same tally the gate keeps, so the owner sees the call count
+    // the stderr banner names without leaving the page.
+    const calls = state.calls_since_message || 0;
+    const callsText = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'} since your last message` : '';
+    setConnection(state.polling ? 'polling' : 'ok', saved + callsText);
     if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);

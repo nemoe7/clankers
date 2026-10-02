@@ -413,6 +413,7 @@ def test_http_boundaries():
     }
     assert store.read()["pending"] == []
     assert store.state()["last_check"]
+    assert store.state()["calls_since_message"] >= 0
     app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
     worker = threading.Thread(target=app.serve_forever, daemon=True)
     worker.start()

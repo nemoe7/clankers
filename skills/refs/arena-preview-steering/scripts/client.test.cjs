@@ -900,6 +900,15 @@ test('preview client', async (t) => {
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     state.polling = false;
     await get('#refresh-notes').events.click();
+    // The header names the bash calls since the owner's last message, singular and plural.
+    state.calls_since_message = 94;
+    await get('#refresh-notes').events.click(); await tick();
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 94 bash calls since your last message');
+    state.calls_since_message = 1;
+    await get('#refresh-notes').events.click(); await tick();
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 bash call since your last message');
+    state.calls_since_message = 0;
+    await get('#refresh-notes').events.click(); await tick();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];

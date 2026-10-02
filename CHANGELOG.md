@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Report dates**: The report status line shows one date stamp. A report never republished shows its publish time, and the first republish swaps the same place to the edit time. The store keeps the first `published_at` for each id.
+- **Message log call count**: The message log header names the bash calls since the owner's last message, beside the saved message count. The server state payload carries the counter the gate already keeps.
 
 #### userscripts
 
