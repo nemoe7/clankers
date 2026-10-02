@@ -86,7 +86,7 @@ SUBJECT_RE = re.compile(
 )
 H2_RE = re.compile(r"^##\s+(?P<title>.*\S)\s*$")
 H3_RE = re.compile(r"^###\s+\S")
-HTML_COMMENT_RE = re.compile(r"<!--|-->")
+HTML_COMMENT_RE = re.compile(r"<!--|--!?>")
 PLACEHOLDER_RE = re.compile(r"<[^<>\n]+>")
 LIST_ITEM_RE = re.compile(r"^-\s+(?P<body>\S.*)$")
 CHECKLIST_RE = re.compile(r"^-\s+\[(?P<mark>[x ])\]\s+(?P<body>\S.*)$")

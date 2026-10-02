@@ -150,6 +150,11 @@ def test_html_comment_fails():
   assert any("HTML comments" in failure for failure in failures)
 
 
+def test_html_comment_with_the_bang_end_tag_fails():
+  failures = body_failures(VALID_BODY + "<!-- hidden --!>\n")
+  assert any("HTML comments" in failure for failure in failures)
+
+
 def test_placeholder_fails():
   failures = body_failures(
     VALID_BODY.replace("Add the commit validator.", "Add <the thing>.")
