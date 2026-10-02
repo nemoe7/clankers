@@ -51,10 +51,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### workflows
 
 - **Preview tests**: The `preview-tests` job installs `pytest`, which `maintenance/check_minify.py` runs on the minified runtime. The workflow contract check now refuses a job that runs the script without the install.
+- **Shell lint**: actionlint reports shellcheck findings. The plugin validation step takes its base commit through the environment. Four scripts in `distribute.yml` carry a scoped disable directive. No command changes.
 
 #### maintenance
 
 - **Subject wording rule**: The rule read an imperative verb that ends in `d` or `s` as an inflection, so it rejected `add` and `hold`. The rule and its exception list go.
+- **Comment end tag**: The body rule matched `-->` only, so `--!>` passed. The pattern takes both forms, and a test holds the second one.
 
 #### preview
 

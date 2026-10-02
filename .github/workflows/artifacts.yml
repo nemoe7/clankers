@@ -195,8 +195,12 @@ jobs:
         run: python maintenance/check_gpt_plugins.py --self-check
 
       - name: Validate The Plugin Collection
+        env:
+          # The base commit reaches the shell through the environment, never through a
+          # template expansion inside the run block.
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          BASE="${{ github.event.pull_request.base.sha }}"
+          BASE="$PR_BASE"
           git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
           changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills)"
           if [ -n "$changed" ]; then

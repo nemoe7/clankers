@@ -65,6 +65,7 @@ jobs:
             }
           done
           failed=""
+          # shellcheck disable=SC2016  # The helper expands the token when git calls it.
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
           for repo in $list; do
             (
@@ -75,6 +76,7 @@ jobs:
               mkdir -p "$work/$(dirname "$DEST")"
               cp "$src" "$work/$DEST"
               for legacy in $LEGACY_SKILLS; do
+                # shellcheck disable=SC2115  # $work comes from mktemp -d and $SKILL_DEST_ROOT is a fixed path.
                 rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
               done
               for skill in $SKILLS; do
@@ -82,6 +84,7 @@ jobs:
                 skill_dest="$SKILL_DEST_ROOT/$skill"
                 files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vFx README.md)
                 [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
+                # shellcheck disable=SC2115  # $work comes from mktemp -d and $skill_dest is a fixed path.
                 rm -rf "$work/$skill_dest"
                 for f in $files; do
                   mkdir -p "$work/$skill_dest/$(dirname "$f")"
@@ -117,6 +120,7 @@ jobs:
                 skill_dest="$SKILL_DEST_ROOT/$skill"
                 files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vFx README.md)
                 have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
+                # shellcheck disable=SC2086  # The word split lists one path per line.
                 want=$(printf '%s\n' $files | sort)
                 [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
                 for f in $files; do
@@ -155,6 +159,7 @@ jobs:
             [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
           done
           failed=""
+          # shellcheck disable=SC2016  # The helper expands the token when git calls it.
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
           for repo in $list; do
             (
