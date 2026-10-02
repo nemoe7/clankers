@@ -48,6 +48,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Poll restart command**: The poll error names the script on PATH and the recorded port, so the agent restarts the server as written.
 - **PR check reminder**: A rotating tail line covers a pull request whose checks never ran: rebase onto `main` first.
 - **Push gate**: A `git push` blocks while a note or answer awaits an ack, whatever the call count. The count threshold still holds every other command.
+- **Gate trap message**: The blocked command gate prints ``READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>``. The old line named read only, while a read but unacked note gates commands too.
+- **Path reminder**: The rotating tails gain one entry: don't use the full script path, run `arena-preview` instead. The installer puts that command on PATH.
 
 ### Fixed
 

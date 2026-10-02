@@ -2881,7 +2881,10 @@ def test_bash_gate():
     )
     assert blocked.returncode == 1
     # The blocked line names the command that clears the block.
-    assert blocked.stdout.strip() == "READ INBOX NOW WITH arena-preview read"
+    assert (
+      blocked.stdout.strip()
+      == "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`"
+    )
     gate_store.acknowledge(["gate-note"], "note", "Cleared")
     assert gate_store.gate()
     cleared = subprocess.run(
@@ -2917,7 +2920,10 @@ def test_bash_gate():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert pushed.returncode == 1
-    assert pushed.stdout.strip() == "READ INBOX NOW WITH arena-preview read"
+    assert (
+      pushed.stdout.strip()
+      == "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`"
+    )
     gate_store.acknowledge(["push-note"], "note", "Cleared")
     assert gate_store.gate(pending_only=True) is True
     cleared_push = subprocess.run(

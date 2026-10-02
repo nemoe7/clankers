@@ -142,6 +142,7 @@ REMINDERS = (
   "No PR checks run? Rebase onto main first.",
   "Check the PR's CI before ending a pushed turn.",
   "Read the PR checks with `gh pr checks <PR> --watch`.",
+  "Don't use the full path. Run `arena-preview` instead.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
@@ -3081,7 +3082,10 @@ def main():
       except Exception:
         return 2
       if not allowed:
-        print("READ INBOX NOW WITH arena-preview read", flush=True)
+        print(
+          "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`",
+          flush=True,
+        )
         return 1
       return 0
     store = Store(
