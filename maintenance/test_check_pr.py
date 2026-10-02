@@ -47,6 +47,10 @@ def test_the_two_optional_sections_may_stay_out():
   assert body_failures(text) == []
   text = VALID_BODY.replace("## Related\n\nNone\n", "")
   assert body_failures(text) == []
+  text = VALID_BODY.replace("## Breaking Changes\n\nNone\n\n", "").replace(
+    "## Related\n\nNone\n", "## Related\n\n- One bullet.\n"
+  )
+  assert body_failures(text) == []
 
 
 def test_a_missing_required_section_fails():

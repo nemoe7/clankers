@@ -139,7 +139,8 @@ def validate_pr_body(text: str) -> list[Failure]:
   if _non_blank([(number, lines[number - 1]) for number in range(1, first_heading)]):
     failures.append(Failure("body", "content before ## Summary", 1))
 
-  if len(titles) < 3 or titles != list(BODY_HEADINGS)[: len(titles)]:
+  optional = [title for title in BODY_HEADINGS[3:] if title in titles]
+  if titles != list(BODY_HEADINGS[:3]) + optional:
     failures.append(
       Failure(
         "body",
