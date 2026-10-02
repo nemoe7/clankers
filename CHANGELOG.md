@@ -68,6 +68,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Path reminder**: The rotating tails gain one entry: don't use the full script path, run `arena-preview` instead. The installer puts that command on PATH.
 - **PATH block**: The installer PATH entry resolved the repo root when the profile sourced, so a shell outside the checkout missed the command. The block pins the root at install time through a placeholder the installer substitutes, in all three install.sh copies.
 
+#### userscripts
+
+- **Prompt fill screenshot line**: The filled prompt states `Expect screenshots to be sent via the steering channel.` after the read line, so a vision session knows where the images arrive. The Arena bundle moves to `1.1.36`.
+
 ### Fixed
 
 #### workflows

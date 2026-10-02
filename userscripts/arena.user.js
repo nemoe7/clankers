@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.35
+// @version      1.1.36
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -133,7 +133,10 @@
     }
 
     function promptForSlug(slug, arenaMd) {
-      var base = slug + " read ARENA.md AGENTS.md";
+      var base =
+        slug +
+        " read ARENA.md AGENTS.md\n" +
+        "Expect screenshots to be sent via the steering channel.";
       if (arenaMd) {
         return base + "\nhere is ARENA.md:\n" + arenaMd;
       }
