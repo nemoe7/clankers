@@ -25,6 +25,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Handoff verification**: The `gpt-handoff` output tells the receiving agent to check material claims before applying them. The collection version steps to `1.5.1`.
 
+#### house
+
+- **Changelog headings**: The house rule states the date heading form `## YYYY-MM-DD`. The bracket and the repeated date go, and the 24 headings follow.
+
 #### workflows
 
 - **CI split**: `validate.yml` becomes `ci.yml`, named CI, with independent `quality`, `tests` and `preview-tests` jobs. It runs on pull requests and after every push to `main`.
