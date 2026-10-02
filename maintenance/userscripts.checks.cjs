@@ -828,6 +828,7 @@ function checkTabTitle(api) {
     [polls("cat arena-preview-steering/README.md | grep polling"), false],
     [polls('cat > "$HOOK" <<EOF\n# arena-preview-hook: poll the steering inbox'), false],
     [polls("python preview.py polls"), false],
+    [polls('python - <<PY\np = Path("skills/arena-preview-steering/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
   ];
   function polls(text) {
     return api.POLL_RE.test(text.toLowerCase());
