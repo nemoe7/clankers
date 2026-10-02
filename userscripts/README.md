@@ -32,7 +32,7 @@ The feature fills the composer on `/agent` and on `/agent/`, not on paths with a
 
 If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. It writes `{repo} read ARENA.md AGENTS.md` and updates that text when the repo name changes. It does not overwrite an unrelated draft.
 
-The feature then fetches `rules/ARENA.md` from the fixed raw URL of this repository, `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill appends the file under a `here is ARENA.md:` line. A failed fetch leaves the plain prompt, and the feature tries once per page.
+The feature then fetches `rules/ARENA.md` from the fixed raw URL of this repository, `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill waits for that fetch and writes the composer one time per page. It appends the file under a `here is ARENA.md:` line. A failed fetch writes the plain prompt. The single write keeps the editor from linking `AGENTS.md` as a bare domain: a second write would put a line break after the name, and the editor reads that break as the end of a domain.
 
 ## Arena Open Steering
 

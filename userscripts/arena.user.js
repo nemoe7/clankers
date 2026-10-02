@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.34
+// @version      1.1.35
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -268,6 +268,13 @@
         return;
       }
       rememberSlug(slug);
+      // One write per page. The plain line first and the file second puts a
+      // line break directly after AGENTS.md, and the editor reads that break
+      // as the end of a bare domain and links the file name.
+      if (!arenaMdTried) {
+        ensureFetch();
+        return;
+      }
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
         lastSlug = slug;
