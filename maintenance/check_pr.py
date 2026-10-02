@@ -237,19 +237,25 @@ def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[F
   if not items:
     return [Failure(f"body: {title}", "the section is empty")]
   if len(items) == 1 and items[0][1].strip() == "None":
-    return failures
+    return [
+      Failure(
+        f"body: {title}",
+        "omit the heading when the section holds nothing",
+        items[0][0],
+      )
+    ]
   for number, line in items:
     if not LIST_ITEM_RE.match(line):
       failures.append(
         Failure(
-          f"body: {title}", "use exactly 'None', or one '- ' bullet per entry", number
+          f"body: {title}", "use one '- ' bullet per entry, or omit the heading", number
         )
       )
   if not any(LIST_ITEM_RE.match(line) for _, line in items):
     failures.append(
       Failure(
         f"body: {title}",
-        "use exactly 'None', or one '- ' bullet per entry",
+        "use one '- ' bullet per entry, or omit the heading",
         items[0][0],
       )
     )

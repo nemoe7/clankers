@@ -38,6 +38,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Placeholder rule**: Angle brackets inside a fenced code block pass the pull request body gate. Every other line keeps the ban, on the owner answer to the `pr-constraints` report.
 - **Body heading order**: A kept `Related` section no longer needs an empty `Breaking Changes` heading in front of it. Either of the last two headings may stay out on its own, and the kept ones follow the locked order.
 - **Breaking cross-check**: A commit that carries the breaking marker now needs a `Breaking Changes` section that lists something. The reverse direction stays unchecked, on the owner answer to the `pr-constraints` report.
+- **Empty optional sections**: A `Breaking Changes` or `Related` section that holds exactly `None` fails the body gate and names the fix: omit the heading. The pull request template no longer pre-fills the two sections, on owner note `a892211`.
 
 #### workflows
 

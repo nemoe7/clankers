@@ -21,14 +21,6 @@ Add a gate that validates every pull request commit and the pull request body.
 
 - [x] Run the gate locally.
 - [ ] Run the gate in CI.
-
-## Breaking Changes
-
-None
-
-## Related
-
-None
 """
 
 
@@ -41,16 +33,15 @@ def test_valid_body_passes():
 
 
 def test_the_two_optional_sections_may_stay_out():
-  text = VALID_BODY.replace("## Breaking Changes\n\nNone\n\n", "").replace(
-    "## Related\n\nNone\n", ""
-  )
+  assert body_failures(VALID_BODY) == []
+  text = VALID_BODY + "## Related\n\n- One bullet.\n"
   assert body_failures(text) == []
-  text = VALID_BODY.replace("## Related\n\nNone\n", "")
-  assert body_failures(text) == []
-  text = VALID_BODY.replace("## Breaking Changes\n\nNone\n\n", "").replace(
-    "## Related\n\nNone\n", "## Related\n\n- One bullet.\n"
-  )
-  assert body_failures(text) == []
+
+
+def test_a_none_section_fails():
+  text = VALID_BODY + "## Breaking Changes\n\nNone\n"
+  failures = body_failures(text)
+  assert any("omit the heading" in failure for failure in failures)
 
 
 def test_a_missing_required_section_fails():
@@ -72,9 +63,7 @@ def test_reordered_section_fails():
 
 
 def test_extra_section_fails():
-  failures = body_failures(
-    VALID_BODY.replace("## Related", "## Notes\n\n- Note.\n\n## Related")
-  )
+  failures = body_failures(VALID_BODY + "## Notes\n\n- Note.\n")
   assert failures and "expected the headings" in failures[0]
 
 
@@ -85,12 +74,9 @@ def test_a_bang_commit_needs_a_filled_breaking_section():
     check_pr.validate_breaking_crosscheck(["feat(preview): drop the gate"], VALID_BODY)
     == []
   )
-  filled = VALID_BODY.replace(
-    "## Breaking Changes\n\nNone\n", "## Breaking Changes\n\n- The gate goes.\n"
-  )
+  filled = VALID_BODY + "## Breaking Changes\n\n- The gate goes.\n"
   assert check_pr.validate_breaking_crosscheck(banged, filled) == []
-  omitted = VALID_BODY.replace("## Breaking Changes\n\nNone\n\n", "")
-  assert check_pr.validate_breaking_crosscheck(banged, omitted)
+  assert check_pr.validate_breaking_crosscheck(banged, VALID_BODY)
 
 
 def test_angle_brackets_pass_inside_a_fenced_block():
@@ -119,9 +105,7 @@ def test_content_before_the_first_section_fails():
 
 def test_content_after_the_final_section_fails():
   failures = body_failures(VALID_BODY + "\nTrailing content.\n")
-  assert any(
-    "content after the final ## Related content" in failure for failure in failures
-  )
+  assert failures and "Validation" in failures[0]
 
 
 def test_empty_summary_fails():
@@ -176,9 +160,7 @@ def test_non_empty_breaking_changes_passes():
 
 
 def test_invalid_breaking_changes_fails():
-  text = VALID_BODY.replace(
-    "## Breaking Changes\n\nNone", "## Breaking Changes\n\nNothing."
-  )
+  text = VALID_BODY + "## Breaking Changes\n\nNothing.\n"
   assert any("Breaking Changes" in failure for failure in body_failures(text))
 
 
@@ -192,7 +174,7 @@ def test_non_empty_related_passes():
 
 
 def test_invalid_related_fails():
-  text = VALID_BODY.replace("## Related\n\nNone", "## Related\n\n#1.")
+  text = VALID_BODY + "## Related\n\n#1.\n"
   assert any("Related" in failure for failure in body_failures(text))
 
 
@@ -311,7 +293,10 @@ def test_ste_lint_selftest_passes():
 
 def test_check_propagates_the_ste_failure(tmp_path: Path):
   body = tmp_path / "body.md"
-  body.write_text(VALID_BODY.replace("None", "None;", 1), encoding="utf-8")
+  body.write_text(
+    VALID_BODY.replace("pull request body.", "pull request body. One line; two rules."),
+    encoding="utf-8",
+  )
   failures = check_pr.check(None, None, str(body), True)
   assert any("STE lint failed" in failure.message for failure in failures)
   without_ste = check_pr.check(None, None, str(body), False)
