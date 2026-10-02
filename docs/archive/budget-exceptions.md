@@ -2,6 +2,8 @@
 
 Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
 
+2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +208 `B`, 83,546 to 83,754, and `skills/arena-preview-steering/scripts/install.sh` +336 `B`, 8,214 to 8,550. A push blocks while an item awaits an ack.
+
 2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +74 `B`, 83,472 to 83,546. The poll error names the restart command, and the reminder tails add a rebase hint.
 
 2026-10-01: Owner request. `skills/arena-preview-steering/scripts/install.sh` +562 `B`, 7,652 to 8,214. The gate skips Arena's own probe and bookkeeping shells.

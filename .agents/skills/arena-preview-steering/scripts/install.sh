@@ -167,6 +167,16 @@ _arena_preview_gate() {
       ;;
   esac
   case "\$BASH_COMMAND" in *preview*|*profile*|*bashrc*|*arena-state*|gh*|sleep*|true*|:*|test*|"git status"*|"git diff"*|"git add"*|"git commit"*|*arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*) return 0 ;; esac
+  # A push is a checkpoint: an unread note can change what leaves the sandbox,
+  # so it waits for an ack whatever the call count.
+  case "\$BASH_COMMAND" in
+    *"git push"*)
+      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" gate --push 2>/dev/null
+      case \$? in
+        1) exit 130 ;;
+      esac
+      ;;
+  esac
   case "\${_arena_preview_gate_checked:-}" in 1) return 0 ;; esac
   _arena_preview_gate_checked=1
   "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" gate 2>/dev/null
