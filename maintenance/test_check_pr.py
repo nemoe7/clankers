@@ -211,6 +211,12 @@ def test_malformed_subject_fails():
   assert any("subject must match" in failure.message for failure in failures)
 
 
+def test_the_subject_carries_no_wording_rule():
+  assert check_pr.validate_commit("feat(preview): polling for notes") == []
+  assert check_pr.validate_commit("ci(workflows): add the security set") == []
+  assert not hasattr(check_pr, "IMPERATIVE_EXCEPTIONS")
+
+
 def test_a_scope_binds_no_path_area():
   assert check_pr.validate_commit("docs(preview): note the release") == []
   assert not hasattr(check_pr, "SCOPE_AREAS")

@@ -81,30 +81,6 @@ ALLOWED_SCOPES = frozenset(
   )
 )
 
-# Base verbs that end in -ed, -ing or -s; the imperative check must not read them as inflected.
-IMPERATIVE_EXCEPTIONS = frozenset(
-  (
-    "address",
-    "breed",
-    "bring",
-    "embed",
-    "exceed",
-    "feed",
-    "need",
-    "proceed",
-    "read",
-    "seed",
-    "shed",
-    "sing",
-    "speed",
-    "spread",
-    "spring",
-    "string",
-    "succeed",
-    "weed",
-  )
-)
-
 SUBJECT_RE = re.compile(
   r"^(?P<type>[a-z]+)(?:\((?P<scope>[^()\s]+)\))?(?P<breaking>!)?: (?P<description>.+)$"
 )
@@ -129,20 +105,6 @@ class Failure:
   def __str__(self) -> str:
     location = self.where if self.line is None else f"{self.where}:{self.line}"
     return f"{location}: {self.message}"
-
-
-def imperative_problem(description: str) -> str | None:
-  """Return a message when the first description word is not an imperative base verb."""
-  first = re.match(r"^[A-Za-z][A-Za-z'-]*", description)
-  if not first:
-    return f"description must start with a word: {description!r}"
-  word = first.group(0)
-  lowered = word.lower()
-  if lowered in IMPERATIVE_EXCEPTIONS:
-    return None
-  if re.search(r"(?:s|es|ed|ing|d)$", lowered):
-    return f"use imperative wording, not {word!r}"
-  return None
 
 
 def validate_subject(subject: str, where: str) -> list[Failure]:
@@ -177,9 +139,6 @@ def validate_subject(subject: str, where: str) -> list[Failure]:
     failures.append(Failure(where, "description must start with a lowercase letter"))
   if description.endswith("."):
     failures.append(Failure(where, "description must not end with a period"))
-  imperative = imperative_problem(description)
-  if imperative:
-    failures.append(Failure(where, imperative))
   return failures
 
 

@@ -52,6 +52,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Preview tests**: The `preview-tests` job installs `pytest`, which `maintenance/check_minify.py` runs on the minified runtime. The workflow contract check now refuses a job that runs the script without the install.
 
+#### maintenance
+
+- **Subject wording rule**: The rule read an imperative verb that ends in `d` or `s` as an inflection, so it rejected `add` and `hold`. The rule and its exception list go.
+
 #### preview
 
 - **PR checks reminder**: A rotating tail line names the `gh pr checks` command for pull request checks.
