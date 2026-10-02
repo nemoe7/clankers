@@ -91,6 +91,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Report answer seen dot**: The submission dot compared clipped stamps with a strict greater check. An answer the agent read inside the answer's own second kept the sent dot. The dot now takes an equal stamp as seen. The refs app.js and both minified copies change.
 - **Dead list regexes**: `REPORT_LIST_TAG` and `REPORT_LIST_TAGS` had no callers, and the nested quantifier of the second tripped a redos alert. Both go with their two stale comments.
 - **Content-Disposition file name**: `reply()` put the raw file name into the header, and a CR or LF in a name splits the response. It now replaces CR, LF and double quote with `_` before the header goes out.
+- **Selector equality**: Two field-label lookups built attribute selectors with only quotes escaped. One `byDataAttr` helper now compares attribute values, and the incomplete-sanitization findings go.
 
 #### userscripts
 

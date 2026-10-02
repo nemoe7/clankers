@@ -688,13 +688,23 @@ function collect(root) {
       for (const control of field.querySelectorAll('input:checked')) {
         const label = control.dataset.label;
         if (label === undefined) { values.push(control.value); continue; }
-        const typed = field.querySelector(`[data-custom="${label.replace(/"/g, '\\"')}"]`);
+        const typed = byDataAttr(field, 'custom', label);
         if (typed && typed.value.trim()) values.push(`${label}: ${typed.value.trim()}`);
       }
       if (values.length) answers[id] = field.dataset.type === 'choice' ? values[0] : values;
     }
   }
   return answers;
+}
+// Labels come from report text, so a selector built from one can break on a
+// backslash or bracket. Equality on the dataset value needs no escaping; the
+// attribute name in the selector is a caller constant, never the label.
+function byDataAttr(root, key, value) {
+  if (!root || !root.querySelectorAll) return null;
+  for (const el of root.querySelectorAll(`[data-${key}]`)) {
+    if (el.dataset && el.dataset[key] === value) return el;
+  }
+  return null;
 }
 function customValue(values, label) {
   for (const value of values) {
@@ -844,8 +854,8 @@ document.addEventListener('input', event => {
   if (!classes.includes('custom-text')) return;
   growSlot(target);
   // Typing in a slot is choosing it: the box checks itself, and blanking the text lets go again.
-  const label = (target.dataset.custom || '').replace(/"/g, '\\"');
-  const slot = target.parentElement && target.parentElement.querySelector(`[data-label="${label}"]`);
+  const label = target.dataset.custom || '';
+  const slot = byDataAttr(target.parentElement, 'label', label);
   if (slot) slot.checked = Boolean(target.value.trim());
 });
 document.addEventListener('click', event => {

@@ -928,7 +928,10 @@ test('preview client', async (t) => {
     picks.querySelectorAll = selector => (selector === 'input:checked' ? boxes.filter(box => box.checked) : boxes);
     shipBox = { value: 'Ship it', checked: false, dataset: {} };
     otherBox = { value: 'Other: ___', checked: false, dataset: { label: 'Other' } };
-    otherOption = { querySelector: selector => (selector === '[data-label="Other"]' ? otherBox : null) };
+    otherOption = {
+      querySelector: selector => (selector === '[data-label="Other"]' ? otherBox : null),
+      querySelectorAll: selector => (selector === '[data-label]' ? [otherBox] : []),
+    };
     otherText = { value: '', dataset: { custom: 'Other' }, className: 'custom-text', scrollHeight: 40, style: {}, parentElement: otherOption };
     choices = [shipBox, otherBox, otherText];
     verdict = new Element();
