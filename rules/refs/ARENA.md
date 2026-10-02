@@ -128,6 +128,7 @@
 - ALWAYS criticize documentation and code, in chat responses and in report files.
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
+- Before every push, read the open code scanning alerts and address each.
 - For large function replacements, prefer a scripted splice.
 - Prefer the file read/write tools for file operations; shell is for what needs it, capped at 2 CPU workers.
 - Before finishing, run the repo's own validation entrypoints (test suite, config validators).

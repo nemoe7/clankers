@@ -24,6 +24,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Chat speech bubble**: The tab title shows a speech bubble while the agent speaks in regular chat. Streaming `data-agent-word` spans under an open turn raise the bubble, and a settled message drops it after the hold. Version 1.1.34.
 
+#### arena
+
+- **Code scanning read**: A Verification line orders the agent to read the open code scanning alerts before every push and address each. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the byte-identical root copy, on the approved proposal in report `arena-codeql-rule-2`.
+
 ### Changed
 
 #### arena
