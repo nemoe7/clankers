@@ -13,6 +13,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Poll restart command**: The poll error names the script on PATH and the recorded port, so the agent restarts the server as written.
 - **PR check reminder**: A rotating tail line covers a pull request whose checks never ran: rebase onto `main` first.
 
+### Fixed
+
+#### userscripts
+
+- **Poll detection**: The tab title matches a poll call as the script name followed by `poll`. A `polling` or `polls` word in another command no longer shows the waiting emoji. The Arena bundle moves to `1.1.30`.
+
 ## [2026-10-01] - 2026-10-01
 
 ### Added

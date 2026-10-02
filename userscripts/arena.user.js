@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.29
+// @version      1.1.30
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1165,8 +1165,9 @@
     var heldEmoji = null;
     var heldEmojiAt = 0;
     var WAITING_EMOJI = "\uD83D\uDCA4";
-    // Any preview command that ends in poll: full paths, the extensionless script, the .py form.
-    var POLL_RE = /preview[\s\S]{0,60}poll/;
+    // A poll call: the script name then the poll word, so a full path, the extensionless
+    // script and the .py form match while "polling", "polls" and a stray phrase stay clear.
+    var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
 
     function repoFromLink(link) {
       if (!link) {
@@ -1410,6 +1411,7 @@
       actionEmoji: actionEmoji,
       TITLE_PREFIX: TITLE_PREFIX,
       EMOJI_HOLD_MS: EMOJI_HOLD_MS,
+      POLL_RE: POLL_RE,
       MESSAGE_SELECTOR: MESSAGE_SELECTOR,
       LIVE_ICON_SELECTOR: LIVE_ICON_SELECTOR,
       LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
