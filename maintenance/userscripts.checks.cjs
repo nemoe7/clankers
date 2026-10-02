@@ -819,7 +819,19 @@ function checkTabTitle(api) {
     [liveRow(groupDoc(false)), null],
     [emojiForRow(liveRow(editRowDoc(true))), "\u270F\uFE0F"],
     [liveRow(editRowDoc(false)), null],
+    [
+      polls("/home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll"),
+      true,
+    ],
+    [polls("arena-preview poll --max 1"), true],
+    [polls("python preview.py poll"), true],
+    [polls("cat arena-preview-steering/README.md | grep polling"), false],
+    [polls('cat > "$HOOK" <<EOF\n# arena-preview-hook: poll the steering inbox'), false],
+    [polls("python preview.py polls"), false],
   ];
+  function polls(text) {
+    return api.POLL_RE.test(text.toLowerCase());
+  }
   var failed = 0;
   var i;
   for (i = 0; i < cases.length; i += 1) {
