@@ -46,7 +46,7 @@ Read these first:
 - `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
 - It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
   - It also checks the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
-- `.github/workflows/validate.yml` runs `python maintenance/check.py --update` on PRs targeting any branch, except changes limited to its `paths-ignore` list.
+- `.github/workflows/ci.yml` runs `python maintenance/check.py --update` on PRs targeting any branch, except changes limited to its `paths-ignore` list, and after every push to `main`.
 - It runs Ruff at the version `ruff.toml` pins, compiles the maintenance script, and lints Markdown with markdownlint-cli2.
 
 ## Verification
