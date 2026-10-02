@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.37
+// @version      1.1.38
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -133,11 +133,12 @@
     }
 
     function promptForSlug(slug, arenaMd) {
-      // The trailing space is the fix: with no character between the file name
-      // and the line break, the editor links AGENTS.md as a bare domain.
+      // The full stop is the fix: the editor links AGENTS.md as a bare domain
+      // when a line break follows it; a space did not hold, a stop does
+      // (owner live test).
       var base =
         slug +
-        " read ARENA.md AGENTS.md \n" +
+        " read ARENA.md AGENTS.md.\n" +
         "Expect screenshots to be sent via the steering channel.";
       if (arenaMd) {
         return base + "\nhere is ARENA.md:\n" + arenaMd;
