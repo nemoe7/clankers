@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.33
+// @version      1.1.34
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1166,7 +1166,12 @@
     var EMOJI_HOLD_MS = 5000;
     var heldEmoji = null;
     var heldEmojiAt = 0;
+    var lastSpeechMark = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
+    // The agent speaking in regular chat streams data-agent-word spans; the bubble rides
+    // the stream while the stop control holds the turn open.
+    var SPEECH_SELECTOR = "[data-agent-word]";
+    var SPEECH_EMOJI = "\uD83D\uDDE8\uFE0F";
     // A poll call: the script name then the poll word, so a full path, the extensionless
     // script and the .py form match while "polling", "polls" and a stray phrase stay clear.
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
@@ -1240,7 +1245,7 @@
     }
 
     // The live status text is the strongest anchor: a thinking row has it and no pulsing icon.
-    function liveRow(doc) {
+    function strongRow(doc) {
       var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
       var row = rowFromLabel(labels.length ? labels[labels.length - 1] : null);
       if (row) {
@@ -1258,13 +1263,19 @@
       }
       icons = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_ICON_SELECTOR) : [];
       row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-      if (row && knownLabel(liveLabel(row))) {
+      return row && knownLabel(liveLabel(row)) ? row : null;
+    }
+
+    // A read or edit group never pulses, so its newest label names the action. The bound is
+    // the newest transcript message plus the stop signal: a finished group label persists
+    // after the turn ends, and without the signal the title would never revert. The match
+    // is a loose stop word, so a label drift weakens the row but never sticks the title.
+    function liveRow(doc) {
+      var row = strongRow(doc);
+      if (row) {
         return row;
       }
-      // A read or edit group never pulses, so its newest label names the action. The bound is
-      // the newest transcript message plus the stop signal: a finished group label persists
-      // after the turn ends, and without the signal the title would never revert. The match
-      // is a loose stop word, so a label drift weakens the row but never sticks the title.
+      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
       var lastMessage = messages.length ? messages[messages.length - 1] : null;
       var groups =
         lastMessage && typeof lastMessage.querySelectorAll === "function"
@@ -1379,8 +1390,35 @@
       return lastRepo && path === lastPath ? lastRepo : null;
     }
 
+    // A streaming chat message keeps adding and repainting word spans; a settled message
+    // stops changing. The mark compares between syncs, so the bubble lives only while the
+    // words move, and the stop signal keeps a late re-render from faking speech.
+    function speechLive(doc) {
+      if (typeof doc.querySelectorAll !== "function") {
+        return false;
+      }
+      var words = doc.querySelectorAll(SPEECH_SELECTOR);
+      if (!words.length) {
+        lastSpeechMark = null;
+        return false;
+      }
+      var last = words[words.length - 1];
+      var mark = words.length + ":" + String(last.textContent || "");
+      var live = mark !== lastSpeechMark;
+      lastSpeechMark = mark;
+      return live;
+    }
+
+    // Rank: a strong row beats the bubble, the bubble beats a stale group label, and the
+    // hold smooths the gap between two bursts of any kind.
     function heldEmojiFor(doc) {
-      var emoji = emojiForRow(liveRow(doc));
+      var emoji = emojiForRow(strongRow(doc));
+      if (!emoji && stopSignal(doc) && speechLive(doc)) {
+        emoji = SPEECH_EMOJI;
+      }
+      if (!emoji) {
+        emoji = emojiForRow(liveRow(doc));
+      }
       if (emoji) {
         heldEmoji = emoji;
         heldEmojiAt = Date.now();
@@ -1438,7 +1476,9 @@
       syncTitle: syncTitle,
       liveLabel: liveLabel,
       liveRow: liveRow,
+      strongRow: strongRow,
       stopSignal: stopSignal,
+      speechLive: speechLive,
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
       TITLE_PREFIX: TITLE_PREFIX,
@@ -1449,7 +1489,10 @@
       LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
       GROUP_LABEL_SELECTOR: GROUP_LABEL_SELECTOR,
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
+      SPEECH_SELECTOR: SPEECH_SELECTOR,
+      SPEECH_EMOJI: SPEECH_EMOJI,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
+      resetSpeech: function () { lastSpeechMark = null; },
       forgetPath: function () { lastPath = "/elsewhere"; },
       setPriorTitle: function (value) { priorTitle = value; },
     })) {
@@ -1485,6 +1528,7 @@
     function onRoute() {
       lastRepo = null;
       lastPath = null;
+      lastSpeechMark = null;
       syncTitle(document);
     }
     window.addEventListener("popstate", onRoute);

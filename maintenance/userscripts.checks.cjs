@@ -486,7 +486,11 @@ function checkTabTitle(api) {
   var syncTitle = api.syncTitle;
   var liveLabel = api.liveLabel;
   var liveRow = api.liveRow;
+  var strongRow = api.strongRow;
   var stopSignal = api.stopSignal;
+  var speechLive = api.speechLive;
+  var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
+  var SPEECH_EMOJI = api.SPEECH_EMOJI;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
@@ -800,6 +804,24 @@ function checkTabTitle(api) {
       },
     };
   }
+  // A regular-chat message streams data-agent-word spans; the mock grows them on demand.
+  function speechDoc(withStop) {
+    var words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
+    return {
+      title: "ChatGPT",
+      words: words,
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === SPEECH_SELECTOR) return words.slice();
+        if (selector === "button[aria-label]") {
+          return withStop ? [stopButton("Stop generating")] : [];
+        }
+        return [];
+      },
+    };
+  }
   function looseStopDoc() {
     return {
       title: "ChatGPT",
@@ -811,6 +833,14 @@ function checkTabTitle(api) {
       },
     };
   }
+  function resetSpeech() {
+    api.resetSpeech();
+    return null;
+  }
+  function addWord(doc, text) {
+    doc.words.push({ textContent: text });
+    return doc.words.length;
+  }
   var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
   var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
   var emptyLink = link("", "");
@@ -818,6 +848,8 @@ function checkTabTitle(api) {
   var keepDoc = docWith(null, "ChatGPT");
   var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
   var endedPage = endedDoc();
+  var talking = speechDoc(true);
+  var settledChat = speechDoc(false);
   var busyMessage = liveMessage("  running\n Bash  ", "$ npm test");
   var pollMessage = liveMessage("running Bash", "$ arena-preview poll");
   var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll");
@@ -934,6 +966,7 @@ function checkTabTitle(api) {
     [liveRow(groupDoc(false)), null],
     [emojiForRow(liveRow(editRowDoc(true))), "\u270F\uFE0F"],
     [liveRow(editRowDoc(false)), null],
+    [strongRow(groupDoc(true)), null],
     [stopSignal(groupDoc(true)), true],
     [stopSignal(groupDoc(false)), false],
     // A drifted label still opens the gate; the exact wording does not.
@@ -944,6 +977,22 @@ function checkTabTitle(api) {
     [desiredTitle(endedDoc()), null],
     [syncTitle(endedPage), true],
     [endedPage.title, "ChatGPT"],
+    // Streaming chat words raise the bubble while the turn is open.
+    [resetSpeech(), null],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
+    // The hold bridges the pause between two bursts of words.
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
+    [addWord(talking, "again"), 3],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
+    // A settled message stops changing; mid-turn the repo name holds the title.
+    [resetSpeech(), null],
+    [speechLive(talking), true],
+    [speechLive(talking), false],
+    [expireHold(), null],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers"],
+    // After the turn no bubble rises and the title stays down.
+    [resetSpeech(), null],
+    [desiredTitle(settledChat), null],
     [
       polls("/home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll"),
       true,
