@@ -226,6 +226,35 @@ def check_preview_path():
       f"the gate killed a sweep shell: {sweep_shell.returncode}"
     )
 
+    # The count gate holds mid-work commands; a push waits on any pending item.
+    python.write_text(
+      '#!/usr/bin/env bash\ncase " $*" in *" gate --push") exit 1 ;; esac\nexit 0\n',
+      encoding="utf-8",
+    )
+    python.chmod(0o755)
+    push_shell = subprocess.run(
+      ["bash", "-l", "-c", "git push origin main"],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    open_shell = subprocess.run(
+      ["bash", "-l", "-c", "echo plain"],
+      cwd=minify.ROOT / "skills",
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert push_shell.returncode == 130, (
+      f"a push with a pending inbox was not blocked: {push_shell.returncode}"
+    )
+    assert open_shell.returncode == 0, (
+      f"a mid-work command met the push gate: {open_shell.returncode}"
+    )
+
   print("PASS: repo-aware PATH install, reset and dispatch")
 
 

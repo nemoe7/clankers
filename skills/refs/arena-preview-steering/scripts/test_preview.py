@@ -2905,6 +2905,30 @@ def test_bash_gate():
     )
     assert missing.returncode == 0, "no inbox means nothing to read"
 
+    # A checkpoint holds while any item stays unacked, whatever the call count, and the
+    # CLI carries that mode for the profile gate.
+    gate_store.note("push-note", "Late steering")
+    assert gate_store.gate(pending_only=True) is False
+    pushed = subprocess.run(
+      [sys.executable, gate_script, "gate", "--push"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
+    )
+    assert pushed.returncode == 1
+    assert pushed.stdout.strip() == "READ INBOX NOW WITH arena-preview read"
+    gate_store.acknowledge(["push-note"], "note", "Cleared")
+    assert gate_store.gate(pending_only=True) is True
+    cleared_push = subprocess.run(
+      [sys.executable, gate_script, "gate", "--push"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
+    )
+    assert cleared_push.returncode == 0
+
 
 def test_dispatch_reminder():
   # Every dispatch carries a reminder without changing stdout; only a delivered read

@@ -2143,14 +2143,21 @@ class Store:
     tail = reminder_tail(cursor, remaining)
     return " ".join([*head, *counts, *ack, tail])
 
-  def gate(self, threshold=GATE_THRESHOLD):
-    """Return False when bash calls must block: a pending inbox at the call threshold."""
+  def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
+    """Return False when bash calls must block.
+
+    The count gate holds mid-work commands until the tally passes the threshold.
+    `pending_only` drops the tally: a checkpoint like a push waits for any
+    unacknowledged item, whatever the count.
+    """
     with closing(self.connect()) as db, db:
       pending = db.execute(
         "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL)"
         " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
       ).fetchone()[0]
       polls = meta_number(db, POLLS_SINCE_MESSAGE)
+    if pending_only:
+      return not pending
     return not (pending and polls >= threshold)
 
   def read(self):
@@ -2987,7 +2994,12 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
-  commands.add_parser("gate")
+  gate = commands.add_parser("gate")
+  gate.add_argument(
+    "--push",
+    action="store_true",
+    help="Block while any note or answer awaits an ack, whatever the call count",
+  )
   commands.add_parser("poll")
   download = commands.add_parser(
     "download-request",
@@ -3062,7 +3074,7 @@ def main():
       parser.error("a command is required")
     if args.command == "gate":
       try:
-        allowed = Store(state_dir).gate()
+        allowed = Store(state_dir).gate(pending_only=args.push)
       except FileNotFoundError:
         return 0
       except Exception:
