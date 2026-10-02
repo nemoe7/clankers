@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.30
+// @version      1.1.31
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1136,7 +1136,9 @@
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
-    var LIVE_ICON_SELECTOR = "svg.animate-pulse";
+    // The pulse sits on the icon in most live rows and on the label span of a collapsed
+    // edit row, so any pulsing element anchors the row.
+    var LIVE_ICON_SELECTOR = ".animate-pulse";
     // The live status text shimmers; a thinking row carries no pulsing icon, so its label leads.
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     // A read or edit group carries no shimmer and no pulse, so its own label is the only anchor.
@@ -1291,6 +1293,12 @@
         }
       }
       text = collapsed(row.querySelector("p"));
+      if (text) {
+        return text;
+      }
+      // A collapsed edit row pulses its label span, so the pulsing element names the action.
+      var pulsing = typeof row.querySelectorAll === "function" ? row.querySelectorAll(LIVE_ICON_SELECTOR) : [];
+      text = collapsed(pulsing.length ? pulsing[pulsing.length - 1] : null);
       if (text) {
         return text;
       }

@@ -72,6 +72,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Tab title edit row**: The live anchor matched `svg.animate-pulse` only, while a collapsed edit row pulses its label span, so the title never read as editing. The anchor takes any pulsing element, the label reader falls back to the pulsing element text, and a class-aware checks case guards both tag forms. Version 1.1.31.
+
+#### userscripts
+
 - **Poll detection**: The tab title matches a poll call as the script name followed by `poll`. A `polling` or `polls` word in another command no longer shows the waiting emoji. The Arena bundle moves to `1.1.30`.
 
 ## 2026-10-01

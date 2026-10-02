@@ -689,6 +689,44 @@ function checkTabTitle(api) {
       },
     };
   }
+  function classMatch(selector, nodes) {
+    var match = /^([a-z]*)\.([a-zA-Z-]+)$/.exec(selector);
+    if (!match) return [];
+    return nodes.filter(function (node) {
+      var has = (" " + node.className + " ").indexOf(" " + match[2] + " ") >= 0;
+      return has && (!match[1] || node.tagName === match[1]);
+    });
+  }
+  // A collapsed edit row pulses its label span, not an svg, so the mock matches by class.
+  function pulseLabelDoc(tagName) {
+    var label = {
+      tagName: tagName,
+      className: "shrink-0 text-text-tertiary animate-pulse",
+      textContent: "Editing",
+      parentElement: null,
+      closest: function () { return null; },
+    };
+    var row = {
+      textContent: "Editing maintenance/check_pr.py",
+      parentElement: null,
+      querySelector: function () { return null; },
+      querySelectorAll: function (selector) {
+        return selector === LIVE_ICON_SELECTOR ? [label] : [];
+      },
+    };
+    label.parentElement = row;
+    var message = {
+      querySelectorAll: function (selector) { return classMatch(selector, [label]); },
+    };
+    return {
+      title: "ChatGPT",
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        return classMatch(selector, [label]);
+      },
+      querySelector: function () { return null; },
+    };
+  }
   function actionDoc(element, message) {
     return {
       title: "ChatGPT",
@@ -776,6 +814,8 @@ function checkTabTitle(api) {
     [emojiForRow(liveRow(shimmerDoc)), "\uD83D\uDCAD"],
     [liveRow(strayDoc), null],
     [emojiForRow(liveRow(olderPulseDoc)), "\uD83D\uDDA5\uFE0F"],
+    [emojiForRow(liveRow(pulseLabelDoc("span"))), "\u270F\uFE0F"],
+    [emojiForRow(liveRow(pulseLabelDoc("svg"))), "\u270F\uFE0F"],
     [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
     [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
     [emojiForRow(pathMessage.row), "\uD83D\uDCA4"],
