@@ -78,6 +78,21 @@ def test_extra_section_fails():
   assert failures and "expected the headings" in failures[0]
 
 
+def test_a_bang_commit_needs_a_filled_breaking_section():
+  banged = ["feat(preview)!: drop the gate"]
+  assert check_pr.validate_breaking_crosscheck(banged, VALID_BODY)
+  assert (
+    check_pr.validate_breaking_crosscheck(["feat(preview): drop the gate"], VALID_BODY)
+    == []
+  )
+  filled = VALID_BODY.replace(
+    "## Breaking Changes\n\nNone\n", "## Breaking Changes\n\n- The gate goes.\n"
+  )
+  assert check_pr.validate_breaking_crosscheck(banged, filled) == []
+  omitted = VALID_BODY.replace("## Breaking Changes\n\nNone\n\n", "")
+  assert check_pr.validate_breaking_crosscheck(banged, omitted)
+
+
 def test_angle_brackets_pass_inside_a_fenced_block():
   text = VALID_BODY.replace(
     "Add a gate that validates every pull request commit and the pull request body.\n",

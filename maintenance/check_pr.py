@@ -296,6 +296,41 @@ def commits_in_range(revision_range: str) -> list[tuple[str, str]]:
   return commits
 
 
+def breaking_section_holds_nothing(text: str) -> bool:
+  """Say whether the body omits the Breaking Changes heading or keeps it at None."""
+  lines = text.splitlines()
+  headings = [
+    (number, match.group("title").strip())
+    for number, line in enumerate(lines, start=1)
+    if (match := H2_RE.match(line))
+  ]
+  titles = [title for _, title in headings]
+  if "Breaking Changes" not in titles:
+    return True
+  index = titles.index("Breaking Changes")
+  start = headings[index][0] + 1
+  end = headings[index + 1][0] - 1 if index + 1 < len(headings) else len(lines)
+  entries = _non_blank(_section_lines(lines, start, end))
+  return not entries or (len(entries) == 1 and entries[0][1].strip() == "None")
+
+
+def validate_breaking_crosscheck(subjects: list[str], body: str) -> list[Failure]:
+  """Fail a breaking-marked commit that meets an empty Breaking Changes section."""
+  banged = [
+    subject
+    for subject in subjects
+    if (match := SUBJECT_RE.fullmatch(subject)) and match.group("breaking")
+  ]
+  if banged and breaking_section_holds_nothing(body):
+    return [
+      Failure(
+        "PR body",
+        "a commit carries the breaking marker, so Breaking Changes must list it",
+      )
+    ]
+  return []
+
+
 def check(
   revision_range: str | None,
   pr_title: str | None,
@@ -304,14 +339,18 @@ def check(
 ) -> list[Failure]:
   """Collect every contract failure for the given inputs."""
   failures: list[Failure] = []
+  subjects: list[str] = []
   if revision_range:
     for sha, message in commits_in_range(revision_range):
+      lines = message.splitlines()
+      subjects.append(lines[0] if lines else message)
       failures.extend(validate_commit(message, where=f"commit {sha[:7]}"))
   if pr_title is not None:
     failures.extend(validate_subject(pr_title, "PR title"))
   if body_file is not None:
     text = Path(body_file).read_text(encoding="utf-8")
     failures.extend(validate_pr_body(text))
+    failures.extend(validate_breaking_crosscheck(subjects, text))
     if ste:
       passed, output = run_ste_lint(text)
       if not passed:
