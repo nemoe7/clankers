@@ -4,6 +4,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## [2026-10-02] - 2026-10-02
+
+### Changed
+
+#### preview
+
+- **Poll restart command**: The poll error names the script on PATH and the recorded port, so the agent restarts the server as written.
+- **PR check reminder**: A rotating tail line covers a pull request whose checks never ran: rebase onto `main` first.
+
 ## [2026-10-01] - 2026-10-01
 
 ### Added

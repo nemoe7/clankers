@@ -3041,6 +3041,7 @@ def test_reminder_rotation():
     assert "Grep-verify each edit landed." in preview.REMINDERS
     assert "Rebase on `origin/main` before pushing." in preview.REMINDERS
     assert "Check the PR's CI before ending a pushed turn." in preview.REMINDERS
+    assert "No PR checks run? Rebase onto main first." in preview.REMINDERS
     assert preview.TASK_REMINDER in preview.REMINDERS
     # One open task keeps every entry visible for the rotation checks.
     rotate_store.write_task("rotate-task", "Open work")
@@ -3242,6 +3243,36 @@ def test_report_ever_seen_migration():
     state = {row["id"]: row for row in migrated.state()["reports"]}
     assert state["fresh"]["seen_at"] is None
     assert state["fresh"]["ever_seen"] == 1
+
+
+def test_require_server_names_the_restart_command():
+  """A dead server fails the poll with the exact restart command and its port."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    hold = socket.socket()
+    hold.bind(("127.0.0.1", 0))
+    port = hold.getsockname()[1]
+    hold.close()
+    store.set_meta("port", str(port))
+    try:
+      preview.require_server(store)
+    except ValueError as error:
+      assert str(error) == (
+        "preview server is down; start it before polling: "
+        f"arena-preview serve --port {port}"
+      )
+    else:
+      raise AssertionError("a dead server passed the poll guard")
+    live = socket.socket()
+    live.bind(("127.0.0.1", 0))
+    live.listen(1)
+    try:
+      store.set_meta("port", str(live.getsockname()[1]))
+      preview.require_server(store)
+    finally:
+      live.close()
+    store.set_meta("port", "")
+    preview.require_server(store)
 
 
 def test_poll_inbox():
