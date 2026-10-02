@@ -1,0 +1,473 @@
+"""Gate for the pull request contract: commits, PR title, PR body and Simplified Technical English.
+
+The commit rules come from `rules/COMMIT-SPEC.txt`. The PR body rules come from the locked
+five-heading format. The gate reports every failure with its section and line; it never edits
+the input.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+STE_LINT = ROOT / ".agents" / "skills" / "asd-ste100" / "scripts" / "ste-lint.py"
+
+ALLOWED_TYPES = (
+  "feat",
+  "fix",
+  "refactor",
+  "perf",
+  "style",
+  "docs",
+  "test",
+  "build",
+  "chore",
+  "ci",
+  "revert",
+)
+
+SUBJECT_LIMIT = 72
+
+# Every scope this repository used before the gate existed. A new scope needs a deliberate
+# addition here, so an accidental scope fails instead of landing in the history.
+ALLOWED_SCOPES = frozenset(
+  (
+    "agents",
+    "agent-handoff",
+    "arena",
+    "arena-live-steering",
+    "arena-preview",
+    "archive",
+    "automations",
+    "changelog",
+    "chatgpt",
+    "check",
+    "ci",
+    "commit-spec",
+    "docs",
+    "gemini",
+    "gist",
+    "git",
+    "gpt-handoff",
+    "gpt-plugins",
+    "handoff",
+    "house",
+    "installer",
+    "kilo",
+    "maintenance",
+    "minify",
+    "planning",
+    "ponytail",
+    "preview",
+    "prose",
+    "publish",
+    "readme",
+    "release",
+    "repo",
+    "rules",
+    "skill",
+    "skills",
+    "steering",
+    "userscript",
+    "userscripts",
+    "validate",
+    "wenyan",
+    "workflows",
+  )
+)
+
+# Deterministic one-logical-change map: a commit that declares one of these scopes may only
+# touch the listed paths. Scopes without a map name no single area, so their paths stay open.
+SCOPE_AREAS = {
+  "changelog": ("CHANGELOG.md",),
+  "docs": ("docs/", "README.md", "rules/README.md"),
+  "gpt-plugins": ("gpt-plugins/",),
+  "preview": (
+    "skills/refs/arena-preview-steering/",
+    "skills/arena-preview-steering/",
+    ".agents/skills/arena-preview-steering/",
+    "maintenance/minify.py",
+    "maintenance/check_minify.py",
+  ),
+  "rules": ("rules/", "ARENA.md"),
+  "userscript": ("userscripts/",),
+  "userscripts": ("userscripts/",),
+}
+
+# Base verbs that end in -ed, -ing or -s; the imperative check must not read them as inflected.
+IMPERATIVE_EXCEPTIONS = frozenset(
+  (
+    "address",
+    "breed",
+    "bring",
+    "embed",
+    "exceed",
+    "feed",
+    "need",
+    "proceed",
+    "read",
+    "seed",
+    "shed",
+    "sing",
+    "speed",
+    "spread",
+    "spring",
+    "string",
+    "succeed",
+    "weed",
+  )
+)
+
+SUBJECT_RE = re.compile(
+  r"^(?P<type>[a-z]+)(?:\((?P<scope>[^()\s]+)\))?(?P<breaking>!)?: (?P<description>.+)$"
+)
+H2_RE = re.compile(r"^##\s+(?P<title>.*\S)\s*$")
+H3_RE = re.compile(r"^###\s+\S")
+HTML_COMMENT_RE = re.compile(r"<!--|-->")
+PLACEHOLDER_RE = re.compile(r"<[^<>\n]+>")
+LIST_ITEM_RE = re.compile(r"^-\s+(?P<body>\S.*)$")
+CHECKLIST_RE = re.compile(r"^-\s+\[(?P<mark>[x ])\]\s+(?P<body>\S.*)$")
+
+BODY_HEADINGS = ("Summary", "Changes", "Validation", "Breaking Changes", "Related")
+
+
+@dataclass(frozen=True)
+class Failure:
+  """One contract violation with enough location data to name it precisely."""
+
+  where: str
+  message: str
+  line: int | None = None
+
+  def __str__(self) -> str:
+    location = self.where if self.line is None else f"{self.where}:{self.line}"
+    return f"{location}: {self.message}"
+
+
+def imperative_problem(description: str) -> str | None:
+  """Return a message when the first description word is not an imperative base verb."""
+  first = re.match(r"^[A-Za-z][A-Za-z'-]*", description)
+  if not first:
+    return f"description must start with a word: {description!r}"
+  word = first.group(0)
+  lowered = word.lower()
+  if lowered in IMPERATIVE_EXCEPTIONS:
+    return None
+  if re.search(r"(?:s|es|ed|ing|d)$", lowered):
+    return f"use imperative wording, not {word!r}"
+  return None
+
+
+def validate_subject(subject: str, where: str) -> list[Failure]:
+  """Validate one Conventional Commit subject against `rules/COMMIT-SPEC.txt`."""
+  failures: list[Failure] = []
+  if subject != subject.strip():
+    failures.append(Failure(where, "subject cannot start or end with whitespace"))
+  if len(subject) > SUBJECT_LIMIT:
+    failures.append(
+      Failure(
+        where, f"subject is {len(subject)} characters; the limit is {SUBJECT_LIMIT}"
+      )
+    )
+  match = SUBJECT_RE.fullmatch(subject)
+  if not match:
+    failures.append(
+      Failure(
+        where,
+        "subject must match <type>[optional scope][!]: <description>; "
+        f"allowed types: {' '.join(ALLOWED_TYPES)}",
+      )
+    )
+    return failures
+  commit_type = match.group("type")
+  scope = match.group("scope")
+  description = match.group("description")
+  if commit_type not in ALLOWED_TYPES:
+    failures.append(Failure(where, f"unknown type {commit_type!r}"))
+  if scope is not None and scope not in ALLOWED_SCOPES:
+    failures.append(Failure(where, f"unknown scope {scope!r}"))
+  if not description[0].islower():
+    failures.append(Failure(where, "description must start with a lowercase letter"))
+  if description.endswith("."):
+    failures.append(Failure(where, "description must not end with a period"))
+  imperative = imperative_problem(description)
+  if imperative:
+    failures.append(Failure(where, imperative))
+  return failures
+
+
+def validate_commit(
+  message: str, paths: list[str] | None = None, where: str = "commit"
+) -> list[Failure]:
+  """Validate one commit message, and its paths when the scope maps to one area."""
+  lines = [line for line in message.splitlines() if line.strip()]
+  if len(lines) != 1:
+    return [Failure(where, "use one subject line and no commit body")]
+  failures = validate_subject(lines[0], where)
+  scope = SUBJECT_RE.fullmatch(lines[0])
+  if paths is None or not scope or not scope.group("scope"):
+    return failures
+  areas = SCOPE_AREAS.get(scope.group("scope") or "")
+  if not areas:
+    return failures
+  for path in paths:
+    if not path.startswith(areas):
+      failures.append(
+        Failure(
+          where,
+          f"path {path!r} is outside the {scope.group('scope')} area, so the commit is not one logical change",
+        )
+      )
+  return failures
+
+
+def _section_lines(lines: list[str], start: int, end: int) -> list[tuple[int, str]]:
+  return [(number, lines[number - 1]) for number in range(start, end + 1)]
+
+
+def _non_blank(entries: list[tuple[int, str]]) -> list[tuple[int, str]]:
+  return [(number, text) for number, text in entries if text.strip()]
+
+
+def validate_pr_body(text: str) -> list[Failure]:
+  """Validate the locked five-heading PR body format and report each failing line."""
+  failures: list[Failure] = []
+  lines = text.splitlines()
+  for number, line in enumerate(lines, start=1):
+    if HTML_COMMENT_RE.search(line):
+      failures.append(Failure("body", "HTML comments are not allowed", number))
+    if PLACEHOLDER_RE.search(line):
+      failures.append(Failure("body", "placeholder text is not allowed", number))
+    if H3_RE.match(line):
+      failures.append(Failure("body", "H3 headings are not allowed", number))
+
+  headings = [
+    (number, match.group("title").strip())
+    for number, line in enumerate(lines, start=1)
+    if (match := H2_RE.match(line))
+  ]
+  titles = [title for _, title in headings]
+
+  first_heading = headings[0][0] if headings else len(lines) + 1
+  if _non_blank([(number, lines[number - 1]) for number in range(1, first_heading)]):
+    failures.append(Failure("body", "content before ## Summary", 1))
+
+  if titles != list(BODY_HEADINGS):
+    failures.append(
+      Failure(
+        "body",
+        f"expected exactly five H2 headings in order {list(BODY_HEADINGS)}; found {titles}",
+      )
+    )
+    return failures
+
+  bounds = [number for number, _ in headings]
+  sections: dict[str, list[tuple[int, str]]] = {}
+  for index, (number, title) in enumerate(headings):
+    end = bounds[index + 1] - 1 if index + 1 < len(bounds) else len(lines)
+    sections[title] = _section_lines(lines, number + 1, end)
+
+  failures.extend(_check_summary(sections["Summary"]))
+  failures.extend(_check_changes(sections["Changes"]))
+  failures.extend(_check_validation(sections["Validation"]))
+  failures.extend(
+    _check_none_or_bullets("Breaking Changes", sections["Breaking Changes"])
+  )
+  failures.extend(_check_none_or_bullets("Related", sections["Related"]))
+
+  related = _non_blank(sections["Related"])
+  if related and related[0][1].strip() == "None" and len(related) > 1:
+    failures.append(
+      Failure("body", "content after the final ## Related content", related[1][0])
+    )
+  return failures
+
+
+def _check_summary(entries: list[tuple[int, str]]) -> list[Failure]:
+  failures: list[Failure] = []
+  content = _non_blank(entries)
+  if not content:
+    return [Failure("body: Summary", "the section is empty")]
+  paragraphs = 0
+  in_paragraph = False
+  for number, line in entries:
+    if not line.strip():
+      in_paragraph = False
+      continue
+    if not in_paragraph:
+      paragraphs += 1
+      in_paragraph = True
+    if LIST_ITEM_RE.match(line) or H3_RE.match(line) or H2_RE.match(line):
+      failures.append(
+        Failure("body: Summary", "use one paragraph and no list or heading", number)
+      )
+  if paragraphs != 1:
+    failures.append(
+      Failure(
+        "body: Summary",
+        f"use exactly one paragraph; found {paragraphs}",
+        content[0][0],
+      )
+    )
+  return failures
+
+
+def _check_changes(entries: list[tuple[int, str]]) -> list[Failure]:
+  failures: list[Failure] = []
+  bullets = [(number, text) for number, text in entries if text.strip()]
+  if not bullets:
+    return [Failure("body: Changes", "the section is empty")]
+  for number, line in bullets:
+    if not LIST_ITEM_RE.match(line):
+      failures.append(
+        Failure("body: Changes", "each change needs a '- ' bullet", number)
+      )
+  return failures
+
+
+def _check_validation(entries: list[tuple[int, str]]) -> list[Failure]:
+  failures: list[Failure] = []
+  items = [(number, text) for number, text in entries if text.strip()]
+  if not items:
+    return [Failure("body: Validation", "the section is empty")]
+  for number, line in items:
+    if not CHECKLIST_RE.match(line):
+      failures.append(
+        Failure(
+          "body: Validation", "each item uses '- [x]' or '- [ ]', lowercase x", number
+        )
+      )
+  return failures
+
+
+def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[Failure]:
+  failures: list[Failure] = []
+  items = _non_blank(entries)
+  if not items:
+    return [Failure(f"body: {title}", "the section is empty")]
+  if len(items) == 1 and items[0][1].strip() == "None":
+    return failures
+  for number, line in items:
+    if not LIST_ITEM_RE.match(line):
+      failures.append(
+        Failure(
+          f"body: {title}", "use exactly 'None', or one '- ' bullet per entry", number
+        )
+      )
+  if not any(LIST_ITEM_RE.match(line) for _, line in items):
+    failures.append(
+      Failure(
+        f"body: {title}",
+        "use exactly 'None', or one '- ' bullet per entry",
+        items[0][0],
+      )
+    )
+  return failures
+
+
+def run_ste_lint(text: str) -> tuple[bool, str]:
+  """Run the vendored ASD-STE linter over text; return (passed, output)."""
+  with tempfile.TemporaryDirectory() as directory:
+    path = Path(directory) / "pr-body.md"
+    path.write_text(text, encoding="utf-8")
+    result = subprocess.run(
+      [sys.executable, str(STE_LINT), str(path)],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+  return result.returncode == 0, (result.stdout + result.stderr).strip()
+
+
+def _git(*arguments: str) -> str:
+  result = subprocess.run(
+    ["git", *arguments],
+    cwd=ROOT,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  if result.returncode:
+    raise SystemExit(f"git {' '.join(arguments)} failed: {result.stderr.strip()}")
+  return result.stdout
+
+
+def commits_in_range(revision_range: str) -> list[tuple[str, str, list[str]]]:
+  """Return (sha, message, paths) for each commit in the revision range, oldest first."""
+  output = _git("log", "--reverse", "--format=%H%x1f%B%x1e", revision_range)
+  commits: list[tuple[str, str, list[str]]] = []
+  for record in output.split("\x1e"):
+    record = record.strip("\n")
+    if not record.strip():
+      continue
+    sha, _, message = record.partition("\x1f")
+    paths = [
+      line
+      for line in _git(
+        "diff-tree", "--no-commit-id", "--name-only", "-r", sha
+      ).splitlines()
+      if line.strip()
+    ]
+    commits.append((sha, message.strip("\n"), paths))
+  return commits
+
+
+def check(
+  revision_range: str | None,
+  pr_title: str | None,
+  body_file: str | None,
+  ste: bool,
+) -> list[Failure]:
+  """Collect every contract failure for the given inputs."""
+  failures: list[Failure] = []
+  if revision_range:
+    for sha, message, paths in commits_in_range(revision_range):
+      failures.extend(validate_commit(message, paths, where=f"commit {sha[:7]}"))
+  if pr_title is not None:
+    failures.extend(validate_subject(pr_title, "PR title"))
+  if body_file is not None:
+    text = Path(body_file).read_text(encoding="utf-8")
+    failures.extend(validate_pr_body(text))
+    if ste:
+      passed, output = run_ste_lint(text)
+      if not passed:
+        failures.append(Failure("PR body", f"STE lint failed:\n{output}"))
+  return failures
+
+
+def main(argv: list[str] | None = None) -> int:
+  parser = argparse.ArgumentParser(description=__doc__)
+  parser.add_argument("--range", dest="revision_range", help="commit range, BASE..HEAD")
+  parser.add_argument("--pr-title", help="PR title to validate as a commit subject")
+  parser.add_argument("--body-file", help="file holding the complete PR body")
+  parser.add_argument(
+    "--no-ste",
+    action="store_true",
+    help="skip the ASD-STE lint of the PR body",
+  )
+  arguments = parser.parse_args(argv)
+  if not (arguments.revision_range or arguments.pr_title or arguments.body_file):
+    parser.error("give --range, --pr-title, --body-file, or several")
+  failures = check(
+    arguments.revision_range,
+    arguments.pr_title,
+    arguments.body_file,
+    not arguments.no_ste,
+  )
+  for failure in failures:
+    print(f"::error::{failure}")
+  if failures:
+    print(f"{len(failures)} contract violation(s)")
+    return 1
+  print("Pull request contract passed")
+  return 0
+
+
+if __name__ == "__main__":
+  raise SystemExit(main())

@@ -11,7 +11,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### workflows
 
 - **Security workflows**: `codeql.yml` analyzes Python, JavaScript and the workflow YAML. `dependency-review.yml` fails a high or critical advisory. `secret-scan.yml` scans the pushed commits and the full history on a schedule.
-- **Pull request gate**: `pr-check.yml` checks each commit against `rules/COMMIT-SPEC.txt`, the pull request title, the five-heading body and the vendored Simplified Technical English linter. A pull request records its rules in `.github/pull_request_template.md`.
+- **Workflow lint**: `workflow-security.yml` runs actionlint, zizmor and the workflow set gate on every workflow change, with a weekly run.
+- **Pull request gate**: `pr-check.yml` checks each commit against `rules/COMMIT-SPEC.txt`, the pull request title, the five-heading body and the vendored Simplified Technical English linter.
+- **Validators**: `maintenance/check_pr.py`, `maintenance/check_workflows.py` and their test modules hold the pull request contract and the workflow set contract. A pull request records its rules in `.github/pull_request_template.md`.
 
 ### Changed
 
