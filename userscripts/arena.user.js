@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.36
+// @version      1.1.37
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -133,9 +133,11 @@
     }
 
     function promptForSlug(slug, arenaMd) {
+      // The trailing space is the fix: with no character between the file name
+      // and the line break, the editor links AGENTS.md as a bare domain.
       var base =
         slug +
-        " read ARENA.md AGENTS.md\n" +
+        " read ARENA.md AGENTS.md \n" +
         "Expect screenshots to be sent via the steering channel.";
       if (arenaMd) {
         return base + "\nhere is ARENA.md:\n" + arenaMd;
@@ -144,7 +146,7 @@
     }
 
     function shouldWrite(current, slug, lastSlug, arenaMd) {
-      var desired = promptForSlug(slug, arenaMd);
+      var desired = promptForSlug(slug, arenaMd).trim();
       var text = String(current || "").trim();
       if (text === desired) {
         return false;
@@ -153,7 +155,7 @@
         return text === "" || TEMPLATE_RE.test(text);
       }
       if (slug === lastSlug) {
-        return text === promptForSlug(slug, null);
+        return text === promptForSlug(slug, null).trim();
       }
       return true;
     }
