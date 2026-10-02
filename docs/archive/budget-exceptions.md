@@ -2,6 +2,12 @@
 
 Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
 
+2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +55 `B`, 83,754 to 83,809. A reminder names the gh command for pull request checks.
+
+2026-10-02: Owner request. `rules/ARENA.md` +341 `B`, 15,464 to 15,805, and the root copy follows. Four rules keep the pull request commit history small and intentional.
+
+2026-10-02: Owner request. `skills/arena-preview-steering/scripts/install.sh` +485 `B`, 8,550 to 9,035. The count gate leaves a chain that reads the inbox quiet.
+
 2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +208 `B`, 83,546 to 83,754, and `skills/arena-preview-steering/scripts/install.sh` +336 `B`, 8,214 to 8,550. A push blocks while an item awaits an ack.
 
 2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +74 `B`, 83,472 to 83,546. The poll error names the restart command, and the reminder tails add a rebase hint.

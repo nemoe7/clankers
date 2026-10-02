@@ -151,6 +151,10 @@
 - If a commit landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.
 - Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
+- ALWAYS minimize the commit history. Keep commits intentional.
+- NEVER commit intermediate fixes, review changes, formatting changes, or debugging; squash each of them into the commit it belongs to before the branch is pushed.
+- Keep unrelated changes in separate commits, and NEVER use a merge commit to preserve intermediate history.
+- Review the final commit list and the diff before pushing the branch.
 - Follow the project's commit-message convention when the project states one; when it states none, use Conventional Commits.
 - Conventional Commits form: `<type>[optional scope]: <description>`, imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body, with `!` before the colon to mark a breaking change.
 - Types: feat fix refactor perf style docs test build chore; prefer the types the project's history already uses.
