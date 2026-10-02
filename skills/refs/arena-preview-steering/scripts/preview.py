@@ -139,6 +139,7 @@ REMINDERS = (
   "Grep-verify each edit landed.",
   TASK_REMINDER,
   "Rebase on `origin/main` before pushing.",
+  "No PR checks run? Rebase onto main first.",
   "Check the PR's CI before ending a pushed turn.",
 )
 REMINDER_CURSOR = "reminder_cursor"
@@ -810,7 +811,8 @@ def require_server(store):
 
   `serve` records its bound port in the state, so a poll can tell a quiet
   inbox from a dead server: the port is the evidence, and a refused connect
-  means the owner's page is gone with it.
+  means the owner's page is gone with it. The error names the restart command
+  as the script the installer puts on PATH, with the recorded port.
   """
   port = store.meta_value("port")
   if not port:
@@ -819,7 +821,9 @@ def require_server(store):
     probe.settimeout(1)
     if probe.connect_ex(("127.0.0.1", int(port))) == 0:
       return
-  raise ValueError("preview server is down; start it again before polling")
+  raise ValueError(
+    f"preview server is down; start it before polling: arena-preview serve --port {port}"
+  )
 
 
 def print_read(store, pretty=False):
