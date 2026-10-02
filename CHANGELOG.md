@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### gpt-plugins
 
 - **Handoff verification**: The `gpt-handoff` output tells the receiving agent to check material claims before applying them. The collection version steps to `1.5.1`.
+- **Handoff disclaimer scope**: The output disclaimer now names both output forms, handoff and audit. Independent verification of material claims stays a condition before the receiving agent applies either output. The output also carries every source and reference the verification needs: relative paths inside the repository, direct links outside it, and nothing else. The plugin version is `1.5.2`.
 
 #### house
 

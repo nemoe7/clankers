@@ -100,7 +100,9 @@ Never claim a check passed without verification.
 
 Produce only the actionable handoff.
 
-The receiving agent MUST independently verify material claims before applying them.
+The receiving agent MUST independently verify material claims in the handoff or audit output before applying them.
+
+Include every source and reference the verification needs. Repository files appear as paths relative to the current repository. External repositories, files, issues, pull requests, documentation and other external sources appear as direct links. Add no reference that no claim needs.
 
 
 Make the handoff one Markdown fenced block, directly copyable as an agent prompt, with all content inside it and no prose before or after it.
