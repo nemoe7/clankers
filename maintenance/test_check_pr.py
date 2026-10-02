@@ -40,9 +40,22 @@ def test_valid_body_passes():
   assert body_failures(VALID_BODY) == []
 
 
-def test_missing_section_fails():
-  failures = body_failures(VALID_BODY.replace("## Related\n\nNone\n", ""))
-  assert failures and "five H2 headings" in failures[0]
+def test_the_two_optional_sections_may_stay_out():
+  text = VALID_BODY.replace("## Breaking Changes\n\nNone\n\n", "").replace(
+    "## Related\n\nNone\n", ""
+  )
+  assert body_failures(text) == []
+  text = VALID_BODY.replace("## Related\n\nNone\n", "")
+  assert body_failures(text) == []
+
+
+def test_a_missing_required_section_fails():
+  failures = body_failures(
+    VALID_BODY.replace(
+      "## Validation\n\n- [x] Run the gate locally.\n- [ ] Run the gate in CI.\n", ""
+    )
+  )
+  assert failures and "expected the headings" in failures[0]
 
 
 def test_reordered_section_fails():
@@ -51,14 +64,14 @@ def test_reordered_section_fails():
   )
   text = text.replace("## Temp", "## Validation")
   failures = body_failures(text)
-  assert failures and "five H2 headings" in failures[0]
+  assert failures and "expected the headings" in failures[0]
 
 
 def test_extra_section_fails():
   failures = body_failures(
     VALID_BODY.replace("## Related", "## Notes\n\n- Note.\n\n## Related")
   )
-  assert failures and "five H2 headings" in failures[0]
+  assert failures and "expected the headings" in failures[0]
 
 
 def test_content_before_the_first_section_fails():

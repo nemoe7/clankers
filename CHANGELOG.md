@@ -12,7 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Security workflows**: `codeql.yml` analyzes Python, JavaScript and the workflow YAML. `dependency-review.yml` fails a high or critical advisory. `secret-scan.yml` scans the pushed commits and the full history on a schedule.
 - **Workflow lint**: `workflow-security.yml` runs actionlint, zizmor and the workflow set gate on every workflow change, with a weekly run.
-- **Pull request gate**: `pr-check.yml` checks each commit and the pull request title against the Conventional Commit rules that `maintenance/check_pr.py` inlines from `rules/COMMIT-SPEC.txt`. It checks the five-heading body and runs the vendored Simplified Technical English linter on it.
+- **Pull request gate**: `pr-check.yml` checks each commit and the pull request title against the Conventional Commit rules that `maintenance/check_pr.py` inlines from `rules/COMMIT-SPEC.txt`. It checks the body heading order and runs the vendored Simplified Technical English linter on it.
 - **Validators**: `maintenance/check_pr.py`, `maintenance/check_workflows.py` and their test modules hold the pull request contract and the workflow set contract. A pull request records its rules in `.github/pull_request_template.md`.
 
 ### Changed
@@ -34,6 +34,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Commit scope areas**: The pull request gate no longer binds a commit scope to a path list, and the `SCOPE_AREAS` map goes. One house commit carries a rule file, its ledger entry and its measurement row, so a bound scope rejected a compliant commit.
 - **Changelog scope**: `changelog` leaves the allowed scope list. Its area was one file, so it could never carry a ledger entry beside the change.
 - **Scope list**: The gate takes any scope in a commit subject and a pull request title, and the frozen 39-name list goes.
+- **Body headings**: The `Breaking Changes` and `Related` headings may stay out of a pull request body when neither holds content. `Summary`, `Changes` and `Validation` stay required and in order.
 
 #### workflows
 

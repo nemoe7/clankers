@@ -2,8 +2,8 @@
 
 The commit rules are the inline constants `ALLOWED_TYPES` and `SUBJECT_LIMIT`, which state
 `rules/COMMIT-SPEC.txt` and are never read from it. The PR body rules come from the locked
-five-heading format. The gate reports every failure with its section and line; it never edits
-the input.
+heading order; the last two headings may stay out when their section holds nothing. The gate
+reports every failure with its section and line; it never edits the input.
 """
 
 from __future__ import annotations
@@ -46,6 +46,7 @@ PLACEHOLDER_RE = re.compile(r"<[^<>\n]+>")
 LIST_ITEM_RE = re.compile(r"^-\s+(?P<body>\S.*)$")
 CHECKLIST_RE = re.compile(r"^-\s+\[(?P<mark>[x ])\]\s+(?P<body>\S.*)$")
 
+# The last two headings may stay out of a body when their section holds nothing.
 BODY_HEADINGS = ("Summary", "Changes", "Validation", "Breaking Changes", "Related")
 
 
@@ -111,7 +112,7 @@ def _non_blank(entries: list[tuple[int, str]]) -> list[tuple[int, str]]:
 
 
 def validate_pr_body(text: str) -> list[Failure]:
-  """Validate the locked five-heading PR body format and report each failing line."""
+  """Validate the locked PR body heading order and report each failing line."""
   failures: list[Failure] = []
   lines = text.splitlines()
   for number, line in enumerate(lines, start=1):
@@ -133,11 +134,12 @@ def validate_pr_body(text: str) -> list[Failure]:
   if _non_blank([(number, lines[number - 1]) for number in range(1, first_heading)]):
     failures.append(Failure("body", "content before ## Summary", 1))
 
-  if titles != list(BODY_HEADINGS):
+  if len(titles) < 3 or titles != list(BODY_HEADINGS)[: len(titles)]:
     failures.append(
       Failure(
         "body",
-        f"expected exactly five H2 headings in order {list(BODY_HEADINGS)}; found {titles}",
+        f"expected the headings {list(BODY_HEADINGS)} in order, with the last two "
+        f"optional when they hold nothing; found {titles}",
       )
     )
     return failures
@@ -151,11 +153,13 @@ def validate_pr_body(text: str) -> list[Failure]:
   failures.extend(_check_summary(sections["Summary"]))
   failures.extend(_check_changes(sections["Changes"]))
   failures.extend(_check_validation(sections["Validation"]))
-  failures.extend(
-    _check_none_or_bullets("Breaking Changes", sections["Breaking Changes"])
-  )
+  if "Breaking Changes" in sections:
+    failures.extend(
+      _check_none_or_bullets("Breaking Changes", sections["Breaking Changes"])
+    )
+  if "Related" not in sections:
+    return failures
   failures.extend(_check_none_or_bullets("Related", sections["Related"]))
-
   related = _non_blank(sections["Related"])
   if related and related[0][1].strip() == "None" and len(related) > 1:
     failures.append(
