@@ -1,6 +1,8 @@
-name: Validate
+name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: ['**']
     paths-ignore:
@@ -12,15 +14,15 @@ on:
       - 'maintenance/README.md'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: Validate-${{ github.ref }}
+  group: CI-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  lint-validate-budget:
-    name: Lint, Validate, And Budget
+  quality:
+    name: Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -39,7 +41,7 @@ jobs:
           # There is no requirements file: the pins live in this workflow and in ruff.toml, so the
           # workflow itself is the honest cache key and any dependency change busts it.
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/validate.yml') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: ${{ runner.os }}-pip-
 
       - name: Cache The Token Encoder
@@ -71,9 +73,6 @@ jobs:
           TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/tiktoken
         run: python maintenance/check.py --update
 
-      - name: Test Commit Message Hook
-        run: python maintenance/test_commit_msg.py
-
       - name: Lint And Format-Check Python
         run: |
           ruff check .
@@ -99,10 +98,50 @@ jobs:
         run: |
           node userscripts/arena.user.js
           node userscripts/chatgpt.user.js
-          node --test maintenance/userscripts.checks.cjs maintenance/userscripts.test.cjs
 
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v24
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+
+      - name: Set Up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Cache Pip Downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-tests-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: ${{ runner.os }}-pip-tests-
+
+      - name: Install Test Dependencies
+        run: python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1 pytest-xdist==3.6.1
+
+      - name: Set Up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Run Python Test Suite
+        run: python -m pytest -q -n auto
+
+      - name: Test Commit Message Hook
+        run: python maintenance/test_commit_msg.py
+
+      - name: Run Node Userscript Tests
+        run: node --test maintenance/userscripts.checks.cjs maintenance/userscripts.test.cjs
 
   preview-tests:
     name: Preview Tests
@@ -144,7 +183,7 @@ jobs:
             pytest.ini \
             package.json \
             package-lock.json \
-            .github/workflows/validate.yml)
+            .github/workflows/ci.yml)
           if [ -n "$files" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             printf '%s\n' "Preview paths changed:" "$files"
@@ -173,18 +212,17 @@ jobs:
           # There is no requirements file: the pins live in this workflow, so the workflow
           # itself is the honest cache key and any dependency change busts it.
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-preview-${{ hashFiles('.github/workflows/validate.yml') }}
+          key: ${{ runner.os }}-pip-preview-${{ hashFiles('.github/workflows/ci.yml') }}
           restore-keys: ${{ runner.os }}-pip-preview-
 
-      - name: Install Test Dependencies
+      - name: Install Preview Dependencies
         if: steps.preview.outputs.run == 'true'
         run: |
-          python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1 pytest-xdist==3.6.1
+          python -m pip install markdown-it-py python-minifier==3.3.0
           npm ci
 
-      - name: Run Preview Tests
+      - name: Run Preview Checks
         if: steps.preview.outputs.run == 'true'
         run: |
-          python -m pytest -q -n auto
           python maintenance/check_minify.py
           node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-preview-steering/scripts/client.test.cjs
