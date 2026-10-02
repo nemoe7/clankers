@@ -176,9 +176,9 @@ def test_invalid_type_fails():
   assert any("unknown type" in failure.message for failure in failures)
 
 
-def test_invalid_scope_fails():
-  failures = check_pr.validate_commit("feat(nonsense): poll for notes")
-  assert any("unknown scope" in failure.message for failure in failures)
+def test_any_scope_passes():
+  assert check_pr.validate_commit("feat(nonsense): poll for notes") == []
+  assert check_pr.validate_commit("chore(changelog): note the release") == []
 
 
 def test_invalid_case_fails():
@@ -227,9 +227,8 @@ def test_a_scope_binds_no_path_area():
   assert not hasattr(check_pr, "SCOPE_AREAS")
 
 
-def test_the_changelog_scope_is_gone():
-  failures = check_pr.validate_commit("chore(changelog): note the release")
-  assert any("unknown scope" in failure.message for failure in failures)
+def test_the_gate_holds_no_scope_list():
+  assert not hasattr(check_pr, "ALLOWED_SCOPES")
 
 
 def test_pr_title_uses_the_commit_rules():

@@ -35,52 +35,6 @@ ALLOWED_TYPES = (
 
 SUBJECT_LIMIT = 72
 
-# Every scope this repository used before the gate existed. A new scope needs a deliberate
-# addition here, so an accidental scope fails instead of landing in the history.
-ALLOWED_SCOPES = frozenset(
-  (
-    "agents",
-    "agent-handoff",
-    "arena",
-    "arena-live-steering",
-    "arena-preview",
-    "archive",
-    "automations",
-    "chatgpt",
-    "check",
-    "ci",
-    "commit-spec",
-    "docs",
-    "gemini",
-    "gist",
-    "git",
-    "gpt-handoff",
-    "gpt-plugins",
-    "handoff",
-    "house",
-    "installer",
-    "kilo",
-    "maintenance",
-    "minify",
-    "planning",
-    "ponytail",
-    "preview",
-    "prose",
-    "publish",
-    "readme",
-    "release",
-    "repo",
-    "rules",
-    "skill",
-    "skills",
-    "steering",
-    "userscript",
-    "userscripts",
-    "validate",
-    "wenyan",
-    "workflows",
-  )
-)
 
 SUBJECT_RE = re.compile(
   r"^(?P<type>[a-z]+)(?:\((?P<scope>[^()\s]+)\))?(?P<breaking>!)?: (?P<description>.+)$"
@@ -130,12 +84,9 @@ def validate_subject(subject: str, where: str) -> list[Failure]:
     )
     return failures
   commit_type = match.group("type")
-  scope = match.group("scope")
   description = match.group("description")
   if commit_type not in ALLOWED_TYPES:
     failures.append(Failure(where, f"unknown type {commit_type!r}"))
-  if scope is not None and scope not in ALLOWED_SCOPES:
-    failures.append(Failure(where, f"unknown scope {scope!r}"))
   if not description[0].islower():
     failures.append(Failure(where, "description must start with a lowercase letter"))
   if description.endswith("."):

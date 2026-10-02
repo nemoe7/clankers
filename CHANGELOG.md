@@ -33,6 +33,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Commit scope areas**: The pull request gate no longer binds a commit scope to a path list, and the `SCOPE_AREAS` map goes. One house commit carries a rule file, its ledger entry and its measurement row, so a bound scope rejected a compliant commit.
 - **Changelog scope**: `changelog` leaves the allowed scope list. Its area was one file, so it could never carry a ledger entry beside the change.
+- **Scope list**: The gate takes any scope in a commit subject and a pull request title, and the frozen 39-name list goes.
 
 #### workflows
 
