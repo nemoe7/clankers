@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### workflows
 
+- **Security workflows**: `codeql.yml` analyzes Python, JavaScript and the workflow YAML. `dependency-review.yml` fails a high or critical advisory. `secret-scan.yml` scans the pushed commits and the full history on a schedule.
 - **Pull request gate**: `pr-check.yml` checks each commit against `rules/COMMIT-SPEC.txt`, the pull request title, the five-heading body and the vendored Simplified Technical English linter. A pull request records its rules in `.github/pull_request_template.md`.
 
 ### Changed

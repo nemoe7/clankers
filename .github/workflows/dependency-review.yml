@@ -1,0 +1,33 @@
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: ['**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: Dependency-Review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # The summary comment on a failing review needs the pull request scope.
+      pull-requests: write
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+
+      - name: Review The Dependency Changes
+        uses: actions/dependency-review-action@v5
+        with:
+          # Repository threshold: high and critical advisories fail the review. The
+          # dependency graph covers package-lock.json and the workflow action pins.
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

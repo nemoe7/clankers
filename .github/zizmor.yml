@@ -1,0 +1,10 @@
+# Zizmor policy for this repository.
+#
+# The workflows pin each action to its published major tag. Reviewers read the tag,
+# and Dependabot-style upgrades stay reviewable. The ref-pin policy records that
+# choice instead of asking for a commit hash on every reference.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": ref-pin
