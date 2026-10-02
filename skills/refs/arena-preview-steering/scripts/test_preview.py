@@ -3058,6 +3058,7 @@ def test_reminder_rotation():
     assert "End the turn with `poll` to wait for more work." in preview.REMINDERS
     assert "Don't forget to publish your reports." in preview.REMINDERS
     assert "Never end a turn with unblocked tasks." in preview.REMINDERS
+    assert "Read the PR checks with `gh pr checks <PR> --watch`." in preview.REMINDERS
     assert (
       "Run `task-list` at turn start and update it as work changes."
       in preview.REMINDERS

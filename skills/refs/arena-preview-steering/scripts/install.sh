@@ -177,6 +177,14 @@ _arena_preview_gate() {
       esac
       ;;
   esac
+  # A command line that reads or answers the inbox must reach its read: a chain with a cd
+  # before the read stays quiet for the count gate, while the push rule above still runs
+  # for every push in the same shell.
+  case "\$(tr '\\0' ' ' < /proc/\$\$/cmdline 2>/dev/null)" in
+    *"arena-preview read"*|*"arena-preview ack"*|*"arena-preview poll"*|*"arena-preview task"*|*"preview.py read"*|*"preview.py ack"*|*"preview.py poll"*|*"preview.py task"*)
+      return 0
+      ;;
+  esac
   case "\${_arena_preview_gate_checked:-}" in 1) return 0 ;; esac
   _arena_preview_gate_checked=1
   "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" gate 2>/dev/null

@@ -141,6 +141,7 @@ REMINDERS = (
   "Rebase on `origin/main` before pushing.",
   "No PR checks run? Rebase onto main first.",
   "Check the PR's CI before ending a pushed turn.",
+  "Read the PR checks with `gh pr checks <PR> --watch`.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"

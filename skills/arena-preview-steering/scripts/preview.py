@@ -56,7 +56,7 @@ def reminder_tail(cursor,remaining):
 		tail=fill_reminder(REMINDERS[(cursor+step)%len(REMINDERS)],remaining)
 		if tail:return tail
 	return REMINDERS[cursor%len(REMINDERS)]
-REMINDERS='Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.','Run `task-list` at turn start and update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Never end a turn with unblocked tasks.','Remove stale reports with unpublish.','End the turn with `poll` to wait for more work.','Grep-verify each edit landed.',TASK_REMINDER,'Rebase on `origin/main` before pushing.','No PR checks run? Rebase onto main first.',"Check the PR's CI before ending a pushed turn."
+REMINDERS='Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.','Run `task-list` at turn start and update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Never end a turn with unblocked tasks.','Remove stale reports with unpublish.','End the turn with `poll` to wait for more work.','Grep-verify each edit landed.',TASK_REMINDER,'Rebase on `origin/main` before pushing.','No PR checks run? Rebase onto main first.',"Check the PR's CI before ending a pushed turn.",'Read the PR checks with `gh pr checks <PR> --watch`.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 GATE_THRESHOLD=50
