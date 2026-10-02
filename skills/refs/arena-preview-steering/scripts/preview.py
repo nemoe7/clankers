@@ -927,12 +927,8 @@ def check_task(task_id, title, details):
 
 
 # A report can carry one allowlisted list form: report prose is agent-authored, and the
-# matrix's Platform specific row needs real lists (the owner read the raw tags, note 8d4ede2).
-# ul, ol and li only, on their own lines, no attributes; everything else keeps escaping.
 # An image the agent sized: `![alt](src =320x200)`, or `=320x` for a scaled height.
 SIZED_IMAGE = re.compile(r"!\[([^\]\n]*)\]\((\S+?)\s+=(\d+)x(\d*)\)")
-REPORT_LIST_TAG = re.compile(r"\s*</?(?:ul|ol|li)>\s*", re.IGNORECASE)
-REPORT_LIST_TAGS = re.compile(r"^(?:\s*</?(?:ul|ol|li)>\s*)+$", re.IGNORECASE)
 
 
 def hold_out(markdown, pattern, build, slug):

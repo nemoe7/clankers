@@ -352,8 +352,6 @@ def check_task(task_id,title,details):
 	for detail in details or():
 		if len(detail)>MAX_TASK_DETAIL:raise ValueError(f"A task detail must be {MAX_TASK_DETAIL} characters or fewer")
 SIZED_IMAGE=re.compile('!\\[([^\\]\\n]*)\\]\\((\\S+?)\\s+=(\\d+)x(\\d*)\\)')
-REPORT_LIST_TAG=re.compile('\\s*</?(?:ul|ol|li)>\\s*',re.IGNORECASE)
-REPORT_LIST_TAGS=re.compile('^(?:\\s*</?(?:ul|ol|li)>\\s*)+$',re.IGNORECASE)
 def hold_out(markdown,pattern,build,slug):
 	held=[]
 	def hold(match):
