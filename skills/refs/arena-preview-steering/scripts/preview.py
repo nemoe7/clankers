@@ -853,17 +853,8 @@ def poll_inbox(store, pretty=False, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   listing = {"checked_at": None, "pending": []}
-  # Unblocked work outranks waiting: return at once with the list instead of idling.
-  open_tasks = [
-    item
-    for item in store.list_tasks()
-    if item["status"] == "upcoming" and not item["blocked"]
-  ]
-  if open_tasks:
-    listing = store.read()
-    listing["tasks"] = open_tasks
-    print(cli_json(listing, pretty), flush=True)
-    return 0
+  # The wait always runs its span; only a new message or an unblocked task breaks
+  # it, and the check sits inside the loop so a task arriving mid-wait breaks too.
   # One heartbeat a second, so the page can light its dot while the agent waits here.
   store.stamp_polling()
   try:
@@ -875,6 +866,15 @@ def poll_inbox(store, pretty=False, sleeper=None):
         store.mark_reports_agent_seen(
           [item.get("report_id") for item in listing["pending"]]
         )
+        return 0
+      open_tasks = [
+        item
+        for item in store.list_tasks()
+        if item["status"] == "upcoming" and not item["blocked"]
+      ]
+      if open_tasks:
+        listing["tasks"] = open_tasks
+        print(cli_json(listing, pretty), flush=True)
         return 0
       if index + 1 < POLL_MAX_LOOPS:
         sleeper(POLL_INTERVAL)

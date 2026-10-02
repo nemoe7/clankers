@@ -60,6 +60,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Gate threshold**: The debug gate's call tally now blocks at 20 bash calls since the owner's last message while the inbox stays pending. The count drops from 50 on owner note `9c5b08b`.
+- **Poll span**: The poll wait always runs its 900 second span. Only a new message or an unblocked task breaks it, and a task that appears mid-wait breaks it too, printing the task list. Owner notes `04ca4e0` and `359c909`.
 - **Poll restart command**: The poll error names the script on PATH and the recorded port, so the agent restarts the server as written.
 - **PR check reminder**: A rotating tail line covers a pull request whose checks never ran: rebase onto `main` first.
 - **Push gate**: A `git push` blocks while a note or answer awaits an ack, whatever the call count. The count threshold still holds every other command.
