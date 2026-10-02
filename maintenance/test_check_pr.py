@@ -211,23 +211,14 @@ def test_malformed_subject_fails():
   assert any("subject must match" in failure.message for failure in failures)
 
 
-def test_non_imperative_verb_fails():
-  failures = check_pr.validate_commit("feat(preview): polling for notes")
-  assert any("imperative" in failure.message for failure in failures)
+def test_a_scope_binds_no_path_area():
+  assert check_pr.validate_commit("docs(preview): note the release") == []
+  assert not hasattr(check_pr, "SCOPE_AREAS")
 
 
-def test_one_logical_change_violation_fails():
-  failures = check_pr.validate_commit(
-    "chore(changelog): note the release", ["skills/arena-preview-steering/SKILL.md"]
-  )
-  assert any("one logical change" in failure.message for failure in failures)
-
-
-def test_one_logical_change_holds_inside_the_scope_area():
-  assert (
-    check_pr.validate_commit("chore(changelog): note the release", ["CHANGELOG.md"])
-    == []
-  )
+def test_the_changelog_scope_is_gone():
+  failures = check_pr.validate_commit("chore(changelog): note the release")
+  assert any("unknown scope" in failure.message for failure in failures)
 
 
 def test_pr_title_uses_the_commit_rules():

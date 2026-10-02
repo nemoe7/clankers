@@ -29,6 +29,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Changelog headings**: The house rule states the date heading form `## YYYY-MM-DD`. The bracket and the repeated date go, and the 24 headings follow.
 
+#### maintenance
+
+- **Commit scope areas**: The pull request gate no longer binds a commit scope to a path list, and the `SCOPE_AREAS` map goes. One house commit carries a rule file, its ledger entry and its measurement row, so a bound scope rejected a compliant commit.
+- **Changelog scope**: `changelog` leaves the allowed scope list. Its area was one file, so it could never carry a ledger entry beside the change.
+
 #### workflows
 
 - **CI split**: `validate.yml` becomes `ci.yml`, named CI, with independent `quality`, `tests` and `preview-tests` jobs. It runs on pull requests and after every push to `main`.

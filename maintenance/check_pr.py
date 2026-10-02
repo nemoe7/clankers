@@ -45,7 +45,6 @@ ALLOWED_SCOPES = frozenset(
     "arena-preview",
     "archive",
     "automations",
-    "changelog",
     "chatgpt",
     "check",
     "ci",
@@ -81,24 +80,6 @@ ALLOWED_SCOPES = frozenset(
     "workflows",
   )
 )
-
-# Deterministic one-logical-change map: a commit that declares one of these scopes may only
-# touch the listed paths. Scopes without a map name no single area, so their paths stay open.
-SCOPE_AREAS = {
-  "changelog": ("CHANGELOG.md",),
-  "docs": ("docs/", "README.md", "rules/README.md"),
-  "gpt-plugins": ("gpt-plugins/",),
-  "preview": (
-    "skills/refs/arena-preview-steering/",
-    "skills/arena-preview-steering/",
-    ".agents/skills/arena-preview-steering/",
-    "maintenance/minify.py",
-    "maintenance/check_minify.py",
-  ),
-  "rules": ("rules/", "ARENA.md"),
-  "userscript": ("userscripts/",),
-  "userscripts": ("userscripts/",),
-}
 
 # Base verbs that end in -ed, -ing or -s; the imperative check must not read them as inflected.
 IMPERATIVE_EXCEPTIONS = frozenset(
@@ -202,29 +183,12 @@ def validate_subject(subject: str, where: str) -> list[Failure]:
   return failures
 
 
-def validate_commit(
-  message: str, paths: list[str] | None = None, where: str = "commit"
-) -> list[Failure]:
-  """Validate one commit message, and its paths when the scope maps to one area."""
+def validate_commit(message: str, where: str = "commit") -> list[Failure]:
+  """Validate one commit message against the subject contract."""
   lines = [line for line in message.splitlines() if line.strip()]
   if len(lines) != 1:
     return [Failure(where, "use one subject line and no commit body")]
-  failures = validate_subject(lines[0], where)
-  scope = SUBJECT_RE.fullmatch(lines[0])
-  if paths is None or not scope or not scope.group("scope"):
-    return failures
-  areas = SCOPE_AREAS.get(scope.group("scope") or "")
-  if not areas:
-    return failures
-  for path in paths:
-    if not path.startswith(areas):
-      failures.append(
-        Failure(
-          where,
-          f"path {path!r} is outside the {scope.group('scope')} area, so the commit is not one logical change",
-        )
-      )
-  return failures
+  return validate_subject(lines[0], where)
 
 
 def _section_lines(lines: list[str], start: int, end: int) -> list[tuple[int, str]]:
@@ -398,23 +362,16 @@ def _git(*arguments: str) -> str:
   return result.stdout
 
 
-def commits_in_range(revision_range: str) -> list[tuple[str, str, list[str]]]:
-  """Return (sha, message, paths) for each commit in the revision range, oldest first."""
+def commits_in_range(revision_range: str) -> list[tuple[str, str]]:
+  """Return (sha, message) for each commit in the revision range, oldest first."""
   output = _git("log", "--reverse", "--format=%H%x1f%B%x1e", revision_range)
-  commits: list[tuple[str, str, list[str]]] = []
+  commits: list[tuple[str, str]] = []
   for record in output.split("\x1e"):
     record = record.strip("\n")
     if not record.strip():
       continue
     sha, _, message = record.partition("\x1f")
-    paths = [
-      line
-      for line in _git(
-        "diff-tree", "--no-commit-id", "--name-only", "-r", sha
-      ).splitlines()
-      if line.strip()
-    ]
-    commits.append((sha, message.strip("\n"), paths))
+    commits.append((sha, message.strip("\n")))
   return commits
 
 
@@ -427,8 +384,8 @@ def check(
   """Collect every contract failure for the given inputs."""
   failures: list[Failure] = []
   if revision_range:
-    for sha, message, paths in commits_in_range(revision_range):
-      failures.extend(validate_commit(message, paths, where=f"commit {sha[:7]}"))
+    for sha, message in commits_in_range(revision_range):
+      failures.extend(validate_commit(message, where=f"commit {sha[:7]}"))
   if pr_title is not None:
     failures.extend(validate_subject(pr_title, "PR title"))
   if body_file is not None:
