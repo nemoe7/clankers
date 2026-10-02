@@ -1,0 +1,317 @@
+name: Artifacts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gpt-plugins/**'
+      - 'rules/**'
+      - '!rules/refs/**'
+      - 'maintenance/publish_clankers_rules.py'
+      - 'maintenance/check_publish_clankers_rules.py'
+      - '.github/workflows/artifacts.yml'
+  pull_request:
+    branches: ['**']
+    paths:
+      - 'gpt-plugins/**'
+      - '.github/workflows/artifacts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # One trigger feeds two jobs with different path interests, so a small job decides which
+  # side has work. It uses the PR base for pull requests, the previous push for pushes, and a
+  # fixed answer for manual runs: package from main, never publish the Gist.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      package: ${{ steps.detect.outputs.package }}
+      rules: ${{ steps.detect.outputs.rules }}
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect Changed Path Groups
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_REF: ${{ github.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -eu
+          package=false
+          rules=false
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$EVENT_REF" = "refs/heads/main" ]; then
+              package=true
+            fi
+          else
+            if [ "$EVENT_NAME" = "pull_request" ]; then
+              base="$PR_BASE"
+            else
+              base="$PUSH_BEFORE"
+            fi
+            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+              # A missing base runs both checks instead of skipping silently.
+              package=true
+              rules=true
+            else
+              files=$(git diff --name-only "$base" HEAD)
+              printf '%s\n' "$files"
+              for file in $files; do
+                case "$file" in
+                  gpt-plugins/* | .github/workflows/artifacts.yml) package=true ;;
+                esac
+                case "$file" in
+                  rules/refs/*) ;;
+                  rules/* | maintenance/publish_clankers_rules.py | maintenance/check_publish_clankers_rules.py | .github/workflows/artifacts.yml) rules=true ;;
+                esac
+              done
+            fi
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "rules=$rules" >> "$GITHUB_OUTPUT"
+          printf 'package=%s rules=%s\n' "$package" "$rules"
+
+  validate-gpt-plugins:
+    name: Validate GPT Plugins
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      # The original workflow cancelled an older run in this group; keep that at job level.
+      group: Validate-GPT-Plugins-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch The Pull Request Base
+        env:
+          # The base ref reaches the shell through the environment, never through a
+          # template expansion inside the run block.
+          BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags origin "$BASE_REF"
+
+      - name: Set Up Python
+        uses: actions/setup-python@v7
+        with:
+          # Keep the manifest validation on the interpreter the other workflows use.
+          python-version: "3.11"
+
+      - name: Cache Pip Downloads
+        uses: actions/cache@v6
+        with:
+          # There is no requirements file: the pins live in this workflow, so the workflow
+          # itself is the honest cache key and any dependency change busts it.
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-gpt-plugins-${{ hashFiles('.github/workflows/artifacts.yml') }}
+          restore-keys: ${{ runner.os }}-pip-gpt-plugins-
+
+      - name: Install Validation Dependencies
+        run: python -m pip install jsonschema PyYAML
+
+      # The required behaviour of this file is part of the check: the triggers, the job
+      # conditions, the version-bump flag, the archive name and the artifact name are assertions.
+      - name: Validate This Workflow Definition
+        run: |
+          python - <<'PY'
+          import yaml
+
+          path = ".github/workflows/artifacts.yml"
+
+          with open(path, encoding="utf-8") as handle:
+            workflow = yaml.safe_load(handle)
+
+          triggers = workflow.get("on", workflow.get(True))
+          push_paths = triggers["push"]["paths"]
+          pull_paths = triggers["pull_request"]["paths"]
+
+          assert triggers["push"]["branches"] == ["main"], triggers["push"]
+          for entry in ("gpt-plugins/**", "rules/**", "!rules/refs/**", path):
+            assert entry in push_paths, f"push paths miss {entry}: {push_paths}"
+          assert pull_paths == ["gpt-plugins/**", path], f"pull_request paths are {pull_paths}"
+          assert "workflow_dispatch" in triggers, "workflow_dispatch is missing"
+
+          jobs = workflow["jobs"]
+          assert jobs["validate-gpt-plugins"]["if"] == (
+            "github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'"
+          ), jobs["validate-gpt-plugins"]["if"]
+          assert jobs["package-gpt-plugins"]["if"] == (
+            "needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main'"
+            " && github.event_name != 'pull_request'"
+          ), jobs["package-gpt-plugins"]["if"]
+          assert jobs["publish-clankers-rules"]["if"] == (
+            "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+            " && needs.changes.outputs.rules == 'true'"
+          ), jobs["publish-clankers-rules"]["if"]
+          assert jobs["package-gpt-plugins"]["needs"] == "changes", "the package job needs the path report"
+          assert jobs["publish-clankers-rules"]["needs"] == "changes", "the publish job needs the path report"
+
+          validate_runs = " ".join(str(step.get("run", "")) for step in jobs["validate-gpt-plugins"]["steps"])
+          assert "check_gpt_plugins.py" in validate_runs
+          assert "--base-manifest" in validate_runs
+          assert "--self-check" in validate_runs
+          assert not any(
+            str(step.get("run", "")).strip().startswith("zip -r ")
+            for step in jobs["validate-gpt-plugins"]["steps"]
+          )
+          assert not any(
+            str(step.get("uses", "")).startswith("actions/upload-artifact")
+            for step in jobs["validate-gpt-plugins"]["steps"]
+          )
+
+          steps = jobs["package-gpt-plugins"]["steps"]
+          upload = next(step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact"))
+
+          assert upload["uses"] == "actions/upload-artifact@v7", upload["uses"]
+          assert upload["with"]["path"] == "gpt-plugins.zip", upload["with"]["path"]
+          assert upload["with"]["archive"] is False, upload["with"]["archive"]
+          assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
+          assert any(
+            str(step.get("run", "")).strip()
+            == "zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills"
+            for step in steps
+          ), "no packaging step"
+
+          publish_runs = " ".join(str(step.get("run", "")) for step in jobs["publish-clankers-rules"]["steps"])
+          assert "check_publish_clankers_rules.py" in publish_runs
+          assert "publish_clankers_rules.py" in publish_runs
+
+          print(f"{path}: PR validation, main package, rules publish, and version-bump assert are as required.")
+          PY
+
+      - name: Check Version Comparison
+        run: python maintenance/check_gpt_plugins.py --self-check
+
+      - name: Validate The Plugin Collection
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
+          changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills)"
+          if [ -n "$changed" ]; then
+            python maintenance/check_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json"
+          else
+            python maintenance/check_gpt_plugins.py
+          fi
+
+  package-gpt-plugins:
+    name: Package GPT Plugins
+    needs: changes
+    if: needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      # The original workflow cancelled an older run in this group; keep that at job level.
+      group: Package-GPT-Plugins-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+
+      - name: Set Up Python
+        uses: actions/setup-python@v7
+        with:
+          # Keep the manifest validation on the interpreter the other workflows use.
+          python-version: "3.11"
+
+      - name: Cache Pip Downloads
+        uses: actions/cache@v6
+        with:
+          # There is no requirements file: the pins live in this workflow, so the workflow
+          # itself is the honest cache key and any dependency change busts it.
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-gpt-plugins-${{ hashFiles('.github/workflows/artifacts.yml') }}
+          restore-keys: ${{ runner.os }}-pip-gpt-plugins-
+
+      - name: Install Validation Dependencies
+        run: python -m pip install jsonschema PyYAML
+
+      - name: Validate This Workflow Definition
+        run: |
+          python - <<'PY'
+          import yaml
+
+          path = ".github/workflows/artifacts.yml"
+
+          with open(path, encoding="utf-8") as handle:
+            workflow = yaml.safe_load(handle)
+
+          triggers = workflow.get("on", workflow.get(True))
+          push_paths = triggers["push"]["paths"]
+
+          assert triggers["push"]["branches"] == ["main"], triggers["push"]
+          for entry in ("gpt-plugins/**", "rules/**", "!rules/refs/**", path):
+            assert entry in push_paths, f"push paths miss {entry}: {push_paths}"
+
+          jobs = workflow["jobs"]
+          assert jobs["package-gpt-plugins"]["if"] == (
+            "needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main'"
+            " && github.event_name != 'pull_request'"
+          ), jobs["package-gpt-plugins"]["if"]
+
+          steps = jobs["package-gpt-plugins"]["steps"]
+          upload = next(step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact"))
+
+          assert upload["uses"] == "actions/upload-artifact@v7", upload["uses"]
+          assert upload["with"]["path"] == "gpt-plugins.zip", upload["with"]["path"]
+          assert upload["with"]["archive"] is False, upload["with"]["archive"]
+          assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
+          assert any(
+            str(step.get("run", "")).strip()
+            == "zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills"
+            for step in steps
+          ), "no packaging step"
+
+          print(f"{path}: the package job keeps the archive and artifact assertions.")
+          PY
+
+      - name: Validate The Plugin Collection
+        run: python maintenance/check_gpt_plugins.py
+
+      - name: Package The Collection
+        run: zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills
+
+      - name: Verify The Archive
+        run: |
+          unzip -l gpt-plugins.zip
+          python maintenance/check_gpt_plugins.py --archive gpt-plugins.zip
+
+      - name: Upload The Plugin Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-plugins.zip
+          archive: false
+
+  publish-clankers-rules:
+    name: Publish Clankers Rules
+    needs: changes
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      # A later main push supersedes an older pending run; never interrupt a running reconciliation.
+      group: publish-clankers-rules-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check Out The Pushed Rules
+        uses: actions/checkout@v7
+      - name: Check Reconciliation Fixtures Without GitHub Credentials
+        run: python3 maintenance/check_publish_clankers_rules.py
+      - name: Reconcile Secret Clankers-Rules Gist
+        # GIST_TOKEN needs Gists:write and repository Variables:write. The default
+        # GITHUB_TOKEN is used only by checkout; it cannot manage repository variables.
+        env:
+          GH_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ vars.GIST_ID }}
+        run: python3 maintenance/publish_clankers_rules.py

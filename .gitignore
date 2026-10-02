@@ -4,5 +4,5 @@ __pycache__/
 reports/
 node_modules/
 
-# Packaged plugin archive, built by .github/workflows/package-gpt-plugins.yml
+# Packaged plugin archive, built by .github/workflows/artifacts.yml
 gpt-plugins.zip

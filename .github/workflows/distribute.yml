@@ -4,6 +4,19 @@
 # Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
 name: Distribute
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'rules/ARENA.md'
+      - 'skills/arena-preview-steering/**'
+      - 'github/workflows/gemini-release.yml'
+      - 'github/workflows/gemini_release.py'
+      - '.github/workflows/distribute.yml'
+  schedule:
+    # Daily reconciliation: 03:17 UTC stays away from the top of the hour, when
+    # scheduled runs queue behind peak load. The schedule repairs missed, failed
+    # and partial synchronization in both target groups.
+    - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       repos:

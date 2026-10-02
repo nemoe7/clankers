@@ -105,8 +105,9 @@ if os.environ.get("CHECK_CURRENT_RULE_NAMES") == "1":
   names, collisions = sync.collect_sources(ROOT)
   assert set(names) == EXPECTED and not collisions, (set(names) ^ EXPECTED, collisions)
   assert all(names[name] for name in EXPECTED)
-workflow = (ROOT / ".github/workflows/publish-clankers-rules.yml").read_text()
+workflow = (ROOT / ".github/workflows/artifacts.yml").read_text()
 for marker in (
+  "name: Artifacts",
   "branches: [main]",
   "- 'rules/**'",
   "- '!rules/refs/**'",
@@ -117,9 +118,22 @@ for marker in (
   "GIST_ID: ${{ vars.GIST_ID }}",
   "run: python3 maintenance/check_publish_clankers_rules.py",
   "run: python3 maintenance/publish_clankers_rules.py",
+  "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'",
 ):
   assert marker in workflow, marker
 assert "contents: write" not in workflow and "actions: write" not in workflow
+# The publish step lives in the publish job only, and no other job sees the Gist token.
+publish_job = workflow.split("publish-clankers-rules:", 1)[1]
+for marker in (
+  "GH_TOKEN: ${{ secrets.GIST_TOKEN }}",
+  "GIST_ID: ${{ vars.GIST_ID }}",
+  "run: python3 maintenance/publish_clankers_rules.py",
+):
+  assert marker in publish_job, marker
+assert "secrets.GIST_TOKEN" not in workflow.split("publish-clankers-rules:", 1)[0], (
+  "only the publish job may read the Gist token"
+)
+assert "workflow_dispatch" in workflow, "the manual trigger survives the merge"
 
 with tempfile.TemporaryDirectory() as tmp:
   root = Path(tmp)

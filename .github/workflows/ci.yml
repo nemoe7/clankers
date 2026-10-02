@@ -55,7 +55,7 @@ jobs:
       - name: Install Maintenance Dependencies
         run: |
           VERSION=$(sed -n 's/^required-version = "\(.*\)"$/\1/p' ruff.toml)
-          python -m pip install tiktoken markdown-it-py python-minifier==3.3.0 "ruff==$VERSION"
+          python -m pip install tiktoken markdown-it-py python-minifier==3.3.0 "pyyaml==6.0.3" "ruff==$VERSION"
 
       - name: Set Up Node
         uses: actions/setup-node@v7
@@ -94,6 +94,9 @@ jobs:
       - name: Check The Rules Gist Publisher
         run: python3 maintenance/check_publish_clankers_rules.py
 
+      - name: Check The Workflow Set
+        run: python maintenance/check_workflows.py
+
       - name: Check Userscript Bundles
         run: |
           node userscripts/arena.user.js
@@ -123,7 +126,7 @@ jobs:
           restore-keys: ${{ runner.os }}-pip-tests-
 
       - name: Install Test Dependencies
-        run: python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1 pytest-xdist==3.6.1
+        run: python -m pip install markdown-it-py python-minifier==3.3.0 "pyyaml==6.0.3" pytest==9.1.1 pytest-xdist==3.6.1
 
       - name: Set Up Node
         uses: actions/setup-node@v7
@@ -218,7 +221,7 @@ jobs:
       - name: Install Preview Dependencies
         if: steps.preview.outputs.run == 'true'
         run: |
-          python -m pip install markdown-it-py python-minifier==3.3.0
+          python -m pip install markdown-it-py python-minifier==3.3.0 pytest==9.1.1
           npm ci
 
       - name: Run Preview Checks

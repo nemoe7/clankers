@@ -6,7 +6,19 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-02
 
+### Added
+
+#### workflows
+
+- **Pull request gate**: `pr-check.yml` checks each commit against `rules/COMMIT-SPEC.txt`, the pull request title, the five-heading body and the vendored Simplified Technical English linter. A pull request records its rules in `.github/pull_request_template.md`.
+
 ### Changed
+
+#### workflows
+
+- **CI split**: `validate.yml` becomes `ci.yml`, named CI, with independent `quality`, `tests` and `preview-tests` jobs. It runs on pull requests and after every push to `main`.
+- **Artifacts merge**: `package-gpt-plugins.yml` and `publish-clankers-rules.yml` become `artifacts.yml`, named Artifacts. A `changes` job detects the affected path group, and two jobs keep the packaging and publishing behavior.
+- **Distribution triggers**: `distribute.yml` runs on a relevant `main` change, on a daily schedule at 03:17 UTC, and on manual dispatch. The two jobs and the two override inputs stay.
 
 #### preview
 
@@ -15,6 +27,15 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Push gate**: A `git push` blocks while a note or answer awaits an ack, whatever the call count. The count threshold still holds every other command.
 
 ### Fixed
+
+#### workflows
+
+- **Preview tests**: The `preview-tests` job installs `pytest`, which `maintenance/check_minify.py` runs on the minified runtime. The workflow contract check now refuses a job that runs the script without the install.
+
+#### preview
+
+- **PR checks reminder**: A rotating tail line names the `gh pr checks` command for pull request checks.
+- **Gate chain**: The count gate leaves a shell quiet when its command line holds an inbox read. A chain that starts with `cd` reaches the read, and the push rule still runs for every push. The installer carries the same guard into the source, live and installed copies.
 
 #### userscripts
 
