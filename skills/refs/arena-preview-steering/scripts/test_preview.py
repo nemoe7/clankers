@@ -396,10 +396,21 @@ def test_http_boundaries():
     )
     store.publish("first", "First <report>", source)
     store.publish("second", "Second", source)
+    published_stamp = store.report("second")["published_at"]
     source.write_text("# Updated\n\n**Bold**", encoding="utf-8")
     store.publish("second", "Second revised", source)
     assert len(store.state()["reports"]) == 2
     assert store.report("second")["markdown"] == source.read_text()
+    # A republish moves the edit stamp; the publish date stays at the first one.
+    assert published_stamp, "the first publish keeps its date"
+    assert store.report("second")["published_at"] == published_stamp
+    assert store.report("second")["updated_at"] >= published_stamp
+    assert {
+      report["id"] for report in store.state()["reports"] if report["published_at"]
+    } >= {
+      "first",
+      "second",
+    }
     assert store.read()["pending"] == []
     assert store.state()["last_check"]
     app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
@@ -572,6 +583,8 @@ def test_http_boundaries():
       assert status == 200
       rendered = json.loads(rendered)
       assert rendered["fields"] == 0
+      # The rendered report carries both dates for the status line.
+      assert rendered["published"] and rendered["edited"]
       assert "<table>" in rendered["html"] and "<script>" not in rendered["html"]
       assert 'href="javascript:' not in rendered["html"]
       assert request("GET", "/api/reports/first/export")[0] == 404

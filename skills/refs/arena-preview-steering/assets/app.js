@@ -1077,8 +1077,14 @@ async function loadReport(force = false) {
     }
     $('#report-form').dataset.fields = result.fields;
     const report = lastState?.reports.find(item => item.id === id);
+    // One date stamp at a time: a republished report shows Edited and drops the Published
+    // line, so the owner reads the newest event, not both. Owner's note on the feature.
+    const stampSource = result.edited && result.published && result.edited !== result.published
+      ? `Edited ${time(result.edited)}`
+      : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
     $('#report-status').textContent =
-      `Report · ${result.fields} field${result.fields === 1 ? '' : 's'}` + submissionParts(report);
+      `Report · ${result.fields} field${result.fields === 1 ? '' : 's'}` +
+      (stampSource ? ` · ${stampSource}` : '') + submissionParts(report);
     checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;

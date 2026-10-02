@@ -94,6 +94,7 @@ let state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
 let stateFails = false;
 let reportFields = 0;
 let reportRevision = '2026-09-22T12:00:00.100000+00:00';
+let reportPublished = '2026-09-22T12:00:00.100000+00:00';
 let reportConflict = false;
 let reportHtmlWait = null;
 let reportSubmitWait = null;
@@ -282,7 +283,10 @@ const context = {
     if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
     const renderedRevision = reportRevision;
     if (reportHtmlWait) await reportHtmlWait;
-    return response({ html: '<h1>Report</h1>', fields: reportFields, revision: renderedRevision });
+    return response({
+      html: '<h1>Report</h1>', fields: reportFields, revision: renderedRevision,
+      published: reportPublished, edited: renderedRevision
+    });
   }
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -983,7 +987,9 @@ test('preview client', async (t) => {
     assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     await get('#refresh-report').events.click();
     await tick();
-    assert.match(get('#report-status').textContent, /^Report · 3 fields · Submission /);
+    assert.match(get('#report-status').textContent, /^Report · 3 fields · Published /,
+      'a report never republished shows the publish stamp');
+    assert.match(get('#report-status').textContent, /· Submission /);
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it red');
@@ -1024,6 +1030,11 @@ test('preview client', async (t) => {
     reportConflict = false;
     await get('#refresh-report').events.click(); await tick();
     assert.equal(get('#report').dataset.revision, reportRevision, 'explicit refresh loads a new revision');
+    reportPublished = '2026-09-22T11:59:59.000000+00:00';
+    await get('#refresh-report').events.click(); await tick();
+    assert.match(get('#report-status').textContent, /Edited /, 'a republished report shows the edit stamp');
+    assert.doesNotMatch(get('#report-status').textContent, /Published /,
+      'the edit stamp replaces the publish stamp instead of joining it');
     releaseSubmission = undefined;
     reportSubmitWait = new Promise(resolve => { releaseSubmission = resolve; });
     beforeSendingUpdate = get('#report').renders;
