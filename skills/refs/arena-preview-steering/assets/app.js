@@ -975,7 +975,7 @@ function submissionParts(report) {
 // The read stamp is report-level, so it counts only when it lands after the latest answer.
 function submissionSeenAt(report) {
   const seen = report.agent_seen_at;
-  return seen && seen > report.latest_answer_at ? seen : '';
+  return seen && seen >= report.latest_answer_at ? seen : '';
 }
 function submissionState(report) {
   if (report.latest_answer_acknowledged_at) return 'said';
