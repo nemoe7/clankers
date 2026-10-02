@@ -199,18 +199,18 @@ strip_block "$PATH_MARKER"
   cat >> "$PROFILE" <<'EOF' || fail "cannot append to $PROFILE"
 
 # arena-preview-path
-_arena_preview_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [ -n "$_arena_preview_root" ]; then
-  _arena_preview_scripts="$_arena_preview_root/.agents/skills/arena-preview-steering/scripts"
-  if [ -x "$_arena_preview_scripts/arena-preview" ]; then
-    case ":$PATH:" in
-      *":$_arena_preview_scripts:"*) ;;
-      *) export PATH="$_arena_preview_scripts:$PATH" ;;
-    esac
-  fi
+# The root is pinned at install time: a source-time lookup reads the cwd of the
+# sourcing shell, so a shell outside the checkout would miss the command.
+_arena_preview_scripts="__ARENA_PREVIEW_ROOT__/.agents/skills/arena-preview-steering/scripts"
+if [ -x "$_arena_preview_scripts/arena-preview" ]; then
+  case ":$PATH:" in
+    *":$_arena_preview_scripts:"*) ;;
+    *) export PATH="$_arena_preview_scripts:$PATH" ;;
+  esac
 fi
-unset _arena_preview_root _arena_preview_scripts
+unset _arena_preview_scripts
 EOF
+sed -i "s|__ARENA_PREVIEW_ROOT__|$REPO_ROOT|" "$PROFILE" || fail "cannot pin the PATH root in $PROFILE"
 
 echo "arena-preview installer: ok; state: $REPO_ROOT/$STATE_REL, ignored through $GLOBAL_IGNORE; command: arena-preview in new Bash shells"
 

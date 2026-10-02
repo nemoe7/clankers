@@ -53,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Push gate**: A `git push` blocks while a note or answer awaits an ack, whatever the call count. The count threshold still holds every other command.
 - **Gate trap message**: The blocked command gate prints ``READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>``. The old line named read only, while a read but unacked note gates commands too.
 - **Path reminder**: The rotating tails gain one entry: don't use the full script path, run `arena-preview` instead. The installer puts that command on PATH.
+- **PATH block**: The installer PATH entry resolved the repo root when the profile sourced, so a shell outside the checkout missed the command. The block pins the root at install time through a placeholder the installer substitutes, in all three install.sh copies.
 
 ### Fixed
 
