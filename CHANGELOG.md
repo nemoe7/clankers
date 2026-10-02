@@ -19,6 +19,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Report dates**: The report status line shows one date stamp. A report never republished shows its publish time, and the first republish swaps the same place to the edit time. The store keeps the first `published_at` for each id.
 
+#### userscripts
+
+- **Chat speech bubble**: The tab title shows a speech bubble while the agent speaks in regular chat. Streaming `data-agent-word` spans under an open turn raise the bubble, and a settled message drops it after the hold. Version 1.1.34.
+
 ### Changed
 
 #### arena
