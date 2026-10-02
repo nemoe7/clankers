@@ -4,7 +4,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
-## [2026-10-02] - 2026-10-02
+## 2026-10-02
 
 ### Changed
 
@@ -20,7 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Poll detection**: The tab title matches a poll call as the script name followed by `poll`. A `polling` or `polls` word in another command no longer shows the waiting emoji. The Arena bundle moves to `1.1.30`.
 
-## [2026-10-01] - 2026-10-01
+## 2026-10-01
 
 ### Added
 
@@ -112,7 +112,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Prose lint**: Comments in `maintenance/check_minify.py` use periods instead of semicolons. `userscripts/README.md` splits a long sentence. The full prose check passes.
 
-## [2026-09-30] - 2026-09-30
+## 2026-09-30
 
 ### Added
 
@@ -184,7 +184,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **CHANGELOG domains**: Every date groups its changes under domain headings. The headings are rules, preview, gpt-plugins, userscripts, workflows, automations, maintenance and docs. AGENTS.md requires the shape.
 
-## [2026-09-29] - 2026-09-29
+## 2026-09-29
 
 ### Added
 
@@ -292,7 +292,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Userscripts Gist retired**: `.github/workflows/publish-userscripts.yml`, `maintenance/publish_userscripts.py` and `maintenance/check_publish_userscripts.py` leave the repository. The rules Gist publisher and its check stay, and `validate.yml` runs only that check. The five userscripts point `@updateURL` and `@downloadURL` at this repository's raw files.
 
-## [2026-09-28] - 2026-09-28
+## 2026-09-28
 
 ### Added
 
@@ -312,7 +312,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Steering prose cleanup**: Use `arena-preview` for ARENA inbox reads and the end-turn wait. Drop duplicate rules and report text plus the primary-skill `--state-dir` line. Keep the raw Python fallback.
 - **ARENA compaction retention**: Request verbatim preservation in context summaries. Reread if a summary omits or changes it. Arena host reinjection is the only guarantee, so the request is best-effort.
 
-## [2026-09-27] - 2026-09-27
+## 2026-09-27
 
 ### Changed
 
@@ -337,7 +337,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Edited report dot dropped**: The Reports tab pip hides a report the owner already opened. The select star still marks changed text. `reports.ever_seen` carries the open across a republish, with a migration backfill, in refs and both live copies.
 - **Five-file cap dropped**: The composer stage, the multipart note route and the skill docs lose the five-file count. The 50MB per-file ceiling and the multipart body bound stay (`MAX_NOTE_UPLOAD` 250,000,000 + `MAX_BODY`). Six-file HTTP and chip tests added.
 
-## [2026-09-26] - 2026-09-26
+## 2026-09-26
 
 ### Added
 
@@ -379,7 +379,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Form-wait inbox poll**: Drop `ask_user` while a report form awaits answers. Loop `sleep 10` and inbox `read`. Break on a new message or after 100 loops.
 
-## [2026-09-25] - 2026-09-25
+## 2026-09-25
 
 ### Added
 
@@ -491,7 +491,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Gist index fix**: `publish_clankers_rules.py` reads the Contents section and emits File and Purpose only, so the gist's Files table shows real purposes again.
 - **Audit fixes**: The Arena Git/Hub cell gains "Planned list before commits." and "GitHub reconnect after one retry". Both are live Arena clauses that earlier squashes lost.
 
-## [2026-09-24] - 2026-09-24
+## 2026-09-24
 
 ### Added
 
@@ -512,7 +512,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **GPT Handoff audits**: Activate audit mode for reviews of agent-produced work: code, human-facing docs, agent-created branches, PRs, commits, implementations and follow-up audits. Always route code and docs audits through Ponytail, then produce only the GPT Handoff format. Keep SOLID conditional on need, exclude audit setup and methodology, check the actual-model marker, and skip the skill for a normal non-agent task.
 - Gates green.
 
-## [2026-09-23] - 2026-09-23
+## 2026-09-23
 
 ### Added
 
@@ -619,7 +619,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Docs audit fixes**: The audit answers approve all eight rows. `rules/README.md` L103 drops the actor narrative and the exploration metaphor while keeping both verification dates. `arena-quirks.md` turns the recovery steps into proper sentences and drops the stray period, the actor narrative and one aphorism.
 
-## [2026-09-22] - 2026-09-22
+## 2026-09-22
 
 ### Changed
 
@@ -700,7 +700,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Timezone fix**: The state surface cuts stamps to seconds and drops the UTC offset, so `Date` read those digits as local time outside UTC. `time()` pins a seconds-only ISO stamp to UTC before the local formatter sees it, so receipts, last-check, tasks and uploads convert into the viewer's timezone. The header clock needed no change, since it formats through `toISOString()`.
 - **Null-tasks copy fix**: `Store.tasks()` returns `None` before any task exists, so `/api/state` sends `"tasks": null` while a session holds notes only. The page cached that value and the shift-click guard blocked the copy, so `restoreCopy` defaults the queue to two empty divs. The client harness mocked the empty queue and crashed on the empty clipboard, which was the red gate on the parent branch.
 
-## [2026-09-21] - 2026-09-21
+## 2026-09-21
 
 ### Added
 
@@ -794,7 +794,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Four preview fixes together**: `/api/state` hands the page its write token, so the save button lands after a sandbox reset with no browser refresh. The retry's page reader accepts either quote style because the build ships minified, and the token rides the page as an HTML attribute. The log filter drops the native dropdown chrome, a code block carries its background wherever markdown renders, and a paragraph carries no `<br>`.
 
-## [2026-09-20] - 2026-09-20
+## 2026-09-20
 
 ### Added
 
@@ -854,7 +854,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The ntfy transport with page-fetch polling and local ingestion logs retires. So does the report pipeline's force-added local `chore(reports): hold the local records` commit that never pushed and undid itself next turn.
 
-## [2026-09-19] - 2026-09-19
+## 2026-09-19
 
 ### Added
 
@@ -904,7 +904,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Compression item 5 in the README, the constitution, maintenance item 10 and both Baselines paragraphs drop the rest-of-file squash wording. Historical exception notes that name the old item 5 stand as the record.
 
-## [2026-09-18] - 2026-09-18
+## 2026-09-18
 
 ### Added
 
@@ -969,7 +969,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Pull always**: `skills/arena-live-steering` drops call-shape sampling. It pulls at turn start, every reasoning block, before and after every tool call, and before the turn ends.
 
-## [2026-09-17] - 2026-09-17
+## 2026-09-17
 
 ### Added
 
@@ -1010,7 +1010,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `skills/arena-live-steering` removes `scripts/dns_steering.py`, `scripts/ntfy_relay.py` and the `dns-txt` metadata. It checks at every reasoning block, every three tool calls and the turn end, and never reads immediately before a blocking call.
 - The DNS relay leaves as measured and removed rather than dropped: the page-fetch path reads the topic directly at the new cadence. A relay needs an unreliable preview tab that fails silently. `check_steering.py` defaults `STEERING_FILE` to `reports/STEERING.md` instead of a hardcoded `/home/user` path.
 
-## [2026-09-16] - 2026-09-16
+## 2026-09-16
 
 ### Changed
 
@@ -1088,7 +1088,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The dropped skill's ntfy channel left with it. `REFERENCE.md` keeps a table of every channel measured and not shipped with the evidence. It records that `pypi.org` and `registry.npmjs.org` would work as carriers but lost on one publish per steer.
 - The dailies automation drops LiteLLM per its own section 4: the tracked-PR section, its section-1 row, the `Watched` columns and example leave. The prose count falls to ten, sections renumber 5 → 4, and the work order becomes `1, 2, 3` with the expensive audit last.
 
-## [2026-09-15] - 2026-09-15
+## 2026-09-15
 
 ### Added
 
@@ -1147,7 +1147,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Planning and init-docs retired, squash baseline born**: `skills/planning/` and `workflows/init-docs.md` are gone on request.
 
-## [2026-09-13] - 2026-09-13
+## 2026-09-13
 
 ### Added
 
@@ -1254,7 +1254,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `rules/AGENTS.md` dropped a Constitution-duplicate keep-behavior line and merged two Ruff-restating lines. `rules/ARENA.md` takes nine word-level trims and `rules/CHATGPT-MORE.txt` four telegraphic trims, while `rules/CLINE.md` and `rules/COMMIT_SPEC.txt` deliberately decline.
 - **Adapted skills removed, ponytail rules restored**: Both adapted skills are gone with every reference. The rules keep the 2026-09-09 ponytail-lite set and regain all six 2026-09-11 parts at the voted intensity.
 
-## [2026-09-12] - 2026-09-12
+## 2026-09-12
 
 ### Added
 
@@ -1343,7 +1343,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Root `AGENTS.md` takes the same skeleton and ends its contradiction with `rules/ARENA.md`: the `Never push or open a pull request unless asked` clause drops on request. `## Use` states Arena's handling — including push and PR — wins there. It gains an 8-line `## Constitution` and a `## Verification` listing the four gates in run order plus what `validate.yml` runs.
 - `rules/CLINE.md` and its ref drop `## MCPs` on request — `tokensave`, `context7`, `memory` — taking the orphaned `tokensave` mention and the `Use only if installed/configured; NEVER invent tool names` lead. `rules/README.md` Formatting loses its stale markdownlint claim, since the globs lint 8 files including all five in `rules/refs/`.
 
-## [2026-09-11] - 2026-09-11
+## 2026-09-11
 
 ### Added
 
@@ -1392,7 +1392,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Fixed `rules/refs/AGENTS.md`: dropped the MUST-print bullet the rebuild resurrected. Generic agents are exempt, the deletion stands, and the baseline matches its own methodology note.
 
-## [2026-09-10] - 2026-09-10
+## 2026-09-10
 
 ### Added
 
@@ -1420,7 +1420,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The `workflows/` directory integrates: a new `workflows/README.md` index describes the portable single-file format. Root README gains a layout bullet, root `AGENTS.md` a read-first link. The Workflows section gains updated validator notes, the rules spec gains a contents row with a selection table, and `maintenance/README.md` describes the new checks.
 - `maintenance/check.py` checks the workflows listing against `workflows/README.md`, requires a `description` frontmatter field per workflow, checks internal links in the index, and budgets `workflows/init-docs.md` in `cl100k_base` tokens. The lightweight-repo rule now prohibits further CI workflows, since the old wording read as banning the new directory. No budgeted file changed.
 
-## [2026-09-09] - 2026-09-09
+## 2026-09-09
 
 ### Added
 
@@ -1464,7 +1464,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Fixed stale documentation: `maintenance/` is not dependency-free: root README, spec and `maintenance/README.md` state `check.py` needs `markdown-it-py` and `tiktoken` with an install command. The installer is `rules/apply.py` not `apply_rules.py`. With `.github/workflows/validate.yml` existing, the no-CI claims go and the lightweight rule reads `no further workflows`.
 
-## [2026-09-08] - 2026-09-08
+## 2026-09-08
 
 ### Added
 
