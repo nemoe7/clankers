@@ -90,6 +90,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Gate chain**: The count gate leaves a shell quiet when its command line holds an inbox read. A chain that starts with `cd` reaches the read, and the push rule still runs for every push. The installer carries the same guard into the source, live and installed copies.
 - **Report answer seen dot**: The submission dot compared clipped stamps with a strict greater check. An answer the agent read inside the answer's own second kept the sent dot. The dot now takes an equal stamp as seen. The refs app.js and both minified copies change.
 - **Dead list regexes**: `REPORT_LIST_TAG` and `REPORT_LIST_TAGS` had no callers, and the nested quantifier of the second tripped a redos alert. Both go with their two stale comments.
+- **Content-Disposition file name**: `reply()` put the raw file name into the header, and a CR or LF in a name splits the response. It now replaces CR, LF and double quote with `_` before the header goes out.
 
 #### userscripts
 

@@ -2650,7 +2650,9 @@ def handler(store):
         "connect-src 'self' https:; base-uri 'none'; form-action 'self'",
       )
       if filename:
-        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        # A CR or LF here splits the response header; a quote ends the value early.
+        safe = re.sub(r'[\r\n"]', "_", str(filename))
+        self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
       self.end_headers()
       self.wfile.write(data)
 
