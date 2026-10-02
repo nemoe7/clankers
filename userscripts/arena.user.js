@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.32
+// @version      1.1.33
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1224,6 +1224,21 @@
       return label.parentElement || label;
     }
 
+    // The composer swaps Stop for Send when the turn ends. A loose word match rides out
+    // label drift that broke an exact-match gate before, and finished group labels persist
+    // after a turn, so this signal decides how long the fallback trusts them.
+    function stopSignal(doc) {
+      var buttons =
+        typeof doc.querySelectorAll === "function" ? doc.querySelectorAll("button[aria-label]") : [];
+      var i;
+      for (i = 0; i < buttons.length; i += 1) {
+        if (/\bstop\b/i.test(String(buttons[i].getAttribute("aria-label") || ""))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     // The live status text is the strongest anchor: a thinking row has it and no pulsing icon.
     function liveRow(doc) {
       var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
@@ -1247,15 +1262,16 @@
         return row;
       }
       // A read or edit group never pulses, so its newest label names the action. The bound is
-      // the newest transcript message: during a turn it holds the live group, and a new user
-      // message holds none, so the title clears without depending on any button label.
+      // the newest transcript message plus the stop signal: a finished group label persists
+      // after the turn ends, and without the signal the title would never revert. The match
+      // is a loose stop word, so a label drift weakens the row but never sticks the title.
       var lastMessage = messages.length ? messages[messages.length - 1] : null;
       var groups =
         lastMessage && typeof lastMessage.querySelectorAll === "function"
           ? lastMessage.querySelectorAll(GROUP_LABEL_SELECTOR)
           : [];
       row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
-      return row && knownLabel(liveLabel(row)) ? row : null;
+      return row && knownLabel(liveLabel(row)) && stopSignal(doc) ? row : null;
     }
 
     function knownLabel(text) {
@@ -1383,6 +1399,12 @@
         return null;
       }
       var emoji = heldEmojiFor(doc);
+      // The repository name is a live-turn title, not a permanent label. With no row, no
+      // held emoji and no stop control the turn ended, so the title reverts to its prior
+      // value instead of sitting on the repository name.
+      if (!emoji && !liveRow(doc) && !stopSignal(doc)) {
+        return null;
+      }
       return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
     }
 
@@ -1416,6 +1438,7 @@
       syncTitle: syncTitle,
       liveLabel: liveLabel,
       liveRow: liveRow,
+      stopSignal: stopSignal,
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
       TITLE_PREFIX: TITLE_PREFIX,

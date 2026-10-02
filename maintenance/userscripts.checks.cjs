@@ -486,6 +486,7 @@ function checkTabTitle(api) {
   var syncTitle = api.syncTitle;
   var liveLabel = api.liveLabel;
   var liveRow = api.liveRow;
+  var stopSignal = api.stopSignal;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
@@ -512,9 +513,16 @@ function checkTabTitle(api) {
       querySelector: function (selector) {
         return selector === REPO_LINK_SELECTOR ? element : null;
       },
-      // liveRow now probes the Stop generating button on every path, as a real document allows.
-      querySelectorAll: function () {
-        return [];
+      // The repo-memory docs stand for a page mid-turn: the stop control holds the title up.
+      querySelectorAll: function (selector) {
+        return selector === "button[aria-label]" ? [stopButton("Stop generating")] : [];
+      },
+    };
+  }
+  function stopButton(label) {
+    return {
+      getAttribute: function (name) {
+        return name === "aria-label" ? label : null;
       },
     };
   }
@@ -547,7 +555,7 @@ function checkTabTitle(api) {
     span.parentElement = row;
     var message = {
       querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR && stopGenerating ? [span] : [];
+        return selector === GROUP_LABEL_SELECTOR ? [span] : [];
       },
     };
     return {
@@ -557,7 +565,7 @@ function checkTabTitle(api) {
       },
       querySelectorAll: function (selector) {
         if (selector === MESSAGE_SELECTOR) {
-          return stopGenerating ? [message] : [];
+          return [message];
         }
         if (selector === GROUP_LABEL_SELECTOR) {
           return [span];
@@ -602,9 +610,11 @@ function checkTabTitle(api) {
         return selector === "button" ? button : null;
       },
     };
+    // The finished group label and its message persist after the turn ends; only the
+    // stop control leaves, and that is what the fallback now bounds itself by.
     var message = {
       querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR && stopGenerating ? [label] : [];
+        return selector === GROUP_LABEL_SELECTOR ? [label] : [];
       },
     };
     return {
@@ -614,7 +624,7 @@ function checkTabTitle(api) {
       },
       querySelectorAll: function (selector) {
         if (selector === MESSAGE_SELECTOR) {
-          return stopGenerating ? [message] : [];
+          return [message];
         }
         if (selector === GROUP_LABEL_SELECTOR) {
           return [label];
@@ -747,10 +757,57 @@ function checkTabTitle(api) {
     return {
       title: "ChatGPT",
       querySelectorAll: function (selector) {
+        // busyDoc and idleDoc stand for pages mid-turn, so the stop control is present.
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
         return selector === MESSAGE_SELECTOR && message ? [message] : [];
       },
       querySelector: function (selector) {
         return selector === REPO_LINK_SELECTOR ? element : null;
+      },
+    };
+  }
+  // The owner's bug page: the turn ended, so the stop control is gone, while the repo
+  // link and the finished group label in the newest message both persist.
+  function endedDoc() {
+    var label = {
+      textContent: "Ran commands",
+      parentElement: null,
+      closest: function () {
+        return null;
+      },
+    };
+    var row = {
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [label] : [];
+      },
+    };
+    label.parentElement = row;
+    var message = {
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [label] : [];
+      },
+    };
+    return {
+      title: TITLE_PREFIX + "clankers",
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === MESSAGE_SELECTOR ? [message] : [];
+      },
+    };
+  }
+  function looseStopDoc() {
+    return {
+      title: "ChatGPT",
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === "button[aria-label]" ? [stopButton("Stop response")] : [];
       },
     };
   }
@@ -760,6 +817,7 @@ function checkTabTitle(api) {
   var setDoc = docWith(repoLink, "ChatGPT");
   var keepDoc = docWith(null, "ChatGPT");
   var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
+  var endedPage = endedDoc();
   var busyMessage = liveMessage("  running\n Bash  ", "$ npm test");
   var pollMessage = liveMessage("running Bash", "$ arena-preview poll");
   var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll");
@@ -872,9 +930,20 @@ function checkTabTitle(api) {
     [idleDoc.title, TITLE_PREFIX + "clankers"],
     [GROUP_LABEL_SELECTOR, "span.text-text-secondary"],
     [emojiForRow(liveRow(groupDoc(true))), "\uD83D\uDCD6"],
+    // The turn-end bound: the same label persists, but the stop control is gone.
     [liveRow(groupDoc(false)), null],
     [emojiForRow(liveRow(editRowDoc(true))), "\u270F\uFE0F"],
     [liveRow(editRowDoc(false)), null],
+    [stopSignal(groupDoc(true)), true],
+    [stopSignal(groupDoc(false)), false],
+    // A drifted label still opens the gate; the exact wording does not.
+    [stopSignal(looseStopDoc()), true],
+    [desiredTitle(looseStopDoc()), TITLE_PREFIX + "clankers"],
+    // The owner's bug: the turn ends, the finished group persists, the title reverts.
+    [expireHold(), null],
+    [desiredTitle(endedDoc()), null],
+    [syncTitle(endedPage), true],
+    [endedPage.title, "ChatGPT"],
     [
       polls("/home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll"),
       true,
