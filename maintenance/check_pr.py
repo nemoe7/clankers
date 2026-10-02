@@ -1,6 +1,7 @@
 """Gate for the pull request contract: commits, PR title, PR body and Simplified Technical English.
 
-The commit rules come from `rules/COMMIT-SPEC.txt`. The PR body rules come from the locked
+The commit rules are the inline constants `ALLOWED_TYPES` and `SUBJECT_LIMIT`, which state
+`rules/COMMIT-SPEC.txt` and are never read from it. The PR body rules come from the locked
 five-heading format. The gate reports every failure with its section and line; it never edits
 the input.
 """
@@ -108,7 +109,7 @@ class Failure:
 
 
 def validate_subject(subject: str, where: str) -> list[Failure]:
-  """Validate one Conventional Commit subject against `rules/COMMIT-SPEC.txt`."""
+  """Validate one Conventional Commit subject against the inline rules."""
   failures: list[Failure] = []
   if subject != subject.strip():
     failures.append(Failure(where, "subject cannot start or end with whitespace"))
