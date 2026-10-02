@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **Verdict line**: The push-check rule now requires reading the passed or failed line of every gate. A pipe that hides the verdict counts as skipping the gate, after one local sweep let a hard STE violation ride to CI. The rule lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the byte-identical root copy.
 - **Commit history**: Four rules hold the pull request history small. Minimize it and keep commits intentional. Never commit intermediate fixes or debugging. Keep unrelated changes separate, with no merge commits. Review the final list and diff before pushing. The rules land in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy.
 
 #### gpt-plugins
