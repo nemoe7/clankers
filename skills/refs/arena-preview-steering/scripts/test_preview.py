@@ -3649,3 +3649,30 @@ def test_unified_import_atomicity():
     assert (
       store.save_path.read_bytes() if store.save_path.exists() else None
     ) == backup
+
+def test_probe_route_answers_the_caller():
+  """The one-off test route: a GET describes it, and a POST echoes the body."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "arena-preview", create=True)
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    status, _, body = request("GET", "/api/probe")
+    assert status == 200
+    payload = json.loads(body)
+    assert payload["ok"] is True
+    assert payload["from"] == "127.0.0.1"
+    status, _, body = request(
+      "POST",
+      "/api/probe",
+      json.dumps({"note": "hello"}),
+      {"Content-Type": "application/json"},
+    )
+    assert status == 200
+    payload = json.loads(body)
+    assert payload["echo"] == {"note": "hello"}
+    status, _, body = request("POST", "/api/probe", "{not json")
+    assert status == 400
+    # The probe changes no state.
+    status, _, body = request("GET", "/api/state")
+    assert status == 200

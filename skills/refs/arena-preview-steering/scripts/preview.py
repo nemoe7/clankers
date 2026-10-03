@@ -2687,6 +2687,23 @@ def handler(store):
           )
           self.reply(200, page.replace("__TOKEN__", token), "text/html; charset=utf-8")
           return
+        if path == "/api/probe":
+          # A test route: it answers the caller address and changes nothing.
+          self.reply(
+            200,
+            json.dumps(
+              {
+                "ok": True,
+                "route": "/api/probe",
+                "from": self.client_address[0],
+                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "hint": "POST a JSON body to echo it",
+              },
+              indent=2,
+            )
+            + "\n",
+          )
+          return
         if path == "/api/state":
           state = store.state()
           # The page keeps its write token fresh from the poll, so a save pressed after a server
@@ -2801,6 +2818,7 @@ def handler(store):
       )
       upload_post = path == "/api/uploads"
       note_upload = path == "/api/notes/with-file"
+      probe = path == "/api/probe"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
         path
@@ -2817,6 +2835,7 @@ def handler(store):
         and not upload_post
         and not note_upload
         and not fetch_post
+        and not probe
       ):
         self.problem(404, "Not found")
         return
@@ -2826,6 +2845,29 @@ def handler(store):
       # if not secrets.compare_digest(supplied, token.encode("ascii")):
       #   self.problem(403, "Reload the preview, then retry; your draft is kept")
       #   return
+      if probe:
+        length = int(self.headers.get("Content-Length", "0") or 0)
+        raw = self.rfile.read(length) if length else b""
+        try:
+          body = json.loads(raw.decode("utf-8")) if raw else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+          self.problem(400, "the probe body must be JSON")
+          return
+        self.reply(
+          200,
+          json.dumps(
+            {
+              "ok": True,
+              "route": "/api/probe",
+              "from": self.client_address[0],
+              "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+              "echo": body,
+            },
+            indent=2,
+          )
+          + "\n",
+        )
+        return
       # A composed note carries its files and text in one multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:
