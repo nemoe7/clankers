@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.38
+// @version      1.1.39
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -132,7 +132,35 @@
       return repo;
     }
 
-    function promptForSlug(slug, arenaMd) {
+    var PROXY_HOST_KEY = "clankers-arena-proxy-host";
+    var PROXY_MASTER_KEY = "clankers-arena-proxy-master";
+
+    function proxyHost(raw) {
+      // One HTTPS origin, no path and no trailing slash: the route path is ours.
+      var host = String(raw || "").trim().replace(/\/+$/, "");
+      return /^https:\/\/[a-z0-9.-]+$/i.test(host) ? host : null;
+    }
+
+    function keyUrl(host, master) {
+      return host + "/v1/key?master=" + encodeURIComponent(master);
+    }
+
+    function agentKeyFrom(body) {
+      var key = body && typeof body.key === "string" ? body.key : "";
+      return /^[A-Za-z0-9_-]{20,64}$/.test(key) ? key : null;
+    }
+
+    function proxyLine(host, key) {
+      return (
+        "Arena proxy: " +
+        host +
+        "/v1/<route>?key=" +
+        key +
+        "\nSend repo=OWNER/REPO with logs, diff and file. Never print the key."
+      );
+    }
+
+    function promptForSlug(slug, arenaMd, proxy) {
       // The full stop is the fix: the editor links AGENTS.md as a bare domain
       // when a line break follows it; a space did not hold, a stop does
       // (owner live test).
@@ -140,14 +168,17 @@
         slug +
         " read ARENA.md AGENTS.md.\n" +
         "Expect screenshots to be sent via the steering channel.";
+      if (proxy) {
+        base += "\n" + proxy;
+      }
       if (arenaMd) {
         return base + "\nhere is ARENA.md:\n" + arenaMd;
       }
       return base;
     }
 
-    function shouldWrite(current, slug, lastSlug, arenaMd) {
-      var desired = promptForSlug(slug, arenaMd).trim();
+    function shouldWrite(current, slug, lastSlug, arenaMd, proxy) {
+      var desired = promptForSlug(slug, arenaMd, proxy).trim();
       var text = String(current || "").trim();
       if (text === desired) {
         return false;
@@ -156,7 +187,7 @@
         return text === "" || TEMPLATE_RE.test(text);
       }
       if (slug === lastSlug) {
-        return text === promptForSlug(slug, null).trim();
+        return text === promptForSlug(slug, null, proxy).trim();
       }
       return true;
     }
@@ -180,6 +211,12 @@
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
       ARENA_MD_URL: ARENA_MD_URL,
+      PROXY_HOST_KEY: PROXY_HOST_KEY,
+      PROXY_MASTER_KEY: PROXY_MASTER_KEY,
+      proxyHost: proxyHost,
+      keyUrl: keyUrl,
+      agentKeyFrom: agentKeyFrom,
+      proxyLine: proxyLine,
     })) {
       return;
     }
@@ -187,6 +224,41 @@
     var arenaMdCache = null;
     var arenaMdTried = false;
     var pendingFetch = null;
+    var proxyLineCache = null;
+    var proxyTried = false;
+    var proxyFetch = null;
+
+    function fetchAgentKey() {
+      var host = proxyHost(GM_getValue(PROXY_HOST_KEY, ""));
+      var master = String(GM_getValue(PROXY_MASTER_KEY, "") || "").trim();
+      if (!host || !master) {
+        return Promise.resolve(null);
+      }
+      return fetch(keyUrl(host, master))
+        .then(function (r) {
+          if (!r.ok) return null;
+          return r.json();
+        })
+        .then(function (body) {
+          var key = agentKeyFrom(body);
+          return key ? proxyLine(host, key) : null;
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+
+    // One try per page: a wrong master key must not hammer the owner's host
+    // on every mutation. A menu change clears the flag and tries again.
+    function ensureProxyLine() {
+      if (proxyTried || proxyFetch) return;
+      proxyFetch = fetchAgentKey().then(function (line) {
+        proxyLineCache = line;
+        proxyTried = true;
+        proxyFetch = null;
+        sync();
+      });
+    }
 
     function fetchArenaMd() {
       return fetch(ARENA_MD_URL).then(function (r) {
@@ -204,6 +276,27 @@
         sync();
       });
     }
+
+    var proxyMenus = [];
+
+    function setProxyValue(key, label, ask) {
+      if (typeof GM_registerMenuCommand !== "function") return;
+      proxyMenus.push(GM_registerMenuCommand(label, function () {
+        var answer = window.prompt(label, ask ? String(ask) : "");
+        if (answer === null) return;
+        GM_setValue(key, String(answer).trim());
+        proxyTried = false;
+        proxyLineCache = null;
+        proxyFetch = null;
+        // A plain prompt is already in the composer, so the next pass rebuilds it.
+        lastSlug = null;
+        ensureProxyLine();
+        sync();
+      }));
+    }
+
+    setProxyValue(PROXY_HOST_KEY, "Arena proxy host — set", GM_getValue(PROXY_HOST_KEY, ""));
+    setProxyValue(PROXY_MASTER_KEY, "Arena proxy master key — set", "");
 
     var lastSlug = null;
 
@@ -277,8 +370,9 @@
       // One write per page. The plain line first and the file second puts a
       // line break directly after AGENTS.md, and the editor reads that break
       // as the end of a bare domain and links the file name.
-      if (!arenaMdTried) {
+      if (!arenaMdTried || !proxyTried) {
         ensureFetch();
+        ensureProxyLine();
         return;
       }
       var composer = document.querySelector(COMPOSER_SELECTOR);
@@ -287,14 +381,16 @@
         return;
       }
       var current = composer.innerText || "";
-      if (!shouldWrite(current, slug, lastSlug, arenaMdCache)) {
+      if (!shouldWrite(current, slug, lastSlug, arenaMdCache, proxyLineCache)) {
         lastSlug = slug;
         ensureFetch();
+        ensureProxyLine();
         return;
       }
-      setComposerText(composer, promptForSlug(slug, arenaMdCache));
+      setComposerText(composer, promptForSlug(slug, arenaMdCache, proxyLineCache));
       lastSlug = slug;
       ensureFetch();
+      ensureProxyLine();
     }
 
     var observer = new MutationObserver(sync);
@@ -308,6 +404,11 @@
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", sync);
+      for (var m = 0; m < proxyMenus.length; m += 1) {
+        if (typeof GM_unregisterMenuCommand === "function") {
+          GM_unregisterMenuCommand(proxyMenus[m]);
+        }
+      }
     };
   });
 

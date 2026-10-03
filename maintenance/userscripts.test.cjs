@@ -15,7 +15,7 @@ const bundles = {
       "tab-title": "Tab title",
     },
     offByDefault: ["transcript-trim"],
-    extraMenus: { "transcript-trim": 1 },
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 2 },
     countMenu: "Transcript trim: ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,

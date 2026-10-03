@@ -21,6 +21,11 @@ function checkPromptFill(api) {
   var promptForSlug = api.promptForSlug;
   var shouldWrite = api.shouldWrite;
   var ARENA_MD_URL = api.ARENA_MD_URL;
+  var proxyHost = api.proxyHost;
+  var keyUrl = api.keyUrl;
+  var agentKeyFrom = api.agentKeyFrom;
+  var proxyLine = api.proxyLine;
+  var KEY43 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
 
   var cases = [
     [isComposerUrl("https://arena.ai/agent"), true],
@@ -50,6 +55,27 @@ function checkPromptFill(api) {
     [shouldWrite("draft", "clankers", "clankers"), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "arena content"), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nhere is ARENA.md:\narena content", "clankers", "clankers", "arena content"), false],
+    [proxyHost("https://arena-proxy.example.ts.net/"), "https://arena-proxy.example.ts.net"],
+    [proxyHost(" https://arena-proxy.example.ts.net "), "https://arena-proxy.example.ts.net"],
+    [proxyHost("http://arena-proxy.example.ts.net"), null],
+    [proxyHost("https://arena-proxy.example.ts.net/path"), null],
+    [proxyHost(""), null],
+    [keyUrl("https://h.example", "m k"), "https://h.example/v1/key?master=m%20k"],
+    [agentKeyFrom({ key: KEY43 }), KEY43],
+    [agentKeyFrom({ key: "short" }), null],
+    [agentKeyFrom({ key: "has spaces in it aaaaaaaaaaaaa" }), null],
+    [agentKeyFrom(null), null],
+    [proxyLine("https://h.example", KEY43),
+      "Arena proxy: https://h.example/v1/<route>?key=" + KEY43 +
+      "\nSend repo=OWNER/REPO with logs, diff and file. Never print the key."],
+    [promptForSlug("clankers", null, "PROXY"),
+      "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY"],
+    [promptForSlug("clankers", "arena content", "PROXY"),
+      "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY\nhere is ARENA.md:\narena content"],
+    // A plain prompt in the composer is rebuilt once the key arrives.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, null, "PROXY"), true],
+    // The finished prompt is left alone, so a write never repeats.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY", "clankers", null, null, "PROXY"), false],
   ];
   var failed = 0;
   var i;
