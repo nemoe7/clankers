@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Exposure**: The skill records Cloudflare Tunnel and Tailscale Funnel as the HTTPS options, with the agent key as the only gate. The shipped scripts stay readable, not minified, because the owner hosts and debugs them.
 - **Fetch guard**: The fetch route refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes. Public HTTPS and the owner's loopback stay open. `maintenance/test_arena_proxy.py` covers the blocked and allowed shapes.
 - **Rename**: The skill, its Python package and its budget row become `arena-proxy`, and the environment prefix becomes `ARENA_PROXY_`.
+- **CodeQL scope**: `.github/codeql/codeql-config.yml` excludes `py/full-ssrf`, whose reports describe the fetch design. The `allowed_url` guard and its tests carry the control.
 - **Install cadence**: ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`. The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
 
 ## 2026-10-02
