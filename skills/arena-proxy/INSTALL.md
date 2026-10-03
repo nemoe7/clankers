@@ -28,6 +28,7 @@ docker run --rm -p 8787:8787 \
 - The funnel needs three tailnet settings: an auth key for `TS_AUTHKEY`, a `tagOwners` entry for the node tag, and the `funnel` node attribute on that tag. Give the key the tag when you make it.
 - A tagged auth key carries its tag to the node, so the compose file requests no tag of its own.
 - Funnel accepts connections from anywhere, so treat the URL as public and keep the token read-only.
+- The userscript can rotate the agent key through the hidden `/v1/rotate` route. Set `ARENA_PROXY_MASTER_KEY` first.
 
 ## Host notes
 

@@ -182,6 +182,41 @@ def test_key_route_serves_the_agent_key_to_the_master(tmp_path):
     assert "ARENA_PROXY_MASTER_KEY" in json.loads(body)["hint"]
 
 
+def test_hidden_rotate_route_replaces_the_key_on_a_schedule(tmp_path):
+  with backend(tmp_path) as handle:
+    # The route list never names the hidden route, so a probe cannot find it.
+    status, body = call(handle.port, "/v1/nothing")
+    assert status == 404
+    assert "rotate" not in body
+    status, body = call(handle.port, f"/v1/ping?key={KEY}")
+    assert "rotate" not in body
+    # A wrong master key answers 401, and the live key keeps working.
+    status, _ = call(handle.port, "/v1/rotate?master=wrong")
+    assert status == 401
+    status, _ = call(handle.port, f"/v1/ping?key={KEY}")
+    assert status == 200
+    # The default minimum age holds the key, and the answer says so.
+    status, body = call(handle.port, f"/v1/rotate?master={MASTER}")
+    assert status == 200
+    assert json.loads(body)["rotated"] is False
+    # A zero minimum rotates at once, and the old key stops working.
+    status, body = call(handle.port, f"/v1/rotate?master={MASTER}&min=0")
+    assert status == 200
+    payload = json.loads(body)
+    assert payload["rotated"] is True
+    fresh = payload["key"]
+    assert fresh != KEY
+    status, _ = call(handle.port, f"/v1/ping?key={KEY}")
+    assert status == 401
+    status, _ = call(handle.port, f"/v1/ping?key={fresh}")
+    assert status == 200
+    status, body = call(handle.port, f"/v1/key?master={MASTER}")
+    assert json.loads(body)["key"] == fresh
+    # A bad minimum is a parameter error, not a rotation.
+    status, _ = call(handle.port, f"/v1/rotate?master={MASTER}&min=soon")
+    assert status == 400
+
+
 def test_header_key_and_ping_payload(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(handle.port, "/v1/ping", {"X-Extension-Key": KEY})

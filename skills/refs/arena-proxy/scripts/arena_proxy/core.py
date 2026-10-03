@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 import secrets
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -22,6 +23,8 @@ API_CAP_BYTES = 1_000_000
 PUBLIC_ROUTES = ("/v1/health",)
 # The key route carries its own master check instead of the agent key.
 MASTER_ROUTES = ("/v1/key",)
+# A hidden route answers by name and appears in no route list.
+HIDDEN_ROUTES = ("/v1/rotate",)
 ROUTES = (
   "/v1/health",
   "/v1/ping",
@@ -68,6 +71,7 @@ class ExtensionServer(ThreadingHTTPServer):
     super().__init__(address, ExtensionHandler)
     self.agent_key = agent_key
     self.master_key = master_key
+    self.key_changed = time.monotonic()
     self.token = token
     self.repo = repo
     self.api = api
@@ -92,6 +96,9 @@ class ExtensionHandler(BaseHTTPRequestHandler):
   def _route(self):
     path, params = split_target(self.path)
     route = path.rstrip("/") or "/"
+    if route in HIDDEN_ROUTES:
+      self._rotate(params)
+      return
     if route not in ROUTES:
       self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
       return
@@ -142,7 +149,44 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     if not supplied or not hmac.compare_digest(supplied, expected):
       self._send_json(401, {"error": "wrong master key"})
       return
-    self._send_json(200, {"ok": True, "version": VERSION, "key": self.server.agent_key})
+    self._send_json(
+      200,
+      {
+        "ok": True,
+        "version": VERSION,
+        "key": self.server.agent_key,
+        "age": int(time.monotonic() - self.server.key_changed),
+      },
+    )
+
+  def _rotate(self, params):
+    """Answer the live key, and replace it only when it is old enough."""
+    expected = self.server.master_key
+    if not expected:
+      self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
+      return
+    supplied = (
+      params.get("master", [""])[0].strip()
+      or self.headers.get("X-Master-Key", "").strip()
+    )
+    if not supplied or not hmac.compare_digest(supplied, expected):
+      self._send_json(401, {"error": "wrong master key"})
+      return
+    try:
+      minimum = max(0, int(params.get("min", ["600"])[0]))
+    except ValueError:
+      self._send_json(400, {"error": "min must be a whole number of seconds"})
+      return
+    age = int(time.monotonic() - self.server.key_changed)
+    if age < minimum:
+      self._send_json(200, {"ok": True, "rotated": False, "age": age})
+      return
+    self.server.agent_key = secrets.token_urlsafe(32)
+    self.server.key_changed = time.monotonic()
+    print("agent key (rotated): new key issued", flush=True)
+    self._send_json(
+      200, {"ok": True, "rotated": True, "age": 0, "key": self.server.agent_key}
+    )
 
   def _authorized(self, params):
     supplied = params.get("key", [""])[0] or self.headers.get("X-Extension-Key", "")
