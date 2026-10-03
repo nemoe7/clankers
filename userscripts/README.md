@@ -44,6 +44,7 @@ The prompt fill also carries the Arena proxy. Two menu entries save the settings
 - The due time is saved, so a reload resumes the countdown instead of waiting a fresh 15 minutes. The backend holds the minimum age, so a second tab that asks early is told the key's age and waits.
 - The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
 - The script also posts the key it holds to the preview, so the Downloads tab shows the key the agent is using.
+- Every minute the script asks `/v1/key` again. A new key makes the script adopt it, post it to the preview and send one quiet note. A container restart therefore reaches the agent inside a minute, not at the next rotation.
 
 ## Arena Open Steering
 

@@ -19,7 +19,8 @@ const bundles = {
     countMenu: "Transcript trim: ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
-    featureIntervals: { "tab-title": 1, "prompt-fill": 1 },
+    // The prompt fill owns two timers: the paint and the key watch. Both ride the one switch.
+    featureIntervals: { "tab-title": 1, "prompt-fill": 2 },
   },
   chatgpt: {
     features: { "hide-elements": 1, "auto-think": 0 },
@@ -72,8 +73,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
       setInterval(callback, ms) {
         assert.ok(
-          [1000, 900000].includes(ms),
-          `An interval runs the paint or the key rotation, not ${ms} ms`,
+          [1000, 60000, 900000].includes(ms),
+          `An interval runs the paint, the key watch or the key rotation, not ${ms} ms`,
         );
         active.intervals += 1;
       },

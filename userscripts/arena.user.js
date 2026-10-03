@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.1
+// @version      1.2.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -164,6 +164,9 @@
     var ROTATE_MIN_SECONDS = 900;
     var ROTATE_INTERVAL_MS = ROTATE_MIN_SECONDS * 1000;
     var ROTATE_DUE_KEY = "clankers-arena-rotate-due";
+    // A container restart makes a new key at once, so the watch adopts it inside the
+    // rotation window instead of leaving the agent with a dead key for 15 minutes.
+    var KEY_WATCH_MS = 60 * 1000;
     var PREVIEW_FRAME_TITLE = "App preview on port 8000";
 
     function previewBase(doc) {
@@ -190,14 +193,24 @@
       return base + "/api/key";
     }
 
-    function rotationNote(key, atIso) {
+    function keyNote(kind, key, atIso) {
       return (
-        "Arena proxy key rotated at " +
+        "Arena proxy key " +
+        kind +
+        " at " +
         atIso +
         ". New key: " +
         key +
         ". Use it as ?key= in every /v1 call. Never print it."
       );
+    }
+
+    function rotationNote(key, atIso) {
+      return keyNote("rotated", key, atIso);
+    }
+
+    function keyChanged(held, incoming) {
+      return incoming && incoming !== held ? incoming : null;
     }
 
     // One countdown survives a reload and the other tabs: the due time is saved, so a
@@ -301,6 +314,9 @@
       PREVIEW_FRAME_TITLE: PREVIEW_FRAME_TITLE,
       ROTATE_MIN_SECONDS: ROTATE_MIN_SECONDS,
       ROTATE_DUE_KEY: ROTATE_DUE_KEY,
+      KEY_WATCH_MS: KEY_WATCH_MS,
+      keyNote: keyNote,
+      keyChanged: keyChanged,
       rotationDueAt: rotationDueAt,
       rotationWaitMs: rotationWaitMs,
       previewBase: previewBase,
@@ -312,6 +328,7 @@
     }
 
     var arenaMdCache = null;
+    var heldKey = null;
     var arenaMdTried = false;
     var pendingFetch = null;
     var proxyLineCache = null;
@@ -323,6 +340,18 @@
       var base = previewBase(document);
       if (!base || !key) return;
       requestJson("POST", keyPostUrl(base), { key: key }, function () {});
+    }
+
+    // One quiet note announces the key, so a read finds it and a poll never wakes on it.
+    function postKeyNote(text) {
+      var base = previewBase(document);
+      if (!base) return;
+      requestJson(
+        "POST",
+        base + "/api/notes",
+        { text: text, quiet: true },
+        function () {},
+      );
     }
 
     function fetchAgentKey() {
@@ -338,7 +367,10 @@
         })
         .then(function (body) {
           var key = agentKeyFrom(body);
-          if (key) postAgentKey(key);
+          if (key) {
+            heldKey = key;
+            postAgentKey(key);
+          }
           return key ? proxyLine(host, key) : null;
         })
         .catch(function () {
@@ -346,8 +378,8 @@
         });
     }
 
-    // One try per page: a wrong master key must not hammer the owner's host
-    // on every mutation. A menu change clears the flag and tries again.
+    // One try per page until the key arrives: a wrong master key must not hammer the
+    // owner's host on every mutation, and the menu change clears the flag.
     function ensureProxyLine() {
       if (proxyTried || proxyFetch) return;
       proxyFetch = fetchAgentKey().then(function (line) {
@@ -438,20 +470,11 @@
             ROTATE_DUE_KEY,
             rotationDueAt(Date.now(), 0, ROTATE_MIN_SECONDS),
           );
+          heldKey = body.key;
           proxyLineCache = proxyLine(pair.host, body.key);
           postAgentKey(body.key);
-          var base = previewBase(document);
           var at = body.at || new Date().toISOString();
-          var line = rotationNote(body.key, at);
-          if (base) {
-            // Quiet: the note never wakes the agent's poll and never stops a command.
-            requestJson(
-              "POST",
-              base + "/api/notes",
-              { text: line, quiet: true },
-              function () {},
-            );
-          }
+          postKeyNote(rotationNote(body.key, at));
           sync();
           if (typeof done === "function") done(true);
         },
@@ -474,6 +497,31 @@
     var rotateTimer = setInterval(function () {
       rotateKey(ROTATE_MIN_SECONDS, null);
     }, ROTATE_INTERVAL_MS);
+
+    var keyWatchTimer = setInterval(function () {
+      var pair = settings();
+      if (!pair.host || !pair.master) return;
+      fetch(keyUrl(pair.host, pair.master))
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .then(function (body) {
+          // The watch adopts a restart's key even when no page write is wanted, so
+          // the agent gets the key note. The composer keeps its own line until a real
+          // change demands a write, because shouldWrite sees the same key text.
+          var key = keyChanged(heldKey, agentKeyFrom(body));
+          if (!key) return;
+          heldKey = key;
+          proxyLineCache = proxyLine(pair.host, key);
+          proxyTried = true;
+          postAgentKey(key);
+          postKeyNote(keyNote("replaced", key, new Date().toISOString()));
+          if (isComposerUrl(location.href) && readSlug(document)) {
+            sync();
+          }
+        })
+        .catch(function () {});
+    }, KEY_WATCH_MS);
 
     var lastSlug = null;
 
@@ -581,7 +629,10 @@
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", sync);
-      if (typeof clearInterval === "function") clearInterval(rotateTimer);
+      if (typeof clearInterval === "function") {
+        clearInterval(rotateTimer);
+        clearInterval(keyWatchTimer);
+      }
       for (var m = 0; m < proxyMenus.length; m += 1) {
         if (typeof GM_unregisterMenuCommand === "function") {
           GM_unregisterMenuCommand(proxyMenus[m]);
