@@ -141,6 +141,7 @@ docker run --rm -p 8787:8787 \
 ```
 
 - The published image is `ghcr.io/nemoe7/arena-proxy:latest`, one mutable tag that follows the branch head.
+- The funnel needs three tailnet settings: an auth key for `TS_AUTHKEY`, a `tagOwners` entry for the node tag, and the `funnel` node attribute on that tag. Give the key the tag when you make it.
 - [`docker-compose.yml`](docker-compose.yml) runs that image behind a Tailscale sidecar, and
   [`tailscale-serve.json`](tailscale-serve.json) carries the funnel route.
 - Images are multi-arch, so an arm64 host pulls and builds natively.
