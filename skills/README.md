@@ -19,6 +19,7 @@ Every skill must follow the [Agent Skills specification](https://agentskills.io/
 - Optional fields: `license`, `compatibility`, `metadata`, and `allowed-tools`. The validator requires `license` with `metadata.upstream`. No other top-level keys: put others, such as `argument-hint`, under `metadata` as strings.
 - The optional directories are `scripts/`, `references/`, and `assets/`.
 - Keep `SKILL.md` below 500 lines. Move the detail into `references/`, which the agent loads only when necessary.
+- A skill carries only what an agent needs to use it. Leave background, rationale and history to the changelog.
 
 `skills/refs/<skill>/` holds full uncompressed baseline trees for skills that have baselines. See [maintenance/README.md](../maintenance/README.md) for source/live synchronization.
 
