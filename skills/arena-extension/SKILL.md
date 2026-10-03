@@ -72,6 +72,7 @@ https://<backend-host>/v1/<route>?key=<agent-key>&<parameters>
 - Read each chunk with `index`, decode, append. The reported `chunks` value says when to stop; an out-of-range index answers 404 with the count.
 - Staged bytes expire after one hour.
 - Exposure changes the trust boundary, not the key: a tunnel or a Funnel publishes the backend to the whole internet, so keep the token read-only and rotate the key.
+- The backend guards the target: HTTPS on a public host, or HTTP on the owner's loopback. It refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes. A refusal answers 400.
 - Reassembly, sandbox side: `printf %s "<payload>" | base64 -d >> file.bin`, and `| gunzip` when `gzip=1`.
 - The real budget is the session context: base64 of 100 KB costs about 34,000 characters. Prefer a text extraction, a smaller range, or a summary.
 

@@ -77,6 +77,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 - Read each chunk with `index`, decode it, and append. The final `chunks` value says when to stop, and an out-of-range index answers 404 with the count.
 - Staged bytes expire after one hour. The owner's disk holds them, so stage only what the session needs.
 - Exposure changes the trust boundary, not the key: a tunnel or a Funnel publishes the backend to the whole internet, so keep the token read-only and rotate the key.
+- The backend guards the target: HTTPS on a public host, or HTTP on the owner's loopback. It refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes such as `.local` and `.internal`. A refusal answers 400.
 - Reassembly, sandbox side, base64: `printf %s "<payload>" | base64 -d >> file.bin`, and gzip adds a trailing `| gunzip`.
 - The real budget is the session context, not the file: base64 of 100 KB costs about 34,000 characters. Prefer a text extraction, a smaller range, or a summary over a large binary.
 

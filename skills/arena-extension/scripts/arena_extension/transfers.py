@@ -8,6 +8,7 @@ disk and leave in fixed-size chunks, so one request stays small.
 
 import base64
 import gzip
+import ipaddress
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -17,6 +18,7 @@ FETCH_TIMEOUT_SECONDS = 30
 DEFAULT_FETCH_CAP = 8_000_000
 DEFAULT_STAGE_CAP = 32_000_000
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+PRIVATE_SUFFIXES = (".local", ".internal", ".lan", ".home", ".corp", ".localhost")
 ENCODINGS = {
   "base64": lambda data: base64.b64encode(data).decode("ascii"),
   "b85": lambda data: base64.b85encode(data).decode("ascii"),
@@ -33,11 +35,27 @@ class TransferError(Exception):
 
 
 def allowed_url(url):
-  """Accept HTTPS anywhere, and HTTP only for a loopback host, such as a local service."""
+  """Accept HTTPS on a public host, and HTTP only for the owner's loopback.
+
+  The guard blocks the addresses that turn a public backend into a network
+  probe: private and link-local ranges, the cloud metadata address, and
+  single-label or internal names. Loopback stays open on purpose, because the
+  owner runs local services on the same host.
+  """
   parts = urllib.parse.urlsplit(url)
-  if parts.scheme == "https":
+  host = (parts.hostname or "").strip("[]")
+  scheme = parts.scheme
+  if not host or scheme not in ("http", "https"):
+    return False
+  if host in LOOPBACK_HOSTS:
     return True
-  return parts.scheme == "http" and parts.hostname in LOOPBACK_HOSTS
+  if scheme != "https":
+    return False
+  try:
+    address = ipaddress.ip_address(host)
+  except ValueError:
+    return "." in host and not host.endswith(PRIVATE_SUFFIXES)
+  return address.is_global and not address.is_link_local
 
 
 def fetch_url(url, cap, timeout=FETCH_TIMEOUT_SECONDS):

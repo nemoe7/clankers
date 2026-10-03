@@ -232,6 +232,29 @@ def test_fetch_refuses_a_public_http_url(tmp_path):
     assert "loopback" in json.loads(body)["error"]
 
 
+def test_url_guard_blocks_private_and_internal_targets():
+  for url in (
+    "http://10.0.0.5/admin",
+    "https://10.0.0.5/admin",
+    "http://192.168.1.1/",
+    "http://169.254.169.254/latest/meta-data/",
+    "https://172.16.0.9/",
+    "http://nas.local/file",
+    "http://router.internal/",
+    "http://printer/",
+    "ftp://example.com/x",
+    "file:///etc/passwd",
+  ):
+    assert transfers.allowed_url(url) is False, url
+  for url in (
+    "https://example.com/x",
+    "https://raw.githubusercontent.com/o/r/main/f.bin",
+    "http://127.0.0.1:8000/state",
+    "http://localhost:8787/v1/health",
+  ):
+    assert transfers.allowed_url(url) is True, url
+
+
 def test_fetch_stages_and_serves_chunks(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(
