@@ -37,6 +37,13 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const source = fs.readFileSync(
     path.join(__dirname, "../userscripts", `${domain}.user.js`), "utf8",
   );
+  // A granted cross-origin call meets the dynamic preview host and the owner's proxy host.
+  // A manager asks the owner once per host without a connect tag, so the tag is required.
+  const header = /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/.exec(source)[0];
+  if (/^\/\/ @grant\s+GM_xmlhttpRequest\s*$/m.test(header)) {
+    assert.match(header, /^\/\/ @connect\s+\*\s*$/m, `${domain}: a cross-origin userscript carries a connect tag`);
+  }
+
   const keys = Object.keys(features);
   const stored = new Map();
   let refuseWrite = false;

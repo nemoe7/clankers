@@ -45,6 +45,7 @@ The prompt fill also carries the Arena proxy. Two menu entries save the settings
 - The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
 - The script also posts the key it holds to the preview, so the Downloads tab shows the key the agent is using.
 - Every minute the script asks `/v1/key` again. A new key makes the script adopt it, post it to the preview and send one quiet note. A container restart therefore reaches the agent inside a minute, not at the next rotation.
+- `@connect *` lets the script reach two targets that cannot be named in advance: the preview host, which changes every session, and the owner's proxy host. Without it, the userscript manager asks the owner to confirm each new preview host.
 
 ## Arena Open Steering
 
