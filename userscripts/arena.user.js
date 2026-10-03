@@ -137,7 +137,7 @@
 
     function proxyHost(raw) {
       // One HTTPS origin, no path and no trailing slash: the route path is ours.
-      var host = String(raw || "").trim().replace(/\/+$/, "");
+      var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
       return /^https:\/\/[a-z0-9.-]+$/i.test(host) ? host : null;
     }
 

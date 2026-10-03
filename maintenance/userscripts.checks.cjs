@@ -56,6 +56,8 @@ function checkPromptFill(api) {
     [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "arena content"), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nhere is ARENA.md:\narena content", "clankers", "clankers", "arena content"), false],
     [proxyHost("https://arena-proxy.example.ts.net/"), "https://arena-proxy.example.ts.net"],
+    [proxyHost("https://arena-proxy.example.ts.net/v1"), "https://arena-proxy.example.ts.net"],
+    [proxyHost("https://arena-proxy.example.ts.net/v1/"), "https://arena-proxy.example.ts.net"],
     [proxyHost(" https://arena-proxy.example.ts.net "), "https://arena-proxy.example.ts.net"],
     [proxyHost("http://arena-proxy.example.ts.net"), null],
     [proxyHost("https://arena-proxy.example.ts.net/path"), null],
