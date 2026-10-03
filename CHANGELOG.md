@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Proxy pointer**: The ARENA.md Use section now points to the `arena-proxy` skill for a task that needs a source the sandbox cannot reach. The refs copy carries the full line and the live and root copies the compressed form.
 - **Skill content**: Every skill now holds only what an agent needs to use it. Design decisions, background, rationale and history go to this changelog or the archive, as the root AGENTS.md and the skills guide both state.
 - **Skill audit**: The `arena-proxy` and `squash` skills drop the owner setup steps and the rationale clauses an agent cannot act on. The vendored `web-interface-guidelines` skill stays verbatim.
+- **Interface verification**: The NemoGPT search rule now names a menu path and a setting beside the API and platform cases. The live copy keeps the same line, and the budget row follows.
 
 #### skills
 
