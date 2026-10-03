@@ -85,11 +85,11 @@ jobs:
             case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
           }
 
-          # One skill's shipped file list: tracked files, minus its README, and
-          # minus the code paths for a documents-only skill.
+          # One skill's shipped file list: tracked files, minus the pages that stay
+          # in this repository, and minus the code paths for a documents-only skill.
           skill_files() {
             local out
-            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx README.md)
+            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md)
             case " ${DOCS_ONLY:-} " in
               *" $1 "*) printf '%s\n' "$out" | grep -vE '^(scripts/|Dockerfile$)' || true ;;
               *) printf '%s\n' "$out" ;;
@@ -127,6 +127,8 @@ jobs:
                   files=$(skill_files "$skill")
                   [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
                   # shellcheck disable=SC2115  # $work comes from mktemp -d and $skill_dest is a fixed path.
+                  # The whole directory goes, so a page that this repository keeps
+                  # leaves the target repo on the same run.
                   rm -rf "$work/$skill_dest"
                   for f in $files; do
                     mkdir -p "$work/$skill_dest/$(dirname "$f")"
