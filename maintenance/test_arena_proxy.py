@@ -124,11 +124,16 @@ def backend(tmp_path, **overrides):
 
 
 def call(port, target, headers=None):
+  status, body, _ = call_with_headers(port, target, headers)
+  return status, body
+
+
+def call_with_headers(port, target, headers=None):
   connection = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
   try:
     connection.request("GET", target, headers=headers or {})
     response = connection.getresponse()
-    return response.status, response.read().decode("utf-8")
+    return response.status, response.read().decode("utf-8"), dict(response.getheaders())
   finally:
     connection.close()
 
@@ -153,6 +158,13 @@ def test_missing_and_wrong_keys_are_rejected(tmp_path):
   with backend(tmp_path) as handle:
     assert call(handle.port, "/v1/ping")[0] == 401
     assert call(handle.port, "/v1/ping?key=wrong-key")[0] == 401
+
+
+def test_every_answer_allows_the_owner_page_to_read_it(tmp_path):
+  with backend(tmp_path) as handle:
+    status, _, headers = call_with_headers(handle.port, f"/v1/key?master={MASTER}")
+    assert status == 200
+    assert headers.get("Access-Control-Allow-Origin") == "*"
 
 
 def test_key_route_serves_the_agent_key_to_the_master(tmp_path):

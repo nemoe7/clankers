@@ -370,6 +370,9 @@ class ExtensionHandler(BaseHTTPRequestHandler):
   def _send(self, status, body, content_type="application/json; charset=utf-8"):
     self.send_response(status)
     self.send_header("Content-Type", content_type)
+    # The owner's userscript calls this backend from the Arena page, so the
+    # browser needs one cross-origin permission on every answer.
+    self.send_header("Access-Control-Allow-Origin", "*")
     self.send_header("Content-Length", str(len(body)))
     self.send_header("Cache-Control", "no-store")
     self.end_headers()
