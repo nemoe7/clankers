@@ -1,5 +1,5 @@
-# Dispatch-only distribution of ARENA.md, the preview skill and the Gemini release workflow.
-# Two jobs, each with its own target list and its own dispatch override.
+# Dispatch-only distribution of ARENA.md, the preview skill, the proxy skill and the Gemini
+# release workflow. Two jobs, each with its own target list and its own dispatch override.
 # CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets.
 # Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
 name: Distribute
@@ -9,6 +9,7 @@ on:
     paths:
       - 'rules/ARENA.md'
       - 'skills/arena-preview-steering/**'
+      - 'skills/arena-proxy/**'
       - 'github/workflows/gemini-release.yml'
       - 'github/workflows/gemini_release.py'
       - '.github/workflows/distribute.yml'
@@ -42,7 +43,9 @@ jobs:
       cancel-in-progress: false
     env:
       DEST: ARENA.md
-      SKILLS: "arena-preview-steering"
+      SKILLS: "arena-preview-steering arena-proxy"
+      # A documents-only skill ships its pages and its configuration, not its code.
+      DOCS_ONLY: "arena-proxy"
       SKILL_ROOT: skills
       SKILL_DEST_ROOT: .agents/skills
       LEGACY_SKILLS: "arena-live-steering arena-preview-reporting"
@@ -64,6 +67,16 @@ jobs:
               echo "::error::$skill missing"; exit 1;
             }
           done
+          # One skill's shipped file list: tracked files, minus its README, and
+          # minus the code paths for a documents-only skill.
+          skill_files() {
+            local out
+            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx README.md)
+            case " ${DOCS_ONLY:-} " in
+              *" $1 "*) printf '%s\n' "$out" | grep -vE '^(scripts/|Dockerfile$)' || true ;;
+              *) printf '%s\n' "$out" ;;
+            esac
+          }
           failed=""
           # shellcheck disable=SC2016  # The helper expands the token when git calls it.
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
@@ -82,7 +95,7 @@ jobs:
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vFx README.md)
+                files=$(skill_files "$skill")
                 [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
                 # shellcheck disable=SC2115  # $work comes from mktemp -d and $skill_dest is a fixed path.
                 rm -rf "$work/$skill_dest"
@@ -118,7 +131,7 @@ jobs:
               for skill in $SKILLS; do
                 skill_src="$SKILL_ROOT/$skill"
                 skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(git -C "$GITHUB_WORKSPACE" ls-files "$skill_src" | sed "s|^$skill_src/||" | grep -vFx README.md)
+                files=$(skill_files "$skill")
                 have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
                 # shellcheck disable=SC2086  # The word split lists one path per line.
                 want=$(printf '%s\n' $files | sort)
