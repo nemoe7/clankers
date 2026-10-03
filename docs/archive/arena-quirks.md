@@ -138,3 +138,17 @@ Rule: read alerts from the bot's review comments or from an owner export. Never 
 Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work. The fetch omits cookies, and the sandbox token cannot read the security endpoints.
 
 Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a pull request comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.
+
+## `fetch_page` reaches beyond the sandbox egress filter
+
+2026-10-03: The `fetch_page` tool runs outside the sandbox. It fetched `httpbin.org`, `raw.githubusercontent.com`, `arena.site` and `api.github.com`. The sandbox egress filter blocks the first three.
+
+It runs headless Chrome. The user agent and `sec-ch-ua` headers name Chrome 153, the accept language is `en-US`, and the referer is `https://www.google.com/`. Query strings pass through unchanged, so a search query works.
+
+The tool carries no credentials. A test page showed no Authorization header. A URL with userinfo in the authority answered HTTP 400. GitHub ignores the legacy `access_token` query parameter. A search query proved that the tool sends the query string, and the parameter still answered 401 `Requires authentication`.
+
+Binary responses fail. A signed run log URL answered HTTP 500 with a fresh signature, and a PNG answered the same.
+
+Consequence: a public text page or raw file on a blocked host is readable. A token in a URL reaches the tool, but GitHub does not honor it. The tool can never read the log zip or the artifact bytes.
+
+Rule: use the tool for public text on a blocked host. NEVER place a credential in a URL for the tool. NEVER ask the owner for a token. Read security data through an owner export or a workflow comment.

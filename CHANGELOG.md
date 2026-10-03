@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Sandbox reach**: `docs/archive/arena-quirks.md` records the reachable hosts, the readable endpoints and the refused security endpoints of a GitHub session.
 - **Token limit**: A user personal access token cannot reach the sandbox, because the egress proxy replaces the Authorization header.
 - **Preview fetch proxy**: The preview can fetch a blocked public URL through the owner's browser, and the archive entry lists its limits.
+- **Fetch tool reach**: `fetch_page` reads public text on hosts that the sandbox egress filter blocks. It cannot carry a token, and it cannot read binary bytes.
 
 ## 2026-10-02
 
