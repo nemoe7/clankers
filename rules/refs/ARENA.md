@@ -7,6 +7,7 @@
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
 - Initial reads of this file and the preview skill may precede that reply.
+- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md and every AGENTS.md in the repository end-to-end before any other tool call.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
 - Before your first tool call that is not a read of a rule or skill file, write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
