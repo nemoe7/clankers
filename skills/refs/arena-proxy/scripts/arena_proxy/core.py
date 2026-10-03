@@ -20,12 +20,23 @@ from .store import Store
 
 API_CAP_BYTES = 1_000_000
 PUBLIC_ROUTES = ("/v1/health",)
-ROUTES = ("/v1/health", "/v1/ping", "/v1/github", "/v1/logs", "/v1/fetch", "/v1/llm")
+# The key route carries its own master check instead of the agent key.
+MASTER_ROUTES = ("/v1/key",)
+ROUTES = (
+  "/v1/health",
+  "/v1/ping",
+  "/v1/github",
+  "/v1/logs",
+  "/v1/fetch",
+  "/v1/llm",
+  "/v1/key",
+)
 
 
-def log_line(method, target, code):
+def log_line(method, target, code, address=None):
   """Format one log line with the query string removed, so no key is written."""
-  return f"{method} {urllib.parse.urlsplit(target).path} -> {code}"
+  line = f"{method} {urllib.parse.urlsplit(target).path} -> {code}"
+  return f"{line} from {address}" if address else line
 
 
 def split_target(target):
@@ -41,10 +52,22 @@ class ExtensionServer(ThreadingHTTPServer):
   allow_reuse_address = True
 
   def __init__(
-    self, address, *, agent_key, token, repo, api, store, llm, fetch_cap, stage_cap
+    self,
+    address,
+    *,
+    agent_key,
+    master_key,
+    token,
+    repo,
+    api,
+    store,
+    llm,
+    fetch_cap,
+    stage_cap,
   ):
     super().__init__(address, ExtensionHandler)
     self.agent_key = agent_key
+    self.master_key = master_key
     self.token = token
     self.repo = repo
     self.api = api
@@ -72,7 +95,11 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     if route not in ROUTES:
       self._send_json(404, {"error": "unknown route", "routes": list(ROUTES)})
       return
-    if route not in PUBLIC_ROUTES and not self._authorized(params):
+    if (
+      route not in PUBLIC_ROUTES
+      and route not in MASTER_ROUTES
+      and not self._authorized(params)
+    ):
       self._send_json(
         401,
         {
@@ -93,6 +120,29 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       self._fetch(params)
     elif route == "/v1/llm":
       self._llm(params)
+    elif route == "/v1/key":
+      self._key(params)
+
+  def _key(self, params):
+    """Return the live agent key to the holder of the master key."""
+    expected = self.server.master_key
+    if not expected:
+      self._send_json(
+        404,
+        {
+          "error": "the key route is off",
+          "hint": "set ARENA_PROXY_MASTER_KEY to turn it on",
+        },
+      )
+      return
+    supplied = (
+      params.get("master", [""])[0].strip()
+      or self.headers.get("X-Master-Key", "").strip()
+    )
+    if not supplied or not hmac.compare_digest(supplied, expected):
+      self._send_json(401, {"error": "wrong master key"})
+      return
+    self._send_json(200, {"ok": True, "version": VERSION, "key": self.server.agent_key})
 
   def _authorized(self, params):
     supplied = params.get("key", [""])[0] or self.headers.get("X-Extension-Key", "")
@@ -326,7 +376,16 @@ class ExtensionHandler(BaseHTTPRequestHandler):
     self.wfile.write(body)
 
   def log_request(self, code="-", size="-"):
-    print(log_line(self.command, self.path, code), flush=True)
+    print(log_line(self.command, self.path, code, self._caller()), flush=True)
+
+  def _caller(self):
+    """The caller address: the first forwarded hop, else the socket peer."""
+    forwarded = self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+    return (
+      forwarded
+      or self.headers.get("CF-Connecting-IP", "").strip()
+      or self.client_address[0]
+    )
 
   def log_message(self, format, *args):
     """Stay silent: log_request already printed the line, and a key could leak."""
@@ -346,6 +405,7 @@ def build_server(options):
   return ExtensionServer(
     (options.host, options.port),
     agent_key=options.key,
+    master_key=options.master,
     token=options.token,
     repo=options.repo,
     api=options.api,
@@ -373,6 +433,7 @@ def parse_args(argv=None):
     "GITHUB_TOKEN", ""
   )
   options.repo = os.environ.get("ARENA_PROXY_REPO", "")
+  options.master = os.environ.get("ARENA_PROXY_MASTER_KEY", "")
   options.api = os.environ.get("ARENA_PROXY_GITHUB_API", github_api.GITHUB_API)
   options.state_dir = os.environ.get("ARENA_PROXY_STATE_DIR", "arena-proxy-state")
   options.llm_base = os.environ.get("ARENA_PROXY_LLM_BASE", "")

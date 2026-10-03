@@ -14,6 +14,8 @@ services:
       # A fine-grained, read-only token for the GitHub routes; leave it out to skip them.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       ARENA_PROXY_REPO: ${ARENA_PROXY_REPO:-nemoe7/clankers}
+      # Set a master key to turn on the /v1/key route; leave it out to keep the route off.
+      ARENA_PROXY_MASTER_KEY: ${ARENA_PROXY_MASTER_KEY:-}
       # The model endpoint, when the LLM route should work; leave the set empty to skip it.
       ARENA_PROXY_LLM_BASE: ${ARENA_PROXY_LLM_BASE:-}
       ARENA_PROXY_LLM_KEY: ${ARENA_PROXY_LLM_KEY:-}

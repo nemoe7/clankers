@@ -16,6 +16,7 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills/refs/arena-proxy/scripts"
 KEY = "test-agent-key-0123456789"
+MASTER = "test-master-key-0123456789"
 TOKEN = "test-provider-token"
 BINARY = b"\x89PNG\r\n\x1a\n\x00binary payload"
 sys.path.insert(0, str(SCRIPTS))
@@ -98,6 +99,7 @@ def backend(tmp_path, **overrides):
     host="127.0.0.1",
     port=0,
     key=KEY,
+    master=MASTER,
     token=TOKEN,
     repo="o/r",
     api=base,
@@ -151,6 +153,21 @@ def test_missing_and_wrong_keys_are_rejected(tmp_path):
   with backend(tmp_path) as handle:
     assert call(handle.port, "/v1/ping")[0] == 401
     assert call(handle.port, "/v1/ping?key=wrong-key")[0] == 401
+
+
+def test_key_route_serves_the_agent_key_to_the_master(tmp_path):
+  with backend(tmp_path) as handle:
+    status, body = call(handle.port, f"/v1/key?master={MASTER}")
+    assert status == 200
+    assert json.loads(body)["key"] == KEY
+    status, _ = call(handle.port, f"/v1/key?key={KEY}")
+    assert status == 401
+    status, _ = call(handle.port, "/v1/key?master=wrong")
+    assert status == 401
+  with backend(tmp_path, master="") as closed:
+    status, body = call(closed.port, f"/v1/key?master={MASTER}")
+    assert status == 404
+    assert "ARENA_PROXY_MASTER_KEY" in json.loads(body)["hint"]
 
 
 def test_header_key_and_ping_payload(tmp_path):
@@ -373,6 +390,10 @@ def test_unknown_route_lists_the_routes(tmp_path):
 def test_log_line_drops_the_query_string():
   assert (
     core.log_line("GET", "/v1/github?key=SECRET&path=x", 200) == "GET /v1/github -> 200"
+  )
+  assert (
+    core.log_line("GET", "/v1/github?key=SECRET", 200, "203.0.113.7")
+    == "GET /v1/github -> 200 from 203.0.113.7"
   )
 
 
