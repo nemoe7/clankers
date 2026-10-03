@@ -4,6 +4,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 
 | Skill | Purpose |
 | --- | --- |
+| [arena-extension](arena-extension/SKILL.md) | Read privileged data outside an Arena sandbox through an owner-run backend that holds the credentials |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox and publish rendered reports, with persistent history and receipts |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Review an existing UI against the upstream Vercel Web Interface Guidelines |
@@ -62,6 +63,7 @@ After setup, ask the agent to name an installed `SKILL.md` and its conditional r
 
 | Skill | When needed |
 | --- | --- |
+| [arena-extension](arena-extension/SKILL.md) | Read-only access to a source the sandbox cannot reach, such as code scanning alerts or run logs |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | Reviews of an existing UI against the upstream guidelines |
 | [squash](squash/SKILL.md) | Text that must fit one or more token, word, character, or byte budgets |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Arena sessions needing mid-turn messages or rendered reports through the live preview |

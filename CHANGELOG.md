@@ -15,6 +15,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Preview fetch proxy**: The preview can fetch a blocked public URL through the owner's browser, and the archive entry lists its limits.
 - **Fetch tool reach**: `fetch_page` reads public text on hosts that the sandbox egress filter blocks. It cannot carry a token, and it cannot read binary bytes.
 
+#### skills
+
+- **Arena extension**: A new first-party skill pairs the `fetch_page` tool with an owner-run backend that holds a provider credential. The backend answers `/v1/ping`, `/v1/github`, and `/v1/logs`, checks a generated agent key, and removes the query string from its log lines. `maintenance/test_arena_extension.py` covers auth, forwarding, the log tail, and key redaction.
+
 ## 2026-10-02
 
 ### Added

@@ -16,7 +16,7 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-02. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
+Latest measurements as of 2026-10-03. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules and `SKILL.md` entries by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -30,6 +30,7 @@ Latest measurements as of 2026-10-02. `maintenance/check.py` measures ARENA.md b
 | `rules/kilo/debug.md` | `cl100k_base` | 272 `tok` |
 | `rules/kilo/plan.md` | `cl100k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 91 `tok` |
+| `skills/arena-extension/SKILL.md` | `cl100k_base` | 1,119 `tok` |
 | `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,076 `B` |
 | `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 43,768 `B` |
 | `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,117 `B` |
