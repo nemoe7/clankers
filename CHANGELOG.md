@@ -51,6 +51,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Live squash**: The live `system-prompts/NEMOGPT.md` copy compresses from its refs source to 12,578 characters and 2,428 `cl100k_base` tokens, with every section and rule kept.
 - **Prompt budget**: The root instruction-budgets table and `maintenance/check.py` now measure the live prompt, so its size is a recorded budget. `system-prompts/README.md` states the compressed-live convention.
 
+#### house
+
+- **Guidelines citation**: The amendment clause in the root `AGENTS.md` now requires the proposal to cite at least one section of `rules/refs/GUIDELINES.md`. The required read therefore leaves a trace. Owner direction.
+
 ## 2026-10-02
 
 ### Added
