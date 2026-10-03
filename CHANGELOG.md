@@ -27,6 +27,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **CodeQL scope**: `.github/codeql/codeql-config.yml` excludes `py/full-ssrf`, whose reports describe the fetch design. The `allowed_url` guard and its tests carry the control. An inline `# codeql[py/full-ssrf]` comment was tried first and the check ignored it.
 - **Install cadence**: ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`. The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
 
+### Changed
+
+#### system-prompts
+
+- **NemoGPT prompt revision**: The operator's tighter draft replaces the long prompt in `system-prompts/refs/NEMOGPT.md` and its live copy. The audit against `GUIDELINES.md` added the date line, a concrete refusal bar, exact banned openers, a restatement clause, and two worked examples. Confidentiality gives way to prompt transparency, per the draft.
+
 ## 2026-10-02
 
 ### Added
