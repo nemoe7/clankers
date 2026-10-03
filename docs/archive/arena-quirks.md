@@ -104,3 +104,37 @@ export VK_ICD_FILENAMES=/tmp/vk_swiftshader_icd.json
 ### Known gap
 
 The sandbox lacks system fontconfig. One source-project test measures a column against a missing font, so it fails locally with no code defect: `test_the_pool_column_fits_the_longest_pool_name`. A monospace TTF through `@font-face` made it pass, which proves an environment defect. The other 51 assertions pass without that font.
+
+## Sandbox egress allowlist, GitHub session
+
+2026-10-03: A GitHub session reached seven hosts. The reachable set holds `github.com`, `api.github.com`, `codeload.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org` and `dns.google`. The IP literal `8.8.8.8` also answered. About 130 other hosts failed. The blocked set holds every `*.githubusercontent.com` host, `docs.github.com`, `ssh.github.com`, `ghcr.io`, `*.blob.core.windows.net`, `gitlab.com`, `api.anthropic.com`, `api.openai.com`, `arena.ai`, `cdn.jsdelivr.net` and `nodejs.org`.
+
+A blocked host resolves and accepts TCP. The TLS handshake then fails with `SSL_ERROR_SYSCALL`. Plain HTTP on `github.com` and `api.github.com` returns 301, and plain HTTP fails elsewhere. The filter reads the host name.
+
+Consequence: package installs, Git operations and the GitHub API work. Every other fetch fails with a TLS error that looks like a transient fault, and a retry never helps. `codeload.github.com` serves repository archives, so a tarball download works without Git.
+
+Rule: treat the host list above as this session type's reach. Test a host before a plan depends on it, and report a blocked host as a limit, not as a failure.
+
+## GitHub API reach, GitHub session
+
+2026-10-03: The sandbox token reads much of a repository, and it cannot read security data.
+
+Readable sources hold workflow run, job and step metadata, check runs with annotations, artifact names and identifiers, pull request review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
+
+Refused with 403: `code-scanning/alerts`, `code-scanning/analyses`, `code-scanning/default-setup`, `secret-scanning/alerts` and `dependabot/alerts`. A fetch of `code-scanning/sarifs` answers 404.
+
+Run logs and artifact bytes need `results-receiver.actions.githubusercontent.com` and `*.blob.core.windows.net`. The egress filter blocks both hosts. The log request returns a signed redirect, then the connection ends. `gh run view --log` fails, the job page HTML carries no log text, and the job log route answers 404.
+
+The token is a GitHub App installation token. A deliberately invalid Authorization header still answered as the owner, so the egress proxy replaces that header. A personal access token pasted into the sandbox has no effect.
+
+Consequence: an alert or log claim must rest on a readable source. The security bot's pull request review comments carry alert details. An owner export or a workflow comment can carry the rest.
+
+Rule: read alerts from the bot's review comments or from an owner export. Never claim a log read that the session cannot perform.
+
+## The preview as a browser fetch proxy
+
+2026-10-03: The preview skill queues `download-request <url>` jobs. The owner approves one URL, and the browser fetches it with no credentials and no referrer. A checkbox adds the third-party proxies AllOrigins and CodeTabs, and the file lands in the state `downloads/` directory. Each file is at most 102.4 MB. Each fetch times out after 600 seconds. Each URL needs its own approval while the preview stays open.
+
+Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work. The fetch omits cookies, and the sandbox token cannot read the security endpoints.
+
+Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a pull request comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.

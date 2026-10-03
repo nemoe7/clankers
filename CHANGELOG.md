@@ -4,6 +4,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-03
+
+### Added
+
+#### arena
+
+- **Sandbox reach**: `docs/archive/arena-quirks.md` records the reachable hosts, the readable endpoints and the refused security endpoints of a GitHub session.
+- **Token limit**: A user personal access token cannot reach the sandbox, because the egress proxy replaces the Authorization header.
+- **Preview fetch proxy**: The preview can fetch a blocked public URL through the owner's browser, and the archive entry lists its limits.
+
 ## 2026-10-02
 
 ### Added
@@ -161,7 +171,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Trap reminders**: The debug trap prints one task-list reminder per shell on `git commit`, `git push`, and `gh pr checks`. The copy check asserts the count.
 - **Composer paste**: A text paste over 2,000 characters stages one attachment named `<lines>-pasted-lines-<epoch>.txt` and leaves the composer text alone. The client test covers both paths.
 - **Missing inbox error**: The error names the installer, the `start_process` tool with the serve command, and the read command. It also names a possible sandbox reset. A test asserts the five fragments.
-- **Blocked tasks**: A task carries a `blocked` mark that `--blocked` and `--unblocked` set. A poll returns at once with the task list while an upcoming task is unblocked.
+- **Blocked tasks**: A task carries a `blocked` mark that `--blocked` and `--unblocked` set. A poll returns at once with the task list while an upcoming task stays unblocked.
 - **Reference parity**: A minify check compares the shipped `REFERENCE.md` against the refs baseline. The two copies must stay byte-identical.
 - **Blocked finish**: A task that carries the blocked mark refuses `--status finished`. The error names `--unblocked`.
 - **Blocked color**: A blocked task title reads in `var(--muted)`, so the queue shows what the agent can act on. Both themes share the one variable.
