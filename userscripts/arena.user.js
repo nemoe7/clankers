@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.2
+// @version      1.2.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -15,6 +15,7 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
+// @connect      *
 // ==/UserScript==
 
 (function () {
