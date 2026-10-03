@@ -15,11 +15,11 @@ const bundles = {
       "tab-title": "Tab title",
     },
     offByDefault: ["transcript-trim"],
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 2 },
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 3 },
     countMenu: "Transcript trim: ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
-    featureIntervals: { "tab-title": 1 },
+    featureIntervals: { "tab-title": 1, "prompt-fill": 1 },
   },
   chatgpt: {
     features: { "hide-elements": 1, "auto-think": 0 },
@@ -71,7 +71,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         disconnect() { active.observers -= 1; }
       },
       setInterval(callback, ms) {
-        assert.equal(ms, 1000);
+        assert.ok(
+          [1000, 900000].includes(ms),
+          `An interval runs the paint or the key rotation, not ${ms} ms`,
+        );
         active.intervals += 1;
       },
       clearInterval() { active.intervals -= 1; },

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.1.39
+// @version      1.2.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -10,6 +10,7 @@
 // @updateURL    https://raw.githubusercontent.com/nemoe7/clankers/main/userscripts/arena.user.js
 // @downloadURL  https://raw.githubusercontent.com/nemoe7/clankers/main/userscripts/arena.user.js
 // @run-at       document-idle
+// @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
@@ -160,6 +161,70 @@
       );
     }
 
+    var ROTATE_MIN_SECONDS = 900;
+    var ROTATE_INTERVAL_MS = ROTATE_MIN_SECONDS * 1000;
+    var PREVIEW_FRAME_TITLE = "App preview on port 8000";
+
+    function previewBase(doc) {
+      // The Arena page carries the preview as an iframe; its title names the port.
+      var frames = doc.querySelectorAll("iframe[title]");
+      var i;
+      var title;
+      for (i = 0; i < frames.length; i += 1) {
+        title = frames[i].getAttribute("title") || "";
+        if (title.indexOf(PREVIEW_FRAME_TITLE) === 0 && frames[i].src) {
+          return frames[i].src.replace(/\/+$/, "");
+        }
+      }
+      return null;
+    }
+
+    function rotateUrl(host, master, min) {
+      return (
+        host + "/v1/rotate?master=" + encodeURIComponent(master) + "&min=" + min
+      );
+    }
+
+    function rotationNote(key, atIso) {
+      return (
+        "Arena proxy key rotated at " +
+        atIso +
+        ". New key: " +
+        key +
+        ". Use it as ?key= in every /v1 call. Never print it."
+      );
+    }
+
+    // GM_xmlhttpRequest skips the page's cross-origin and CSP rules, so it carries
+    // both calls when it exists.
+    function requestJson(method, url, payload, done) {
+      function finish(text, status) {
+        var body = null;
+        try {
+          body = JSON.parse(text);
+        } catch (err) {
+          body = null;
+        }
+        done(status, body);
+      }
+      if (typeof GM_xmlhttpRequest === "function") {
+        GM_xmlhttpRequest({
+          method: method,
+          url: url,
+          headers: payload ? { "Content-Type": "application/json" } : {},
+          data: payload ? JSON.stringify(payload) : undefined,
+          onload: function (answer) {
+            finish(answer.responseText, answer.status);
+          },
+          onerror: function () {
+            finish("", 0);
+          },
+        });
+        return;
+      }
+      done(0, null);
+    }
+
     function promptForSlug(slug, arenaMd, proxy) {
       // The full stop is the fix: the editor links AGENTS.md as a bare domain
       // when a line break follows it; a space did not hold, a stop does
@@ -217,6 +282,11 @@
       keyUrl: keyUrl,
       agentKeyFrom: agentKeyFrom,
       proxyLine: proxyLine,
+      PREVIEW_FRAME_TITLE: PREVIEW_FRAME_TITLE,
+      ROTATE_MIN_SECONDS: ROTATE_MIN_SECONDS,
+      previewBase: previewBase,
+      rotateUrl: rotateUrl,
+      rotationNote: rotationNote,
     })) {
       return;
     }
@@ -297,6 +367,52 @@
 
     setProxyValue(PROXY_HOST_KEY, "Arena proxy host — set", GM_getValue(PROXY_HOST_KEY, ""));
     setProxyValue(PROXY_MASTER_KEY, "Arena proxy master key — set", "");
+
+    function settings() {
+      return {
+        host: proxyHost(GM_getValue(PROXY_HOST_KEY, "")),
+        master: String(GM_getValue(PROXY_MASTER_KEY, "") || "").trim(),
+      };
+    }
+
+    // One rotation pass: ask the backend to rotate when the key is old enough, then
+    // carry the new key into the prompt and tell the agent through the preview.
+    function rotateKey(done) {
+      var pair = settings();
+      if (!pair.host || !pair.master) return;
+      requestJson(
+        "GET",
+        rotateUrl(pair.host, pair.master, ROTATE_MIN_SECONDS),
+        null,
+        function (status, body) {
+          if (status !== 200 || !body || body.rotated !== true || !body.key) {
+            if (typeof done === "function") done(false);
+            return;
+          }
+          proxyLineCache = proxyLine(pair.host, body.key);
+          var base = previewBase(document);
+          var at = body.at || new Date().toISOString();
+          var line = rotationNote(body.key, at);
+          if (base) {
+            requestJson("POST", base + "/api/notes", { text: line }, function () {});
+          }
+          sync();
+          if (typeof done === "function") done(true);
+        },
+      );
+    }
+
+    if (typeof GM_registerMenuCommand === "function") {
+      proxyMenus.push(
+        GM_registerMenuCommand("Arena proxy rotate now — run", function () {
+          rotateKey(null);
+        }),
+      );
+    }
+
+    var rotateTimer = setInterval(function () {
+      rotateKey(null);
+    }, ROTATE_INTERVAL_MS);
 
     var lastSlug = null;
 
@@ -404,6 +520,7 @@
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", sync);
+      if (typeof clearInterval === "function") clearInterval(rotateTimer);
       for (var m = 0; m < proxyMenus.length; m += 1) {
         if (typeof GM_unregisterMenuCommand === "function") {
           GM_unregisterMenuCommand(proxyMenus[m]);

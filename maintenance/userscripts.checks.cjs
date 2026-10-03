@@ -25,7 +25,28 @@ function checkPromptFill(api) {
   var keyUrl = api.keyUrl;
   var agentKeyFrom = api.agentKeyFrom;
   var proxyLine = api.proxyLine;
+  var previewBase = api.previewBase;
+  var rotateUrl = api.rotateUrl;
+  var rotationNote = api.rotationNote;
+  var PREVIEW_FRAME_TITLE = api.PREVIEW_FRAME_TITLE;
+  var ROTATE_MIN_SECONDS = api.ROTATE_MIN_SECONDS;
   var KEY43 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
+
+  function frames(rows) {
+    return {
+      querySelectorAll: function (selector) {
+        if (selector !== "iframe[title]") return [];
+        return rows.map(function (row) {
+          return {
+            getAttribute: function () {
+              return row[0];
+            },
+            src: row[1],
+          };
+        });
+      },
+    };
+  }
 
   var cases = [
     [isComposerUrl("https://arena.ai/agent"), true],
@@ -74,6 +95,18 @@ function checkPromptFill(api) {
       "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY"],
     [promptForSlug("clankers", "arena content", "PROXY"),
       "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY\nhere is ARENA.md:\narena content"],
+    [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
+    [ROTATE_MIN_SECONDS, 900],
+    [previewBase(frames([["App preview on port 8000", "https://sbx.example/"]])),
+      "https://sbx.example"],
+    [previewBase(frames([["Website", "https://x.example/"], ["App preview on port 8000", "https://sbx.example"]]))
+      ? "https://sbx.example" : null, "https://sbx.example"],
+    [previewBase(frames([["Website", "https://x.example/"]])) , null],
+    [previewBase(frames([["App preview on port 8000", ""]])), null],
+    [rotateUrl("https://h.example", "m k", 900), "https://h.example/v1/rotate?master=m%20k&min=900"],
+    [rotationNote(KEY43, "2026-10-03T15:00:00+00:00"),
+      "Arena proxy key rotated at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
+      ". Use it as ?key= in every /v1 call. Never print it."],
     // A plain prompt in the composer is rebuilt once the key arrives.
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, null, "PROXY"), true],
     // The finished prompt is left alone, so a write never repeats.

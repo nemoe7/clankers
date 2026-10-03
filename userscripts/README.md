@@ -34,6 +34,15 @@ If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` 
 
 The feature then fetches `rules/ARENA.md` from the fixed raw URL of this repository, `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill waits for that fetch and writes the composer one time per page. It appends the file under a `here is ARENA.md:` line. A failed fetch writes the plain prompt. The single write keeps the editor from linking `AGENTS.md` as a bare domain: a second write would put a line break after the name, and the editor reads that break as the end of a domain.
 
+### Arena proxy settings and key rotation
+
+The prompt fill also carries the Arena proxy. Two menu entries save the settings, `Arena proxy host — set` and `Arena proxy master key — set`, and a third, `Arena proxy rotate now — run`, rotates at once.
+
+- The host is one HTTPS origin with no path. A trailing `/v1` is trimmed.
+- With both settings saved, the fill asks `/v1/key` for the live agent key and appends a line naming the proxy and the routes. A plain prompt in the composer is rebuilt once the key arrives; a prompt that carries a draft is left alone.
+- Every 15 minutes the script asks `/v1/rotate` with `min=900`. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview with the new key, so the agent picks it up at its next inbox read.
+- The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
+
 ## Arena Open Steering
 
 After `/agent/`, the feature waits 1 second, then clicks the port 8000 row whose label mentions `steering` or `preview`, once per page. A running row wins over the `Start …` cards that earlier turns leave behind, and those cards are never clicked, because a click on one opens nothing. A row naming the repository outranks a renamed row, and the newest row breaks a tie. Matching ignores letter case.
