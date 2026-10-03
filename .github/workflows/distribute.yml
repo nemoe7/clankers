@@ -1,7 +1,11 @@
-# Dispatch-only distribution of ARENA.md, the preview skill, the proxy skill and the Gemini
-# release workflow. Two jobs, each with its own target list and its own dispatch override.
-# CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets.
-# Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
+# Dispatch-only distribution of ARENA.md, the skills and the Gemini release workflow.
+# One job walks the union of the two target lists and leaves exactly one commit per
+# target repository. The lists stay independent: the Arena files reach only the Arena
+# targets, and the Gemini workflow reaches only the Gemini targets.
+# CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write
+# on the Gemini targets.
+# Delivery is not activation: each session must start its own preview, and GitHub
+# activates a copied workflow on the target default branch.
 name: Distribute
 on:
   push:
@@ -34,12 +38,12 @@ env:
   REPOS_ARENA: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki"
   REPOS_GEMINI: "nemoe7/daedalus"
 jobs:
-  arena:
-    name: Distribute Arena
+  distribute:
+    name: Distribute
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     concurrency:
-      group: distribute-arena
+      group: distribute
       cancel-in-progress: false
     env:
       DEST: ARENA.md
@@ -49,17 +53,22 @@ jobs:
       SKILL_ROOT: skills
       SKILL_DEST_ROOT: .agents/skills
       LEGACY_SKILLS: "arena-live-steering arena-preview-reporting"
+      SRC_ROOT: github/workflows
+      DEST_ROOT: .github/workflows
+      FILES: "gemini-release.yml gemini_release.py"
     steps:
       - name: Check Out Source Repository
         uses: actions/checkout@v7
-      - name: Sync ARENA.md And The Preview Skill To Target Repos
+      - name: Sync The Rules, The Skills And The Gemini Release Workflow
         env:
           CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
-          TARGET_REPOS: ${{ inputs.repos }}
+          ARENA_TARGETS: ${{ inputs.repos }}
+          GEMINI_TARGETS: ${{ inputs.gemini_repos }}
         run: |
           set -e
-          list="${TARGET_REPOS:-$REPOS_ARENA}"
-          [ -n "$list" ] || { echo "::error::no target repos configured"; exit 1; }
+          arena_list="${ARENA_TARGETS:-$REPOS_ARENA}"
+          gemini_list="${GEMINI_TARGETS:-$REPOS_GEMINI}"
+          [ -n "${arena_list}${gemini_list}" ] || { echo "::error::no target repos configured"; exit 1; }
           src="$GITHUB_WORKSPACE/rules/ARENA.md"
           [ -f "$src" ] || { echo "::error::rules/ARENA.md missing"; exit 1; }
           for skill in $SKILLS; do
@@ -67,6 +76,15 @@ jobs:
               echo "::error::$skill missing"; exit 1;
             }
           done
+          for f in $FILES; do
+            [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
+          done
+
+          # Membership keeps the two target lists independent in one pass.
+          in_list() {
+            case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
+          }
+
           # One skill's shipped file list: tracked files, minus its README, and
           # minus the code paths for a documents-only skill.
           skill_files() {
@@ -77,129 +95,106 @@ jobs:
               *) printf '%s\n' "$out" ;;
             esac
           }
+
+          union=""
+          for repo in $arena_list $gemini_list; do
+            in_list "$union" "$repo" || union="$union $repo"
+          done
+
           failed=""
           # shellcheck disable=SC2016  # The helper expands the token when git calls it.
           git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
-          for repo in $list; do
+          for repo in $union; do
             (
               set -e
               work=$(mktemp -d)
               trap 'rm -rf "$work"' EXIT
               git clone "https://github.com/$repo.git" "$work"
-              mkdir -p "$work/$(dirname "$DEST")"
-              cp "$src" "$work/$DEST"
-              for legacy in $LEGACY_SKILLS; do
-                # shellcheck disable=SC2115  # $work comes from mktemp -d and $SKILL_DEST_ROOT is a fixed path.
-                rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
-              done
-              for skill in $SKILLS; do
-                skill_src="$SKILL_ROOT/$skill"
-                skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(skill_files "$skill")
-                [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
-                # shellcheck disable=SC2115  # $work comes from mktemp -d and $skill_dest is a fixed path.
-                rm -rf "$work/$skill_dest"
-                for f in $files; do
-                  mkdir -p "$work/$skill_dest/$(dirname "$f")"
-                  cp "$GITHUB_WORKSPACE/$skill_src/$f" "$work/$skill_dest/$f"
+              arena_target=0
+              gemini_target=0
+              in_list "$arena_list" "$repo" && arena_target=1
+              in_list "$gemini_list" "$repo" && gemini_target=1
+              if [ "$arena_target" = 1 ]; then
+                mkdir -p "$work/$(dirname "$DEST")"
+                cp "$src" "$work/$DEST"
+                for legacy in $LEGACY_SKILLS; do
+                  # shellcheck disable=SC2115  # $work comes from mktemp -d and this path is fixed.
+                  rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
                 done
-              done
+                for skill in $SKILLS; do
+                  skill_src="$SKILL_ROOT/$skill"
+                  skill_dest="$SKILL_DEST_ROOT/$skill"
+                  files=$(skill_files "$skill")
+                  [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
+                  # shellcheck disable=SC2115  # $work comes from mktemp -d and $skill_dest is a fixed path.
+                  rm -rf "$work/$skill_dest"
+                  for f in $files; do
+                    mkdir -p "$work/$skill_dest/$(dirname "$f")"
+                    cp "$GITHUB_WORKSPACE/$skill_src/$f" "$work/$skill_dest/$f"
+                  done
+                done
+              fi
+              if [ "$gemini_target" = 1 ]; then
+                mkdir -p "$work/$DEST_ROOT"
+                for f in $FILES; do
+                  cp "$GITHUB_WORKSPACE/$SRC_ROOT/$f" "$work/$DEST_ROOT/$f"
+                done
+              fi
               cd "$work"
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add "$DEST"
-              for skill in $SKILLS; do
-                git add "$SKILL_DEST_ROOT/$skill"
-              done
-              for legacy in $LEGACY_SKILLS; do
-                if [ -n "$(git ls-files "$SKILL_DEST_ROOT/$legacy")" ]; then
-                  git add -u -- "$SKILL_DEST_ROOT/$legacy"
-                fi
-              done
+              if [ "$arena_target" = 1 ]; then
+                git add "$DEST"
+                for skill in $SKILLS; do
+                  git add "$SKILL_DEST_ROOT/$skill"
+                done
+                for legacy in $LEGACY_SKILLS; do
+                  if [ -n "$(git ls-files "$SKILL_DEST_ROOT/$legacy")" ]; then
+                    git add -u -- "$SKILL_DEST_ROOT/$legacy"
+                  fi
+                done
+              fi
+              if [ "$gemini_target" = 1 ]; then
+                for f in $FILES; do
+                  git add "$DEST_ROOT/$f"
+                done
+              fi
               git diff --cached --quiet || {
                 git commit -m "chore: clankers sync"
                 git push -u origin HEAD
               }
-              git show "HEAD:$DEST" | cmp -s - "$src" || {
-                echo "::error::$repo: ARENA.md differs after sync"; exit 1;
-              }
-              for legacy in $LEGACY_SKILLS; do
-                [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$legacy")" ] || {
-                  echo "::error::$repo: retired skill $legacy remains"; exit 1;
+              if [ "$arena_target" = 1 ]; then
+                git show "HEAD:$DEST" | cmp -s - "$src" || {
+                  echo "::error::$repo: ARENA.md differs after sync"; exit 1;
                 }
-              done
-              for skill in $SKILLS; do
-                skill_src="$SKILL_ROOT/$skill"
-                skill_dest="$SKILL_DEST_ROOT/$skill"
-                files=$(skill_files "$skill")
-                have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
-                # shellcheck disable=SC2086  # The word split lists one path per line.
-                want=$(printf '%s\n' $files | sort)
-                [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
-                for f in $files; do
-                  git show "HEAD:$skill_dest/$f" | cmp -s - "$GITHUB_WORKSPACE/$skill_src/$f" || {
-                    echo "::error::$repo: $skill/$f differs"; exit 1;
+                for legacy in $LEGACY_SKILLS; do
+                  [ -z "$(git ls-tree -r --name-only HEAD -- "$SKILL_DEST_ROOT/$legacy")" ] || {
+                    echo "::error::$repo: retired skill $legacy remains"; exit 1;
                   }
                 done
-              done
-              echo "$repo: rules and the preview skill verified"
-            ) || failed="$failed $repo"
-          done
-          [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }
-  gemini-release:
-    name: Distribute Gemini Release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    concurrency:
-      group: distribute-gemini-release
-      cancel-in-progress: false
-    env:
-      SRC_ROOT: github/workflows
-      DEST_ROOT: .github/workflows
-      FILES: "gemini-release.yml gemini_release.py"
-    steps:
-      - name: Check Out Source Repository
-        uses: actions/checkout@v7
-      - name: Sync The Gemini Release Workflow To Target Repos
-        env:
-          CLANKERS_DIST_PAT: ${{ secrets.CLANKERS_DIST_PAT }}
-          TARGET_REPOS: ${{ inputs.gemini_repos }}
-        run: |
-          set -e
-          list="${TARGET_REPOS:-$REPOS_GEMINI}"
-          [ -n "$list" ] || { echo "::error::no target repos configured"; exit 1; }
-          for f in $FILES; do
-            [ -f "$GITHUB_WORKSPACE/$SRC_ROOT/$f" ] || { echo "::error::$SRC_ROOT/$f missing"; exit 1; }
-          done
-          failed=""
-          # shellcheck disable=SC2016  # The helper expands the token when git calls it.
-          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=$CLANKERS_DIST_PAT"; }; f'
-          for repo in $list; do
-            (
-              set -e
-              work=$(mktemp -d)
-              trap 'rm -rf "$work"' EXIT
-              git clone "https://github.com/$repo.git" "$work"
-              mkdir -p "$work/$DEST_ROOT"
-              for f in $FILES; do
-                cp "$GITHUB_WORKSPACE/$SRC_ROOT/$f" "$work/$DEST_ROOT/$f"
-              done
-              cd "$work"
-              git config user.name "github-actions[bot]"
-              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              for f in $FILES; do
-                git add "$DEST_ROOT/$f"
-              done
-              git diff --cached --quiet || {
-                git commit -m "chore: clankers sync"
-                git push -u origin HEAD
-              }
-              for f in $FILES; do
-                git show "HEAD:$DEST_ROOT/$f" | cmp -s - "$GITHUB_WORKSPACE/$SRC_ROOT/$f" || {
-                  echo "::error::$repo: $f differs after sync"; exit 1;
-                }
-              done
-              echo "$repo: gemini release workflow verified"
+                for skill in $SKILLS; do
+                  skill_src="$SKILL_ROOT/$skill"
+                  skill_dest="$SKILL_DEST_ROOT/$skill"
+                  files=$(skill_files "$skill")
+                  have=$(git ls-tree -r --name-only "HEAD:$skill_dest" | sort)
+                  # shellcheck disable=SC2086  # The word split lists one path per line.
+                  want=$(printf '%s\n' $files | sort)
+                  [ "$have" = "$want" ] || { echo "::error::$repo: $skill file-list mismatch"; exit 1; }
+                  for f in $files; do
+                    git show "HEAD:$skill_dest/$f" | cmp -s - "$GITHUB_WORKSPACE/$skill_src/$f" || {
+                      echo "::error::$repo: $skill/$f differs"; exit 1;
+                    }
+                  done
+                done
+              fi
+              if [ "$gemini_target" = 1 ]; then
+                for f in $FILES; do
+                  git show "HEAD:$DEST_ROOT/$f" | cmp -s - "$GITHUB_WORKSPACE/$SRC_ROOT/$f" || {
+                    echo "::error::$repo: $f differs after sync"; exit 1;
+                  }
+                done
+              fi
+              echo "$repo: verified"
             ) || failed="$failed $repo"
           done
           [ -z "$failed" ] || { echo "::error::sync failed for:$failed"; exit 1; }

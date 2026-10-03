@@ -258,6 +258,6 @@ def test_distribute_triggers_and_inputs():
   inputs = triggers["workflow_dispatch"]["inputs"]
   assert set(inputs) == {"repos", "gemini_repos"}
   assert all(value.get("default") == "" for value in inputs.values())
-  assert list(document["jobs"]) == ["arena", "gemini-release"]
+  assert list(document["jobs"]) == ["distribute"]
   for name in document["jobs"]:
     assert document["jobs"][name]["concurrency"]["cancel-in-progress"] is False
