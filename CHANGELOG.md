@@ -30,7 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Proxy key rotation**: the server makes a new random key on every start and prints it once. It never reads the key from the environment, on owner direction.
 - **Image publish**: `publish-arena-proxy-image.yml` builds `skills/arena-proxy/Dockerfile` for amd64 and arm64, and pushes `ghcr.io/nemoe7/arena-proxy` under the one mutable tag `latest`. The skill ships a compose file with a Tailscale sidecar and the funnel serve config.
 - **Install cadence**: ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`. The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
-- **Agent key panel**: The preview serves `POST /api/key`, which stores the key the userscript holds. The Downloads tab shows it with its arrival time, and `/api/state` carries it.
+- **Agent key panel**: The preview serves `POST /api/key`, which stores the key and the proxy host the userscript holds. The Downloads tab shows both with the arrival time, and `/api/state` carries them.
 
 ### Changed
 
@@ -42,7 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Rotation countdown and quiet notes**: The bundle saves the rotation due time. A reload therefore resumes the countdown instead of waiting a fresh 15 minutes. A second tab that asks early reads the key's age and waits. The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview. Version 1.2.1.
 - **Key watch**: The bundle asks the key route every minute. A container restart therefore reaches the agent inside a minute, not at the next rotation. A changed key swaps the composer line, posts one quiet note, and shows in the Downloads panel. Version 1.2.2.
-- **Connect tag**: The bundle carries `@connect *`, so the userscript manager stops asking the owner about each new preview host. Version 1.2.3.
+- **Connect tag**: The bundle carries `@connect arena.site`, so the userscript manager stops asking the owner about each new preview host. The rotation call moves to `fetch`, which keeps the owner's proxy host out of the file. Version 1.2.5.
+- **Preview carries the proxy**: The composer keeps the rules line only. The script posts the proxy host with the key, and the quiet note names both.
 
 #### system-prompts
 
