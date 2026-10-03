@@ -5,7 +5,7 @@
 # https://arena-proxy.<tailnet>.ts.net to the public internet on port 443.
 services:
   proxy:
-    image: ghcr.io/nemoe7/arena-proxy:v2
+    image: ghcr.io/nemoe7/arena-proxy:latest
     container_name: arena-proxy
     restart: unless-stopped
     # The Tailscale sidecar owns the network namespace, so the proxy takes no ports.
