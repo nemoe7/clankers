@@ -48,6 +48,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### system-prompts
 
 - **NemoGPT prompt revision**: The operator's tighter draft replaces the long prompt in `system-prompts/refs/NEMOGPT.md` and its live copy. The audit against `GUIDELINES.md` added the date line, a concrete refusal bar, exact banned openers, a restatement clause, and two worked examples. Confidentiality gives way to prompt transparency, per the draft.
+- **Live squash**: The live `system-prompts/NEMOGPT.md` copy compresses from its refs source to 12,578 characters and 2,428 `cl100k_base` tokens, with every section and rule kept.
+- **Prompt budget**: The root instruction-budgets table and `maintenance/check.py` now measure the live prompt, so its size is a recorded budget. `system-prompts/README.md` states the compressed-live convention.
 
 ## 2026-10-02
 
