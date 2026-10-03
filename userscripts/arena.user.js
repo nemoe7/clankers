@@ -377,12 +377,12 @@
 
     // One rotation pass: ask the backend to rotate when the key is old enough, then
     // carry the new key into the prompt and tell the agent through the preview.
-    function rotateKey(done) {
+    function rotateKey(minSeconds, done) {
       var pair = settings();
       if (!pair.host || !pair.master) return;
       requestJson(
         "GET",
-        rotateUrl(pair.host, pair.master, ROTATE_MIN_SECONDS),
+        rotateUrl(pair.host, pair.master, minSeconds),
         null,
         function (status, body) {
           if (status !== 200 || !body || body.rotated !== true || !body.key) {
@@ -404,14 +404,15 @@
 
     if (typeof GM_registerMenuCommand === "function") {
       proxyMenus.push(
+        // A manual press forces the rotation; the timer holds the minimum age.
         GM_registerMenuCommand("Arena proxy rotate now — run", function () {
-          rotateKey(null);
+          rotateKey(0, null);
         }),
       );
     }
 
     var rotateTimer = setInterval(function () {
-      rotateKey(null);
+      rotateKey(ROTATE_MIN_SECONDS, null);
     }, ROTATE_INTERVAL_MS);
 
     var lastSlug = null;
