@@ -45,6 +45,7 @@ EXPECTED_BUDGETS = {
   "rules/kilo/debug.md": "cl100k_base",
   "rules/kilo/plan.md": "cl100k_base",
   "rules/COMMIT-SPEC.txt": "cl100k_base",
+  "system-prompts/NEMOGPT.md": "cl100k_base",
   "skills/arena-proxy/SKILL.md": "cl100k_base",
   "skills/arena-preview-steering/SKILL.md": "UTF-8 file size",
   # The distributed assets and scripts carry the minified build from `maintenance/minify.py`.
