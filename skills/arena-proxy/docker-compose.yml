@@ -1,5 +1,6 @@
 # Runs the published arena-proxy image behind a Tailscale sidecar.
-# Set TS_AUTHKEY and ARENA_PROXY_KEY in the environment, or in a .env file.
+# Set TS_AUTHKEY in the environment, or in a .env file.
+# Leave ARENA_PROXY_KEY empty and every start makes a new key, printed once in the log.
 # The sidecar applies tailscale-serve.json and publishes the funnel URL
 # https://arena-proxy.<tailnet>.ts.net to the public internet on port 443.
 services:
@@ -10,7 +11,7 @@ services:
     # The Tailscale sidecar owns the network namespace, so the proxy takes no ports.
     network_mode: service:tailscale
     environment:
-      ARENA_PROXY_KEY: ${ARENA_PROXY_KEY:?set ARENA_PROXY_KEY}
+      ARENA_PROXY_KEY: ${ARENA_PROXY_KEY:-}
       ARENA_PROXY_REPO: ${ARENA_PROXY_REPO:-nemoe7/clankers}
     volumes:
       - arena-proxy-state:/state

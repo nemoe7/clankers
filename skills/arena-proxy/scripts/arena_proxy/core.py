@@ -390,12 +390,20 @@ def parse_args(argv=None):
   return options
 
 
+def agent_key(value):
+  """Return the key to serve with, and whether this start made a fresh one."""
+  if value:
+    return value, False
+  return secrets.token_urlsafe(32), True
+
+
 def main(argv=None):
   """Run the backend, or print a generated key."""
   options = parse_args(argv)
   if options.generate_key:
     print(secrets.token_urlsafe(32))
     return 0
+  options.key, generated = agent_key(options.key)
   if len(options.key) < MIN_KEY_LENGTH:
     print(
       f"ARENA_PROXY_KEY must hold at least {MIN_KEY_LENGTH} characters. Make one with --generate-key.",
@@ -404,6 +412,8 @@ def main(argv=None):
     return 2
   os.makedirs(options.state_dir, exist_ok=True)
   server = build_server(options)
+  if generated:
+    print(f"agent key (new on every start): {options.key}", flush=True)
   print(
     f"arena-proxy {VERSION} on http://{options.host}:{options.port};"
     f" github token {'set' if options.token else 'missing'};"

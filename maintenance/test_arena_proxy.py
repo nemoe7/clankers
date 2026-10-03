@@ -374,3 +374,12 @@ def test_log_line_drops_the_query_string():
   assert (
     core.log_line("GET", "/v1/github?key=SECRET&path=x", 200) == "GET /v1/github -> 200"
   )
+
+
+def test_agent_key_is_made_when_unset():
+  made, generated = core.agent_key("")
+  assert generated and len(made) >= core.MIN_KEY_LENGTH
+  other, _ = core.agent_key("")
+  assert other != made
+  pinned, generated = core.agent_key(KEY)
+  assert pinned == KEY and not generated

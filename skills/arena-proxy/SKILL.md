@@ -145,6 +145,7 @@ docker run --rm -p 8787:8787 \
   [`tailscale-serve.json`](tailscale-serve.json) carries the funnel route.
 - Images are multi-arch, so an arm64 host pulls and builds natively.
 - The image holds no secrets: pass them as environment variables, and mount a volume when staged bytes should outlive the container.
+- With no `ARENA_PROXY_KEY`, every start makes a random one and prints `agent key (new on every start): ...`. Set the variable to pin a stable key.
 - The server holds no state beyond the state directory, so `--rm` costs nothing but staged bytes.
 
 ### Host notes
