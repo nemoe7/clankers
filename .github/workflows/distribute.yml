@@ -117,7 +117,7 @@ jobs:
                 fi
               done
               git diff --cached --quiet || {
-                git commit -m "chore(arena): sync rules and preview skills from nemoe7/clankers"
+                git commit -m "chore: clankers sync"
                 git push -u origin HEAD
               }
               git show "HEAD:$DEST" | cmp -s - "$src" || {
@@ -191,7 +191,7 @@ jobs:
                 git add "$DEST_ROOT/$f"
               done
               git diff --cached --quiet || {
-                git commit -m "chore(release): sync gemini release workflow from nemoe7/clankers"
+                git commit -m "chore: clankers sync"
                 git push -u origin HEAD
               }
               for f in $FILES; do
