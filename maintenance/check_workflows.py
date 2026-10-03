@@ -25,6 +25,7 @@ REQUIRED_FILES = (
   "secret-scan.yml",
   "workflow-security.yml",
   "pr-check.yml",
+  "release-gpt-plugins.yml",
 )
 
 # A pull request can run untrusted code, so these scopes stay out of its workflows.

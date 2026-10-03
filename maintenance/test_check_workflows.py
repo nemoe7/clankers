@@ -42,6 +42,7 @@ def test_required_file_set_is_exact():
     "secret-scan.yml",
     "workflow-security.yml",
     "pr-check.yml",
+    "release-gpt-plugins.yml",
   )
 
 
