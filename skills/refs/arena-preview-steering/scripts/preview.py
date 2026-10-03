@@ -861,12 +861,13 @@ def poll_inbox(store, pretty=False, sleeper=None):
   store.start_poll()
   try:
     for index in range(POLL_MAX_LOOPS):
-      listing = store.read()
+      listing = store.read(include_quiet=False)
       if listing["pending"]:
-        print(cli_json(listing, pretty), flush=True)
-        store.mark_seen([item["id"] for item in listing["pending"]])
+        full = store.read()
+        print(cli_json(full, pretty), flush=True)
+        store.mark_seen([item["id"] for item in full["pending"]])
         store.mark_reports_agent_seen(
-          [item.get("report_id") for item in listing["pending"]]
+          [item.get("report_id") for item in full["pending"]]
         )
         return 0
       open_tasks = [
@@ -1026,7 +1027,8 @@ class Store:
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
           text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,
           ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,
-          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0
+          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,
+          quiet INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS reports (
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
@@ -1083,6 +1085,10 @@ class Store:
         db.execute(
           "ALTER TABLE notes ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0"
         )
+      if "quiet" not in columns:
+        # A quiet note carries information the agent needs when it looks, and it
+        # never wakes a poll or stops a command. The userscript posts the key this way.
+        db.execute("ALTER TABLE notes ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0")
       if "origin" in columns:
         # The author tag is gone from the note schema; drop a column a restore might
         # still carry so SELECT * never resurfaces it on the state surface.
@@ -1175,6 +1181,7 @@ class Store:
     shared=None,
     replies=None,
     ack_edited_seen_count=None,
+    quiet=False,
   ):
     """Record a message; a restore carries its receipt and it is written as given.
 
@@ -1201,8 +1208,18 @@ class Store:
       db.execute(
         "INSERT INTO notes"
         " (id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id,"
-        " replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (note_id, text, at or now(), *receipt, seen, task_id, more, seen_reply_count),
+        " replies, ack_edited_seen_count, quiet) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+          note_id,
+          text,
+          at or now(),
+          *receipt,
+          seen,
+          task_id,
+          more,
+          seen_reply_count,
+          1 if quiet else 0,
+        ),
       )
       reset_poll_count(db)
       return message_row(
@@ -2184,7 +2201,7 @@ class Store:
     """
     with closing(self.connect()) as db, db:
       pending = db.execute(
-        "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL)"
+        "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0)"
         " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
       ).fetchone()[0]
       polls = meta_number(db, POLLS_SINCE_MESSAGE)
@@ -2192,12 +2209,15 @@ class Store:
       return not pending
     return not (pending and polls >= threshold)
 
-  def read(self):
+  def read(self, include_quiet=True):
+    """The unacknowledged items. A poll passes False, so a quiet note never wakes it."""
+    quiet_filter = "" if include_quiet else " AND quiet = 0"
     with self.transaction() as db:
       pending = [
         dict(row) | {"kind": "note"}
         for row in db.execute(
-          "SELECT * FROM notes WHERE acknowledged_at IS NULL ORDER BY seq"
+          "SELECT * FROM notes WHERE acknowledged_at IS NULL"
+          f"{quiet_filter} ORDER BY seq"
         )
       ]
       pending += [
@@ -3026,7 +3046,9 @@ def handler(store):
             note[key] = clip_stamp(note[key])
           self.reply(201, json.dumps(note, ensure_ascii=False))
           return
-        note = store.note(payload.get("id"), payload.get("text"))
+        note = store.note(
+          payload.get("id"), payload.get("text"), quiet=bool(payload.get("quiet"))
+        )
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))

@@ -3677,3 +3677,54 @@ def test_probe_route_answers_the_caller():
     # The probe changes no state.
     status, _, body = request("GET", "/api/state")
     assert status == 200
+
+
+def test_quiet_note_never_wakes_the_poll():
+  """A quiet note is readable and unacknowledged, yet it wakes nothing and stops nothing."""
+  with tempfile.TemporaryDirectory() as quiet_dir:
+    store = preview.Store(quiet_dir, create=True)
+    store.note("key-note", "Arena proxy key rotated. New key: K", quiet=True)
+    # A read still shows it, so the agent finds the new key when it looks.
+    assert [item["id"] for item in store.read()["pending"]] == ["key-note"]
+    # The poll passes over it and runs its whole span.
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    sleeps = []
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      rc = preview.poll_inbox(store, sleeper=lambda seconds: sleeps.append(seconds))
+      assert rc == 1
+      assert sleeps == [10, 10]
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+    # A checkpoint lets a command through: a quiet note is not owner work.
+    assert store.gate(pending_only=True) is True
+
+    # An owner note still wakes the poll, and the quiet note rides that read.
+    def arriving_sleeper(seconds):
+      store.note("owner-note", "Owner work")
+
+    rc = preview.poll_inbox(store, sleeper=arriving_sleeper)
+    assert rc == 0
+    seen = {note["id"]: note["seen_at"] for note in store.state()["notes"]}
+    assert seen["owner-note"] is not None and seen["key-note"] is not None
+
+
+def test_quiet_note_route():
+  """POST /api/notes takes the quiet flag from the userscript."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "arena-preview", create=True)
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    status, _, body = request(
+      "POST",
+      "/api/notes",
+      json.dumps({"id": "key-note", "text": "key rotated", "quiet": True}),
+      {"Content-Type": "application/json"},
+    )
+    assert status == 201
+    assert json.loads(body)["quiet"] == 1
+    assert [note["id"] for note in store.read()["pending"]] == ["key-note"]
+    assert store.gate(pending_only=True) is True
+    # The page still shows it.
+    assert [note["id"] for note in store.state()["notes"]] == ["key-note"]

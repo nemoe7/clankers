@@ -394,7 +394,13 @@
           var at = body.at || new Date().toISOString();
           var line = rotationNote(body.key, at);
           if (base) {
-            requestJson("POST", base + "/api/notes", { text: line }, function () {});
+            // Quiet: the note never wakes the agent's poll and never stops a command.
+            requestJson(
+              "POST",
+              base + "/api/notes",
+              { text: line, quiet: true },
+              function () {},
+            );
           }
           sync();
           if (typeof done === "function") done(true);
