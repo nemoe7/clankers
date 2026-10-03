@@ -30,6 +30,9 @@ function checkPromptFill(api) {
   var rotationNote = api.rotationNote;
   var PREVIEW_FRAME_TITLE = api.PREVIEW_FRAME_TITLE;
   var ROTATE_MIN_SECONDS = api.ROTATE_MIN_SECONDS;
+  var ROTATE_DUE_KEY = api.ROTATE_DUE_KEY;
+  var rotationDueAt = api.rotationDueAt;
+  var rotationWaitMs = api.rotationWaitMs;
   var KEY43 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
 
   function frames(rows) {
@@ -97,6 +100,14 @@ function checkPromptFill(api) {
       "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY\nhere is ARENA.md:\narena content"],
     [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
     [ROTATE_MIN_SECONDS, 900],
+    [ROTATE_DUE_KEY, "clankers-arena-rotate-due"],
+    // A saved due time carries the countdown across reloads and tabs.
+    [rotationDueAt(1000000, 0, 900), 1900000],
+    [rotationDueAt(1000000, 895, 900), 1005000],
+    [rotationDueAt(1000000, 900, 900), 1000000],
+    [rotationDueAt(1000000, 2000, 900), 1000000],
+    [rotationWaitMs(1900000, 1000000), 900000],
+    [rotationWaitMs(1000000, 1900000), 0],
     [previewBase(frames([["App preview on port 8000", "https://sbx.example/"]])),
       "https://sbx.example"],
     [previewBase(frames([["Website", "https://x.example/"], ["App preview on port 8000", "https://sbx.example"]]))

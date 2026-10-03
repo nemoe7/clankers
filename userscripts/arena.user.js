@@ -163,6 +163,7 @@
 
     var ROTATE_MIN_SECONDS = 900;
     var ROTATE_INTERVAL_MS = ROTATE_MIN_SECONDS * 1000;
+    var ROTATE_DUE_KEY = "clankers-arena-rotate-due";
     var PREVIEW_FRAME_TITLE = "App preview on port 8000";
 
     function previewBase(doc) {
@@ -193,6 +194,17 @@
         key +
         ". Use it as ?key= in every /v1 call. Never print it."
       );
+    }
+
+    // One countdown survives a reload and the other tabs: the due time is saved, so a
+    // reload resumes the wait instead of starting a fresh one. The server still holds
+    // the minimum age, so a second tab can only lose the race.
+    function rotationDueAt(nowMs, ageSeconds, minSeconds) {
+      return nowMs + Math.max(0, minSeconds - ageSeconds) * 1000;
+    }
+
+    function rotationWaitMs(dueMs, nowMs) {
+      return Math.max(0, dueMs - nowMs);
     }
 
     // GM_xmlhttpRequest skips the page's cross-origin and CSP rules, so it carries
@@ -284,6 +296,9 @@
       proxyLine: proxyLine,
       PREVIEW_FRAME_TITLE: PREVIEW_FRAME_TITLE,
       ROTATE_MIN_SECONDS: ROTATE_MIN_SECONDS,
+      ROTATE_DUE_KEY: ROTATE_DUE_KEY,
+      rotationDueAt: rotationDueAt,
+      rotationWaitMs: rotationWaitMs,
       previewBase: previewBase,
       rotateUrl: rotateUrl,
       rotationNote: rotationNote,
@@ -380,15 +395,36 @@
     function rotateKey(minSeconds, done) {
       var pair = settings();
       if (!pair.host || !pair.master) return;
+      // The timer skips a wait that has not elapsed. A manual press passes 0 and forces.
+      if (
+        minSeconds > 0 &&
+        rotationWaitMs(Number(GM_getValue(ROTATE_DUE_KEY, 0)), Date.now()) > 0
+      ) {
+        return;
+      }
       requestJson(
         "GET",
         rotateUrl(pair.host, pair.master, minSeconds),
         null,
         function (status, body) {
-          if (status !== 200 || !body || body.rotated !== true || !body.key) {
+          if (status !== 200 || !body) {
             if (typeof done === "function") done(false);
             return;
           }
+          if (body.rotated !== true || !body.key) {
+            // The server holds the minimum age and reports the key's age.
+            var age = typeof body.age === "number" ? body.age : ROTATE_MIN_SECONDS;
+            GM_setValue(
+              ROTATE_DUE_KEY,
+              rotationDueAt(Date.now(), age, ROTATE_MIN_SECONDS),
+            );
+            if (typeof done === "function") done(false);
+            return;
+          }
+          GM_setValue(
+            ROTATE_DUE_KEY,
+            rotationDueAt(Date.now(), 0, ROTATE_MIN_SECONDS),
+          );
           proxyLineCache = proxyLine(pair.host, body.key);
           var base = previewBase(document);
           var at = body.at || new Date().toISOString();
@@ -416,6 +452,10 @@
         }),
       );
     }
+
+    // The first call runs the saved countdown: after a reload the key is due, it rotates
+    // at once, and a fresh key only refreshes the due time.
+    rotateKey(ROTATE_MIN_SECONDS, null);
 
     var rotateTimer = setInterval(function () {
       rotateKey(ROTATE_MIN_SECONDS, null);

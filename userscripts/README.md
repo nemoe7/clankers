@@ -41,6 +41,7 @@ The prompt fill also carries the Arena proxy. Two menu entries save the settings
 - The host is one HTTPS origin with no path. A trailing `/v1` is trimmed.
 - With both settings saved, the fill asks `/v1/key` for the live agent key and appends a line naming the proxy and the routes. A plain prompt in the composer is rebuilt once the key arrives; a prompt that carries a draft is left alone.
 - Every 15 minutes the script asks `/v1/rotate` with `min=900`. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview with the new key, so the agent picks it up at its next inbox read.
+- The due time is saved, so a reload resumes the countdown instead of waiting a fresh 15 minutes. The backend holds the minimum age, so a second tab that asks early is told the key's age and waits.
 - The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
 
 ## Arena Open Steering
