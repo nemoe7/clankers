@@ -41,6 +41,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **Rotation countdown and quiet notes**: The bundle saves the rotation due time. A reload therefore resumes the countdown instead of waiting a fresh 15 minutes. A second tab that asks early reads the key's age and waits. The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview. Version 1.2.1.
+- **Key watch**: The bundle asks the key route every minute. A container restart therefore reaches the agent inside a minute, not at the next rotation. A changed key swaps the composer line, posts one quiet note, and shows in the Downloads panel. Version 1.2.2.
 
 #### system-prompts
 
