@@ -14,6 +14,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Token limit**: A user personal access token cannot reach the sandbox, because the egress proxy replaces the Authorization header.
 - **Preview fetch proxy**: The preview can fetch a blocked public URL through the owner's browser, and the archive entry lists its limits.
 - **Fetch tool reach**: `fetch_page` reads public text on hosts that the sandbox egress filter blocks. It cannot carry a token, and it cannot read binary bytes.
+- **Turn-start reads**: ARENA.md now requires a turn-start reread of itself and every AGENTS.md in the repository, and again after a compaction or summary. This clause landed on the owner's approval. The refs copy carries the full line, and the live and root copies carry the compressed form.
 
 #### skills
 
@@ -29,8 +30,17 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Proxy key rotation**: the server makes a new random key on every start and prints it once. It never reads the key from the environment, on owner direction.
 - **Image publish**: `publish-arena-proxy-image.yml` builds `skills/arena-proxy/Dockerfile` for amd64 and arm64, and pushes `ghcr.io/nemoe7/arena-proxy` under the one mutable tag `latest`. The skill ships a compose file with a Tailscale sidecar and the funnel serve config.
 - **Install cadence**: ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`. The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
+- **Agent key panel**: The preview serves `POST /api/key`, which stores the key the userscript holds. The Downloads tab shows it with its arrival time, and `/api/state` carries it.
 
 ### Changed
+
+#### skills
+
+- **Key recovery**: The proxy skill states one inbox read after a 401, then a retry with the newest key note.
+
+#### userscripts
+
+- **Rotation countdown and quiet notes**: The bundle saves the rotation due time. A reload therefore resumes the countdown instead of waiting a fresh 15 minutes. A second tab that asks early reads the key's age and waits. The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview. Version 1.2.1.
 
 #### system-prompts
 
