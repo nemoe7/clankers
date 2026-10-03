@@ -84,6 +84,29 @@ function scrollHistory(force) {
   const near = history.scrollHeight - history.scrollTop - history.clientHeight < 80;
   if (force || near) history.scrollTop = history.scrollHeight;
 }
+// The header times the agent's wait: the server stamps the wait start, and the text ticks once a
+// second, so a long wait stays visible while it runs. The stamp is second-precision UTC, and the
+// trailing Z is added back for the browser's parser.
+let pollSince = null;
+let connectionBase = 'Connecting…';
+function stampMs(value) {
+  if (typeof value !== 'string') return null;
+  const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value) ? `${value}Z` : value;
+  const parsed = Date.parse(stamp);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function duration(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return minutes ? `${minutes}m ${String(seconds).padStart(2, '0')}s` : `${seconds}s`;
+}
+function pollSuffix() {
+  return pollSince === null ? '' : ` · agent in poll ${duration(Date.now() - pollSince)}`;
+}
+function paintConnection() {
+  if (pollSince !== null) $('#connection-text').textContent = connectionBase + pollSuffix();
+}
 const chromeButton = $('#chrome');
 const composerButton = $('#composer-toggle');
 const chromeLabels = { text: ['▲', '▼'], name: ['Collapse bar', 'Expand bar'] };
@@ -547,8 +570,13 @@ async function refreshState() {
     // the stderr banner names without leaving the page.
     const calls = state.calls_since_message || 0;
     const callsText = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'} since your last message` : '';
-    setConnection(state.polling ? 'polling' : 'ok', saved + callsText);
-    if (state.rendering_error) $('#connection-text').textContent += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+    pollSince = state.polling ? stampMs(state.polling_since) : null;
+    connectionBase = saved + callsText;
+    setConnection(state.polling ? 'polling' : 'ok', connectionBase + pollSuffix());
+    if (state.rendering_error) {
+      connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+      paintConnection();
+    }
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
@@ -582,7 +610,7 @@ async function refreshState() {
     // receipt tracks the selected report's latest answer.
     updateReportPip(state.reports);
     renderReportAcknowledgement();
-  } catch (error) { setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
+  } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
     stateBusy = false;
     if (queueReady && (lastState.fetch_jobs || []).some(item => item.approval === 'approved'
@@ -1636,3 +1664,5 @@ $('#unpublish-report').addEventListener('click', async () => {
 $('#refresh-notes').addEventListener('click', refreshState);
 refreshState();
 setInterval(refreshState, 3000);
+// The wait timer repaints between state refreshes, so the seconds move without a fetch.
+setInterval(paintConnection, 1000);

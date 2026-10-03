@@ -898,8 +898,15 @@ test('preview client', async (t) => {
     assert.equal(get('#connection-dot').dataset.state, 'polling');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
-    state.polling = false;
+    // A poll start times the wait in the header; the clock ticks between state refreshes.
+    state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
+    assert.match(get('#connection-text').textContent, /^3 messages saved · agent in poll 1m 0[5-9]s$/);
+    await tick();
+    state.polling = false;
+    state.polling_since = null;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-text').textContent, '3 messages saved');
     // The header names the bash calls since the owner's last message, singular and plural.
     state.calls_since_message = 94;
     await get('#refresh-notes').events.click(); await tick();

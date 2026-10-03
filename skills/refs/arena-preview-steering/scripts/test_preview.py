@@ -3338,18 +3338,29 @@ def test_poll_inbox():
       assert store.state()["notes"] == []
 
       # The page lights its blue dot on a fresh poll heartbeat, and the poll clears it.
+      # The wait start rides the heartbeat, so the page can time the wait.
       heartbeats = []
+      waits = []
 
       def watching_sleeper(seconds):
         heartbeats.append(store.polling())
+        waits.append(store.state()["polling_since"])
         sleeps.append(seconds)
 
       sleeps.clear()
       rc = preview.poll_inbox(store, sleeper=watching_sleeper)
       assert rc == 1
       assert heartbeats == [True, True]
+      assert all(wait for wait in waits), waits
       assert store.polling() is False
       assert store.state()["polling"] is False
+      assert store.state()["polling_since"] is None
+
+      store.start_poll()
+      start = store.state()["polling_since"]
+      assert start and start == store.meta_value(preview.POLL_SINCE_META)[:19]
+      store.clear_polling()
+      assert store.state()["polling_since"] is None
 
       store.stamp_polling()
       assert store.polling() is True

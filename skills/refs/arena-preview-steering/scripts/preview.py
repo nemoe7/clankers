@@ -845,6 +845,8 @@ def print_read(store, pretty=False):
 POLL_INTERVAL = 1
 POLL_MAX_LOOPS = 900
 POLLING_META = "polling_at"
+# The wait start is stamped once, so the page can show how long the agent has waited.
+POLL_SINCE_META = "polling_since"
 # The page shows its polling dot while a poll heartbeat is no older than this.
 POLLING_FRESH_SECONDS = 5.0
 
@@ -856,7 +858,7 @@ def poll_inbox(store, pretty=False, sleeper=None):
   # The wait always runs its span; only a new message or an unblocked task breaks
   # it, and the check sits inside the loop so a task arriving mid-wait breaks too.
   # One heartbeat a second, so the page can light its dot while the agent waits here.
-  store.stamp_polling()
+  store.start_poll()
   try:
     for index in range(POLL_MAX_LOOPS):
       listing = store.read()
@@ -1365,6 +1367,10 @@ class Store:
         "workspace": workspace_usage(),
         "last_check": clip_stamp(meta.get("last_check")),
         "polling": self.polling(),
+        # The wait start rides the heartbeat, so a stale stamp never shows.
+        "polling_since": (
+          clip_stamp(meta.get(POLL_SINCE_META)) if self.polling() else None
+        ),
         # The message log header names the bash calls since the owner's last message.
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
       }
@@ -2090,10 +2096,19 @@ class Store:
     with closing(self.connect()) as db, db:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLING_META, now()))
 
-  def clear_polling(self):
-    """Drop the poll heartbeat, so the page returns to its connected dot."""
+  def start_poll(self):
+    """Record the heartbeat and the wait start, so the page can time the wait."""
     with closing(self.connect()) as db, db:
-      db.execute("DELETE FROM meta WHERE key = ?", (POLLING_META,))
+      stamp = now()
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLING_META, stamp))
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLL_SINCE_META, stamp))
+
+  def clear_polling(self):
+    """Drop the poll heartbeat and the wait start, so the page returns to its connected dot."""
+    with closing(self.connect()) as db, db:
+      db.execute(
+        "DELETE FROM meta WHERE key IN (?, ?)", (POLLING_META, POLL_SINCE_META)
+      )
 
   def polling(self):
     """True while a poll heartbeat sits inside the freshness window."""
