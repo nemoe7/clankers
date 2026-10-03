@@ -62,6 +62,8 @@ def fetch_url(url, cap, timeout=FETCH_TIMEOUT_SECONDS):
   """Fetch one allowed URL and return its bytes and content type."""
   if not allowed_url(url):
     raise TransferError(400, "url must be https://, or http:// on a loopback host")
+  # The fetch proxy takes a caller-supplied URL by design. The guard above checks it.
+  # codeql[py/full-ssrf]
   request = urllib.request.Request(url, headers={"User-Agent": "arena-proxy/2"})
   try:
     with urllib.request.urlopen(request, timeout=timeout) as response:

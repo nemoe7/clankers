@@ -1,8 +1,0 @@
-# The fetch route of arena-proxy hands a caller-supplied URL to urllib on purpose:
-# that is the feature. The `allowed_url` guard rejects private, link-local,
-# metadata and single-label hosts, and its tests pin that behaviour. The
-# `py/full-ssrf` rule therefore reports the design of this proxy, not a bug in it,
-# so the rule is excluded here. Every other Python rule still runs.
-query-filters:
-  - exclude:
-      id: py/full-ssrf
