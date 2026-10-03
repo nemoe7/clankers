@@ -32,13 +32,6 @@ jobs:
           # The push uses the token from the login step, not a stored credential.
           persist-credentials: false
 
-      - name: Read The Package Version
-        id: version
-        run: |
-          set -eu
-          version="$(python3 -c 'import pathlib, re; text = pathlib.Path("skills/arena-proxy/scripts/arena_proxy/__init__.py").read_text(); print(re.search(r"VERSION = \"([^\"]+)\"", text).group(1))')"
-          printf 'version=%s\nmajor=%s\n' "$version" "${version%%.*}" >> "$GITHUB_OUTPUT"
-
       - name: Set Up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -60,7 +53,5 @@ jobs:
           push: true
           # An arm64 host pulls the right layer instead of emulating amd64.
           platforms: linux/amd64,linux/arm64
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/arena-proxy:latest
-            ghcr.io/${{ github.repository_owner }}/arena-proxy:v${{ steps.version.outputs.major }}
-            ghcr.io/${{ github.repository_owner }}/arena-proxy:v${{ steps.version.outputs.version }}
+          # One mutable tag. The owner pulls latest and manages no versions.
+          tags: ghcr.io/${{ github.repository_owner }}/arena-proxy:latest

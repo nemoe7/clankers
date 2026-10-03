@@ -140,7 +140,7 @@ docker run --rm -p 8787:8787 \
   arena-proxy
 ```
 
-- The published image is `ghcr.io/nemoe7/arena-proxy`, tagged `v<version>`, `v<major>` and `latest`.
+- The published image is `ghcr.io/nemoe7/arena-proxy:latest`, one mutable tag that follows the branch head.
 - [`docker-compose.yml`](docker-compose.yml) runs that image behind a Tailscale sidecar, and
   [`tailscale-serve.json`](tailscale-serve.json) carries the funnel route.
 - Images are multi-arch, so an arm64 host pulls and builds natively.
