@@ -26,7 +26,6 @@ import hmac
 import io
 import json
 import os
-import re
 import secrets
 import sys
 import urllib.error
@@ -44,7 +43,15 @@ LOG_CAP_BYTES = 200_000
 LOG_TAIL_LINES = 400
 TIMEOUT_SECONDS = 30
 CHUNK_BYTES = 1_048_576
-REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+REPO_CHARS = frozenset(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"
+)
+
+
+def valid_repo(value: str) -> bool:
+  """Accept owner/name only, with ASCII letters, digits, dot, dash and underscore."""
+  parts = value.split("/")
+  return len(parts) == 2 and all(part and set(part) <= REPO_CHARS for part in parts)
 
 
 def request_target(target: str) -> tuple[str, dict[str, list[str]]]:
@@ -198,7 +205,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         {"error": "run must be a workflow run id", "example": "/v1/logs?run=123456789"},
       )
       return
-    if not REPO_RE.fullmatch(repo):
+    if not valid_repo(repo):
       self._send_json(
         400,
         {

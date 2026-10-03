@@ -182,3 +182,13 @@ def test_log_line_drops_the_query_string():
 def test_log_tail_rejects_non_zip_bytes():
   module = load_server()
   assert module.log_tail(b"not a zip") is None
+
+
+def test_repo_validation_accepts_the_owner_name_shape():
+  module = load_server()
+  assert module.valid_repo("o/r") is True
+  assert module.valid_repo("owner-1/repo_2.name") is True
+  assert module.valid_repo("o/r/extra") is False
+  assert module.valid_repo("o//r") is False
+  assert module.valid_repo("") is False
+  assert module.valid_repo("o/r\n") is False
