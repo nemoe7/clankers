@@ -1481,9 +1481,13 @@ function approvalRow(item) {
 }
 // The Downloads tab shows the key the userscript holds, so a stale key is visible at once.
 function renderAgentKey(record) {
-  $('#agent-key').textContent = record
-    ? `Agent key the userscript holds: ${record.key} · set ${time(record.at)}`
-    : 'No agent key recorded yet.';
+  if (!record) {
+    $('#agent-key').textContent = 'No agent key recorded yet.';
+    return;
+  }
+  const host = record.host ? ` · host ${record.host}` : '';
+  $('#agent-key').textContent =
+    `Agent key the userscript holds: ${record.key}${host} · set ${time(record.at)}`;
 }
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);

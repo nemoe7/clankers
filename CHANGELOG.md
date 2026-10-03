@@ -15,6 +15,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Preview fetch proxy**: The preview can fetch a blocked public URL through the owner's browser, and the archive entry lists its limits.
 - **Fetch tool reach**: `fetch_page` reads public text on hosts that the sandbox egress filter blocks. It cannot carry a token, and it cannot read binary bytes.
 - **Turn-start reads**: ARENA.md now requires a turn-start reread of itself and every AGENTS.md in the repository, and again after a compaction or summary. This clause landed on the owner's approval. The refs copy carries the full line, and the live and root copies carry the compressed form.
+- **Proxy pointer**: The ARENA.md Use section now points to the `arena-proxy` skill for a task that needs a source the sandbox cannot reach. The refs copy carries the full line and the live and root copies the compressed form.
+- **Skill content**: Every skill now holds only what an agent needs to use it. Design decisions, background, rationale and history go to this changelog or the archive, as the root AGENTS.md and the skills guide both state.
+- **Skill audit**: The `arena-proxy` and `squash` skills drop the owner setup steps and the rationale clauses an agent cannot act on. The vendored `web-interface-guidelines` skill stays verbatim.
+- **Interface verification**: The NemoGPT search rule now names a menu path and a setting beside the API and platform cases. The live copy keeps the same line, and the budget row follows.
 
 #### skills
 
@@ -30,7 +34,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Proxy key rotation**: the server makes a new random key on every start and prints it once. It never reads the key from the environment, on owner direction.
 - **Image publish**: `publish-arena-proxy-image.yml` builds `skills/arena-proxy/Dockerfile` for amd64 and arm64, and pushes `ghcr.io/nemoe7/arena-proxy` under the one mutable tag `latest`. The skill ships a compose file with a Tailscale sidecar and the funnel serve config.
 - **Install cadence**: ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`. The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
-- **Agent key panel**: The preview serves `POST /api/key`, which stores the key the userscript holds. The Downloads tab shows it with its arrival time, and `/api/state` carries it.
+- **Agent key panel**: The preview serves `POST /api/key`, which stores the key and the proxy host the userscript holds. The Downloads tab shows both with the arrival time, and `/api/state` carries them.
 
 ### Changed
 
@@ -42,10 +46,19 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Rotation countdown and quiet notes**: The bundle saves the rotation due time. A reload therefore resumes the countdown instead of waiting a fresh 15 minutes. A second tab that asks early reads the key's age and waits. The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview. Version 1.2.1.
 - **Key watch**: The bundle asks the key route every minute. A container restart therefore reaches the agent inside a minute, not at the next rotation. A changed key swaps the composer line, posts one quiet note, and shows in the Downloads panel. Version 1.2.2.
+- **Connect tag**: The bundle carries `@connect arena.site`, so the userscript manager stops asking the owner about each new preview host. The rotation call moves to `fetch`, which keeps the owner's proxy host out of the file. Version 1.2.5.
+- **Preview carries the proxy**: The composer keeps the rules line only. The script posts the proxy host with the key, and the quiet note names both.
 
 #### system-prompts
 
 - **NemoGPT prompt revision**: The operator's tighter draft replaces the long prompt in `system-prompts/refs/NEMOGPT.md` and its live copy. The audit against `GUIDELINES.md` added the date line, a concrete refusal bar, exact banned openers, a restatement clause, and two worked examples. Confidentiality gives way to prompt transparency, per the draft.
+- **Live squash**: The live `system-prompts/NEMOGPT.md` copy compresses from its refs source to 12,578 characters and 2,428 `cl100k_base` tokens, with every section and rule kept.
+- **Prompt budget**: The root instruction-budgets table and `maintenance/check.py` now measure the live prompt, so its size is a recorded budget. `system-prompts/README.md` states the compressed-live convention.
+- **Search verification**: The NemoGPT prompt requires a check of the current official documentation before advice on a specific API, tool, or platform behavior. When no source is reachable, the answer states the assumption and marks the advice unverified. Both copies carry the line.
+
+#### house
+
+- **Guidelines citation**: The amendment clause in the root `AGENTS.md` now requires the proposal to cite at least one section of `rules/refs/GUIDELINES.md`. The required read therefore leaves a trace. Owner direction.
 
 ## 2026-10-02
 

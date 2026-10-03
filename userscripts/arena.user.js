@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.2
+// @version      1.2.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -15,6 +15,7 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_unregisterMenuCommand
+// @connect      arena.site
 // ==/UserScript==
 
 (function () {
@@ -151,19 +152,10 @@
       return /^[A-Za-z0-9_-]{20,64}$/.test(key) ? key : null;
     }
 
-    function proxyLine(host, key) {
-      return (
-        "Arena proxy: " +
-        host +
-        "/v1/<route>?key=" +
-        key +
-        "\nSend repo=OWNER/REPO with logs, diff and file. Never print the key."
-      );
-    }
-
     var ROTATE_MIN_SECONDS = 900;
     var ROTATE_INTERVAL_MS = ROTATE_MIN_SECONDS * 1000;
     var ROTATE_DUE_KEY = "clankers-arena-rotate-due";
+    var NOTED_KEY = "clankers-arena-noted-key";
     // A container restart makes a new key at once, so the watch adopts it inside the
     // rotation window instead of leaving the agent with a dead key for 15 minutes.
     var KEY_WATCH_MS = 60 * 1000;
@@ -193,9 +185,11 @@
       return base + "/api/key";
     }
 
-    function keyNote(kind, key, atIso) {
+    function keyNote(kind, key, atIso, host) {
       return (
-        "Arena proxy key " +
+        "Arena proxy " +
+        host +
+        " key " +
         kind +
         " at " +
         atIso +
@@ -205,8 +199,11 @@
       );
     }
 
-    function rotationNote(key, atIso) {
-      return keyNote("rotated", key, atIso);
+    // One quiet note per key: a reload or a second tab must not repeat it.
+    function noteKey(key, host, kind) {
+      if (GM_getValue(NOTED_KEY, "") === key) return;
+      GM_setValue(NOTED_KEY, key);
+      postKeyNote(keyNote(kind, key, new Date().toISOString(), host));
     }
 
     function keyChanged(held, incoming) {
@@ -254,25 +251,39 @@
       done(0, null);
     }
 
-    function promptForSlug(slug, arenaMd, proxy) {
+    // The proxy answers with a wildcard origin, so a plain fetch reads it. GM_xmlhttpRequest
+    // stays for the preview, and the connect tag names that one host only.
+    function fetchJson(url, done) {
+      fetch(url)
+        .then(function (r) {
+          return r.json().then(function (body) {
+            return { status: r.status, body: body };
+          });
+        })
+        .then(function (answer) {
+          done(answer.status, answer.body);
+        })
+        .catch(function () {
+          done(0, null);
+        });
+    }
+
+    function promptForSlug(slug, arenaMd) {
       // The full stop is the fix: the editor links AGENTS.md as a bare domain
       // when a line break follows it; a space did not hold, a stop does
-      // (owner live test).
+      // (owner live test). The proxy rides the preview, not this text.
       var base =
         slug +
         " read ARENA.md AGENTS.md.\n" +
         "Expect screenshots to be sent via the steering channel.";
-      if (proxy) {
-        base += "\n" + proxy;
-      }
       if (arenaMd) {
         return base + "\nhere is ARENA.md:\n" + arenaMd;
       }
       return base;
     }
 
-    function shouldWrite(current, slug, lastSlug, arenaMd, proxy) {
-      var desired = promptForSlug(slug, arenaMd, proxy).trim();
+    function shouldWrite(current, slug, lastSlug, arenaMd) {
+      var desired = promptForSlug(slug, arenaMd).trim();
       var text = String(current || "").trim();
       if (text === desired) {
         return false;
@@ -281,7 +292,7 @@
         return text === "" || TEMPLATE_RE.test(text);
       }
       if (slug === lastSlug) {
-        return text === promptForSlug(slug, null, proxy).trim();
+        return text === promptForSlug(slug, null).trim();
       }
       return true;
     }
@@ -310,10 +321,10 @@
       proxyHost: proxyHost,
       keyUrl: keyUrl,
       agentKeyFrom: agentKeyFrom,
-      proxyLine: proxyLine,
       PREVIEW_FRAME_TITLE: PREVIEW_FRAME_TITLE,
       ROTATE_MIN_SECONDS: ROTATE_MIN_SECONDS,
       ROTATE_DUE_KEY: ROTATE_DUE_KEY,
+      NOTED_KEY: NOTED_KEY,
       KEY_WATCH_MS: KEY_WATCH_MS,
       keyNote: keyNote,
       keyChanged: keyChanged,
@@ -321,8 +332,8 @@
       rotationWaitMs: rotationWaitMs,
       previewBase: previewBase,
       keyPostUrl: keyPostUrl,
+      fetchJson: fetchJson,
       rotateUrl: rotateUrl,
-      rotationNote: rotationNote,
     })) {
       return;
     }
@@ -331,15 +342,14 @@
     var heldKey = null;
     var arenaMdTried = false;
     var pendingFetch = null;
-    var proxyLineCache = null;
-    var proxyTried = false;
-    var proxyFetch = null;
+    var keyTried = false;
+    var keyFetch = null;
 
-    // The preview shows the key the agent holds, so a stale key is visible at once.
-    function postAgentKey(key) {
+    // The preview shows the key and the host the agent uses, so a stale key is visible at once.
+    function postAgentKey(key, host) {
       var base = previewBase(document);
       if (!base || !key) return;
-      requestJson("POST", keyPostUrl(base), { key: key }, function () {});
+      requestJson("POST", keyPostUrl(base), { key: key, host: host }, function () {});
     }
 
     // One quiet note announces the key, so a read finds it and a poll never wakes on it.
@@ -369,9 +379,10 @@
           var key = agentKeyFrom(body);
           if (key) {
             heldKey = key;
-            postAgentKey(key);
+            postAgentKey(key, host);
+            noteKey(key, host, "ready");
           }
-          return key ? proxyLine(host, key) : null;
+          return null;
         })
         .catch(function () {
           return null;
@@ -380,12 +391,11 @@
 
     // One try per page until the key arrives: a wrong master key must not hammer the
     // owner's host on every mutation, and the menu change clears the flag.
-    function ensureProxyLine() {
-      if (proxyTried || proxyFetch) return;
-      proxyFetch = fetchAgentKey().then(function (line) {
-        proxyLineCache = line;
-        proxyTried = true;
-        proxyFetch = null;
+    function ensureAgentKey() {
+      if (keyTried || keyFetch) return;
+      keyFetch = fetchAgentKey().then(function () {
+        keyTried = true;
+        keyFetch = null;
         sync();
       });
     }
@@ -415,12 +425,11 @@
         var answer = window.prompt(label, ask ? String(ask) : "");
         if (answer === null) return;
         GM_setValue(key, String(answer).trim());
-        proxyTried = false;
-        proxyLineCache = null;
-        proxyFetch = null;
+        keyTried = false;
+        keyFetch = null;
         // A plain prompt is already in the composer, so the next pass rebuilds it.
         lastSlug = null;
-        ensureProxyLine();
+        ensureAgentKey();
         sync();
       }));
     }
@@ -447,10 +456,8 @@
       ) {
         return;
       }
-      requestJson(
-        "GET",
+      fetchJson(
         rotateUrl(pair.host, pair.master, minSeconds),
-        null,
         function (status, body) {
           if (status !== 200 || !body) {
             if (typeof done === "function") done(false);
@@ -471,10 +478,16 @@
             rotationDueAt(Date.now(), 0, ROTATE_MIN_SECONDS),
           );
           heldKey = body.key;
-          proxyLineCache = proxyLine(pair.host, body.key);
-          postAgentKey(body.key);
-          var at = body.at || new Date().toISOString();
-          postKeyNote(rotationNote(body.key, at));
+          GM_setValue(NOTED_KEY, body.key);
+          postAgentKey(body.key, pair.host);
+          postKeyNote(
+            keyNote(
+              "rotated",
+              body.key,
+              body.at || new Date().toISOString(),
+              pair.host,
+            ),
+          );
           sync();
           if (typeof done === "function") done(true);
         },
@@ -512,10 +525,9 @@
           var key = keyChanged(heldKey, agentKeyFrom(body));
           if (!key) return;
           heldKey = key;
-          proxyLineCache = proxyLine(pair.host, key);
-          proxyTried = true;
-          postAgentKey(key);
-          postKeyNote(keyNote("replaced", key, new Date().toISOString()));
+          keyTried = true;
+          postAgentKey(key, pair.host);
+          noteKey(key, pair.host, "replaced");
           if (isComposerUrl(location.href) && readSlug(document)) {
             sync();
           }
@@ -595,9 +607,9 @@
       // One write per page. The plain line first and the file second puts a
       // line break directly after AGENTS.md, and the editor reads that break
       // as the end of a bare domain and links the file name.
-      if (!arenaMdTried || !proxyTried) {
+      if (!arenaMdTried) {
         ensureFetch();
-        ensureProxyLine();
+        ensureAgentKey();
         return;
       }
       var composer = document.querySelector(COMPOSER_SELECTOR);
@@ -606,16 +618,16 @@
         return;
       }
       var current = composer.innerText || "";
-      if (!shouldWrite(current, slug, lastSlug, arenaMdCache, proxyLineCache)) {
+      if (!shouldWrite(current, slug, lastSlug, arenaMdCache)) {
         lastSlug = slug;
         ensureFetch();
-        ensureProxyLine();
+        ensureAgentKey();
         return;
       }
-      setComposerText(composer, promptForSlug(slug, arenaMdCache, proxyLineCache));
+      setComposerText(composer, promptForSlug(slug, arenaMdCache));
       lastSlug = slug;
       ensureFetch();
-      ensureProxyLine();
+      ensureAgentKey();
     }
 
     var observer = new MutationObserver(sync);
