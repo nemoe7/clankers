@@ -41,7 +41,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   // A manager asks the owner once per host without a connect tag, so the tag is required.
   const header = /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/.exec(source)[0];
   if (/^\/\/ @grant\s+GM_xmlhttpRequest\s*$/m.test(header)) {
-    assert.match(header, /^\/\/ @connect\s+\*\s*$/m, `${domain}: a cross-origin userscript carries a connect tag`);
+    assert.match(header, /^\/\/ @connect\s+arena\.site\s*$/m, `${domain}: the connect tag names the preview host only`);
   }
 
   const keys = Object.keys(features);

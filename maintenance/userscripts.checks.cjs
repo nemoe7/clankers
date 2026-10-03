@@ -10,7 +10,8 @@ const vm = require("node:vm");
 
 function loadChecks(file) {
   const source = fs.readFileSync(path.join(__dirname, "../userscripts", file), "utf8");
-  const context = { console, URL };
+  // fetch resolves against the host realm at call time, so one case can drive it.
+  const context = { console, URL, fetch: (...args) => globalThis.fetch(...args) };
   vm.runInNewContext(source, context, { filename: file });
   return context.CLANKERS_CHECKS;
 }
@@ -24,14 +25,14 @@ function checkPromptFill(api) {
   var proxyHost = api.proxyHost;
   var keyUrl = api.keyUrl;
   var agentKeyFrom = api.agentKeyFrom;
-  var proxyLine = api.proxyLine;
   var previewBase = api.previewBase;
   var rotateUrl = api.rotateUrl;
   var keyPostUrl = api.keyPostUrl;
   var KEY_WATCH_MS = api.KEY_WATCH_MS;
   var keyNote = api.keyNote;
   var keyChanged = api.keyChanged;
-  var rotationNote = api.rotationNote;
+  var NOTED_KEY = api.NOTED_KEY;
+  var fetchJson = api.fetchJson;
   var PREVIEW_FRAME_TITLE = api.PREVIEW_FRAME_TITLE;
   var ROTATE_MIN_SECONDS = api.ROTATE_MIN_SECONDS;
   var ROTATE_DUE_KEY = api.ROTATE_DUE_KEY;
@@ -95,13 +96,9 @@ function checkPromptFill(api) {
     [agentKeyFrom({ key: "short" }), null],
     [agentKeyFrom({ key: "has spaces in it aaaaaaaaaaaaa" }), null],
     [agentKeyFrom(null), null],
-    [proxyLine("https://h.example", KEY43),
-      "Arena proxy: https://h.example/v1/<route>?key=" + KEY43 +
-      "\nSend repo=OWNER/REPO with logs, diff and file. Never print the key."],
+    // The composer carries the rules line only: the proxy rides the preview.
     [promptForSlug("clankers", null, "PROXY"),
-      "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY"],
-    [promptForSlug("clankers", "arena content", "PROXY"),
-      "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY\nhere is ARENA.md:\narena content"],
+      "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel."],
     [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
     [ROTATE_MIN_SECONDS, 900],
     [ROTATE_DUE_KEY, "clankers-arena-rotate-due"],
@@ -124,19 +121,22 @@ function checkPromptFill(api) {
     [keyChanged("old", "new"), "new"],
     [keyChanged("same", "same"), null],
     [keyChanged("old", null), null],
-    [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00"),
-      "Arena proxy key replaced at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
+    [NOTED_KEY, "clankers-arena-noted-key"],
+    // The note names the host, because the composer no longer carries it.
+    [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
+      "Arena proxy https://h.example key replaced at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Never print it."],
-    [rotationNote(KEY43, "2026-10-03T15:00:00+00:00"),
-      "Arena proxy key rotated at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
+    [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
+      "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Never print it."],
-    // A plain prompt in the composer is rebuilt once the key arrives.
-    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, null, "PROXY"), true],
-    // The finished prompt is left alone, so a write never repeats.
-    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nPROXY", "clankers", null, null, "PROXY"), false],
+    // The finished line stays while the rules file is still on its way.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), false],
+    // A plain prompt is rebuilt once the rules file arrives.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, "arena content"), true],
   ];
   var failed = 0;
   var i;
+  var promised;
   for (i = 0; i < cases.length; i += 1) {
     if (cases[i][0] !== cases[i][1]) {
       console.error("check fail", i, cases[i][0], cases[i][1]);
@@ -146,7 +146,42 @@ function checkPromptFill(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
+  // fetchJson maps a status and a parsed body, and it must survive a refused fetch.
+  globalThis.fetch = function () {
+    return Promise.resolve({
+      status: 200,
+      json: function () {
+        return Promise.resolve({ rotated: true, key: KEY43 });
+      },
+    });
+  };
+  promised = new Promise(function (resolve, reject) {
+    fetchJson("https://h.example/v1/rotate", function (status, body) {
+      if (status === 200 && body && body.rotated === true && body.key === KEY43) {
+        resolve();
+        return;
+      }
+      reject(new Error("fetchJson lost the answer"));
+    });
+  });
+  globalThis.fetch = function () {
+    return Promise.reject(new Error("offline"));
+  };
+  promised = promised.then(function () {
+    return new Promise(function (resolve, reject) {
+      fetchJson("https://h.example/v1/rotate", function (status, body) {
+        if (status === 0 && body === null) {
+          resolve();
+          return;
+        }
+        reject(new Error("fetchJson hid a refused fetch"));
+      });
+    });
+  }).finally(function () {
+    delete globalThis.fetch;
+  });
   console.log("ok prompt fill " + cases.length);
+  return promised;
 }
 
 function checkOpenSteering(api) {
@@ -1371,8 +1406,11 @@ function run(name, check) {
   }
 }
 
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+
 const arena = loadChecks("arena.user.js");
-run("prompt fill", () => checkPromptFill(arena.promptFill));
+test("prompt fill", () => checkPromptFill(arena.promptFill));
 run("open steering", () => checkOpenSteering(arena.openSteering));
 run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
