@@ -62,7 +62,7 @@ def fetch_url(url, cap, timeout=FETCH_TIMEOUT_SECONDS):
   """Fetch one allowed URL and return its bytes and content type."""
   if not allowed_url(url):
     raise TransferError(400, "url must be https://, or http:// on a loopback host")
-  request = urllib.request.Request(url, headers={"User-Agent": "arena-extension/2"})
+  request = urllib.request.Request(url, headers={"User-Agent": "arena-proxy/2"})
   try:
     with urllib.request.urlopen(request, timeout=timeout) as response:
       declared = int(response.headers.get("Content-Length") or 0)

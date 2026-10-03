@@ -1,4 +1,4 @@
-"""Arena extension backend: read-only bridges from an Arena agent to owner-held tools.
+"""Arena proxy backend: read-only bridges from an Arena agent to owner-held tools.
 
 The agent reaches this server with the `fetch_page` tool, which sends one GET
 request, carries no credentials, and returns text only. Every module here keeps

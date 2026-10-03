@@ -1,4 +1,4 @@
-"""HTTP server, routing and configuration for the Arena extension backend.
+"""HTTP server, routing and configuration for the Arena proxy backend.
 
 One class owns the state, and one handler owns the routes. Every route answers
 GET, because the calling tool sends nothing else. The agent key arrives in the
@@ -59,7 +59,7 @@ class ExtensionServer(ThreadingHTTPServer):
 class ExtensionHandler(BaseHTTPRequestHandler):
   """Answer the key-gated routes over GET only."""
 
-  server_version = f"arena-extension/{VERSION}"
+  server_version = f"arena-proxy/{VERSION}"
   protocol_version = "HTTP/1.1"
 
   def do_GET(self):
@@ -162,7 +162,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return
     if not github_api.valid_repo(repo):
       self._send_json(
-        400, {"error": "repo must look like owner/name", "hint": "set EXTENSION_REPO"}
+        400, {"error": "repo must look like owner/name", "hint": "set ARENA_PROXY_REPO"}
       )
       return
     status, body = github_api.request(
@@ -305,7 +305,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         503,
         {
           "error": "no model endpoint is configured",
-          "hint": "set EXTENSION_LLM_BASE, EXTENSION_LLM_KEY and EXTENSION_LLM_MODEL",
+          "hint": "set ARENA_PROXY_LLM_BASE, ARENA_PROXY_LLM_KEY and ARENA_PROXY_LLM_MODEL",
         },
       )
       return
@@ -361,31 +361,31 @@ def build_server(options):
 def parse_args(argv=None):
   """Read the command line and the environment into one options object."""
   parser = argparse.ArgumentParser(
-    description="Arena extension backend: read-only access for an Arena agent."
+    description="Arena proxy backend: read-only access for an Arena agent."
   )
-  parser.add_argument("--host", default=os.environ.get("EXTENSION_HOST", "127.0.0.1"))
+  parser.add_argument("--host", default=os.environ.get("ARENA_PROXY_HOST", "127.0.0.1"))
   parser.add_argument(
-    "--port", type=int, default=int(os.environ.get("EXTENSION_PORT", "8787"))
+    "--port", type=int, default=int(os.environ.get("ARENA_PROXY_PORT", "8787"))
   )
   parser.add_argument(
     "--generate-key", action="store_true", help="print a new agent key and exit"
   )
   options = parser.parse_args(argv)
-  options.key = os.environ.get("EXTENSION_KEY", "")
-  options.token = os.environ.get("EXTENSION_GITHUB_TOKEN") or os.environ.get(
+  options.key = os.environ.get("ARENA_PROXY_KEY", "")
+  options.token = os.environ.get("ARENA_PROXY_GITHUB_TOKEN") or os.environ.get(
     "GITHUB_TOKEN", ""
   )
-  options.repo = os.environ.get("EXTENSION_REPO", "")
-  options.api = os.environ.get("EXTENSION_GITHUB_API", github_api.GITHUB_API)
-  options.state_dir = os.environ.get("EXTENSION_STATE_DIR", "arena-extension-state")
-  options.llm_base = os.environ.get("EXTENSION_LLM_BASE", "")
-  options.llm_key = os.environ.get("EXTENSION_LLM_KEY", "")
-  options.llm_model = os.environ.get("EXTENSION_LLM_MODEL", "")
+  options.repo = os.environ.get("ARENA_PROXY_REPO", "")
+  options.api = os.environ.get("ARENA_PROXY_GITHUB_API", github_api.GITHUB_API)
+  options.state_dir = os.environ.get("ARENA_PROXY_STATE_DIR", "arena-proxy-state")
+  options.llm_base = os.environ.get("ARENA_PROXY_LLM_BASE", "")
+  options.llm_key = os.environ.get("ARENA_PROXY_LLM_KEY", "")
+  options.llm_model = os.environ.get("ARENA_PROXY_LLM_MODEL", "")
   options.fetch_cap = int(
-    os.environ.get("EXTENSION_FETCH_CAP", transfers.DEFAULT_FETCH_CAP)
+    os.environ.get("ARENA_PROXY_FETCH_CAP", transfers.DEFAULT_FETCH_CAP)
   )
   options.stage_cap = int(
-    os.environ.get("EXTENSION_STAGE_CAP", transfers.DEFAULT_STAGE_CAP)
+    os.environ.get("ARENA_PROXY_STAGE_CAP", transfers.DEFAULT_STAGE_CAP)
   )
   return options
 
@@ -398,14 +398,14 @@ def main(argv=None):
     return 0
   if len(options.key) < MIN_KEY_LENGTH:
     print(
-      f"EXTENSION_KEY must hold at least {MIN_KEY_LENGTH} characters. Make one with --generate-key.",
+      f"ARENA_PROXY_KEY must hold at least {MIN_KEY_LENGTH} characters. Make one with --generate-key.",
       file=sys.stderr,
     )
     return 2
   os.makedirs(options.state_dir, exist_ok=True)
   server = build_server(options)
   print(
-    f"arena-extension {VERSION} on http://{options.host}:{options.port};"
+    f"arena-proxy {VERSION} on http://{options.host}:{options.port};"
     f" github token {'set' if options.token else 'missing'};"
     f" llm {'set' if server.llm.enabled() else 'missing'};"
     f" routes: {' '.join(ROUTES)}",

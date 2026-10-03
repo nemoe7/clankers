@@ -140,7 +140,7 @@ class LlmService:
       headers={
         "Content-Type": "application/json",
         "Authorization": f"Bearer {self.api_key}",
-        "User-Agent": "arena-extension/2",
+        "User-Agent": "arena-proxy/2",
       },
       method="POST",
     )

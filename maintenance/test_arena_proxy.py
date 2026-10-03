@@ -1,4 +1,4 @@
-"""Tests for the arena-extension backend: auth, forwarding, transfers and model jobs."""
+"""Tests for the arena-proxy backend: auth, forwarding, transfers and model jobs."""
 
 import base64
 import contextlib
@@ -14,15 +14,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS = ROOT / "skills/refs/arena-extension/scripts"
+SCRIPTS = ROOT / "skills/refs/arena-proxy/scripts"
 KEY = "test-agent-key-0123456789"
 TOKEN = "test-provider-token"
 BINARY = b"\x89PNG\r\n\x1a\n\x00binary payload"
 sys.path.insert(0, str(SCRIPTS))
-core = importlib.import_module("arena_extension.core")
-github_api = importlib.import_module("arena_extension.github_api")
-transfers = importlib.import_module("arena_extension.transfers")
-llm_module = importlib.import_module("arena_extension.llm")
+core = importlib.import_module("arena_proxy.core")
+github_api = importlib.import_module("arena_proxy.github_api")
+transfers = importlib.import_module("arena_proxy.transfers")
+llm_module = importlib.import_module("arena_proxy.llm")
 
 
 def log_zip():
@@ -360,7 +360,7 @@ def test_llm_reports_a_missing_endpoint(tmp_path):
   with backend(tmp_path, llm_base="") as handle:
     status, body = call(handle.port, f"/v1/llm?key={KEY}&prompt=hello")
     assert status == 503
-    assert "EXTENSION_LLM_BASE" in json.loads(body)["hint"]
+    assert "ARENA_PROXY_LLM_BASE" in json.loads(body)["hint"]
 
 
 def test_unknown_route_lists_the_routes(tmp_path):

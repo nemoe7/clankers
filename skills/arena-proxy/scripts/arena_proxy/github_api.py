@@ -25,7 +25,7 @@ def request(
   path, token="", cap=1_000_000, api=GITHUB_API, accept="application/vnd.github+json"
 ):
   """Call one GitHub API path and return its status and body."""
-  headers = {"Accept": accept, "User-Agent": "arena-extension/2"}
+  headers = {"Accept": accept, "User-Agent": "arena-proxy/2"}
   if token:
     headers["Authorization"] = f"Bearer {token}"
   url = f"{api.rstrip('/')}/{path.lstrip('/')}"
