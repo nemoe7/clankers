@@ -150,6 +150,8 @@ GATE_THRESHOLD = 20
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
+# The proxy host, one HTTPS origin with no path, as the userscript saves it.
+AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
 
 
 def now():
@@ -2142,14 +2144,15 @@ class Store:
     with closing(self.connect()) as db, db:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
 
-  def set_agent_key(self, key):
-    """Record the key the userscript holds, with its stamp."""
+  def set_agent_key(self, key, host=None):
+    """Record the key the userscript holds and the proxy host, with the stamp."""
     self.set_meta(
-      AGENT_KEY_META, json.dumps({"key": key, "at": now()}, ensure_ascii=False)
+      AGENT_KEY_META,
+      json.dumps({"key": key, "host": host, "at": now()}, ensure_ascii=False),
     )
 
   def agent_key(self):
-    """The recorded key and its stamp, or None while none stands or the record is broken."""
+    """The recorded key, host and stamp, or None while none stands or the record is broken."""
     value = self.meta_value(AGENT_KEY_META)
     if not value:
       return None
@@ -2162,7 +2165,10 @@ class Store:
     key = record.get("key")
     if not isinstance(key, str) or not AGENT_KEY_RE.fullmatch(key):
       return None
-    return {"key": key, "at": clip_stamp(record.get("at"))}
+    host = record.get("host")
+    if not isinstance(host, str) or not AGENT_HOST_RE.fullmatch(host):
+      host = None
+    return {"key": key, "host": host, "at": clip_stamp(record.get("at"))}
 
   def reminder(self, advance=False):
     """Count pending kinds without marking any message seen; any count asks for an ack.
@@ -3022,7 +3028,12 @@ def handler(store):
             raise ValueError(
               "key must be 20 to 64 letters, digits, dashes or underscores"
             )
-          store.set_agent_key(candidate)
+          host = payload.get("host")
+          if host is not None and (
+            not isinstance(host, str) or not AGENT_HOST_RE.fullmatch(host)
+          ):
+            raise ValueError("host must be one https origin, with no path")
+          store.set_agent_key(candidate, host)
           self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
           return
         if path == "/api/fetch-jobs":

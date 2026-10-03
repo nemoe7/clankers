@@ -3691,14 +3691,28 @@ def test_agent_key_route_records_the_key_for_the_page():
     status, _, body = request(
       "POST",
       "/api/key",
-      json.dumps({"key": key}),
+      json.dumps({"key": key, "host": "https://arena-proxy.example.ts.net"}),
       {"Content-Type": "application/json"},
     )
     assert status == 200
     record = json.loads(body)
     assert record["key"] == key
+    assert record["host"] == "https://arena-proxy.example.ts.net"
     assert record["at"]
-    assert json.loads(request("GET", "/api/state")[2])["agent_key"]["key"] == key
+    state = json.loads(request("GET", "/api/state")[2])["agent_key"]
+    assert state["key"] == key
+    assert state["host"] == "https://arena-proxy.example.ts.net"
+    # A host with a path is refused, and the stored record stands.
+    status, _, body = request(
+      "POST",
+      "/api/key",
+      json.dumps({"key": key, "host": "https://arena-proxy.example.ts.net/v1"}),
+      {"Content-Type": "application/json"},
+    )
+    assert status == 400
+    assert json.loads(request("GET", "/api/state")[2])["agent_key"]["host"] == (
+      "https://arena-proxy.example.ts.net"
+    )
     # A short candidate changes nothing.
     status, _, body = request(
       "POST",
