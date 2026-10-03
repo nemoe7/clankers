@@ -22,7 +22,7 @@ metadata:
 
 Compress text against a stated budget without losing anything it says.
 
-Squashing is editorial, not lossy: it removes words, never content. If a reader learns less from the output than the input, the pass failed.
+Squashing is editorial, not lossy: it removes words, never content.
 
 ## Criterion
 
@@ -89,7 +89,7 @@ Merge items sharing a subject into one sentence or bullet.
 5. Repeat, targeting whichever unit is still over, until every target is met or a pass yields nothing.
 6. Check against the step 2 list, then report before, after, and percentage.
 
-Keep each pass small enough to review. Several modest passes beat one aggressive rewrite: a lost constraint is easier to spot in a short diff.
+Keep each pass small enough to review.
 
 ## Constraints
 
