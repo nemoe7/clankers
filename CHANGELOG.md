@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Turn-start reads**: ARENA.md now requires a turn-start reread of itself and every AGENTS.md in the repository, and again after a compaction or summary. This clause landed on the owner's approval. The refs copy carries the full line, and the live and root copies carry the compressed form.
 - **Proxy pointer**: The ARENA.md Use section now points to the `arena-proxy` skill for a task that needs a source the sandbox cannot reach. The refs copy carries the full line and the live and root copies the compressed form.
 - **Skill content**: Every skill now holds only what an agent needs to use it. Design decisions, background, rationale and history go to this changelog or the archive, as the root AGENTS.md and the skills guide both state.
+- **Skill audit**: The `arena-proxy` and `squash` skills drop the owner setup steps and the rationale clauses an agent cannot act on. The vendored `web-interface-guidelines` skill stays verbatim.
 
 #### skills
 
