@@ -427,6 +427,33 @@ def test_llm_reports_a_missing_endpoint(tmp_path):
     assert "ARENA_PROXY_LLM_BASE" in json.loads(body)["hint"]
 
 
+class DeadConnection:
+  """A socket whose peer is gone: every write fails the way the owner's log showed."""
+
+  def __init__(self, request):
+    self.request = request
+
+  def makefile(self, mode="rb", buffering=None):
+    return io.BytesIO(self.request)
+
+  def sendall(self, body):
+    raise BrokenPipeError(32, "Broken pipe")
+
+  def close(self):
+    pass
+
+
+def test_a_caller_that_leaves_early_is_no_fault():
+  """A closed socket must not raise out of the handler, or the traceback floods the log."""
+  request = b"GET /v1/nothing HTTP/1.1\r\nHost: probe\r\n\r\n"
+  handler = core.ExtensionHandler(
+    DeadConnection(request),
+    ("127.0.0.1", 42440),
+    SimpleNamespace(),
+  )
+  assert handler.close_connection is True
+
+
 def test_unknown_route_lists_the_routes(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(handle.port, "/v1/nothing")

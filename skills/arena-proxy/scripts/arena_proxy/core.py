@@ -90,8 +90,14 @@ class ExtensionHandler(BaseHTTPRequestHandler):
   def do_GET(self):
     try:
       self._route()
+    except (BrokenPipeError, ConnectionResetError):
+      # A caller that leaves before the answer is not a fault: close without a traceback.
+      self.close_connection = True
     except Exception as error:
-      self._send_json(500, {"error": f"internal error: {type(error).__name__}"})
+      try:
+        self._send_json(500, {"error": f"internal error: {type(error).__name__}"})
+      except (BrokenPipeError, ConnectionResetError):
+        self.close_connection = True
 
   def _route(self):
     path, params = split_target(self.path)
