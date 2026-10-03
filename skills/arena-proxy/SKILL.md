@@ -41,7 +41,7 @@ https://<backend-host>/v1/<route>?key=<agent-key>&<parameters>
 | `/v1/health` | none, no key | JSON liveness: `ok`, `version` |
 | `/v1/ping` | `key` | JSON status: version, GitHub API base, default repo, token presence, route list, model state, caps |
 | `/v1/github` | `key`, `path`, plus any GitHub API query | The GitHub API response through the owner's token |
-| `/v1/logs` | `key`, `run`, optional `repo` | The text tail of one workflow run log |
+| `/v1/logs` | `key`, `run`, `repo` | The text tail of one workflow run log |
 | `/v1/fetch` | `key`, `url`, `mode`, `encoding`, `gzip`, `stage`, `id`, `index` | Text, JSON with base64, or one staged chunk |
 | `/v1/llm` | `key`, `prompt`, `model`, `system`, `image`, `file`, `ref`, `diff`, `repo`, `max_tokens`, or `id` | JSON job id, then JSON status and text |
 
@@ -50,7 +50,7 @@ Examples:
 ```
 /v1/ping?key=KEY
 /v1/github?key=KEY&path=repos/OWNER/REPO/code-scanning/alerts&state=open&per_page=100
-/v1/logs?key=KEY&run=1234567890
+/v1/logs?key=KEY&repo=OWNER%2FREPO&run=1234567890
 /v1/fetch?key=KEY&url=https%3A%2F%2Fexample.com%2Fdata.bin&mode=base64&gzip=1
 /v1/fetch?key=KEY&url=https%3A%2F%2Fexample.com%2Fbig.bin&stage=1
 /v1/fetch?key=KEY&id=ID&index=0
@@ -93,10 +93,11 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 | `image` | an image URL, repeatable up to four times; the backend fetches it and sends it as a data URI |
 | `diff` | a pull request number; the backend sends its diff as context |
 | `file`, `ref` | a repository path and an optional ref; the backend sends that file as context |
-| `repo` | the repository for `diff` or `file`, defaulting to the owner's configured repository |
+| `repo` | the repository for `diff` or `file` |
 | `max_tokens` | an output cap, when the endpoint honors it |
 
-- Send `repo` with `diff` or `file`. The backend refuses a malformed `owner/name`, and it reports the upstream status when the context read fails.
+- Always name `repo` in a call that takes one, `logs`, `diff` and `file` included. The backend default is a convenience, not a rule; a call that names its repo stays correct.
+- The backend refuses a malformed `owner/name`, and it reports the upstream status when the context read fails.
 - The vision route is the point of `image`: the owner's model sees the picture and answers with text the session can read. Ask for a description, a transcription, or a judgement, not for the image back.
 - Privacy: prompts, context and images leave the owner's machine for the endpoint they configured. Never put an agent key, a token, or a private file in a prompt.
 - Jobs live in memory and expire after one hour. A restart loses them; resubmit instead of retrying an unknown id.
