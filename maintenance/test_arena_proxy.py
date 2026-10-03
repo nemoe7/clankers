@@ -376,10 +376,7 @@ def test_log_line_drops_the_query_string():
   )
 
 
-def test_agent_key_is_made_when_unset():
-  made, generated = core.agent_key("")
-  assert generated and len(made) >= core.MIN_KEY_LENGTH
-  other, _ = core.agent_key("")
-  assert other != made
-  pinned, generated = core.agent_key(KEY)
-  assert pinned == KEY and not generated
+def test_agent_key_is_fresh_on_every_call():
+  first = core.agent_key()
+  second = core.agent_key()
+  assert first != second and len(first) >= 32

@@ -3,7 +3,7 @@
 Run it from this directory, or copy the whole `scripts/` folder:
 
   python3 server.py --generate-key
-  ARENA_PROXY_KEY=<key> GITHUB_TOKEN=<token> python3 server.py --port 8787
+  GITHUB_TOKEN=<token> python3 server.py --port 8787
 """
 
 import sys

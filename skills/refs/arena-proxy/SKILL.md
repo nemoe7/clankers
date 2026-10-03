@@ -119,7 +119,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 4. Start the backend:
 
 ```
-ARENA_PROXY_KEY=<key> GITHUB_TOKEN=<pat> ARENA_PROXY_REPO=<owner>/<repo> \
+GITHUB_TOKEN=<pat> ARENA_PROXY_REPO=<owner>/<repo> \
   ARENA_PROXY_LLM_BASE=<url> ARENA_PROXY_LLM_KEY=<key> ARENA_PROXY_LLM_MODEL=<model> \
   python3 scripts/server.py --port 8787
 ```
@@ -134,7 +134,7 @@ The [`Dockerfile`](Dockerfile) copies `scripts/` into a `python:3.12-alpine` ima
 ```
 docker build -t arena-proxy .
 docker run --rm -p 8787:8787 \
-  -e ARENA_PROXY_KEY=<key> -e GITHUB_TOKEN=<pat> -e ARENA_PROXY_REPO=<owner>/<repo> \
+  -e GITHUB_TOKEN=<pat> -e ARENA_PROXY_REPO=<owner>/<repo> \
   -e ARENA_PROXY_LLM_BASE=<url> -e ARENA_PROXY_LLM_KEY=<key> -e ARENA_PROXY_LLM_MODEL=<model> \
   -v arena-proxy-state:/state -e ARENA_PROXY_STATE_DIR=/state \
   arena-proxy
@@ -145,13 +145,13 @@ docker run --rm -p 8787:8787 \
   [`tailscale-serve.json`](tailscale-serve.json) carries the funnel route.
 - Images are multi-arch, so an arm64 host pulls and builds natively.
 - The image holds no secrets: pass them as environment variables, and mount a volume when staged bytes should outlive the container.
-- With no `ARENA_PROXY_KEY`, every start makes a random one and prints `agent key (new on every start): ...`. Set the variable to pin a stable key.
+- Every start makes a new agent key and prints `agent key (new on every start): ...`. The key is never read from the environment, so a restart rotates it.
 - The server holds no state beyond the state directory, so `--rm` costs nothing but staged bytes.
 
 ### Host notes
 
 - The backend is one Python package with no dependencies beyond the standard library, about 30 KB of source. It idles at a few megabytes of memory.
-- Environment variables: `ARENA_PROXY_KEY`, `ARENA_PROXY_HOST`, `ARENA_PROXY_PORT`, `ARENA_PROXY_STATE_DIR`, `ARENA_PROXY_FETCH_CAP`, `ARENA_PROXY_STAGE_CAP`, plus the GitHub and model groups above.
+- Environment variables: `ARENA_PROXY_HOST`, `ARENA_PROXY_PORT`, `ARENA_PROXY_STATE_DIR`, `ARENA_PROXY_FETCH_CAP`, `ARENA_PROXY_STAGE_CAP`, plus the GitHub and model groups above.
 - Prune the state directory if staged bytes accumulate: the server drops entries older than one hour on its own requests.
 - On a small host, cap the process (`--memory 128m`) and keep one replica.
 

@@ -11,7 +11,6 @@ import hmac
 import json
 import os
 import secrets
-import sys
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -19,7 +18,6 @@ from . import VERSION, github_api, transfers
 from .llm import LlmService
 from .store import Store
 
-MIN_KEY_LENGTH = 16
 API_CAP_BYTES = 1_000_000
 PUBLIC_ROUTES = ("/v1/health",)
 ROUTES = ("/v1/health", "/v1/ping", "/v1/github", "/v1/logs", "/v1/fetch", "/v1/llm")
@@ -371,7 +369,6 @@ def parse_args(argv=None):
     "--generate-key", action="store_true", help="print a new agent key and exit"
   )
   options = parser.parse_args(argv)
-  options.key = os.environ.get("ARENA_PROXY_KEY", "")
   options.token = os.environ.get("ARENA_PROXY_GITHUB_TOKEN") or os.environ.get(
     "GITHUB_TOKEN", ""
   )
@@ -390,11 +387,9 @@ def parse_args(argv=None):
   return options
 
 
-def agent_key(value):
-  """Return the key to serve with, and whether this start made a fresh one."""
-  if value:
-    return value, False
-  return secrets.token_urlsafe(32), True
+def agent_key():
+  """Return a fresh agent key; every start makes a new one."""
+  return secrets.token_urlsafe(32)
 
 
 def main(argv=None):
@@ -403,17 +398,10 @@ def main(argv=None):
   if options.generate_key:
     print(secrets.token_urlsafe(32))
     return 0
-  options.key, generated = agent_key(options.key)
-  if len(options.key) < MIN_KEY_LENGTH:
-    print(
-      f"ARENA_PROXY_KEY must hold at least {MIN_KEY_LENGTH} characters. Make one with --generate-key.",
-      file=sys.stderr,
-    )
-    return 2
+  options.key = agent_key()
   os.makedirs(options.state_dir, exist_ok=True)
   server = build_server(options)
-  if generated:
-    print(f"agent key (new on every start): {options.key}", flush=True)
+  print(f"agent key (new on every start): {options.key}", flush=True)
   print(
     f"arena-proxy {VERSION} on http://{options.host}:{options.port};"
     f" github token {'set' if options.token else 'missing'};"
