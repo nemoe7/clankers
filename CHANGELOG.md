@@ -25,6 +25,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Rename**: The skill, its Python package and its budget row become `arena-proxy`, and the environment prefix becomes `ARENA_PROXY_`.
 - **Plugin release**: `release-gpt-plugins.yml` publishes `gpt-plugins.zip` as a GitHub Release on the tag `gpt-plugins-v<version>` from `plugin.json`, and the workflow contract gains that file.
 - **CodeQL scope**: `.github/codeql/codeql-config.yml` excludes `py/full-ssrf`, whose reports describe the fetch design. The `allowed_url` guard and its tests carry the control. An inline `# codeql[py/full-ssrf]` comment was tried first and the check ignored it.
+- **Image publish**: `publish-arena-proxy-image.yml` builds `skills/arena-proxy/Dockerfile` for amd64 and arm64, and pushes `ghcr.io/nemoe7/arena-proxy` under `v<version>`, `v<major>` and `latest`. The skill ships a compose file with a Tailscale sidecar and the funnel serve config.
 - **Install cadence**: ARENA.md now requires the preview installer from the repository root before activation, never a manual copy. It holds in every session, the ntfy and no-steering cases included. It lands in `rules/refs/ARENA.md`, `rules/ARENA.md` and the root copy, on the approved proposal in report `install-cadence-proposal`. The duplicate-message check found the rule already present at refs line 112, so no second clause landed.
 
 ### Changed

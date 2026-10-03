@@ -1,0 +1,43 @@
+# Runs the published arena-proxy image behind a Tailscale sidecar.
+# Set TS_AUTHKEY and ARENA_PROXY_KEY in the environment, or in a .env file.
+# The sidecar applies tailscale-serve.json and publishes the funnel URL
+# https://arena-proxy.<tailnet>.ts.net to the public internet on port 443.
+services:
+  proxy:
+    image: ghcr.io/nemoe7/arena-proxy:v2
+    container_name: arena-proxy
+    restart: unless-stopped
+    # The Tailscale sidecar owns the network namespace, so the proxy takes no ports.
+    network_mode: service:tailscale
+    environment:
+      ARENA_PROXY_KEY: ${ARENA_PROXY_KEY:?set ARENA_PROXY_KEY}
+      ARENA_PROXY_REPO: ${ARENA_PROXY_REPO:-nemoe7/clankers}
+    volumes:
+      - arena-proxy-state:/state
+    depends_on:
+      - tailscale
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: arena-proxy-tailscale
+    restart: unless-stopped
+    hostname: arena-proxy
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/tailscale-serve.json
+      TS_USERSPACE: "false"
+      # A tagged key keeps the node owned by the tailnet, not by a user account.
+      TS_EXTRA_ARGS: --advertise-tags=${TS_TAG:-tag:arena-proxy}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale-serve.json:/config/tailscale-serve.json:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+
+volumes:
+  arena-proxy-state:
+  tailscale-state:
