@@ -27,6 +27,7 @@ function checkPromptFill(api) {
   var proxyLine = api.proxyLine;
   var previewBase = api.previewBase;
   var rotateUrl = api.rotateUrl;
+  var keyPostUrl = api.keyPostUrl;
   var rotationNote = api.rotationNote;
   var PREVIEW_FRAME_TITLE = api.PREVIEW_FRAME_TITLE;
   var ROTATE_MIN_SECONDS = api.ROTATE_MIN_SECONDS;
@@ -115,6 +116,7 @@ function checkPromptFill(api) {
     [previewBase(frames([["Website", "https://x.example/"]])) , null],
     [previewBase(frames([["App preview on port 8000", ""]])), null],
     [rotateUrl("https://h.example", "m k", 900), "https://h.example/v1/rotate?master=m%20k&min=900"],
+    [keyPostUrl("https://sbx.example"), "https://sbx.example/api/key"],
     [rotationNote(KEY43, "2026-10-03T15:00:00+00:00"),
       "Arena proxy key rotated at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Never print it."],

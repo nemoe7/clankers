@@ -3679,6 +3679,37 @@ def test_probe_route_answers_the_caller():
     assert status == 200
 
 
+def test_agent_key_route_records_the_key_for_the_page():
+  """POST /api/key stores the key the userscript holds, and the state carries it."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "arena-preview", create=True)
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    assert json.loads(request("GET", "/api/state")[2])["agent_key"] is None
+    key = "K" * 43
+    status, _, body = request(
+      "POST",
+      "/api/key",
+      json.dumps({"key": key}),
+      {"Content-Type": "application/json"},
+    )
+    assert status == 200
+    record = json.loads(body)
+    assert record["key"] == key
+    assert record["at"]
+    assert json.loads(request("GET", "/api/state")[2])["agent_key"]["key"] == key
+    # A short candidate changes nothing.
+    status, _, body = request(
+      "POST",
+      "/api/key",
+      json.dumps({"key": "too short"}),
+      {"Content-Type": "application/json"},
+    )
+    assert status == 400
+    assert json.loads(request("GET", "/api/state")[2])["agent_key"]["key"] == key
+
+
 def test_quiet_note_never_wakes_the_poll():
   """A quiet note is readable and unacknowledged, yet it wakes nothing and stops nothing."""
   with tempfile.TemporaryDirectory() as quiet_dir:

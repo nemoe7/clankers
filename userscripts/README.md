@@ -43,6 +43,7 @@ The prompt fill also carries the Arena proxy. Two menu entries save the settings
 - Every 15 minutes the script asks `/v1/rotate` with `min=900`. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview with the new key, so the agent picks it up at its next inbox read.
 - The due time is saved, so a reload resumes the countdown instead of waiting a fresh 15 minutes. The backend holds the minimum age, so a second tab that asks early is told the key's age and waits.
 - The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
+- The script also posts the key it holds to the preview, so the Downloads tab shows the key the agent is using.
 
 ## Arena Open Steering
 

@@ -581,6 +581,7 @@ async function refreshState() {
     showHistory(state.notes);
     renderTasksIfChanged(state.tasks);
     renderFetchIfChanged(state.fetch_jobs || []);
+    renderAgentKey(state.agent_key);
     showWorkspace(state.workspace);
     queueReady = true;
     const signature = reportsSignature(state.reports);
@@ -1477,6 +1478,12 @@ function approvalRow(item) {
   actions.append(...buttons);
   row.append(url, meta, actions);
   return row;
+}
+// The Downloads tab shows the key the userscript holds, so a stale key is visible at once.
+function renderAgentKey(record) {
+  $('#agent-key').textContent = record
+    ? `Agent key the userscript holds: ${record.key} · set ${time(record.at)}`
+    : 'No agent key recorded yet.';
 }
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);

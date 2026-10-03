@@ -2064,4 +2064,13 @@ test('preview client', async (t) => {
     assert.equal(taskTitle.scrolledIntoView, true);
     assert.equal(taskTitle.focused, true);
   });
+
+  await t.test("The Downloads tab shows the key the userscript holds, and says so while none stands", async () => {
+    state.agent_key = { key: 'K'.repeat(43), at: '2026-10-03T15:00:00+00:00' };
+    await get('#refresh-notes').events.click();
+    assert.match(get('#agent-key').textContent, /K{43}/);
+    state.agent_key = null;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#agent-key').textContent, 'No agent key recorded yet.');
+  });
 });

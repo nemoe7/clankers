@@ -186,6 +186,10 @@
       );
     }
 
+    function keyPostUrl(base) {
+      return base + "/api/key";
+    }
+
     function rotationNote(key, atIso) {
       return (
         "Arena proxy key rotated at " +
@@ -300,6 +304,7 @@
       rotationDueAt: rotationDueAt,
       rotationWaitMs: rotationWaitMs,
       previewBase: previewBase,
+      keyPostUrl: keyPostUrl,
       rotateUrl: rotateUrl,
       rotationNote: rotationNote,
     })) {
@@ -312,6 +317,13 @@
     var proxyLineCache = null;
     var proxyTried = false;
     var proxyFetch = null;
+
+    // The preview shows the key the agent holds, so a stale key is visible at once.
+    function postAgentKey(key) {
+      var base = previewBase(document);
+      if (!base || !key) return;
+      requestJson("POST", keyPostUrl(base), { key: key }, function () {});
+    }
 
     function fetchAgentKey() {
       var host = proxyHost(GM_getValue(PROXY_HOST_KEY, ""));
@@ -326,6 +338,7 @@
         })
         .then(function (body) {
           var key = agentKeyFrom(body);
+          if (key) postAgentKey(key);
           return key ? proxyLine(host, key) : null;
         })
         .catch(function () {
@@ -426,6 +439,7 @@
             rotationDueAt(Date.now(), 0, ROTATE_MIN_SECONDS),
           );
           proxyLineCache = proxyLine(pair.host, body.key);
+          postAgentKey(body.key);
           var base = previewBase(document);
           var at = body.at || new Date().toISOString();
           var line = rotationNote(body.key, at);

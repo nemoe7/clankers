@@ -32,10 +32,10 @@ Latest measurements as of 2026-10-03. `maintenance/check.py` measures ARENA.md b
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 91 `tok` |
 | `skills/arena-proxy/SKILL.md` | `cl100k_base` | 2,628 `tok` |
 | `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,076 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 44,479 `B` |
-| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,117 `B` |
+| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 44,657 `B` |
+| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,194 `B` |
 | `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 12,795 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 85,743 `B` |
+| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 86,701 `B` |
 | `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 9,144 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,286 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |

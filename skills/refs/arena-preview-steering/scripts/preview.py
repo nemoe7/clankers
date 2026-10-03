@@ -147,6 +147,9 @@ REMINDERS = (
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
 GATE_THRESHOLD = 20
+# The key the userscript holds. The page records it, so the Downloads tab can show it.
+AGENT_KEY_META = "agent_key"
+AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 
 
 def now():
@@ -1390,6 +1393,8 @@ class Store:
         ),
         # The message log header names the bash calls since the owner's last message.
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
+        # The Downloads tab shows the key the userscript holds.
+        "agent_key": self.agent_key(),
       }
 
   def tasks(self):
@@ -2137,6 +2142,28 @@ class Store:
     with closing(self.connect()) as db, db:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
 
+  def set_agent_key(self, key):
+    """Record the key the userscript holds, with its stamp."""
+    self.set_meta(
+      AGENT_KEY_META, json.dumps({"key": key, "at": now()}, ensure_ascii=False)
+    )
+
+  def agent_key(self):
+    """The recorded key and its stamp, or None while none stands or the record is broken."""
+    value = self.meta_value(AGENT_KEY_META)
+    if not value:
+      return None
+    try:
+      record = json.loads(value)
+    except json.JSONDecodeError:
+      return None
+    if not isinstance(record, dict):
+      return None
+    key = record.get("key")
+    if not isinstance(key, str) or not AGENT_KEY_RE.fullmatch(key):
+      return None
+    return {"key": key, "at": clip_stamp(record.get("at"))}
+
   def reminder(self, advance=False):
     """Count pending kinds without marking any message seen; any count asks for an ack.
 
@@ -2839,6 +2866,7 @@ def handler(store):
       upload_post = path == "/api/uploads"
       note_upload = path == "/api/notes/with-file"
       probe = path == "/api/probe"
+      agent_key_post = path == "/api/key"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
         path
@@ -2856,6 +2884,7 @@ def handler(store):
         and not note_upload
         and not fetch_post
         and not probe
+        and not agent_key_post
       ):
         self.problem(404, "Not found")
         return
@@ -2986,6 +3015,15 @@ def handler(store):
         payload = json.loads(data)
         if not isinstance(payload, dict):
           self.problem(400, "Expected a JSON object")
+          return
+        if agent_key_post:
+          candidate = payload.get("key")
+          if not isinstance(candidate, str) or not AGENT_KEY_RE.fullmatch(candidate):
+            raise ValueError(
+              "key must be 20 to 64 letters, digits, dashes or underscores"
+            )
+          store.set_agent_key(candidate)
+          self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
           return
         if path == "/api/fetch-jobs":
           record = store.enqueue_fetch(
