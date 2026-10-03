@@ -36,16 +36,16 @@ The feature then fetches `rules/ARENA.md` from the fixed raw URL of this reposit
 
 ### Arena proxy settings and key rotation
 
-The prompt fill also carries the Arena proxy. Two menu entries save the settings, `Arena proxy host — set` and `Arena proxy master key — set`, and a third, `Arena proxy rotate now — run`, rotates at once.
+The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Two menu entries save the settings, `Arena proxy host — set` and `Arena proxy master key — set`, and a third, `Arena proxy rotate now — run`, rotates at once.
 
 - The host is one HTTPS origin with no path. A trailing `/v1` is trimmed.
-- With both settings saved, the fill asks `/v1/key` for the live agent key and appends a line naming the proxy and the routes. A plain prompt in the composer is rebuilt once the key arrives; a prompt that carries a draft is left alone.
+- With both settings saved, the script asks `/v1/key` for the live agent key. The composer holds the rules line only.
 - Every 15 minutes the script asks `/v1/rotate` with `min=900`. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview with the new key, so the agent picks it up at its next inbox read.
 - The due time is saved, so a reload resumes the countdown instead of waiting a fresh 15 minutes. The backend holds the minimum age, so a second tab that asks early is told the key's age and waits.
 - The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
-- The script also posts the key it holds to the preview, so the Downloads tab shows the key the agent is using.
+- The script posts the key and the host it holds to the preview, so the Downloads tab shows both. One quiet note carries the host and a new key to the agent. A saved key keeps a reload or a second tab from repeating the note.
 - Every minute the script asks `/v1/key` again. A new key makes the script adopt it, post it to the preview and send one quiet note. A container restart therefore reaches the agent inside a minute, not at the next rotation.
-- `@connect *` lets the script reach two targets that cannot be named in advance: the preview host, which changes every session, and the owner's proxy host. Without it, the userscript manager asks the owner to confirm each new preview host.
+- `@connect arena.site` names the preview host, the only target of `GM_xmlhttpRequest`. The proxy calls use plain `fetch`, which the proxy's wildcard origin allows, so the owner's proxy host never enters the file.
 
 ## Arena Open Steering
 
