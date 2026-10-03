@@ -14,6 +14,10 @@ services:
       # A fine-grained, read-only token for the GitHub routes; leave it out to skip them.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       ARENA_PROXY_REPO: ${ARENA_PROXY_REPO:-nemoe7/clankers}
+      # The model endpoint, when the LLM route should work; leave the set empty to skip it.
+      ARENA_PROXY_LLM_BASE: ${ARENA_PROXY_LLM_BASE:-}
+      ARENA_PROXY_LLM_KEY: ${ARENA_PROXY_LLM_KEY:-}
+      ARENA_PROXY_LLM_MODEL: ${ARENA_PROXY_LLM_MODEL:-}
     volumes:
       - arena-proxy-state:/state
     depends_on:
