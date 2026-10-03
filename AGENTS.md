@@ -102,7 +102,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - `name` matches its directory.
 - Adapted skills record `metadata.upstream`; first-party ones record `metadata.origin`.
 - The file stays under 500 lines.
-- The preview skill NEVER contains a design decision. It holds only the proper practice and command references the Arena agent needs to operate the skill. Rationale goes to [CHANGELOG.md](CHANGELOG.md) or [docs/archive/arena-quirks.md](docs/archive/arena-quirks.md).
+- A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to [CHANGELOG.md](CHANGELOG.md) or [docs/archive/arena-quirks.md](docs/archive/arena-quirks.md).
 
 ## Workflows
 
