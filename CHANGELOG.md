@@ -18,6 +18,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### skills
 
 - **Arena extension**: A new first-party skill pairs the `fetch_page` tool with an owner-run backend that holds a provider credential. The backend answers `/v1/ping`, `/v1/github`, and `/v1/logs`, checks a generated agent key, and removes the query string from its log lines. `maintenance/test_arena_extension.py` covers auth, forwarding, the log tail, and key redaction.
+- **Module split**: The backend becomes an `arena_extension` package of five modules with a thin `server.py` launcher. `/v1/health` answers without a key. `/v1/fetch` returns text, base64, base85 or gzip, and stages large bytes for chunked reads. `/v1/llm` queues an OpenAI-compatible job and returns its result on a poll. Staged bytes and jobs expire after one hour. The backend accepts loopback HTTP for a local service.
+- **Container**: `skills/arena-extension/Dockerfile` builds a `python:3.12-alpine` image with no build step, runs as a non-root user, and keeps secrets in the environment.
+- **Exposure**: The skill records Cloudflare Tunnel and Tailscale Funnel as the HTTPS options, with the agent key as the only gate. The shipped scripts stay readable, not minified, because the owner hosts and debugs them.
 
 ## 2026-10-02
 
