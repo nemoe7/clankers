@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Dead surfaces removed**: The preview drops `/api/probe`, the legacy `/api/uploads` pair, `parse_note_attachments` and the CLI `--pretty` flag. Nothing called them. Attachments ride the note route.
 - **Copy state carries reports**: The copy button fetches `/api/report-sources`, so the clipboard carries the report sources with the notes, tasks and answers. A restore rebuilds the report pages from either the copy or the save file.
 
 #### skills

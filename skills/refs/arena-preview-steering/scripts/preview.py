@@ -829,18 +829,6 @@ def stream_note_attachments(content_type, stream, length):
     yield fields["id"], fields["text"], files
 
 
-def parse_note_attachments(content_type, data):
-  """Compatibility parser for callers with a complete byte buffer."""
-  import io
-
-  with stream_note_attachments(content_type, io.BytesIO(data), len(data)) as parsed:
-    note_id, text, files = parsed
-    result = []
-    for name, kind, body in files:
-      result.append((name, kind, body.path.read_bytes()))
-    return note_id, text, result
-
-
 def upload_row(row, directory):
   """A stored upload, plus the two things the row cannot say: where the bytes are and whether they are there."""
   path = directory / UPLOAD_DIR / row["file"]
@@ -856,13 +844,8 @@ def add_note_attachments(note, records):
   return note
 
 
-def cli_json(value, pretty=False):
-  """Print agent-facing JSON minified; the agent pays for every space it reads.
-
-  `--pretty` is the human escape hatch: indentation costs tokens, and the tokens are the point.
-  """
-  if pretty:
-    return json.dumps(value, ensure_ascii=False, indent=2)
+def cli_json(value):
+  """Return agent-facing JSON minified; the agent pays for every space it reads."""
   return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -886,7 +869,7 @@ def require_server(store):
   )
 
 
-def print_read(store, pretty=False):
+def print_read(store):
   """Print a read listing, then stamp Seen for the IDs it delivered.
 
   The stamp follows the write on purpose: a write that fails or never reaches the
@@ -895,7 +878,7 @@ def print_read(store, pretty=False):
   until it is answered.
   """
   listing = store.read()
-  print(cli_json(listing, pretty), flush=True)
+  print(cli_json(listing), flush=True)
   store.mark_seen([item["id"] for item in listing["pending"]])
   store.mark_reports_agent_seen([item.get("report_id") for item in listing["pending"]])
 
@@ -991,7 +974,7 @@ def quiet_inbox_line(line):
   return True
 
 
-def poll_inbox(store, pretty=False, sleeper=None):
+def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   listing = {"checked_at": None, "pending": []}
@@ -1004,7 +987,7 @@ def poll_inbox(store, pretty=False, sleeper=None):
       listing = store.read(include_quiet=False)
       if listing["pending"]:
         full = store.read()
-        print(cli_json(full, pretty), flush=True)
+        print(cli_json(full), flush=True)
         store.mark_seen([item["id"] for item in full["pending"]])
         store.mark_reports_agent_seen(
           [item.get("report_id") for item in full["pending"]]
@@ -1024,14 +1007,14 @@ def poll_inbox(store, pretty=False, sleeper=None):
           file=sys.stderr,
           flush=True,
         )
-        print(cli_json(listing, pretty), flush=True)
+        print(cli_json(listing), flush=True)
         return 0
       if index + 1 < POLL_MAX_LOOPS:
         sleeper(POLL_INTERVAL)
         store.stamp_polling()
   finally:
     store.clear_polling()
-  print(cli_json(listing, pretty), flush=True)
+  print(cli_json(listing), flush=True)
   return 1
 
 
@@ -1807,18 +1790,18 @@ class Store:
     path.write_text(state_ndjson(lines), encoding="utf-8")
     return {"path": str(path), **counts}
 
+  def upload(self, upload_id):
+    """One upload record by ID, or None; the tests read a record back through it."""
+    identifier(upload_id)
+    with closing(self.connect()) as db:
+      row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
+    return None if row is None else upload_row(row, self.path.parent)
+
   def uploads(self):
     """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
     with closing(self.connect()) as db:
       rows = db.execute("SELECT * FROM uploads ORDER BY seq").fetchall()
     return [upload_row(row, self.path.parent) for row in rows]
-
-  def upload(self, upload_id):
-    """One upload by ID, or None; the bytes are read separately so a missing file is a 404."""
-    identifier(upload_id)
-    with closing(self.connect()) as db:
-      row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
-    return None if row is None else upload_row(row, self.path.parent)
 
   def save_upload(
     self,
@@ -3005,23 +2988,6 @@ def handler(store):
           )
           self.reply(200, page.replace("__TOKEN__", token), "text/html; charset=utf-8")
           return
-        if path == "/api/probe":
-          # A test route: it answers the caller address and changes nothing.
-          self.reply(
-            200,
-            json.dumps(
-              {
-                "ok": True,
-                "route": "/api/probe",
-                "from": self.client_address[0],
-                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                "hint": "POST a JSON body to echo it",
-              },
-              indent=2,
-            )
-            + "\n",
-          )
-          return
         if path == "/api/state":
           state = store.state()
           # The page keeps its write token fresh from the poll, so a save pressed after a server
@@ -3087,25 +3053,6 @@ def handler(store):
             "application/json; charset=utf-8",
           )
           return
-        upload = re.fullmatch(r"/api/uploads/([a-zA-Z0-9_-]{1,80})", path)
-        if upload:
-          record = store.upload(upload.group(1))
-          if record is None:
-            self.problem(404, "No upload with that ID")
-            return
-          try:
-            data = Path(record["path"]).read_bytes()
-          except OSError:
-            # The record outlives the bytes by design on the owner's answer in report submission
-            # c27a4dd5: a restore deletes what is under the state directory, and the tab shows that
-            # row as one whose file is gone rather than as an entry that opens nothing.
-            self.problem(
-              404, "This upload's bytes are gone; the record survived a restore"
-            )
-            return
-          # An attachment with nosniff, so an uploaded page cannot run in this origin.
-          self.reply(200, data, record["type"], record["name"])
-          return
         match = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)", path)
         if match:
           report_id, kind = match.groups()
@@ -3158,9 +3105,7 @@ def handler(store):
         r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)",
         path,
       )
-      upload_post = path == "/api/uploads"
       note_upload = path == "/api/notes/with-file"
-      probe = path == "/api/probe"
       agent_key_post = path == "/api/key"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
@@ -3175,10 +3120,8 @@ def handler(store):
         and not report_seen
         and not message_replies_seen
         and not report_unpublish
-        and not upload_post
         and not note_upload
         and not fetch_post
-        and not probe
         and not agent_key_post
       ):
         self.problem(404, "Not found")
@@ -3189,36 +3132,13 @@ def handler(store):
       # if not secrets.compare_digest(supplied, token.encode("ascii")):
       #   self.problem(403, "Reload the preview, then retry; your draft is kept")
       #   return
-      if probe:
-        length = int(self.headers.get("Content-Length", "0") or 0)
-        raw = self.rfile.read(length) if length else b""
-        try:
-          body = json.loads(raw.decode("utf-8")) if raw else {}
-        except (UnicodeDecodeError, json.JSONDecodeError):
-          self.problem(400, "the probe body must be JSON")
-          return
-        self.reply(
-          200,
-          json.dumps(
-            {
-              "ok": True,
-              "route": "/api/probe",
-              "from": self.client_address[0],
-              "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-              "echo": body,
-            },
-            indent=2,
-          )
-          + "\n",
-        )
-        return
       # A composed note carries its files and text in one multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:
         if not content_type.lower().startswith("multipart/form-data;"):
           self.problem(415, "Expected multipart/form-data")
           return
-      elif content_type != "application/json" and not (upload_post or fetch_result):
+      elif content_type != "application/json" and not fetch_result:
         self.problem(415, "Expected application/json")
         return
       try:
@@ -3228,7 +3148,7 @@ def handler(store):
         ):
           raise ValueError("Send one Content-Length and no Transfer-Encoding")
         length = int(self.headers.get("Content-Length", "0"))
-        limit = MAX_UPLOAD if upload_post else None
+        limit = None
         if fetch_result:
           with closing(store.connect()) as db:
             job = store.claimed_fetch(
@@ -3237,11 +3157,7 @@ def handler(store):
             limit = MAX_FETCH if job["origin"] != "owner" else None
         if length <= 0 or (limit is not None and length > limit):
           subject = (
-            "Upload"
-            if upload_post or note_upload
-            else "Download"
-            if fetch_result
-            else "Request body"
+            "Upload" if note_upload else "Download" if fetch_result else "Request body"
           )
           # Discard at most one byte over the limit in chunks. Clients sending a wider body get
           # the 413 without forcing this server to buffer or read all of it.
@@ -3291,21 +3207,6 @@ def handler(store):
         data = self.rfile.read(length)
         if len(data) != length:
           self.problem(400, "Incomplete request body; retry the upload or request")
-          return
-        if upload_post:
-          # The file name rides the query string because the body is the file itself. The bytes are
-          # stored exactly as they arrived, and the record carries the type, size and hash.
-          name = parse_qs(urlsplit(self.path).query).get("name", [""])[0]
-          record = store.save_upload(name, self.headers.get("Content-Type", ""), data)
-          record["at"] = clip_stamp(record["at"])
-          # An upload writes a note, so the agent's next read sees it: the uploads list renders
-          # only in the browser, and the agent has no other signal that bytes arrived. The note
-          # rides the upload's ID, so the log receipt points at the record.
-          store.note(
-            record["id"],
-            f"Upload: {record['name']} ({record['size']} B, {record['type'] or 'unknown type'}) saved to {record['path']}",
-          )
-          self.reply(201, json.dumps(record, ensure_ascii=False))
           return
         payload = json.loads(data)
         if not isinstance(payload, dict):
@@ -3421,11 +3322,6 @@ def main():
     "--reminder",
     action="store_true",
     help="Print the unacked-count reminder line and exit",
-  )
-  parser.add_argument(
-    "--pretty",
-    action="store_true",
-    help="Indent the JSON this CLI prints; agent-facing output is minified by default",
   )
   commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve")
@@ -3569,7 +3465,7 @@ def main():
         server.serve_forever()
     elif args.command == "read":
       require_server(store)
-      print_read(store, args.pretty)
+      print_read(store)
     elif args.command == "key":
       # The key note is quiet and it ages out of the pending list after an ack, so a later
       # session reads the recorded key here instead of waiting for a new note.
@@ -3577,17 +3473,13 @@ def main():
       if not record:
         print("No agent key recorded yet.", file=sys.stderr)
         return 1
-      print(cli_json(record, args.pretty))
+      print(cli_json(record))
     elif args.command == "poll":
       require_server(store)
-      return poll_inbox(store, args.pretty)
+      return poll_inbox(store)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.
-      print(
-        cli_json(
-          store.enqueue_fetch(args.url, args.allow_proxy, pending=True), args.pretty
-        )
-      )
+      print(cli_json(store.enqueue_fetch(args.url, args.allow_proxy, pending=True)))
     elif args.command == "ack":
       if bool(args.reply) == bool(args.note):
         raise ValueError("Choose exactly one of --reply or --note")
@@ -3647,18 +3539,16 @@ def main():
       echo = echo_task(record, before, after)
       if args.msg_id:
         echo["msg_id"] = args.msg_id
-      print(cli_json(echo, args.pretty))
+      print(cli_json(echo))
     elif args.command == "task-remove":
-      print(cli_json(echo_task(store.remove_task(args.task_id)), args.pretty))
+      print(cli_json(echo_task(store.remove_task(args.task_id))))
     elif args.command == "task-list":
-      print(cli_json(store.list_tasks(), args.pretty))
+      print(cli_json(store.list_tasks()))
     elif args.command == "import-state":
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
-      print(
-        cli_json(store.import_state(text, args.replace_tasks, args.force), args.pretty)
-      )
+      print(cli_json(store.import_state(text, args.replace_tasks, args.force)))
 
   except (
     OSError,

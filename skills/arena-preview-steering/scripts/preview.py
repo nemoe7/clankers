@@ -317,19 +317,11 @@ def stream_note_attachments(content_type,stream,length):
 			if ending!=b'\r\n':raise ValueError('Invalid multipart delimiter')
 		if set(fields)!={'id','text'}or not files:raise ValueError('Send one note ID, text and at least one file')
 		yield(fields['id'],fields['text'],files)
-def parse_note_attachments(content_type,data):
-	import io
-	with stream_note_attachments(content_type,io.BytesIO(data),len(data))as parsed:
-		note_id,text,files=parsed;result=[]
-		for(name,kind,body)in files:result.append((name,kind,body.path.read_bytes()))
-		return note_id,text,result
 def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];return dict(row)|{'path':str(path),'present':path.exists()}
 def add_note_attachments(note,records):
 	if records:note['attachment_name']=records[0]['name'];note['attachment_path']=records[0]['path'];note['attachments']=records
 	return note
-def cli_json(value,pretty=False):
-	if pretty:return json.dumps(value,ensure_ascii=False,indent=2)
-	return json.dumps(value,ensure_ascii=False,separators=(',',':'))
+def cli_json(value):return json.dumps(value,ensure_ascii=False,separators=(',',':'))
 def require_server(store):
 	port=store.meta_value('port')
 	if not port:return
@@ -337,7 +329,7 @@ def require_server(store):
 		probe.settimeout(1)
 		if probe.connect_ex(('127.0.0.1',int(port)))==0:return
 	raise ValueError(f"preview server is down; start it before polling: arena-preview serve --port {port}")
-def print_read(store,pretty=False):listing=store.read();print(cli_json(listing,pretty),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
+def print_read(store):listing=store.read();print(cli_json(listing),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
 POLL_INTERVAL=1
 POLL_MAX_LOOPS=900
 POLLING_META='polling_at'
@@ -372,18 +364,18 @@ def quiet_inbox_line(line):
 			continue
 		return False
 	return True
-def poll_inbox(store,pretty=False,sleeper=None):
+def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
 	listing={'checked_at':None,'pending':[]};store.start_poll()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
-			if listing['pending']:full=store.read();print(cli_json(full,pretty),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
+			if listing['pending']:full=store.read();print(cli_json(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);print(f"CONTINUE: unblocked task {names} waits. Do not end the turn.",file=sys.stderr,flush=True);print(cli_json(listing,pretty),flush=True);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);print(f"CONTINUE: unblocked task {names} waits. Do not end the turn.",file=sys.stderr,flush=True);print(cli_json(listing),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
-	print(cli_json(listing,pretty),flush=True);return 1
+	print(cli_json(listing),flush=True);return 1
 def parse_state_import(text):
 	try:value=json.loads(text)
 	except json.JSONDecodeError:value=[json.loads(line)for line in text.splitlines()if line.strip()]
@@ -575,13 +567,13 @@ class Store:
 		lines,counts=self.state_lines(notes,tasks);path=self.save_path
 		if path.parent!=Path('.'):path.parent.mkdir(parents=True,exist_ok=True)
 		path.write_text(state_ndjson(lines),encoding='utf-8');return{'path':str(path),**counts}
-	def uploads(self):
-		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads ORDER BY seq').fetchall()
-		return[upload_row(row,self.path.parent)for row in rows]
 	def upload(self,upload_id):
 		identifier(upload_id)
 		with closing(self.connect())as db:row=db.execute('SELECT * FROM uploads WHERE id = ?',(upload_id,)).fetchone()
 		return None if row is None else upload_row(row,self.path.parent)
+	def uploads(self):
+		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads ORDER BY seq').fetchall()
+		return[upload_row(row,self.path.parent)for row in rows]
 	def save_upload(self,name,content_type,data,upload_id=None,shared=None,note_id=None,position=None):
 		if not isinstance(data,(bytes,bytearray,FileBody)):raise TypeError('An upload is bytes')
 		if not data:raise ValueError('An upload must not be empty')
@@ -954,7 +946,6 @@ def handler(store):
 			path=urlsplit(self.path).path
 			try:
 				if path=='/':page=(ASSETS/'index.html').read_text(encoding='utf-8');page=page.replace('__STYLE__',(ASSETS/'style.css').read_text(encoding='utf-8'));page=page.replace('__SCRIPT__',(ASSETS/'app.js').read_text(encoding='utf-8'));self.reply(200,page.replace('__TOKEN__',token),'text/html; charset=utf-8');return
-				if path=='/api/probe':self.reply(200,json.dumps({'ok':True,'route':'/api/probe','from':self.client_address[0],'at':datetime.now(timezone.utc).isoformat(timespec='seconds'),'hint':'POST a JSON body to echo it'},indent=2)+'\n');return
 				if path=='/api/state':
 					state=store.state();state['token']=token
 					try:
@@ -968,13 +959,6 @@ def handler(store):
 				if path=='/api/submissions':live={report['id']for report in store.state()['reports']};self.reply(200,json.dumps([saved_answer_line(record)for record in store.submissions()if record['report_id']in live],ensure_ascii=False),'application/json; charset=utf-8');return
 				if path=='/api/copy-state':lines,counts=store.state_lines(store.state()['notes'],store.tasks()or{});self.reply(200,json.dumps({'text':state_ndjson(lines),'counts':counts},ensure_ascii=False),'application/json; charset=utf-8');return
 				if path=='/api/report-sources':self.reply(200,json.dumps([saved_report_line(record)for record in store.report_sources()],ensure_ascii=False),'application/json; charset=utf-8');return
-				upload=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})',path)
-				if upload:
-					record=store.upload(upload.group(1))
-					if record is None:self.problem(404,'No upload with that ID');return
-					try:data=Path(record['path']).read_bytes()
-					except OSError:self.problem(404,"This upload's bytes are gone; the record survived a restore");return
-					self.reply(200,data,record['type'],record['name']);return
 				match=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/(html|source)',path)
 				if match:
 					report_id,kind=match.groups();report=store.report(report_id)
@@ -987,24 +971,19 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)',path);upload_post=path=='/api/uploads';note_upload=path=='/api/notes/with-file';probe=path=='/api/probe';agent_key_post=path=='/api/key';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
-			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not message_replies_seen and not report_unpublish and not upload_post and not note_upload and not fetch_post and not probe and not agent_key_post:self.problem(404,'Not found');return
-			if probe:
-				length=int(self.headers.get('Content-Length','0')or 0);raw=self.rfile.read(length)if length else b''
-				try:body=json.loads(raw.decode('utf-8'))if raw else{}
-				except(UnicodeDecodeError,json.JSONDecodeError):self.problem(400,'the probe body must be JSON');return
-				self.reply(200,json.dumps({'ok':True,'route':'/api/probe','from':self.client_address[0],'at':datetime.now(timezone.utc).isoformat(timespec='seconds'),'echo':body},indent=2)+'\n');return
+			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)',path);note_upload=path=='/api/notes/with-file';agent_key_post=path=='/api/key';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
+			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not message_replies_seen and not report_unpublish and not note_upload and not fetch_post and not agent_key_post:self.problem(404,'Not found');return
 			content_type=self.headers.get('Content-Type','')
 			if note_upload:
 				if not content_type.lower().startswith('multipart/form-data;'):self.problem(415,'Expected multipart/form-data');return
-			elif content_type!='application/json'and not(upload_post or fetch_result):self.problem(415,'Expected application/json');return
+			elif content_type!='application/json'and not fetch_result:self.problem(415,'Expected application/json');return
 			try:
 				if self.headers.get('Transfer-Encoding')or len(self.headers.get_all('Content-Length',[]))!=1:raise ValueError('Send one Content-Length and no Transfer-Encoding')
-				length=int(self.headers.get('Content-Length','0'));limit=MAX_UPLOAD if upload_post else None
+				length=int(self.headers.get('Content-Length','0'));limit=None
 				if fetch_result:
 					with closing(store.connect())as db:job=store.claimed_fetch(db,fetch_post.group(1),self.headers.get('X-Fetch-Claim',''));limit=MAX_FETCH if job['origin']!='owner'else None
 				if length<=0 or limit is not None and length>limit:
-					subject='Upload'if upload_post or note_upload else'Download'if fetch_result else'Request body';remaining=length if limit is not None and 0<length<=limit+1 else 0
+					subject='Upload'if note_upload else'Download'if fetch_result else'Request body';remaining=length if limit is not None and 0<length<=limit+1 else 0
 					while remaining>0:
 						chunk=self.rfile.read(min(65536,remaining))
 						if not chunk:break
@@ -1026,7 +1005,6 @@ def handler(store):
 					self.reply(201,json.dumps(record,ensure_ascii=False));return
 				data=self.rfile.read(length)
 				if len(data)!=length:self.problem(400,'Incomplete request body; retry the upload or request');return
-				if upload_post:name=parse_qs(urlsplit(self.path).query).get('name',[''])[0];record=store.save_upload(name,self.headers.get('Content-Type',''),data);record['at']=clip_stamp(record['at']);store.note(record['id'],f"Upload: {record['name']} ({record['size']} B, {record['type']or'unknown type'}) saved to {record['path']}");self.reply(201,json.dumps(record,ensure_ascii=False));return
 				payload=json.loads(data)
 				if not isinstance(payload,dict):self.problem(400,'Expected a JSON object');return
 				if agent_key_post:
@@ -1070,7 +1048,7 @@ def resolve_state_dir():
 		if(parent/'.git').exists():return str(parent/'arena-state')
 	return'arena-state'
 def main():
-	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');parser.add_argument('--pretty',action='store_true',help='Indent the JSON this CLI prints; agent-facing output is minified by default');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');commands.add_parser('key');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');gate=commands.add_parser('gate');gate.add_argument('--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');commands.add_parser('poll');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');state_import=commands.add_parser('import-state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('--replace-tasks',action='store_true');state_import.add_argument('--force',action='store_true',help='import even when the live state holds newer messages');args=parser.parse_args();state_dir=resolve_state_dir()
+	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');commands.add_parser('key');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');gate=commands.add_parser('gate');gate.add_argument('--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');commands.add_parser('poll');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');state_import=commands.add_parser('import-state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('--replace-tasks',action='store_true');state_import.add_argument('--force',action='store_true',help='import even when the live state holds newer messages');args=parser.parse_args();state_dir=resolve_state_dir()
 	try:
 		if args.reminder:store=Store(state_dir,create=False);require_server(store);print(store.reminder(advance=True),flush=True);return 0
 		if not args.command:parser.error('a command is required')
@@ -1087,13 +1065,13 @@ def main():
 		if args.command=='serve':
 			require_renderer()
 			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));print(f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
-		elif args.command=='read':require_server(store);print_read(store,args.pretty)
+		elif args.command=='read':require_server(store);print_read(store)
 		elif args.command=='key':
 			record=store.agent_key()
 			if not record:print('No agent key recorded yet.',file=sys.stderr);return 1
-			print(cli_json(record,args.pretty))
-		elif args.command=='poll':require_server(store);return poll_inbox(store,args.pretty)
-		elif args.command=='download-request':print(cli_json(store.enqueue_fetch(args.url,args.allow_proxy,pending=True),args.pretty))
+			print(cli_json(record))
+		elif args.command=='poll':require_server(store);return poll_inbox(store)
+		elif args.command=='download-request':print(cli_json(store.enqueue_fetch(args.url,args.allow_proxy,pending=True)))
 		elif args.command=='ack':
 			if bool(args.reply)==bool(args.note):raise ValueError('Choose exactly one of --reply or --note')
 			kind='reply'if args.reply else'note';store.acknowledge(args.ids,kind,args.reply or args.note);print('Acknowledged: '+', '.join(args.ids));print('If a note asks for work, add it to the task list: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in args.ids))
@@ -1112,10 +1090,10 @@ def main():
 			else:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked)
 			before,after=store.neighbours(task_id);echo=echo_task(record,before,after)
 			if args.msg_id:echo['msg_id']=args.msg_id
-			print(cli_json(echo,args.pretty))
-		elif args.command=='task-remove':print(cli_json(echo_task(store.remove_task(args.task_id)),args.pretty))
-		elif args.command=='task-list':print(cli_json(store.list_tasks(),args.pretty))
-		elif args.command=='import-state':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();print(cli_json(store.import_state(text,args.replace_tasks,args.force),args.pretty))
+			print(cli_json(echo))
+		elif args.command=='task-remove':print(cli_json(echo_task(store.remove_task(args.task_id))))
+		elif args.command=='task-list':print(cli_json(store.list_tasks()))
+		elif args.command=='import-state':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();print(cli_json(store.import_state(text,args.replace_tasks,args.force)))
 	except(OSError,ValueError,TypeError,KeyError,sqlite3.Error,RuntimeError)as error:print(f"Preview error: {error}",file=sys.stderr);return 1
 	return 0
 if __name__=='__main__':raise SystemExit(main())

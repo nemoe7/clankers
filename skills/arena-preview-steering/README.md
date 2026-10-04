@@ -48,7 +48,6 @@ Each note has one ID and acknowledgement. `read` lists files in `attachments[]`.
 Files stay outside SQLite in `<state-dir>/uploads/`. Each is at most 50MB.
 Name stored files with the note ID's first seven characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
 Only duplicate names add `-2`, `-3`, and so on after the timestamp. Keep existing files unchanged.
-Legacy `/api/uploads` can still create a separate upload note.
 Long names use a short disk name when required by the filesystem. Records keep the original filename. `present` reports if bytes exist.
 Identical retries repair missing bytes without changing the note receipt or file order.
 Multipart uploads stream each file to temporary storage without a total request cap. Each file keeps its 50 MB cap. The server rejects incomplete transfers before it saves the note.

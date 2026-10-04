@@ -1309,85 +1309,10 @@ def test_http_boundaries():
       # The save route is gone: autosave writes the file and the page copies to the clipboard.
       assert request("POST", "/api/save-state", "{}", auth)[0] == 404
       assert request("POST", "/api/save-state", "{}")[0] == 404
-      # An upload stores its bytes beside the database and its record inside it, on the owner's answers in
-      # report submission c27a4dd5: any bytes, a 50,000,000-byte ceiling, and a record that outlives them.
-      blob = bytes(range(256)) * 4
-      status, _, created = request(
-        "POST",
-        "/api/uploads?name=shot%2Fmy%20file.png",
-        blob,
-        {**auth, "Content-Type": "image/png"},
-      )
-      assert status == 201
-      record = json.loads(created)
-      assert record["name"] == "my file.png" and record["size"] == len(blob)
-      assert record["sha256"] == hashlib.sha256(blob).hexdigest() and record["present"]
-      assert Path(record["path"]).read_bytes() == blob
-      assert Path(record["path"]).parent.name == "uploads"
-      # An upload writes a note under its own ID, so that ID carries the shape the log shows:
-      # seven characters, a hyphen, the rest. A raw uuid4 reads as a different kind of identifier.
-      assert re.fullmatch(r"[0-9a-f]{7}-[0-9a-f]{25}", record["id"]), record["id"]
-      # An upload writes a note, so the agent's next read sees it; the note rides the upload's ID.
-      upload_note = store.state()["notes"][-1]
-      assert upload_note["id"] == record["id"]
-      assert upload_note["text"] == (
-        f"Upload: my file.png ({len(blob)} B, image/png) saved to {record['path']}"
-      )
-      # A declared body above the new bound is refused before buffering 50 MB in this harness.
-      status, _, problem = request(
-        "POST",
-        "/api/uploads?name=big.bin",
-        b"0",
-        {
-          **auth,
-          "Content-Type": "application/octet-stream",
-          "Content-Length": str(preview.MAX_UPLOAD + 2),
-        },
-      )
-      assert status == 413 and "50,000,000" in json.loads(problem)["error"]
-      assert (
-        request(
-          "POST",
-          "/api/uploads?name=empty.bin",
-          b"",
-          {**auth, "Content-Type": "application/octet-stream"},
-        )[0]
-        == 413
-      )
-      uploads_before = store.uploads()
-      notes_before = store.state()["notes"]
-      files_before = set((root / "uploads").iterdir())
-      for partial in (b"abc", b""):
-        with socket.create_connection(
-          ("127.0.0.1", app.server_port), timeout=5
-        ) as client:
-          client.sendall(
-            (
-              "POST /api/uploads?name=partial.bin HTTP/1.0\r\n"
-              "Content-Type: application/octet-stream\r\n"
-              f"X-Preview-Token: {auth['X-Preview-Token']}\r\n"
-              "Content-Length: 10\r\n\r\n"
-            ).encode()
-            + partial
-          )
-          client.shutdown(socket.SHUT_WR)
-          response = http.client.HTTPResponse(client)
-          response.begin()
-          assert response.status == 400
-          assert "Incomplete request body" in response.read().decode()
-      assert store.uploads() == uploads_before
-      assert store.state()["notes"] == notes_before
-      assert set((root / "uploads").iterdir()) == files_before
-      status, headers, served = request("GET", f"/api/uploads/{record['id']}", raw=True)
-      assert status == 200 and served == blob and headers["Content-Type"] == "image/png"
-      assert "attachment" in headers["Content-Disposition"]
-      assert request("GET", "/api/uploads/no-such-upload")[0] == 404
-      # The record survives a restore and the bytes do not: the tab is told which is which rather than
-      # shown an entry that opens nothing.
-      Path(record["path"]).unlink()
-      assert request("GET", f"/api/uploads/{record['id']}")[0] == 404
-      assert store.upload(record["id"])["present"] is False
-      assert [item["id"] for item in store.uploads()] == [record["id"]]
+      # The legacy upload surface left the skill: attachments ride the note route, and the
+      # store cases keep the bytes, the ceiling and a missing file.
+      assert request("POST", "/api/uploads?name=gone.bin", b"x", auth)[0] == 404
+      assert request("GET", "/api/uploads/gone")[0] == 404
 
       # The read stamp belongs to the report rather than to one browser's storage, so the browser
       # writes it through a route of its own, and only the first look sets it.
@@ -1999,36 +1924,19 @@ def test_download_queue():
       )
       assert status == 201 and json.loads(completed)["source"] == "codetabs"
 
-      # Both binary routes refuse a declared excess; manual uploads above 1 MB now succeed.
-      medium = b"x" * 1_000_001
-      status, _, created = request(
+      # The download route refuses a declared excess; the store keeps the upload ceiling.
+      status, _, _problem = request(
         "POST",
-        "/api/uploads?name=medium.bin",
-        medium,
-        {**auth, "Content-Type": "application/octet-stream"},
+        f"/api/fetch-jobs/{proxy['id']}/result?name=large.bin",
+        b"x",
+        {
+          **auth,
+          **proxy_headers,
+          "Content-Type": "application/octet-stream",
+          "Content-Length": str(preview.MAX_FETCH + 2),
+        },
       )
-      assert status == 201 and json.loads(created)["size"] == len(medium)
-      assert Path(json.loads(created)["path"]).read_bytes() == medium
-      for path, limit, extra in (
-        ("/api/uploads?name=large.bin", preview.MAX_UPLOAD, {}),
-        (
-          f"/api/fetch-jobs/{proxy['id']}/result?name=large.bin",
-          preview.MAX_FETCH,
-          proxy_headers,
-        ),
-      ):
-        status, _, _problem = request(
-          "POST",
-          path,
-          b"x",
-          {
-            **auth,
-            **extra,
-            "Content-Type": "application/octet-stream",
-            "Content-Length": str(limit + 2),
-          },
-        )
-        assert status == (413 if path.startswith("/api/uploads") else 409)
+      assert status == 409
       assert preview.MAX_UPLOAD == 50_000_000
       assert preview.MAX_FETCH == 102_400_000
       exact = queue_store.save_upload(
@@ -2708,19 +2616,6 @@ def test_shared_save_import():
     # The imported note carries its receipt, so `read` has nothing pending; the receipt is what
     # makes it acknowledged; reading alone never stamps Seen.
     assert json.loads(read_out)["pending"] == []
-    pretty_out = subprocess.run(
-      [
-        sys.executable,
-        script_again,
-        "--pretty",
-        "read",
-      ],
-      capture_output=True,
-      text=True,
-      check=True,
-      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
-    ).stdout.strip()
-    assert "\n" in pretty_out, "--pretty is the human escape hatch"
     restored = preview.Store(mixed_root)
     assert [row["id"] for row in restored.state()["notes"]] == ["saved-note"]
     assert [row["id"] for row in restored.submissions()] == ["saved-answer"]
@@ -3746,34 +3641,6 @@ def test_import_accepts_a_newer_snapshot():
     assert store.import_state(newer)["notes"] == 1
     assert "forced" not in store.import_state(newer)
     assert {note["id"] for note in store.state()["notes"]} == {"live", "new"}
-
-
-def test_probe_route_answers_the_caller():
-  """The one-off test route: a GET describes it, and a POST echoes the body."""
-  global app
-  with tempfile.TemporaryDirectory() as directory:
-    store = preview.Store(Path(directory) / "arena-preview", create=True)
-    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
-    threading.Thread(target=app.serve_forever, daemon=True).start()
-    status, _, body = request("GET", "/api/probe")
-    assert status == 200
-    payload = json.loads(body)
-    assert payload["ok"] is True
-    assert payload["from"] == "127.0.0.1"
-    status, _, body = request(
-      "POST",
-      "/api/probe",
-      json.dumps({"note": "hello"}),
-      {"Content-Type": "application/json"},
-    )
-    assert status == 200
-    payload = json.loads(body)
-    assert payload["echo"] == {"note": "hello"}
-    status, _, body = request("POST", "/api/probe", "{not json")
-    assert status == 400
-    # The probe changes no state.
-    status, _, body = request("GET", "/api/state")
-    assert status == 200
 
 
 def test_agent_key_route_records_the_key_for_the_page():
