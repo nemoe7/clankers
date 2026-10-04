@@ -590,6 +590,15 @@ def test_http_boundaries():
       assert 'href="javascript:' not in rendered["html"]
       assert request("GET", "/api/reports/first/export")[0] == 404
       assert request("GET", "/api/reports/first/source")[0] == 200
+      # The copy button asks for the report lines, so the clipboard carries the same
+      # fields as the save file.
+      status, _, sources = request("GET", "/api/report-sources")
+      assert status == 200
+      lines = json.loads(sources)
+      assert "first" in [line["id"] for line in lines]
+      first = next(line for line in lines if line["id"] == "first")
+      assert set(first) == set(preview.REPORT_LINE_KEYS)
+      assert first["markdown"].startswith("# First")
       prune = root / "prune.md"
       prune.write_text("# Prune\n\nA report the tab outgrew.\n", encoding="utf-8")
       store.publish("prune", "Prune", prune)

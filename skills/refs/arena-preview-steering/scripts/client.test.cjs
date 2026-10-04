@@ -139,6 +139,7 @@ const context = {
   fetch: async (url, options) => {
     if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
     if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
+    if (url === '/api/report-sources') return response(state.reportSources || []);
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
       // A note send is the write the retry tests drive, now that no save route exists.
@@ -614,6 +615,7 @@ test('preview client', async (t) => {
     cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
     assert.ok(cacheKeyHere, 'every poll caches the state the copy button copies');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
+    state.reportSources = [{ id: 'r1', title: 'Fielded', markdown: '# Fielded\n\nA question.\n', published_at: '2026-09-22T10:00:00' }];
     state.submissions = [{ id: 'ans-1', report_id: 'r1', text: 'REPORT r1: one', at: '2026-09-22T10:00:00',
       acknowledged_at: null, ack_kind: null, ack_text: null, ack_edited_at: null, replies: null, ack_edited_seen_count: 0, seen_at: null, task_id: null }];
     copied.length = 0;
@@ -636,8 +638,13 @@ test('preview client', async (t) => {
       ...(cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),
       ...(cachedHere.tasks.finished || []).map(task => projectHere(task, taskKeysHere)),
       ...state.submissions,
-    ], 'the copy carries the note, task and answer lines a restore reads, and nothing derived');
-    taskLines = lines.filter(line => 'title' in line);
+      ...state.reportSources,
+    ], 'the copy carries the note, task, answer and report lines a restore reads, and nothing derived');
+    reportLines = lines.filter(line => 'markdown' in line);
+    assert.equal(reportLines.length, 1, 'the copy carries the report sources, as the save file does');
+    assert.equal(reportLines[0].id, 'r1', 'the report line is the save-file shape from the server');
+    // A report line carries a title too, so the task filter excludes it.
+    taskLines = lines.filter(line => 'title' in line && !('markdown' in line));
     answerLines = lines.filter(line => 'report_id' in line);
     assert.equal(answerLines.length, 1, 'the copy carries the live report answers');
     assert.equal(answerLines[0].id, 'ans-1', 'the answer line is the save-file shape from the server');
@@ -646,7 +653,7 @@ test('preview client', async (t) => {
       'every cached task rides the copy');
     assert.equal(get('#copy-state').dataset.state, 'good', 'the click reports through the button');
     assert.match(get('#send-status').textContent,
-      new RegExp(`Copied ${lines.length - taskLines.length - answerLines.length} messages, ${answerLines.length} answers and ${taskLines.length} tasks as NDJSON\\.`),
+      new RegExp(`Copied ${lines.length - taskLines.length - answerLines.length - reportLines.length} messages, ${answerLines.length} answers, ${reportLines.length} reports and ${taskLines.length} tasks as NDJSON\\.`),
       'the receipt counts what the clipboard took');
     state.tasks.upcoming = [];
     await get('#refresh-notes').events.click();
@@ -1373,7 +1380,7 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(copied.length, 1, 'the button copies the cache');
     assert.ok(copied[0].split('\n').filter(Boolean).length > 1, 'the copy carries note and task lines');
-    assert.match(get('#send-status').textContent, /Copied \d+ messages, \d+ answers and \d+ tasks as NDJSON\./);
+    assert.match(get('#send-status').textContent, /Copied \d+ messages, \d+ answers, \d+ reports and \d+ tasks as NDJSON\./);
     assert.equal(stateCopyButton.dataset.state, 'good');
     storage.delete(cacheKey);
     copied.length = 0;

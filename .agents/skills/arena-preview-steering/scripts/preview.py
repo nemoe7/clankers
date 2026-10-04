@@ -919,6 +919,7 @@ def handler(store):
 					except RuntimeError as error:state['rendering_error']=str(error)
 					self.reply(200,json.dumps(state,ensure_ascii=False));return
 				if path=='/api/submissions':live={report['id']for report in store.state()['reports']};self.reply(200,json.dumps([saved_answer_line(record)for record in store.submissions()if record['report_id']in live],ensure_ascii=False),'application/json; charset=utf-8');return
+				if path=='/api/report-sources':self.reply(200,json.dumps([saved_report_line(record)for record in store.report_sources()],ensure_ascii=False),'application/json; charset=utf-8');return
 				upload=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})',path)
 				if upload:
 					record=store.upload(upload.group(1))

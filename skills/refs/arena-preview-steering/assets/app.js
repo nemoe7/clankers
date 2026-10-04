@@ -982,8 +982,8 @@ function restoreCopy(cached) {
   };
 }
 const copyStateButton = $('#copy-state');
-function stateLines(state, answers = []) {
-  return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished, ...answers];
+function stateLines(state, answers = [], reports = []) {
+  return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished, ...answers, ...reports];
 }
 copyStateButton.addEventListener('click', async () => {
   let cached = null;
@@ -991,20 +991,27 @@ copyStateButton.addEventListener('click', async () => {
   const state = cached && Array.isArray(cached.notes) ? restoreCopy(cached) : null;
   if (!state) status.textContent = 'Nothing cached to copy yet; the page caches its copy on every poll.';
   let answers = null;
+  let reports = null;
   if (state) {
     try { answers = await (await request('/api/submissions')).json(); }
     catch { answers = null; }
+    try { reports = await (await request('/api/report-sources')).json(); }
+    catch { reports = null; }
   }
-  const lines = state ? stateLines(state, answers || []) : [];
   // One JSON line per record is the save format accepted by `import-state`.
-  // The server supplies answer lines for reports still in the tab.
+  // The server supplies the answer lines for reports still in the tab, and the report
+  // lines with their sources, so the clipboard carries what the save file carries.
+  const lines = state ? stateLines(state, answers || [], reports || []) : [];
   const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
   await copyFrom(copyStateButton, text, 'state');
   if (state) {
-    const taskCount = lines.length - state.notes.length - (answers?.length || 0);
-    status.textContent = answers
-      ? `Copied ${state.notes.length} messages, ${answers.length} answers and ${taskCount} tasks as NDJSON.`
-      : `Copied ${state.notes.length} messages and ${taskCount} tasks as NDJSON; the answers did not arrive.`;
+    const taskCount = lines.length - state.notes.length - (answers?.length || 0)
+      - (reports?.length || 0);
+    const counted = `${state.notes.length} messages, ${answers?.length || 0} answers, `
+      + `${reports?.length || 0} reports and ${taskCount} tasks`;
+    status.textContent = answers && reports
+      ? `Copied ${counted} as NDJSON.`
+      : `Copied ${counted} as NDJSON; the answers or the report sources did not arrive.`;
   }
 });
 $('#copy-report').addEventListener('click', async () => {

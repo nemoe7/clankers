@@ -2904,6 +2904,18 @@ def handler(store):
             "application/json; charset=utf-8",
           )
           return
+        if path == "/api/report-sources":
+          # The copy button asks for the report lines too, so the clipboard carries the same
+          # fields as the save file and a restore rebuilds the report pages from either one.
+          self.reply(
+            200,
+            json.dumps(
+              [saved_report_line(record) for record in store.report_sources()],
+              ensure_ascii=False,
+            ),
+            "application/json; charset=utf-8",
+          )
+          return
         upload = re.fullmatch(r"/api/uploads/([a-zA-Z0-9_-]{1,80})", path)
         if upload:
           record = store.upload(upload.group(1))
