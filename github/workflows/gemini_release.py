@@ -140,11 +140,14 @@ TEMPLATE = """\
 \
 """
 
-INPUT_BYTES = 600_000
-PIECE_CHARS = 60_000
-# A request is refused above the free tier's 250,000 input tokens per minute, so the
-# runner never sends a payload that the quota cannot answer in one request.
+# The owner's numbers. A request is refused above the free tier's 250,000 input tokens
+# per minute; chunks are packed to 230,000 so one model's allowance answers one.
 MAX_INPUT_TOKENS = 250_000
+CHUNK_TOKENS = 230_000
+# Every cooldown carries this safety margin on top of the wait the API reports.
+SAFETY_SECONDS = 5
+SUCCESS_COOLDOWN = 60
+COOLDOWNS = {}
 MODELS = (
   "gemini-3.8-flash",
   "gemini-3.7-flash",
@@ -299,41 +302,96 @@ def history(target, base, evidence=EVIDENCE_KINDS[0]):
   return units
 
 
-def pieces(units, size=PIECE_CHARS):
-  result = []
-  for identity, text in units:
-    parts = [text[i : i + size] for i in range(0, len(text), size)] or [""]
-    if "".join(parts) != text:
-      raise RuntimeError("History split lost data")
-    result.extend(
-      {"id": f"{identity}:{i + 1}/{len(parts)}", "text": part}
-      for i, part in enumerate(parts)
-    )
-  return result
+def pieces(units):
+  return [{"id": identity, "text": text} for identity, text in units]
 
 
 def encoded(value):
   return json.dumps(value, ensure_ascii=False).encode("utf-8")
 
 
-def batches(items, context, limit=INPUT_BYTES):
-  batch = []
-  for item in items:
-    if len(encoded({**context, "evidence": batch + [item]})) > limit:
-      if not batch:
-        raise RuntimeError("One evidence item exceeds request size")
-      yield batch
-      batch = []
-    if len(encoded({**context, "evidence": [item]})) > limit:
-      raise RuntimeError("One evidence item exceeds request size")
-    batch.append(item)
-  if batch:
-    yield batch
-
-
 RETRY_HINT = re.compile(r"retry in ([\d.]+)s", re.IGNORECASE)
 QUOTA_LIMIT = re.compile(r"limit:\s*([\d,]+)")
-RUN_STATS = {"requests": 0, "failures": 0, "models": {}, "seen_counts": set()}
+RUN_STATS = {"requests": 0, "failures": 0, "models": {}}
+TOKEN_COUNTS = {}
+
+
+def request_for(context, evidence):
+  """The exact payload a generate call sends, so a count measures the real request."""
+  context = dict(context)
+  phase = context.pop("phase", "release")
+  contents = [
+    {
+      "role": "user",
+      "parts": [
+        {"text": json.dumps({**context, "evidence": evidence}, ensure_ascii=False)}
+      ],
+    }
+  ]
+  system = {"parts": [{"text": PROMPTS[phase]}]}
+  return {"contents": contents, "systemInstruction": system}
+
+
+def input_tokens(model, request):
+  """Count one request's input tokens on the free Count Tokens API."""
+  count = gemini_call(
+    model,
+    "countTokens",
+    {"generateContentRequest": {"model": f"models/{model}", **request}},
+  )
+  return int(count["totalTokens"])
+
+
+def measured(model, request):
+  """A count per payload, memoized: packing must not re-count the same request."""
+  model = first_rung(model)
+  key = (model, hashlib.sha256(encoded(request)).hexdigest())
+  if key not in TOKEN_COUNTS:
+    TOKEN_COUNTS[key] = input_tokens(model, request)
+  return TOKEN_COUNTS[key]
+
+
+def fitting_items(item, context, model, ceiling, cover):
+  """Split one item in half until each part fits the ceiling, then return the parts."""
+  tokens = measured(model, request_for(context, [item]))
+  if tokens <= ceiling:
+    return [item]
+  text = item["text"]
+  if len(text) < 2:
+    raise RuntimeError("One evidence item cannot fit the token ceiling")
+  summary(
+    f"  {item['id']} is {tokens:,} input tokens over the {ceiling:,} ceiling; "
+    "split in half"
+  )
+  middle = len(text) // 2
+  halves = []
+  for index, part in enumerate((text[:middle], text[middle:])):
+    half = {"id": f"{item['id']}:{index + 1}/2", "text": part}
+    cover[half["id"]] = cover[item["id"]]
+    halves.append(half)
+  return [
+    piece
+    for half in halves
+    for piece in fitting_items(half, context, model, ceiling, cover)
+  ]
+
+
+def grouped(items, context, model, cover, ceiling=None):
+  """Pack items into requests under the token ceiling, splitting what does not fit."""
+  ceiling = CHUNK_TOKENS if ceiling is None else ceiling
+  atomic = [
+    piece
+    for item in items
+    for piece in fitting_items(item, context, model, ceiling, cover)
+  ]
+  group = []
+  for item in atomic:
+    if group and measured(model, request_for(context, group + [item])) > ceiling:
+      yield group
+      group = []
+    group.append(item)
+  if group:
+    yield group
 
 
 def short_error(detail):
@@ -414,17 +472,57 @@ def model_ladder(value):
   return models
 
 
+def first_rung(model):
+  """The rung that carries the token count: a ladder is named by its highest model."""
+  return model[0] if isinstance(model, (list, tuple)) else model
+
+
+def ready_rung(models, exhausted):
+  """The highest rung that is neither cooling nor already failed on this request."""
+  now = time.monotonic()
+  for rung in models:
+    if rung not in exhausted and COOLDOWNS.get(rung, 0) <= now:
+      return rung
+  return None
+
+
+def earliest_ready(models, exhausted):
+  """The soonest cooldown among the rungs that did not fail on this request."""
+  ready = [COOLDOWNS.get(rung, 0) for rung in models if rung not in exhausted]
+  return min(ready) if ready else None
+
+
+def cool(rung, seconds, reason):
+  COOLDOWNS[rung] = time.monotonic() + seconds
+  summary(f"  {rung} cooling {seconds:.1f}s ({reason})")
+
+
 def generate(context, evidence, model, on_success=None):
-  """Generate with one model, or walk a ladder of models until one answers."""
+  """Send one request: take the highest ready rung, cool a 429, walk on."""
   models = [model] if isinstance(model, str) else list(model)
   failures = []
+  exhausted = set()
   RUN_STATS["requests"] += 1
-  RUN_STATS["seen_counts"] = set()
   summary(
     f"Request {RUN_STATS['requests']} ({context.get('phase', 'release')}): "
     f"{len(evidence)} evidence item(s)"
   )
-  for index, rung in enumerate(models):
+  tokens = measured(models[0], request_for(context, evidence))
+  summary(f"  {tokens:,} input tokens (allowance {MAX_INPUT_TOKENS:,})")
+  if tokens > MAX_INPUT_TOKENS:
+    raise RuntimeError(
+      f"Request exceeds the {MAX_INPUT_TOKENS:,}-token allowance; reduce CHUNK_TOKENS"
+    )
+  while True:
+    rung = ready_rung(models, exhausted)
+    if rung is None:
+      ready = earliest_ready(models, exhausted)
+      if ready is None:
+        raise RuntimeError("Every Gemini model failed: " + "; ".join(failures))
+      delay = max(0.0, ready - time.monotonic())
+      summary(f"  all models cooling; waiting {delay:.1f}s")
+      time.sleep(delay + SAFETY_SECONDS)
+      continue
     try:
       text = generate_once(context, evidence, rung)
     except RuntimeError as exc:
@@ -433,49 +531,28 @@ def generate(context, evidence, model, on_success=None):
       detail = redact(str(exc))
       failures.append(f"{rung}: {detail}")
       RUN_STATS["failures"] += 1
-      message = f"Gemini model {rung} failed: {short_error(detail)}"
-      if index + 1 < len(models):
-        message += f"; trying {models[index + 1]}"
+      hint = RETRY_HINT.search(" ".join(str(detail).split()))
+      if "429" in detail:
+        wait = (float(hint.group(1)) if hint else 60.0) + SAFETY_SECONDS
+        cool(rung, wait, f"429, retry in {wait:.1f}s")
+      elif "HTTP" in detail:
+        # The request never ran, so the rung stays ready; step down for this request.
+        exhausted.add(rung)
+        summary(f"Gemini model {rung} failed: {short_error(detail)}; stepping down")
       else:
-        message += "; no fallback models remain"
-      summary(message)
+        # A 200 response whose output is blocked or unusable spent the tokens anyway.
+        cool(rung, SUCCESS_COOLDOWN + SAFETY_SECONDS, "blocked output")
       continue
     RUN_STATS["models"][rung] = RUN_STATS["models"].get(rung, 0) + 1
+    cool(rung, SUCCESS_COOLDOWN + SAFETY_SECONDS, "answered")
     if on_success is not None:
       on_success(rung)
     return text
-  raise RuntimeError("Every Gemini model failed: " + "; ".join(failures))
 
 
 def generate_once(context, evidence, model):
-  context = dict(context)
-  phase = context.pop("phase", "release")
-  prompt = PROMPTS[phase]
-  contents = [
-    {
-      "role": "user",
-      "parts": [
-        {"text": json.dumps({**context, "evidence": evidence}, ensure_ascii=False)}
-      ],
-    }
-  ]
-  system = {"parts": [{"text": prompt}]}
-  request = {"contents": contents, "systemInstruction": system}
+  request = request_for(context, evidence)
   started = time.monotonic()
-  count = gemini_call(
-    model,
-    "countTokens",
-    {"generateContentRequest": {"model": f"models/{model}", **request}},
-  )
-  # The same payload counts the same on every rung, so it prints once per request.
-  if count["totalTokens"] not in RUN_STATS["seen_counts"]:
-    RUN_STATS["seen_counts"].add(count["totalTokens"])
-    summary(f"  {count['totalTokens']:,} input tokens (allowance {MAX_INPUT_TOKENS:,})")
-  if count["totalTokens"] > MAX_INPUT_TOKENS:
-    raise RuntimeError(
-      f"Request exceeds the {MAX_INPUT_TOKENS:,}-token allowance; "
-      "reduce INPUT_BYTES and PIECE_CHARS"
-    )
   data = gemini_call(
     model, "generateContent", {**request, "generationConfig": {"maxOutputTokens": 8192}}
   )
@@ -488,35 +565,49 @@ def generate_once(context, evidence, model):
   return text
 
 
-def release_body(
-  units, context, model, generate_fn=generate, limit=INPUT_BYTES, on_success=None
-):
+def round_requests(items, context, phase, model, cover):
+  """One request if the whole payload fits the chunk ceiling, else packed chunks."""
+  whole = {**context, "phase": phase}
+  tokens = measured(model, request_for(whole, items))
+  if tokens <= CHUNK_TOKENS:
+    summary(f"  {phase} payload is {tokens:,} input tokens; one request")
+    return whole, [items]
+  chunked = {**context, "phase": "chunk" if phase == "release" else phase}
+  groups = list(grouped(items, chunked, model, cover))
+  summary(
+    f"  {phase} payload is {tokens:,} input tokens over the {CHUNK_TOKENS:,} ceiling;"
+    f" packed into {len(groups)} request(s)"
+  )
+  return chunked, groups
+
+
+def release_body(units, context, model, generate_fn=generate, on_success=None):
   items = pieces(units)
   if not items:
     raise RuntimeError("No commits in release range")
-  expected = [p["id"] for p in items]
-  coverage = [[identity] for identity in expected]
-  phase = "chunk"
+  expected = {p["id"] for p in items}
+  cover = {p["id"]: [p["id"]] for p in items}
+  phase = "release"
   while True:
-    groups = list(batches(items, context, limit))
+    context, groups = round_requests(items, context, phase, model, cover)
     if len(groups) == 1:
-      if [identity for group in coverage for identity in group] != expected:
+      covered = {identity for piece in groups[0] for identity in cover[piece["id"]]}
+      if covered != expected:
         raise RuntimeError("Summary coverage mismatch")
       if on_success is None:
         return generate_fn(context, groups[0], model)
       return generate_fn(context, groups[0], model, on_success)
-    reduced, next_coverage = [], []
-    offset = 0
+    reduced, next_cover = [], {}
     for i, group in enumerate(groups):
-      text = generate_fn({**context, "phase": phase}, group, model)
-      reduced.append({"id": f"summary:{i}", "text": text})
-      next_coverage.append(
-        [identity for ids in coverage[offset : offset + len(group)] for identity in ids]
-      )
-      offset += len(group)
+      text = generate_fn(context, group, model)
+      summary_id = f"summary:{i}"
+      reduced.append({"id": summary_id, "text": text})
+      next_cover[summary_id] = [
+        identity for piece in group for identity in cover[piece["id"]]
+      ]
     if len(encoded(reduced)) >= len(encoded(items)):
       raise RuntimeError("Summaries did not shrink; cannot combine all history")
-    items, coverage = reduced, next_coverage
+    items, cover = reduced, next_cover
     phase = "combine"
 
 

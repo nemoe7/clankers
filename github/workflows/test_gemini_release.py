@@ -117,8 +117,34 @@ def test_release_pipeline():
     assert [key.split(":")[1] for key, _ in messages] == ["message"] * len(messages)
     assert dict(messages)[target + ":message"] == dict(units)[target + ":message"]
     fails(lambda: release.history(target, root, "everything"), "Invalid evidence input")
-    split = release.pieces([("unicode", "é🦀abc" * 20)], size=7)
-    assert "".join(p["text"] for p in split) == "é🦀abc" * 20
+
+    # An item that does not fit is halved on text until every piece fits the ceiling.
+    def text_size(model, request):
+      payload = json.loads(request["contents"][0]["parts"][0]["text"])
+      return sum(len(item["text"]) for item in payload["evidence"])
+
+    with (
+      patch.object(release, "input_tokens", text_size),
+      patch.object(release, "summary") as split_log,
+    ):
+      halved = release.fitting_items(
+        {"id": "big", "text": "x" * 80}, {}, "test", 20, {"big": ["big"]}
+      )
+    assert any("split in half" in call.args[0] for call in split_log.call_args_list)
+    assert [piece["id"] for piece in halved] == [
+      "big:1/2:1/2",
+      "big:1/2:2/2",
+      "big:2/2:1/2",
+      "big:2/2:2/2",
+    ]
+    assert "".join(piece["text"] for piece in halved) == "x" * 80
+    with patch.object(release, "input_tokens", text_size):
+      fails(
+        lambda: release.fitting_items(
+          {"id": "one", "text": "x"}, {}, "test", 0, {"one": ["one"]}
+        ),
+        "cannot fit the token ceiling",
+      )
     os.chdir(original)
   secret = "sentinel-secret-do-not-log"
   with (
@@ -149,21 +175,36 @@ def test_release_pipeline():
     return "summary"
 
   units = [(str(n), "x" * 100) for n in range(8)]
-  assert release.release_body(units, {}, "test", generate, limit=350) == "summary"
-  raw = [
-    item["id"]
-    for call in calls
-    for item in call
-    if not item["id"].startswith("summary:")
-  ]
-  assert raw == [item["id"] for item in release.pieces(units)]
-  fails(lambda: release.release_body([], {}, "test", generate), "No commits")
-  fails(
-    lambda: release.release_body(
-      units, {}, "test", lambda *args: "x" * 1000, limit=350
-    ),
-    "did not shrink",
-  )
+
+  # Sizing is by counted tokens: the fake count is the evidence's character count.
+  def by_size(model, request):
+    payload = json.loads(request["contents"][0]["parts"][0]["text"])
+    return sum(len(item["text"]) for item in payload["evidence"])
+
+  with (
+    patch.object(release, "measured", by_size),
+    patch.object(release, "CHUNK_TOKENS", 350),
+    patch.object(release, "summary") as steps,
+  ):
+    assert release.release_body(units, {}, "test", generate) == "summary"
+    raw = [
+      item["id"]
+      for call in calls
+      for item in call
+      if not item["id"].startswith("summary:")
+    ]
+    assert raw == [identity for identity, _ in units]
+    step_lines = [call.args[0] for call in steps.call_args_list]
+    # The log names the packing decision: the counted payload, its ceiling and the
+    # request count, so a chunked run reads as steps and not as unexplained calls.
+    assert any(
+      "over the 350 ceiling; packed into 3 request(s)" in line for line in step_lines
+    )
+    fails(lambda: release.release_body([], {}, "test", generate), "No commits")
+    fails(
+      lambda: release.release_body(units, {}, "test", lambda *args: "x" * 1000),
+      "did not shrink",
+    )
   assert (
     release.response_text(
       {
@@ -200,26 +241,38 @@ def test_release_pipeline():
     phases.append(context.get("phase", "release"))
     return "summary"
 
-  release.release_body(
-    [(str(n), "x" * 100) for n in range(80)], {}, "test", phased, limit=350
-  )
-  assert set(phases) == {"chunk", "combine", "release"}
+  with (
+    patch.object(release, "measured", by_size),
+    patch.object(release, "CHUNK_TOKENS", 350),
+  ):
+    release.release_body([(str(n), "x" * 100) for n in range(80)], {}, "test", phased)
+  # The whole payload fits the ceiling only in the first round, and it does not fit:
+  # the summarize rounds run as chunk, then combine; a lone release round happens
+  # when everything fits at once.
+  assert set(phases) == {"chunk", "combine"}
+  with (
+    patch.object(release, "measured", by_size),
+    patch.object(release, "CHUNK_TOKENS", 350),
+  ):
+    release.release_body([("one", "x" * 10)], {}, "test", phased)
+  assert "release" in phases
   selected_models = []
 
   def tracked(context, evidence, model, on_success):
     on_success("gemini-3.7-flash")
     return "draft"
 
-  assert (
-    release.release_body(
-      [("id", "diff")],
-      {},
-      ["gemini-3.8-flash", "gemini-3.7-flash"],
-      tracked,
-      on_success=selected_models.append,
+  with patch.object(release, "measured", by_size):
+    assert (
+      release.release_body(
+        [("id", "diff")],
+        {},
+        ["gemini-3.8-flash", "gemini-3.7-flash"],
+        tracked,
+        on_success=selected_models.append,
+      )
+      == "draft"
     )
-    == "draft"
-  )
   assert selected_models == ["gemini-3.7-flash"]
   quota = json.dumps(
     {
@@ -297,15 +350,16 @@ def test_release_pipeline():
     "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "ok"}]}}]
   }
   selected_model = []
+  release.COOLDOWNS.clear()
+  release.TOKEN_COUNTS.clear()
   with (
     patch.object(
       release,
       "gemini_call",
       side_effect=[
-        RuntimeError("Gemini countTokens failed: HTTP 404"),
         {"totalTokens": 1},
+        RuntimeError("Gemini generateContent failed: HTTP 404"),
         {"candidates": []},
-        {"totalTokens": 1},
         good,
       ],
     ),
@@ -315,12 +369,69 @@ def test_release_pipeline():
   assert selected_model == ["c"]
   lines = [call.args[0] for call in progress.call_args_list]
   assert any("HTTP 404" in line for line in lines)
-  assert any("trying b" in line for line in lines)
+  assert any("stepping down" in line for line in lines)
+  assert any("cooling" in line for line in lines)
+  # A 429 cools that rung with the reported wait plus the safety margin, so the next
+  # pick starts lower; a model that answered cools for a minute; a fully cooling
+  # ladder waits for the earliest rung to come back.
+  with (
+    patch.object(
+      release,
+      "gemini_call",
+      side_effect=[
+        {"totalTokens": 1},
+        RuntimeError("Gemini generateContent failed: HTTP 429: retry in 3.5s"),
+        good,
+      ],
+    ),
+    patch.object(release, "summary"),
+    patch.object(release, "time") as clock,
+  ):
+    release.COOLDOWNS.clear()
+    release.TOKEN_COUNTS.clear()
+    clock.monotonic.return_value = 100.0
+    assert release.generate({}, [], ["a", "b"]) == "ok"
+    assert release.COOLDOWNS["a"] == 108.5
+    assert release.COOLDOWNS["b"] == 165.0
+  # A blocked output from a 200 response cools too: those tokens were spent.
+  with (
+    patch.object(
+      release,
+      "gemini_call",
+      side_effect=[
+        {"totalTokens": 1},
+        {"candidates": [{"finishReason": "MAX_TOKENS"}]},
+        good,
+      ],
+    ),
+    patch.object(release, "summary") as blocked,
+    patch.object(release, "time") as clock,
+  ):
+    release.COOLDOWNS.clear()
+    release.TOKEN_COUNTS.clear()
+    clock.monotonic.return_value = 50.0
+    assert release.generate({}, [], ["a", "b"]) == "ok"
+    assert release.COOLDOWNS["a"] == 115.0
+    assert any("blocked output" in call.args[0] for call in blocked.call_args_list)
+  with (
+    patch.object(release, "gemini_call", side_effect=[{"totalTokens": 1}, good]),
+    patch.object(release, "summary"),
+    patch.object(release, "time") as clock,
+  ):
+    release.COOLDOWNS.clear()
+    release.TOKEN_COUNTS.clear()
+    release.COOLDOWNS.update({"a": 400.0, "b": 110.0})
+    clock.monotonic.side_effect = [100.0, 100.0] + [200.0] * 6
+    assert release.generate({}, [], ["a", "b"]) == "ok"
+    clock.sleep.assert_called_once_with(15.0)
+    assert release.COOLDOWNS["b"] == 265.0
+    release.COOLDOWNS.clear()
   with patch.object(release, "gemini_call", side_effect=RuntimeError("HTTP 503")):
     fails(
       lambda: release.generate({}, [], ["a", "b"]),
       "Every Gemini model failed: a: HTTP 503; b: HTTP 503",
     )
+  release.TOKEN_COUNTS.clear()
   with patch.object(
     release, "gemini_call", return_value={"totalTokens": 10**7}
   ) as call:
@@ -342,6 +453,7 @@ def test_release_pipeline():
         },
       ],
     ) as call:
+      release.COOLDOWNS.clear()
       assert release.generate({"phase": phase}, [], "test") == "notes"
       assert (
         call.call_args_list[1].args[2]["systemInstruction"]["parts"][0]["text"]

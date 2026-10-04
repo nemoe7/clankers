@@ -12,6 +12,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Push rule**: The push bullet measures the branch by tree, not commit count. A branch whose tree matches `origin/main` never pushes, even when it shows commits ahead.
 
+### Changed
+
+#### workflows
+
+- **Gemini token packing**: The runner counts every payload with the Count Tokens API and packs chunks under 230,000 input tokens. A model that answers or spends its tokens cools down for 60 seconds plus 5 seconds of safety. The next request starts at the highest ready rung.
+
 ### Added
 
 #### skills
