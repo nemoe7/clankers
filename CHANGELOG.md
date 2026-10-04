@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Amendment skill trimmed**: `amending-violations` drops the five-step process and the five-point format. It keeps the system-prompt guidelines and the output table, with one row per changed line.
 - **Amendment skill frame**: The output format also names the status line, the citation and the decision list. The model answers in the proposal form.
+- **Process tool line**: The steering skill gives the long-lived process tool one job. That tool MUST host `serve` alone, and every other command runs as a one-shot shell call.
 
 ### Changed
 
