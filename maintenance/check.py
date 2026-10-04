@@ -108,6 +108,8 @@ STE_DOCS = (
   "CHANGELOG.md",
 )
 STE_LINT = ".agents/skills/asd-ste100/scripts/ste-lint.py"
+# The prose lint covers the code comments and the documents outside the STE list.
+PROSE_LINT = "maintenance/lint_prose.py"
 
 LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 
@@ -155,6 +157,19 @@ def check_ste(errors: list[str]) -> None:
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
     errors.append(f"STE lint failed:\n{output}")
+
+
+def check_prose(errors: list[str]) -> None:
+  """Run the prose lint over the covered code comments and documents."""
+  result = subprocess.run(
+    [sys.executable, str(ROOT / PROSE_LINT)],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  if result.returncode:
+    output = (result.stdout + result.stderr).strip()
+    errors.append(f"Prose lint failed:\n{output}")
 
 
 def parse_frontmatter(
@@ -834,6 +849,7 @@ def main() -> int:
     return 0
   validate(errors)
   check_ste(errors)
+  check_prose(errors)
 
   if errors:
     print("Validation failed:")
@@ -857,8 +873,8 @@ def main() -> int:
 
   print(
     f"Validation passed: {skills} skills, {workflows} workflows, README "
-    "measurements, the markdownlint scope, refs/live parity, and the root "
-    "ARENA.md copy checked."
+    "measurements, the markdownlint scope, refs/live parity, the prose lint "
+    "and the root ARENA.md copy checked."
   )
 
   return 0

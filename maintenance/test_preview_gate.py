@@ -68,7 +68,7 @@ def run(command: str) -> subprocess.CompletedProcess[str]:
       encoding="utf-8",
     )
     stub.chmod(0o755)
-    # The tested command line may call the real CLI for its answer; a stub on PATH
+    # The tested command line may call the real CLI for its answer. A stub on PATH
     # keeps that answer free of an installation, so the test runs anywhere.
     bin_dir = root / "bin"
     bin_dir.mkdir()
@@ -141,7 +141,7 @@ def test_a_silenced_read_meets_the_count_gate():
 
 
 def test_the_inbox_line_classifier():
-  # Work beside an inbox call ends the exemption; inert prefixes keep it.
+  # Work beside an inbox call ends the exemption. Inert prefixes keep it.
   quiet = quiet_inbox_line
   assert quiet("")
   assert quiet("cd /x && arena-preview read")

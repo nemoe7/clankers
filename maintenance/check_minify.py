@@ -165,7 +165,7 @@ def check_preview_path():
     assert event_result.stderr.count(reminder) == 1, event_result.stderr
     # A blocking gate must not exit a shell that hosts a long-lived process, nor
     # Arena's own probe shells: a killed probe reads as a dead preview or sandbox
-    # while the process it probed stays up. Only an agent call shell is gated.
+    # while the process it probed stays up. Only an agent call shell meets the gate.
     python.write_text(
       '#!/usr/bin/env bash\ncase " $*" in *" gate") exit 1 ;; esac\nexit 0\n',
       encoding="utf-8",
@@ -226,7 +226,7 @@ def check_preview_path():
       f"the gate killed a sweep shell: {sweep_shell.returncode}"
     )
 
-    # The count gate holds mid-work commands; a push waits on any pending item.
+    # The count gate holds mid-work commands. A push waits on any pending item.
     python.write_text(
       '#!/usr/bin/env bash\ncase " $*" in *" gate --push") exit 1 ;; esac\nexit 0\n',
       encoding="utf-8",

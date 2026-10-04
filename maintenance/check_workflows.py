@@ -37,7 +37,7 @@ SECRET_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 
 
 def credential_names(text: str) -> set[str]:
-  """Return the stored credential names in text; the automatic token is not one."""
+  """Return the stored credential names in text. The automatic token is not one."""
   return {name for name in SECRET_RE.findall(text) if name != "GITHUB_TOKEN"}
 
 

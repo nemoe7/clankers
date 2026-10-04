@@ -2,8 +2,8 @@
 
 The commit rules are the inline constants `ALLOWED_TYPES` and `SUBJECT_LIMIT`, which state
 `rules/COMMIT-SPEC.txt` and are never read from it. The PR body rules come from the locked
-heading order; the last two headings may stay out when their section holds nothing. The gate
-reports every failure with its section and line; it never edits the input.
+heading order. The last two headings may stay out when their section holds nothing. The gate
+reports every failure with its section and line. The gate never edits the input.
 """
 
 from __future__ import annotations
@@ -263,7 +263,7 @@ def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[F
 
 
 def run_ste_lint(text: str) -> tuple[bool, str]:
-  """Run the vendored ASD-STE linter over text; return (passed, output)."""
+  """Run the vendored ASD-STE linter over text. Return (passed, output)."""
   with tempfile.TemporaryDirectory() as directory:
     path = Path(directory) / "pr-body.md"
     path.write_text(text, encoding="utf-8")
