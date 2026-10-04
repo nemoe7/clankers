@@ -38,6 +38,7 @@
 - Read the inbox with `arena-preview read` at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. Block mechanics: the skill reference, Read cadence.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read; once the inbox exists, missing or failed reads are errors, NEVER empty inboxes.
 - Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so acknowledge notes separately when the answers differ. NEVER blindly acknowledge all pending notes.
+- Refer to a note in prose by the first seven characters of its ID, NEVER by its sequence number or list position.
 - A receipt means received, not implemented. Acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
 - Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
