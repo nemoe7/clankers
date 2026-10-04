@@ -147,7 +147,7 @@ REMINDERS = (
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
-GATE_THRESHOLD = 20
+GATE_THRESHOLD = 3
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
 AGENT_SEEN_META = "agent_seen_at"

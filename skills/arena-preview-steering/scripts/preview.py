@@ -60,7 +60,7 @@ def reminder_tail(cursor,remaining):
 REMINDERS='Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.','Run `task-list` at turn start and update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Never end a turn with unblocked tasks.','Remove stale reports with unpublish.','End the turn with `poll` to wait for more work.','Grep-verify each edit landed.',TASK_REMINDER,'Rebase on `origin/main` before pushing.','No PR checks run? Rebase onto main first.',"Check the PR's CI before ending a pushed turn.",'Read the PR checks with `gh pr checks <PR> --watch`.',"Don't use the full path. Run `arena-preview` instead."
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
-GATE_THRESHOLD=20
+GATE_THRESHOLD=3
 AGENT_KEY_META='agent_key'
 AGENT_SEEN_META='agent_seen_at'
 AGENT_KEY_RE=re.compile('[A-Za-z0-9_-]{20,64}\\Z')
