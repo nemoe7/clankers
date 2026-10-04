@@ -574,18 +574,18 @@ def generate_once(context, evidence, model):
   return text
 
 
-def round_requests(items, context, phase, model, cover):
+def round_requests(items, context, phase, model, cover, round_number):
   """One request if the whole payload fits the chunk ceiling, else packed chunks."""
   whole = {**context, "phase": phase}
   tokens = measured(model, request_for(whole, items))
   if tokens <= CHUNK_TOKENS:
-    summary(f"  {phase} payload is {tokens:,} input tokens; one request")
+    summary(f"  {phase} round {round_number}: {tokens:,} input tokens; one request")
     return whole, [items]
   chunked = {**context, "phase": "chunk" if phase == "release" else phase}
   groups = grouped(items, chunked, model, cover)
   summary(
-    f"  {phase} payload is {tokens:,} input tokens over the {CHUNK_TOKENS:,} ceiling;"
-    f" packed into {len(groups)} request(s)"
+    f"  {phase} round {round_number}: {tokens:,} input tokens over the"
+    f" {CHUNK_TOKENS:,} ceiling; packed into {len(groups)} request(s)"
   )
   return chunked, groups
 
@@ -597,15 +597,18 @@ def release_body(units, context, model, generate_fn=generate, on_success=None):
   expected = {p["id"] for p in items}
   cover = {p["id"]: [p["id"]] for p in items}
   phase = "release"
+  round_number = 1
   while True:
-    context, groups = round_requests(items, context, phase, model, cover)
+    context, groups = round_requests(items, context, phase, model, cover, round_number)
     if len(groups) == 1:
       covered = {identity for piece in groups[0] for identity in cover[piece["id"]]}
       if covered != expected:
         raise RuntimeError("Summary coverage mismatch")
+      # The last request writes the release body, whichever round it lands on.
+      final = {**context, "phase": "release"}
       if on_success is None:
-        return generate_fn(context, groups[0], model)
-      return generate_fn(context, groups[0], model, on_success)
+        return generate_fn(final, groups[0], model)
+      return generate_fn(final, groups[0], model, on_success)
     reduced, next_cover = [], {}
     for i, group in enumerate(groups):
       text = generate_fn(context, group, model)
@@ -616,8 +619,13 @@ def release_body(units, context, model, generate_fn=generate, on_success=None):
       ]
     if len(encoded(reduced)) >= len(encoded(items)):
       raise RuntimeError("Summaries did not shrink; cannot combine all history")
+    summary(
+      f"  consolidation round {round_number}: {len(items)} evidence item(s)"
+      f" became {len(reduced)} summary item(s)"
+    )
     items, cover = reduced, next_cover
     phase = "combine"
+    round_number += 1
 
 
 def save_draft(repo, tag, body, target):

@@ -265,10 +265,19 @@ def test_release_pipeline():
     patch.object(release, "CHUNK_TOKENS", 350),
   ):
     release.release_body([(str(n), "x" * 100) for n in range(80)], {}, "test", phased)
-  # The whole payload fits the ceiling only in the first round, and it does not fit:
-  # the summarize rounds run as chunk, then combine; a lone release round happens
-  # when everything fits at once.
-  assert set(phases) == {"chunk", "combine"}
+  # The whole payload does not fit the ceiling in the first round: the summarize round
+  # runs as chunk, and the last request writes the release body whichever round it
+  # lands on. A tighter ceiling forces a combine round with several requests.
+  assert set(phases) == {"chunk", "release"}
+  assert phases[-1] == "release"
+  with (
+    patch.object(release, "measured", by_size),
+    patch.object(release, "CHUNK_TOKENS", 150),
+    patch.object(release, "summary"),
+  ):
+    release.release_body([(str(n), "x" * 100) for n in range(80)], {}, "test", phased)
+  assert set(phases) == {"chunk", "combine", "release"}
+  assert phases[-1] == "release"
   with (
     patch.object(release, "measured", by_size),
     patch.object(release, "CHUNK_TOKENS", 350),
