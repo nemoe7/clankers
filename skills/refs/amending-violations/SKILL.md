@@ -17,11 +17,24 @@ Write an amendment to the NEMOGPT system prompt when an instruction in it causes
 
 ## Output format
 
-Answer with the proposal table, one row per changed line:
+Answer in the format of our amendment proposals:
+
+`Status: proposal. No line lands before approval.`
+
+`Citation:` the instruction the amendment follows from
 
 `| Line | Current | Amended | Reason |`
 
 Quote the current wording and the amended wording verbatim. Keep the amended line a bare rule; put the behavior and the expected effect in the Reason cell.
+
+End with the decision list:
+
+- ( ) approve
+- ( ) squash: re-propose a shorter line; do not land
+- ( ) reject
+- ( ) custom: ___
+
+Other wording or scope: ___
 
 ## Guidelines: writing a system prompt
 
