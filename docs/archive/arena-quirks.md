@@ -158,3 +158,11 @@ Rule: use the tool for public text on a blocked host. NEVER place a credential i
 Consequence: a page longer than 8,000 characters takes more than one call, and the caller must ask for each next chunk.
 
 Rule: read a long document with `chunkIndex`. Stop when `hasMore` is false.
+
+## A preview page cannot hand the owner's PC a file
+
+2026-10-04: A preview page was tested for handing a file to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file. `navigator.clipboard.writeText` threw in the frame, while the preview's shared copy path, the API followed by a selection copy, put a text file on the clipboard.
+
+Consequence: the sandbox-to-PC direction has no working file route from a preview page. The text of a small file still crosses, through the clipboard, and the owner pastes it on the PC.
+
+Rule: hand a file to the PC as text through the clipboard. NEVER report a download as delivered, because the preview page cannot see the PC's disk.
