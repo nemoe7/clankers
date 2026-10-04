@@ -152,3 +152,9 @@ Binary responses fail. A signed run log URL answered HTTP 500 with a fresh signa
 Consequence: a public text page or raw file on a blocked host is readable. A token in a URL reaches the tool, but GitHub does not honor it. The tool can never read the log zip or the artifact bytes.
 
 Rule: use the tool for public text on a blocked host. NEVER place a credential in a URL for the tool. NEVER ask the owner for a token. Read security data through an owner export or a workflow comment.
+
+2026-10-04: A turn held 100 `fetch_page` calls, so 100 is a tested lower bound rather than a stated limit. `httpbin.org/range/8000` returned one chunk, and `/range/8001` returned two chunks of 8,000 characters and one character. The per-chunk limit is 8,000 characters. A 63-chunk read of `rfc-editor.org/rfc/rfc9110.txt` used `chunkIndex`, and chunk 0 carried `hasMore: true`.
+
+Consequence: a page longer than 8,000 characters takes more than one call, and the caller must ask for each next chunk.
+
+Rule: read a long document with `chunkIndex`. Stop when `hasMore` is false.
