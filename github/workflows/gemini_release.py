@@ -8,6 +8,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -141,6 +142,9 @@ TEMPLATE = """\
 
 INPUT_BYTES = 600_000
 PIECE_CHARS = 60_000
+# A request is refused above the free tier's 250,000 input tokens per minute, so the
+# runner never sends a payload that the quota cannot answer in one request.
+MAX_INPUT_TOKENS = 250_000
 MODELS = (
   "gemini-3.8-flash",
   "gemini-3.7-flash",
@@ -327,6 +331,42 @@ def batches(items, context, limit=INPUT_BYTES):
     yield batch
 
 
+RETRY_HINT = re.compile(r"retry in ([\d.]+)s", re.IGNORECASE)
+QUOTA_LIMIT = re.compile(r"limit:\s*([\d,]+)")
+RUN_STATS = {"requests": 0, "failures": 0, "models": {}, "seen_counts": set()}
+
+
+def short_error(detail):
+  """Keep one rung failure to one log line: the status, the cause and the retry hint."""
+  text = " ".join(str(detail).split())
+  status = re.search(r"HTTP (\d{3})", text)
+  if status and status.group(1) == "429":
+    parts = ["429 RESOURCE_EXHAUSTED, free-tier input tokens"]
+    limit = QUOTA_LIMIT.search(text)
+    retry = RETRY_HINT.search(text)
+    if limit:
+      parts.append(f"limit {limit.group(1)}, per minute")
+    if retry:
+      parts.append(f"retry in {float(retry.group(1)):.1f}s")
+    return ", ".join(parts)
+  if status and status.group(1) == "503":
+    return "503 UNAVAILABLE, model at capacity"
+  if status and status.group(1) in ("401", "403"):
+    return f"{status.group(1)} authentication or permission failure"
+  return text if len(text) <= 140 else text[:137] + "..."
+
+
+def run_summary():
+  """One closing line per run: the request count, the failures and the models that answered."""
+  used = ", ".join(
+    f"{model} x{count}" for model, count in sorted(RUN_STATS["models"].items())
+  )
+  summary(
+    f"Run summary: {RUN_STATS['requests']} request(s), "
+    f"{RUN_STATS['failures']} rung failure(s); answered by {used or 'no model'}"
+  )
+
+
 def gemini_call(model, action, payload):
   if not re.fullmatch(r"[a-zA-Z0-9._-]+", model):
     raise ValueError("Invalid Gemini model ID")
@@ -340,7 +380,6 @@ def gemini_call(model, action, payload):
   )
   try:
     with urllib.request.urlopen(request, timeout=180) as response:
-      summary(f"Gemini model {model} {action} HTTP {response.status}")
       return json.load(response)
   except urllib.error.HTTPError as exc:
     message = f"Gemini {action} failed: HTTP {exc.code}"
@@ -379,6 +418,12 @@ def generate(context, evidence, model, on_success=None):
   """Generate with one model, or walk a ladder of models until one answers."""
   models = [model] if isinstance(model, str) else list(model)
   failures = []
+  RUN_STATS["requests"] += 1
+  RUN_STATS["seen_counts"] = set()
+  summary(
+    f"Request {RUN_STATS['requests']} ({context.get('phase', 'release')}): "
+    f"{len(evidence)} evidence item(s)"
+  )
   for index, rung in enumerate(models):
     try:
       text = generate_once(context, evidence, rung)
@@ -387,13 +432,15 @@ def generate(context, evidence, model, on_success=None):
         raise
       detail = redact(str(exc))
       failures.append(f"{rung}: {detail}")
-      message = f"Gemini model {rung} failed: {detail}"
+      RUN_STATS["failures"] += 1
+      message = f"Gemini model {rung} failed: {short_error(detail)}"
       if index + 1 < len(models):
         message += f"; trying {models[index + 1]}"
       else:
         message += "; no fallback models remain"
       summary(message)
       continue
+    RUN_STATS["models"][rung] = RUN_STATS["models"].get(rung, 0) + 1
     if on_success is not None:
       on_success(rung)
     return text
@@ -414,19 +461,31 @@ def generate_once(context, evidence, model):
   ]
   system = {"parts": [{"text": prompt}]}
   request = {"contents": contents, "systemInstruction": system}
+  started = time.monotonic()
   count = gemini_call(
     model,
     "countTokens",
     {"generateContentRequest": {"model": f"models/{model}", **request}},
   )
-  if count["totalTokens"] > 900_000:
+  # The same payload counts the same on every rung, so it prints once per request.
+  if count["totalTokens"] not in RUN_STATS["seen_counts"]:
+    RUN_STATS["seen_counts"].add(count["totalTokens"])
+    summary(f"  {count['totalTokens']:,} input tokens (allowance {MAX_INPUT_TOKENS:,})")
+  if count["totalTokens"] > MAX_INPUT_TOKENS:
     raise RuntimeError(
-      "Request exceeds token allowance; reduce INPUT_BYTES and PIECE_CHARS"
+      f"Request exceeds the {MAX_INPUT_TOKENS:,}-token allowance; "
+      "reduce INPUT_BYTES and PIECE_CHARS"
     )
   data = gemini_call(
     model, "generateContent", {**request, "generationConfig": {"maxOutputTokens": 8192}}
   )
-  return response_text(data)
+  text = response_text(data)
+  usage = data.get("usageMetadata") or {}
+  summary(
+    f"  {model} answered in {time.monotonic() - started:.1f}s, "
+    f"{int(usage.get('candidatesTokenCount') or 0):,} tokens out"
+  )
+  return text
 
 
 def release_body(
@@ -685,6 +744,7 @@ def propose(repo, branch):
     "template": release_template(base),
   }
   model = model_ladder(os.getenv("GEMINI_MODELS") or ",".join(MODELS))
+  summary("Model ladder: " + ", ".join(model))
   override = os.getenv("IMPACT_OVERRIDE", "")
   if override == "auto":
     override = ""
@@ -733,6 +793,7 @@ def propose(repo, branch):
   summary(
     f"Proposal run: `{os.getenv('GITHUB_RUN_ID', 'local')}`\n\nProposed tag: `{tag}`\n\nTarget SHA: `{target}`\n\nBaseline: `{previous or '(all history)'}`\n\nImpact: `{impact}`\n\n## Proposed notes\n\n{body}"
   )
+  run_summary()
 
 
 def remote_ref(repo, tag):
@@ -942,5 +1003,6 @@ if __name__ == "__main__":
     TypeError,
     zipfile.BadZipFile,
   ) as error:
+    run_summary()
     print(f"Release generation stopped: {error}", file=sys.stderr)
     sys.exit(1)

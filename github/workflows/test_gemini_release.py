@@ -264,9 +264,8 @@ def test_release_pipeline():
     assert release.gemini_call("gemini-3.7-flash", "generateContent", {}) == {
       "ok": True
     }
-  assert status_log.call_args.args == (
-    "Gemini model gemini-3.7-flash generateContent HTTP 200",
-  )
+  # A successful call is silent; the ladder prints the one line that matters.
+  assert status_log.call_args is None
   with (
     patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}),
     patch("builtins.print") as print_output,
@@ -314,8 +313,9 @@ def test_release_pipeline():
   ):
     assert release.generate({}, [], ["a", "b", "c"], selected_model.append) == "ok"
   assert selected_model == ["c"]
-  assert "HTTP 404" in progress.call_args_list[0].args[0]
-  assert "trying b" in progress.call_args_list[0].args[0]
+  lines = [call.args[0] for call in progress.call_args_list]
+  assert any("HTTP 404" in line for line in lines)
+  assert any("trying b" in line for line in lines)
   with patch.object(release, "gemini_call", side_effect=RuntimeError("HTTP 503")):
     fails(
       lambda: release.generate({}, [], ["a", "b"]),
