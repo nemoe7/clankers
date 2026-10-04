@@ -125,10 +125,12 @@ function checkPromptFill(api) {
     // The note names the host, because the composer no longer carries it.
     [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
       "Arena proxy https://h.example key replaced at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
-      ". Use it as ?key= in every /v1 call. Never print it."],
+      ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
+      + " skills/arena-proxy holds the map. Never print it."],
     [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
       "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
-      ". Use it as ?key= in every /v1 call. Never print it."],
+      ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
+      + " skills/arena-proxy holds the map. Never print it."],
     // The finished line stays while the rules file is still on its way.
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), false],
     // A plain prompt is rebuilt once the rules file arrives.

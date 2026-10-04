@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.7
+// @version      1.2.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -195,7 +195,8 @@
         atIso +
         ". New key: " +
         key +
-        ". Use it as ?key= in every /v1 call. Never print it."
+        ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
+        + " skills/arena-proxy holds the map. Never print it."
       );
     }
 
