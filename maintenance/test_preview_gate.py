@@ -7,6 +7,7 @@ profile or state.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -67,6 +68,13 @@ def run(command: str) -> subprocess.CompletedProcess[str]:
       encoding="utf-8",
     )
     stub.chmod(0o755)
+    # The tested command line may call the real CLI for its answer; a stub on PATH
+    # keeps that answer free of an installation, so the test runs anywhere.
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    cli = bin_dir / "arena-preview"
+    cli.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    cli.chmod(0o755)
     # The gate body stays in a sourced file: its own pattern text must not reach the
     # shell command line, because the guard reads that line.
     gate_file = root / "gate.sh"
@@ -86,6 +94,7 @@ def run(command: str) -> subprocess.CompletedProcess[str]:
       capture_output=True,
       text=True,
       check=False,
+      env={**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"]},
     )
 
 
@@ -125,6 +134,12 @@ def test_chained_acks_stay_quiet():
   assert result.returncode == 0, result.stderr
 
 
+def test_a_silenced_read_meets_the_count_gate():
+  # A quiet chain that discards the reminder meets the gate like other work.
+  result = run("cd /tmp && arena-preview read >/dev/null 2>&1")
+  assert result.returncode == 130, result.stderr
+
+
 def test_the_inbox_line_classifier():
   # Work beside an inbox call ends the exemption; inert prefixes keep it.
   quiet = quiet_inbox_line
@@ -133,6 +148,13 @@ def test_the_inbox_line_classifier():
   assert quiet("export PATH=/y; arena-preview read")
   assert quiet("arena-preview ack a; arena-preview ack b; arena-preview task x")
   assert quiet("arena-preview poll")
+  assert quiet('arena-preview ack abc --reply "one line\ntwo lines"')
+  assert quiet("arena-preview read 2>&1")
+  assert not quiet("arena-preview read >/dev/null 2>&1")
+  assert not quiet("arena-preview read > /dev/null 2>&1")
+  assert not quiet("arena-preview read 2>/dev/null")
+  assert not quiet("arena-preview ack abc &>/dev/null")
+  assert not quiet('arena-preview ack abc --reply "$(rm -rf /tmp/x)"')
   assert not quiet("pytest -q; arena-preview read >/dev/null 2>&1")
   assert not quiet("cd /x && echo ran && arena-preview read")
   assert not quiet("git push origin main && arena-preview ack a")

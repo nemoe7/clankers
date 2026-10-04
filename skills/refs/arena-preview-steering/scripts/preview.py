@@ -902,14 +902,51 @@ INERT_COMMANDS = (
 )
 
 
+def unquote_commands(line):
+  """Return the command line with quoted text dropped.
+
+  Quoted text is an argument, never a command, so a reply may span lines. A
+  substitution inside quotes still runs, so it leaves a marker behind.
+  """
+  kept = []
+  quote = ""
+  index = 0
+  text = str(line or "").replace("\r", "\n")
+  while index < len(text):
+    char = text[index]
+    if quote:
+      if char == "\\" and quote == '"':
+        index += 2
+        continue
+      if text.startswith("$(", index) or char == "`":
+        kept.append(" $(")
+      if char == quote:
+        quote = ""
+      index += 1
+      continue
+    if char in ("'", '"'):
+      quote = char
+      index += 1
+      continue
+    if char == "\\" and index + 1 < len(text):
+      kept.append(text[index + 1])
+      index += 2
+      continue
+    kept.append(char)
+    index += 1
+  return "".join(kept)
+
+
 def quiet_inbox_line(line):
   """True when a command line that names an inbox call runs nothing else.
 
   The gate exempts a line so a read reaches its read. Work beside the read must
   not ride that exemption: every command on the line is either an inbox call or
-  an inert prefix, or the line meets the count gate like any other work.
+  an inert prefix, or the line meets the count gate like any other work. A
+  redirect on an inbox call ends the exemption: it discards the reminder that
+  read delivers.
   """
-  text = str(line or "").replace("\r", "\n")
+  text = unquote_commands(line)
   for separator in ("&&", "||", ";", "|", "\n"):
     text = text.replace(separator, "\x00")
   for piece in text.split("\x00"):
@@ -920,6 +957,13 @@ def quiet_inbox_line(line):
     if head in INERT_COMMANDS:
       continue
     if head in ("arena-preview", "preview.py"):
+      rest = tokens[1:]
+      # A redirect to /dev/null discards the reminder the read exists to deliver;
+      # a substitution runs work beside the read.
+      if "/dev/null" in piece and ">" in piece:
+        return False
+      if any(token.startswith("$(") or "`" in token for token in rest):
+        return False
       continue
     return False
   return True
