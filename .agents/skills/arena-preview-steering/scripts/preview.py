@@ -339,7 +339,7 @@ def poll_inbox(store,pretty=False,sleeper=None):
 			listing=store.read(include_quiet=False)
 			if listing['pending']:full=store.read();print(cli_json(full,pretty),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;print(cli_json(listing,pretty),flush=True);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);print(f"CONTINUE: unblocked task {names} waits. Do not end the turn.",file=sys.stderr,flush=True);print(cli_json(listing,pretty),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
 	print(cli_json(listing,pretty),flush=True);return 1

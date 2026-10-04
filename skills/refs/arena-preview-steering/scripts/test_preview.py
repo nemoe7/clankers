@@ -3457,6 +3457,10 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       payload = json.loads(printed[-1])
       assert [item["id"] for item in payload["tasks"]] == ["open-task"]
+      # The early return names the task on stderr, so no session reads it as an empty wait.
+      assert printed[0] == (
+        "CONTINUE: unblocked task open-task waits. Do not end the turn."
+      )
       assert payload["tasks"][0]["blocked"] is False
       assert payload["pending"] == []
 

@@ -904,6 +904,13 @@ def poll_inbox(store, pretty=False, sleeper=None):
       ]
       if open_tasks:
         listing["tasks"] = open_tasks
+        names = ", ".join(item["id"] for item in open_tasks)
+        # The early return must not read as an empty wait: the turn continues that task.
+        print(
+          f"CONTINUE: unblocked task {names} waits. Do not end the turn.",
+          file=sys.stderr,
+          flush=True,
+        )
         print(cli_json(listing, pretty), flush=True)
         return 0
       if index + 1 < POLL_MAX_LOOPS:
