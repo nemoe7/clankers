@@ -1233,7 +1233,10 @@ def test_http_boundaries():
       assert written["answers"] == len(
         [line for line in saved_lines if "report_id" in line]
       )
-      assert written["answers"] >= 1 and saved_lines[-1]["id"] == "saved-answer"
+      answer_ids = [line["id"] for line in saved_lines if "report_id" in line]
+      assert written["answers"] >= 1 and answer_ids[-1] == "saved-answer"
+      # Report lines follow the answers, so the last line carries a report source.
+      assert written["reports"] >= 1 and "markdown" in saved_lines[-1]
       # This block passes an explicit sibling path, so the file lands outside the state
       # directory instead of inside it.
       assert written["path"] == str(save_file)
@@ -2605,7 +2608,12 @@ def test_shared_save_import():
       check=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout
-    assert json.loads(imported) == {"notes": 1, "answers": 1, "tasks": 1}
+    assert json.loads(imported) == {
+      "notes": 1,
+      "answers": 1,
+      "reports": 0,
+      "tasks": 1,
+    }
     # The import does not overwrite its source; reimport merges by ID without duplicates.
     assert any(
       "title" in json.loads(line)
@@ -2624,7 +2632,12 @@ def test_shared_save_import():
       check=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout
-    assert json.loads(again) == {"notes": 1, "answers": 1, "tasks": 1}
+    assert json.loads(again) == {
+      "notes": 1,
+      "answers": 1,
+      "reports": 0,
+      "tasks": 1,
+    }
     assert len(preview.Store(mixed_root).state()["notes"]) == 1
     assert len(preview.Store(mixed_root).submissions()) == 1
     # Writer and reader move together: what `task-list` prints is what `import-state` reads back, so
@@ -3613,6 +3626,7 @@ def test_unified_import_atomicity():
     assert store.import_state(json.dumps(payload)) == {
       "notes": 1,
       "answers": 0,
+      "reports": 0,
       "tasks": 1,
     }
     assert not store.save_path.exists(), "Import must not overwrite the source backup"
@@ -3882,3 +3896,30 @@ def test_agent_seen_at_is_stamped_by_the_cli():
     empty = preview.Store(str(Path(state_dir) / "unseen"), create=True)
     assert empty.touch_agent() is None
     assert empty.state()["agent_seen_at"]
+
+
+def test_report_sources_ride_in_the_saved_state():
+  """A save file carries each report's markdown, so a restore rebuilds the report page."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.save_state({"notes": store.state()["notes"], "tasks": store.tasks()})
+    lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
+    saved = next(line for line in lines if line.get("id") == "pick")
+    assert saved["title"] == "Pick one"
+    assert "Choice? {#pick}" in saved["markdown"]
+    assert saved["published_at"]
+
+    restored_dir = Path(directory) / "restored"
+    restored_dir.mkdir()
+    restored = preview.Store(restored_dir, create=True)
+    result = restored.import_state(store.save_path.read_text())
+    assert result["reports"] == 1
+    report = restored.report("pick")
+    assert report["title"] == "Pick one"
+    assert "Choice? {#pick}" in report["markdown"]
+    assert report["published_at"]

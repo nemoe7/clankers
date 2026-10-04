@@ -531,6 +531,7 @@ SUBMISSION_LINE_KEYS = (
   "seen_at",
   "task_id",
 )
+REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at")
 
 
 def task_row(row):
@@ -574,6 +575,13 @@ def saved_answer_line(record):
   if not isinstance(record, dict):
     raise TypeError("Every saved answer is an object")
   return {key: record.get(key) for key in SUBMISSION_LINE_KEYS}
+
+
+def saved_report_line(record):
+  """Return the keys a saved report line carries, so a restore keeps the source."""
+  if not isinstance(record, dict):
+    raise TypeError("Every saved report is an object")
+  return {key: record.get(key) for key in REPORT_LINE_KEYS}
 
 
 def saved_task_line(record):
@@ -1330,6 +1338,16 @@ class Store:
         message_row(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")
       ]
 
+  def report_sources(self):
+    """Every report source, oldest first, for the save file."""
+    with closing(self.connect()) as db:
+      return [
+        dict(row)
+        for row in db.execute(
+          "SELECT id, title, markdown, published_at FROM reports ORDER BY seq, id"
+        )
+      ]
+
   def state(self):
     """The page's state, with every stamp cut to seconds.
 
@@ -1644,7 +1662,9 @@ class Store:
     of them is the failure this exists to prevent; task lines keep their status and order, so the
     queue comes back in the same shape. Answer lines come from the database rather than from the
     page, because the owner's report answers are stored here the moment they are sent, and an
-    answer that a restore drops is an answer the owner has to type again.
+    answer that a restore drops is an answer the owner has to type again. Report lines carry
+    each report's markdown, so a restore that rebuilds the database brings the report pages
+    back instead of leaving the answers without their reports.
 
     The file lands inside the state directory unless a path overrides it, so one
     globally ignored directory carries the database and its export together.
@@ -1663,6 +1683,8 @@ class Store:
         lines.append(saved_task_line(record))
     answers = [saved_answer_line(record) for record in self.submissions()]
     lines.extend(answers)
+    reports = [saved_report_line(record) for record in self.report_sources()]
+    lines.extend(reports)
     path = self.save_path
     if path.parent != Path("."):
       path.parent.mkdir(parents=True, exist_ok=True)
@@ -1673,8 +1695,9 @@ class Store:
     return {
       "path": str(path),
       "notes": len(notes),
-      "tasks": len(lines) - len(notes) - len(answers),
+      "tasks": len(lines) - len(notes) - len(answers) - len(reports),
       "answers": len(answers),
+      "reports": len(reports),
     }
 
   def uploads(self):
@@ -2047,10 +2070,16 @@ class Store:
 
   def import_state(self, text, replace_tasks=False):
     records = parse_state_import(text)
-    tasks = [r for r in records if "title" in r and "text" not in r]
-    messages = [r for r in records if "title" not in r or "text" in r]
+    reports = [r for r in records if "markdown" in r and "text" not in r]
+    tasks = [
+      r for r in records if "markdown" not in r and "title" in r and "text" not in r
+    ]
+    messages = [
+      r for r in records if "markdown" not in r and ("title" not in r or "text" in r)
+    ]
     with self.transaction(autosave=False) as db:
       db.execute("BEGIN IMMEDIATE")
+      self.import_reports(reports, shared=db)
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
       for record in messages:
         if "text" not in record or "title" in record:
@@ -2079,8 +2108,49 @@ class Store:
     return {
       "notes": sum("report_id" not in r for r in messages),
       "answers": sum("report_id" in r for r in messages),
+      "reports": len(reports),
       "tasks": len(tasks),
     }
+
+  def import_reports(self, records, shared=None):
+    """Rebuild report sources from a save file, published state included.
+
+    The save file carries each report's markdown, so a restore that rebuilds the database
+    brings the report pages back with it. Every record is validated before anything is
+    written, as the task import does.
+    """
+    if not isinstance(records, list):
+      raise TypeError("Import a list of report objects")
+    prepared = []
+    for record in records:
+      if not isinstance(record, dict):
+        raise TypeError("Import a list of report objects")
+      report_id = record.get("id")
+      identifier(report_id)
+      title = record.get("title")
+      if not isinstance(title, str) or not title.strip() or len(title) > 200:
+        raise ValueError("Report title must contain 1–200 characters")
+      markdown = record.get("markdown")
+      if not isinstance(markdown, str) or not markdown.strip():
+        raise ValueError("A saved report needs its markdown")
+      if len(markdown.encode("utf-8")) > MAX_REPORT:
+        raise ValueError("Report exceeds the 2 MB limit; split it into reports")
+      published_at = record.get("published_at")
+      if published_at is not None and not isinstance(published_at, str):
+        raise ValueError("A saved publish stamp is text")
+      prepared.append((report_id, title, markdown, published_at))
+    with self.transaction(shared) as db:
+      for report_id, title, markdown, published_at in prepared:
+        highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
+        db.execute(
+          """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET title = excluded.title,
+               markdown = excluded.markdown, updated_at = excluded.updated_at,
+               published_at = COALESCE(reports.published_at, excluded.published_at)""",
+          (report_id, title, markdown, now(), published_at, highest + 1),
+        )
+    return len(prepared)
 
   def import_tasks(self, records, replace=False, autosave=True, shared=None):
     """Rebuild a list from the JSON a copy button or task-list produced.
