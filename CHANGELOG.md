@@ -18,6 +18,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Push guard**: The push checkpoint refuses a push whose HEAD tree equals `origin/main`. Such a push leaves the pull request without a diff, and GitHub closes it.
 - **Poll return**: A poll that returns for an unblocked task names the task on stderr, so the turn continues it.
+- **Key command**: `arena-preview key` prints the recorded agent key, host and stamp. A later session recovers the key after the quiet note is acknowledged.
+- **Key recovery line**: The 401 line in the proxy skill names `arena-preview key` beside the inbox read, and the preview reference table carries the row.
 - **Post key now**: A fourth proxy menu command posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one. Version 1.2.7.
 - **Rotate log**: The rotation line prints the new agent key, as the start line does. The owner reads the key from the container log when no preview is at hand.
 
