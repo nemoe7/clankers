@@ -3691,6 +3691,39 @@ def test_unified_import_atomicity():
     ) == backup
 
 
+def test_import_refuses_a_snapshot_older_than_the_state():
+  """A paste of an old copy must not write over newer messages."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("live", "Newest message", at="2026-10-04T15:00:00+00:00")
+    older = json.dumps(
+      [{"id": "old", "text": "Old message", "at": "2026-10-04T11:42:48"}]
+    )
+    try:
+      store.import_state(older)
+      raise AssertionError("An older snapshot was accepted")
+    except ValueError as error:
+      assert "live state is fresher" in str(error)
+      assert "--force" in str(error)
+    assert {note["id"] for note in store.state()["notes"]} == {"live"}
+    receipt = store.import_state(older, force=True)
+    assert receipt["forced"] is True
+    assert {note["id"] for note in store.state()["notes"]} == {"live", "old"}
+
+
+def test_import_accepts_a_newer_snapshot():
+  """A save newer than the live state lands without the flag."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("live", "Older message", at="2026-10-04T11:42:48")
+    newer = json.dumps(
+      [{"id": "new", "text": "Newer message", "at": "2026-10-04T15:00:00+00:00"}]
+    )
+    assert store.import_state(newer)["notes"] == 1
+    assert "forced" not in store.import_state(newer)
+    assert {note["id"] for note in store.state()["notes"]} == {"live", "new"}
+
+
 def test_probe_route_answers_the_caller():
   """The one-off test route: a GET describes it, and a POST echoes the body."""
   global app

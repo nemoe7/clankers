@@ -231,6 +231,23 @@ def at_or_after(value, other):
   return clip_stamp(value) >= clip_stamp(other)
 
 
+def import_stamp(value):
+  """Return a stamp for comparison, in UTC, or None when the text will not parse.
+
+  A save file may carry a naive stamp (the server writes UTC) or one with an
+  offset, so both sides become aware datetimes before they compare.
+  """
+  if not value:
+    return None
+  try:
+    parsed = datetime.fromisoformat(str(value))
+  except ValueError:
+    return None
+  if parsed.tzinfo is None:
+    parsed = parsed.replace(tzinfo=timezone.utc)
+  return parsed
+
+
 def identifier(value):
   if not isinstance(value, str) or not IDENTIFIER.fullmatch(value):
     raise ValueError("ID must contain 1–80 letters, digits, underscores or hyphens")
@@ -2150,7 +2167,33 @@ class Store:
     self.autosave()  # the completion wrote an inbox note; unfinished queue rows stay only in SQLite
     return fetch_row(result, self.path.parent)
 
-  def import_state(self, text, replace_tasks=False):
+  def stale_import(self, db, messages):
+    """Return the two stamps when the live state is fresher than the import.
+
+    A paste of an old copy must not write over a state that already holds newer
+    messages. Both stamps come back so the refusal can name them, and an import
+    with no messages or no live state never counts as stale.
+    """
+    newest_import = max(
+      [s for s in (import_stamp(r.get("at")) for r in messages) if s],
+      default=None,
+    )
+    newest_live = max(
+      [
+        stamp
+        for stamp in (
+          import_stamp(db.execute("SELECT MAX(at) FROM notes").fetchone()[0]),
+          import_stamp(db.execute("SELECT MAX(at) FROM submissions").fetchone()[0]),
+        )
+        if stamp
+      ],
+      default=None,
+    )
+    if newest_import and newest_live and newest_live > newest_import:
+      return newest_live, newest_import
+    return None
+
+  def import_state(self, text, replace_tasks=False, force=False):
     records = parse_state_import(text)
     reports = [r for r in records if "markdown" in r and "text" not in r]
     tasks = [
@@ -2161,6 +2204,15 @@ class Store:
     ]
     with self.transaction(autosave=False) as db:
       db.execute("BEGIN IMMEDIATE")
+      stale = self.stale_import(db, messages)
+      if stale and not force:
+        live, older = stale
+        raise ValueError(
+          "Refuse the import: the live state is fresher"
+          f" (live {clip_stamp(live.isoformat())},"
+          f" import {clip_stamp(older.isoformat()) if older else 'none'})."
+          " Pass --force to import anyway."
+        )
       self.import_reports(reports, shared=db)
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
       for record in messages:
@@ -2187,12 +2239,16 @@ class Store:
         writer(
           *args, record["text"], record.get("at"), shared=db, autosave=False, **options
         )
-    return {
+    receipt = {
       "notes": sum("report_id" not in r for r in messages),
       "answers": sum("report_id" in r for r in messages),
       "reports": len(reports),
       "tasks": len(tasks),
     }
+    if stale:
+      # The guard refused this import unless `force` asked for it, so the receipt says so.
+      receipt["forced"] = True
+    return receipt
 
   def import_reports(self, records, shared=None):
     """Rebuild report sources from a save file, published state included.
@@ -3417,6 +3473,11 @@ def main():
   state_import = commands.add_parser("import-state")
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("--replace-tasks", action="store_true")
+  state_import.add_argument(
+    "--force",
+    action="store_true",
+    help="import even when the live state holds newer messages",
+  )
   args = parser.parse_args()
   state_dir = resolve_state_dir()
   try:
@@ -3559,7 +3620,9 @@ def main():
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
-      print(cli_json(store.import_state(text, args.replace_tasks), args.pretty))
+      print(
+        cli_json(store.import_state(text, args.replace_tasks, args.force), args.pretty)
+      )
 
   except (
     OSError,

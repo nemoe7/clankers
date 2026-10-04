@@ -86,6 +86,12 @@ def clip_stamp(value):return value[:19]if value else value
 def at_or_after(value,other):
 	if not value or not other:return False
 	return clip_stamp(value)>=clip_stamp(other)
+def import_stamp(value):
+	if not value:return None
+	try:parsed=datetime.fromisoformat(str(value))
+	except ValueError:return None
+	if parsed.tzinfo is None:parsed=parsed.replace(tzinfo=timezone.utc)
+	return parsed
 def identifier(value):
 	if not isinstance(value,str)or not IDENTIFIER.fullmatch(value):raise ValueError('ID must contain 1–80 letters, digits, underscores or hyphens')
 	return value
@@ -690,16 +696,24 @@ class Store:
 			if target is not None:target.unlink(missing_ok=True)
 			raise
 		self.autosave();return fetch_row(result,self.path.parent)
-	def import_state(self,text,replace_tasks=False):
+	def stale_import(self,db,messages):
+		newest_import=max([s for s in(import_stamp(r.get('at'))for r in messages)if s],default=None);newest_live=max([stamp for stamp in(import_stamp(db.execute('SELECT MAX(at) FROM notes').fetchone()[0]),import_stamp(db.execute('SELECT MAX(at) FROM submissions').fetchone()[0]))if stamp],default=None)
+		if newest_import and newest_live and newest_live>newest_import:return newest_live,newest_import
+		return None
+	def import_state(self,text,replace_tasks=False,force=False):
 		records=parse_state_import(text);reports=[r for r in records if'markdown'in r and'text'not in r];tasks=[r for r in records if'markdown'not in r and'title'in r and'text'not in r];messages=[r for r in records if'markdown'not in r and('title'not in r or'text'in r)]
 		with self.transaction(autosave=False)as db:
-			db.execute('BEGIN IMMEDIATE');self.import_reports(reports,shared=db);self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
+			db.execute('BEGIN IMMEDIATE');stale=self.stale_import(db,messages)
+			if stale and not force:live,older=stale;raise ValueError(f"Refuse the import: the live state is fresher (live {clip_stamp(live.isoformat())}, import {clip_stamp(older.isoformat())if older else'none'}). Pass --force to import anyway.")
+			self.import_reports(reports,shared=db);self.import_tasks(tasks,replace_tasks,autosave=False,shared=db)
 			for record in messages:
 				if'text'not in record or'title'in record:raise ValueError('Each record must be a note, task or report answer')
 				options={key:record.get(key)for key in('acknowledged_at','ack_kind','ack_text','ack_edited_at','seen_at','task_id','replies','ack_edited_seen_count')};args=[record['id']];writer=self.note
 				if'report_id'in record:writer=self.submission;args.append(record['report_id'])
 				writer(*args,record['text'],record.get('at'),shared=db,autosave=False,**options)
-		return{'notes':sum('report_id'not in r for r in messages),'answers':sum('report_id'in r for r in messages),'reports':len(reports),'tasks':len(tasks)}
+		receipt={'notes':sum('report_id'not in r for r in messages),'answers':sum('report_id'in r for r in messages),'reports':len(reports),'tasks':len(tasks)}
+		if stale:receipt['forced']=True
+		return receipt
 	def import_reports(self,records,shared=None):
 		if not isinstance(records,list):raise TypeError('Import a list of report objects')
 		prepared=[]
@@ -1051,7 +1065,7 @@ def resolve_state_dir():
 		if(parent/'.git').exists():return str(parent/'arena-state')
 	return'arena-state'
 def main():
-	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');parser.add_argument('--pretty',action='store_true',help='Indent the JSON this CLI prints; agent-facing output is minified by default');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');commands.add_parser('key');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');gate=commands.add_parser('gate');gate.add_argument('--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');commands.add_parser('poll');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');state_import=commands.add_parser('import-state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('--replace-tasks',action='store_true');args=parser.parse_args();state_dir=resolve_state_dir()
+	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('--reminder',action='store_true',help='Print the unacked-count reminder line and exit');parser.add_argument('--pretty',action='store_true',help='Indent the JSON this CLI prints; agent-facing output is minified by default');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('--port',type=int,default=8000,help='Port to bind (default: 8000)');commands.add_parser('init');commands.add_parser('read');commands.add_parser('key');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');gate=commands.add_parser('gate');gate.add_argument('--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');commands.add_parser('poll');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('--reply',help='Markdown answer shown in the message log');ack.add_argument('--note',help='Short plain answer shown in the message log');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('--id',required=True);publish.add_argument('--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('--task-details',action='append',help='One detail line, repeatable; an empty string clears the list');task.add_argument('--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('--status',choices=TASK_STATUSES,default=None);task.add_argument('--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');commands.add_parser('task-list');state_import=commands.add_parser('import-state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('--replace-tasks',action='store_true');state_import.add_argument('--force',action='store_true',help='import even when the live state holds newer messages');args=parser.parse_args();state_dir=resolve_state_dir()
 	try:
 		if args.reminder:store=Store(state_dir,create=False);require_server(store);print(store.reminder(advance=True),flush=True);return 0
 		if not args.command:parser.error('a command is required')
@@ -1096,7 +1110,7 @@ def main():
 			print(cli_json(echo,args.pretty))
 		elif args.command=='task-remove':print(cli_json(echo_task(store.remove_task(args.task_id)),args.pretty))
 		elif args.command=='task-list':print(cli_json(store.list_tasks(),args.pretty))
-		elif args.command=='import-state':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();print(cli_json(store.import_state(text,args.replace_tasks),args.pretty))
+		elif args.command=='import-state':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();print(cli_json(store.import_state(text,args.replace_tasks,args.force),args.pretty))
 	except(OSError,ValueError,TypeError,KeyError,sqlite3.Error,RuntimeError)as error:print(f"Preview error: {error}",file=sys.stderr);return 1
 	return 0
 if __name__=='__main__':raise SystemExit(main())
