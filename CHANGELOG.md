@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### skills
+
+- **Push guard**: The push checkpoint refuses a push whose HEAD tree equals `origin/main`. Such a push leaves the pull request without a diff, and GitHub closes it.
+
 #### arena
 
 - **Note IDs in prose**: ARENA.md names the first seven characters of a note ID as the prose reference, never the sequence number. The steering skill already carries the rule.
