@@ -1,12 +1,10 @@
 ---
 name: amending-violations
 description: >-
-  Amend the NEMOGPT system prompt after a violation, in the model's own amendment
-  format. Holds the guidelines for writing a system prompt and the amendment
-  procedure: name the behavior, the instruction that caused it, the added wording,
-  the expected behavior and the preserved behavior. Use when an instruction in the
-  prompt causes undesirable behavior, when the owner reports one, or when the owner
-  asks for a prompt audit.
+  Write an amendment to the NEMOGPT system prompt when one of its instructions causes
+  undesirable behavior. Holds the guidelines for writing a system prompt and the output
+  format: one row per changed line, with the current wording, the amended wording and
+  the reason.
 license: MIT. LICENSE.txt has complete terms
 metadata:
   origin: first-party, maintained in this repository
@@ -15,27 +13,15 @@ metadata:
 
 # Amending violations
 
-Repair an instruction in the NEMOGPT system prompt when it causes undesirable behavior. The draft comes before the edit, and the owner approves it first.
+Write an amendment to the NEMOGPT system prompt when an instruction in it causes undesirable behavior.
 
-## Process
+## Output format
 
-1. Name the behavior that went wrong, and the instruction that caused or contributed to it.
-2. Read the guidelines below and check the draft against them.
-3. Draft the amendment in the model's own format, the five points below.
-4. Show the draft before the prompt changes. Land the change only after the owner approves.
-5. Edit `system-prompts/refs/NEMOGPT.md` first, then mirror the changed line into `system-prompts/NEMOGPT.md`.
+Answer with the proposal table, one row per changed line:
 
-## Amendment format
+`| Line | Current | Amended | Reason |`
 
-The model's own format, in this order:
-
-1. The undesirable behavior.
-2. The instruction that causes or contributes to it.
-3. The concise replacement or added wording.
-4. The expected behavior after the amendment.
-5. The unrelated behavior and safeguards that stay.
-
-Quote the added wording exactly as it will read in the prompt. Keep the amended line a bare rule, and put the behavior and the expected effect in their own points.
+Quote the current wording and the amended wording verbatim. Keep the amended line a bare rule; put the behavior and the expected effect in the Reason cell.
 
 ## Guidelines: writing a system prompt
 

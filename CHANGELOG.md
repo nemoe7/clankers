@@ -19,6 +19,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Diff evidence**: The Gemini release runner keeps one diff per commit. One base-to-target diff cuts the input tokens by 14% to 54%, and the owner keeps the per-commit diffs for attribution.
 - **Gemini token packing**: The runner puts a commit message and its diff in one evidence item. It counts every payload with the Count Tokens API, and an oversized list halves until every part fits the 230,000-token ceiling. A model that answers or spends its tokens cools down for 60 seconds plus 5 seconds of safety. The next request starts at the highest ready rung.
 
+#### skills
+
+- **Amendment skill trimmed**: `amending-violations` drops the five-step process and the five-point format. It keeps the system-prompt guidelines and the output table, with one row per changed line.
+
 ### Added
 
 #### preview

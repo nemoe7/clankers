@@ -4,7 +4,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 
 | Skill | Purpose |
 | --- | --- |
-| [amending-violations](amending-violations/SKILL.md) | Amend the NEMOGPT system prompt after a violation, with the system-prompt guidelines and the model's amendment format |
+| [amending-violations](amending-violations/SKILL.md) | Write an amendment to the NEMOGPT system prompt when an instruction in it causes undesirable behavior, with the system-prompt guidelines and the output table |
 | [arena-proxy](arena-proxy/SKILL.md) | Read privileged data outside an Arena sandbox through an owner-run backend that holds the credentials |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox and publish rendered reports, with persistent history and receipts |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
