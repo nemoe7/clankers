@@ -36,7 +36,7 @@ The feature then fetches `rules/ARENA.md` from the fixed raw URL of this reposit
 
 ### Arena proxy settings and key rotation
 
-The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Two menu entries save the settings, `Arena proxy host — set` and `Arena proxy master key — set`, and a third, `Arena proxy rotate now — run`, rotates at once.
+The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Two menu entries save the settings, `Arena proxy host — set` and `Arena proxy master key — set`, and a third, `Arena proxy rotate now — run`, rotates at once. A fourth, `Arena proxy post key now — run`, posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
 
 - The host is one HTTPS origin with no path. A trailing `/v1` is trimmed.
 - With both settings saved, the script asks `/v1/key` for the live agent key. The composer holds the rules line only.

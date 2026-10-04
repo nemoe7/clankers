@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.6
+// @version      1.2.7
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -334,6 +334,7 @@
       keyPostUrl: keyPostUrl,
       fetchJson: fetchJson,
       rotateUrl: rotateUrl,
+      postKeyNow: postKeyNow,
     })) {
       return;
     }
@@ -350,6 +351,19 @@
       var base = previewBase(document);
       if (!base || !key) return;
       requestJson("POST", keyPostUrl(base), { key: key, host: host }, function () {});
+    }
+
+    // The menu button posts the key the script holds to the preview. A missing key fetches
+    // the live one, which posts it too. No rotation call runs here.
+    function postKeyNow(state, post, fetchNow) {
+      if (!state.host) {
+        return;
+      }
+      if (state.key) {
+        post(state.key, state.host);
+        return;
+      }
+      fetchNow();
     }
 
     // One quiet note announces the key, so a read finds it and a poll never wakes on it.
@@ -499,6 +513,21 @@
         // A manual press forces the rotation; the timer holds the minimum age.
         GM_registerMenuCommand("Arena proxy rotate now — run", function () {
           rotateKey(0, null);
+        }),
+      );
+      proxyMenus.push(
+        // A manual press posts the held key without a rotation call.
+        GM_registerMenuCommand("Arena proxy post key now — run", function () {
+          var pair = settings();
+          postKeyNow(
+            { host: pair.host, key: heldKey },
+            postAgentKey,
+            function () {
+              keyTried = false;
+              keyFetch = null;
+              fetchAgentKey();
+            },
+          );
         }),
       );
     }
