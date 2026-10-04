@@ -2693,20 +2693,33 @@ class Store:
       )
     return len(fields)
 
-  def unpublish(self, report_id):
+  def unpublish(self, report_id, dismissed_by_owner=False):
     """Delete the report's tab row only; its answers and source file stay.
 
     Sent answers are inbox history the agent already read, and the .md under the
     state directory is the republish source, so pruning the tab touches neither.
+
+    A dismissal from the page writes one inbox note, because a report that
+    vanishes with no word reads as a report that never arrived. The CLI form
+    stays silent: the agent already knows what it removed.
     """
     identifier(report_id)
     with self.transaction() as db:
-      missing = db.execute(
-        "SELECT 1 FROM reports WHERE id = ?", (report_id,)
+      row = db.execute(
+        "SELECT title FROM reports WHERE id = ?", (report_id,)
       ).fetchone()
-      if missing is None:
+      if row is None:
         raise FileNotFoundError("Report not found")
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+      if dismissed_by_owner:
+        db.execute(
+          "INSERT INTO notes (id, text, at) VALUES (?, ?, ?)",
+          (
+            new_id(),
+            f"The owner dismissed the report {report_id} ({row['title']}).",
+            now(),
+          ),
+        )
 
   def mark_report_seen(self, report_id):
     """Stamp the moment the owner reached the end of a report, and only the first one.
@@ -3357,7 +3370,9 @@ def handler(store):
           self.reply(200, json.dumps(seen, ensure_ascii=False))
           return
         if report_unpublish:
-          store.unpublish(report_unpublish.group(1))
+          # The page deletes a report only on the owner's two clicks, so the removal
+          # writes the inbox note that names it.
+          store.unpublish(report_unpublish.group(1), dismissed_by_owner=True)
           self.reply(200, json.dumps({"unpublished": report_unpublish.group(1)}))
           return
         if report_submit:

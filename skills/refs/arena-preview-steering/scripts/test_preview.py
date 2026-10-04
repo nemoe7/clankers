@@ -291,6 +291,8 @@ def test_report_unpublish():
     store.submission("answer-1", "pick", "REPORT pick: one")
     store.unpublish("pick")
     assert store.state()["reports"] == []
+    # The CLI form stays silent: the agent already knows what it removed.
+    assert store.state()["notes"] == [], "the CLI unpublish writes no note"
     try:
       store.report("pick")
       raise AssertionError("A deleted report still read back")
@@ -618,6 +620,13 @@ def test_http_boundaries():
       assert request("GET", "/api/reports/prune/html")[0] == 200
       status, _, removed = request("POST", "/api/reports/prune/unpublish", "{}", auth)
       assert status == 200 and json.loads(removed) == {"unpublished": "prune"}
+      # The page deletes a report only on the owner's two clicks, so the route writes the
+      # note that tells the agent the report was dismissed instead of lost.
+      dismissed = [
+        note for note in store.state()["notes"] if "dismissed" in note["text"]
+      ]
+      assert dismissed and "prune" in dismissed[-1]["text"]
+      assert store.state()["notes"][-1]["acknowledged_at"] is None
       assert request("GET", "/api/reports/prune/html")[0] == 404
       assert request("POST", "/api/reports/prune/unpublish", "{}", auth)[0] == 404
       assert (

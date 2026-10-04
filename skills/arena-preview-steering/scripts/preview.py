@@ -856,12 +856,13 @@ class Store:
 			if answered:raise ValueError(f"Report {report_id} has submitted answers; publish the update under a new ID")
 			self.refuse_shared_id(db,'reports','tasks',report_id);highest=db.execute('SELECT COALESCE(MAX(seq), 0) FROM reports').fetchone()[0];db.execute('INSERT INTO reports (id, title, markdown, updated_at, published_at, seq)\n           VALUES (?, ?, ?, ?, ?, ?)\n           ON CONFLICT(id) DO UPDATE SET title = excluded.title,\n             markdown = excluded.markdown, updated_at = excluded.updated_at,\n             seq = COALESCE(reports.seq, excluded.seq), seen_at = NULL',(report_id,title,text,now(),now(),highest+1))
 		return len(fields)
-	def unpublish(self,report_id):
+	def unpublish(self,report_id,dismissed_by_owner=False):
 		identifier(report_id)
 		with self.transaction()as db:
-			missing=db.execute('SELECT 1 FROM reports WHERE id = ?',(report_id,)).fetchone()
-			if missing is None:raise FileNotFoundError('Report not found')
+			row=db.execute('SELECT title FROM reports WHERE id = ?',(report_id,)).fetchone()
+			if row is None:raise FileNotFoundError('Report not found')
 			db.execute('DELETE FROM reports WHERE id = ?',(report_id,))
+			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at) VALUES (?, ?, ?)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 	def mark_report_seen(self,report_id):
 		identifier(report_id)
 		with self.transaction()as db:
@@ -1049,7 +1050,7 @@ def handler(store):
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])
 					self.reply(200,json.dumps(report,ensure_ascii=False));return
 				if message_replies_seen:seen=store.mark_replies_seen(message_replies_seen.group(1),payload.get('count'));self.reply(200,json.dumps(seen,ensure_ascii=False));return
-				if report_unpublish:store.unpublish(report_unpublish.group(1));self.reply(200,json.dumps({'unpublished':report_unpublish.group(1)}));return
+				if report_unpublish:store.unpublish(report_unpublish.group(1),dismissed_by_owner=True);self.reply(200,json.dumps({'unpublished':report_unpublish.group(1)}));return
 				if report_submit:
 					note=store.submit_report(report_submit.group(1),payload.get('id'),payload.get('answers'),payload.get('revision'))
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])
