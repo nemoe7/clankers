@@ -4,6 +4,7 @@ Each reusable AI skill is a self-contained directory with a `SKILL.md` entry poi
 
 | Skill | Purpose |
 | --- | --- |
+| [amending-violations](amending-violations/SKILL.md) | Amend a rule after a violation, with the guidelines for a rule file and the repository's proposal form |
 | [arena-proxy](arena-proxy/SKILL.md) | Read privileged data outside an Arena sandbox through an owner-run backend that holds the credentials |
 | [arena-preview-steering](arena-preview-steering/SKILL.md) | Steer an Arena agent through the shared preview inbox and publish rendered reports, with persistent history and receipts |
 | [squash](squash/SKILL.md) | Compress text to token, word, character, or byte budgets without losing meaning |
