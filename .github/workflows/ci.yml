@@ -29,20 +29,10 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          # Keep minifier output stable across interpreter releases.
-          python-version: "3.11"
-
-      - name: Cache Pip Downloads
-        uses: actions/cache@v6
-        with:
-          # There is no requirements file: the pins live in this workflow and in ruff.toml, so the
-          # workflow itself is the honest cache key and any dependency change busts it.
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: ${{ runner.os }}-pip-
+          pip-cache-key: ci
 
       - name: Cache The Token Encoder
         uses: actions/cache@v6
@@ -56,12 +46,6 @@ jobs:
         run: |
           VERSION=$(sed -n 's/^required-version = "\(.*\)"$/\1/p' ruff.toml)
           python -m pip install tiktoken markdown-it-py python-minifier==3.3.0 "pyyaml==6.0.3" "ruff==$VERSION"
-
-      - name: Set Up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: npm
 
       - name: Install Build Dependencies And Check Generated Copies
         run: |
@@ -113,26 +97,13 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v7
 
-      - name: Set Up Python
-        uses: actions/setup-python@v7
+      - name: Prepare The Runner
+        uses: ./.github/actions/prepare
         with:
-          python-version: "3.11"
-
-      - name: Cache Pip Downloads
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-tests-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: ${{ runner.os }}-pip-tests-
+          pip-cache-key: tests
 
       - name: Install Test Dependencies
         run: python -m pip install markdown-it-py python-minifier==3.3.0 "pyyaml==6.0.3" pytest==9.1.1 pytest-xdist==3.6.1
-
-      - name: Set Up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: npm
 
       - name: Install Node Dependencies
         run: npm ci
@@ -195,28 +166,11 @@ jobs:
             echo "No preview paths changed. Skip the preview tests."
           fi
 
-      - name: Set Up Python
+      - name: Prepare The Runner
         if: steps.preview.outputs.run == 'true'
-        uses: actions/setup-python@v7
+        uses: ./.github/actions/prepare
         with:
-          python-version: "3.11"
-
-      - name: Set Up Node
-        if: steps.preview.outputs.run == 'true'
-        uses: actions/setup-node@v7
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Cache Pip Downloads
-        if: steps.preview.outputs.run == 'true'
-        uses: actions/cache@v6
-        with:
-          # There is no requirements file: the pins live in this workflow, so the workflow
-          # itself is the honest cache key and any dependency change busts it.
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-preview-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: ${{ runner.os }}-pip-preview-
+          pip-cache-key: preview
 
       - name: Install Preview Dependencies
         if: steps.preview.outputs.run == 'true'

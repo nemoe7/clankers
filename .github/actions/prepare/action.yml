@@ -1,0 +1,31 @@
+name: Prepare Runner
+description: Set up Python and Node with the shared pip download cache.
+
+inputs:
+  pip-cache-key:
+    description: Suffix that keeps each job's pip cache apart.
+    default: ci
+
+runs:
+  using: composite
+  steps:
+    - name: Set Up Python
+      uses: actions/setup-python@v7
+      with:
+        # Keep minifier output stable across interpreter releases.
+        python-version: "3.11"
+
+    - name: Cache Pip Downloads
+      uses: actions/cache@v6
+      with:
+        # There is no requirements file: the pins live in the workflow and in this action, so the
+        # two files are the honest cache key and any dependency change busts it.
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ inputs.pip-cache-key }}-${{ hashFiles('.github/workflows/ci.yml', '.github/actions/prepare/action.yml') }}
+        restore-keys: ${{ runner.os }}-pip-${{ inputs.pip-cache-key }}-
+
+    - name: Set Up Node
+      uses: actions/setup-node@v7
+      with:
+        node-version: "22"
+        cache: npm
