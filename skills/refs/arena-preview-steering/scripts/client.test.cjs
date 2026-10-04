@@ -937,6 +937,14 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.match(get('#connection-text').textContent, /^3 messages saved · agent in poll 1m 0[5-9]s$/);
     await tick();
+    // A wait outlives the idle window: the live heartbeat keeps the wait text, not the stale note.
+    state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'polling');
+    assert.match(get('#connection-text').textContent, /^3 messages saved · agent in poll /);
+    assert.doesNotMatch(get('#connection-text').textContent, /No agent since/);
+    state.agent_seen_at = new Date().toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
     state.polling = false;
     state.polling_since = null;
     await get('#refresh-notes').events.click();

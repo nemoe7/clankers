@@ -96,6 +96,8 @@ const AGENT_IDLE_MS = 180_000;
 let agentSeenAt = null;
 let agentSeenStamp = null;
 function agentIdle() {
+  // A live poll heartbeat proves the agent is present, so a long wait never reads as idle.
+  if (pollSince !== null) return false;
   return agentSeenAt !== null && Date.now() - agentSeenAt > AGENT_IDLE_MS;
 }
 function connectionText() {

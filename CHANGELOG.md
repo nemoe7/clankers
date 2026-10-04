@@ -64,6 +64,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### preview
+
+- **Poll header**: A live poll heartbeat keeps the wait text in the header. Only an aged stamp with no poll reads as `No agent since <time>`.
+
 #### userscripts
 
 - **Tab title turn end**: The title reverted to the Arena default when a turn ended. The title now keeps the repository name, and only the emoji clears. Version 1.2.6.
