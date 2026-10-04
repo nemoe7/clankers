@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.5
+// @version      1.2.6
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1623,8 +1623,8 @@
 
     // A read or edit group never pulses, so its newest label names the action. The bound is
     // the newest transcript message plus the stop signal: a finished group label persists
-    // after the turn ends, and without the signal the title would never revert. The match
-    // is a loose stop word, so a label drift weakens the row but never sticks the title.
+    // after the turn ends, and without the signal the row would keep a stale emoji alive.
+    // The match is a loose stop word, so a label drift weakens the row but never sticks it.
     function liveRow(doc) {
       var row = strongRow(doc);
       if (row) {
@@ -1792,12 +1792,8 @@
         return null;
       }
       var emoji = heldEmojiFor(doc);
-      // The repository name is a live-turn title, not a permanent label. With no row, no
-      // held emoji and no stop control the turn ended, so the title reverts to its prior
-      // value instead of sitting on the repository name.
-      if (!emoji && !liveRow(doc) && !stopSignal(doc)) {
-        return null;
-      }
+      // The turn end clears only the emoji; the repository name stays in the title. The
+      // title reverts to its prior value only when this page holds no repository name.
       return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
     }
 

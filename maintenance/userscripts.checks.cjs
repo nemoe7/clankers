@@ -915,7 +915,7 @@ function checkTabTitle(api) {
       },
     };
     return {
-      title: TITLE_PREFIX + "clankers",
+      title: "ChatGPT",
       querySelector: function (selector) {
         return selector === REPO_LINK_SELECTOR ? repoLink : null;
       },
@@ -1092,11 +1092,11 @@ function checkTabTitle(api) {
     // A drifted label still opens the gate; the exact wording does not.
     [stopSignal(looseStopDoc()), true],
     [desiredTitle(looseStopDoc()), TITLE_PREFIX + "clankers"],
-    // The owner's bug: the turn ends, the finished group persists, the title reverts.
+    // The owner's bug: the turn ends, the finished group persists, and only the emoji clears.
     [expireHold(), null],
-    [desiredTitle(endedDoc()), null],
+    [desiredTitle(endedPage), TITLE_PREFIX + "clankers"],
     [syncTitle(endedPage), true],
-    [endedPage.title, "ChatGPT"],
+    [endedPage.title, TITLE_PREFIX + "clankers"],
     // Streaming chat words raise the bubble while the turn is open.
     [resetSpeech(), null],
     [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
@@ -1110,9 +1110,9 @@ function checkTabTitle(api) {
     [speechLive(talking), false],
     [expireHold(), null],
     [desiredTitle(talking), TITLE_PREFIX + "clankers"],
-    // After the turn no bubble rises and the title stays down.
+    // After the turn no bubble rises; the title keeps the repository name and drops the emoji.
     [resetSpeech(), null],
-    [desiredTitle(settledChat), null],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
     [
       polls("/home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll"),
       true,
