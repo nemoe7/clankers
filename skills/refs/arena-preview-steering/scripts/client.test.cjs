@@ -1024,6 +1024,14 @@ test('preview client', async (t) => {
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it blue');
     assert.equal(otherText.style.height, '42px');
+    // A reload must keep the draft: an edit writes the answers before any submit.
+    apiBox.checked = true;
+    get('#report-form').events.input(event({}));
+    assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers,
+      { name: 'ada', areas: ['ui', 'api'], verdict: 'Other: make it blue' },
+      'a checkbox edit reaches the saved answers');
+    apiBox.checked = false;
+    get('#report-form').events.input(event({}));
     otherText.value = 'typed in the slot';
     otherText.scrollHeight = 88;
     documentEvents.input({ target: otherText });

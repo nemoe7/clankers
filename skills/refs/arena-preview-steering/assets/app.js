@@ -1119,7 +1119,19 @@ function renderReportAcknowledgement() {
   history.hidden = !blocks.length;
 }
 let reportDirty = false;
-$('#report-form').addEventListener('input', () => { reportDirty = true; });
+// A reload must keep the draft. The browser restores typed text but not the boxes, so every edit
+// writes the answers, and a submit replaces the record with the server's own stamp.
+function saveReportDraft() {
+  const id = $('#report').dataset.reportId;
+  if (!id || id !== $('#report-select').value) return;
+  const previous = savedAnswers(id);
+  save(`answers:${id}`, JSON.stringify({
+    answers: collect($('#report')),
+    at: previous?.at || new Date().toISOString()
+  }));
+}
+$('#report-form').addEventListener('input', () => { reportDirty = true; saveReportDraft(); });
+$('#report-form').addEventListener('change', () => { reportDirty = true; saveReportDraft(); });
 async function loadReport(force = false) {
   const id = $('#report-select').value;
   const sequence = ++reportRequest;
