@@ -3172,6 +3172,7 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  commands.add_parser("key")
   gate = commands.add_parser("gate")
   gate.add_argument(
     "--push",
@@ -3290,6 +3291,14 @@ def main():
     elif args.command == "read":
       require_server(store)
       print_read(store, args.pretty)
+    elif args.command == "key":
+      # The key note is quiet and it ages out of the pending list after an ack, so a later
+      # session reads the recorded key here instead of waiting for a new note.
+      record = store.agent_key()
+      if not record:
+        print("No agent key recorded yet.", file=sys.stderr)
+        return 1
+      print(cli_json(record, args.pretty))
     elif args.command == "poll":
       require_server(store)
       return poll_inbox(store, args.pretty)

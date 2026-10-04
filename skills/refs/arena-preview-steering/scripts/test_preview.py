@@ -3828,3 +3828,33 @@ def test_push_gate_identical_to_main():
       "HEAD content equals `origin/main`, so the push carries nothing."
       " Start new work from `origin/main`."
     )
+
+
+def test_key_command_reads_the_recorded_key():
+  """A later session reads the key from the state, because an acked note never returns."""
+  with tempfile.TemporaryDirectory() as key_dir:
+    store = preview.Store(key_dir, create=True)
+    script = str(Path(preview.__file__))
+
+    def run():
+      return subprocess.run(
+        [sys.executable, script, "key"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": key_dir},
+      )
+
+    missing = run()
+    assert missing.returncode == 1
+    assert missing.stdout == ""
+    store.set_agent_key("fresh-key-0123456789abcdef", "https://h.example")
+    found = run()
+    assert found.returncode == 0
+    payload = json.loads(found.stdout)
+    assert payload["key"] == "fresh-key-0123456789abcdef"
+    assert payload["host"] == "https://h.example"
+    assert payload["at"]
+    # The command needs no server, so a restore reads it before the preview starts.
+    store.set_meta(preview.AGENT_KEY_META, "not json")
+    assert run().returncode == 1
