@@ -30,6 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Fetch page limits**: `docs/archive/arena-quirks.md` records the measured 8,000-character chunk, the two-chunk split above it, the 63-chunk RFC read and the 100-call lower bound.
 - **Note IDs in prose**: ARENA.md names the first seven characters of a note ID as the prose reference, never the sequence number. The steering skill already carries the rule.
 - **Proposal skeleton**: The amendment clause in the root `AGENTS.md` fixes the proposal opening lines, names the `Citation:` line, and puts the decision list under each table. This clause landed on the owner's approval.
+- **Tool claim sources**: The NEMOGPT prompt holds a second verification line. Search official documentation before a claim about a tool or an interface, and mark the advice unverified when verification is impossible. This line landed on the owner's approval. The owner rejected the first long-answer line, so a compact answer shape is a separate proposal.
 
 ### Fixed
 
