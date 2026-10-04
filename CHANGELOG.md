@@ -39,6 +39,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Report sources in the save file**: `saved-state.ndjson` carries each report's markdown, and `import-state` rebuilds the report pages from it.
 - **Copy state from one route**: `/api/copy-state` returns the save-file text and its counts. The copy button copies that text in one fetch. The cached assembly stays as the fallback.
 - **Dismissal note**: A report the owner unpublishes from the page writes one inbox note that names it. The CLI form stays silent.
+- **No working directory needed**: A CLI call finds the repository from the wrapper's own path. It runs from any directory and needs no `cd`.
 - **Gate message names the bare call**: The blocked gate prints that the only call that passes is a bare `arena-preview read`. Work beside the read ends the exemption.
 - **Stale import guard**: `import-state` reads the newest message stamp in the payload and in the database. It refuses the import when the database is fresher, and names both stamps. `--force` overrides the guard and the receipt says `forced`.
 - **Gate mark rule**: The steering reference bans the `_arena_preview_platform` mark. NEVER set or export it. NEVER bypass a blocked gate. The owner approved the line.
