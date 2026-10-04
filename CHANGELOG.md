@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Post key now**: A fourth proxy menu command posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one. Version 1.2.7.
 - **Rotate log**: The rotation line prints the new agent key, as the start line does. The owner reads the key from the container log when no preview is at hand.
 - **Gate threshold**: The read gate blocks after three calls while notes wait, so a skipped read costs three calls instead of twenty. The owner set the number.
+- **Report sources in the save file**: `saved-state.ndjson` carries each report's markdown, and `import-state` rebuilds the report pages from it.
 - **Gate mark rule**: The steering reference bans the `_arena_preview_platform` mark. NEVER set or export it. NEVER bypass a blocked gate. The owner approved the line.
 - **Amendment skill**: `skills/amending-violations` amends the NEMOGPT prompt after a violation. The skill file holds the system-prompt guidelines and the model's five-point amendment format, and the prompt points at the skill by name.
 
