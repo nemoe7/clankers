@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-04
+
+### Fixed
+
+#### userscripts
+
+- **Tab title turn end**: The title reverted to the Arena default when a turn ended. The title now keeps the repository name, and only the emoji clears. Version 1.2.6.
+
 ## 2026-10-03
 
 ### Added
