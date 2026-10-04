@@ -43,6 +43,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **Skill reads**: A skill's first use in a session needs a full read of its SKILL.md and every Markdown reference it names. A partial read does not count.
 - **Full reads**: The reread bullet names full reads: a partial read, such as head, tail or a grep excerpt, does not count. The line also names the skill reference as the home of the gate and read cadence mechanics.
 - **Idle dot**: Every CLI call stamps `agent_seen_at`. The header turns amber with `No agent since <time>` after three quiet minutes, so a preview left open after a turn shows no agent instead of a live connection.
 - **Fetch page limits**: `docs/archive/arena-quirks.md` records the measured 8,000-character chunk, the two-chunk split above it, the 63-chunk RFC read and the 100-call lower bound.
