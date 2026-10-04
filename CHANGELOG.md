@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-04
 
+### Added
+
+#### arena
+
+- **Note IDs in prose**: ARENA.md names the first seven characters of a note ID as the prose reference, never the sequence number. The steering skill already carries the rule.
+
 ### Fixed
 
 #### userscripts
