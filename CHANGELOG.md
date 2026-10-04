@@ -6,11 +6,18 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-04
 
+### Changed
+
+#### arena
+
+- **Push rule**: The push bullet measures the branch by tree, not commit count. A branch whose tree matches `origin/main` never pushes, even when it shows commits ahead.
+
 ### Added
 
 #### skills
 
 - **Push guard**: The push checkpoint refuses a push whose HEAD tree equals `origin/main`. Such a push leaves the pull request without a diff, and GitHub closes it.
+- **Poll return**: A poll that returns for an unblocked task names the task on stderr, so the turn continues it.
 
 #### arena
 
