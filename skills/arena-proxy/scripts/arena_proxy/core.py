@@ -36,6 +36,11 @@ ROUTES = (
 )
 
 
+def rotation_line(key):
+  """The rotate log line: the owner reads the new key here, as on a start."""
+  return f"agent key (rotated): {key}"
+
+
 def log_line(method, target, code, address=None):
   """Format one log line with the query string removed, so no key is written."""
   line = f"{method} {urllib.parse.urlsplit(target).path} -> {code}"
@@ -189,7 +194,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       return
     self.server.agent_key = secrets.token_urlsafe(32)
     self.server.key_changed = time.monotonic()
-    print("agent key (rotated): new key issued", flush=True)
+    print(rotation_line(self.server.agent_key), flush=True)
     self._send_json(
       200, {"ok": True, "rotated": True, "age": 0, "key": self.server.agent_key}
     )

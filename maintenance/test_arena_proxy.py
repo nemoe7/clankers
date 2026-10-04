@@ -461,6 +461,10 @@ def test_unknown_route_lists_the_routes(tmp_path):
     assert "/v1/llm" in json.loads(body)["routes"]
 
 
+def test_rotation_line_names_the_new_key():
+  assert core.rotation_line("fresh-key") == "agent key (rotated): fresh-key"
+
+
 def test_log_line_drops_the_query_string():
   assert (
     core.log_line("GET", "/v1/github?key=SECRET&path=x", 200) == "GET /v1/github -> 200"
