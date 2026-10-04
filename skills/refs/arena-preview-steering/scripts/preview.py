@@ -3519,7 +3519,8 @@ def main():
         return 2
       if not allowed:
         print(
-          "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`",
+          "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
+          " Then ack every note with `arena-preview ack <id>`.",
           flush=True,
         )
         return 1

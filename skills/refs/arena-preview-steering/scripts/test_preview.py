@@ -2935,7 +2935,8 @@ def test_bash_gate():
     # The blocked line names the command that clears the block.
     assert (
       blocked.stdout.strip()
-      == "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`"
+      == "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
+      " Then ack every note with `arena-preview ack <id>`."
     )
     gate_store.acknowledge(["gate-note"], "note", "Cleared")
     assert gate_store.gate()
@@ -2981,7 +2982,8 @@ def test_bash_gate():
     assert pushed.returncode == 1
     assert (
       pushed.stdout.strip()
-      == "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`"
+      == "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
+      " Then ack every note with `arena-preview ack <id>`."
     )
     gate_store.acknowledge(["push-note"], "note", "Cleared")
     assert gate_store.gate(pending_only=True) is True

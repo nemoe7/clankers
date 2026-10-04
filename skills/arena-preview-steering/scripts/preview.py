@@ -1078,7 +1078,7 @@ def main():
 			try:allowed=Store(state_dir).gate(pending_only=args.push)
 			except FileNotFoundError:allowed=True
 			except Exception:return 2
-			if not allowed:print('READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`',flush=True);return 1
+			if not allowed:print('READ INBOX NOW. The only call that passes is a bare `arena-preview read`. Then ack every note with `arena-preview ack <id>`.',flush=True);return 1
 			if args.push and main_identical():print('HEAD content equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
 			return 0
 		store=Store(state_dir,create=args.command in{'serve','init','import-state'});print(store.reminder(),file=sys.stderr,flush=True)
