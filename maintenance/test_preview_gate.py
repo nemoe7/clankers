@@ -9,17 +9,24 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena-preview-steering" / "scripts"))
+
+import preview as preview_module
+
+quiet_inbox_line = preview_module.quiet_inbox_line
 INSTALLER = (
   ROOT / "skills" / "refs" / "arena-preview-steering" / "scripts" / "install.sh"
 )
 
 STUB = """#!/bin/sh
-if [ "$1" = "gate" ] && [ "$2" = "--push" ]; then
-  exit 1
+# The classifier is pure, so the stub answers with the real one.
+if [ "$1" = "inbox-line" ]; then
+  exec __PYTHON__ __PREVIEW__ inbox-line "$2"
 fi
 exit 1
 """
@@ -48,7 +55,17 @@ def run(command: str) -> subprocess.CompletedProcess[str]:
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     stub = root / "stub.sh"
-    stub.write_text(STUB, encoding="utf-8")
+    import sys
+
+    preview_module = (
+      ROOT / "skills" / "refs" / "arena-preview-steering" / "scripts" / "preview.py"
+    )
+    stub.write_text(
+      STUB.replace("__PYTHON__", sys.executable).replace(
+        "__PREVIEW__", str(preview_module)
+      ),
+      encoding="utf-8",
+    )
     stub.chmod(0o755)
     # The gate body stays in a sourced file: its own pattern text must not reach the
     # shell command line, because the guard reads that line.
@@ -78,20 +95,50 @@ def test_plain_chain_meets_the_count_gate():
   assert "ran" not in result.stdout
 
 
-def test_chain_that_names_a_read_stays_quiet():
+def test_a_read_alone_stays_quiet():
+  # The read must reach its read, whatever the tally.
+  result = run(': "arena-preview read"')
+  assert result.returncode == 0, result.stderr
+
+
+def test_a_read_beside_work_meets_the_gate():
+  # A read no longer licenses other calls: the work meets the gate first.
   result = run('cd /tmp && echo ran && : "arena-preview read"')
-  assert result.returncode == 0, result.stderr
-  assert "ran" in result.stdout
+  assert result.returncode == 130, result.stderr
+  assert "ran" not in result.stdout
 
 
-def test_chain_that_names_an_ack_stays_quiet():
+def test_a_read_with_a_redirect_beside_work_meets_the_gate():
+  result = run('cd /tmp && echo ran && : "arena-preview read" >/dev/null 2>&1')
+  assert result.returncode == 130, result.stderr
+  assert "ran" not in result.stdout
+
+
+def test_an_ack_beside_work_meets_the_gate():
   result = run('cd /tmp && echo ran && : "arena-preview ack abc"')
+  assert result.returncode == 130, result.stderr
+  assert "ran" not in result.stdout
+
+
+def test_chained_acks_stay_quiet():
+  result = run(': "arena-preview ack a" && : "arena-preview ack b"')
   assert result.returncode == 0, result.stderr
-  assert "ran" in result.stdout
+
+
+def test_the_inbox_line_classifier():
+  # Work beside an inbox call ends the exemption; inert prefixes keep it.
+  quiet = quiet_inbox_line
+  assert quiet("")
+  assert quiet("cd /x && arena-preview read")
+  assert quiet("export PATH=/y; arena-preview read")
+  assert quiet("arena-preview ack a; arena-preview ack b; arena-preview task x")
+  assert quiet("arena-preview poll")
+  assert not quiet("pytest -q; arena-preview read >/dev/null 2>&1")
+  assert not quiet("cd /x && echo ran && arena-preview read")
+  assert not quiet("git push origin main && arena-preview ack a")
+  assert not quiet("echo hi | arena-preview read")
 
 
 def test_push_in_a_quiet_chain_still_meets_the_push_gate():
-  result = run(
-    'cd /tmp && echo ran && : "arena-preview read" && git push origin branch'
-  )
+  result = run("arena-preview read && git push origin branch")
   assert result.returncode == 130, result.stderr

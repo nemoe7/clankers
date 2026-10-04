@@ -887,6 +887,44 @@ POLL_SINCE_META = "polling_since"
 POLLING_FRESH_SECONDS = 5.0
 
 
+INERT_COMMANDS = (
+  "cd",
+  "export",
+  "set",
+  "unset",
+  "true",
+  ":",
+  "source",
+  ".",
+  "trap",
+  "shopt",
+  "umask",
+)
+
+
+def quiet_inbox_line(line):
+  """True when a command line that names an inbox call runs nothing else.
+
+  The gate exempts a line so a read reaches its read. Work beside the read must
+  not ride that exemption: every command on the line is either an inbox call or
+  an inert prefix, or the line meets the count gate like any other work.
+  """
+  text = str(line or "").replace("\r", "\n")
+  for separator in ("&&", "||", ";", "|", "\n"):
+    text = text.replace(separator, "\x00")
+  for piece in text.split("\x00"):
+    tokens = [token for token in piece.split() if token]
+    if not tokens:
+      continue
+    head = tokens[0].rsplit("/", 1)[-1]
+    if head in INERT_COMMANDS:
+      continue
+    if head in ("arena-preview", "preview.py"):
+      continue
+    return False
+  return True
+
+
 def poll_inbox(store, pretty=False, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -3262,6 +3300,11 @@ def main():
   commands.add_parser("init")
   commands.add_parser("read")
   commands.add_parser("key")
+  inbox_line = commands.add_parser(
+    "inbox-line",
+    help="Report whether a command line that names an inbox call runs nothing else",
+  )
+  inbox_line.add_argument("line", help="The command line, as the hook read it")
   gate = commands.add_parser("gate")
   gate.add_argument(
     "--push",
@@ -3340,6 +3383,8 @@ def main():
       return 0
     if not args.command:
       parser.error("a command is required")
+    if args.command == "inbox-line":
+      return 0 if quiet_inbox_line(args.line) else 1
     if args.command == "gate":
       try:
         allowed = Store(state_dir).gate(pending_only=args.push)

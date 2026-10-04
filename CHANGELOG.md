@@ -35,7 +35,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Post key now**: A fourth proxy menu command posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one. Version 1.2.7.
 - **Rotate log**: The rotation line prints the new agent key, as the start line does. The owner reads the key from the container log when no preview is at hand.
 - **Gate threshold**: The read gate blocks after ten calls while notes wait. The owner raised the number from three.
-- **Ack form**: An ack clears the call count, so a read that carries no ack clears nothing. The reference clause is proposed in report `gate-read-clause`.
+- **Read exemption**: The gate exempts a command line only when every command on it is an inbox call or an inert prefix. A read beside work no longer exempts the work, so the work meets the gate. `preview.py inbox-line` answers the question and `maintenance/test_preview_gate.py` covers it.
 - **Report sources in the save file**: `saved-state.ndjson` carries each report's markdown, and `import-state` rebuilds the report pages from it.
 - **Gate mark rule**: The steering reference bans the `_arena_preview_platform` mark. NEVER set or export it. NEVER bypass a blocked gate. The owner approved the line.
 - **Amendment skill**: `skills/amending-violations` amends the NEMOGPT prompt after a violation. The skill file holds the system-prompt guidelines and the model's five-point amendment format, and the prompt points at the skill by name.

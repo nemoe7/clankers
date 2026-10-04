@@ -40,7 +40,7 @@ def check_preview_path():
     python.parent.mkdir(parents=True)
     python.write_text(
       "#!/usr/bin/env bash\n"
-      'case " $*" in *" gate") exit 0 ;; esac\n'
+      'case " $*" in *" gate"*|*" inbox-line"*) exit 0 ;; esac\n'
       'printf \'%s\\n\' "$@" > "$HOME/arena-preview-args"\n',
       encoding="utf-8",
     )
