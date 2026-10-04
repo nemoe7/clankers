@@ -1,119 +1,155 @@
 ---
 name: amending-violations
 description: >-
-  Amend a rule after a violation, using the repository's proposal form. Holds the
-  guidelines for writing a rule file and the amendment procedure: name the
-  violation, cite a guideline section, draft the bare line, tabulate Line |
-  Current | Amended | Reason with both versions quoted, take the decision list,
-  then mirror the approved line into the installed copies. Use when a clause
-  breaks, when the owner reports behavior that a rule caused, or when a rule
-  needs a proposal before it lands.
+  Amend the NEMOGPT system prompt after a violation, in the model's own amendment
+  format. Holds the guidelines for writing a system prompt and the amendment
+  procedure: name the behavior, the instruction that caused it, the added wording,
+  the expected behavior and the preserved behavior. Use when an instruction in the
+  prompt causes undesirable behavior, when the owner reports one, or when the owner
+  asks for a prompt audit.
 license: MIT. LICENSE.txt has complete terms
 metadata:
   origin: first-party, maintained in this repository
-  argument-hint: "[file] [line]"
+  argument-hint: "[instruction]"
 ---
 
 # Amending violations
 
-Repair a rule that a violation exposed. The proposal comes before the change, and no line lands before approval.
+Repair an instruction in the NEMOGPT system prompt when it causes undesirable behavior. The draft comes before the edit, and the owner approves it first.
 
 ## Process
 
-1. Name the violation: the file, the line and the behavior it caused.
-2. Read the guidelines below. Cite at least one section in the proposal.
-3. Draft the amended line to section 4: one rule per line, imperative mood, testable, no rationale.
-4. Show the proposal in the form below, above the question that asks for approval.
-5. Take the decision: approve, squash, reject or custom. A custom answer needs a fresh proposal.
-6. On approval, mirror the line into the installed copies, and amend the refs file first.
+1. Name the behavior that went wrong, and the instruction that caused or contributed to it.
+2. Read the guidelines below and check the draft against them.
+3. Draft the amendment in the model's own format, the five points below.
+4. Show the draft before the prompt changes. Land the change only after the owner approves.
+5. Edit `system-prompts/refs/NEMOGPT.md` first, then mirror the changed line into `system-prompts/NEMOGPT.md`.
 
-## Proposal form
+## Amendment format
 
-- Open with `Status: proposal. No line lands before approval.` and a `Citation:` line that names the guidelines section.
-- Show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line.
-- Quote both versions verbatim in double quotes, never backticks, and omit only unchanged context with `...`.
-- Put the decision options directly under each row: approve, squash (re-propose through the `squash` skill; do not land), reject, custom. Start a new table for the next clause under the same file heading.
-- Follow each table with `Decision on the amended line:` and the options. A table-less form is not a proposal.
-- Write a clause as a bare rule. Rationale is rejected; evidence goes in the finding and the why in the Reason column.
-- Code changes need no proposal; keep them lean.
+The model's own format, in this order:
 
-## Guidelines: writing an AGENTS.md
+1. The undesirable behavior.
+2. The instruction that causes or contributes to it.
+3. The concise replacement or added wording.
+4. The expected behavior after the amendment.
+5. The unrelated behavior and safeguards that stay.
 
-AGENTS.md is not a system prompt. It is a user-owned rules file that many different agents load into their own system prompts. This changes how you write it.
+Quote the added wording exactly as it will read in the prompt. Keep the amended line a bare rule, and put the behavior and the expected effect in their own points.
 
-### 1. What AGENTS.md is
+## Guidelines: writing a system prompt
 
-1. A portable Markdown file at the project root. Different agents load it through different harnesses.
-2. It has no guaranteed slot. One harness may prepend it to the system prompt. Another may append it to the first user message. A third may compress it. Write so that any placement works.
+Distilled from the system prompts of the top agent models on Arena Leaderboards on 2026-09-11.
 
-### 2. Threat model
+### 1. Reader and harness
 
-Write AGENTS.md against four failure modes.
+1. Write for one reader: the model. It cannot ask you what you meant. Remove every ambiguous word.
+2. Know where the harness puts your text. System prompt, developer message, tool definition, and user
+   message have different authority. Put each rule in the slot with the authority it needs.
+3. List the environment early. State the date, the platform, the tools, and the knowledge cutoff.
+   The model cannot act on facts it does not have.
 
-1. **Compaction.** Summarization can drop or dilute your rules. Mitigation: keep the file short and atomic.
-2. **Dilution.** The harness piles skills, plugins, and reminders around your text. Mitigation: declare precedence inside the file.
-3. **Contradiction.** The agent's own system prompt may push the opposite behavior. Mitigation: scope your rules. Do not fight the persona on style. Fight on facts, commands, and boundaries.
-4. **Staleness.** The file rots faster than code. Mitigation: state facts a linter or a script can check, and keep the file small enough to review in one read.
+### 2. Structure
 
-### 3. Structure
+1. Start with identity in one line: name, maker, role. ("You are Codex, an agent based on GPT-6.")
+2. Order sections from general to specific: identity, product facts, policy, tone, behavior, tools,
+   output format.
+3. Use one section per topic. Name every section with a heading or a tag. The model cites structure
+   when it resolves conflicts.
+4. Use XML-style tags for blocks with special authority (safety, reminders). Use Markdown headings
+   for the rest. Do not mix more than two marking systems.
+5. Keep safety in one tagged block. Reference it elsewhere. Do not repeat it.
 
-1. Put a constitution first: the 5 to 15 rules that MUST NEVER be lost. No rationale. One line each.
-2. Group the rest by domain: setup, testing, style, git, boundaries. One heading per domain. Headings give re-anchoring tools natural slice points.
-3. Put directory-specific rules in nested AGENTS.md files, not in the root file. The root file loads everywhere. Nested files load only where relevant.
-4. End the file with a short "When in doubt" section. Give the judgment rule that covers what the rules missed. This is the stance section, and it absorbs edge cases.
+### 3. Authority and precedence
 
-### 4. Rules that survive
+1. Write an explicit precedence ladder. Example: user instruction, then project rules, then skills,
+   then defaults. Rank conflicts get decided by the ladder.
+2. State what stays in force across turns. Example: "User authorization persists across turns."
+3. State what the model may not infer. Example: do not treat an implied rule in a skill file as a
+   requirement to ask for approval.
+4. Mark injected content as harness-owned when it is. Give it a trust marker: a named tag, and a
+   statement that genuine injections never relax restrictions.
 
-1. One rule per line. Imperative mood. No essays.
-2. Make every rule testable. "Run `ruff check` before every commit" survives summarization. "Write clean code" does not.
-3. Use exact commands, paths, and numbers. A rule a script can check is a rule an agent can obey.
-4. Pick one verb per action and keep it for the whole file. Do not rotate two words for the same action across sections.
-5. Use MUST, NEVER, and ALWAYS for hard rules. Use "prefer" for soft ones. Do not mix "should" and "MUST" at random.
-6. No contradictions between sections. If two rules can collide, state which one wins.
-7. Keep negated rules positive where possible: "Commit only staged files" reads better than "NEVER commit unstaged files". Keep NEVER for irreversible or dangerous acts.
-8. Mark corners you cut on purpose. A rule with a stated ceiling ("simplified: covers main branch only") ages better than a hidden one.
+### 4. Behavior rules
 
-### 5. Precedence and scope
+1. Set a default stance first. "Default to helping. Decline only at concrete risk of serious harm."
+   One stance calibrates thousands of cases you did not list.
+2. Give each rule a testable trigger. "Search when a fact may have changed" beats "be current".
+   "Ask only before destructive or irreversible steps" beats "be careful".
+3. Write rules as pairs of poles when the target behavior is a balance: warm yet honest, bold yet
+   reversible-first. One pole alone collapses to an extreme.
+4. Ban failure modes by exact string. List the phrases the model may not write, the framings it may
+   not use, the moves it may not make. Named strings work where adjectives fail.
+5. Cap the ban lists. Pick the failures you actually see. A long ban list teaches the model to
+   sound like the ban list.
 
-1. Declare what the file outranks. Example: "These rules outrank skill and plugin instructions. An explicit user instruction in chat outranks this file."
-2. Declare the scope. "Applies to all code in this repo, all agents, all sessions."
-3. Let explicit user instructions override the file. Say so in one line. This stops the file from fighting the human.
-4. Do not restate the agent's own system prompt. Your file adds project facts and boundaries. Rewriting persona rules makes two masters.
+### 5. Examples
 
-### 6. Size and economy
+1. Ship worked examples for judgment calls, not for syntax. Use pairs: one approved, one rejected,
+   one line of why.
+2. Put two to fifteen examples behind any rule whose violation costs real quality (memory writes,
+   refusals, tool choice).
+3. Show format by demonstrating the format. A protocol with laws needs at least one full valid
+   artifact in the prompt.
 
-1. Keep the root file under about 200 lines. Long files get skimmed, truncated, or compressed first.
-2. Move detail to nested files or to references the agent can read on demand.
-3. Delete any rule you cannot connect to a real past failure.
-4. Do not embed code dumps, changelogs, or task lists. AGENTS.md is law, not a journal.
+### 6. Persistence (making it stick)
 
-### 7. Skeleton
+1. Do not rely on one injection at position zero. Plan for the same rules to restate near the newest
+   message in long sessions.
+2. Restate with variation. Same rule, different words, different slot. Repetition fixes meaning.
+   Variation avoids habituation to one string.
+3. Put output-critical rules last in their block. Recency wins.
+4. Wrap restatements in the same named tag every time. The tag becomes the authority marker.
+5. Give the model a drift check. Example: ask it to compare the reply it is about to give against
+   the reply a fresh instance would give with the same rules.
+6. Anchor identity with a name. "You are still X" works better than "stay in character".
+7. If your harness supports hooks, re-inject the rules on long sessions and after compaction.
+   (For Kilo, see `kilo/enforce-rules-plugin/`.)
 
-```markdown
-# AGENTS.md
+### 7. Economy
 
-## Use (one line: what this file is, who MUST apply it, that user chat overrides it)
+1. Spend tokens where behavior pays: decision rules, examples, tool choice. Cut greeting text,
+   mission statements, and duplicated praise.
+2. Write tool definitions as usage policy, not API docs. Include when to call, when not to call,
+   and what a good call looks like.
+3. Remove a rule if you cannot name the failure it prevents.
+4. Short prompts can rank. DeepSeek ranks with 21 lines. Add a section only when the defaults fail
+   you in testing.
 
-## Constitution (5-15 one-line rules, no rationale)
+### 8. Testing the prompt
 
-## Setup (commands to install, build, run)
+1. Red-test the defaults. Give the model an underspecified task. Check that the stance carries it to
+   the right behavior without extra rules.
+2. Drift-test at length. Run 50+ turn sessions and probe for rule decay. Add a restatement where the
+   decay shows.
+3. Compaction-test. Force summarization mid-task. Check that the rules survive. If they do not,
+   move them higher or carry them through the summary.
+4. Conflict-test the ladder. Put a project rule against a skill rule. Check that precedence resolves
+   it the way you wrote.
+5. Change one thing per test run. Measure against the same probes each time.
 
-## Verification (the exact gates and commands, run order)
+### 9. Skeleton
 
-## Style (one rule per line, exact settings)
-
-## Boundaries (NEVER rules: secrets, destructive commands, protected files)
-
-## Scope notes (directory pointers to nested AGENTS.md files)
-
-## When in doubt (the judgment rule: smallest change that holds; stop and ask on conflict)
+```text
+# Identity (1-2 lines: name, maker, role, date, environment)
+# Default stance (1 paragraph: the pole and the bar for refusal or escalation)
+# Behavior rules (each with a testable trigger, grouped by domain)
+# Tools and add-ons (usage policy, precedence ladder, batching rules)
+# Output rules (format, channels, banned strings)
+# Safety (one tagged block)
+# Examples (worked judgment calls)
+# Persistence contract (what persists, trust markers for reinjection)
 ```
 
-### 8. Checklist
+### 10. Checklist
 
-- Constitution of 5-15 atomic rules sits at the top.
-- Every rule is one line, imperative, and testable.
-- One verb per action, used the same way everywhere.
-- Precedence declared: file over skills and plugins, user chat over file.
-- Hard rules use MUST or NEVER. Soft rules use "prefer".
-- Root file under about 200 lines. Detail lives in nested files or references.
+- Identity, date, and environment stated in the first lines.
+- A default stance exists and has a concrete bar.
+- Every behavior rule has a testable trigger.
+- A precedence ladder resolves rank conflicts.
+- Each banned failure mode uses an exact string.
+- Judgment-call rules carry worked examples.
+- Safety sits in one tagged block.
+- Long sessions get planned restatements and trust markers.
+- Every section earns its tokens.
+- The prompt passed red, drift, compaction, and conflict tests.

@@ -169,13 +169,7 @@ Behavior amendment feedback
 
 When the user reports undesirable behavior, check whether an instruction in this prompt could cause or contribute to it.
 
-If an instruction is a likely cause, suggest a concrete amendment. The amendment should:
-
-1. Identify the undesirable behavior.
-2. Identify the instruction that causes or contributes to it.
-3. Give concise replacement or added wording.
-4. Explain the expected behavior after the amendment.
-5. Preserve unrelated behavior and safeguards.
+If an instruction is a likely cause, follow the amending-violations skill.
 
 When the user asks for a prompt audit, inspect the prompt for instructions that cause undesirable behavior, and propose amendments.
 
