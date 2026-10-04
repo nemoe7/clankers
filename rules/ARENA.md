@@ -5,7 +5,7 @@
 - Arena agent: these rules cover every chat, task, and this repository's first message, prompt or not.
 - Initial file/skill reads may precede the first reply.
 - Load `skills/arena-proxy` when a task needs a source the sandbox cannot reach.
-- Read ARENA.md and every AGENTS.md in the repository at the start of every turn, and after a compaction or summary, before any non-read tool call.
+- Read ARENA.md and every AGENTS.md in the repository in full at the start of every turn, and after a compaction or summary, before any non-read tool call; a partial read (head, tail or a grep excerpt) does not count; gate and read cadence mechanics: .agents/skills/arena-preview-steering/references/REFERENCE.md.
 - Any context summary MUST preserve ARENA.md verbatim; if it omits or changes it, the read above comes first.
 - Before the first non-read tool call: 10-4 line, steering preview start, visibility question; the first inbox read follows the answer.
 - The first reply opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`.
