@@ -71,7 +71,8 @@ function label(button, text) {
 
 function connectionLabel(state) {
   // A poll shows as the blue dot alone, so its text keeps the normal reading.
-  return state === 'down' ? 'Disconnected' : 'Connected';
+  if (state === 'down') return 'Disconnected';
+  return state === 'idle' ? 'No agent' : 'Connected';
 }
 function setConnection(state, text) {
   const dot = $('#connection-dot');
@@ -89,6 +90,17 @@ function scrollHistory(force) {
 // trailing Z is added back for the browser's parser.
 let pollSince = null;
 let connectionBase = 'Connecting…';
+// A turn that ends leaves the preview up. The agent's own calls are stamped in the state, so the
+// header can say no agent has spoken instead of showing a live connection to nobody.
+const AGENT_IDLE_MS = 180_000;
+let agentSeenAt = null;
+let agentSeenStamp = null;
+function agentIdle() {
+  return agentSeenAt !== null && Date.now() - agentSeenAt > AGENT_IDLE_MS;
+}
+function connectionText() {
+  return agentIdle() ? `No agent since ${time(agentSeenStamp)}` : connectionBase + pollSuffix();
+}
 function stampMs(value) {
   if (typeof value !== 'string') return null;
   const stamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value) ? `${value}Z` : value;
@@ -105,7 +117,10 @@ function pollSuffix() {
   return pollSince === null ? '' : ` · agent in poll ${duration(Date.now() - pollSince)}`;
 }
 function paintConnection() {
-  if (pollSince !== null) $('#connection-text').textContent = connectionBase + pollSuffix();
+  if (pollSince !== null) $('#connection-text').textContent = connectionText();
+  else if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
+    setConnection('idle', connectionText());
+  }
 }
 const chromeButton = $('#chrome');
 const composerButton = $('#composer-toggle');
@@ -571,8 +586,10 @@ async function refreshState() {
     const calls = state.calls_since_message || 0;
     const callsText = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'} since your last message` : '';
     pollSince = state.polling ? stampMs(state.polling_since) : null;
+    agentSeenAt = stampMs(state.agent_seen_at);
+    agentSeenStamp = state.agent_seen_at;
     connectionBase = saved + callsText;
-    setConnection(state.polling ? 'polling' : 'ok', connectionBase + pollSuffix());
+    setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
     if (state.rendering_error) {
       connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
       paintConnection();

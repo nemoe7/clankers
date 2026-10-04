@@ -34,6 +34,8 @@ Use this only after the owner selects the external channel. The owner supplies a
 
 Read the inbox at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. When ending a turn or a report form awaits answers, run `poll`. Co-issue a read inside each parallel block and read again after it returns; a block is the cadence unit. A count that changes inside a block is a read now, not at the next boundary: the reminder prints only a count, so a higher count means notes nobody has read. ALWAYS run `poll` on the bash call that ends the turn, chained or not. Between two reads, NEVER run a fourth bash call; a read MUST come before it. A blocking-only call needs its read after return. Initial discovery may precede the first read; startup MUST.
 
+Every CLI call stamps `agent_seen_at`. The preview header turns amber with `No agent since <time>` after three quiet minutes, so a preview left open after a turn says no agent has spoken.
+
 ## Tasks
 
 Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit; use a short kebab-case title. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.

@@ -103,6 +103,7 @@ small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13p
 .dot[data-state="ok"] { background: #22c55e; }
 .dot[data-state="down"] { background: #ef4444; }
 .dot[data-state="polling"] { background: #3b82f6; }
+.dot[data-state="idle"] { background: #f59e0b; }
 #connection, #last-check { margin-block: 0; padding-block: 0; }
 #history-title { margin: 0; }
 #form > div:first-child { margin-top: 0; padding-top: 0; }

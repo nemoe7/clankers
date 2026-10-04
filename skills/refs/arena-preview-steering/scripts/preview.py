@@ -150,6 +150,7 @@ POLLS_SINCE_MESSAGE = "polls_since_message"
 GATE_THRESHOLD = 20
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
+AGENT_SEEN_META = "agent_seen_at"
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -1426,6 +1427,8 @@ class Store:
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
         "agent_key": self.agent_key(),
+        # The header turns amber when this stamp ages, so a stale preview shows itself.
+        "agent_seen_at": clip_stamp(meta.get(AGENT_SEEN_META)),
       }
 
   def tasks(self):
@@ -2172,6 +2175,10 @@ class Store:
     """Record one meta value, replacing any previous one."""
     with closing(self.connect()) as db, db:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
+
+  def touch_agent(self):
+    """Stamp the agent's own call: the liveness signal the preview header reads."""
+    self.set_meta(AGENT_SEEN_META, now())
 
   def set_agent_key(self, key, host=None):
     """Record the key the userscript holds and the proxy host, with the stamp."""
@@ -3279,6 +3286,10 @@ def main():
       create=args.command in {"serve", "init", "import-state"},
     )
     print(store.reminder(), file=sys.stderr, flush=True)
+    if args.command != "serve":
+      # The agent's own CLI call is the debug-trap signal made durable: the header reads
+      # this stamp, so a preview left open after a turn says no agent has spoken.
+      store.touch_agent()
     if args.command == "serve":
       require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:

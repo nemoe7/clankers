@@ -907,6 +907,17 @@ test('preview client', async (t) => {
     state.polling_since = null;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-text').textContent, '3 messages saved');
+    // A turn that ends leaves the preview up; the stamp of the agent's own calls turns the dot
+    // amber, so the owner reads a stale preview instead of a live connection to nobody.
+    state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'idle');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
+    assert.match(get('#connection-text').textContent, /^No agent since /);
+    state.agent_seen_at = new Date().toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'ok');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     // The header names the bash calls since the owner's last message, singular and plural.
     state.calls_since_message = 94;
     await get('#refresh-notes').events.click(); await tick();

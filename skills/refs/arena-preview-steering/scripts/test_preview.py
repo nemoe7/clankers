@@ -3858,3 +3858,27 @@ def test_key_command_reads_the_recorded_key():
     # The command needs no server, so a restore reads it before the preview starts.
     store.set_meta(preview.AGENT_KEY_META, "not json")
     assert run().returncode == 1
+
+
+def test_agent_seen_at_is_stamped_by_the_cli():
+  """Every agent CLI call stamps the liveness the preview header reads."""
+  with tempfile.TemporaryDirectory() as state_dir:
+    script = str(Path(preview.__file__))
+    store = preview.Store(state_dir, create=True)
+    store.set_agent_key("stamp-check-0123456789abcdef", "https://h.example")
+    result = subprocess.run(
+      [sys.executable, script, "key"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": state_dir},
+    )
+    assert result.returncode == 0
+    store = preview.Store(state_dir)
+    stamp = store.state()["agent_seen_at"]
+    assert isinstance(stamp, str) and stamp.count(":") == 2
+    # A state that never saw an agent says so, so the header accuses nobody.
+    assert preview.Store(state_dir).meta_value(preview.AGENT_SEEN_META)
+    empty = preview.Store(str(Path(state_dir) / "unseen"), create=True)
+    assert empty.touch_agent() is None
+    assert empty.state()["agent_seen_at"]
