@@ -21,6 +21,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### preview
+
+- **Copy state carries reports**: The copy button fetches `/api/report-sources`, so the clipboard carries the report sources with the notes, tasks and answers. A restore rebuilds the report pages from either the copy or the save file.
+
 #### skills
 
 - **Push guard**: The push checkpoint refuses a push whose HEAD tree equals `origin/main`. Such a push leaves the pull request without a diff, and GitHub closes it.
