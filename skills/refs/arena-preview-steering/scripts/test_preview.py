@@ -594,6 +594,19 @@ def test_http_boundaries():
       # fields as the save file.
       status, _, sources = request("GET", "/api/report-sources")
       assert status == 200
+      # One route hands the page the whole save file in one piece, so the copy button
+      # copies the server's export instead of assembling three routes.
+      status, _, copy_state = request("GET", "/api/copy-state")
+      assert status == 200
+      copy_payload = json.loads(copy_state)
+      assert copy_payload["text"] == store.save_path.read_text(encoding="utf-8"), (
+        "the copy route returns the save-file text"
+      )
+      assert copy_payload["counts"]["reports"] >= 1
+      assert copy_payload["counts"]["notes"] == len(store.state()["notes"])
+      assert sum(
+        copy_payload["counts"][key] for key in ("notes", "tasks", "answers", "reports")
+      ) == (len(copy_payload["text"].splitlines()))
       lines = json.loads(sources)
       assert "first" in [line["id"] for line in lines]
       first = next(line for line in lines if line["id"] == "first")

@@ -601,6 +601,11 @@ def saved_report_line(record):
   return {key: record.get(key) for key in REPORT_LINE_KEYS}
 
 
+def state_ndjson(lines):
+  """Return one JSON line per record, with one trailing newline: the save-file text."""
+  return "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines)
+
+
 def saved_task_line(record):
   """Return the keys a saved task line carries; details keep their list shape."""
   if not isinstance(record, dict):
@@ -1752,28 +1757,17 @@ class Store:
     except Exception as error:
       print(f"preview: autosave failed: {error}", file=sys.stderr)
 
-  def save_state(self, payload):
-    """Write the current state to the save file, in the shape the importer reads.
+  def state_lines(self, notes, tasks):
+    """Return the save-file lines and their counts for one state snapshot.
 
-    Autosave calls this after every committed mutation, so the file follows the database with no
-    button press. The page copies its own state to the clipboard instead of posting it.
-    Note lines keep their receipts, read stamps and task markers, because a restore that drops any
+    Notes carry their receipts, read stamps and task markers, because a restore that drops any
     of them is the failure this exists to prevent; task lines keep their status and order, so the
     queue comes back in the same shape. Answer lines come from the database rather than from the
     page, because the owner's report answers are stored here the moment they are sent, and an
     answer that a restore drops is an answer the owner has to type again. Report lines carry
     each report's markdown, so a restore that rebuilds the database brings the report pages
     back instead of leaving the answers without their reports.
-
-    The file lands inside the state directory unless a path overrides it, so one
-    globally ignored directory carries the database and its export together.
     """
-    if not isinstance(payload, dict):
-      raise TypeError("Save a state object")
-    notes = payload.get("notes")
-    tasks = payload.get("tasks")
-    if tasks is None:
-      tasks = {}
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
     lines = [saved_note_line(record) for record in notes]
@@ -1784,20 +1778,34 @@ class Store:
     lines.extend(answers)
     reports = [saved_report_line(record) for record in self.report_sources()]
     lines.extend(reports)
-    path = self.save_path
-    if path.parent != Path("."):
-      path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-      "".join(json.dumps(line, ensure_ascii=False) + "\n" for line in lines),
-      encoding="utf-8",
-    )
-    return {
-      "path": str(path),
+    return lines, {
       "notes": len(notes),
       "tasks": len(lines) - len(notes) - len(answers) - len(reports),
       "answers": len(answers),
       "reports": len(reports),
     }
+
+  def save_state(self, payload):
+    """Write the current state to the save file, in the shape the importer reads.
+
+    Autosave calls this after every committed mutation, so the file follows the database with no
+    button press. The page copies the same text from `/api/copy-state`; it posts nothing.
+
+    The file lands inside the state directory unless a path overrides it, so one
+    globally ignored directory carries the database and its export together.
+    """
+    if not isinstance(payload, dict):
+      raise TypeError("Save a state object")
+    notes = payload.get("notes")
+    tasks = payload.get("tasks")
+    if tasks is None:
+      tasks = {}
+    lines, counts = self.state_lines(notes, tasks)
+    path = self.save_path
+    if path.parent != Path("."):
+      path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(state_ndjson(lines), encoding="utf-8")
+    return {"path": str(path), **counts}
 
   def uploads(self):
     """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
@@ -3038,6 +3046,18 @@ def handler(store):
                 if record["report_id"] in live
               ],
               ensure_ascii=False,
+            ),
+            "application/json; charset=utf-8",
+          )
+          return
+        if path == "/api/copy-state":
+          # One request carries what the save file carries, so the copy button copies the
+          # server's own export instead of assembling notes, tasks, answers and reports.
+          lines, counts = store.state_lines(store.state()["notes"], store.tasks() or {})
+          self.reply(
+            200,
+            json.dumps(
+              {"text": state_ndjson(lines), "counts": counts}, ensure_ascii=False
             ),
             "application/json; charset=utf-8",
           )

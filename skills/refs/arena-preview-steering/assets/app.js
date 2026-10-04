@@ -986,6 +986,18 @@ function stateLines(state, answers = [], reports = []) {
   return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished, ...answers, ...reports];
 }
 copyStateButton.addEventListener('click', async () => {
+  // The server holds the same NDJSON the save file carries, so one fetch carries the copy.
+  // The cached assembly stays as the fallback for a server that does not answer the route.
+  let payload = null;
+  try { payload = await (await request('/api/copy-state')).json(); }
+  catch { payload = null; }
+  if (payload) {
+    await copyFrom(copyStateButton, payload.text, 'state');
+    const counts = payload.counts || {};
+    status.textContent = `Copied ${counts.notes} messages, ${counts.answers} answers, `
+      + `${counts.reports} reports and ${counts.tasks} tasks as NDJSON.`;
+    return;
+  }
   let cached = null;
   try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
   const state = cached && Array.isArray(cached.notes) ? restoreCopy(cached) : null;
@@ -999,8 +1011,6 @@ copyStateButton.addEventListener('click', async () => {
     catch { reports = null; }
   }
   // One JSON line per record is the save format accepted by `import-state`.
-  // The server supplies the answer lines for reports still in the tab, and the report
-  // lines with their sources, so the clipboard carries what the save file carries.
   const lines = state ? stateLines(state, answers || [], reports || []) : [];
   const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
   await copyFrom(copyStateButton, text, 'state');

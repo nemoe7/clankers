@@ -220,6 +220,7 @@ def saved_answer_line(record):
 def saved_report_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved report is an object')
 	return{key:record.get(key)for key in REPORT_LINE_KEYS}
+def state_ndjson(lines):return''.join(json.dumps(line,ensure_ascii=False)+'\n'for line in lines)
 def saved_task_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved task is an object')
 	line={key:record.get(key)for key in TASK_LINE_KEYS};line['details']=[str(item)for item in record.get('details')or[]];return line
@@ -561,17 +562,19 @@ class Store:
 	def autosave(self):
 		try:self.save_state({'notes':self.state()['notes'],'tasks':self.tasks()})
 		except Exception as error:print(f"preview: autosave failed: {error}",file=sys.stderr)
-	def save_state(self,payload):
-		if not isinstance(payload,dict):raise TypeError('Save a state object')
-		notes=payload.get('notes');tasks=payload.get('tasks')
-		if tasks is None:tasks={}
+	def state_lines(self,notes,tasks):
 		if not isinstance(notes,list)or not isinstance(tasks,dict):raise TypeError('Save a state object with notes and tasks')
 		lines=[saved_note_line(record)for record in notes]
 		for status in TASK_STATUSES:
 			for record in tasks.get(status)or[]:lines.append(saved_task_line(record))
-		answers=[saved_answer_line(record)for record in self.submissions()];lines.extend(answers);reports=[saved_report_line(record)for record in self.report_sources()];lines.extend(reports);path=self.save_path
+		answers=[saved_answer_line(record)for record in self.submissions()];lines.extend(answers);reports=[saved_report_line(record)for record in self.report_sources()];lines.extend(reports);return lines,{'notes':len(notes),'tasks':len(lines)-len(notes)-len(answers)-len(reports),'answers':len(answers),'reports':len(reports)}
+	def save_state(self,payload):
+		if not isinstance(payload,dict):raise TypeError('Save a state object')
+		notes=payload.get('notes');tasks=payload.get('tasks')
+		if tasks is None:tasks={}
+		lines,counts=self.state_lines(notes,tasks);path=self.save_path
 		if path.parent!=Path('.'):path.parent.mkdir(parents=True,exist_ok=True)
-		path.write_text(''.join(json.dumps(line,ensure_ascii=False)+'\n'for line in lines),encoding='utf-8');return{'path':str(path),'notes':len(notes),'tasks':len(lines)-len(notes)-len(answers)-len(reports),'answers':len(answers),'reports':len(reports)}
+		path.write_text(state_ndjson(lines),encoding='utf-8');return{'path':str(path),**counts}
 	def uploads(self):
 		with closing(self.connect())as db:rows=db.execute('SELECT * FROM uploads ORDER BY seq').fetchall()
 		return[upload_row(row,self.path.parent)for row in rows]
@@ -962,6 +965,7 @@ def handler(store):
 					except RuntimeError as error:state['rendering_error']=str(error)
 					self.reply(200,json.dumps(state,ensure_ascii=False));return
 				if path=='/api/submissions':live={report['id']for report in store.state()['reports']};self.reply(200,json.dumps([saved_answer_line(record)for record in store.submissions()if record['report_id']in live],ensure_ascii=False),'application/json; charset=utf-8');return
+				if path=='/api/copy-state':lines,counts=store.state_lines(store.state()['notes'],store.tasks()or{});self.reply(200,json.dumps({'text':state_ndjson(lines),'counts':counts},ensure_ascii=False),'application/json; charset=utf-8');return
 				if path=='/api/report-sources':self.reply(200,json.dumps([saved_report_line(record)for record in store.report_sources()],ensure_ascii=False),'application/json; charset=utf-8');return
 				upload=re.fullmatch('/api/uploads/([a-zA-Z0-9_-]{1,80})',path)
 				if upload:

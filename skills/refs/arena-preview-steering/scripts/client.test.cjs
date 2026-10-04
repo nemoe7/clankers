@@ -140,6 +140,30 @@ const context = {
     if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
     if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
     if (url === '/api/report-sources') return response(state.reportSources || []);
+    if (url === '/api/copy-state') {
+      // The route serves the save-file text and its counts; the harness projects the same keys.
+      if (state.copyStateFails) return response({ error: 'no route' }, false);
+      const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
+      const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked'];
+      const project = (record, keys) => {
+        const line = {};
+        for (const key of keys) line[key] = record[key] ?? null;
+        return line;
+      };
+      const tasks = state.tasks || {};
+      const taskLines = [...(tasks.upcoming || []), ...(tasks.finished || [])];
+      const lines = [
+        ...(state.notes || []).map(record => project(record, noteKeys)),
+        ...taskLines.map(record => project(record, taskKeys)),
+        ...(state.submissions || []),
+        ...(state.reportSources || []),
+      ];
+      return response({
+        text: lines.map(line => JSON.stringify(line)).join('\n') + '\n',
+        counts: { notes: (state.notes || []).length, tasks: taskLines.length,
+          answers: (state.submissions || []).length, reports: (state.reportSources || []).length },
+      });
+    }
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
       // A note send is the write the retry tests drive, now that no save route exists.
@@ -664,10 +688,13 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.equal(get('#tasks-finished').hidden, true);
     assert.equal(get('#tasks-current').hidden, true, 'no task list, no current div');
+    // The server route answers whatever the poll cached, so the copy needs no client cache.
     storage.delete(cacheKeyHere);
+    copied.length = 0;
     get('#copy-state').events.click();
     await tick();
-    assert.equal(get('#copy-state').title, 'There is no state to copy');
+    assert.equal(get('#copy-state').dataset.state, 'good', 'the server export needs no client cache');
+    assert.ok(copied.at(-1).endsWith('\n'), 'the copy stays NDJSON with one trailing newline');
 
     assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
     assert.equal(get('#notes-tab').focused, true);
@@ -1386,9 +1413,27 @@ test('preview client', async (t) => {
     copied.length = 0;
     stateCopyButton.events.click();
     await tick();
-    assert.equal(copied.length, 0, 'nothing is copied without a cache');
+    assert.equal(copied.length, 1, 'the server export copies without a client cache');
+    assert.match(get('#send-status').textContent,
+      /Copied \d+ messages, \d+ answers, \d+ reports and \d+ tasks as NDJSON\./);
+    // With the route down, the cached assembly is the fallback. The store retries once, so a
+    // failing route costs about a second per call.
+    state.copyStateFails = true;
+    storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
+    copied.length = 0;
+    stateCopyButton.events.click();
+    await new Promise(done => setTimeout(done, 1200));
+    await tick();
+    assert.equal(copied.length, 1, 'the fallback copies the cached assembly');
+    assert.ok(copied.at(-1).includes('saved'), 'the fallback carries the cached note');
+    storage.delete(cacheKey);
+    copied.length = 0;
+    stateCopyButton.events.click();
+    await new Promise(done => setTimeout(done, 1200));
+    await tick();
+    assert.equal(copied.length, 0, 'no route and no cache leaves nothing to copy');
     assert.match(get('#send-status').textContent, /Nothing cached to copy yet/);
-    assert.equal(stateCopyButton.dataset.state, 'bad');
+    delete state.copyStateFails;
   });
 
   await t.test("A page outlives the server that served it", async () => {
