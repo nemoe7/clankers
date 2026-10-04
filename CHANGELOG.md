@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Push guard**: The push checkpoint refuses a push whose HEAD tree equals `origin/main`. Such a push leaves the pull request without a diff, and GitHub closes it.
 - **Poll return**: A poll that returns for an unblocked task names the task on stderr, so the turn continues it.
+- **Post key now**: A fourth proxy menu command posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one. Version 1.2.7.
 
 #### arena
 
