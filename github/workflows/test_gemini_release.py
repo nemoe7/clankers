@@ -101,6 +101,7 @@ def test_release_pipeline():
     ):
       fails(lambda: release.current_base("owner/repo", target), "notes are invalid")
     fails(lambda: release.baseline(rows, "v2", target, "absent"), "no published")
+    # One item per commit: its message and its diff, or the message alone.
     units = release.history(target, root)
     all_units = release.history(target, "")
     text = "\n".join(value for _, value in units)
@@ -110,38 +111,56 @@ def test_release_pipeline():
       and "Binary files" in text
       and "GIT binary patch" not in text
     )
-    assert root + ":message" not in dict(units)
-    assert root + ":message" in dict(all_units)
-    assert len([key for key, _ in units if key.startswith(target + ":parent:")]) == 2
+    ids = [key for key, _ in units]
+    assert target in ids and root not in ids
+    assert root in [key for key, _ in all_units]
+    # The merge commit carries one diff per parent inside its single item.
+    assert dict(units)[target].count("diff --git") > 1
     messages = release.history(target, root, "commits")
-    assert [key.split(":")[1] for key, _ in messages] == ["message"] * len(messages)
-    assert dict(messages)[target + ":message"] == dict(units)[target + ":message"]
+    assert [key for key, _ in messages] == ids
+    assert "diff --git" not in dict(messages)[target]
     fails(lambda: release.history(target, root, "everything"), "Invalid evidence input")
 
-    # An item that does not fit is halved on text until every piece fits the ceiling.
+    # An oversized evidence list is cut in half until every part fits the ceiling.
     def text_size(model, request):
       payload = json.loads(request["contents"][0]["parts"][0]["text"])
       return sum(len(item["text"]) for item in payload["evidence"])
 
+    with patch.object(release, "input_tokens", text_size):
+      items = [{"id": str(n), "text": "x" * 40} for n in range(8)]
+      cover = {item["id"]: [item["id"]] for item in items}
+      parts = release.split_group(items, {}, "test", 100, cover)
+    assert [[piece["id"] for piece in part] for part in parts] == [
+      ["0", "1"],
+      ["2", "3"],
+      ["4", "5"],
+      ["6", "7"],
+    ]
+    with patch.object(release, "input_tokens", text_size):
+      groups = release.grouped(items, {}, "test", cover, 100)
+    assert len(groups) == 4
+    # One item's text halves only as a last resort, because a single item barely
+    # reaches the ceiling.
     with (
       patch.object(release, "input_tokens", text_size),
       patch.object(release, "summary") as split_log,
     ):
-      halved = release.fitting_items(
-        {"id": "big", "text": "x" * 80}, {}, "test", 20, {"big": ["big"]}
+      halved = release.split_group(
+        [{"id": "big", "text": "x" * 80}], {}, "test", 20, {"big": ["big"]}
       )
-    assert any("split in half" in call.args[0] for call in split_log.call_args_list)
-    assert [piece["id"] for piece in halved] == [
+    assert any(
+      "splitting its text" in call.args[0] for call in split_log.call_args_list
+    )
+    assert [part[0]["id"] for part in halved] == [
       "big:1/2:1/2",
       "big:1/2:2/2",
       "big:2/2:1/2",
       "big:2/2:2/2",
     ]
-    assert "".join(piece["text"] for piece in halved) == "x" * 80
     with patch.object(release, "input_tokens", text_size):
       fails(
-        lambda: release.fitting_items(
-          {"id": "one", "text": "x"}, {}, "test", 0, {"one": ["one"]}
+        lambda: release.split_group(
+          [{"id": "one", "text": "x"}], {}, "test", 0, {"one": ["one"]}
         ),
         "cannot fit the token ceiling",
       )

@@ -282,23 +282,23 @@ def history(target, base, evidence=EVIDENCE_KINDS[0]):
   commits = git("rev-list", "--reverse", "--topo-order", revision).splitlines()
   units = []
   for sha in commits:
-    parents = git("rev-list", "--parents", "-n", "1", sha).split()[1:]
-    units.append((f"{sha}:message", git("show", "-s", "--format=fuller", sha)))
-    if evidence == "commits":
-      continue
-    for parent in parents or [""]:
-      args = [
-        "diff-tree",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--no-color",
-        "--full-index",
-        "--no-commit-id",
-        "-r",
-        "-p",
-      ]
-      args += [parent, sha] if parent else ["--root", sha]
-      units.append((f"{sha}:parent:{parent or 'root'}", git(*args)))
+    parts = [git("show", "-s", "--format=fuller", sha)]
+    if evidence != "commits":
+      parents = git("rev-list", "--parents", "-n", "1", sha).split()[1:]
+      for parent in parents or [""]:
+        args = [
+          "diff-tree",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--no-color",
+          "--full-index",
+          "--no-commit-id",
+          "-r",
+          "-p",
+        ]
+        args += [parent, sha] if parent else ["--root", sha]
+        parts.append(git(*args))
+    units.append((sha, "\n\n".join(parts)))
   return units
 
 
@@ -351,17 +351,23 @@ def measured(model, request):
   return TOKEN_COUNTS[key]
 
 
-def fitting_items(item, context, model, ceiling, cover):
-  """Split one item in half until each part fits the ceiling, then return the parts."""
-  tokens = measured(model, request_for(context, [item]))
-  if tokens <= ceiling:
-    return [item]
+def split_group(items, context, model, ceiling, cover):
+  """Cut an oversized evidence list in half until every part fits the ceiling."""
+  if measured(model, request_for(context, items)) <= ceiling:
+    return [items]
+  if len(items) > 1:
+    middle = len(items) // 2
+    return split_group(items[:middle], context, model, ceiling, cover) + split_group(
+      items[middle:], context, model, ceiling, cover
+    )
+  item = items[0]
   text = item["text"]
   if len(text) < 2:
     raise RuntimeError("One evidence item cannot fit the token ceiling")
+  tokens = measured(model, request_for(context, items))
   summary(
     f"  evidence item {item['id']} is {tokens:,} input tokens over the "
-    f"{ceiling:,} ceiling; split in half"
+    f"{ceiling:,} ceiling; splitting its text in half"
   )
   middle = len(text) // 2
   halves = []
@@ -369,29 +375,32 @@ def fitting_items(item, context, model, ceiling, cover):
     half = {"id": f"{item['id']}:{index + 1}/2", "text": part}
     cover[half["id"]] = cover[item["id"]]
     halves.append(half)
-  return [
-    piece
-    for half in halves
-    for piece in fitting_items(half, context, model, ceiling, cover)
-  ]
+  return split_group([halves[0]], context, model, ceiling, cover) + split_group(
+    [halves[1]], context, model, ceiling, cover
+  )
 
 
 def grouped(items, context, model, cover, ceiling=None):
-  """Pack items into requests under the token ceiling, splitting what does not fit."""
+  """Pack the evidence into requests under the token ceiling.
+
+  The list bisection proves that every piece fits; the greedy pass over the pieces
+  then fills each request, so the request count stays the smallest one.
+  """
   ceiling = CHUNK_TOKENS if ceiling is None else ceiling
-  atomic = [
+  pieces = [
     piece
-    for item in items
-    for piece in fitting_items(item, context, model, ceiling, cover)
+    for part in split_group(items, context, model, ceiling, cover)
+    for piece in part
   ]
-  group = []
-  for item in atomic:
-    if group and measured(model, request_for(context, group + [item])) > ceiling:
-      yield group
+  packed, group = [], []
+  for piece in pieces:
+    if group and measured(model, request_for(context, group + [piece])) > ceiling:
+      packed.append(group)
       group = []
-    group.append(item)
+    group.append(piece)
   if group:
-    yield group
+    packed.append(group)
+  return packed
 
 
 def short_error(detail):
@@ -573,7 +582,7 @@ def round_requests(items, context, phase, model, cover):
     summary(f"  {phase} payload is {tokens:,} input tokens; one request")
     return whole, [items]
   chunked = {**context, "phase": "chunk" if phase == "release" else phase}
-  groups = list(grouped(items, chunked, model, cover))
+  groups = grouped(items, chunked, model, cover)
   summary(
     f"  {phase} payload is {tokens:,} input tokens over the {CHUNK_TOKENS:,} ceiling;"
     f" packed into {len(groups)} request(s)"
