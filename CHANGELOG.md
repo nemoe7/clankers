@@ -16,6 +16,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### workflows
 
+- **Diff evidence**: The Gemini release runner keeps one diff per commit. One base-to-target diff cuts the input tokens by 14% to 54%, and the owner keeps the per-commit diffs for attribution.
 - **Gemini token packing**: The runner counts every payload with the Count Tokens API and packs chunks under 230,000 input tokens. A model that answers or spends its tokens cools down for 60 seconds plus 5 seconds of safety. The next request starts at the highest ready rung.
 
 ### Added

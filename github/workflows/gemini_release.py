@@ -360,8 +360,8 @@ def fitting_items(item, context, model, ceiling, cover):
   if len(text) < 2:
     raise RuntimeError("One evidence item cannot fit the token ceiling")
   summary(
-    f"  {item['id']} is {tokens:,} input tokens over the {ceiling:,} ceiling; "
-    "split in half"
+    f"  evidence item {item['id']} is {tokens:,} input tokens over the "
+    f"{ceiling:,} ceiling; split in half"
   )
   middle = len(text) // 2
   halves = []
