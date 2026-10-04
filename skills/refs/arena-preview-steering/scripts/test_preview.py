@@ -2891,6 +2891,9 @@ def test_bash_gate():
       capture_output=True,
       text=True,
       check=False,
+      # Run outside the checkout: the push guard asks the working directory, and this
+      # test covers the inbox gate alone. The push guard has its own test.
+      cwd=gate_dir,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert blocked.returncode == 1
@@ -2906,6 +2909,9 @@ def test_bash_gate():
       capture_output=True,
       text=True,
       check=False,
+      # Run outside the checkout: the push guard asks the working directory, and this
+      # test covers the inbox gate alone. The push guard has its own test.
+      cwd=gate_dir,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert cleared.returncode == 0
@@ -2918,6 +2924,7 @@ def test_bash_gate():
       capture_output=True,
       text=True,
       check=False,
+      cwd=gate_dir,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(Path(gate_dir) / "none")},
     )
     assert missing.returncode == 0, "no inbox means nothing to read"
@@ -2931,6 +2938,9 @@ def test_bash_gate():
       capture_output=True,
       text=True,
       check=False,
+      # Run outside the checkout: the push guard asks the working directory, and this
+      # test covers the inbox gate alone. The push guard has its own test.
+      cwd=gate_dir,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert pushed.returncode == 1
@@ -2945,6 +2955,9 @@ def test_bash_gate():
       capture_output=True,
       text=True,
       check=False,
+      # Run outside the checkout: the push guard asks the working directory, and this
+      # test covers the inbox gate alone. The push guard has its own test.
+      cwd=gate_dir,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert cleared_push.returncode == 0
@@ -3773,3 +3786,41 @@ def test_quiet_note_route():
     assert store.gate(pending_only=True) is True
     # The page still shows it.
     assert [note["id"] for note in store.state()["notes"]] == ["key-note"]
+
+
+def test_push_gate_identical_to_main():
+  """The push gate refuses a branch whose content already matches origin/main."""
+  with tempfile.TemporaryDirectory() as repo:
+
+    def git(*arguments):
+      return subprocess.run(
+        ["git", *arguments], cwd=repo, capture_output=True, text=True, check=False
+      )
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+    (Path(repo) / "file.txt").write_text("one\n", encoding="utf-8")
+    git("add", "file.txt")
+    git("commit", "-q", "-m", "first")
+    assert preview.main_identical(repo) is False, "no origin/main means no verdict"
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    assert preview.main_identical(repo) is True
+    (Path(repo) / "file.txt").write_text("two\n", encoding="utf-8")
+    git("add", "file.txt")
+    git("commit", "-q", "-m", "second")
+    assert preview.main_identical(repo) is False
+    git("reset", "--hard", "--quiet", "HEAD~1")
+    blocked = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "gate", "--push"],
+      cwd=repo,
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(Path(repo) / "arena-state")},
+    )
+    assert blocked.returncode == 1
+    assert blocked.stdout.strip() == (
+      "HEAD content equals `origin/main`, so the push carries nothing."
+      " Start new work from `origin/main`."
+    )

@@ -10,6 +10,7 @@ import secrets
 import shutil
 import socket
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -178,6 +179,27 @@ def meta_number(db, key):
   row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
   value = str(row[0]) if row else ""
   return int(value) if value.isdigit() else 0
+
+
+def main_identical(root="."):
+  """True when origin/main holds the tree at HEAD, so a push carries no change.
+
+  A rewritten main leaves the old branch commits ahead by ancestry while the content
+  matches, and that push leaves the pull request without a diff.
+  """
+
+  def git(*arguments):
+    return subprocess.run(
+      ["git", *arguments], cwd=root, capture_output=True, text=True, check=False
+    )
+
+  try:
+    for ref in ("origin/main", "HEAD"):
+      if git("rev-parse", "--verify", "--quiet", ref).returncode:
+        return False
+    return git("diff", "--quiet", "origin/main", "HEAD", "--").returncode == 0
+  except OSError:
+    return False
 
 
 def new_id():
@@ -3225,12 +3247,21 @@ def main():
       try:
         allowed = Store(state_dir).gate(pending_only=args.push)
       except FileNotFoundError:
-        return 0
+        allowed = True
       except Exception:
         return 2
       if not allowed:
         print(
           "READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`",
+          flush=True,
+        )
+        return 1
+      # A push whose content equals origin/main leaves the pull request without a diff,
+      # and GitHub then closes it. The checkpoint holds before any such push.
+      if args.push and main_identical():
+        print(
+          "HEAD content equals `origin/main`, so the push carries nothing."
+          " Start new work from `origin/main`.",
           flush=True,
         )
         return 1

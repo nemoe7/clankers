@@ -8,6 +8,7 @@ import secrets
 import shutil
 import socket
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -68,6 +69,13 @@ def reset_poll_count(db):
 	unacked=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0]
 	if unacked==1:db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 def meta_number(db,key):row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();value=str(row[0])if row else'';return int(value)if value.isdigit()else 0
+def main_identical(root='.'):
+	def git(*arguments):return subprocess.run(['git',*arguments],cwd=root,capture_output=True,text=True,check=False)
+	try:
+		for ref in('origin/main','HEAD'):
+			if git('rev-parse','--verify','--quiet',ref).returncode:return False
+		return git('diff','--quiet','origin/main','HEAD','--').returncode==0
+	except OSError:return False
 def new_id():hexed=uuid.uuid4().hex;return f"{hexed[:7]}-{hexed[7:]}"
 def seconds_since(value):
 	if not value:return None
@@ -995,9 +1003,10 @@ def main():
 		if not args.command:parser.error('a command is required')
 		if args.command=='gate':
 			try:allowed=Store(state_dir).gate(pending_only=args.push)
-			except FileNotFoundError:return 0
+			except FileNotFoundError:allowed=True
 			except Exception:return 2
 			if not allowed:print('READ INBOX NOW WITH `arena-preview read`, THEN ACK EVERY NOTE WITH `arena-preview ack <id>`',flush=True);return 1
+			if args.push and main_identical():print('HEAD content equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
 			return 0
 		store=Store(state_dir,create=args.command in{'serve','init','import-state'});print(store.reminder(),file=sys.stderr,flush=True)
 		if args.command=='serve':
