@@ -288,6 +288,26 @@ def test_release_pipeline():
   ):
     release.release_body([("one", "x" * 10)], {}, "test", phased)
   assert "release" in phases
+  # The reduction is done once per run: the raw commits go into the chunk rounds
+  # a single time, and the returned summaries serve the later requests.
+  chunk_phases, chunk_ids = [], []
+
+  def chunker(context, evidence, model):
+    chunk_phases.append(context.get("phase", "release"))
+    chunk_ids.extend(item["id"] for item in evidence)
+    return "summary"
+
+  with (
+    patch.object(release, "measured", by_size),
+    patch.object(release, "CHUNK_TOKENS", 350),
+    patch.object(release, "summary"),
+  ):
+    reduced = release.prepared(
+      [(str(n), "x" * 100) for n in range(8)], {}, "test", chunker
+    )
+  assert chunk_phases == ["chunk", "chunk", "chunk"]
+  assert chunk_ids == [str(n) for n in range(8)]
+  assert [item["id"] for item in reduced] == ["summary:0", "summary:1", "summary:2"]
   selected_models = []
 
   def tracked(context, evidence, model, on_success):
@@ -792,6 +812,7 @@ def test_release_pipeline():
     patch.object(release, "history", return_value=[("id", "diff")]),
     patch.object(release, "releases", return_value=[]),
     patch.object(release, "remote_ref", return_value=None),
+    patch.object(release, "measured", lambda model, request: 10),
     patch.object(release, "release_body", return_value=empty_feature_body) as notes,
     patch.object(release, "summary"),
   ):
@@ -833,6 +854,49 @@ def test_release_pipeline():
     assert "previous_release_notes" not in version_context[0]
     stored = json.loads(Path(directory, "proposal.json").read_text())
     assert stored["baseline_release"] == baseline_record
+  # The proposal reduces the evidence once and hands the same summaries to the
+  # classification and the release body, so no phase re-chunks the raw commits.
+  shared = [{"id": "summary:0", "text": "combined"}]
+  prepared_units, classified_units, body_units = [], [], []
+
+  def prepared_spy(
+    units, context, model, generate_fn=release.generate, phase="evidence"
+  ):
+    prepared_units.append(list(units))
+    return shared
+
+  def classify_spy(units, context, model):
+    classified_units.append(list(units))
+    return "patch"
+
+  def body_spy(units, context, model, **options):
+    body_units.append(list(units))
+    return empty_feature_body
+
+  with (
+    tempfile.TemporaryDirectory() as directory,
+    patch.dict(
+      os.environ,
+      {
+        "PROPOSAL_PATH": str(Path(directory) / "proposal.json"),
+        "IMPACT_OVERRIDE": "auto",
+        "PROMOTE_TO_STABLE": "false",
+      },
+    ),
+    patch.object(release, "target_commit", return_value="a" * 40),
+    patch.object(release, "check_remote_target"),
+    patch.object(release, "current_base", return_value=("", "", None)),
+    patch.object(release, "history", return_value=[("id", "diff")]),
+    patch.object(release, "releases", return_value=[]),
+    patch.object(release, "remote_ref", return_value=None),
+    patch.object(release, "prepared", prepared_spy),
+    patch.object(release, "classify", classify_spy),
+    patch.object(release, "release_body", body_spy),
+  ):
+    release.propose("owner/repo", "main")
+  assert prepared_units == [[("id", "diff")]]
+  assert classified_units == [shared]
+  assert body_units == [shared]
   with patch.object(release, "release_body", return_value="minor"):
     assert release.classify([("id", "diff")], {}, "test") == "minor"
   with patch.object(release, "release_body", return_value="maybe minor"):

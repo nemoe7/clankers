@@ -115,6 +115,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Classifier prompt**: The version request uses the version prompt. The release phase stamp overrode the caller, so every classification answered with release notes.
 - **Chunk plan**: A packed round lists each chunk and its token count before the requests run.
 - **Classification retry**: An invalid classification answer retries on the next rung, one try per rung, and stops when the rungs run out.
+- **Single reduction**: The proposal run summarizes the evidence once. The version request and the release body read the same summaries, so a big release skips the second chunk pass.
 
 ## 2026-10-03
 
