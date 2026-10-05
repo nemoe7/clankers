@@ -3431,7 +3431,8 @@ def main():
       if not allowed:
         print(
           "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
-          " Then ack every note with `arena-preview ack <id>`.",
+          " Then ack every note with a bare `arena-preview ack <id> --reply <markdown>`"
+          " or `arena-preview ack <id> --note <text>` call, one call per note.",
           flush=True,
         )
         return 1

@@ -53,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Rotate log**: The rotation line prints the new agent key, as the start line does. The owner reads the key from the container log when no preview is at hand.
 - **Gate threshold**: The read gate blocks after ten calls while notes wait. The owner raised the number from three.
 - **Read exemption**: The gate exempts a command line only when every command on it is an inbox call or an inert prefix. A read beside work no longer exempts the work, so the work meets the gate. Quoted text is an argument, so a reply may span lines.
+- **Ack line in the gate message**: The blocked line names a bare `arena-preview ack <id>` call with its `--reply` and `--note` flags. Earlier the line named only the read.
   A redirect that sends the read to `/dev/null` ends the exemption too. `preview.py inbox-line` answers the question and `maintenance/test_preview_gate.py` covers it.
 - **Report sources in the save file**: `saved-state.ndjson` carries each report's markdown, and `import-state` rebuilds the report pages from it.
 - **Copy state from one route**: `/api/copy-state` returns the save-file text and its counts. The copy button copies that text in one fetch. The cached assembly stays as the fallback.
