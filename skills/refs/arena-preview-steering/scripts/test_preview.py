@@ -1889,8 +1889,23 @@ def test_download_queue():
       assert Path(saved["path"]).parent.name == "downloads"
       assert queue_store.state()["notes"][-1]["id"] == job["id"]
       assert request("POST", result_path, b"PK", headers)[0] == 409
-      Path(saved["path"]).unlink()
-      assert preview.Store(queue_store.path.parent).fetch_jobs()[0]["present"] is False
+      # The owner's X removes the record and the bytes it staged.
+      dropped = request("POST", f"/api/fetch-jobs/{job['id']}/drop", "{}", auth)
+      assert dropped[0] == 200 and json.loads(dropped[2])["dropped"] == job["id"]
+      assert all(item["id"] != job["id"] for item in queue_store.fetch_jobs())
+      assert not Path(saved["path"]).exists()
+      assert request("POST", f"/api/fetch-jobs/{job['id']}/drop", "{}", auth)[0] == 404
+      saved_again = queue_store.enqueue_fetch("https://example.org/again.zip", False)
+      claim_again = json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])[
+        "job"
+      ]
+      assert (
+        request("POST", f"/api/fetch-jobs/{saved_again['id']}/drop", "{}", auth)[0]
+        == 409
+      ), "an active download must not drop under its worker"
+      queue_store.fail_fetch(saved_again["id"], claim_again["claim"], "stopped")
+      Path(saved["path"]).unlink(missing_ok=True)
+      assert preview.Store(queue_store.path.parent).fetch_jobs()[-1]["present"] is False
       assert queue_store.state()["notes"][-1]["id"] == job["id"]
 
       # A proxy source needs that job's opt-in; failure and retry keep its URL and choice.

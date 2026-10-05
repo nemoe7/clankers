@@ -2086,6 +2086,24 @@ class Store:
       row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
     return fetch_row(row, self.path.parent)
 
+  def drop_fetch(self, job_id):
+    """Remove one download record and its staged bytes, on the owner's click."""
+    identifier(job_id)
+    with self.transaction(autosave=False) as db:
+      row = db.execute("SELECT * FROM fetch_jobs WHERE id = ?", (job_id,)).fetchone()
+      if row is None:
+        raise FileNotFoundError("No download with that ID")
+      if row["status"] in {"queued", "fetching"} and row["claim"]:
+        raise FetchChanged("This download is active in a browser")
+      db.execute("DELETE FROM fetch_jobs WHERE id = ?", (job_id,))
+      if row["file"]:
+        target = self.path.parent / "downloads" / row["file"]
+        try:
+          target.unlink()
+        except FileNotFoundError:
+          pass
+    return {"dropped": job_id}
+
   def retry_fetch(self, job_id):
     identifier(job_id)
     with self.transaction(autosave=False) as db:
@@ -3102,7 +3120,7 @@ def handler(store):
         r"/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish", path
       )
       fetch_post = re.fullmatch(
-        r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)",
+        r"/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)",
         path,
       )
       note_upload = path == "/api/notes/with-file"
@@ -3247,6 +3265,8 @@ def handler(store):
             record = store.decide_fetch(
               job_id, "approved" if action == "approve" else "denied"
             )
+          elif action == "drop":
+            record = store.drop_fetch(job_id)
           else:
             record = store.retry_fetch(job_id)
           self.reply(200, json.dumps(record, ensure_ascii=False))

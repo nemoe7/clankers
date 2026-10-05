@@ -668,6 +668,18 @@ class Store:
 		message=str(error).strip()[:1000]or'The browser could not fetch this URL'
 		with self.transaction(autosave=False)as db:self.claimed_fetch(db,job_id,claim);db.execute("UPDATE fetch_jobs SET status = 'failed', error = ?, claim = NULL, lease_until = NULL, updated_at = ? WHERE id = ?",(message,now(),job_id));row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
 		return fetch_row(row,self.path.parent)
+	def drop_fetch(self,job_id):
+		identifier(job_id)
+		with self.transaction(autosave=False)as db:
+			row=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
+			if row is None:raise FileNotFoundError('No download with that ID')
+			if row['status']in{'queued','fetching'}and row['claim']:raise FetchChanged('This download is active in a browser')
+			db.execute('DELETE FROM fetch_jobs WHERE id = ?',(job_id,))
+			if row['file']:
+				target=self.path.parent/'downloads'/row['file']
+				try:target.unlink()
+				except FileNotFoundError:pass
+		return{'dropped':job_id}
 	def retry_fetch(self,job_id):
 		identifier(job_id)
 		with self.transaction(autosave=False)as db:
@@ -971,7 +983,7 @@ def handler(store):
 			except FileNotFoundError as error:self.problem(404,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 		def do_POST(self):
-			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny)',path);note_upload=path=='/api/notes/with-file';agent_key_post=path=='/api/key';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
+			path=urlsplit(self.path).path;report_submit=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/submit',path);report_seen=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/seen',path);message_replies_seen=re.fullmatch('/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen',path);report_unpublish=re.fullmatch('/api/reports/([a-zA-Z0-9_-]{1,80})/unpublish',path);fetch_post=re.fullmatch('/api/fetch-jobs/([a-zA-Z0-9_-]{1,80})/(renew|result|fail|retry|approve|deny|drop)',path);note_upload=path=='/api/notes/with-file';agent_key_post=path=='/api/key';fetch_result=bool(fetch_post and fetch_post.group(2)=='result')
 			if path not in{'/api/notes','/api/markdown','/api/fetch-jobs','/api/fetch-jobs/claim'}and not report_submit and not report_seen and not message_replies_seen and not report_unpublish and not note_upload and not fetch_post and not agent_key_post:self.problem(404,'Not found');return
 			content_type=self.headers.get('Content-Type','')
 			if note_upload:
@@ -1020,6 +1032,7 @@ def handler(store):
 					if action=='renew':record=store.renew_fetch(job_id,self.headers.get('X-Fetch-Claim',''))
 					elif action=='fail':record=store.fail_fetch(job_id,self.headers.get('X-Fetch-Claim',''),payload.get('error',''))
 					elif action in{'approve','deny'}:record=store.decide_fetch(job_id,'approved'if action=='approve'else'denied')
+					elif action=='drop':record=store.drop_fetch(job_id)
 					else:record=store.retry_fetch(job_id)
 					self.reply(200,json.dumps(record,ensure_ascii=False));return
 				if path=='/api/markdown':self.reply(200,render(owner_text(payload.get('text')),breaks=True),'text/html; charset=utf-8');return

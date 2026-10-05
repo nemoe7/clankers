@@ -110,6 +110,7 @@ class FormDataStub {
   getAll(name) { return this.fields.get(name) || []; }
 }
 const queuedCalls = [];
+const dropped = [];
 const remoteCalls = [];
 const remoteBehaviors = new Map();
 const resultCalls = [];
@@ -235,6 +236,11 @@ const context = {
         record.approval = action === 'approve' ? 'approved' : 'denied';
         if (action === 'deny') { record.status = 'failed'; record.error = 'Denied in the preview'; }
         return response(record);
+      }
+      if (action === 'drop') {
+        dropped.push({ url, id });
+        state.fetch_jobs = state.fetch_jobs.filter(item => item.id !== id);
+        return response({ dropped: id });
       }
       if (action === 'result') {
         resultCalls.push({ url, body: options.body, source: options.headers['X-Fetch-Source'] });
@@ -1943,9 +1949,18 @@ test('preview client', async (t) => {
     assert.match(state.fetch_jobs[0].error, /CodeTabs: Proxy down/);
     remoteBehaviors.set(chain, { chunks: [Uint8Array.from([1])] });
     retryRow = get('#fetch-list').children.find(item => item.children[0].textContent === chain);
-    await retryRow.children.at(-1).events.click();
+    await retryRow.children.find(item => item.textContent === 'Retry same URL').events.click();
     await waitFor(() => state.fetch_jobs.find(item => item.url === chain)?.status === 'saved');
     assert.equal(queuedCalls.length, 3, 'retry reuses the same SQLite job');
+
+    // The owner's X frees one saved row; the first click only arms it.
+    dropRow = get('#fetch-list').children.find(item => item.children[0].textContent === chain);
+    dropButton = dropRow.children.find(item => item.textContent === '✕');
+    await dropButton.events.click();
+    assert.equal(dropped.length, 0, 'the first click only arms the delete');
+    await dropButton.events.click();
+    assert.equal(dropped.length, 1);
+    assert.equal(state.fetch_jobs.some(item => item.url === chain), false, 'the row leaves the list');
 
     origin = 'https://files.example.org/fallback.zip';
     allOrigins = `https://api.allorigins.win/raw?url=${encodeURIComponent(origin)}`;

@@ -1481,6 +1481,37 @@ function downloadRow(item) {
       : 'The bytes are gone; the record survived a restore.';
     row.append(where);
   }
+  // The owner's ✕ drops a record and the bytes it staged. It arms on the first click the way
+  // the report delete does, so a stray click never removes a download.
+  if (item.approval !== 'pending') {
+    const drop = document.createElement('button');
+    drop.type = 'button';
+    drop.className = 'icon-button fetch-drop';
+    drop.textContent = '✕';
+    drop.setAttribute('aria-label', `Delete ${item.url}`);
+    drop.addEventListener('click', async () => {
+      if (drop.dataset.armed !== item.id) {
+        drop.dataset.armed = item.id;
+        drop.dataset.state = 'bad';
+        $('#fetch-status').textContent = `Delete ${item.url}? Click ✕ again to confirm.`;
+        setTimeout(() => {
+          if (drop.dataset.armed === item.id) { delete drop.dataset.armed; delete drop.dataset.state; }
+        }, 8000);
+        return;
+      }
+      delete drop.dataset.armed;
+      drop.disabled = true;
+      try {
+        await request(`/api/fetch-jobs/${item.id}/drop`, {
+          method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+        });
+        $('#fetch-status').textContent = `Deleted ${item.url}.`;
+        await refreshState();
+      } catch (failure) { $('#fetch-status').textContent = `Delete failed: ${failure.message}`; }
+      finally { drop.disabled = false; }
+    });
+    row.append(drop);
+  }
   return row;
 }
 function approvalRow(item) {
