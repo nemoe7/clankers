@@ -28,8 +28,7 @@ HIDDEN_ROUTES = ("/v1/rotate",)
 ROUTES = (
   "/v1/health",
   "/v1/ping",
-  "/v1/github",
-  "/v1/logs",
+  "/v1/gh",
   "/v1/fetch",
   "/v1/llm",
   "/v1/key",
@@ -130,10 +129,8 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       self._send_json(200, {"ok": True, "version": VERSION})
     elif route == "/v1/ping":
       self._ping()
-    elif route == "/v1/github":
-      self._github(params)
-    elif route == "/v1/logs":
-      self._logs(params)
+    elif route == "/v1/gh":
+      self._gh(params)
     elif route == "/v1/fetch":
       self._fetch(params)
     elif route == "/v1/llm":
@@ -219,7 +216,13 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       },
     )
 
-  def _github(self, params):
+  def _gh(self, params):
+    """Answer one api.github.com path, with the run-log tail folded in.
+
+    The caller sends the real API path in `path` and that path's own query beside it,
+    so no route mirrors the API. A path that ends `/actions/runs/<id>/logs` would
+    answer a zip archive the tool cannot read, so it answers the text tail instead.
+    """
     path = params.get("path", [""])[0].strip()
     if not path or "://" in path or path.startswith("/") or ".." in path.split("/"):
       self._send_json(
@@ -238,8 +241,27 @@ class ExtensionHandler(BaseHTTPRequestHandler):
         for value in values
       ]
     )
+    target = f"{path}" + (f"?{query}" if query else "")
+    if (
+      path.startswith("repos/") and path.endswith("/logs") and "/actions/runs/" in path
+    ):
+      status, body = github_api.request(
+        target,
+        self.server.token,
+        cap=transfers.DEFAULT_STAGE_CAP,
+        api=self.server.api,
+      )
+      if status != 200:
+        self._send(status, body)
+        return
+      tail = github_api.log_tail(body)
+      if tail is None:
+        self._send_json(502, {"error": "the log download was not a zip archive"})
+        return
+      self._send(200, tail.encode("utf-8"), "text/plain; charset=utf-8")
+      return
     status, body = github_api.request(
-      f"{path}" + (f"?{query}" if query else ""),
+      target,
       self.server.token,
       cap=API_CAP_BYTES,
       api=self.server.api,
@@ -254,34 +276,6 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       )
       return
     self._send(status, body)
-
-  def _logs(self, params):
-    run = params.get("run", [""])[0].strip()
-    repo = params.get("repo", [""])[0].strip() or self.server.repo
-    if not run.isdigit():
-      self._send_json(
-        400, {"error": "run must be a workflow run id", "example": "/v1/logs?run=123"}
-      )
-      return
-    if not github_api.valid_repo(repo):
-      self._send_json(
-        400, {"error": "repo must look like owner/name", "hint": "set ARENA_PROXY_REPO"}
-      )
-      return
-    status, body = github_api.request(
-      f"repos/{repo}/actions/runs/{run}/logs",
-      self.server.token,
-      cap=transfers.DEFAULT_STAGE_CAP,
-      api=self.server.api,
-    )
-    if status != 200:
-      self._send(status, body)
-      return
-    tail = github_api.log_tail(body)
-    if tail is None:
-      self._send_json(502, {"error": "the log download was not a zip archive"})
-      return
-    self._send(200, tail.encode("utf-8"), "text/plain; charset=utf-8")
 
   def _fetch(self, params):
     if "id" in params:

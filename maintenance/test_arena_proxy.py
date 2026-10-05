@@ -227,11 +227,11 @@ def test_header_key_and_ping_payload(tmp_path):
     )
 
 
-def test_github_forwards_path_query_and_token(tmp_path):
+def test_gh_forwards_path_query_and_token(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(
       handle.port,
-      f"/v1/github?key={KEY}&path=repos/o/r/code-scanning/alerts&state=open&per_page=5",
+      f"/v1/gh?key={KEY}&path=repos/o/r/code-scanning/alerts&state=open&per_page=5",
     )
     assert status == 200
     assert json.loads(body) == [{"number": 7}]
@@ -240,26 +240,29 @@ def test_github_forwards_path_query_and_token(tmp_path):
     assert "state=open" in sent["path"] and "per_page=5" in sent["path"]
 
 
-def test_github_rejects_an_absolute_path(tmp_path):
+def test_gh_rejects_an_absolute_path(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(
-      handle.port, f"/v1/github?key={KEY}&path=https://evil.example/steal"
+      handle.port, f"/v1/gh?key={KEY}&path=https://evil.example/steal"
     )
     assert status == 400
     assert "relative" in json.loads(body)["error"]
 
 
-def test_logs_route_returns_a_text_tail(tmp_path):
+def test_gh_folds_the_run_log_tail_into_the_route(tmp_path):
   with backend(tmp_path) as handle:
-    status, body = call(handle.port, f"/v1/logs?key={KEY}&run=1")
+    logs = f"/v1/gh?key={KEY}&path=repos/o/r/actions/runs/1/logs"
+    status, body = call(handle.port, logs)
     assert status == 200
     assert "1_Set up job.txt" in body and "test line two" in body
-
-
-def test_logs_route_validates_the_run_and_repo(tmp_path):
-  with backend(tmp_path) as handle:
-    assert call(handle.port, f"/v1/logs?key={KEY}&run=nope")[0] == 400
-    assert call(handle.port, f"/v1/logs?key={KEY}&run=1&repo=bad//repo")[0] == 400
+    # A path that is not a run log answers the API as it stands, so the tail stays folded in.
+    status, body = call(handle.port, f"/v1/gh?key={KEY}&path=repos/o/r/pulls/9")
+    assert status == 200 and "added line" in body
+    # A run log the token cannot reach answers the API status, not a tail.
+    assert (
+      call(handle.port, f"/v1/gh?key={KEY}&path=repos/o/r/actions/runs/2/logs")[0]
+      == 404
+    )
 
 
 def test_fetch_returns_text_for_text_bytes(tmp_path):
@@ -466,12 +469,10 @@ def test_rotation_line_names_the_new_key():
 
 
 def test_log_line_drops_the_query_string():
+  assert core.log_line("GET", "/v1/gh?key=SECRET&path=x", 200) == "GET /v1/gh -> 200"
   assert (
-    core.log_line("GET", "/v1/github?key=SECRET&path=x", 200) == "GET /v1/github -> 200"
-  )
-  assert (
-    core.log_line("GET", "/v1/github?key=SECRET", 200, "203.0.113.7")
-    == "GET /v1/github -> 200 from 203.0.113.7"
+    core.log_line("GET", "/v1/gh?key=SECRET", 200, "203.0.113.7")
+    == "GET /v1/gh -> 200 from 203.0.113.7"
   )
 
 

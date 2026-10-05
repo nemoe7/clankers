@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **One GitHub route**: The proxy replaces `/v1/github` and `/v1/logs` with `/v1/gh`.
+  The path parameter carries the real `api.github.com` path and its own query, and a run-log path answers the text tail.
 - **Push rule**: The push bullet measures the branch by tree, not commit count. A branch whose tree matches `origin/main` never pushes, even when it shows commits ahead.
 
 ### Changed
