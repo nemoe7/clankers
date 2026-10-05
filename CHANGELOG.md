@@ -117,6 +117,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Classification retry**: An invalid classification answer retries on the next rung, one try per rung, and stops when the rungs run out.
 - **Single reduction**: The proposal run summarizes the evidence once. The version request and the release body read the same summaries, so a big release skips the second chunk pass.
 - **Summary hand-off**: A ready summary item keeps its text. Unpacking it like a pair sent the literal keys to the version request, so the classifier answered review.
+- **Step log**: Every Count Tokens call prints, and a split names the two commits it falls between. The packing steps stay visible during a long round.
 
 ## 2026-10-03
 

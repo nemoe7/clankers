@@ -126,10 +126,26 @@ def test_release_pipeline():
       payload = json.loads(request["contents"][0]["parts"][0]["text"])
       return sum(len(item["text"]) for item in payload["evidence"])
 
-    with patch.object(release, "input_tokens", text_size):
+    # Every count prints, and a split names the two ids it falls between.
+    with (
+      patch.object(release, "input_tokens", text_size),
+      patch.object(release, "summary") as step_log,
+      patch.object(release, "TOKEN_COUNTS", {}),
+    ):
       items = [{"id": str(n), "text": "x" * 40} for n in range(8)]
       cover = {item["id"]: [item["id"]] for item in items}
       parts = release.split_group(items, {}, "test", 100, cover)
+    step_lines = [call.args[0] for call in step_log.call_args_list]
+    assert any(
+      "countTokens test: 8 evidence item(s) -> 320 tokens" in line
+      for line in step_lines
+    )
+    assert any(
+      "split 8 evidence item(s) between 3 and 4" in line for line in step_lines
+    )
+    assert any(
+      "countTokens test: 2 evidence item(s) -> 80 tokens" in line for line in step_lines
+    )
     assert [[piece["id"] for piece in part] for part in parts] == [
       ["0", "1"],
       ["2", "3"],

@@ -346,12 +346,22 @@ def input_tokens(model, request):
   return int(count["totalTokens"])
 
 
+def payload_evidence(request):
+  """The evidence a counted request carries, so a count line names its payload."""
+  return json.loads(request["contents"][0]["parts"][0]["text"])["evidence"]
+
+
 def measured(model, request):
   """A count per payload, memoized: packing must not re-count the same request."""
   model = first_rung(model)
   key = (model, hashlib.sha256(encoded(request)).hexdigest())
   if key not in TOKEN_COUNTS:
     TOKEN_COUNTS[key] = input_tokens(model, request)
+    # The count is the packing's unit of work, so every one of them prints.
+    summary(
+      f"  countTokens {model}: {len(payload_evidence(request))} evidence item(s)"
+      f" -> {TOKEN_COUNTS[key]:,} tokens"
+    )
   return TOKEN_COUNTS[key]
 
 
@@ -361,6 +371,11 @@ def split_group(items, context, model, ceiling, cover):
     return [items]
   if len(items) > 1:
     middle = len(items) // 2
+    # The cut prints the ids it falls between, so a split reads as a step.
+    summary(
+      f"  split {len(items)} evidence item(s) between "
+      f"{items[middle - 1]['id']} and {items[middle]['id']}"
+    )
     return split_group(items[:middle], context, model, ceiling, cover) + split_group(
       items[middle:], context, model, ceiling, cover
     )
