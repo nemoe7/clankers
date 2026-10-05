@@ -2188,4 +2188,18 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.equal(get('#agent-key').textContent, 'No key recorded.');
   });
+
+  await t.test('A quiet note informs the agent and stays out of the log', async () => {
+    state.notes = [
+      { id: 'loud', text: 'Owner-facing line', at: '2026-10-05T05:00:00' },
+      { id: 'murmur', text: 'The recorded agent key expired.', at: '2026-10-05T05:01:00', quiet: 1 },
+    ];
+    await get('#refresh-notes').events.click();
+    const texts = get('#history').children.map(node => node.children[0].textContent);
+    assert.deepEqual(texts, ['Owner-facing line'], 'the quiet note never renders');
+    assert.match(get('#connection-text').textContent, /^1 messages saved/, 'the tally counts the log');
+    // The copy state still carries it: the quiet note rides the cache, not the log.
+    const cached = JSON.parse(storage.get('arena-preview-v1:state-cache'));
+    assert.equal(cached.notes.length, 2, 'the cached state keeps the quiet note');
+  });
 });

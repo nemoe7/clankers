@@ -582,7 +582,10 @@ async function refreshState() {
     // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
     // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
     save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
-    const saved = state.notes.length ? `${state.notes.length} messages saved` : 'No messages yet';
+    // A quiet note informs the agent, not the log: it stays in the cache and the copy state
+    // while the log and its tally carry the owner-facing messages only.
+    const logNotes = state.notes.filter(item => !item.quiet);
+    const saved = logNotes.length ? `${logNotes.length} messages saved` : 'No messages yet';
     // The header carries the same tally the gate keeps, so the owner sees the call count
     // the stderr banner names without leaving the page.
     const calls = state.calls_since_message || 0;
@@ -597,7 +600,7 @@ async function refreshState() {
       paintConnection();
     }
     $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
-    showHistory(state.notes);
+    showHistory(logNotes);
     renderTasksIfChanged(state.tasks);
     renderFetchIfChanged(state.fetch_jobs || []);
     renderAgentKey(state.agent_key);

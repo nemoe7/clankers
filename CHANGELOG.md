@@ -90,6 +90,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Fixed
 
 #### preview
+- **Quiet notes out of the log**: A quiet note stays in the cached state and the copy file.
+  The log and its tally show the owner-facing messages only.
 
 - **Poll header**: A live poll heartbeat keeps the wait text in the header. Only an aged stamp with no poll reads as `No agent since <time>`.
 - **Report drafts**: An edit in a report form writes the answers at once, so a reload keeps the chosen options. A submit still replaces the record with the server's stamp.
