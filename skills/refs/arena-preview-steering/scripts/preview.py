@@ -2743,8 +2743,10 @@ class Store:
         raise FileNotFoundError("Report not found")
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       if dismissed_by_owner:
+        # A dismissal informs the agent without waking a poll: the agent looks, it is not
+        # roused for a report the owner already read.
         db.execute(
-          "INSERT INTO notes (id, text, at) VALUES (?, ?, ?)",
+          "INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)",
           (
             new_id(),
             f"The owner dismissed the report {report_id} ({row['title']}).",

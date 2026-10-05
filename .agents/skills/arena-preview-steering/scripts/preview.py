@@ -876,7 +876,7 @@ class Store:
 			row=db.execute('SELECT title FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
 			db.execute('DELETE FROM reports WHERE id = ?',(report_id,))
-			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at) VALUES (?, ?, ?)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
+			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 	def mark_report_seen(self,report_id):
 		identifier(report_id)
 		with self.transaction()as db:

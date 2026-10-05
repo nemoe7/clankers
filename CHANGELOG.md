@@ -45,6 +45,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Key expiry notice**: A recorded key older than the rotation window posts one quiet note.
   The note points at `arena-preview key` and names no key. A new post overwrites the record by itself.
+- **Quiet dismissal**: The report-dismissal note posts quiet. It informs a read without waking a poll.
 - **Terse status lines**: The downloads, reports, tasks and composer lines lose their extra prose.
   The files cap line opens with the size, and the key line joins the Enter to send row with only the key characters in monospace.
 - **Download removal**: The Downloads tab carries a ✕ that removes a row and the bytes it staged. The first click arms it for eight seconds, and the confirmation names the URL.

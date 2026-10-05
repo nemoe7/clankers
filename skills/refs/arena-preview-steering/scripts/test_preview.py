@@ -627,6 +627,14 @@ def test_http_boundaries():
       ]
       assert dismissed and "prune" in dismissed[-1]["text"]
       assert store.state()["notes"][-1]["acknowledged_at"] is None
+      # Quiet: a read shows it, and a poll never wakes on it.
+      assert dismissed[-1]["quiet"] == 1
+      assert [item for item in store.read()["pending"] if "prune" in item["text"]]
+      assert [
+        item
+        for item in store.read(include_quiet=False)["pending"]
+        if "prune" in item["text"]
+      ] == []
       assert request("GET", "/api/reports/prune/html")[0] == 404
       assert request("POST", "/api/reports/prune/unpublish", "{}", auth)[0] == 404
       assert (
