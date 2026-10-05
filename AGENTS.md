@@ -10,6 +10,7 @@
   - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
   - Mirror task-related source changes into installed copies in this repository without separate user authorization.
+  - The waiver never covers a clause change; every clause change MUST wait for the approved report.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 ## Glossary
