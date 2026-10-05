@@ -97,6 +97,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Poll header**: A live poll heartbeat keeps the wait text in the header. Only an aged stamp with no poll reads as `No agent since <time>`.
 - **Report drafts**: An edit in a report form writes the answers at once, so a reload keeps the chosen options. A submit still replaces the record with the server's stamp.
+- **Report custom slot**: The field rule puts the custom slot inside its option group, in `REFERENCE.md` and `SKILL.md`.
+  A standalone `Answer: ___` line stays a question of its own.
 
 #### userscripts
 
