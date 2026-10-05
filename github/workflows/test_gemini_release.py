@@ -840,6 +840,69 @@ def test_release_pipeline():
       lambda: release.classify([("id", "diff")], {}, "test"),
       "invalid version classification",
     )
+  # The classification request carries the version phase, whatever round answers it.
+  prompt_phases = []
+
+  def phase_spy(context, evidence, model):
+    prompt_phases.append(context.get("phase", "release"))
+    return "patch"
+
+  small_counts = patch.object(release, "measured", lambda model, request: 10)
+  with small_counts, patch.object(release, "summary"):
+    assert (
+      release.release_body([("id", "diff")], {"phase": "version"}, "test", phase_spy)
+      == "patch"
+    )
+  assert prompt_phases == ["version"]
+  prompt_phases.clear()
+
+  def by_chars(model, request):
+    payload = json.loads(request["contents"][0]["parts"][0]["text"])
+    return sum(len(item["text"]) for item in payload["evidence"])
+
+  with (
+    patch.object(release, "measured", by_chars),
+    patch.object(release, "CHUNK_TOKENS", 350),
+    patch.object(release, "summary"),
+  ):
+    release.release_body(
+      [(str(n), "x" * 100) for n in range(80)], {"phase": "version"}, "test", phase_spy
+    )
+  assert prompt_phases[0] == "chunk" and prompt_phases[-1] == "version"
+  # An invalid classification retries on the next rung; the run stops only when
+  # every rung refused the word.
+  answers = ["maybe minor", "minor"]
+  real_release_body = release.release_body
+
+  def flaky(context, evidence, model):
+    return answers.pop(0)
+
+  def routed(units, context, model, **options):
+    return real_release_body(units, context, model, flaky, **options)
+
+  def always_invalid(units, context, model, **options):
+    return real_release_body(
+      units, context, model, lambda *args: "maybe minor", **options
+    )
+
+  with (
+    small_counts,
+    patch.object(release, "summary") as retried,
+    patch.object(release, "release_body", routed),
+  ):
+    assert release.classify([("id", "diff")], {}, ["first", "second"]) == "minor"
+  assert any(
+    "retrying on the next rung" in call.args[0] for call in retried.call_args_list
+  )
+  with (
+    small_counts,
+    patch.object(release, "summary"),
+    patch.object(release, "release_body", always_invalid),
+  ):
+    fails(
+      lambda: release.classify([("id", "diff")], {}, ["only"]),
+      "invalid version classification",
+    )
   with patch.object(
     release, "api", side_effect=[{"commit": {"sha": "b" * 40}}, {"status": "diverged"}]
   ):

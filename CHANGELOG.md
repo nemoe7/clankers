@@ -112,7 +112,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### workflows
 
+- **Classifier prompt**: The version request uses the version prompt. The release phase stamp overrode the caller, so every classification answered with release notes.
 - **Chunk plan**: A packed round lists each chunk and its token count before the requests run.
+- **Classification retry**: An invalid classification answer retries on the next rung, one try per rung, and stops when the rungs run out.
 
 ## 2026-10-03
 
