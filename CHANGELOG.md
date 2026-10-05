@@ -88,6 +88,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Proposal skeleton**: The amendment clause in the root `AGENTS.md` fixes the proposal opening lines, names the `Citation:` line, and puts the decision list under each table. This clause landed on the owner's approval.
 - **Tool claim sources**: The NEMOGPT prompt holds a second verification line. Search official documentation before a claim about a tool or an interface, and mark the advice unverified when verification is impossible. This line landed on the owner's approval.
   The owner rejected the first long-answer line, so a compact answer shape is a separate proposal.
+- **Re-read on rebase**: A rebase onto `main`, or a new `main` change to a rule or skill file, forces a full re-read.
+  Every affected file comes before the next work step.
 
 ### Fixed
 
