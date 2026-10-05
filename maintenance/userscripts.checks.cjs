@@ -31,6 +31,7 @@ function checkPromptFill(api) {
   var KEY_WATCH_MS = api.KEY_WATCH_MS;
   var keyNote = api.keyNote;
   var keyChanged = api.keyChanged;
+  var keyPostDue = api.keyPostDue;
   var NOTED_KEY = api.NOTED_KEY;
   var fetchJson = api.fetchJson;
   var PREVIEW_FRAME_TITLE = api.PREVIEW_FRAME_TITLE;
@@ -121,6 +122,11 @@ function checkPromptFill(api) {
     [keyChanged("old", "new"), "new"],
     [keyChanged("same", "same"), null],
     [keyChanged("old", null), null],
+    // The key posts when the frame appears, and the minute tick posts it again.
+    [keyPostDue(null, null, true), false],
+    [keyPostDue("https://sbx.example", null, false), true],
+    [keyPostDue("https://sbx.example", "https://sbx.example", false), false],
+    [keyPostDue("https://sbx.example", "https://sbx.example", true), true],
     [NOTED_KEY, "clankers-arena-noted-key"],
     // The note names the host, because the composer no longer carries it.
     [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),

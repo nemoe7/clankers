@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.8
+// @version      1.2.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -211,6 +211,12 @@
       return incoming && incoming !== held ? incoming : null;
     }
 
+    // A key post runs when the preview is present and either the minute tick forces it
+    // or the frame just appeared. A refresh is a fresh page, so its first sight posts.
+    function keyPostDue(base, posted, force) {
+      return Boolean(base) && (force === true || base !== posted);
+    }
+
     // One countdown survives a reload and the other tabs: the due time is saved, so a
     // reload resumes the wait instead of starting a fresh one. The server still holds
     // the minimum age, so a second tab can only lose the race.
@@ -329,6 +335,7 @@
       KEY_WATCH_MS: KEY_WATCH_MS,
       keyNote: keyNote,
       keyChanged: keyChanged,
+      keyPostDue: keyPostDue,
       rotationDueAt: rotationDueAt,
       rotationWaitMs: rotationWaitMs,
       previewBase: previewBase,
@@ -459,6 +466,20 @@
       };
     }
 
+    // The preview can arrive after the key did: the composer observer watches the DOM, and
+    // the first sight of the frame posts the held key. The minute tick forces a post even
+    // when the key has not changed, so the preview stamp keeps moving. That was the gap
+    // the owner measured: the clock read 12:56 and the last update stood at 12:53.
+    var postedBase = null;
+    function postKeyToPreview(force) {
+      var base = previewBase(document);
+      if (!keyPostDue(base, postedBase, force === true)) return;
+      var pair = settings();
+      if (!pair.host || !heldKey) return;
+      postedBase = base;
+      postAgentKey(heldKey, pair.host);
+    }
+
     // One rotation pass: ask the backend to rotate when the key is old enough, then
     // carry the new key into the prompt and tell the agent through the preview.
     function rotateKey(minSeconds, done) {
@@ -553,14 +574,15 @@
           // the agent gets the key note. The composer keeps its own line until a real
           // change demands a write, because shouldWrite sees the same key text.
           var key = keyChanged(heldKey, agentKeyFrom(body));
-          if (!key) return;
-          heldKey = key;
-          keyTried = true;
-          postAgentKey(key, pair.host);
-          noteKey(key, pair.host, "replaced");
-          if (isComposerUrl(location.href) && readSlug(document)) {
-            sync();
+          if (key) {
+            heldKey = key;
+            keyTried = true;
+            noteKey(key, pair.host, "replaced");
+            if (isComposerUrl(location.href) && readSlug(document)) {
+              sync();
+            }
           }
+          postKeyToPreview(true);
         })
         .catch(function () {});
     }, KEY_WATCH_MS);
@@ -617,6 +639,7 @@
     }
 
     function sync() {
+      postKeyToPreview(false);
       if (!isComposerUrl(location.href)) {
         lastSlug = null;
         return;
