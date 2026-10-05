@@ -995,9 +995,7 @@ copyStateButton.addEventListener('click', async () => {
   catch { payload = null; }
   if (payload) {
     await copyFrom(copyStateButton, payload.text, 'state');
-    const counts = payload.counts || {};
-    status.textContent = `Copied ${counts.notes} messages, ${counts.answers} answers, `
-      + `${counts.reports} reports and ${counts.tasks} tasks as NDJSON.`;
+    status.textContent = 'Copied state as NDJSON.';
     return;
   }
   let cached = null;
@@ -1017,13 +1015,9 @@ copyStateButton.addEventListener('click', async () => {
   const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
   await copyFrom(copyStateButton, text, 'state');
   if (state) {
-    const taskCount = lines.length - state.notes.length - (answers?.length || 0)
-      - (reports?.length || 0);
-    const counted = `${state.notes.length} messages, ${answers?.length || 0} answers, `
-      + `${reports?.length || 0} reports and ${taskCount} tasks`;
     status.textContent = answers && reports
-      ? `Copied ${counted} as NDJSON.`
-      : `Copied ${counted} as NDJSON; the answers or the report sources did not arrive.`;
+      ? 'Copied state as NDJSON.'
+      : 'Copied state as NDJSON. The answers or the report sources did not arrive.';
   }
 });
 $('#copy-report').addEventListener('click', async () => {

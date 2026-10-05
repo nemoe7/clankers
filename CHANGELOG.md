@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Amendment skill frame**: The output format also names the status line, the citation and the decision list. The model answers in the proposal form.
 - **Process tool line**: The steering skill gives the long-lived process tool one job. That tool MUST host `serve` alone, and every other command runs as a one-shot shell call.
 - **Key command line**: The steering skill names `arena-preview key` for a call that needs the recorded key. The command prints the key, the host and the stamp.
+- **Copy receipt**: The copy-state receipt reads `Copied state as NDJSON.` and drops the record counts.
 
 ### Changed
 

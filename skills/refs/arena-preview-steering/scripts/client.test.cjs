@@ -676,9 +676,8 @@ test('preview client', async (t) => {
       (cachedHere.tasks.upcoming || []).length + (cachedHere.tasks.finished || []).length,
       'every cached task rides the copy');
     assert.equal(get('#copy-state').dataset.state, 'good', 'the click reports through the button');
-    assert.match(get('#send-status').textContent,
-      new RegExp(`Copied ${lines.length - taskLines.length - answerLines.length - reportLines.length} messages, ${answerLines.length} answers, ${reportLines.length} reports and ${taskLines.length} tasks as NDJSON\\.`),
-      'the receipt counts what the clipboard took');
+    assert.equal(get('#send-status').textContent, 'Copied state as NDJSON.',
+      'the receipt names the state copy without counts');
     state.tasks.upcoming = [];
     await get('#refresh-notes').events.click();
     assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
@@ -1423,7 +1422,7 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(copied.length, 1, 'the button copies the cache');
     assert.ok(copied[0].split('\n').filter(Boolean).length > 1, 'the copy carries note and task lines');
-    assert.match(get('#send-status').textContent, /Copied \d+ messages, \d+ answers, \d+ reports and \d+ tasks as NDJSON\./);
+    assert.equal(get('#send-status').textContent, 'Copied state as NDJSON.');
     assert.equal(stateCopyButton.dataset.state, 'good');
     storage.delete(cacheKey);
     copied.length = 0;
@@ -1431,7 +1430,7 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(copied.length, 1, 'the server export copies without a client cache');
     assert.match(get('#send-status').textContent,
-      /Copied \d+ messages, \d+ answers, \d+ reports and \d+ tasks as NDJSON\./);
+      /^Copied state as NDJSON/);
     // With the route down, the cached assembly is the fallback. The store retries once, so a
     // failing route costs about a second per call.
     state.copyStateFails = true;
