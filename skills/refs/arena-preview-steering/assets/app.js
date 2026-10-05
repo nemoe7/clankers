@@ -859,6 +859,21 @@ function quoteId(id, control) {
 function quoteNoteId(code) {
   quoteId((code.dataset.full || code.textContent).slice(0, 7), code);
 }
+// The report ID rides the status line as a copyable code element. A click copies it and a
+// ctrl-click quotes it to the composer, the gestures the log's note IDs and the task titles use.
+function reportStatusLine(text, id) {
+  const status = $('#report-status');
+  if (!id) {
+    status.textContent = text;
+    return;
+  }
+  const code = document.createElement('code');
+  code.className = 'note-id';
+  code.textContent = id;
+  code.dataset.full = id;
+  code.title = id;
+  status.replaceChildren(text, ' · ', code);
+}
 async function copyTaskId(title) {
   const id = title.dataset.taskId;
   const words = await copyText(id);
@@ -1170,9 +1185,11 @@ async function loadReport(force = false) {
     const stampSource = result.edited && result.published && result.edited !== result.published
       ? `Edited ${time(result.edited)}`
       : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
-    $('#report-status').textContent =
+    reportStatusLine(
       `Report · ${result.fields} field${result.fields === 1 ? '' : 's'}` +
-      (stampSource ? ` · ${stampSource}` : '') + submissionParts(report);
+      (stampSource ? ` · ${stampSource}` : '') + submissionParts(report),
+      id,
+    );
     checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;

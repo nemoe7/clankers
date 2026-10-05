@@ -1078,6 +1078,18 @@ test('preview client', async (t) => {
       'a report never republished shows the publish stamp');
     assert.match(get('#report-status').textContent, /· Submission /);
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
+    // The ID is on show, one click copies it, and a ctrl-click quotes it like a note ID.
+    const reportCode = part(get('#report-status'), 'note-id');
+    assert.equal(reportCode.textContent, 'r1', 'the loaded report shows its ID');
+    assert.equal(reportCode.dataset.full, 'r1');
+    const copiedBeforeReport = copied.length;
+    documentEvents.click({ target: reportCode });
+    await tick();
+    assert.equal(copied.at(-1), 'r1', 'a click copies the report ID');
+    assert.equal(copied.length, copiedBeforeReport + 1);
+    documentEvents.click({ target: reportCode, ctrlKey: true });
+    assert.equal(copied.length, copiedBeforeReport + 1, 'a ctrl-click leaves the clipboard alone');
+    assert.match(get('#note').value, /^RE: r1\n/);
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it red');
     otherText.value = '   ';

@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Added
 
 #### preview
+- **Report ID on show**: The Reports tab prints the loaded report's ID beside the status line.
+  A click copies it, and a ctrl-click quotes it to the composer.
 
 - **Key expiry notice**: A recorded key older than the rotation window posts one quiet note.
   The note points at `arena-preview key` and names no key. A new post overwrites the record by itself.
