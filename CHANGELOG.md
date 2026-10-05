@@ -38,6 +38,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Prose gate**: `maintenance/check.py` runs `maintenance/lint_prose.py`. The gate covers the code comments under `maintenance` and `rules` and the covered documents. The changelog bullet cap stays at three sentences.
 - **Runner prep**: One composite action holds the Python setup, the pip cache and the Node setup. The three `ci.yml` jobs call it, so the block lives in one file.
+- **Clause gate**: The clause gate names system prompts beside rules, skills and workflows. The verbatim pass stays.
 
 ### Added
 

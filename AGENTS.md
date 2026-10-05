@@ -81,7 +81,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - Every entry terse: one entry per event, no story between facts.
 - Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless strictly necessary; digestible; MUST ASD-STE100; no skill or linter.
 - Chat text and reports: at most 3 sentences per block; keep terse.
-- No clause in a rule, skill, or workflow file is added, amended, or deleted until the user approves the report; hold the work and say so in one line. Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
+- No clause in a rule, skill, workflow or system-prompt file is added, amended, or deleted until the user approves the report; hold the work and say so in one line. Edits that change no clause — a squash that removes no rule, a typo or link fix, formatting, a re-measure — need no report.
 - Every clause change takes a proposal on its initial refs wording, owner-supplied text included; the compressed live mirrors and platform copies follow the approved line.
 - A custom answer on a clause takes a fresh proposal of the new wording; the line lands only after that proposal is approved.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
