@@ -471,7 +471,7 @@ def test_http_boundaries():
       assert page.index('id="upload-file"') < page.index('id="reports-panel"')
       assert 'id="staged-files"' in page
       assert 'id="uploads-list"' not in page and 'id="uploads-history"' not in page
-      assert 'id="fetch-url"' in page and 'id="fetch-proxy"' in page
+      assert 'id="fetch-url"' in page and 'id="fetch-proxy"' not in page
       assert "Agent requests: up to 102.4 MB per URL" in page
       assert "Keep this page open while transfers run." in page
       assert "not measured" not in page

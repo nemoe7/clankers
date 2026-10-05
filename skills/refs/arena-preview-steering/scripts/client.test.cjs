@@ -84,7 +84,6 @@ get('#reports-panel').hidden = true;
 get('#tasks-panel').hidden = true;
 get('#downloads-panel').hidden = true;
 get('#upload-file').files = [];
-get('#fetch-proxy').checked = false;
 get('#note').placeholder = 'What should happen next?';
 const storage = new Map();
 const root = { dataset: {} };
@@ -1913,7 +1912,7 @@ test('preview client', async (t) => {
     get('#fetch-url').value = direct;
     await get('#fetch-form').events.submit(event({}));
     await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
-    assert.equal(queuedCalls[0].allow_proxy, false, 'direct access is the per-job default');
+    assert.equal(queuedCalls[0].allow_proxy, true, 'every job allows the proxy fallback');
     assert.equal(remoteCalls.at(-1).url, direct);
     assert.equal(remoteCalls.at(-1).options.credentials, 'omit');
     assert.equal(remoteCalls.at(-1).options.referrerPolicy, 'no-referrer');
@@ -1926,27 +1925,36 @@ test('preview client', async (t) => {
     remoteBehaviors.set(blocked, { error: 'CORS blocked' });
     get('#fetch-url').value = blocked;
     await get('#fetch-form').events.submit(event({}));
+    await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
+    assert.equal(queuedCalls[1].allow_proxy, true);
+    assert.equal(resultCalls.at(-1).source, 'allorigins', 'the fallback chain runs with no opt-in');
+    assert.equal(remoteCalls.at(-1).url, `https://api.allorigins.win/raw?url=${encodeURIComponent(blocked)}`);
+
+    // A whole chain that fails names every leg, and the retry reuses the same SQLite job.
+    chain = 'https://files.example.org/chain.zip';
+    remoteBehaviors.set(chain, { error: 'CORS blocked' });
+    remoteBehaviors.set(`https://api.allorigins.win/raw?url=${encodeURIComponent(chain)}`, { error: 'Proxy offline' });
+    remoteBehaviors.set(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(chain)}`, { error: 'Proxy down' });
+    get('#fetch-url').value = chain;
+    await get('#fetch-form').events.submit(event({}));
     await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
-    assert.equal(queuedCalls[1].allow_proxy, false);
-    assert.match(state.fetch_jobs[0].error, /CORS blocked.*proxy fallback checked/);
-    assert.equal(remoteCalls.filter(item => item.url.startsWith('https://api.allorigins.win/')).length, 0,
-      'no proxy is used without opt-in');
-    remoteBehaviors.set(blocked, { chunks: [Uint8Array.from([1])] });
-    retryRow = get('#fetch-list').children.find(item => item.children[0].textContent === blocked);
+    assert.match(state.fetch_jobs[0].error, /Direct: CORS blocked/);
+    assert.match(state.fetch_jobs[0].error, /AllOrigins: Proxy offline/);
+    assert.match(state.fetch_jobs[0].error, /CodeTabs: Proxy down/);
+    remoteBehaviors.set(chain, { chunks: [Uint8Array.from([1])] });
+    retryRow = get('#fetch-list').children.find(item => item.children[0].textContent === chain);
     await retryRow.children.at(-1).events.click();
-    await waitFor(() => state.fetch_jobs.find(item => item.url === blocked)?.status === 'saved');
-    assert.equal(queuedCalls.length, 2, 'retry reuses the same SQLite job');
+    await waitFor(() => state.fetch_jobs.find(item => item.url === chain)?.status === 'saved');
+    assert.equal(queuedCalls.length, 3, 'retry reuses the same SQLite job');
 
     origin = 'https://files.example.org/fallback.zip';
     allOrigins = `https://api.allorigins.win/raw?url=${encodeURIComponent(origin)}`;
     remoteBehaviors.set(origin, { error: 'CORS blocked' });
     remoteBehaviors.set(allOrigins, { chunks: [Uint8Array.from([3, 4])] });
     get('#fetch-url').value = origin;
-    get('#fetch-proxy').checked = true;
     await get('#fetch-form').events.submit(event({}));
     await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
-    assert.equal(queuedCalls[2].allow_proxy, true);
-    assert.equal(get('#fetch-proxy').checked, false, 'the next URL requires its own opt-in');
+    assert.equal(queuedCalls[3].allow_proxy, true);
     assert.equal(resultCalls.at(-1).source, 'allorigins');
     assert.equal(remoteCalls.at(-1).url, allOrigins);
 
@@ -1957,7 +1965,6 @@ test('preview client', async (t) => {
     remoteBehaviors.set(allOriginsThird, { error: 'Proxy offline' });
     remoteBehaviors.set(codeTabs, { chunks: [Uint8Array.from([5])] });
     get('#fetch-url').value = third;
-    get('#fetch-proxy').checked = true;
     await get('#fetch-form').events.submit(event({}));
     await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
     assert.equal(resultCalls.at(-1).source, 'codetabs');

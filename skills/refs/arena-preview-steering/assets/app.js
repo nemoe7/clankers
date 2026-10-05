@@ -1448,7 +1448,7 @@ function downloadRow(item) {
   url.textContent = item.url;
   const meta = document.createElement('span');
   meta.className = 'fetch-meta';
-  meta.textContent = `${item.approval === 'denied' ? 'denied' : item.status} · ${item.allow_proxy ? 'proxy opt-in' : 'direct only'}`
+  meta.textContent = `${item.approval === 'denied' ? 'denied' : item.status}`
     + (item.source ? ` · ${item.source}` : '')
     + (item.size == null ? '' : ` · ${bytes(item.size)} · ${item.sha256.slice(0, 12)}`);
   row.append(url, meta);
@@ -1491,7 +1491,7 @@ function approvalRow(item) {
   url.textContent = item.url;
   const meta = document.createElement('span');
   meta.className = 'fetch-meta';
-  meta.textContent = `Agent request · ${item.allow_proxy ? 'proxy opt-in' : 'direct only'}`;
+  meta.textContent = 'Agent request';
   const actions = document.createElement('div');
   actions.className = 'row tight fetch-decisions';
   const buttons = ['approve', 'deny'].map(action => {
@@ -1556,11 +1556,12 @@ function renderFetchIfChanged(jobs) {
 
 async function fetchRemote(job) {
   const limit = job.origin === 'owner' ? Infinity : MAX_FETCH;
-  const candidates = [{ source: 'direct', label: 'Direct', url: job.url }];
-  if (job.allow_proxy) candidates.push(
+  // Direct access first, then the two CORS proxies: the fallback needs no opt-in.
+  const candidates = [
+    { source: 'direct', label: 'Direct', url: job.url },
     { source: 'allorigins', label: 'AllOrigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(job.url)}` },
     { source: 'codetabs', label: 'CodeTabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(job.url)}` }
-  );
+  ];
   const failures = [];
   for (const candidate of candidates) {
     $('#fetch-status').textContent = `Fetching ${job.url} via ${candidate.label}…`;
@@ -1600,8 +1601,7 @@ async function fetchRemote(job) {
       failures.push(`${candidate.label}: ${error.message || String(error)}`);
     } finally { clearTimeout(timer); }
   }
-  const hint = job.allow_proxy ? '' : ' Queue the URL again with proxy fallback checked to try proxy services.';
-  throw new Error(failures.join('; ') + hint);
+  throw new Error(failures.join('; '));
 }
 
 async function pumpFetchQueue() {
@@ -1652,7 +1652,6 @@ async function pumpFetchQueue() {
 $('#fetch-form').addEventListener('submit', async event => {
   event.preventDefault();
   const field = $('#fetch-url');
-  const checkbox = $('#fetch-proxy');
   const button = $('#fetch-add');
   if (button.disabled) return;
   let parsed;
@@ -1666,12 +1665,11 @@ $('#fetch-form').addEventListener('submit', async event => {
   try {
     const job = await (await request('/api/fetch-jobs', {
       method: 'POST', headers: writeHeaders('application/json'),
-      body: JSON.stringify({ url: field.value.trim(), allow_proxy: checkbox.checked }),
+      body: JSON.stringify({ url: field.value.trim(), allow_proxy: true }),
       retryOnFailure: false
     })).json();
-    $('#fetch-status').textContent = `Queued ${job.url} · ${job.allow_proxy ? 'proxy opt-in' : 'direct only'}.`;
+    $('#fetch-status').textContent = `Queued ${job.url}. Direct access first, then AllOrigins and CodeTabs.`;
     field.value = '';
-    checkbox.checked = false;
     await refreshState();
   } catch (error) { $('#fetch-status').textContent = `Queue not confirmed: ${error.message}. Check the list before retrying.`; }
   finally { button.disabled = false; }
