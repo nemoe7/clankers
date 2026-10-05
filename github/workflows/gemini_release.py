@@ -303,7 +303,11 @@ def history(target, base, evidence=EVIDENCE_KINDS[0]):
 
 
 def pieces(units):
-  return [{"id": identity, "text": text} for identity, text in units]
+  """Evidence items from (identity, text) pairs or from ready item dicts."""
+  return [
+    item if isinstance(item, dict) else {"id": item[0], "text": item[1]}
+    for item in units
+  ]
 
 
 def encoded(value):

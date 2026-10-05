@@ -308,6 +308,23 @@ def test_release_pipeline():
   assert chunk_phases == ["chunk", "chunk", "chunk"]
   assert chunk_ids == [str(n) for n in range(8)]
   assert [item["id"] for item in reduced] == ["summary:0", "summary:1", "summary:2"]
+  # release_body receives those ready items, and their text must survive the
+  # hand-off: an item unpacked like a pair carries the literal keys instead.
+  carried = []
+  shared = [{"id": "summary:0", "text": "combined text"}]
+
+  def carrier(context, evidence, model):
+    carried.append(evidence)
+    return "patch"
+
+  with (
+    patch.object(release, "measured", lambda model, request: 10),
+    patch.object(release, "summary"),
+  ):
+    assert (
+      release.release_body(shared, {"phase": "version"}, "test", carrier) == "patch"
+    )
+  assert carried == [shared]
   selected_models = []
 
   def tracked(context, evidence, model, on_success):
