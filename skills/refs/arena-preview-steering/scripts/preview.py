@@ -150,6 +150,10 @@ POLLS_SINCE_MESSAGE = "polls_since_message"
 GATE_THRESHOLD = 10
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
+# The userscript replaces the record inside its 15-minute rotation window, so an older
+# record means no key post arrived and the agent's key is dead until a new one lands.
+AGENT_KEY_EXPIRY_SECONDS = 1200
+AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
@@ -2404,6 +2408,32 @@ class Store:
       json.dumps({"key": key, "host": host, "at": now()}, ensure_ascii=False),
     )
 
+  def notice_expired_key(self):
+    """Tell the agent once per record when the recorded key outlives the rotation window.
+
+    A new key overwrites the record by itself, so nothing here removes one. The note
+    names no key: `arena-preview key` prints the live one, and the record is already
+    stored. One note per record stamp, so a later read never repeats it.
+    """
+    record = self.agent_key()
+    if not record:
+      return None
+    # The stored stamp is clipped to seconds with no offset, so it needs the UTC read.
+    stamp = import_stamp(record["at"])
+    if stamp is None:
+      return None
+    if (datetime.now(timezone.utc) - stamp).total_seconds() < AGENT_KEY_EXPIRY_SECONDS:
+      return None
+    if self.meta_value(AGENT_KEY_EXPIRY_META) == record["at"]:
+      return None
+    self.set_meta(AGENT_KEY_EXPIRY_META, record["at"])
+    return self.note(
+      new_id(),
+      f"The recorded agent key expired (set {record['at']}). Run `arena-preview key`"
+      " for the live key; a new post overwrites this record by itself.",
+      quiet=True,
+    )
+
   def agent_key(self):
     """The recorded key, host and stamp, or None while none stands or the record is broken."""
     value = self.meta_value(AGENT_KEY_META)
@@ -3486,6 +3516,7 @@ def main():
         server.serve_forever()
     elif args.command == "read":
       require_server(store)
+      store.notice_expired_key()
       print_read(store)
     elif args.command == "key":
       # The key note is quiet and it ages out of the pending list after an ack, so a later
@@ -3497,6 +3528,7 @@ def main():
       print(cli_json(record))
     elif args.command == "poll":
       require_server(store)
+      store.notice_expired_key()
       return poll_inbox(store)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.

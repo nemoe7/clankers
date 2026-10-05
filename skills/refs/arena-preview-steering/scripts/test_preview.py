@@ -3824,6 +3824,48 @@ def test_key_command_reads_the_recorded_key():
     assert run().returncode == 1
 
 
+def test_expired_agent_key_tells_the_agent_once():
+  """An old key record posts one quiet note; a fresh record stays silent and a read prints it."""
+  with tempfile.TemporaryDirectory() as state_dir:
+    script = str(Path(preview.__file__))
+    store = preview.Store(state_dir, create=True)
+    assert store.notice_expired_key() is None, "no key record says nothing"
+    store.set_meta(
+      preview.AGENT_KEY_META,
+      json.dumps(
+        {
+          "key": "old-key-0123456789abcdef",
+          "host": "https://h.example",
+          "at": "2020-01-01T00:00:00+00:00",
+        }
+      ),
+    )
+    first = store.notice_expired_key()
+    assert first is not None and first["quiet"] == 1
+    assert [item["text"] for item in store.read()["pending"]] == [
+      (
+        "The recorded agent key expired (set 2020-01-01T00:00:00). Run `arena-preview key`"
+        " for the live key; a new post overwrites this record by itself."
+      )
+    ]
+    assert store.notice_expired_key() is None, "one note per record"
+    assert len(store.read()["pending"]) == 1
+    # A read prints the notice and a poll never wakes on it.
+    assert store.read(include_quiet=False)["pending"] == []
+    seen = subprocess.run(
+      [sys.executable, script, "read"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": state_dir},
+    )
+    assert seen.returncode == 0 and "expired" in seen.stdout
+    # A fresh record is silent, and its own stamp lets a later expiry speak again.
+    store.set_agent_key("new-key-0123456789abcdef", "https://h.example")
+    assert store.notice_expired_key() is None
+    assert len(store.read()["pending"]) == 1
+
+
 def test_agent_seen_at_is_stamped_by_the_cli():
   """Every agent CLI call stamps the liveness the preview header reads."""
   with tempfile.TemporaryDirectory() as state_dir:

@@ -62,6 +62,8 @@ REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 GATE_THRESHOLD=10
 AGENT_KEY_META='agent_key'
+AGENT_KEY_EXPIRY_SECONDS=1200
+AGENT_KEY_EXPIRY_META='agent_key_expired_at'
 AGENT_SEEN_META='agent_seen_at'
 AGENT_KEY_RE=re.compile('[A-Za-z0-9_-]{20,64}\\Z')
 AGENT_HOST_RE=re.compile('https://[A-Za-z0-9.-]+\\Z')
@@ -770,6 +772,14 @@ class Store:
 		with closing(self.connect())as db,db:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(key,str(value)))
 	def touch_agent(self):self.set_meta(AGENT_SEEN_META,now())
 	def set_agent_key(self,key,host=None):self.set_meta(AGENT_KEY_META,json.dumps({'key':key,'host':host,'at':now()},ensure_ascii=False))
+	def notice_expired_key(self):
+		record=self.agent_key()
+		if not record:return None
+		stamp=import_stamp(record['at'])
+		if stamp is None:return None
+		if(datetime.now(timezone.utc)-stamp).total_seconds()<AGENT_KEY_EXPIRY_SECONDS:return None
+		if self.meta_value(AGENT_KEY_EXPIRY_META)==record['at']:return None
+		self.set_meta(AGENT_KEY_EXPIRY_META,record['at']);return self.note(new_id(),f"The recorded agent key expired (set {record['at']}). Run `arena-preview key` for the live key; a new post overwrites this record by itself.",quiet=True)
 	def agent_key(self):
 		value=self.meta_value(AGENT_KEY_META)
 		if not value:return None
@@ -1078,12 +1088,12 @@ def main():
 		if args.command=='serve':
 			require_renderer()
 			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));print(f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
-		elif args.command=='read':require_server(store);print_read(store)
+		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)
 		elif args.command=='key':
 			record=store.agent_key()
 			if not record:print('No agent key recorded yet.',file=sys.stderr);return 1
 			print(cli_json(record))
-		elif args.command=='poll':require_server(store);return poll_inbox(store)
+		elif args.command=='poll':require_server(store);store.notice_expired_key();return poll_inbox(store)
 		elif args.command=='download-request':print(cli_json(store.enqueue_fetch(args.url,args.allow_proxy,pending=True)))
 		elif args.command=='ack':
 			if bool(args.reply)==bool(args.note):raise ValueError('Choose exactly one of --reply or --note')
