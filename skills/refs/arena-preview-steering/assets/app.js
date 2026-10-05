@@ -1143,7 +1143,7 @@ async function loadReport(force = false) {
     $('#report').replaceChildren();
     $('#report-submit').hidden = true;
   }
-  if (!id) { $('#report-status').textContent = 'No report has been published yet.'; return; }
+  if (!id) { $('#report-status').textContent = 'No report published yet.'; return; }
   save('report', id);
   $('#report-status').textContent = 'Loading report…';
   try {
@@ -1271,7 +1271,7 @@ function renderTasks(tasks) {
   const finished = $('#tasks-finished');
   const upcoming = $('#tasks-upcoming');
   if (!tasks) {
-    status.textContent = 'The agent has not written a task list yet.';
+    status.textContent = 'No task list yet.';
     current.hidden = true;
     finished.hidden = true;
     upcoming.hidden = true;
@@ -1493,7 +1493,7 @@ function downloadRow(item) {
       if (drop.dataset.armed !== item.id) {
         drop.dataset.armed = item.id;
         drop.dataset.state = 'bad';
-        $('#fetch-status').textContent = `Delete ${item.url}? Click ✕ again to confirm.`;
+        $('#fetch-status').textContent = `Delete ${item.url}? Click ✕ again.`;
         setTimeout(() => {
           if (drop.dataset.armed === item.id) { delete drop.dataset.armed; delete drop.dataset.state; }
         }, 8000);
@@ -1555,12 +1555,16 @@ function approvalRow(item) {
 // The composer footer shows the key the userscript holds, so a stale key is visible at once.
 // Seven characters name the key without printing it in full into the log.
 function renderAgentKey(record) {
+  const line = $('#agent-key');
   if (!record) {
-    $('#agent-key').textContent = 'No key recorded.';
+    line.textContent = 'No key recorded.';
     return;
   }
+  // Only the key characters are monospace, so the host and the stamp read as prose.
+  const key = document.createElement('code');
+  key.textContent = record.key.slice(0, 7);
   const host = record.host ? ` · ${record.host}` : '';
-  $('#agent-key').textContent = `Key ${record.key.slice(0, 7)}${host} · set ${time(record.at)}`;
+  line.replaceChildren('Key ', key, `${host} · set ${time(record.at)}`);
 }
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);
@@ -1576,13 +1580,13 @@ function renderFetchIfChanged(jobs) {
   $('#fetch-approvals').replaceChildren(...pending.map(item => approvalRow(item)));
   $('#fetch-approval-count').textContent = pending.length
     ? `${pending.length} request${pending.length === 1 ? '' : 's'} awaiting approval.`
-    : 'No requests awaiting approval.';
+    : 'No approvals waiting.';
   $('#fetch-list').replaceChildren(...history.map(item => downloadRow(item)));
   const active = history.filter(item => item.status === 'queued' || item.status === 'fetching').length;
   const count = history.length
-    ? `${history.length} URL${history.length === 1 ? '' : 's'} in history; ${active} queued or active.`
-    : 'No downloads queued yet.';
-  $('#fetch-count').textContent = count + (pending.length ? ` ${pending.length} awaiting approval.` : '');
+    ? `${history.length} in history · ${active} queued or active.`
+    : 'No downloads yet.';
+  $('#fetch-count').textContent = count + (pending.length ? ` · ${pending.length} awaiting approval.` : '');
 }
 
 async function fetchRemote(job) {
@@ -1595,7 +1599,7 @@ async function fetchRemote(job) {
   ];
   const failures = [];
   for (const candidate of candidates) {
-    $('#fetch-status').textContent = `Fetching ${job.url} via ${candidate.label}…`;
+    $('#fetch-status').textContent = `Fetching via ${candidate.label}…`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), BINARY_TIMEOUT);
     try {
@@ -1652,7 +1656,7 @@ async function pumpFetchQueue() {
       }, 30_000);
       try {
         const file = await fetchRemote(job);
-        $('#fetch-status').textContent = `Saving ${downloadName(job.url)} in the preview…`;
+        $('#fetch-status').textContent = `Saving ${downloadName(job.url)}…`;
         const saved = await (await request(
           `/api/fetch-jobs/${job.id}/result?name=${encodeURIComponent(downloadName(job.url))}`, {
             method: 'POST',
@@ -1699,7 +1703,7 @@ $('#fetch-form').addEventListener('submit', async event => {
       body: JSON.stringify({ url: field.value.trim(), allow_proxy: true }),
       retryOnFailure: false
     })).json();
-    $('#fetch-status').textContent = `Queued ${job.url}. Direct access first, then AllOrigins and CodeTabs.`;
+    $('#fetch-status').textContent = `Queued ${job.url}. Tries direct, AllOrigins, CodeTabs.`;
     field.value = '';
     await refreshState();
   } catch (error) { $('#fetch-status').textContent = `Queue not confirmed: ${error.message}. Check the list before retrying.`; }

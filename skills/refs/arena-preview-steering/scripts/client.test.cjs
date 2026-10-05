@@ -10,8 +10,11 @@ const { File } = require('node:buffer');
 class Element {
   // textContent reads through to children, the way a browser does, so a receipt built from
   // two elements still asserts as one string; setting it clears the children, as in a browser.
+  // A bare string child is a text node, the way replaceChildren takes one.
   get textContent() {
-    return this.children.length ? this.children.map(child => child.textContent).join('') : this.text;
+    return this.children.length
+      ? this.children.map(child => (typeof child === 'string' ? child : child.textContent)).join('')
+      : this.text;
   }
   set textContent(value) {
     this.text = value;
@@ -516,7 +519,7 @@ test('preview client', async (t) => {
     assert.equal(get('#note').value, 'keep draft');
     get('#reports-tab').events.keydown(event({ key: 'ArrowLeft' }));
     assert.equal(get('#notes-panel').hidden, false);
-    assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
+    assert.equal(get('#tasks-status').textContent, 'No task list yet.');
     assert.equal(get('#tasks-finished').hidden, true);
     get('#notes-tab').events.keydown(event({ key: 'ArrowRight' }));
     assert.equal(get('#reports-panel').hidden, false);
@@ -700,7 +703,7 @@ test('preview client', async (t) => {
     assert.equal(get('#copy-state').dataset.state, 'good', 'the server export needs no client cache');
     assert.ok(copied.at(-1).endsWith('\n'), 'the copy stays NDJSON with one trailing newline');
 
-    assert.equal(get('#tasks-status').textContent, 'The agent has not written a task list yet.');
+    assert.equal(get('#tasks-status').textContent, 'No task list yet.');
     assert.equal(get('#notes-tab').focused, true);
     get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: false }));
     assert.equal(get('#form').submissions, 1);
@@ -1925,7 +1928,7 @@ test('preview client', async (t) => {
     assert.equal(resultCalls[0].source, 'direct');
     assert.equal(resultCalls[0].body.size, 2);
     assert.equal(get('#fetch-list').children[0].children[2].textContent, 'downloads/fetch-1.zip');
-    assert.equal(get('#fetch-count').textContent, '1 URL in history; 0 queued or active.');
+    assert.equal(get('#fetch-count').textContent, '1 in history · 0 queued or active.');
 
     blocked = 'https://files.example.org/cors.zip';
     remoteBehaviors.set(blocked, { error: 'CORS blocked' });
@@ -2174,6 +2177,9 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.match(get('#agent-key').textContent, /^Key K{7} · /, 'seven characters name the key');
     assert.doesNotMatch(get('#agent-key').textContent, /K{8}/, 'the full key never prints');
+    assert.equal(get('#agent-key').children.find(child => child.tagName === 'code')?.textContent,
+      'KKKKKKK', 'only the key characters carry the code element');
+    assert.equal(get('#agent-key').children[0], 'Key ', 'the label stays prose');
     assert.match(get('#agent-key').textContent, /https:\/\/arena-proxy\.example\.ts\.net/);
     state.agent_key = { key: 'K'.repeat(43), host: null, at: '2026-10-03T15:00:00+00:00' };
     await get('#refresh-notes').events.click();
