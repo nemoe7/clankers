@@ -584,9 +584,16 @@ def round_requests(items, context, phase, model, cover, round_number):
   chunked = {**context, "phase": "chunk" if phase == "release" else phase}
   groups = grouped(items, chunked, model, cover)
   summary(
-    f"  {phase} round {round_number}: {tokens:,} input tokens over the"
-    f" {CHUNK_TOKENS:,} ceiling; packed into {len(groups)} request(s)"
+    f"  {phase} round {round_number}: {len(items)} evidence item(s), {tokens:,} input"
+    f" tokens over the {CHUNK_TOKENS:,} ceiling; packed into {len(groups)} request(s)"
   )
+  # The plan prints each request's share before the requests run, so the packing
+  # reads as numbered steps of one plan.
+  for index, group in enumerate(groups, 1):
+    share = measured(model, request_for(chunked, group))
+    summary(
+      f"    chunk {index}/{len(groups)}: {len(group)} evidence item(s), {share:,} tokens"
+    )
   return chunked, groups
 
 

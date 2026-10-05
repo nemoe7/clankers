@@ -110,6 +110,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   A refresh and a preview enabled later both land, and the preview stamp keeps moving. Version 1.2.9.
 - **Tab title turn end**: The title reverted to the Arena default when a turn ended. The title now keeps the repository name, and only the emoji clears. Version 1.2.6.
 
+#### workflows
+
+- **Chunk plan**: A packed round lists each chunk and its token count before the requests run.
+
 ## 2026-10-03
 
 ### Added

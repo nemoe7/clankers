@@ -219,6 +219,10 @@ def test_release_pipeline():
     assert any(
       "over the 350 ceiling; packed into 3 request(s)" in line for line in step_lines
     )
+    # The plan names each request's share before the requests run.
+    assert any(
+      "chunk 1/3: 3 evidence item(s), 300 tokens" in line for line in step_lines
+    )
     fails(lambda: release.release_body([], {}, "test", generate), "No commits")
     fails(
       lambda: release.release_body(units, {}, "test", lambda *args: "x" * 1000),
