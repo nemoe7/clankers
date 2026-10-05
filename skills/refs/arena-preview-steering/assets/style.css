@@ -272,8 +272,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .downloads-layout h2, .downloads-layout p { margin: 0; }
 .fetch-controls { justify-content: flex-start; margin: 0 0 10px; }
 .fetch-controls input { flex: 1 1 260px; min-width: 0; min-height: 40px; padding: 8px 10px; }
-.fetch-opt-in { display: flex; gap: 8px; align-items: baseline; font-weight: 400; }
-.fetch-opt-in input { flex: none; }
+.key-line { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .fetch-approval { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
 .fetch-approval h3 { margin: 0 0 6px; }
 .fetch-approval .fetch-decisions { justify-content: flex-start; gap: 8px; margin: 6px 0 0; }

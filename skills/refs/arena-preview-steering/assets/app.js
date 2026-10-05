@@ -1521,15 +1521,15 @@ function approvalRow(item) {
   row.append(url, meta, actions);
   return row;
 }
-// The Downloads tab shows the key the userscript holds, so a stale key is visible at once.
+// The composer footer shows the key the userscript holds, so a stale key is visible at once.
+// Seven characters name the key without printing it in full into the log.
 function renderAgentKey(record) {
   if (!record) {
-    $('#agent-key').textContent = 'No agent key recorded yet.';
+    $('#agent-key').textContent = 'No key recorded.';
     return;
   }
-  const host = record.host ? ` · host ${record.host}` : '';
-  $('#agent-key').textContent =
-    `Agent key the userscript holds: ${record.key}${host} · set ${time(record.at)}`;
+  const host = record.host ? ` · ${record.host}` : '';
+  $('#agent-key').textContent = `Key ${record.key.slice(0, 7)}${host} · set ${time(record.at)}`;
 }
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);

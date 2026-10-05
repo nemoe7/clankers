@@ -2150,20 +2150,21 @@ test('preview client', async (t) => {
     assert.equal(taskTitle.focused, true);
   });
 
-  await t.test("The Downloads tab shows the key the userscript holds, and says so while none stands", async () => {
+  await t.test("The composer footer shows the key the userscript holds, and says so while none stands", async () => {
     state.agent_key = {
       key: 'K'.repeat(43),
       host: 'https://arena-proxy.example.ts.net',
       at: '2026-10-03T15:00:00+00:00',
     };
     await get('#refresh-notes').events.click();
-    assert.match(get('#agent-key').textContent, /K{43}/);
-    assert.match(get('#agent-key').textContent, /host https:\/\/arena-proxy\.example\.ts\.net/);
+    assert.match(get('#agent-key').textContent, /^Key K{7} · /, 'seven characters name the key');
+    assert.doesNotMatch(get('#agent-key').textContent, /K{8}/, 'the full key never prints');
+    assert.match(get('#agent-key').textContent, /https:\/\/arena-proxy\.example\.ts\.net/);
     state.agent_key = { key: 'K'.repeat(43), host: null, at: '2026-10-03T15:00:00+00:00' };
     await get('#refresh-notes').events.click();
-    assert.doesNotMatch(get('#agent-key').textContent, /host/);
+    assert.doesNotMatch(get('#agent-key').textContent, /example/);
     state.agent_key = null;
     await get('#refresh-notes').events.click();
-    assert.equal(get('#agent-key').textContent, 'No agent key recorded yet.');
+    assert.equal(get('#agent-key').textContent, 'No key recorded.');
   });
 });

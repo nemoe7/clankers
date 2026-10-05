@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Key command line**: The steering skill names `arena-preview key` for a call that needs the recorded key. The command prints the key, the host and the stamp.
 - **Copy receipt**: The copy-state receipt reads `Copied state as NDJSON.` and drops the record counts.
 - **Downloads fallback**: A download tries direct access, then AllOrigins, then CodeTabs with no opt-in. The per-URL proxy toggle leaves the page.
+- **Key line in the composer**: The agent key and host leave the Downloads tab for the composer footer. The line prints the first seven key characters in monospace.
 
 ### Changed
 
