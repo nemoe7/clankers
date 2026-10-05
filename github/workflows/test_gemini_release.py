@@ -267,6 +267,23 @@ def test_release_pipeline():
     lambda: release.response_text({"promptFeedback": {"blockReason": "SAFETY"}}),
     "blocked",
   )
+  # The chunk rounds cap the output; the compact combine round stays uncapped.
+  sent = []
+
+  def capture_call(model, action, payload):
+    sent.append(payload)
+    return {
+      "candidates": [
+        {"finishReason": "STOP", "content": {"parts": [{"text": "text"}]}}
+      ],
+      "usageMetadata": {},
+    }
+
+  with patch.object(release, "gemini_call", capture_call):
+    release.generate_once({"phase": "chunk"}, [{"id": "a", "text": "x"}], "test")
+    release.generate_once({"phase": "combine"}, [{"id": "a", "text": "x"}], "test")
+  assert sent[0]["generationConfig"] == {"maxOutputTokens": 8192}
+  assert "generationConfig" not in sent[1]
   with (
     patch.object(release, "remote_tag_sha", return_value="abc"),
     patch.object(release, "releases", return_value=[{"id": 1, "tag_name": "v2"}]),

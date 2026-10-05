@@ -144,6 +144,9 @@ TEMPLATE = """\
 # per minute; chunks are packed to 230,000 so one model's allowance answers one.
 MAX_INPUT_TOKENS = 250_000
 CHUNK_TOKENS = 230_000
+# A chunk answer is a summary and stays short; the compact combine round is left
+# uncapped, because its payload is already small.
+MAX_OUTPUT_TOKENS = 8192
 # Every cooldown carries this safety margin on top of the wait the API reports.
 SAFETY_SECONDS = 5
 SUCCESS_COOLDOWN = 60
@@ -581,9 +584,14 @@ def generate(context, evidence, model, on_success=None):
 def generate_once(context, evidence, model):
   request = request_for(context, evidence)
   started = time.monotonic()
-  data = gemini_call(
-    model, "generateContent", {**request, "generationConfig": {"maxOutputTokens": 8192}}
+  # The chunk rounds cap their output; the final summarization reads a compact payload,
+  # so its output stays uncapped and a long combination cannot truncate.
+  config = (
+    {}
+    if context.get("phase") == "combine"
+    else {"generationConfig": {"maxOutputTokens": MAX_OUTPUT_TOKENS}}
   )
+  data = gemini_call(model, "generateContent", {**request, **config})
   text = response_text(data)
   usage = data.get("usageMetadata") or {}
   summary(
