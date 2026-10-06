@@ -94,6 +94,7 @@ let counter = 0;
 let sendHandler;
 let state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
 let stateFails = false;
+let stateGatewayBody = null;
 let reportFields = 0;
 let reportRevision = '2026-09-22T12:00:00.100000+00:00';
 let reportPublished = '2026-09-22T12:00:00.100000+00:00';
@@ -141,7 +142,11 @@ const context = {
   setInterval: () => 1,
   clearInterval: () => {},
   fetch: async (url, options) => {
-    if (url === '/api/state') return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+    if (url === '/api/state') {
+      // A gateway in front of a dead server answers with its own page, not the app's JSON.
+      if (stateGatewayBody !== null) return { ok: false, status: 502, statusText: 'Bad Gateway', json: async () => ({}), text: async () => stateGatewayBody };
+      return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+    }
     if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
     if (url === '/api/report-sources') return response(state.reportSources || []);
     if (url === '/api/copy-state') {
@@ -937,6 +942,15 @@ test('preview client', async (t) => {
     assert.equal(get('#connection-dot').dataset.state, 'down');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Disconnected');
     assert.match(get('#connection-text').textContent, /Connection failed: server gone/);
+    // A Cloudflare page for the dead sandbox must not land in the header; the status stands in.
+    stateGatewayBody = '<!DOCTYPE html><html class="no-js ie6 oldie" lang="en-US"><head><title>arena-site.site | 502: Bad gateway</title></head><body><h2>Bad gateway</h2><p>Error code 502</p></body></html>';
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-text').textContent, 'Connection failed: HTTP 502 Bad Gateway. Draft kept; history may be stale.');
+    // A proxy that answers plain text keeps one short line of it, folded to 120 characters.
+    stateGatewayBody = `proxy refused\n${'x'.repeat(200)}`;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-text').textContent, `Connection failed: proxy refused ${'x'.repeat(106)}. Draft kept; history may be stale.`);
+    stateGatewayBody = null;
     stateFails = false;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');

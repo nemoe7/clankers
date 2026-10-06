@@ -333,8 +333,11 @@ async function request(path, options = {}) {
   if (!response.ok) {
     const message = await response.text();
     let error;
-    try { error = JSON.parse(message).error; } catch { error = message; }
-    throw new Error(error || `HTTP ${response.status}`);
+    try { error = JSON.parse(message).error; } catch {
+      // A gateway answers a dead backend with a long HTML page; keep the connection line short.
+      error = /^\s*</.test(message) ? '' : message.trim().replace(/\s+/g, ' ').slice(0, 120);
+    }
+    throw new Error(error || `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);
   }
   return response;
 }
