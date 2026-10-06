@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.9
+// @version      1.3.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1576,6 +1576,11 @@
     var heldEmojiAt = 0;
     var lastSpeechMark = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
+    // The waiting line shows a 16px spinner canvas beside rotating monospace status text.
+    // The words rotate, so the anchors stay structural: the spinner and its animated ellipsis.
+    var WAITING_SELECTOR =
+      'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]';
+    var HOURGLASS_EMOJI = "\u23F3";
     // The agent speaking in regular chat streams data-agent-word spans; the bubble rides
     // the stream while the stop control holds the turn open.
     var SPEECH_SELECTOR = "[data-agent-word]";
@@ -1817,12 +1822,24 @@
       return live;
     }
 
-    // Rank: a strong row beats the bubble, the bubble beats a stale group label, and the
+    // The waiting line carries no named action and no streamed words, so the hourglass
+    // ranks below both and shows while the model works on its own.
+    function waitingSignal(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") {
+        return false;
+      }
+      return doc.querySelectorAll(WAITING_SELECTOR).length > 0;
+    }
+
+    // Rank: a strong row beats the bubble, the bubble beats the waiting line, and the
     // hold smooths the gap between two bursts of any kind.
     function heldEmojiFor(doc) {
       var emoji = emojiForRow(strongRow(doc));
       if (!emoji && stopSignal(doc) && speechLive(doc)) {
         emoji = SPEECH_EMOJI;
+      }
+      if (!emoji && waitingSignal(doc)) {
+        emoji = HOURGLASS_EMOJI;
       }
       if (!emoji) {
         emoji = emojiForRow(liveRow(doc));
@@ -1883,6 +1900,7 @@
       strongRow: strongRow,
       stopSignal: stopSignal,
       speechLive: speechLive,
+      waitingSignal: waitingSignal,
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
       TITLE_PREFIX: TITLE_PREFIX,
@@ -1895,6 +1913,8 @@
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
       SPEECH_SELECTOR: SPEECH_SELECTOR,
       SPEECH_EMOJI: SPEECH_EMOJI,
+      WAITING_SELECTOR: WAITING_SELECTOR,
+      HOURGLASS_EMOJI: HOURGLASS_EMOJI,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       resetSpeech: function () { lastSpeechMark = null; },
       forgetPath: function () { lastPath = "/elsewhere"; },

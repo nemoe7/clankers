@@ -617,8 +617,11 @@ function checkTabTitle(api) {
   var strongRow = api.strongRow;
   var stopSignal = api.stopSignal;
   var speechLive = api.speechLive;
+  var waitingSignal = api.waitingSignal;
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
   var SPEECH_EMOJI = api.SPEECH_EMOJI;
+  var WAITING_SELECTOR = api.WAITING_SELECTOR;
+  var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
@@ -961,6 +964,24 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's waiting line: a 16px spinner canvas beside rotating monospace status
+  // text. The words rotate, so the mock returns the line for the structural selector.
+  function waitingDoc(messages, words) {
+    var line = { textContent: "descending gradients" };
+    return {
+      title: "ChatGPT",
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === WAITING_SELECTOR) return [line];
+        if (selector === MESSAGE_SELECTOR) return messages || [];
+        if (selector === SPEECH_SELECTOR) return words || [];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
   function resetSpeech() {
     api.resetSpeech();
     return null;
@@ -1131,6 +1152,23 @@ function checkTabTitle(api) {
     [polls('cat > "$HOOK" <<EOF\n# arena-preview-hook: poll the steering inbox'), false],
     [polls("python preview.py polls"), false],
     [polls('python - <<PY\np = Path("skills/arena-preview-steering/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
+    // The owner's waiting line: rotating words, one structural selector, one hourglass.
+    [WAITING_SELECTOR, 'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]'],
+    [waitingSignal(waitingDoc()), true],
+    [waitingSignal(setDoc), false],
+    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+    // A named action outranks the line, so the poll row keeps its own emoji.
+    [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers \uD83D\uDCA4"],
+    // Streamed words outrank the line too; the first burst raises the bubble.
+    [resetSpeech(), null],
+    [
+      desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }])),
+      TITLE_PREFIX + "clankers " + SPEECH_EMOJI,
+    ],
+    [expireHold(), null],
+    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
   ];
   function polls(text) {
     return api.POLL_RE.test(text.toLowerCase());

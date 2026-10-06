@@ -4,6 +4,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-06
+
+### Changed
+
+#### userscripts
+
+- **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.
+  The words rotate, so the selector anchors on the canvas and the animated ellipsis. Version 1.3.0.
+
 ## 2026-10-04
 
 ### Changed
