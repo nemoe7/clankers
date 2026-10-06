@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Global pause**: One entry, `Arena userscript — pause all`, stops every feature where it stands and flips to `Arena userscript — resume all`. The script saves the pause, so a reload keeps it, and the resume restores the features whose switch is ON. Arena 1.6.20.
+- **Scattered HTTP timers**: The key watch, the key rotation and the state watch land each call at a random moment in a 15-second band. The DOM ticks keep their steady interval. Arena 1.6.20.
 - **Captcha hold**: The prompt fill, the Open Steering click and the proxy key posts wait while the Arena security check shows.
   The tab title keeps the shield, each tab reads its own page, and the held work resumes when the check clears. Arena 1.6.17.
 - **Preview state download**: The userscript saves the preview state to one owner-chosen file, checked once a minute.
