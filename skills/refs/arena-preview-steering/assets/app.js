@@ -1008,41 +1008,8 @@ function showClock() {
 }
 showClock();
 setInterval(showClock, 1000);
-// A copied timestamp stops at the seconds: the fraction and the offset cost characters on every
-// line of a backup and carry nothing a restore needs. The store itself keeps full precision, so
-// this is a property of the copy and not of the record.
-function stamp(value) {
-  return typeof value === 'string'
-    ? value.replace(/\.\d+/, '').replace(/(?:Z|[+-]\d{2}:?\d{2})$/, '') : value;
-}
-// Copy state exports notes, tasks and report answers for `import-state`.
-// Report source copies remain Markdown for `publish`.
-// The JSON copies are minified on purpose: the agent parses them, and the whitespace only costs tokens.
-// A copied line carries its receipt too, so a restore keeps the time the acknowledgement was
-// actually written instead of the time the restore ran. Every key is present on every line,
-// null where absent, because the importer refuses a partial receipt rather than filling it in.
-// Copy state builds NDJSON from cached notes and tasks plus available report answers.
-// It does not write to disk. Report sources, uploads, downloads and display-only fields
-// are not restored by `import-state`; preserve the backup and republish report sources.
-const NOTE_LINE_KEYS = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-const TASK_LINE_KEYS = ['id', 'title', 'details', 'status', 'order', 'blocked'];
-function restoreLine(record, keys) {
-  const line = {};
-  for (const key of keys) line[key] = record[key] ?? null;
-  return line;
-}
-function restoreCopy(cached) {
-  // A session that has written no task yet is sent `tasks: null`, and its notes are still a log worth
-  // copying, so the queue defaults to two empty divs instead of cancelling the copy.
-  const tasks = cached.tasks || {};
-  return {
-    notes: cached.notes.map(note => restoreLine(note, NOTE_LINE_KEYS)),
-    tasks: {
-      upcoming: (tasks.upcoming || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
-      finished: (tasks.finished || []).map(task => restoreLine(task, TASK_LINE_KEYS)),
-    },
-  };
-}
+// Copy state exports notes, tasks and report answers for `import-state`; the server
+// builds the NDJSON and one fetch carries the copy.
 const copyStateButton = $('#copy-state');
 const saveStateButton = $('#save-state');
 function stateSaveName(payload) {
@@ -1090,41 +1057,17 @@ saveStateButton.addEventListener('click', async () => {
   }
 });
 
-function stateLines(state, answers = [], reports = []) {
-  return [...state.notes, ...state.tasks.upcoming, ...state.tasks.finished, ...answers, ...reports];
-}
 copyStateButton.addEventListener('click', async () => {
   // The server holds the same NDJSON the save file carries, so one fetch carries the copy.
-  // The cached assembly stays as the fallback for a server that does not answer the route.
   let payload = null;
   try { payload = await (await request('/api/copy-state')).json(); }
   catch { payload = null; }
-  if (payload) {
-    await copyFrom(copyStateButton, payload.text, 'state');
-    status.textContent = 'Copied state as NDJSON.';
+  if (!payload || !payload.text) {
+    status.textContent = 'The state route did not answer; nothing is copied.';
     return;
   }
-  let cached = null;
-  try { cached = JSON.parse(stored('state-cache') || 'null'); } catch { cached = null; }
-  const state = cached && Array.isArray(cached.notes) ? restoreCopy(cached) : null;
-  if (!state) status.textContent = 'Nothing cached to copy yet; the page caches its copy on every poll.';
-  let answers = null;
-  let reports = null;
-  if (state) {
-    try { answers = await (await request('/api/submissions')).json(); }
-    catch { answers = null; }
-    try { reports = await (await request('/api/report-sources')).json(); }
-    catch { reports = null; }
-  }
-  // One JSON line per record is the save format accepted by `import-state`.
-  const lines = state ? stateLines(state, answers || [], reports || []) : [];
-  const text = state ? `${lines.map(line => JSON.stringify(line)).join('\n')}\n` : null;
-  await copyFrom(copyStateButton, text, 'state');
-  if (state) {
-    status.textContent = answers && reports
-      ? 'Copied state as NDJSON.'
-      : 'Copied state as NDJSON. The answers or the report sources did not arrive.';
-  }
+  await copyFrom(copyStateButton, payload.text, 'state');
+  status.textContent = 'Copied state as NDJSON.';
 });
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;

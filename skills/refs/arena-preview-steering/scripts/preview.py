@@ -1900,13 +1900,6 @@ class Store:
     path.write_text(state_ndjson(lines), encoding="utf-8")
     return {"path": str(path), **counts}
 
-  def upload(self, upload_id):
-    """One upload record by ID, or None; the tests read a record back through it."""
-    identifier(upload_id)
-    with closing(self.connect()) as db:
-      row = db.execute("SELECT * FROM uploads WHERE id = ?", (upload_id,)).fetchone()
-    return None if row is None else upload_row(row, self.path.parent)
-
   def uploads(self):
     """Every upload, newest last, with `present` saying whether its bytes are still on disk."""
     with closing(self.connect()) as db:
@@ -3329,12 +3322,6 @@ def handler(store):
       ):
         self.problem(404, "Not found")
         return
-      # The owner dropped the write-token check; the original doc clause survives here for recovery:
-      # Reload the preview after a server restart to refresh its write token; preserve unsent drafts.
-      # supplied = self.headers.get("X-Preview-Token", "").encode("utf-8")
-      # if not secrets.compare_digest(supplied, token.encode("ascii")):
-      #   self.problem(403, "Reload the preview, then retry; your draft is kept")
-      #   return
       # A composed note carries its files and text in one multipart request.
       content_type = self.headers.get("Content-Type", "")
       if note_upload:

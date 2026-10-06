@@ -1542,23 +1542,17 @@ test('preview client', async (t) => {
     assert.equal(copied.length, 1, 'the server export copies without a client cache');
     assert.match(get('#send-status').textContent,
       /^Copied state as NDJSON/);
-    // With the route down, the cached assembly is the fallback. The store retries once, so a
+    // With the route down, nothing is copied: the server builds the copy, and the page
+    // says so instead of assembling one from its cache. The store retries once, so a
     // failing route costs about a second per call.
     state.copyStateFails = true;
-    storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     copied.length = 0;
     stateCopyButton.events.click();
     await new Promise(done => setTimeout(done, 1200));
     await tick();
-    assert.equal(copied.length, 1, 'the fallback copies the cached assembly');
-    assert.ok(copied.at(-1).includes('saved'), 'the fallback carries the cached note');
-    storage.delete(cacheKey);
-    copied.length = 0;
-    stateCopyButton.events.click();
-    await new Promise(done => setTimeout(done, 1200));
-    await tick();
-    assert.equal(copied.length, 0, 'no route and no cache leaves nothing to copy');
-    assert.match(get('#send-status').textContent, /Nothing cached to copy yet/);
+    assert.equal(copied.length, 0, 'a down route copies nothing');
+    assert.equal(get('#send-status').textContent,
+      'The state route did not answer; nothing is copied.');
     delete state.copyStateFails;
   });
 

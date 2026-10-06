@@ -1446,11 +1446,13 @@ def test_note_owns_one_attachment():
     attached = preview.Store(attached_dir, create=True)
     raw = bytes(range(256)) + b"\r\nline two\x00"
     with patch.object(preview.time, "time", return_value=1_760_000_000):
-      note = attached.note_with_upload(
-        "linked-note", "Read this file", "old name.bin", "application/octet-stream", raw
+      note = attached.note_with_uploads(
+        "linked-note",
+        "Read this file",
+        [("old name.bin", "application/octet-stream", raw)],
       )
     assert note["id"] == "linked-note" and note["text"] == "Read this file"
-    record = attached.upload("linked-note")
+    record = attached.uploads()[0]
     assert record["name"] == "old name.bin" and record["size"] == len(raw)
     assert Path(record["path"]).name == "linked--1760000000-old-name.bin"
     assert Path(record["path"]).read_bytes() == raw
@@ -1458,8 +1460,10 @@ def test_note_owns_one_attachment():
     assert attached.state()["notes"][0]["attachment_name"] == "old name.bin"
     assert attached.read()["pending"][0]["attachment_path"] == record["path"]
     attached.acknowledge(["linked-note"], "note", "Seen")
-    again = attached.note_with_upload(
-      "linked-note", "Read this file", "old name.bin", "application/octet-stream", raw
+    again = attached.note_with_uploads(
+      "linked-note",
+      "Read this file",
+      [("old name.bin", "application/octet-stream", raw)],
     )
     assert (
       preview.clip_stamp(again["acknowledged_at"])
@@ -1468,8 +1472,8 @@ def test_note_owns_one_attachment():
     assert len(attached.uploads()) == 1 and len(attached.state()["notes"]) == 1
     for text, content in (("Different text", raw), ("Read this file", b"different")):
       try:
-        attached.note_with_upload(
-          "linked-note", text, "old name.bin", "application/octet-stream", content
+        attached.note_with_uploads(
+          "linked-note", text, [("old name.bin", "application/octet-stream", content)]
         )
         raise AssertionError("A reused note ID replaced an attachment or its text")
       except ValueError:
@@ -1561,7 +1565,9 @@ def test_upload_filenames_are_unique():
     ]
     with patch.object(preview.time, "time", return_value=1_760_000_000):
       first = store.note_with_uploads("abcdefg-one", "Three files", files)
-      second = store.note_with_upload("abcdefg-two", "Same prefix and name", *files[0])
+      second = store.note_with_uploads(
+        "abcdefg-two", "Same prefix and name", [files[0]]
+      )
     names = [Path(item["path"]).name for item in first["attachments"]]
     second_record = second["attachments"][0]
     names.append(Path(second_record["path"]).name)
@@ -1611,10 +1617,11 @@ def test_upload_record_migration():
     Path(old_upload_dir, "uploads").mkdir()
     Path(old_upload_dir, "uploads", "old-file.png").write_bytes(b"PNG")
     migrated = preview.Store(old_upload_dir)
-    assert migrated.upload("old-file")["note_id"] == "old-file"
+    old_record = migrated.uploads()[0]
+    assert old_record["note_id"] == "old-file"
     migrated.note("old-file", "Upload: photo.png")
     assert migrated.state()["notes"][0]["attachments"][0]["name"] == "photo.png"
-    assert Path(migrated.upload("old-file")["path"]).read_bytes() == b"PNG"
+    assert Path(old_record["path"]).read_bytes() == b"PNG"
 
 
 def test_http_note_attachment():
