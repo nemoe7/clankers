@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.7.0
+// @version      1.7.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -764,7 +764,10 @@
       if (captchaSignal(document)) return;
       postKeyToPreview(false);
       if (!isComposerUrl(location.href)) {
+        // A route away from the composer ends that conversation's fill: a return to
+        // /agent is a new chat, so the same repo fills again.
         lastSlug = null;
+        filledSlug = null;
         return;
       }
       var slug = readSlug(document);

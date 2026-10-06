@@ -566,6 +566,14 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     popstates.forEach((fn) => fn());
     flush();
     assert.equal(clicked, 1, "The steering click returns when the check clears");
+    // A session route and a return to a new chat: the fill memory left with the route,
+    // so the same repo fills its new conversation again.
+    composer.innerText = "";
+    goto("/agent");
+    popstates.forEach((fn) => fn());
+    flush();
+    await settle();
+    assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns on a new chat after a session route");
     console.log("ok captcha hold: fill, steering click, proxy posts wait for the check");
   });
 }
