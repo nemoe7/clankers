@@ -3931,3 +3931,37 @@ def test_report_sources_ride_in_the_saved_state():
     assert report["title"] == "Pick one"
     assert "Choice? {#pick}" in report["markdown"]
     assert report["published_at"]
+
+
+def test_task_detail_steps():
+  # A task detail is one step per line: a block splits on its line breaks, and a wall of
+  # text is refused before anything is written.
+  script = str(Path(preview.__file__))
+  with tempfile.TemporaryDirectory() as tasks_dir:
+    preview.Store(tasks_dir, create=True)
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": tasks_dir}
+    out = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "task",
+        "steps",
+        "Steps",
+        "--task-details",
+        "read it\n\n fix it \ncheck it",
+      ],
+      capture_output=True,
+      text=True,
+      check=True,
+      env=env,
+    ).stdout
+    assert json.loads(out)["details"] == ["read it", "fix it", "check it"]
+    wall = subprocess.run(
+      [sys.executable, script, "task", "wall", "Wall", "--task-details", "y" * 400],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert wall.returncode != 0 and "one step per line" in wall.stderr
+    assert "wall" not in {item["id"] for item in preview.Store(tasks_dir).list_tasks()}

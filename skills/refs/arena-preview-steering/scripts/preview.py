@@ -515,6 +515,8 @@ TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 MAX_TASK_TITLE = 200
 MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
+# A task detail is one step: a longer line is a wall of text, and the tool refuses it.
+TASK_STEP_MAX = 120
 ECHO_DETAIL = 200
 TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked"
 # The save file carries note, task and answer lines through one importer. Keys are named
@@ -1046,6 +1048,25 @@ def parse_state_import(text):
   if not value:
     raise ValueError("Nothing to import")
   return value
+
+
+def task_steps(details):
+  """One step per line: a line break inside one argument becomes a break between steps."""
+  steps = []
+  for item in details or ():
+    steps.extend(part.strip() for part in str(item).splitlines())
+  return [step for step in steps if step]
+
+
+def check_task_steps(details):
+  """Refuse a wall of text: each detail is one step on one short line."""
+  for step in details or ():
+    if len(step) > TASK_STEP_MAX:
+      raise ValueError(
+        "A task detail is one step per line,"
+        f" {TASK_STEP_MAX} characters or fewer; this line runs {len(step)}."
+        " Split it and repeat --task-details"
+      )
 
 
 def check_task(task_id, title, details):
@@ -3447,7 +3468,7 @@ def main():
   task.add_argument(
     "--task-details",
     action="append",
-    help="One detail line, repeatable; an empty string clears the list",
+    help="One step per line, 120 characters or fewer, repeatable; an empty string clears the list",
   )
   task.add_argument(
     "--blocked",
@@ -3590,6 +3611,9 @@ def main():
       details = args.task_details
       if details is None and args.detail_arg:
         details = args.detail_arg
+      if details is not None:
+        details = task_steps(details)
+        check_task_steps(details)
       if args.amend:
         store.amend_task(args.amend, task_id)
       if args.msg_id:
