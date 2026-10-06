@@ -103,7 +103,6 @@ Distilled from the system prompts of the top agent models on Arena Leaderboards 
    the reply a fresh instance would give with the same rules.
 6. Anchor identity with a name. "You are still X" works better than "stay in character".
 7. If your harness supports hooks, re-inject the rules on long sessions and after compaction.
-   (For Kilo, see `kilo/enforce-rules-plugin/`.)
 
 ### 7. Economy
 

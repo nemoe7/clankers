@@ -55,6 +55,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### skills
+
+- **Kilo path**: The `amending-violations` skill drops the directory path in the persistence item. The rule stays: re-inject the rules on long sessions and after compaction.
+
 #### preview
 
 - **Message table spacing**: A table inside a message takes tight rows, so a three-column table no longer eats the Messages tab.
