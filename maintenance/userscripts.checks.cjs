@@ -10,10 +10,25 @@ const vm = require("node:vm");
 
 function loadChecks(file) {
   const source = fs.readFileSync(path.join(__dirname, "../userscripts", file), "utf8");
-  // fetch resolves against the host realm at call time, so one case can drive it.
-  const context = { console, URL, fetch: (...args) => globalThis.fetch(...args) };
+  // fetch resolves against the host realm at call time, so one case can drive it. The
+  // session store lives in the VM realm too, so a case can plant a saved slug.
+  const session = {
+    value: null,
+    getItem() {
+      return session.value;
+    },
+    setItem(key, value) {
+      session.value = value;
+    },
+  };
+  const context = {
+    console,
+    URL,
+    sessionStorage: session,
+    fetch: (...args) => globalThis.fetch(...args),
+  };
   vm.runInNewContext(source, context, { filename: file });
-  return context.CLANKERS_CHECKS;
+  return { checks: context.CLANKERS_CHECKS, session };
 }
 
 function checkLogging(api) {
@@ -1516,11 +1531,12 @@ function run(name, check) {
   }
 }
 
-function checkStateDownload(api) {
+function checkStateDownload(api, session) {
   var stateFileName = api.stateFileName;
   var stateDownload = api.stateDownload;
   var stateDelivery = api.stateDelivery;
   var stateScope = api.stateScope;
+  var stateRepo = api.stateRepo;
   var pagePicker = api.pagePicker;
   var counts = { notes: 12, tasks: 4 };
   var repo = "clankers";
@@ -1595,6 +1611,21 @@ function checkStateDownload(api) {
     stateFileName(scope.repo, scope.branch, "2026-10-06T06:12:33", counts),
     "arena-state-clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
   );
+  // The server stamp carries the timezone; the name keeps the seconds alone.
+  assert.equal(
+    stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
+    "arena-state-clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
+  );
+  // The header leaves the page while a dialog holds it, so the fill's saved slug names the
+  // repository; the branch stays empty.
+  session.value = "clankers";
+  assert.equal(stateRepo({ querySelector: function () { return null; } }), "clankers");
+  assert.equal(
+    stateScope({ querySelector: function () { return null; } }).branch,
+    "",
+  );
+  session.value = null;
+  assert.equal(stateRepo({ querySelector: function () { return null; } }), "");
   // A title without the arrow falls back to the href; a page without the bar stays empty.
   branchLink.getAttribute = function (name) {
     if (name === "href") return "https://github.com/other/repo/tree/feat%2Fx";
@@ -1609,13 +1640,14 @@ function checkStateDownload(api) {
   // The picker call runs on the page window; a realm without one yields no picker rather
   // than a throw, which is what keeps the download route alive.
   assert.equal(pagePicker(), null);
-  console.log("ok state download 22");
+  console.log("ok state download 26");
 }
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
-const arena = loadChecks("arena.user.js");
+const arenaModule = loadChecks("arena.user.js");
+const arena = arenaModule.checks;
 test("prompt fill", () => checkPromptFill(arena.promptFill));
 run("arena logging", () => checkLogging(arena.logging));
 run("open steering", () => checkOpenSteering(arena.openSteering));
@@ -1623,9 +1655,9 @@ run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
 run("hide composer", () => checkHideComposer(arena.hideComposer));
 run("tab title", () => checkTabTitle(arena.tabTitle));
-run("state download", () => checkStateDownload(arena.stateDownload));
+run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session));
 
-const chatgpt = loadChecks("chatgpt.user.js");
+const chatgpt = loadChecks("chatgpt.user.js").checks;
 run("hide elements", () => checkHideElements(chatgpt.hideElements));
 run("chatgpt logging", () => checkLogging(chatgpt.logging));
 run("auto think", () => checkAutoThink(chatgpt.autoThink));

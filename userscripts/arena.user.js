@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.3
+// @version      1.6.4
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1562,7 +1562,8 @@
     var scope = [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
     var when = String(stamp || "")
       .replace(/[-:]/g, "")
-      .replace(/\..*$/, "");
+      .replace(/\..*$/, "")
+      .replace(/\+.*$/, "");
     var name = "arena-state-" + scope + (when ? "-" + when : "");
     if (counts) {
       name += "-n" + (counts.notes || 0) + "-t" + (counts.tasks || 0);
@@ -1612,9 +1613,21 @@
   var STATE_BAR_SELECTOR =
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
 
+  var STATE_SLUG_KEY = "clankers-arena-agent-slug";
+
+  // The header leaves the page while a dialog holds it, so the slug the prompt fill saved
+  // stands in for the bar. A page without both keeps the repo empty.
+  function savedSlug() {
+    try {
+      return String(sessionStorage.getItem(STATE_SLUG_KEY) || "").trim();
+    } catch (err) {
+      return "";
+    }
+  }
+
   function stateRepo(doc) {
     var bar = doc.querySelector(STATE_BAR_SELECTOR);
-    if (!bar) return "";
+    if (!bar) return savedSlug();
     var spans = bar.querySelectorAll("span.truncate");
     var i;
     for (i = 0; i < spans.length; i += 1) {
@@ -1622,10 +1635,10 @@
       var slash = text.indexOf("/");
       if (slash > 0 && slash < text.length - 1) {
         var repo = text.slice(slash + 1);
-        if (repo.indexOf("/") === -1 && !/\s/.test(repo)) return repo;
+        if (repo.indexOf("/") === -1 && !/\s/.test(text)) return repo;
       }
     }
-    return "";
+    return savedSlug();
   }
 
   function stateBranch(doc) {
@@ -1665,6 +1678,7 @@
       stateDownload: stateDownload,
       stateDelivery: stateDelivery,
       stateScope: stateScope,
+      stateRepo: stateRepo,
       pagePicker: pagePicker,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {

@@ -50,6 +50,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **State file name**: The saved name keeps the repository from the saved slug when the header leaves the page. The stamp drops its timezone offset. Version 1.6.4.
 - **Security check mark**: The tab title shows a shield while the Arena security check holds the page. The mark outranks the poll row, the speech bubble and the waiting line. Version 1.6.3.
 - **Tagged console log**: Both bundles log under one `[clankers]` tag. Feature switches, the prompt fill and the state save land in the devtools console filter. Arena 1.6.0, ChatGPT 1.3.0.
 - **Initial message fill**: The composer fill writes the initial-message block under the repo name. It drops the ARENA.md fetch and the `here is ARENA.md:` copy, because the agent reads the rules file from the repository. Version 1.5.0.
