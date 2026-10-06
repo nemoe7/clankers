@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.20
+// @version      1.6.21
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1554,13 +1554,17 @@
     };
   });
 
-  function stateFileName(repo, branch, stamp, counts) {
+  function stateScopeKey(repo, branch) {
     function part(value) {
       return String(value || "")
         .replace(/[^A-Za-z0-9._-]+/g, "-")
         .replace(/^-+|-+$/g, "");
     }
-    var scope = [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
+    return [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
+  }
+
+  function stateFileName(repo, branch, stamp, counts) {
+    var scope = stateScopeKey(repo, branch);
     var when = String(stamp || "")
       .replace(/[-:]/g, "")
       .replace(/\..*$/, "")
@@ -1725,6 +1729,7 @@
   runFeature("state-download", "Preview state download", function () {
     if (exposeChecks("stateDownload", {
       stateFileName: stateFileName,
+      stateScopeKey: stateScopeKey,
       stateDownload: stateDownload,
       stateMemory: stateMemory,
       stateRemembered: stateRemembered,
@@ -1744,9 +1749,17 @@
 
     var STATE_DB = "clankers-arena-state";
     var STATE_HINT_KEY = "clankers-arena-state-hinted";
-    var stampKey = "clankers-arena-state-stamp";
+    // One stamp memory and one chosen file per repo and branch, so two tabs of two
+    // sessions never share either.
+    function stampKey(scopeKey) {
+      return "clankers-arena-state-stamp-" + scopeKey;
+    }
+    function fileKey(scopeKey) {
+      return "state-file-" + scopeKey;
+    }
     var staleWarned = false;
     var picked = null;
+    var pickedKey = null;
     var frameLogged = false;
 
     function previewBase(doc) {
@@ -1807,14 +1820,14 @@
       });
     }
 
-    function stateHandle() {
+    function stateHandle(key) {
       return stateDb()
         .then(function (db) {
           return new Promise(function (resolve) {
             var request = db
               .transaction("files")
               .objectStore("files")
-              .get("state-file");
+              .get(key);
             request.onsuccess = function () {
               resolve(request.result || null);
             };
@@ -1828,12 +1841,12 @@
         });
     }
 
-    function saveStateHandle(handle) {
+    function saveStateHandle(handle, key) {
       return stateDb()
         .then(function (db) {
           db.transaction("files", "readwrite")
             .objectStore("files")
-            .put(handle, "state-file");
+            .put(handle, key);
         })
         .catch(function () {});
     }
@@ -1920,7 +1933,8 @@
           return;
         }
         var scope = stateScope(document);
-        var memory = stateRemembered(GM_getValue(stampKey, ""));
+        var storeKey = stateScopeKey(scope.repo, scope.branch);
+        var memory = stateRemembered(GM_getValue(stampKey(storeKey), ""));
         var plan = stateDownload(
           scope.repo,
           scope.branch,
@@ -1941,9 +1955,12 @@
           return;
         }
         var hasPicker = Boolean(pagePicker());
-        var ready = picked ? Promise.resolve(picked) : stateHandle();
+        var ready = pickedKey === storeKey && picked
+          ? Promise.resolve(picked)
+          : stateHandle(fileKey(storeKey));
         ready.then(function (handle) {
           picked = handle || null;
+          pickedKey = handle ? storeKey : null;
           var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
           logEvent("state", "route " + action);
           if (action === "unchanged" || action === "error") {
@@ -1958,13 +1975,14 @@
             writeToHandle(handle, body.text).then(
               function () {
                 GM_setValue(
-                  stampKey,
+                  stampKey(storeKey),
                   JSON.stringify(stateMemory(body.stamp, body.stamps)),
                 );
                 logEvent("state", "saved " + writtenName(handle, plan.name));
               },
               function (err) {
                 picked = null;
+                pickedKey = null;
                 logEvent(
                   "state",
                   "write failed (" + ((err && err.name) || "unknown") + "), asking for the file again",
@@ -1978,7 +1996,7 @@
           if (action === "download" && hasPicker && !handle) hintStateFile();
           logEvent("state", "stamped download: " + plan.name);
           writeStateDownload(body.text, plan.name);
-          GM_setValue(stampKey, JSON.stringify(stateMemory(body.stamp, body.stamps)));
+          GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(body.stamp, body.stamps)));
         });
       });
     }
@@ -2002,9 +2020,12 @@
         ],
       })
         .then(function (handle) {
-          return saveStateHandle(handle).then(function () {
+          var scope = stateScope(document);
+          var storeKey = stateScopeKey(scope.repo, scope.branch);
+          return saveStateHandle(handle, fileKey(storeKey)).then(function () {
             picked = handle;
-            GM_setValue(stampKey, "");
+            pickedKey = storeKey;
+            GM_setValue(stampKey(storeKey), "");
             fetchStateFile(true);
           });
         })

@@ -87,6 +87,8 @@ The first save asks for the file through the browser's own picker. After that th
 
 The name carries the repository, the branch, the stamp and the record counts, such as `arena-state-clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
 
+The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. The same repository and branch keeps one file, and the picker asks once per repository and branch.
+
 A stamp older than the last write never overwrites the file. The script says so once, quietly, and keeps the older file. A state with no stamp writes nothing.
 
 The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file. A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
