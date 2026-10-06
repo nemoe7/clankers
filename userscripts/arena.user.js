@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.5
+// @version      1.6.6
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -2243,6 +2243,17 @@
       return panel ? String(panel.textContent || "") : "";
     }
 
+    // A log line names the signal that won and the label behind it, so the console shows
+    // why the title took a mark.
+    function rowSource(row) {
+      var label = liveLabel(row);
+      var text = String(label || "").replace(/\s+/g, " ").trim().slice(0, 40);
+      if (POLL_RE.test(rowCommand(row).toLowerCase())) {
+        return "poll command" + (text ? " (" + text + ")" : "");
+      }
+      return "action row" + (text ? " (" + text + ")" : "");
+    }
+
     function emojiForRow(row) {
       if (!row) {
         return null;
@@ -2310,19 +2321,30 @@
     // the bubble beats the waiting line, and the hold smooths the gap between bursts.
     function heldEmojiFor(doc) {
       if (captchaSignal(doc)) {
+        titleReason = "security check";
         heldEmoji = CAPTCHA_EMOJI;
         heldEmojiAt = Date.now();
         return CAPTCHA_EMOJI;
       }
-      var emoji = emojiForRow(strongRow(doc));
+      var row = strongRow(doc);
+      var emoji = emojiForRow(row);
+      if (emoji) {
+        titleReason = rowSource(row);
+      }
       if (!emoji && stopSignal(doc) && speechLive(doc)) {
         emoji = SPEECH_EMOJI;
+        titleReason = "streaming words";
       }
       if (!emoji && waitingSignal(doc)) {
         emoji = HOURGLASS_EMOJI;
+        titleReason = "waiting line";
       }
       if (!emoji) {
-        emoji = emojiForRow(liveRow(doc));
+        row = liveRow(doc);
+        emoji = emojiForRow(row);
+        if (emoji) {
+          titleReason = rowSource(row);
+        }
       }
       if (emoji) {
         heldEmoji = emoji;
@@ -2330,9 +2352,11 @@
         return emoji;
       }
       if (heldEmoji && Date.now() - heldEmojiAt < EMOJI_HOLD_MS) {
+        titleReason = "hold";
         return heldEmoji;
       }
       heldEmoji = null;
+      titleReason = null;
       return null;
     }
 
@@ -2349,6 +2373,7 @@
 
     var appliedTitle = null;
     var priorTitle = null;
+    var titleReason = null;
     var lastRepo = null;
     var lastPath = null;
 
@@ -2358,6 +2383,7 @@
         if (doc.title === desired) {
           return false;
         }
+        logEvent("title", (titleReason || "title") + " -> " + desired);
         appliedTitle = desired;
         doc.title = desired;
         return true;
@@ -2398,6 +2424,7 @@
       CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
       CAPTCHA_EMOJI: CAPTCHA_EMOJI,
       captchaSignal: captchaSignal,
+      rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       resetSpeech: function () { lastSpeechMark = null; },
       forgetPath: function () { lastPath = "/elsewhere"; },

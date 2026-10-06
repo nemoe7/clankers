@@ -50,6 +50,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Title log lines**: Each tab-title change prints one `[clankers]` line: the signal that won, the label behind it and the emoji the title takes. Version 1.6.6.
 - **State download route**: The stamped save goes through the manager's own download, which the page download policy cannot block. The page link stays as the fallback. Version 1.6.5.
 - **State file name**: The saved name keeps the repository from the saved slug when the header leaves the page. The stamp drops its timezone offset. Version 1.6.4.
 - **Security check mark**: The tab title shows a shield while the Arena security check holds the page. The mark outranks the poll row, the speech bubble and the waiting line. Version 1.6.3.

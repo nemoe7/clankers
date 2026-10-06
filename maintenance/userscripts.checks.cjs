@@ -676,6 +676,7 @@ function checkTabTitle(api) {
   var SPEECH_EMOJI = api.SPEECH_EMOJI;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
+  var rowSource = api.rowSource;
   var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
   var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
   var captchaSignal = api.captchaSignal;
@@ -1250,7 +1251,39 @@ function checkTabTitle(api) {
     [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
     [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
     [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
+    // Every title change prints one line: the signal, then the emoji the title takes.
+    [
+      loggedTitle(captchaDoc()),
+      "[clankers] title security check -> " + TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI,
+    ],
+    // The label behind the row rides the line, so the cause is visible.
+    [
+      loggedTitle(waitingDoc([pollMessage])),
+      "[clankers] title poll command (running Bash) -> " + TITLE_PREFIX + "clankers \uD83D\uDCA4",
+    ],
+    [expireHold(), null],
+    [
+      loggedTitle(idleDoc),
+      "[clankers] title title -> " + TITLE_PREFIX + "clankers",
+    ],
   ];
+  // The title writes through syncTitle, which logs the signal that won. The capture keeps
+  // the host console clean and returns the last line.
+  function loggedTitle(doc) {
+    var lines = [];
+    var original = console.log;
+    console.log = function () {
+      lines.push(Array.prototype.join.call(arguments, " "));
+    };
+    try {
+      doc.title = "ChatGPT";
+      api.syncTitle(doc);
+    } finally {
+      console.log = original;
+    }
+    return lines.length ? lines[lines.length - 1] : "";
+  }
+
   function polls(text) {
     return api.POLL_RE.test(text.toLowerCase());
   }
