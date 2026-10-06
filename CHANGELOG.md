@@ -24,6 +24,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   A press arms one flag and writes no note. A second press clears the flag, so the owner can take the skip back.
   The agent's poll consumes an armed flag and the wait ends at once. No stale line waits in the log for a later turn to misread.
 
+#### arena
+
+- **PR close and reopen**: The Git section bans closing or reopening a PR, not even to retrigger its checks.
+  It lands on the approved proposal in report `proposal-arena-md-conduct-bans`.
+
 ### Changed
 
 #### arena

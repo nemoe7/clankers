@@ -186,6 +186,7 @@
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.
 - Keep the PR title current with the work; update it alongside the body.
 - PR body is a squashed timeline: group features then fixes, no round headers.
+- NEVER close or reopen a PR, not even to retrigger its checks.
 
 ## Workspace
 

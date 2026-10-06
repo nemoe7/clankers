@@ -123,6 +123,7 @@
 - `gh pr edit` may fail on older repos; update title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`.
 - **NEVER `-f body=@path`**; stage PR text in the workspace, NEVER /tmp. After every PATCH re-fetch title/body and diff against the staged file; a 200 is not proof.
 - PR body is a squashed timeline: features then fixes, no round headers.
+- NEVER close or reopen a PR, not even to retrigger its checks.
 
 ## Workspace
 
