@@ -1669,6 +1669,7 @@ function checkStateDownload(api, session) {
   var stateAction = api.stateAction;
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
+  var stateScopeKey = api.stateScopeKey;
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
   var stateTick = api.stateTick;
@@ -1841,6 +1842,13 @@ function checkStateDownload(api, session) {
   );
   session.value = null;
   assert.equal(stateRepo({ querySelector: function () { return null; } }), "");
+  // One storage scope per repo and branch, so a second tab of another session never
+  // shares the stamp memory or the chosen file with this one.
+  assert.equal(stateScopeKey("clankers", "main"), stateScopeKey("clankers", "main"));
+  assert.notEqual(stateScopeKey("clankers", "main"), stateScopeKey("widget", "main"));
+  assert.notEqual(stateScopeKey("clankers", "main"), stateScopeKey("clankers", "feat/x"));
+  assert.equal(stateScopeKey("", ""), "arena");
+  assert.equal(stateScopeKey("my repo", "feat/x"), "my-repo-feat-x");
   // The manager's download beats the page link, because the page policy can block a link.
   assert.equal(downloadRoute(true), "manager");
   assert.equal(downloadRoute(false), "link");
@@ -1891,7 +1899,7 @@ function checkStateDownload(api, session) {
     "a.ndjson stamp=2026-10-06T09:45:05+00:00 saved=2026-10-06T09:44:05+00:00",
   );
   assert.equal(stateTick("a.ndjson", "", ""), "a.ndjson stamp=none saved=none");
-  console.log("ok state download 31");
+  console.log("ok state download 32");
 }
 
 const { test } = require("node:test");
