@@ -609,6 +609,14 @@ def test_http_boundaries():
       assert sum(
         copy_payload["counts"][key] for key in ("notes", "tasks", "answers", "reports")
       ) == (len(copy_payload["text"].splitlines()))
+      # The download names its file with this stamp, so the name comes from the export
+      # rather than from the browser clock.
+      newest = max(
+        preview.import_stamp(record["at"])
+        for record in [*store.state()["notes"], *store.submissions()]
+        if record.get("at")
+      )
+      assert copy_payload["stamp"] == newest.isoformat()
       lines = json.loads(sources)
       assert "first" in [line["id"] for line in lines]
       first = next(line for line in lines if line["id"] == "first")

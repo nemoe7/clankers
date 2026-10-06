@@ -6,6 +6,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-06
 
+### Added
+
+#### userscripts
+
+- **Preview state download**: The userscript saves the preview state to one owner-chosen file, checked once a minute.
+  It writes only when the newest stamp moves, and an older stamp never overwrites the file.
+  The name carries the repo, the branch, the stamp and the record counts. Version 1.4.0.
+
 ### Changed
 
 #### arena

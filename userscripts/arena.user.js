@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.0
+// @version      1.4.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1537,6 +1537,356 @@
         }
       });
       spacerStyles.clear();
+    };
+  });
+
+  // The state leaves the sandbox through the owner's own browser, because the sandbox cannot
+  // push a file to the PC. The owner picks one file once; a minute tick compares the newest
+  // record stamp the server exports against the stamp of the last write and fills that file only
+  // when the state moved, so nothing piles up and a quiet minute writes nothing. A stamp that
+  // goes backward is a wiped or replaced preview and is refused, so a stale state never replaces
+  // the owner's file. The import stays the owner's own command: this side writes a file and never
+  // posts it back. The file name carries the repository, the branch, the stamp and the counts, so
+  // states from two repositories never collide in one folder.
+  function stateFileName(repo, branch, stamp, counts) {
+    function part(value) {
+      return String(value || "")
+        .replace(/[^A-Za-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+    var scope = [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
+    var when = String(stamp || "")
+      .replace(/[-:]/g, "")
+      .replace(/\..*$/, "");
+    var name = "arena-state-" + scope + (when ? "-" + when : "");
+    if (counts) {
+      name += "-n" + (counts.notes || 0) + "-t" + (counts.tasks || 0);
+    }
+    return name + ".ndjson";
+  }
+
+  function stateDownload(repo, branch, stamp, counts, remembered) {
+    if (!stamp) {
+      return {
+        kind: "error",
+        message: "The state carries no stamp; the next save names it.",
+      };
+    }
+    var name = stateFileName(repo, branch, stamp, counts);
+    if (remembered && remembered === stamp) {
+      return {
+        kind: "unchanged",
+        name: name,
+        message: "State unchanged since the last write: " + name,
+      };
+    }
+    if (remembered && String(stamp) < String(remembered)) {
+      return {
+        kind: "stale",
+        name: name,
+        message:
+          "Stale preview state (" + stamp + " is older than " + remembered + "); nothing written.",
+      };
+    }
+    return { kind: "download", name: name, message: "Wrote " + name };
+  }
+
+  // One decision point: a changed state goes to the chosen file, asks for one when the browser
+  // can write files, and falls back to a stamped download when it cannot.
+  function stateDelivery(plan, hasHandle, hasPicker) {
+    if (plan.kind !== "download") return plan.kind;
+    if (hasHandle) return "write";
+    return hasPicker ? "pick" : "download";
+  }
+
+  var STATE_WATCH_MS = 60 * 1000;
+
+  // The Arena repo bar carries the owner/repo pair and the branch anchor; the anchor's title
+  // reads `main → arena/x` and its href ends in `/tree/<branch>`, so the branch comes from the
+  // bar too. A page without the bar leaves the branch empty and the name keeps the repo alone.
+  var STATE_BAR_SELECTOR =
+    "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
+
+  function stateRepo(doc) {
+    var bar = doc.querySelector(STATE_BAR_SELECTOR);
+    if (!bar) return "";
+    var spans = bar.querySelectorAll("span.truncate");
+    var i;
+    for (i = 0; i < spans.length; i += 1) {
+      var text = String(spans[i].textContent || "").trim();
+      var slash = text.indexOf("/");
+      if (slash > 0 && slash < text.length - 1) {
+        var repo = text.slice(slash + 1);
+        if (repo.indexOf("/") === -1 && !/\s/.test(repo)) return repo;
+      }
+    }
+    return "";
+  }
+
+  function stateBranch(doc) {
+    var bar = doc.querySelector(STATE_BAR_SELECTOR);
+    if (!bar) return "";
+    var links = bar.querySelectorAll("a");
+    var i;
+    for (i = 0; i < links.length; i += 1) {
+      var href = String(links[i].getAttribute("href") || "");
+      var match = /\/tree\/([^?#]+)/.exec(href);
+      if (match) {
+        var decoded = "";
+        try {
+          decoded = decodeURIComponent(match[1]);
+        } catch (err) {
+          decoded = match[1];
+        }
+        if (decoded) return decoded;
+      }
+      var title = String(links[i].getAttribute("title") || "");
+      var arrow = title.indexOf("\u2192");
+      if (arrow !== -1) {
+        var branch = title.slice(arrow + 1).trim();
+        if (branch) return branch;
+      }
+    }
+    return "";
+  }
+
+  function stateScope(doc) {
+    return { repo: stateRepo(doc), branch: stateBranch(doc) };
+  }
+
+  runFeature("state-download", "Preview state download", function () {
+    if (exposeChecks("stateDownload", {
+      stateFileName: stateFileName,
+      stateDownload: stateDownload,
+      stateDelivery: stateDelivery,
+      stateScope: stateScope,
+      STATE_WATCH_MS: STATE_WATCH_MS,
+    })) {
+      return function () {};
+    }
+
+    var STATE_DB = "clankers-arena-state";
+    var STATE_HINT_KEY = "clankers-arena-state-hinted";
+    var stampKey = "clankers-arena-state-stamp";
+    var staleWarned = false;
+    var picked = null;
+
+    function previewBase(doc) {
+      var frames = doc.querySelectorAll("iframe[title]");
+      var i;
+      for (i = 0; i < frames.length; i += 1) {
+        var title = frames[i].getAttribute("title") || "";
+        if (title.indexOf("App preview on port 8000") === 0 && frames[i].src) {
+          return frames[i].src.replace(/\/+$/, "");
+        }
+      }
+      return null;
+    }
+
+    function getJson(url, done) {
+      if (typeof GM_xmlhttpRequest !== "function") return;
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: url,
+        headers: {},
+        onload: function (answer) {
+          var body = null;
+          try {
+            body = JSON.parse(answer.responseText);
+          } catch (err) {
+            body = null;
+          }
+          done(answer.status, body);
+        },
+        onerror: function () {
+          done(0, null);
+        },
+      });
+    }
+
+    function stateDb() {
+      return new Promise(function (resolve, reject) {
+        var request = indexedDB.open(STATE_DB, 1);
+        request.onupgradeneeded = function () {
+          request.result.createObjectStore("files");
+        };
+        request.onsuccess = function () {
+          resolve(request.result);
+        };
+        request.onerror = function () {
+          reject(request.error);
+        };
+      });
+    }
+
+    function stateHandle() {
+      return stateDb()
+        .then(function (db) {
+          return new Promise(function (resolve) {
+            var request = db
+              .transaction("files")
+              .objectStore("files")
+              .get("state-file");
+            request.onsuccess = function () {
+              resolve(request.result || null);
+            };
+            request.onerror = function () {
+              resolve(null);
+            };
+          });
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+
+    function saveStateHandle(handle) {
+      return stateDb()
+        .then(function (db) {
+          db.transaction("files", "readwrite")
+            .objectStore("files")
+            .put(handle, "state-file");
+        })
+        .catch(function () {});
+    }
+
+    function writeToHandle(handle, text) {
+      return handle.createWritable().then(function (writable) {
+        return writable.write(text).then(function () {
+          return writable.close();
+        });
+      });
+    }
+
+    function hintStateFile() {
+      if (GM_getValue(STATE_HINT_KEY, false)) return;
+      GM_setValue(STATE_HINT_KEY, true);
+      window.alert(
+        "Pick the state file once from the Tampermonkey menu: Arena preview state — choose the file.",
+      );
+    }
+
+    function writeStateDownload(text, name) {
+      var url = URL.createObjectURL(
+        new Blob([text], { type: "application/x-ndjson" }),
+      );
+      var anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    }
+
+    function fetchStateFile(manual) {
+      var base = previewBase(document);
+      if (!base) return;
+      getJson(base + "/api/copy-state", function (status, body) {
+        if (status !== 200 || !body) return;
+        var scope = stateScope(document);
+        var plan = stateDownload(
+          scope.repo,
+          scope.branch,
+          body.stamp,
+          body.counts,
+          GM_getValue(stampKey, ""),
+        );
+        if (plan.kind === "stale") {
+          if (manual || !staleWarned) window.alert(plan.message);
+          staleWarned = true;
+          return;
+        }
+        var hasPicker = typeof window.showSaveFilePicker === "function";
+        var ready = picked ? Promise.resolve(picked) : stateHandle();
+        ready.then(function (handle) {
+          picked = handle || null;
+          var route = stateDelivery(plan, Boolean(handle), hasPicker);
+          if (route === "unchanged" || route === "error") {
+            if (manual) window.alert(plan.message);
+            return;
+          }
+          if (route === "pick") {
+            if (manual) chooseStateFile();
+            else hintStateFile();
+            return;
+          }
+          if (route === "write") {
+            writeToHandle(handle, body.text).then(
+              function () {
+                GM_setValue(stampKey, body.stamp);
+              },
+              function () {
+                picked = null;
+                if (manual) chooseStateFile();
+                else hintStateFile();
+              },
+            );
+            return;
+          }
+          writeStateDownload(body.text, plan.name);
+          GM_setValue(stampKey, body.stamp);
+        });
+      });
+    }
+
+    function chooseStateFile() {
+      if (typeof window.showSaveFilePicker !== "function") {
+        window.alert(
+          "This browser cannot write the state file; the stamped download is used instead.",
+        );
+        return;
+      }
+      window
+        .showSaveFilePicker({
+          suggestedName: (function () {
+            var scope = stateScope(document);
+            return stateFileName(scope.repo, scope.branch, "", null);
+          })(),
+          types: [
+            {
+              description: "NDJSON state",
+              accept: { "application/x-ndjson": [".ndjson"] },
+            },
+          ],
+        })
+        .then(function (handle) {
+          return saveStateHandle(handle).then(function () {
+            picked = handle;
+            // A fresh pick fills the file at once, even when the state has not moved.
+            GM_setValue(stampKey, "");
+            fetchStateFile(true);
+          });
+        })
+        .catch(function () {});
+    }
+
+    var menus = [];
+    if (typeof GM_registerMenuCommand === "function") {
+      menus.push(
+        GM_registerMenuCommand("Arena preview state — choose the file", chooseStateFile),
+      );
+      menus.push(
+        GM_registerMenuCommand("Arena preview state — save now", function () {
+          fetchStateFile(true);
+        }),
+      );
+    }
+
+    fetchStateFile(false);
+    var timer = setInterval(function () {
+      fetchStateFile(false);
+    }, STATE_WATCH_MS);
+    return function () {
+      clearInterval(timer);
+      if (typeof GM_unregisterMenuCommand === "function") {
+        menus.forEach(function (id) {
+          GM_unregisterMenuCommand(id);
+        });
+      }
+      menus = [];
     };
   });
 

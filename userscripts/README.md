@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Feature switches |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Tab title |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Preview state download, Tab title |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-Seven features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
+Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
@@ -74,6 +74,18 @@ The trim waits for the page to settle. It touches nothing while a turn streams, 
 A row is a child of the outermost `div.flex.flex-col.gap-2` block. It can hold text, a tool call, a thinking line or a status line. Only attached rows count, and the oldest rows leave first.
 
 The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you remove the message there.
+
+## Arena Preview State Download
+
+The feature saves the preview state to one file, without a click. It asks the preview once a minute. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
+
+The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file instead.
+
+The name carries the repository, the branch, the stamp and the record counts, such as `arena-state-clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
+
+A stamp older than the last write never overwrites the file. The script says so once, quietly, and keeps the older file. A state with no stamp writes nothing.
+
+Two menu entries sit with the feature: `Arena preview state — choose the file` and `Arena preview state — save now`. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
 
 ## Arena Tab Title
 

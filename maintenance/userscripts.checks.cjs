@@ -1452,6 +1452,98 @@ function run(name, check) {
   }
 }
 
+function checkStateDownload(api) {
+  var stateFileName = api.stateFileName;
+  var stateDownload = api.stateDownload;
+  var stateDelivery = api.stateDelivery;
+  var stateScope = api.stateScope;
+  var counts = { notes: 12, tasks: 4 };
+  var repo = "clankers";
+  var branch = "main";
+  // The name carries the repository, the branch, the server's stamp and the record counts, so
+  // two repos never collide in one folder and the newest file is obvious.
+  assert.equal(
+    stateFileName(repo, branch, "2026-10-06T06:12:33.123456+00:00", counts),
+    "arena-state-clankers-main-20261006T061233-n12-t4.ndjson",
+  );
+  assert.equal(
+    stateFileName("my repo", "feat/x", "2026-10-06T06:12:33", counts),
+    "arena-state-my-repo-feat-x-20261006T061233-n12-t4.ndjson",
+  );
+  assert.equal(
+    stateFileName("", "", "2026-10-06T06:12:33", counts),
+    "arena-state-arena-20261006T061233-n12-t4.ndjson",
+  );
+  assert.equal(
+    stateFileName(repo, branch, "2026-10-06T06:12:33", { notes: 0, tasks: 0 }),
+    "arena-state-clankers-main-20261006T061233-n0-t0.ndjson",
+  );
+  assert.equal(stateFileName(repo, branch, null, counts), "arena-state-clankers-main-n12-t4.ndjson");
+  // Only a stamp that differs from the last write fills the file.
+  assert.equal(stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "").kind, "download");
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-05T20:00:00").kind,
+    "download",
+  );
+  var repeated = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
+  assert.equal(repeated.kind, "unchanged");
+  assert.equal(repeated.name, "arena-state-clankers-main-20261006T061233-n12-t4.ndjson");
+  assert.match(repeated.message, /unchanged since the last write/);
+  // A stamp that goes backward is a wiped or replaced preview, so nothing overwrites the
+  // owner's file with an older state.
+  var stale = stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33");
+  assert.equal(stale.kind, "stale");
+  assert.match(stale.message, /Stale preview state/);
+  // A payload with no stamp says so instead of writing an undated file.
+  var unstamped = stateDownload(repo, branch, null, counts, "");
+  assert.equal(unstamped.kind, "error");
+  assert.match(unstamped.message, /carries no stamp/);
+  // One route per state: the chosen file, the one-time pick, or the stamped download on a
+  // browser without the file picker.
+  var fresh = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "");
+  assert.equal(stateDelivery(fresh, true, true), "write");
+  assert.equal(stateDelivery(fresh, false, true), "pick");
+  assert.equal(stateDelivery(fresh, false, false), "download");
+  assert.equal(stateDelivery(repeated, true, true), "unchanged");
+  assert.equal(stateDelivery(stale, true, true), "stale");
+  // The repo bar carries the pair and the branch anchor, so the name scopes to this repo and
+  // branch and two repos never collide in one folder.
+  var branchLink = {
+    getAttribute: function (name) {
+      if (name === "href") return "https://github.com/nemoe7/clankers/tree/arena%2F01a0fd4f-clankers";
+      if (name === "title") return "main \u2192 arena/01a0fd4f-clankers";
+      return null;
+    },
+  };
+  var bar = {
+    querySelectorAll: function (selector) {
+      if (selector === "span.truncate") return [{ textContent: "nemoe7/clankers" }];
+      if (selector === "a") return [branchLink];
+      return [];
+    },
+  };
+  var doc = { querySelector: function () { return bar; } };
+  var scope = stateScope(doc);
+  assert.equal(scope.repo, "clankers");
+  assert.equal(scope.branch, "arena/01a0fd4f-clankers");
+  assert.equal(
+    stateFileName(scope.repo, scope.branch, "2026-10-06T06:12:33", counts),
+    "arena-state-clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
+  );
+  // A title without the arrow falls back to the href; a page without the bar stays empty.
+  branchLink.getAttribute = function (name) {
+    if (name === "href") return "https://github.com/other/repo/tree/feat%2Fx";
+    return "";
+  };
+  assert.equal(stateScope(doc).branch, "feat/x");
+  // The structure crosses the VM realm, so it is compared as JSON.
+  assert.equal(
+    JSON.stringify(stateScope({ querySelector: function () { return null; } })),
+    JSON.stringify({ repo: "", branch: "" }),
+  );
+  console.log("ok state download 21");
+}
+
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
@@ -1462,6 +1554,7 @@ run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
 run("hide composer", () => checkHideComposer(arena.hideComposer));
 run("tab title", () => checkTabTitle(arena.tabTitle));
+run("state download", () => checkStateDownload(arena.stateDownload));
 
 const chatgpt = loadChecks("chatgpt.user.js");
 run("hide elements", () => checkHideElements(chatgpt.hideElements));

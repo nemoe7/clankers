@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 const bundles = {
   arena: {
-    features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1 },
+    features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0 },
     labels: {
       "prompt-fill": "Prompt fill",
       "open-steering": "Open Steering",
@@ -13,14 +13,16 @@ const bundles = {
       "auto-scroll": "Transcript auto-scroll",
       "transcript-trim": "Transcript trim",
       "tab-title": "Tab title",
+      "state-download": "Preview state download",
     },
     offByDefault: ["transcript-trim"],
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 4 },
+    // The prompt fill owns the four proxy entries; the state download owns its two.
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 2 },
     countMenu: "Transcript trim: ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
     // The prompt fill owns two timers: the paint and the key watch. Both ride the one switch.
-    featureIntervals: { "tab-title": 1, "prompt-fill": 2 },
+    featureIntervals: { "tab-title": 1, "prompt-fill": 2, "state-download": 1 },
   },
   chatgpt: {
     features: { "hide-elements": 1, "auto-think": 0 },

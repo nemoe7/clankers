@@ -1772,6 +1772,23 @@ class Store:
       "reports": len(reports),
     }
 
+  def newest_stamp(self, notes):
+    """Return the newest note or answer stamp, in UTC, or None.
+
+    The owner's browser names a downloaded state with this stamp, so the name comes
+    from the state the server exports rather than from the browser clock. The pair
+    matches the two tables the import guard compares.
+    """
+    stamps = [
+      stamp
+      for stamp in (
+        [import_stamp(record.get("at")) for record in notes]
+        + [import_stamp(record.get("at")) for record in self.submissions()]
+      )
+      if stamp
+    ]
+    return max(stamps).isoformat() if stamps else None
+
   def save_state(self, payload):
     """Write the current state to the save file, in the shape the importer reads.
 
@@ -3082,11 +3099,18 @@ def handler(store):
         if path == "/api/copy-state":
           # One request carries what the save file carries, so the copy button copies the
           # server's own export instead of assembling notes, tasks, answers and reports.
-          lines, counts = store.state_lines(store.state()["notes"], store.tasks() or {})
+          # The stamp names a downloaded state, so its file name comes from the server.
+          notes = store.state()["notes"]
+          lines, counts = store.state_lines(notes, store.tasks() or {})
           self.reply(
             200,
             json.dumps(
-              {"text": state_ndjson(lines), "counts": counts}, ensure_ascii=False
+              {
+                "text": state_ndjson(lines),
+                "counts": counts,
+                "stamp": store.newest_stamp(notes),
+              },
+              ensure_ascii=False,
             ),
             "application/json; charset=utf-8",
           )
