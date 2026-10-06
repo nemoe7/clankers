@@ -63,6 +63,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **State log lines**: The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed picker and the stamped download each print a line. Version 1.6.1.
 - **Fill loop**: The prompt fill rewrote the composer on every DOM mutation when the editor changed the text, which made the page unresponsive. It writes once per repo per page now.
 
 #### preview

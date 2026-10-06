@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.0
+// @version      1.6.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1674,6 +1674,9 @@
     var stampKey = "clankers-arena-state-stamp";
     var staleWarned = false;
     var picked = null;
+    // One line per page per condition, so a failure is visible and the minute tick stays quiet.
+    var frameLogged = false;
+    var pickLogged = false;
 
     function previewBase(doc) {
       var frames = doc.querySelectorAll("iframe[title]");
@@ -1787,9 +1790,18 @@
 
     function fetchStateFile(manual) {
       var base = previewBase(document);
-      if (!base) return;
+      if (!base) {
+        if (!frameLogged) {
+          frameLogged = true;
+          logEvent("state", "no preview frame yet");
+        }
+        return;
+      }
       getJson(base + "/api/copy-state", function (status, body) {
-        if (status !== 200 || !body) return;
+        if (status !== 200 || !body) {
+          logEvent("state", "copy-state answered HTTP " + status);
+          return;
+        }
         var scope = stateScope(document);
         var plan = stateDownload(
           scope.repo,
@@ -1798,6 +1810,9 @@
           body.counts,
           GM_getValue(stampKey, ""),
         );
+        if (plan.kind !== "unchanged") {
+          logEvent("state", plan.kind + ": " + plan.name);
+        }
         if (plan.kind === "stale") {
           if (manual || !staleWarned) window.alert(plan.message);
           staleWarned = true;
@@ -1813,6 +1828,15 @@
             return;
           }
           if (route === "pick") {
+            if (!pickLogged) {
+              pickLogged = true;
+              logEvent(
+                "state",
+                hasPicker
+                  ? "no file chosen yet; pick one from the menu to overwrite it"
+                  : "this browser cannot write files; the stamped download is next",
+              );
+            }
             if (manual) chooseStateFile();
             else hintStateFile();
             return;
@@ -1823,15 +1847,19 @@
                 GM_setValue(stampKey, body.stamp);
                 logEvent("state", "saved");
               },
-              function () {
+              function (err) {
                 picked = null;
-                logEvent("state", "write failed, asking for the file again");
+                logEvent(
+                  "state",
+                  "write failed (" + ((err && err.name) || "unknown") + "), asking for the file again",
+                );
                 if (manual) chooseStateFile();
                 else hintStateFile();
               },
             );
             return;
           }
+          logEvent("state", "stamped download: " + plan.name);
           writeStateDownload(body.text, plan.name);
           GM_setValue(stampKey, body.stamp);
         });
@@ -1866,7 +1894,12 @@
             fetchStateFile(true);
           });
         })
-        .catch(function () {});
+        .catch(function (err) {
+          logEvent(
+            "state",
+            "picker closed without a file (" + ((err && err.name) || "unknown") + ")",
+          );
+        });
     }
 
     var menus = [];
