@@ -50,6 +50,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Security check mark**: The tab title shows a shield while the Arena security check holds the page. The mark outranks the poll row, the speech bubble and the waiting line. Version 1.6.3.
 - **Tagged console log**: Both bundles log under one `[clankers]` tag. Feature switches, the prompt fill and the state save land in the devtools console filter. Arena 1.6.0, ChatGPT 1.3.0.
 - **Initial message fill**: The composer fill writes the initial-message block under the repo name. It drops the ARENA.md fetch and the `here is ARENA.md:` copy, because the agent reads the rules file from the repository. Version 1.5.0.
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.

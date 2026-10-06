@@ -659,6 +659,9 @@ function checkTabTitle(api) {
   var SPEECH_EMOJI = api.SPEECH_EMOJI;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
+  var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
+  var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
+  var captchaSignal = api.captchaSignal;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
@@ -1019,6 +1022,23 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's security dialog: Arena shows it over the page and it holds until the
+  // check passes, so it outranks the poll row, the bubble and the waiting line.
+  function captchaDoc(messages) {
+    var frame = { title: "reCAPTCHA" };
+    return {
+      title: "ChatGPT",
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === CAPTCHA_SELECTOR) return [frame];
+        if (selector === MESSAGE_SELECTOR) return messages || [];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
   function resetSpeech() {
     api.resetSpeech();
     return null;
@@ -1206,6 +1226,13 @@ function checkTabTitle(api) {
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
     [expireHold(), null],
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
+    // The security check beats every other mark, including a poll row and the hourglass.
+    [CAPTCHA_SELECTOR, '.recaptcha-v2-container, iframe[title="reCAPTCHA"]'],
+    [captchaSignal(captchaDoc()), true],
+    [captchaSignal(idleDoc), false],
+    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
+    [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
+    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
   ];
   function polls(text) {
     return api.POLL_RE.test(text.toLowerCase());

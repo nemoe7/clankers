@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.2
+// @version      1.6.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1986,6 +1986,10 @@
     var WAITING_SELECTOR =
       'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]';
     var HOURGLASS_EMOJI = "\u23F3";
+    // A security check blocks the page until the owner acts, so its dialog outranks every
+    // other mark. The container class and the reCAPTCHA frame are both stable anchors.
+    var CAPTCHA_SELECTOR = '.recaptcha-v2-container, iframe[title="reCAPTCHA"]';
+    var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     // The agent speaking in regular chat streams data-agent-word spans; the bubble rides
     // the stream while the stop control holds the turn open.
     var SPEECH_SELECTOR = "[data-agent-word]";
@@ -2236,9 +2240,22 @@
       return doc.querySelectorAll(WAITING_SELECTOR).length > 0;
     }
 
-    // Rank: a strong row beats the bubble, the bubble beats the waiting line, and the
-    // hold smooths the gap between two bursts of any kind.
+    // The security dialog takes the whole page, so nothing else can be done while it shows.
+    function captchaSignal(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") {
+        return false;
+      }
+      return doc.querySelectorAll(CAPTCHA_SELECTOR).length > 0;
+    }
+
+    // Rank: the security check beats every other mark, a strong row beats the bubble,
+    // the bubble beats the waiting line, and the hold smooths the gap between bursts.
     function heldEmojiFor(doc) {
+      if (captchaSignal(doc)) {
+        heldEmoji = CAPTCHA_EMOJI;
+        heldEmojiAt = Date.now();
+        return CAPTCHA_EMOJI;
+      }
       var emoji = emojiForRow(strongRow(doc));
       if (!emoji && stopSignal(doc) && speechLive(doc)) {
         emoji = SPEECH_EMOJI;
@@ -2320,6 +2337,9 @@
       SPEECH_EMOJI: SPEECH_EMOJI,
       WAITING_SELECTOR: WAITING_SELECTOR,
       HOURGLASS_EMOJI: HOURGLASS_EMOJI,
+      CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
+      CAPTCHA_EMOJI: CAPTCHA_EMOJI,
+      captchaSignal: captchaSignal,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       resetSpeech: function () { lastSpeechMark = null; },
       forgetPath: function () { lastPath = "/elsewhere"; },
