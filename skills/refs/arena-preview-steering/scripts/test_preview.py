@@ -3511,6 +3511,16 @@ def test_skip_poll():
       assert code == 1 and sleeps == [10, 10]
       assert json.loads(printed[-1])["skip_poll"] is None
 
+      # A second press clears the flag: the agent keeps waiting, and the state says so.
+      assert store.request_skip_poll()["skip_poll"]
+      assert store.skip_poll_requested() is True
+      assert store.request_skip_poll(False) == {"skip_poll": None}
+      assert store.skip_poll_requested() is False
+      assert store.state()["skip_poll"] is None
+      assert store.read()["skip_poll"] is None
+      # A disarm with nothing armed stays a no-op, so a stale button never fails a press.
+      assert store.request_skip_poll(False) == {"skip_poll": None}
+
       # A pending message outranks the skip: the poll delivers it, and the skip still waits.
       store.request_skip_poll()
       store.note("skip-note", "arrived while a skip waits")
@@ -3881,6 +3891,24 @@ def test_skip_poll_route():
       assert json.loads(request("GET", "/api/state")[2])["skip_poll"] is None
     finally:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+    # A second press carries skip false: the flag clears and the state tells the page.
+    status, _, body = request(
+      "POST", "/api/skip-poll", '{"skip": true}', {"Content-Type": "application/json"}
+    )
+    assert status == 200 and json.loads(body)["skip_poll"]
+    status, _, body = request(
+      "POST", "/api/skip-poll", '{"skip": false}', {"Content-Type": "application/json"}
+    )
+    assert status == 200
+    assert json.loads(body)["skip_poll"] is None
+    assert json.loads(request("GET", "/api/state")[2])["skip_poll"] is None
+    # A value that is not a boolean names the field instead of arming the flag.
+    status, _, body = request(
+      "POST", "/api/skip-poll", '{"skip": "no"}', {"Content-Type": "application/json"}
+    )
+    assert status == 400 and "skip must be true or false" in body
+    assert store.skip_poll_requested() is False
 
 
 def test_push_gate_identical_to_main():

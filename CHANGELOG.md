@@ -17,7 +17,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Skip poll control**: The Message log toolbar carries a Skip poll button beside the refresh and composer controls.
-  A press arms one flag and writes no note. The agent's poll consumes it and the wait ends at once. No stale line waits in the log for a later turn to misread.
+  A press arms one flag and writes no note. A second press clears the flag, so the owner can take the skip back.
+  The agent's poll consumes an armed flag and the wait ends at once. No stale line waits in the log for a later turn to misread.
 
 ### Changed
 

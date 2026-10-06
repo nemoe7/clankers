@@ -2447,8 +2447,11 @@ class Store:
     age = seconds_since(self.meta_value(POLLING_META))
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
-  def request_skip_poll(self):
-    """Record the owner's Skip poll press; the next poll consumes it once."""
+  def request_skip_poll(self, armed=True):
+    """Arm or clear the owner's Skip poll press; the next poll consumes an armed flag once."""
+    if not armed:
+      self.take_skip_poll()
+      return {"skip_poll": None}
     self.set_meta(SKIP_POLL_META, now())
     return {"skip_poll": clip_stamp(self.meta_value(SKIP_POLL_META))}
 
@@ -3368,7 +3371,12 @@ def handler(store):
           self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
           return
         if skip_poll_post:
-          self.reply(200, json.dumps(store.request_skip_poll(), ensure_ascii=False))
+          armed = payload.get("skip", True)
+          if not isinstance(armed, bool):
+            raise ValueError("skip must be true or false")
+          self.reply(
+            200, json.dumps(store.request_skip_poll(armed), ensure_ascii=False)
+          )
           return
         if path == "/api/fetch-jobs":
           record = store.enqueue_fetch(
