@@ -1600,6 +1600,7 @@ function checkStateDownload(api, session) {
   var stateFileName = api.stateFileName;
   var stateDownload = api.stateDownload;
   var stateDelivery = api.stateDelivery;
+  var stateAction = api.stateAction;
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
   var pagePicker = api.pagePicker;
@@ -1711,7 +1712,14 @@ function checkStateDownload(api, session) {
   // The picker call runs on the page window; a realm without one yields no picker rather
   // than a throw, which is what keeps the download route alive.
   assert.equal(pagePicker(), null);
-  console.log("ok state download 28");
+  // A menu click grants no browser gesture, so the automatic path writes the stamped
+  // download and the pick stays a manual action.
+  assert.equal(stateAction("pick", false), "download");
+  assert.equal(stateAction("pick", true), "pick");
+  assert.equal(stateAction("download", false), "download");
+  assert.equal(stateAction("write", true), "write");
+  assert.equal(stateAction("unchanged", false), "unchanged");
+  console.log("ok state download 29");
 }
 
 const { test } = require("node:test");

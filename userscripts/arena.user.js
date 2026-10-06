@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.8
+// @version      1.6.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1606,6 +1606,13 @@
     return hasPicker ? "pick" : "download";
   }
 
+  // A menu click grants no browser gesture, so the picker cannot open on the automatic path:
+  // that path writes the stamped download, and the pick stays the owner's own menu action.
+  function stateAction(route, manual) {
+    if (route === "pick" && !manual) return "download";
+    return route;
+  }
+
   var STATE_WATCH_MS = 60 * 1000;
 
   // The Arena repo bar carries the owner/repo pair and the branch anchor; the anchor's title
@@ -1678,6 +1685,7 @@
       stateFileName: stateFileName,
       stateDownload: stateDownload,
       stateDelivery: stateDelivery,
+      stateAction: stateAction,
       stateScope: stateScope,
       stateRepo: stateRepo,
       pagePicker: pagePicker,
@@ -1695,7 +1703,6 @@
     var picked = null;
     // One line per page per condition, so a failure is visible and the minute tick stays quiet.
     var frameLogged = false;
-    var pickLogged = false;
 
     function previewBase(doc) {
       var frames = doc.querySelectorAll("iframe[title]");
@@ -1796,12 +1803,11 @@
       });
     }
 
+    // The owner reads the console, and a popup interrupts the preview: the note lands once.
     function hintStateFile() {
       if (GM_getValue(STATE_HINT_KEY, false)) return;
       GM_setValue(STATE_HINT_KEY, true);
-      window.alert(
-        "Pick the state file once from the Tampermonkey menu: Arena preview state — choose the file.",
-      );
+      logEvent("state", "no file chosen; the stamped download lands each new stamp");
     }
 
     // The manager's own download writes the file through the browser API, which the page's
@@ -1886,34 +1892,27 @@
           logEvent("state", plan.kind + ": " + plan.name);
         }
         if (plan.kind === "stale") {
-          if (manual || !staleWarned) window.alert(plan.message);
-          staleWarned = true;
+          // A popup interrupts the owner, so the console carries the reason once.
+          if (!staleWarned) {
+            staleWarned = true;
+            logEvent("state", "stale: " + plan.name);
+          }
           return;
         }
         var hasPicker = Boolean(pagePicker());
         var ready = picked ? Promise.resolve(picked) : stateHandle();
         ready.then(function (handle) {
           picked = handle || null;
-          var route = stateDelivery(plan, Boolean(handle), hasPicker);
-          if (route === "unchanged" || route === "error") {
-            if (manual) window.alert(plan.message);
+          var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
+          if (action === "unchanged" || action === "error") {
+            if (manual) logEvent("state", "no write: " + plan.kind);
             return;
           }
-          if (route === "pick") {
-            if (!pickLogged) {
-              pickLogged = true;
-              logEvent(
-                "state",
-                hasPicker
-                  ? "no file chosen yet; pick one from the menu to overwrite it"
-                  : "this browser cannot write files; the stamped download is next",
-              );
-            }
-            if (manual) chooseStateFile();
-            else hintStateFile();
+          if (action === "pick") {
+            chooseStateFile();
             return;
           }
-          if (route === "write") {
+          if (action === "write") {
             writeToHandle(handle, body.text).then(
               function () {
                 GM_setValue(stampKey, body.stamp);
@@ -1931,6 +1930,8 @@
             );
             return;
           }
+          // The picker cannot open without a click, so the note explains the download path.
+          if (action === "download" && hasPicker && !handle) hintStateFile();
           logEvent("state", "stamped download: " + plan.name);
           writeStateDownload(body.text, plan.name);
           GM_setValue(stampKey, body.stamp);
@@ -1941,9 +1942,7 @@
     function chooseStateFile() {
       var pick = pagePicker();
       if (!pick) {
-        window.alert(
-          "This browser cannot write the state file; the stamped download is used instead.",
-        );
+        logEvent("state", "this browser cannot write files; the stamped download is used");
         return;
       }
       pick({
