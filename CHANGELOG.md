@@ -30,6 +30,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Verbatim trigger**: The house clause names when a copy is verbatim: the user's word, the user's phrase `as is`, or a double-quoted passage.
   A Markdown quote stays context.
 
+#### preview
+
+- **Bash call tally**: The header names the bash calls alone, without the phrase since your last message.
+
 #### userscripts
 
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.

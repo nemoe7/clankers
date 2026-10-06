@@ -980,13 +980,13 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
-    // The header names the bash calls since the owner's last message, singular and plural.
+    // The header names the bash calls, singular and plural, and nothing else.
     state.calls_since_message = 94;
     await get('#refresh-notes').events.click(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 94 bash calls since your last message');
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 94 bash calls');
     state.calls_since_message = 1;
     await get('#refresh-notes').events.click(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 bash call since your last message');
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 bash call');
     state.calls_since_message = 0;
     await get('#refresh-notes').events.click(); await tick();
     assert.equal(get('#connection-dot').dataset.state, 'ok');

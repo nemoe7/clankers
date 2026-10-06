@@ -605,7 +605,7 @@ async function refreshState() {
     // The header carries the same tally the gate keeps, so the owner sees the call count
     // the stderr banner names without leaving the page.
     const calls = state.calls_since_message || 0;
-    const callsText = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'} since your last message` : '';
+    const callsText = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'}` : '';
     pollSince = state.polling ? stampMs(state.polling_since) : null;
     agentSeenAt = stampMs(state.agent_seen_at);
     agentSeenStamp = state.agent_seen_at;
