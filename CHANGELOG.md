@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Poll ceiling**: The poll wait spans 1800 seconds, the bash tool's own maximum.
 - **Bash call tally**: The header names the bash calls alone, without the phrase since your last message.
 
 #### userscripts

@@ -3315,7 +3315,7 @@ def test_poll_inbox():
     def sleeper(seconds):
       sleeps.append(seconds)
 
-    assert (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS) == (1, 900)
+    assert (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS) == (1, 1800)
     saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
     try:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3

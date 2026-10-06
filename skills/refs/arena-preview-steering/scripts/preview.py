@@ -888,7 +888,8 @@ def print_read(store):
 
 
 POLL_INTERVAL = 1
-POLL_MAX_LOOPS = 900
+# One loop a second, so the wait spans the bash tool's 1800-second ceiling.
+POLL_MAX_LOOPS = 1800
 POLLING_META = "polling_at"
 # The wait start is stamped once, so the page can show how long the agent has waited.
 POLL_SINCE_META = "polling_since"

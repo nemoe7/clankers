@@ -333,7 +333,7 @@ def require_server(store):
 	raise ValueError(f"preview server is down; start it before polling: arena-preview serve --port {port}")
 def print_read(store):listing=store.read();print(cli_json(listing),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
 POLL_INTERVAL=1
-POLL_MAX_LOOPS=900
+POLL_MAX_LOOPS=1800
 POLLING_META='polling_at'
 POLL_SINCE_META='polling_since'
 POLLING_FRESH_SECONDS=5.
