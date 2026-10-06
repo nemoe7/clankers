@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.21
+// @version      1.7.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -445,8 +445,12 @@
       "\n\nStop when verification holds, and finish with what changed, what you checked, and what" +
       " is open.";
 
-    function promptForSlug(slug) {
-      return slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." + TEMPLATE_TAIL;
+    function promptForSlug(slug, arenaMd) {
+      var base = slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." + TEMPLATE_TAIL;
+      if (arenaMd) {
+        return base + "\n\nhere is ARENA.md:\n" + arenaMd;
+      }
+      return base;
     }
 
     function shouldWrite(current, slug, lastSlug, filledSlug) {
@@ -474,11 +478,17 @@
       }
     }
 
+    // The rules of this repository, at a fixed URL: a session in another repository
+    // still receives them.
+    var ARENA_MD_URL =
+      "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md";
+
     if (exposeChecks("promptFill", {
       isComposerUrl: isComposerUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
+      ARENA_MD_URL: ARENA_MD_URL,
       PROXY_HOST_KEY: PROXY_HOST_KEY,
       PROXY_MASTER_KEY: PROXY_MASTER_KEY,
       proxyHost: proxyHost,
@@ -503,9 +513,29 @@
       return;
     }
 
+    var arenaMdCache = null;
     var heldKey = null;
+    var arenaMdTried = false;
+    var pendingFetch = null;
     var keyTried = false;
     var keyFetch = null;
+
+    function fetchArenaMd() {
+      return fetch(ARENA_MD_URL).then(function (r) {
+        if (!r.ok) return null;
+        return r.text();
+      }).catch(function () { return null; });
+    }
+
+    function ensureFetch() {
+      if (arenaMdTried || pendingFetch) return;
+      pendingFetch = fetchArenaMd().then(function (content) {
+        arenaMdCache = typeof content === "string" ? content : null;
+        arenaMdTried = true;
+        pendingFetch = null;
+        sync();
+      });
+    }
 
     function postAgentKey(key, host) {
       var base = previewBase(document);
@@ -755,6 +785,13 @@
       }
       slugLogged = false;
       rememberSlug(slug);
+      // One write per page: the fill waits for the one ARENA.md fetch, then writes the
+      // message with the file under it when the fetch answered and without it when not.
+      if (!arenaMdTried) {
+        ensureFetch();
+        ensureAgentKey();
+        return;
+      }
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
         if (composerLogged !== slug) {
@@ -768,10 +805,11 @@
       var current = composer.innerText || "";
       if (!shouldWrite(current, slug, lastSlug, filledSlug)) {
         lastSlug = slug;
+        ensureFetch();
         ensureAgentKey();
         return;
       }
-      setComposerText(composer, promptForSlug(slug));
+      setComposerText(composer, promptForSlug(slug, arenaMdCache));
       logEvent("fill", "wrote the initial message for " + slug);
       lastSlug = slug;
       filledSlug = slug;

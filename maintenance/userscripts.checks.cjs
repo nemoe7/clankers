@@ -71,6 +71,7 @@ function checkPromptFill(api) {
   var slugFromOwnerRepo = api.slugFromOwnerRepo;
   var promptForSlug = api.promptForSlug;
   var shouldWrite = api.shouldWrite;
+  var ARENA_MD_URL = api.ARENA_MD_URL;
   var proxyHost = api.proxyHost;
   var keyUrl = api.keyUrl;
   var agentKeyFrom = api.agentKeyFrom;
@@ -122,11 +123,15 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    // The repo name leads the fill; the rules file stays out of the composer.
+    // The repo name leads the fill; the rules file rides under the initial message.
     [promptForSlug("clankers").split("\n")[0],
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
     [promptForSlug("clankers").indexOf("here is ARENA.md"), -1],
     [promptForSlug("clankers").indexOf("red first") > 0, true],
+    [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
+    [promptForSlug("clankers", "# Rules\n").indexOf("here is ARENA.md:\n# Rules\n") > 0, true],
+    [promptForSlug("clankers", "# Rules\n").indexOf("here is ARENA.md")
+      > promptForSlug("clankers", "# Rules\n").indexOf("red first"), true],
     [shouldWrite("", "clankers", null, null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null, null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), true],

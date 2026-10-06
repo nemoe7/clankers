@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Rules file in the fill**: The fill fetches `rules/ARENA.md` once from the fixed raw URL of this repository. It appends the file under a `here is ARENA.md:` line after the initial message, and a failed fetch writes the plain message. Arena 1.7.0.
 - **Global pause**: One entry, `Arena userscript — pause all`, stops every feature where it stands and flips to `Arena userscript — resume all`. The script saves the pause, so a reload keeps it, and the resume restores the features whose switch is ON. Arena 1.6.20.
 - **Scattered HTTP timers**: The key watch, the key rotation and the state watch land each call at a random moment in a 15-second band. The DOM ticks keep their steady interval. Arena 1.6.20.
 - **Captcha hold**: The prompt fill, the Open Steering click and the proxy key posts wait while the Arena security check shows.

@@ -481,6 +481,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
           ok: true,
           status: 200,
           json: () => Promise.resolve({ key: "testkey-testkey-test", rotated: false, age: 700 }),
+          text: () => Promise.resolve("# Rules"),
         });
       },
       sessionStorage: { getItem() { return null; }, setItem() {} },
@@ -547,6 +548,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     flush();
     await settle();
     assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns when the check clears");
+    assert.ok(composer.innerText.includes("here is ARENA.md:\n# Rules"), "The fill carries the rules file under the message");
     // The pause clears a scattered call that waits, so no request leaves after the press.
     const idle = httpCalls();
     intervals.filter((item) => item.ms === 60000).forEach((item) => item.fn());
