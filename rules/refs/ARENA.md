@@ -153,6 +153,7 @@
 
 ## Git
 
+- The sandbox clone may be shallow: check it with `git rev-parse --is-shallow-repository`, and run `git fetch --unshallow` before work that needs full history.
 - **Before every commit, without exception, print the planned final commit list first**: every local commit and fix folded into a clean timeline, one message per logical change, the list you intend to land, updated as work lands.
 - If a commit landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.

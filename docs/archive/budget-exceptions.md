@@ -2,6 +2,8 @@
 
 Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
 
+2026-10-06: Owner request. `rules/ARENA.md` +160 `B`, 17,168 to 17,328, and the root copy follows. A rule names the shallow sandbox clone and its check.
+
 2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +55 `B`, 83,754 to 83,809. A reminder names the gh command for pull request checks.
 
 2026-10-02: Owner request. `rules/ARENA.md` +341 `B`, 15,464 to 15,805, and the root copy follows. Four rules keep the pull request commit history small and intentional.
