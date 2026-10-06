@@ -23,6 +23,10 @@ For human-facing docs audits, MUST follow: GPT Handoff audit → Ponytail docs a
 
 Use `handoff` when the user asks for implementation direction or a plan.
 
+MUST activate `handoff` when the user explicitly requests a handoff, an agent handoff, an agent prompt, an implementation handoff, or copy-pasteable instructions intended for another agent.
+
+This trigger applies even when the requested content is otherwise ordinary writing: activate GPT Handoff before drafting the answer.
+
 Use the user's requested outcome over repository state.
 
 Do not activate GPT Handoff for ordinary non-agent tasks without an audit, review, or handoff request.

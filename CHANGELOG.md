@@ -36,6 +36,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Poll ceiling**: The poll wait spans 1800 seconds, the bash tool's own maximum.
 - **Bash call tally**: The header names the bash calls alone, without the phrase since your last message.
 
+#### gpt-plugins
+
+- **Handoff trigger**: An explicit handoff request activates `handoff` mode, and the trigger holds for ordinary writing.
+  Plugin version 1.5.3.
+
 #### system-prompts
 
 - **NEMOGPT refusal scope**: The safety block names the subjects a refusal must not block, and the decline list becomes three narrow guardrails.
