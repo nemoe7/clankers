@@ -39,6 +39,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.
   The words rotate, so the selector anchors on the canvas and the animated ellipsis. Version 1.3.0.
 
+### Fixed
+
+#### preview
+
+- **Dropped upload**: A note upload the network drops replays once under the same note ID, so a lost response does not lose the send.
+  The staged chips now carry each file's size, and the failure line names the combined upload.
+
+
 ## 2026-10-04
 
 ### Changed

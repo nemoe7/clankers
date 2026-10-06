@@ -106,6 +106,7 @@ const replySeenCalls = [];
 const unpublished = [];
 const uploadCalls = [];
 let loseUploadResponse = false;
+let dropUploadOnce = false;
 class FormDataStub {
   constructor() { this.fields = new Map(); }
   append(name, value) { this.fields.set(name, [...(this.fields.get(name) || []), value]); }
@@ -207,6 +208,12 @@ const context = {
         state.uploads = [...(state.uploads || []), ...records];
       }
       if (loseUploadResponse) { loseUploadResponse = false; throw new Error('response lost after commit'); }
+      if (dropUploadOnce) {
+        dropUploadOnce = false;
+        const drop = new Error('Failed to fetch');
+        drop.name = 'TypeError';
+        throw drop;
+      }
       return response(saved);
     }
     if (url === '/api/fetch-jobs') {
@@ -1719,7 +1726,8 @@ test('preview client', async (t) => {
     // Multiple files stage as removable filename chips beside "Your message". The saved-files list
     // is deliberately gone; the note receipt and backend state still carry every original name.
     picker = get('#upload-file');
-    chips = () => get('#staged-files').children.map(chip => chip.children[0].textContent);
+    chips = () => get('#staged-files').children.map(chip => chip.children[0].textContent.replace(/ · .*$/, ''));
+    chipText = () => get('#staged-files').children[0].children[0].textContent;
     get('#attach-file').events.click();
     assert.equal(picker.clicks, 1, 'the attach button opens the native multi-file picker');
     picker.files = [{ name: 'empty.bin', size: 0, type: '' }];
@@ -1744,6 +1752,7 @@ test('preview client', async (t) => {
     picker.files = [first, second];
     picker.events.change();
     assert.deepEqual(chips(), ['report card.pdf', 'photo.png']);
+    assert.equal(chipText(), 'report card.pdf · 12 B', 'the chip carries the size of the file');
     assert.equal(get('#staged-files').hidden, false);
     assert.equal(get('#staged-files').children[0].children[1].getAttribute('aria-label'), 'Remove report card.pdf');
     assert.equal(uploadCalls.length, 0, 'choosing files does not upload them yet');
@@ -1811,6 +1820,24 @@ test('preview client', async (t) => {
     assert.ok(receipt.children.indexOf(part(receipt, 'receipt-file')) > receipt.children.indexOf(part(receipt, 'state-dot')),
       'the filenames follow the receipt date and state dot');
 
+  });
+
+  await t.test("An upload the network drops retries once under the same note ID", async () => {
+    // A dropped connection is the one failure worth replaying unseen: the note ID, text and file
+    // set are unchanged, and the server returns the first record instead of writing a second note.
+    picker.files = [{ name: 'retry.bin', size: 2048, type: 'application/octet-stream' }];
+    picker.events.change();
+    const calls = uploadCalls.length;
+    const notes = state.notes.length;
+    dropUploadOnce = true;
+    await get('#form').events.submit(event({}));
+    await tick();
+    assert.equal(uploadCalls.length, calls + 2, 'exactly one replay follows the drop');
+    assert.equal(uploadCalls.at(-1).id, uploadCalls.at(-2).id, 'the replay keeps the note ID');
+    assert.deepEqual(uploadCalls.at(-1).files.map(file => file.name), ['retry.bin']);
+    assert.match(get('#send-status').textContent, /^Saved /);
+    assert.equal(state.notes.length, notes + 1, 'the replay writes no second note');
+    assert.equal(get('#staged-files').hidden, true, 'a saved note clears its chips');
   });
 
   await t.test("One file without text still writes a note and uses the original single-file basename", async () => {

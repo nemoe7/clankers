@@ -213,8 +213,8 @@ function renderStagedFiles() {
     chip.className = 'staged-chip';
     const name = document.createElement('span');
     name.className = 'staged-chip-name';
-    name.textContent = file.name;
-    name.title = file.name;
+    name.textContent = `${file.name} · ${bytes(file.size)}`;
+    name.title = `${file.name} · ${file.size.toLocaleString()} bytes`;
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.textContent = '×';
@@ -685,10 +685,20 @@ $('#form').addEventListener('submit', async event => {
       body.append('id', pending.id);
       body.append('text', text);
       for (const file of stagedFiles) body.append('file', file, file.name);
-      response = await request('/api/notes/with-file', {
+      // The same note ID, text and file set twice is safe: the server answers with the first
+      // record, so one retry after a dropped connection cannot duplicate the note.
+      const postFiles = () => request('/api/notes/with-file', {
         method: 'POST', headers: { 'X-Preview-Token': writeToken }, body,
         timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
       });
+      try { response = await postFiles(); }
+      catch (error) {
+        // A dropped connection arrives as a TypeError, with no status to read. The same note ID,
+        // text and file set replay safely, so one retry covers a blip that lost the body.
+        if (!error || error.name !== 'TypeError') throw error;
+        status.textContent = 'The upload dropped once; retrying the same note ID…';
+        response = await postFiles();
+      }
     } else response = await request('/api/notes', {
       method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(pending)
     });
@@ -705,7 +715,12 @@ $('#form').addEventListener('submit', async event => {
       writeMode();
     }
     refreshState();
-  } catch (error) { status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same note ID.`; }
+  } catch (error) {
+    const total = stagedFiles.reduce((sum, file) => sum + file.size, 0);
+    const hint = stagedFiles.length > 1 && error && error.name === 'TypeError'
+      ? ` The combined upload is ${bytes(total)}; if it fails again, send fewer files per note.` : '';
+    status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same note ID.${hint}`;
+  }
   finally { send.disabled = picker.disabled = $('#attach-file').disabled = false; }
 });
 note.addEventListener('keydown', event => {
