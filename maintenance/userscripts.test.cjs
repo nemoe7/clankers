@@ -18,6 +18,8 @@ const bundles = {
     offByDefault: ["transcript-trim"],
     // The prompt fill owns the four proxy entries; the state download owns its two.
     extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 2 },
+    // One entry stands outside the feature switches: the global pause.
+    globalMenus: 1,
     countMenu: "Transcript trim: ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
@@ -56,7 +58,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   }
   const observersFor = (saved) => baseObservers + keys.reduce((total, key) => total + (isOn(saved, key) ? features[key] : 0), 0);
   const intervalsFor = (saved) => keys.reduce((total, key) => total + (isOn(saved, key) ? (featureIntervals[key] || 0) : 0), 0);
-  const menusFor = (saved) => keys.length + keys.reduce((total, key) => total + (isOn(saved, key) ? (extraMenus[key] || 0) : 0), 0);
+  const pauseKey = "clankers-arena-userscript-paused";
+  const menusFor = (saved) =>
+    (bundle.globalMenus || 0) +
+    keys.length +
+    keys.reduce((total, key) => total + (isOn(saved, key) ? (extraMenus[key] || 0) : 0), 0);
 
   function load() {
     const menus = new Map();
@@ -185,8 +191,13 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const allOff = load();
   assert.equal(allOff.active.observers, baseObservers);
   assert.equal(allOff.active.intervals, 0);
-  assert.equal(allOff.menus.size, keys.length);
-  assert.ok([...allOff.menus.values()].every((item) => item.label.includes(": OFF")));
+  assert.equal(allOff.menus.size, keys.length + (bundle.globalMenus || 0));
+  assert.ok(
+    [...allOff.menus.values()]
+      .filter((item) => item.label.includes("— toggle"))
+      .every((item) => item.label.includes(": OFF")),
+    "Every feature switch reads OFF",
+  );
   assert.deepEqual(allOff.active, { observers: baseObservers, intervals: 0, clicks: 0 });
 
   refuseWrite = true;
@@ -194,6 +205,60 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.throws(() => allOff.menus.values().next().value.callback(), /Storage write failed/);
   assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labelsBefore);
   assert.ok([...stored.values()].every((value) => value === false));
+  // The global pause stops every feature where it stands, with no reload, and the resume
+  // brings back the features whose own switch is ON (form answer 74b99a5).
+  if (domain === "arena") {
+    // The storage-failure check above leaves the writes refused; the pause writes again.
+    refuseWrite = false;
+    stored.clear();
+    const live = load();
+    const pauseMenu = () => [...live.menus.values()].find((item) => item.label.includes("pause all"));
+    const resumeMenu = () => [...live.menus.values()].find((item) => item.label.includes("resume all"));
+    assert.ok(pauseMenu(), "Missing the pause-all menu entry");
+    assert.equal(live.menus.size, menusFor(stored), "The running set carries the global entry beside the switches");
+    pauseMenu().callback();
+    assert.equal(stored.get(pauseKey), true, "The pause press is stored, so a reload keeps it");
+    assert.deepEqual(
+      { observers: live.active.observers, intervals: live.active.intervals },
+      { observers: 0, intervals: 0 },
+      "The pause stops every observer and timer where it stands",
+    );
+    assert.equal(live.menus.size, keys.length + bundle.globalMenus, "Every feature switch stays usable while paused");
+    assert.ok(menuFor(live, "tab-title").label.includes(": ON"), "A paused feature keeps its own switch label");
+    assert.ok(resumeMenu(), "The pause entry flips to resume");
+    // A switch flipped while paused is stored, and the resume honors it.
+    menuFor(live, "tab-title").callback();
+    assert.equal(stored.get("tab-title"), false, "A switch flips while paused");
+    resumeMenu().callback();
+    assert.equal(stored.get(pauseKey), false, "The resume clears the stored pause");
+    assert.deepEqual(
+      { observers: live.active.observers, intervals: live.active.intervals },
+      {
+        observers: observersFor(stored),
+        intervals: intervalsFor(stored),
+      },
+      "The resume brings back the features whose own switch is ON",
+    );
+    assert.ok(pauseMenu(), "The resume entry flips back to pause");
+    // A reload while paused starts with nothing running and still offers the resume.
+    stored.set(pauseKey, true);
+    const reloaded = load();
+    assert.equal(reloaded.active.observers, 0, "A reload keeps the pause");
+    assert.equal(reloaded.active.intervals, 0, "A paused reload runs no timer");
+    assert.ok(
+      [...reloaded.menus.values()].some((item) => item.label.includes("resume all")),
+      "A paused reload offers the resume",
+    );
+    // The pause leaves the switches alone: the next unpaused load runs them again.
+    stored.set(pauseKey, false);
+    const after = load();
+    assert.deepEqual(
+      { observers: after.active.observers, intervals: after.active.intervals },
+      { observers: observersFor(stored), intervals: intervalsFor(stored) },
+      "The switches survive the pause",
+    );
+  }
+
   console.log(`ok ${domain}: switches, defaults, storage failure, live switches, and disabled startup`);
 }
 {
@@ -323,8 +388,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const posts = [];
     const fetches = [];
     const intervals = [];
-    const timeouts = [];
+    // The timeout ids are tracked, so a cleared wait really leaves the queue.
+    const timeouts = new Map();
+    let nextTimeout = 0;
     const popstates = [];
+    const menus = new Map();
     const stored = new Map();
     const page = { title: "" };
     const composer = {
@@ -401,8 +469,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       cancelAnimationFrame() {},
       setInterval(fn, ms) { intervals.push({ ms, fn }); return intervals.length; },
       clearInterval() {},
-      setTimeout(fn) { timeouts.push(fn); return timeouts.length; },
-      clearTimeout() {},
+      setTimeout(fn) {
+        nextTimeout += 1;
+        timeouts.set(nextTimeout, fn);
+        return nextTimeout;
+      },
+      clearTimeout(id) { timeouts.delete(id); },
       fetch(url) {
         fetches.push(url);
         return Promise.resolve({
@@ -415,8 +487,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       prompt() { return null; },
       GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
       GM_setValue(key, value) { stored.set(key, value); },
-      GM_registerMenuCommand() { return 1; },
-      GM_unregisterMenuCommand() {},
+      // The menu map lets one case press the pause entry, as the manager would.
+      GM_registerMenuCommand(label, fn) {
+        menus.set(label, fn);
+        return label;
+      },
+      GM_unregisterMenuCommand(label) { menus.delete(label); },
       GM_xmlhttpRequest(options) { posts.push(options.method + " " + options.url); },
     };
     stored.set("clankers-arena-proxy-host", "https://proxy.example");
@@ -426,9 +502,16 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       context.location.pathname = path;
       context.location.href = "https://arena.ai" + path;
     };
+    const drainTimeouts = () => {
+      const pending = [...timeouts.values()];
+      timeouts.clear();
+      pending.forEach((fn) => fn());
+    };
     const flush = () => {
-      timeouts.splice(0).forEach((fn) => fn());
+      drainTimeouts();
       intervals.forEach((item) => item.fn());
+      // A jittered HTTP timer defers its call, so the drain repeats for what the ticks scheduled.
+      drainTimeouts();
     };
     const settle = () => new Promise((resolve) => setImmediate(resolve));
     const sent = () => posts.filter((entry) => entry.startsWith("POST"));
@@ -450,10 +533,30 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
     captchaVisible = false;
     goto("/agent");
+    // The HTTP timers scatter each call inside its own band: a tick waits a random moment
+    // before the request, so no fixed beat forms (owner notes b70fc88 and 7a094e5).
+    const httpCalls = () => posts.length + fetches.length;
+    const callsBefore = httpCalls();
+    intervals.filter((item) => item.ms === 60000).forEach((item) => item.fn());
+    await settle();
+    assert.equal(httpCalls(), callsBefore, "No HTTP call lands on the timer's own beat");
+    flush();
+    await settle();
+    assert.ok(httpCalls() > callsBefore, "The scattered call lands inside its band");
     popstates.forEach((fn) => fn());
     flush();
     await settle();
     assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns when the check clears");
+    // The pause clears a scattered call that waits, so no request leaves after the press.
+    const idle = httpCalls();
+    intervals.filter((item) => item.ms === 60000).forEach((item) => item.fn());
+    assert.equal(httpCalls(), idle, "A waiting call is not on the wire yet");
+    const pauseEntry = [...menus.keys()].find((label) => label.includes("pause all"));
+    assert.ok(pauseEntry, "The pause entry stands on this page");
+    menus.get(pauseEntry)();
+    drainTimeouts();
+    await settle();
+    assert.equal(httpCalls(), idle, "The pause clears the call that waited");
     assert.ok(sent().length >= 1, "The key posts return when the check clears");
     assert.ok(fetches.length >= 1, "The proxy calls return when the check clears");
 

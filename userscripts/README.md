@@ -44,11 +44,11 @@ The prompt fill stays free of the proxy. The preview carries the proxy host and 
 
 - The host is one HTTPS origin with no path. The script trims a trailing `/v1`.
 - With both settings saved, the script asks `/v1/key` for the live agent key. The composer holds the rules line only.
-- Every 15 minutes the script asks `/v1/rotate` with `min=900`. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview. The agent then picks the key up at its next inbox read.
+- Every 15 minutes the script asks `/v1/rotate` with `min=900`, and each call lands at a random moment inside a 15-second band after the beat. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview. The agent then picks the key up at its next inbox read.
 - The script saves the due time, so a reload resumes the countdown. The backend holds the minimum age. An early second tab learns the key's age and waits.
 - The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
 - The script posts the key and the host it holds to the preview, so the Downloads tab shows both. One quiet note carries the host and a new key to the agent. A saved key keeps a reload or a second tab from repeating the note.
-- Every minute the script asks `/v1/key` again. A new key makes the script adopt it, post it to the preview and send one quiet note. A container restart therefore reaches the agent inside a minute, not at the next rotation.
+- Every minute the script asks `/v1/key` again, with the same scatter. A new key makes the script adopt it, post it to the preview and send one quiet note. A container restart therefore reaches the agent inside a minute, not at the next rotation.
 - `@connect arena.site` names the preview host, the only target of `GM_xmlhttpRequest`. The proxy calls use plain `fetch`, which the proxy's wildcard origin allows, so the owner's proxy host never enters the file.
 
 ## Arena Open Steering
@@ -81,7 +81,7 @@ The page holds fewer nodes, so the tab uses less memory. The Arena client may ke
 
 ## Arena Preview State Download
 
-The feature saves the preview state to one file, without a click. It asks the preview once a minute. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
+The feature saves the preview state to one file, without a click. It asks the preview once a minute, and the request lands at a random moment inside a 15-second band after the beat. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
 
 The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file instead.
 
@@ -101,6 +101,12 @@ On `/agent/*`, ON reads the repository name from the GitHub link in the session 
 
 While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait.
 The held work is the prompt fill, the Open Steering click and the proxy key posts. Each tab reads its own page, so a background tab keeps its own work. The held work resumes when the check clears.
+
+## Arena Userscript Pause
+
+One entry, `Arena userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Arena userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
+
+The script saves the pause, so a reload keeps it: a paused page starts with nothing running and still offers the resume. Each feature switch stays in the menu while paused, and a flip is saved for the resume. The security check hold is independent of the pause.
 
 ## ChatGPT Hide Elements
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.19
+// @version      1.6.20
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -119,6 +119,73 @@
     return null;
   }
 
+  // The global pause stops every feature where it stands and honors the pause on the next
+  // load; the resume brings back the features whose own switch is ON (form answer 74b99a5).
+  var PAUSE_KEY = "clankers-arena-userscript-paused";
+  var PAUSE_LABEL = "Arena userscript";
+  var pauseUnits = [];
+  var pauseMenuId = null;
+
+  function pauseStored() {
+    // The checks load this file without the manager grants, so the pause reads as off there.
+    if (typeof GM_getValue !== "function") return false;
+    return GM_getValue(PAUSE_KEY, false) === true;
+  }
+
+  function pauseLabel(paused) {
+    return PAUSE_LABEL + (paused ? " — resume all" : " — pause all");
+  }
+
+  function registerPauseUnit(label, start, halt, stored) {
+    pauseUnits.push({ label: label, start: start, halt: halt, stored: stored });
+  }
+
+  function showPauseMenu(paused) {
+    if (typeof GM_registerMenuCommand !== "function") return;
+    pauseMenuId = GM_registerMenuCommand(pauseLabel(paused), function () {
+      setPause(!pauseStored());
+    });
+  }
+
+  function setPause(next) {
+    GM_setValue(PAUSE_KEY, next);
+    pauseUnits.forEach(function (unit) {
+      if (next) {
+        unit.halt();
+      } else if (unit.stored()) {
+        unit.start();
+      }
+    });
+    if (typeof GM_unregisterMenuCommand === "function" && pauseMenuId !== null) {
+      GM_unregisterMenuCommand(pauseMenuId);
+    }
+    showPauseMenu(next);
+    logEvent("pause", "all: " + (next ? "PAUSED" : "RESUMED"));
+  }
+
+  // A repeating timer that touches HTTP scatters each call inside its own band, so the requests
+  // never form a fixed beat; a DOM tick keeps its steady interval. A stop clears the beat and
+  // any call already waiting (owner notes b70fc88 and 7a094e5).
+  var HTTP_JITTER_MS = 15000;
+
+  function jitteredTimer(run, everyMs, spreadMs) {
+    var waiting = null;
+    function tick() {
+      waiting = setTimeout(function () {
+        waiting = null;
+        run();
+      }, Math.floor(Math.random() * spreadMs));
+    }
+    var beat = setInterval(tick, everyMs);
+    return function () {
+      if (typeof clearInterval === "function") clearInterval(beat);
+      if (waiting !== null && typeof clearTimeout === "function") {
+        clearTimeout(waiting);
+      }
+      waiting = null;
+    };
+  }
+
   function runFeature(key, label, run, onChange, defaultOn) {
     if (typeof document === "undefined") {
       run();
@@ -130,12 +197,27 @@
     var stop = null;
     logEvent("feature", label + ": " + (enabled ? "ON" : "OFF"));
 
+    function storedOn() {
+      return GM_getValue(key, fallback) !== false;
+    }
+
+    function start() {
+      if (stop === null) stop = run();
+    }
+
+    function halt() {
+      if (stop) {
+        stop();
+        stop = null;
+      }
+    }
+
     function toggle() {
       var next = GM_getValue(key, fallback) === false;
       GM_setValue(key, next);
       logEvent("feature", label + ": " + (next ? "ON" : "OFF"));
-      if (stop) stop();
-      stop = next ? run() : null;
+      halt();
+      if (next && !pauseStored()) start();
       GM_unregisterMenuCommand(menuId);
       showMenu(next);
       if (typeof onChange === "function") onChange();
@@ -149,7 +231,8 @@
     }
 
     showMenu(enabled);
-    if (enabled) {
+    registerPauseUnit(label, start, halt, storedOn);
+    if (enabled && !pauseStored()) {
       stop = run();
     }
     return {
@@ -586,11 +669,11 @@
 
     rotateKey(ROTATE_MIN_SECONDS, null);
 
-    var rotateTimer = setInterval(function () {
+    var stopRotate = jitteredTimer(function () {
       rotateKey(ROTATE_MIN_SECONDS, null);
-    }, ROTATE_INTERVAL_MS);
+    }, ROTATE_INTERVAL_MS, HTTP_JITTER_MS);
 
-    var keyWatchTimer = setInterval(function () {
+    var stopKeyWatch = jitteredTimer(function () {
       if (captchaSignal(document)) return;
       var pair = settings();
       if (!pair.host || !pair.master) return;
@@ -611,7 +694,7 @@
           postKeyToPreview(true);
         })
         .catch(function () {});
-    }, KEY_WATCH_MS);
+    }, KEY_WATCH_MS, HTTP_JITTER_MS);
 
     var lastSlug = null;
     var filledSlug = null;
@@ -706,10 +789,8 @@
     return function () {
       observer.disconnect();
       window.removeEventListener("popstate", sync);
-      if (typeof clearInterval === "function") {
-        clearInterval(rotateTimer);
-        clearInterval(keyWatchTimer);
-      }
+      stopRotate();
+      stopKeyWatch();
       for (var m = 0; m < proxyMenus.length; m += 1) {
         if (typeof GM_unregisterMenuCommand === "function") {
           GM_unregisterMenuCommand(proxyMenus[m]);
@@ -1036,8 +1117,21 @@
     }
 
     var observer = new MutationObserver(ensureButton);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    ensureButton();
+
+    // The button injector runs beside the switch: the script-wide pause stops it too.
+    function startButtonWatch() {
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      ensureButton();
+    }
+
+    function haltButtonWatch() {
+      observer.disconnect();
+    }
+
+    if (!pauseStored()) startButtonWatch();
+    registerPauseUnit("Transcript auto-scroll button", startButtonWatch, haltButtonWatch, function () {
+      return true;
+    });
   })();
 
     // A trim waits for a quiet page and keeps the newest rows.
@@ -1931,11 +2025,12 @@
     });
 
     fetchStateFile(false);
-    var timer = setInterval(function () {
+    // The watch asks the preview over HTTP, so it scatters like the proxy timers.
+    var stopStateWatch = jitteredTimer(function () {
       fetchStateFile(false);
-    }, STATE_WATCH_MS);
+    }, STATE_WATCH_MS, HTTP_JITTER_MS);
     return function () {
-      clearInterval(timer);
+      stopStateWatch();
       if (typeof GM_unregisterMenuCommand === "function") {
         menus.forEach(function (id) {
           GM_unregisterMenuCommand(id);
@@ -2426,5 +2521,10 @@
       appliedTitle = null;
     };
   });
+
+  // The pause entry registers once, after every feature has offered its stop closure.
+  exposeChecks("pause", { PAUSE_KEY: PAUSE_KEY, pauseLabel: pauseLabel });
+  exposeChecks("timers", { jitteredTimer: jitteredTimer, HTTP_JITTER_MS: HTTP_JITTER_MS });
+  showPauseMenu(pauseStored());
 
 })();
