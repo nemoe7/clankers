@@ -78,6 +78,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - **Plugin frontmatter**: `check_gpt_plugins.py` imports `parse_frontmatter`, `NAME_RE` and `EXPECTED_SKILL_FIELDS` from `check.py` instead of carrying drifted copies of all three.
+- **Skill and workflow counts**: `check.py` prints the counts its own validation pass returns instead of walking both trees a second time.
+- **Bullet walk**: `check_pr.py` keeps one heading-slice helper, and `_check_none_or_bullets` drops its extra failure line for a section that holds no bullet at all.
 
 #### workflows
 

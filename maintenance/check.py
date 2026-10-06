@@ -634,7 +634,7 @@ def check_root_copies(errors: list[str]) -> None:
       )
 
 
-def validate(errors: list[str]) -> None:
+def validate(errors: list[str]) -> tuple[int, int]:
   skills = sorted(
     path
     for path in SKILLS.iterdir()
@@ -823,6 +823,8 @@ def validate(errors: list[str]) -> None:
   check_refs_parity(errors)
   check_root_copies(errors)
 
+  return len(skills), len(workflows)
+
 
 def main() -> int:
   args = parse_args()
@@ -847,7 +849,7 @@ def main() -> int:
       return 1
     print(f"STE lint passed: {len(STE_DOCS)} files.")
     return 0
-  validate(errors)
+  skills, workflows = validate(errors)
   check_ste(errors)
   check_prose(errors)
 
@@ -858,18 +860,6 @@ def main() -> int:
       print(f"- {error}")
 
     return 1
-
-  skills = sum(
-    1
-    for path in SKILLS.iterdir()
-    if path.is_dir() and not path.name.startswith(".") and path.name != "refs"
-  )
-
-  workflows = sum(
-    1
-    for path in WORKFLOWS.iterdir()
-    if path.is_file() and path.suffix == ".md" and path.name != "README.md"
-  )
 
   print(
     f"Validation passed: {skills} skills, {workflows} workflows, README "

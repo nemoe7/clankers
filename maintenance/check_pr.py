@@ -112,6 +112,26 @@ def _non_blank(entries: list[tuple[int, str]]) -> list[tuple[int, str]]:
   return [(number, text) for number, text in entries if text.strip()]
 
 
+def _headings(lines: list[str]) -> list[tuple[int, str]]:
+  return [
+    (number, match.group("title").strip())
+    for number, line in enumerate(lines, start=1)
+    if (match := H2_RE.match(line))
+  ]
+
+
+def _sections(
+  lines: list[str], headings: list[tuple[int, str]]
+) -> dict[str, list[tuple[int, str]]]:
+  bounds = [number for number, _ in headings]
+  sections: dict[str, list[tuple[int, str]]] = {}
+  for index, (number, title) in enumerate(headings):
+    end = bounds[index + 1] - 1 if index + 1 < len(bounds) else len(lines)
+    # The first section wins on a repeated title, so both callers read one slice.
+    sections.setdefault(title, _section_lines(lines, number + 1, end))
+  return sections
+
+
 def validate_pr_body(text: str) -> list[Failure]:
   """Validate the locked PR body heading order and report each failing line."""
   failures: list[Failure] = []
@@ -128,11 +148,7 @@ def validate_pr_body(text: str) -> list[Failure]:
     if H3_RE.match(line):
       failures.append(Failure("body", "H3 headings are not allowed", number))
 
-  headings = [
-    (number, match.group("title").strip())
-    for number, line in enumerate(lines, start=1)
-    if (match := H2_RE.match(line))
-  ]
+  headings = _headings(lines)
   titles = [title for _, title in headings]
 
   first_heading = headings[0][0] if headings else len(lines) + 1
@@ -150,11 +166,7 @@ def validate_pr_body(text: str) -> list[Failure]:
     )
     return failures
 
-  bounds = [number for number, _ in headings]
-  sections: dict[str, list[tuple[int, str]]] = {}
-  for index, (number, title) in enumerate(headings):
-    end = bounds[index + 1] - 1 if index + 1 < len(bounds) else len(lines)
-    sections[title] = _section_lines(lines, number + 1, end)
+  sections = _sections(lines, headings)
 
   failures.extend(_check_summary(sections["Summary"]))
   failures.extend(_check_changes(sections["Changes"]))
@@ -251,14 +263,6 @@ def _check_none_or_bullets(title: str, entries: list[tuple[int, str]]) -> list[F
           f"body: {title}", "use one '- ' bullet per entry, or omit the heading", number
         )
       )
-  if not any(LIST_ITEM_RE.match(line) for _, line in items):
-    failures.append(
-      Failure(
-        f"body: {title}",
-        "use one '- ' bullet per entry, or omit the heading",
-        items[0][0],
-      )
-    )
   return failures
 
 
@@ -305,18 +309,8 @@ def commits_in_range(revision_range: str) -> list[tuple[str, str]]:
 def breaking_section_holds_nothing(text: str) -> bool:
   """Say whether the body omits the Breaking Changes heading or keeps it at None."""
   lines = text.splitlines()
-  headings = [
-    (number, match.group("title").strip())
-    for number, line in enumerate(lines, start=1)
-    if (match := H2_RE.match(line))
-  ]
-  titles = [title for _, title in headings]
-  if "Breaking Changes" not in titles:
-    return True
-  index = titles.index("Breaking Changes")
-  start = headings[index][0] + 1
-  end = headings[index + 1][0] - 1 if index + 1 < len(headings) else len(lines)
-  entries = _non_blank(_section_lines(lines, start, end))
+  sections = _sections(lines, _headings(lines))
+  entries = _non_blank(sections.get("Breaking Changes", []))
   return not entries or (len(entries) == 1 and entries[0][1].strip() == "None")
 
 
