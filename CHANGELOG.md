@@ -81,6 +81,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Waiting-line anchor**: The hourglass needs the spinner canvas and the text block beside it. An action row carries the same canvas as its icon, so a bare canvas no longer reads as a waiting line. Version 1.6.19.
 - **State without a picker**: A pick needs a click for the browser gesture. The automatic path writes the stamped download, so the state lands. Version 1.6.9.
 - **Quiet state notices**: Every state-file notice is a console line under the `[clankers]` tag, and no popup interrupts the preview. Version 1.6.9.
 - **State file names**: The save line names the file the write reached, from the chosen handle. The repo name falls back to the tab title when the bar is gone. Version 1.6.11.

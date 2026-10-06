@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.18
+// @version      1.6.19
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1973,8 +1973,8 @@
     var heldEmojiAt = 0;
     var lastSpeechMark = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
-    var WAITING_SELECTOR =
-      'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]';
+    var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
+    var WAITING_TEXT_SELECTOR = 'span[class*="whitespace-pre"]';
     var HOURGLASS_EMOJI = "\u23F3";
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
@@ -2205,11 +2205,45 @@
       return live;
     }
 
+    // The waiting line is a spinner canvas beside the rotating monospace text. An action row
+    // carries the very same canvas as its own icon (note 37b3a4e), so the canvas alone proves
+    // nothing: the row must hold the text block too, beside the icon.
+    function waitingText(row, canvas) {
+      var kids = row && row.children ? row.children : [];
+      var i;
+      for (i = 0; i < kids.length; i += 1) {
+        if (
+          kids[i] === canvas ||
+          (typeof kids[i].contains === "function" && kids[i].contains(canvas))
+        ) {
+          continue;
+        }
+        if (typeof kids[i].querySelectorAll !== "function") continue;
+        var spans = kids[i].querySelectorAll(WAITING_TEXT_SELECTOR);
+        var j;
+        for (j = 0; j < spans.length; j += 1) {
+          if (collapsed(spans[j])) return true;
+        }
+      }
+      return false;
+    }
+
     function waitingSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
       }
-      return doc.querySelectorAll(WAITING_SELECTOR).length > 0;
+      var canvases = doc.querySelectorAll(WAITING_SELECTOR);
+      var i;
+      for (i = 0; i < canvases.length; i += 1) {
+        var node = canvases[i];
+        var depth = 0;
+        while (node && depth < 3) {
+          node = node.parentElement || null;
+          depth += 1;
+          if (node && waitingText(node, canvases[i])) return true;
+        }
+      }
+      return false;
     }
 
     function heldEmojiFor(doc) {
@@ -2336,6 +2370,7 @@
       SPEECH_SELECTOR: SPEECH_SELECTOR,
       SPEECH_EMOJI: SPEECH_EMOJI,
       WAITING_SELECTOR: WAITING_SELECTOR,
+      WAITING_TEXT_SELECTOR: WAITING_TEXT_SELECTOR,
       HOURGLASS_EMOJI: HOURGLASS_EMOJI,
       CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
       CAPTCHA_EMOJI: CAPTCHA_EMOJI,
