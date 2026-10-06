@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.16
+// @version      1.6.17
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -175,6 +175,43 @@
       }
     }
     return null;
+  }
+
+  // The security check owns the page while it shows, so the automatic posts wait for it.
+  var CAPTCHA_SELECTOR = '.recaptcha-v2-container, iframe[title="reCAPTCHA"]';
+
+  function openDialog(node) {
+    var current = node;
+    var depth = 0;
+    while (current && depth < 8) {
+      if (typeof current.getAttribute === "function") {
+        var state = current.getAttribute("data-state");
+        if (state === "closed") return false;
+        if (state === "open") return true;
+      }
+      current = current.parentElement || null;
+      depth += 1;
+    }
+    return true;
+  }
+
+  function renderedNode(node) {
+    if (typeof node.getClientRects === "function") {
+      return node.getClientRects().length > 0;
+    }
+    return !node.hidden;
+  }
+
+  function captchaSignal(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") {
+      return false;
+    }
+    var nodes = doc.querySelectorAll(CAPTCHA_SELECTOR);
+    var i;
+    for (i = 0; i < nodes.length; i += 1) {
+      if (openDialog(nodes[i]) && renderedNode(nodes[i])) return true;
+    }
+    return false;
   }
 
     // The fill writes the initial message: the repo name leads it, the rules stay in the files.
@@ -485,6 +522,7 @@
     }
 
     function rotateKey(minSeconds, done) {
+      if (captchaSignal(document)) return;
       var pair = settings();
       if (!pair.host || !pair.master) return;
       if (
@@ -553,6 +591,7 @@
     }, ROTATE_INTERVAL_MS);
 
     var keyWatchTimer = setInterval(function () {
+      if (captchaSignal(document)) return;
       var pair = settings();
       if (!pair.host || !pair.master) return;
       fetch(keyUrl(pair.host, pair.master))
@@ -609,6 +648,7 @@
     }
 
     function sync() {
+      if (captchaSignal(document)) return;
       postKeyToPreview(false);
       if (!isComposerUrl(location.href)) {
         lastSlug = null;
@@ -755,6 +795,7 @@
     function fireClick(path) {
       clickTimer = null;
       pendingPath = null;
+      if (captchaSignal(document)) return;
       if (!isSessionUrl(location.href) || location.pathname !== path) {
         return;
       }
@@ -1892,7 +1933,6 @@
     var WAITING_SELECTOR =
       'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]';
     var HOURGLASS_EMOJI = "\u23F3";
-    var CAPTCHA_SELECTOR = '.recaptcha-v2-container, iframe[title="reCAPTCHA"]';
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
     var SPEECH_EMOJI = "\uD83D\uDDE8\uFE0F";
@@ -2127,40 +2167,6 @@
         return false;
       }
       return doc.querySelectorAll(WAITING_SELECTOR).length > 0;
-    }
-
-    function openDialog(node) {
-      var current = node;
-      var depth = 0;
-      while (current && depth < 8) {
-        if (typeof current.getAttribute === "function") {
-          var state = current.getAttribute("data-state");
-          if (state === "closed") return false;
-          if (state === "open") return true;
-        }
-        current = current.parentElement || null;
-        depth += 1;
-      }
-      return true;
-    }
-
-    function renderedNode(node) {
-      if (typeof node.getClientRects === "function") {
-        return node.getClientRects().length > 0;
-      }
-      return !node.hidden;
-    }
-
-    function captchaSignal(doc) {
-      if (!doc || typeof doc.querySelectorAll !== "function") {
-        return false;
-      }
-      var nodes = doc.querySelectorAll(CAPTCHA_SELECTOR);
-      var i;
-      for (i = 0; i < nodes.length; i += 1) {
-        if (openDialog(nodes[i]) && renderedNode(nodes[i])) return true;
-      }
-      return false;
     }
 
     function heldEmojiFor(doc) {

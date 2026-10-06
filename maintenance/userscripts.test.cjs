@@ -312,3 +312,155 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(events.has('scroll'), false, 'Removed transcript releases its listener');
   console.log('ok auto-scroll: growth, resize, navigation, toggle button, menu sync, cleanup');
 }
+{
+  const { test } = require("node:test");
+  // The security check owns the page while it shows: the fill, the steering click and the
+  // proxy posts wait for it, and the tab title keeps its shield.
+  test("captcha hold", async () => {
+    const source = fs.readFileSync(path.join(__dirname, "../userscripts/arena.user.js"), "utf8");
+    let captchaVisible = true;
+    let clicked = 0;
+    const posts = [];
+    const fetches = [];
+    const intervals = [];
+    const timeouts = [];
+    const popstates = [];
+    const stored = new Map();
+    const page = { title: "" };
+    const composer = {
+      innerText: "",
+      attrs: {},
+      focus() {},
+      getAttribute(name) { return this.attrs[name] || null; },
+    };
+    const captcha = {
+      getAttribute() { return null; },
+      parentElement: null,
+      getClientRects() { return [{}]; },
+    };
+    const bar = {
+      textContent: "nemoe7/clankers",
+      querySelectorAll(selector) {
+        return selector === "span.truncate" ? [{ textContent: "nemoe7/clankers" }] : [];
+      },
+    };
+    const repoLink = {
+      getAttribute(name) {
+        if (name === "href") return "https://github.com/nemoe7/clankers";
+        if (name === "aria-label") return "Open nemoe7/clankers on GitHub";
+        return null;
+      },
+    };
+    const previewFrame = {
+      src: "https://preview.example",
+      getAttribute(name) { return name === "title" ? "App preview on port 8000" : null; },
+    };
+    const steering = {
+      textContent: "clankers - Steering :8000",
+      querySelectorAll(selector) {
+        return selector === "span"
+          ? [{ textContent: "clankers - Steering" }, { textContent: ":8000" }]
+          : [];
+      },
+      click() { clicked += 1; },
+    };
+    const context = {
+      console: { log() {} },
+      URL,
+      location: { href: "https://arena.ai/agent", pathname: "/agent" },
+      document: {
+        documentElement: {},
+        execCommand(command, show, text) { composer.innerText = text; return true; },
+        createRange() { return { selectNodeContents() {} }; },
+        querySelector(selector) {
+          if (selector === 'div.tiptap.ProseMirror[contenteditable="true"]') return composer;
+          if (selector.indexOf("div.relative.z-10") === 0) return bar;
+          if (selector.indexOf('a[aria-label^="Open "]') === 0) return repoLink;
+          return null;
+        },
+        querySelectorAll(selector) {
+          if (selector === '.recaptcha-v2-container, iframe[title="reCAPTCHA"]') {
+            return captchaVisible ? [captcha] : [];
+          }
+          if (selector === 'button[type="button"]') return [steering];
+          if (selector === "iframe[title]") return [previewFrame];
+          return [];
+        },
+        get title() { return page.title; },
+        set title(value) { page.title = value; },
+      },
+      window: {
+        addEventListener(name, fn) { if (name === "popstate") popstates.push(fn); },
+        removeEventListener() {},
+        getSelection() { return { removeAllRanges() {}, addRange() {} }; },
+      },
+      getComputedStyle() { return { overflowY: "auto" }; },
+      MutationObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      requestAnimationFrame() { return 1; },
+      cancelAnimationFrame() {},
+      setInterval(fn, ms) { intervals.push({ ms, fn }); return intervals.length; },
+      clearInterval() {},
+      setTimeout(fn) { timeouts.push(fn); return timeouts.length; },
+      clearTimeout() {},
+      fetch(url) {
+        fetches.push(url);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ key: "testkey-testkey-test", rotated: false, age: 700 }),
+        });
+      },
+      sessionStorage: { getItem() { return null; }, setItem() {} },
+      prompt() { return null; },
+      GM_getValue(key, fallback) { return stored.has(key) ? stored.get(key) : fallback; },
+      GM_setValue(key, value) { stored.set(key, value); },
+      GM_registerMenuCommand() { return 1; },
+      GM_unregisterMenuCommand() {},
+      GM_xmlhttpRequest(options) { posts.push(options.method + " " + options.url); },
+    };
+    stored.set("clankers-arena-proxy-host", "https://proxy.example");
+    stored.set("clankers-arena-proxy-master", "master-secret");
+    vm.runInNewContext(source, context, { filename: "arena.user.js" });
+    const goto = (path) => {
+      context.location.pathname = path;
+      context.location.href = "https://arena.ai" + path;
+    };
+    const flush = () => {
+      timeouts.splice(0).forEach((fn) => fn());
+      intervals.forEach((item) => item.fn());
+    };
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    const sent = () => posts.filter((entry) => entry.startsWith("POST"));
+
+    assert.equal(composer.innerText, "", "The check holds the fill at load");
+    assert.equal(clicked, 0, "The check holds the steering click at load");
+    assert.equal(sent().length, 0, "The check holds the key posts at load");
+    assert.equal(fetches.length, 0, "The check holds the rotate and key calls at load");
+    assert.ok(page.title.includes("\uD83D\uDEE1"), "The tab title still marks the check");
+
+    goto("/agent/one");
+    popstates.forEach((fn) => fn());
+    flush();
+    await settle();
+    assert.equal(composer.innerText, "", "The check holds the fill on a session route");
+    assert.equal(clicked, 0, "The check holds the steering click on a session route");
+    assert.equal(sent().length, 0, "The check holds the key posts on a session route");
+    assert.equal(fetches.length, 0, "The check holds the proxy calls on a session route");
+
+    captchaVisible = false;
+    goto("/agent");
+    popstates.forEach((fn) => fn());
+    flush();
+    await settle();
+    assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns when the check clears");
+    assert.ok(sent().length >= 1, "The key posts return when the check clears");
+    assert.ok(fetches.length >= 1, "The proxy calls return when the check clears");
+
+    goto("/agent/one");
+    popstates.forEach((fn) => fn());
+    flush();
+    assert.equal(clicked, 1, "The steering click returns when the check clears");
+    console.log("ok captcha hold: fill, steering click, proxy posts wait for the check");
+  });
+}

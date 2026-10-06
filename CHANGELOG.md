@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Captcha hold**: The prompt fill, the Open Steering click and the proxy key posts wait while the Arena security check shows.
+  The tab title keeps the shield, each tab reads its own page, and the held work resumes when the check clears. Arena 1.6.17.
 - **Preview state download**: The userscript saves the preview state to one owner-chosen file, checked once a minute.
   It writes only when the newest stamp moves, and an older stamp never overwrites the file.
   The name carries the repo, the branch, the stamp and the record counts. Version 1.4.0.
