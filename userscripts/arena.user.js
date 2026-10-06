@@ -1,9 +1,10 @@
 // ==UserScript==
-// @name         Clankers Arena
+// @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.12
+// @version      1.6.13
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
+// @icon         https://arena.ai/favicon.ico
 // @license      MIT
 // @match        https://arena.ai/*
 // @match        https://www.arena.ai/*

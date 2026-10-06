@@ -1,9 +1,10 @@
 // ==UserScript==
-// @name         Clankers ChatGPT
+// @name         ChatGPT.com | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.1
+// @version      1.3.3
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
+// @icon         https://chatgpt.com/favicon.ico
 // @license      MIT
 // @match        https://chatgpt.com/*
 // @updateURL    https://raw.githubusercontent.com/nemoe7/clankers/main/userscripts/chatgpt.user.js
