@@ -1749,6 +1749,28 @@ function checkStateDownload(api, session) {
   );
   assert.equal(rolledBackTask.kind, "stale");
   assert.match(rolledBackTask.message, /task stamp went backward/);
+  // A forced save takes the state whatever the memory says: the same stamp, an older
+  // stamp and a rolled-back pair all write, and the write moves the reference.
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33", null, true).kind,
+    "download",
+  );
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33", null, true).kind,
+    "download",
+  );
+  assert.equal(
+    stateDownload(
+      repo,
+      branch,
+      "2026-10-06T06:12:33",
+      counts,
+      memory,
+      { note: "2026-10-06T06:12:33", task: "2026-10-05T18:00:00" },
+      true,
+    ).kind,
+    "download",
+  );
   var rolledBackNote = stateDownload(
     repo,
     branch,

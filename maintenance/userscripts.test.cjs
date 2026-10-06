@@ -17,7 +17,7 @@ const bundles = {
     },
     offByDefault: ["transcript-trim"],
     // The prompt fill owns the four proxy entries; the state download owns its two.
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 2 },
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 3 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
     countMenu: "Transcript trim: ",

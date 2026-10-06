@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.7.1
+// @version      1.8.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1639,7 +1639,7 @@
     return stateMemory("", null);
   }
 
-  function stateDownload(repo, branch, stamp, counts, remembered, pair) {
+  function stateDownload(repo, branch, stamp, counts, remembered, pair, force) {
     if (!stamp) {
       return {
         kind: "error",
@@ -1648,14 +1648,14 @@
     }
     var name = stateFileName(repo, branch, stamp, counts);
     var memory = stateRemembered(remembered);
-    if (memory.stamp && memory.stamp === stamp) {
+    if (!force && memory.stamp && memory.stamp === stamp) {
       return {
         kind: "unchanged",
         name: name,
         message: "State unchanged since the last write: " + name,
       };
     }
-    if (memory.stamp && String(stamp) < memory.stamp) {
+    if (!force && memory.stamp && String(stamp) < memory.stamp) {
       return {
         kind: "stale",
         name: name,
@@ -1666,9 +1666,10 @@
     // The approved pair: the newest note stamp and the newest task stamp. A rollback leaves the
     // older records of a group behind while one new record moves the state stamp forward, so an
     // older stamp of the pair refuses the write and the newer local file stays (answer a898024).
+    // A forced save skips the refusal on purpose: the menu entry takes the state as it stands.
     var held = [];
-    if (pair && memory.note && pair.note && String(pair.note) < memory.note) held.push("note");
-    if (pair && memory.task && pair.task && String(pair.task) < memory.task) held.push("task");
+    if (!force && pair && memory.note && pair.note && String(pair.note) < memory.note) held.push("note");
+    if (!force && pair && memory.task && pair.task && String(pair.task) < memory.task) held.push("task");
     if (held.length) {
       var phrase = held.join(" and ") + (held.length > 1 ? " stamps" : " stamp");
       return {
@@ -1959,7 +1960,7 @@
       });
     }
 
-    function fetchStateFile(manual) {
+    function fetchStateFile(manual, force) {
       var base = previewBase(document);
       if (!base) {
         if (!frameLogged) {
@@ -1983,7 +1984,11 @@
           body.counts,
           memory,
           body.stamps,
+          force,
         );
+        if (force) {
+          logEvent("state", "forced save");
+        }
         logEvent("state", "tick " + stateTick(plan.name, body.stamp, memory.stamp));
         if (plan.kind !== "unchanged") {
           logEvent("state", plan.kind + ": " + plan.name);
@@ -2084,6 +2089,10 @@
     menuItem(menus, "Arena preview state — choose the file", chooseStateFile);
     menuItem(menus, "Arena preview state — save now", function () {
       fetchStateFile(true);
+    });
+    // A forced save writes whatever the state holds and moves the reference to it.
+    menuItem(menus, "Arena preview state — force save", function () {
+      fetchStateFile(true, true);
     });
 
     fetchStateFile(false);

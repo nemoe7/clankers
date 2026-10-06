@@ -93,7 +93,7 @@ A stamp older than the last write never overwrites the file. The script says so 
 
 The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file. A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
 
-Two menu entries sit with the feature: `Arena preview state — choose the file` and `Arena preview state — save now`. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
+Three menu entries sit with the feature: `Arena preview state — choose the file`, `Arena preview state — save now`, and `Arena preview state — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
 
 ## Arena Tab Title
 
