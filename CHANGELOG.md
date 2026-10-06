@@ -50,6 +50,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Initial message fill**: The composer fill writes the initial-message block under the repo name. It drops the ARENA.md fetch and the `here is ARENA.md:` copy, because the agent reads the rules file from the repository. Version 1.5.0.
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.
   The words rotate, so the selector anchors on the canvas and the animated ellipsis. Version 1.3.0.
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.4.0
+// @version      1.5.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -275,33 +275,44 @@
         });
     }
 
-    function promptForSlug(slug, arenaMd) {
+    // The initial message. The repo name leads it; the rules stay in the files the agent
+    // reads, so the composer carries the block and never the rules text.
+    var TEMPLATE_TAIL =
+      "\n\nRead the task and every file it touches in full. Trace the real flow end to end before you plan." +
+      "\n\nReuse first, one line second, new code last. Add nothing the task does not ask for." +
+      "\n\nNew behavior: red first. Write the failing check, make the smallest change that passes it," +
+      " refactor without a behavior change, then recheck." +
+      "\n\nFor a bug: reproduce it, change one variable at a time, fix the root cause where every" +
+      " caller routes through, cover the fix with a check, then recheck." +
+      "\n\nState every assumption the moment you make it. Ask one question when a wrong reading" +
+      " changes the result." +
+      "\n\nNEVER claim a check you did not run. Print what you skipped." +
+      "\n\nExpect screenshots, notes and corrections through the steering channel. Take each one in" +
+      " the next reply." +
+      "\n\nStop when verification holds, and finish with what changed, what you checked, and what" +
+      " is open.";
+
+    function promptForSlug(slug) {
       // The full stop is the fix: the editor links AGENTS.md as a bare domain
       // when a line break follows it; a space did not hold, a stop does
       // (owner live test). The proxy rides the preview, not this text.
-      var base =
-        slug +
-        " read ARENA.md AGENTS.md.\n" +
-        "Expect screenshots to be sent via the steering channel.";
-      if (arenaMd) {
-        return base + "\nhere is ARENA.md:\n" + arenaMd;
-      }
-      return base;
+      return slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." + TEMPLATE_TAIL;
     }
 
-    function shouldWrite(current, slug, lastSlug, arenaMd) {
-      var desired = promptForSlug(slug, arenaMd).trim();
+    function shouldWrite(current, slug, lastSlug) {
+      var desired = promptForSlug(slug).trim();
       var text = String(current || "").trim();
       if (text === desired) {
         return false;
       }
+      // An earlier fill, in either wording, is ours to replace; a real draft is not.
+      if (TEMPLATE_RE.test(text)) {
+        return true;
+      }
       if (lastSlug === null) {
-        return text === "" || TEMPLATE_RE.test(text);
+        return text === "";
       }
-      if (slug === lastSlug) {
-        return text === promptForSlug(slug, null).trim();
-      }
-      return true;
+      return slug !== lastSlug;
     }
 
     function rememberSlug(slug) {
@@ -312,17 +323,11 @@
       }
     }
 
-    // The rules of this repository, at a fixed URL: a session in another repository
-    // still receives them.
-    var ARENA_MD_URL =
-      "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md";
-
     if (exposeChecks("promptFill", {
       isComposerUrl: isComposerUrl,
       slugFromOwnerRepo: slugFromOwnerRepo,
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
-      ARENA_MD_URL: ARENA_MD_URL,
       PROXY_HOST_KEY: PROXY_HOST_KEY,
       PROXY_MASTER_KEY: PROXY_MASTER_KEY,
       proxyHost: proxyHost,
@@ -347,10 +352,7 @@
       return;
     }
 
-    var arenaMdCache = null;
     var heldKey = null;
-    var arenaMdTried = false;
-    var pendingFetch = null;
     var keyTried = false;
     var keyFetch = null;
 
@@ -418,23 +420,6 @@
       keyFetch = fetchAgentKey().then(function () {
         keyTried = true;
         keyFetch = null;
-        sync();
-      });
-    }
-
-    function fetchArenaMd() {
-      return fetch(ARENA_MD_URL).then(function (r) {
-        if (!r.ok) return null;
-        return r.text();
-      }).catch(function () { return null; });
-    }
-
-    function ensureFetch() {
-      if (arenaMdTried || pendingFetch) return;
-      pendingFetch = fetchArenaMd().then(function (content) {
-        arenaMdCache = typeof content === "string" ? content : null;
-        arenaMdTried = true;
-        pendingFetch = null;
         sync();
       });
     }
@@ -657,29 +642,21 @@
         return;
       }
       rememberSlug(slug);
-      // One write per page. The plain line first and the file second puts a
-      // line break directly after AGENTS.md, and the editor reads that break
-      // as the end of a bare domain and links the file name.
-      if (!arenaMdTried) {
-        ensureFetch();
-        ensureAgentKey();
-        return;
-      }
+      // One write per page. The repo name leads the message, and the rules file
+      // stays out of the composer: the agent reads it from the repository.
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
         lastSlug = slug;
         return;
       }
       var current = composer.innerText || "";
-      if (!shouldWrite(current, slug, lastSlug, arenaMdCache)) {
+      if (!shouldWrite(current, slug, lastSlug)) {
         lastSlug = slug;
-        ensureFetch();
         ensureAgentKey();
         return;
       }
-      setComposerText(composer, promptForSlug(slug, arenaMdCache));
+      setComposerText(composer, promptForSlug(slug));
       lastSlug = slug;
-      ensureFetch();
       ensureAgentKey();
     }
 

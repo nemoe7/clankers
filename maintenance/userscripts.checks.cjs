@@ -21,7 +21,6 @@ function checkPromptFill(api) {
   var slugFromOwnerRepo = api.slugFromOwnerRepo;
   var promptForSlug = api.promptForSlug;
   var shouldWrite = api.shouldWrite;
-  var ARENA_MD_URL = api.ARENA_MD_URL;
   var proxyHost = api.proxyHost;
   var keyUrl = api.keyUrl;
   var agentKeyFrom = api.agentKeyFrom;
@@ -73,18 +72,21 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
-    [promptForSlug("clankers"), "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel."],
-    [promptForSlug("clankers", "arena content here"), "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.\nhere is ARENA.md:\narena content here"],
+    // The repo name leads the fill; the rules file stays out of the composer.
+    [promptForSlug("clankers").split("\n")[0],
+      "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
+    [promptForSlug("clankers").indexOf("here is ARENA.md"), -1],
+    [promptForSlug("clankers").indexOf("red first") > 0, true],
     [shouldWrite("", "clankers", null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null), true],
     [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null), true],
+    [shouldWrite(promptForSlug("clankers"), "clankers", null), false],
     [shouldWrite("draft", "clankers", null), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers"), true],
     [shouldWrite("draft", "clankers", "clankers"), false],
-    [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "arena content"), false],
-    [shouldWrite("clankers read ARENA.md AGENTS.md\nhere is ARENA.md:\narena content", "clankers", "clankers", "arena content"), false],
+    [shouldWrite(promptForSlug("clankers"), "clankers", "clankers"), false],
+    [shouldWrite(promptForSlug("other"), "clankers", "clankers"), true],
     [proxyHost("https://arena-proxy.example.ts.net/"), "https://arena-proxy.example.ts.net"],
     [proxyHost("https://arena-proxy.example.ts.net/v1"), "https://arena-proxy.example.ts.net"],
     [proxyHost("https://arena-proxy.example.ts.net/v1/"), "https://arena-proxy.example.ts.net"],
@@ -97,9 +99,8 @@ function checkPromptFill(api) {
     [agentKeyFrom({ key: "short" }), null],
     [agentKeyFrom({ key: "has spaces in it aaaaaaaaaaaaa" }), null],
     [agentKeyFrom(null), null],
-    // The composer carries the rules line only: the proxy rides the preview.
-    [promptForSlug("clankers", null, "PROXY"),
-      "clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel."],
+    // The composer carries the fill only: the proxy rides the preview.
+    [promptForSlug("clankers").indexOf("http"), -1],
     [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
     [ROTATE_MIN_SECONDS, 900],
     [ROTATE_DUE_KEY, "clankers-arena-rotate-due"],
@@ -137,10 +138,10 @@ function checkPromptFill(api) {
       "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
       + " skills/arena-proxy holds the map. Never print it."],
-    // The finished line stays while the rules file is still on its way.
-    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), false],
-    // A plain prompt is rebuilt once the rules file arrives.
-    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", null, "arena content"), true],
+    // The same fill for the same repo holds, old or new wording.
+    [shouldWrite(promptForSlug("clankers"), "clankers", "clankers"), false],
+    // The older two-line fill is rebuilt without the rules text.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers"), true],
   ];
   var failed = 0;
   var i;

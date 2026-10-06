@@ -30,9 +30,9 @@ The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
-If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. It writes `{repo} read ARENA.md AGENTS.md.` with a full stop, then the line `Expect screenshots to be sent via the steering channel.`, and updates that text when the repo name changes. It does not overwrite an unrelated draft. The full stop keeps the editor from linking `AGENTS.md` as a bare domain.
+If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. The name leads the message, then `read ARENA.md AGENTS.md in full before your first edit, and follow both.` The rest is the initial message. It asks for a full read of the task and the touched files, and for reuse before new code. It asks for a failing check before new behavior, and a root-cause fix for a bug. It asks for stated assumptions, no claim of an unrun check, the steering channel for corrections, and a closing report. The text updates when the repo name changes, and an unrelated draft stays. The full stop keeps the editor from linking `AGENTS.md` as a bare domain.
 
-The feature then fetches `rules/ARENA.md` from the fixed raw URL of this repository. The URL is `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill waits for that fetch and writes the composer one time per page. It appends the file under a `here is ARENA.md:` line. A failed fetch writes the plain prompt. The single write keeps the editor from linking `AGENTS.md` as a bare domain. A second write would put a line break after the name. The editor reads that break as the end of a domain.
+The message names the rules files and carries no copy of them: the agent reads `ARENA.md` from the repository. The fill writes the composer one time per page. A second write would put a line break after the name. The editor reads that break as the end of a domain.
 
 ### Arena proxy settings and key rotation
 
