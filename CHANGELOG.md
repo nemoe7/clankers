@@ -40,6 +40,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Preview pick control**: The message toolbar carries a save button that picks one file and writes the state into it. The click is the gesture the picker needs, and the name carries the repo, the branch, the stamp and the record counts.
 - **State stamp scope**: The state stamp takes the newest change the state carries, receipts included, so a download follows every change. The poll heartbeat stays out.
 - **Skip poll on a message**: A note or a report answer clears an armed Skip poll flag, so the wait delivers it. An item that arrived before the press still outranks the skip.
 - **Paste line rule**: The composer stages a pasted text file when the paste holds more than 25 lines, counted in lines rather than characters.

@@ -164,6 +164,22 @@ def now():
   return datetime.now(timezone.utc).isoformat()
 
 
+def workspace_branch(root=None):
+  """The checked-out branch of a git checkout, or an empty string.
+
+  A state file name carries the branch beside the repository, so the pick control asks
+  the checkout the preview serves rather than the browser.
+  """
+  try:
+    head = (
+      (Path(root or Path.cwd()) / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+    )
+  except OSError:
+    return ""
+  prefix = "ref: refs/heads/"
+  return head[len(prefix) :] if head.startswith(prefix) else ""
+
+
 def clear_skip_poll(db):
   """Drop an armed Skip poll press when the owner writes.
 
@@ -3197,6 +3213,10 @@ def handler(store):
                 "text": state_ndjson(lines),
                 "counts": counts,
                 "stamp": store.newest_stamp(),
+                # The preview checkout names the repository and its branch, so a saved
+                # file carries both, as the userscript's own downloads do.
+                "repo": store.path.parent.parent.name,
+                "branch": workspace_branch(store.path.parent.parent),
               },
               ensure_ascii=False,
             ),
