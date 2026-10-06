@@ -877,7 +877,10 @@ function quoteId(id, control) {
   control.title = `Quoted in the composer: RE: ${id}`;
 }
 function quoteNoteId(code) {
-  quoteId((code.dataset.full || code.textContent).slice(0, 7), code);
+  // The log's IDs are UUIDs, so the quote carries the seven characters on show, which find the
+  // note. A report ID is a slug: seven characters of it name nothing, so it marks itself whole.
+  const full = code.dataset.full || code.textContent;
+  quoteId(code.dataset.quote === 'full' ? full : full.slice(0, 7), code);
 }
 // The report ID rides the status line as a copyable code element. A click copies it and a
 // ctrl-click quotes it to the composer, the gestures the log's note IDs and the task titles use.
@@ -891,6 +894,7 @@ function reportStatusLine(text, id) {
   code.className = 'note-id';
   code.textContent = id;
   code.dataset.full = id;
+  code.dataset.quote = 'full';
   code.title = id;
   status.replaceChildren(text, ' · ', code);
 }

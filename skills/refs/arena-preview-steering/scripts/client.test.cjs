@@ -1637,6 +1637,18 @@ test('preview client', async (t) => {
     assert.equal(noteBox.value, '', 'and does not fill the composer');
   });
 
+  await t.test("A report ID quotes whole: its seven-character prefix names nothing", async () => {
+    // The log's UUIDs find their note from seven characters. A report ID is a slug, so the quote
+    // carries the whole of it.
+    context.reportStatusLine('Report · 3 fields', 'summarize-stops');
+    const code = part(get('#report-status'), 'note-id');
+    assert.equal(code.dataset.quote, 'full');
+    get('#note').value = '';
+    documentEvents.click({ target: code, ctrlKey: true });
+    assert.equal(get('#note').value, 'RE: summarize-stops\n');
+    assert.equal(get('#note').hidden, false, 'the quote opens the composer');
+  });
+
   await t.test("The report copies its Markdown source, fetched on the click rather than riding the poll", async () => {
     // The report copies its Markdown source, fetched on the click rather than riding the poll.
     selectBefore = get('#report-select').value;
