@@ -39,6 +39,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **Merge ban**: The Constitution bans the merge outright. No authorization or instruction overrides it.
+- **Push cadence**: The Constitution pushes each verified commit or batch at once and never holds green commits.
 - **Poll call wording**: The Verification clause now reads "Run every arena-preview poll as 1 Bash call with tool timeout 1800 s and no pipe. A shorter tool timeout is a failed wait, and NEVER a result."
   It lands on the approved proposal in report `proposal-arena-md-conduct-bans-2`.
 - **Skill pointer**: ARENA.md names the two Arena skills: `arena-preview-steering` for the inbox, the reports and the gate, and `arena-proxy` for a source the sandbox cannot reach.
