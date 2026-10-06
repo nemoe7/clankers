@@ -7,7 +7,7 @@
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
 - Initial reads of this file and the preview skill may precede that reply.
-- Load `skills/arena-proxy` when a task needs a source the sandbox cannot reach; the skill holds the endpoints, the key handling and the caps.
+- Load the named skills for Arena work: `arena-preview-steering` for the inbox, the reports and the gate, and `arena-proxy` for a source the sandbox cannot reach.
 - Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
 - At the start of every turn, and after any compaction or summary, MUST reread ARENA.md and every AGENTS.md in the repository end-to-end before any other tool call; a partial read, such as head, tail or a grep excerpt, does not count; the gate and read cadence mechanics live in .agents/skills/arena-preview-steering/references/REFERENCE.md.
 - After a rebase onto `main`, or a new `main` change to a rule or skill file, MUST reread every affected file end-to-end before the next work step; a partial read, such as head, tail or a grep excerpt, does not count.

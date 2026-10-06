@@ -18,6 +18,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **Skill pointer**: ARENA.md names the two Arena skills: `arena-preview-steering` for the inbox, the reports and the gate, and `arena-proxy` for a source the sandbox cannot reach.
+  The refs copy carries the full line, and the live and root copies the compressed form. It lands on the approved proposal in report `arena-skill-names-2`.
 - **Quoted report ID**: A ctrl-click on a report ID quotes it, whole, into the Messages composer, the tab the box lives in.
   The quote regrows the box and leaves the Markdown preview, so the ID and the text stay complete.
 - **Long call header**: While no call has reported for three minutes, the header counts the call instead of naming the agent gone.
