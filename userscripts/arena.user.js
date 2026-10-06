@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.10
+// @version      1.6.11
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1630,6 +1630,12 @@
     return route;
   }
 
+  // The chosen file keeps its own name, so the save line names the file the write reached
+  // instead of the generated name the download route would use.
+  function writtenName(handle, fallback) {
+    return handle && handle.name ? handle.name : fallback;
+  }
+
   var STATE_WATCH_MS = 60 * 1000;
 
   // The Arena repo bar carries the owner/repo pair and the branch anchor; the anchor's title
@@ -1641,7 +1647,14 @@
   var STATE_SLUG_KEY = "clankers-arena-agent-slug";
 
   // The header leaves the page while a dialog holds it, so the slug the prompt fill saved
-  // stands in for the bar. A page without both keeps the repo empty.
+  // stands in for the bar. The tab title this script wrote stands in when the slug is empty.
+  var STATE_TITLE_RE = /^Arena \| (\S+)/;
+
+  function titleRepo(doc) {
+    var match = STATE_TITLE_RE.exec(String((doc && doc.title) || ""));
+    return match ? match[1] : "";
+  }
+
   function savedSlug() {
     try {
       return String(sessionStorage.getItem(STATE_SLUG_KEY) || "").trim();
@@ -1652,7 +1665,7 @@
 
   function stateRepo(doc) {
     var bar = doc.querySelector(STATE_BAR_SELECTOR);
-    if (!bar) return savedSlug();
+    if (!bar) return savedSlug() || titleRepo(doc);
     var spans = bar.querySelectorAll("span.truncate");
     var i;
     for (i = 0; i < spans.length; i += 1) {
@@ -1663,7 +1676,7 @@
         if (repo.indexOf("/") === -1 && !/\s/.test(text)) return repo;
       }
     }
-    return savedSlug();
+    return savedSlug() || titleRepo(doc);
   }
 
   function stateBranch(doc) {
@@ -1703,6 +1716,7 @@
       stateDownload: stateDownload,
       stateDelivery: stateDelivery,
       stateAction: stateAction,
+      writtenName: writtenName,
       stateScope: stateScope,
       stateRepo: stateRepo,
       pagePicker: pagePicker,
@@ -1937,7 +1951,7 @@
             writeToHandle(handle, body.text).then(
               function () {
                 GM_setValue(stampKey, body.stamp);
-                logEvent("state", "saved");
+                logEvent("state", "saved " + writtenName(handle, plan.name));
               },
               function (err) {
                 picked = null;

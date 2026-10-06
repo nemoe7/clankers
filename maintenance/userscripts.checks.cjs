@@ -1619,6 +1619,7 @@ function checkStateDownload(api, session) {
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
   var pagePicker = api.pagePicker;
+  var writtenName = api.writtenName;
   var downloadRoute = api.downloadRoute;
   var stateDownloadRoute = api.stateDownloadRoute;
   var counts = { notes: 12, tasks: 4 };
@@ -1727,6 +1728,21 @@ function checkStateDownload(api, session) {
   // The picker call runs on the page window; a realm without one yields no picker rather
   // than a throw, which is what keeps the download route alive.
   assert.equal(pagePicker(), null);
+  // The chosen file keeps its own name, so the save line names the file the write reached.
+  assert.equal(writtenName({ name: "clankers-state.ndjson" }, "generated.ndjson"), "clankers-state.ndjson");
+  assert.equal(writtenName({}, "generated.ndjson"), "generated.ndjson");
+  assert.equal(writtenName(null, "generated.ndjson"), "generated.ndjson");
+  // The bar leaves the page while a dialog holds it; with no saved slug either, the title
+  // still carries the repository this script wrote.
+  session.value = null;
+  assert.equal(
+    stateRepo({ querySelector: function () { return null; }, title: "Arena | clankers \uD83D\uDCA4" }),
+    "clankers",
+  );
+  assert.equal(
+    stateRepo({ querySelector: function () { return null; }, title: "ChatGPT" }),
+    "",
+  );
   // A menu click grants no browser gesture, so the automatic path writes the stamped
   // download and the pick stays a manual action.
   assert.equal(stateAction("pick", false), "download");
@@ -1734,7 +1750,7 @@ function checkStateDownload(api, session) {
   assert.equal(stateAction("download", false), "download");
   assert.equal(stateAction("write", true), "write");
   assert.equal(stateAction("unchanged", false), "unchanged");
-  console.log("ok state download 29");
+  console.log("ok state download 30");
 }
 
 const { test } = require("node:test");

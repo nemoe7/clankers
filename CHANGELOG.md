@@ -72,6 +72,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **State without a picker**: A pick needs a click for the browser gesture. The automatic path writes the stamped download, so the state lands. Version 1.6.9.
 - **Quiet state notices**: Every state-file notice is a console line under the `[clankers]` tag, and no popup interrupts the preview. Version 1.6.9.
+- **State file names**: The save line names the file the write reached, from the chosen handle. The repo name falls back to the tab title when the bar is gone. Version 1.6.11.
 - **Parked security node**: The page keeps the reCAPTCHA node after the widget closes, so the shield stuck. The mark now needs a rendered node, not a present one. Version 1.6.8.
 - **Closed security dialog**: Radix keeps the closed dialog in the page, so the shield stuck. The mark now needs an open dialog ancestor. Version 1.6.7.
 - **State picker call**: The picker ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window. Version 1.6.2.
