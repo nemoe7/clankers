@@ -57,6 +57,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### userscripts
+
+- **State picker call**: The picker ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window. Version 1.6.2.
+
 #### skills
 
 - **Kilo path**: The `amending-violations` skill drops the directory path in the persistence item. The rule stays: re-inject the rules on long sessions and after compaction.

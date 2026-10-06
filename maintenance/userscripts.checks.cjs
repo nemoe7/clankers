@@ -1494,6 +1494,7 @@ function checkStateDownload(api) {
   var stateDownload = api.stateDownload;
   var stateDelivery = api.stateDelivery;
   var stateScope = api.stateScope;
+  var pagePicker = api.pagePicker;
   var counts = { notes: 12, tasks: 4 };
   var repo = "clankers";
   var branch = "main";
@@ -1578,7 +1579,10 @@ function checkStateDownload(api) {
     JSON.stringify(stateScope({ querySelector: function () { return null; } })),
     JSON.stringify({ repo: "", branch: "" }),
   );
-  console.log("ok state download 21");
+  // The picker call runs on the page window; a realm without one yields no picker rather
+  // than a throw, which is what keeps the download route alive.
+  assert.equal(pagePicker(), null);
+  console.log("ok state download 22");
 }
 
 const { test } = require("node:test");

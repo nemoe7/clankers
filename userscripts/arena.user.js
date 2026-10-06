@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.1
+// @version      1.6.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -14,6 +14,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
+// @grant        unsafeWindow
 // @grant        GM_unregisterMenuCommand
 // @connect      arena.site
 // ==/UserScript==
@@ -1664,6 +1665,7 @@
       stateDownload: stateDownload,
       stateDelivery: stateDelivery,
       stateScope: stateScope,
+      pagePicker: pagePicker,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -1709,6 +1711,18 @@
           done(0, null);
         },
       });
+    }
+
+    // The sandbox copy of the picker refuses the call with a TypeError, so the call runs on the
+    // page window the owner granted. A browser without the picker returns null.
+    function pagePicker() {
+      var page = typeof unsafeWindow !== "undefined" ? unsafeWindow : null;
+      if (!page && typeof window !== "undefined") page = window;
+      var picker = page && page.showSaveFilePicker;
+      if (typeof picker !== "function") return null;
+      return function (options) {
+        return picker.call(page, options);
+      };
     }
 
     function stateDb() {
@@ -1818,7 +1832,7 @@
           staleWarned = true;
           return;
         }
-        var hasPicker = typeof window.showSaveFilePicker === "function";
+        var hasPicker = Boolean(pagePicker());
         var ready = picked ? Promise.resolve(picked) : stateHandle();
         ready.then(function (handle) {
           picked = handle || null;
@@ -1867,25 +1881,25 @@
     }
 
     function chooseStateFile() {
-      if (typeof window.showSaveFilePicker !== "function") {
+      var pick = pagePicker();
+      if (!pick) {
         window.alert(
           "This browser cannot write the state file; the stamped download is used instead.",
         );
         return;
       }
-      window
-        .showSaveFilePicker({
-          suggestedName: (function () {
-            var scope = stateScope(document);
-            return stateFileName(scope.repo, scope.branch, "", null);
-          })(),
-          types: [
-            {
-              description: "NDJSON state",
-              accept: { "application/x-ndjson": [".ndjson"] },
-            },
-          ],
-        })
+      pick({
+        suggestedName: (function () {
+          var scope = stateScope(document);
+          return stateFileName(scope.repo, scope.branch, "", null);
+        })(),
+        types: [
+          {
+            description: "NDJSON state",
+            accept: { "application/x-ndjson": [".ndjson"] },
+          },
+        ],
+      })
         .then(function (handle) {
           return saveStateHandle(handle).then(function () {
             picked = handle;
@@ -1895,9 +1909,11 @@
           });
         })
         .catch(function (err) {
+          var name = (err && err.name) || "unknown";
+          var message = (err && err.message) || "";
           logEvent(
             "state",
-            "picker closed without a file (" + ((err && err.name) || "unknown") + ")",
+            "picker closed without a file (" + name + (message ? ": " + message : "") + ")",
           );
         });
     }
