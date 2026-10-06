@@ -21,6 +21,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+import check
+
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "gpt-plugins"
 MANIFEST = PLUGIN / "plugin.json"
@@ -32,48 +34,6 @@ SHIPPED = PLUGIN / "skills"
 PLUGIN_NAME = "gpt-plugins"
 EXPECTED_SKILLS = ("gpt-quirks", "gpt-handoff", "gpt-planning", "gpt-github")
 SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
-NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-EXPECTED_SKILL_FIELDS = {
-  "name",
-  "description",
-  "license",
-  "compatibility",
-  "metadata",
-  "allowed-tools",
-}
-
-
-def parse_frontmatter(text: str) -> tuple[dict[str, str], list[str]]:
-  """Return the top-level frontmatter values and their problems."""
-  errors: list[str] = []
-
-  if not text.startswith("---\n"):
-    return {}, ["missing YAML frontmatter"]
-
-  end = text.find("\n---", 4)
-
-  if end < 0:
-    return {}, ["unterminated YAML frontmatter"]
-
-  values: dict[str, str] = {}
-
-  for line in text[4:end].splitlines():
-    if not line.strip() or line.startswith((" ", "\t")):
-      continue
-
-    if ":" not in line:
-      errors.append(f"invalid frontmatter line: {line}")
-      continue
-
-    key, _, value = line.partition(":")
-    value = value.strip()
-
-    if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
-      value = value[1:-1]
-
-    values[key.strip()] = value
-
-  return values, errors
 
 
 def shipped_paths() -> list[Path]:
@@ -177,16 +137,16 @@ def check_skill(root: Path, name: str, errors: list[str]) -> None:
     return
 
   text = path.read_text(encoding="utf-8")
-  values, frontmatter_errors = parse_frontmatter(text)
+  values, frontmatter_errors = check.parse_frontmatter(text)
 
   errors.extend(f"{label}: {error}" for error in frontmatter_errors)
 
-  unknown = set(values) - EXPECTED_SKILL_FIELDS
+  unknown = set(values) - check.EXPECTED_SKILL_FIELDS
 
   if unknown:
     errors.append(f"{label}: unknown frontmatter fields: {sorted(unknown)}")
 
-  if values.get("name") != name or not NAME_RE.fullmatch(values.get("name", "")):
+  if values.get("name") != name or not check.NAME_RE.fullmatch(values.get("name", "")):
     errors.append(f"{label}: invalid name {values.get('name')!r}, expected {name!r}")
 
   description = values.get("description", "")
