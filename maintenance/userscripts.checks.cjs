@@ -1043,13 +1043,19 @@ function checkTabTitle(api) {
   }
   // The owner's security dialog: Arena shows it over the page and it holds until the
   // check passes, so it outranks the poll row, the bubble and the waiting line.
-  function captchaDoc(messages, state) {
+  function captchaDoc(messages, state, parked) {
     var frame = {
       title: "reCAPTCHA",
       getAttribute: function (name) {
         return null;
       },
     };
+    if (parked) {
+      // A parked node keeps its place in the page after the widget closes: no box renders.
+      frame.getClientRects = function () {
+        return [];
+      };
+    }
     if (state) {
       // Radix keeps the dialog in the page after it closes, one data-state away.
       var dialog = {
@@ -1267,6 +1273,10 @@ function checkTabTitle(api) {
     // A closed dialog stays in the DOM, so the shield clears with it.
     [captchaSignal(captchaDoc(null, "closed")), false],
     [captchaSignal(captchaDoc(null, "open")), true],
+    // A parked node keeps its place after the dialog closes, so the shield needs a rendered
+    // node: no box, no mark.
+    [captchaSignal(captchaDoc(null, null, true)), false],
+    [captchaSignal(captchaDoc(null, "open", true)), false],
     [openDialog({ getAttribute: function () { return null; } }), true],
     [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
     [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],

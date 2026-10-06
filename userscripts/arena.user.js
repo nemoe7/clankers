@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.7
+// @version      1.6.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -2326,6 +2326,15 @@
       return true;
     }
 
+    // A parked node keeps its place in the page after the widget closes, so the mark needs a
+    // rendered node: a hidden subtree reports no client rects.
+    function renderedNode(node) {
+      if (typeof node.getClientRects === "function") {
+        return node.getClientRects().length > 0;
+      }
+      return !node.hidden;
+    }
+
     // The security dialog takes the whole page, so nothing else can be done while it shows.
     function captchaSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
@@ -2334,7 +2343,7 @@
       var nodes = doc.querySelectorAll(CAPTCHA_SELECTOR);
       var i;
       for (i = 0; i < nodes.length; i += 1) {
-        if (openDialog(nodes[i])) return true;
+        if (openDialog(nodes[i]) && renderedNode(nodes[i])) return true;
       }
       return false;
     }
