@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.9
+// @version      1.6.10
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -39,12 +39,15 @@
   // the event a person needs and never the feature's own loop.
   var LOG_TAG = "[clankers]";
 
-  function logEvent(event, detail) {
+  // One tag carries every line, and the module rides a second bracket, so one filter shows
+  // one module alone.
+  function logEvent(module, event, detail) {
+    var line = LOG_TAG + "[" + module + "] " + event;
     try {
       if (detail === undefined) {
-        console.log(LOG_TAG + " " + event);
+        console.log(line);
       } else {
-        console.log(LOG_TAG + " " + event, detail);
+        console.log(line, detail);
       }
     } catch (err) {
       return;
@@ -600,6 +603,9 @@
 
     var lastSlug = null;
     var filledSlug = null;
+    // The fill runs on every mutation, so each failure reports once until it clears.
+    var slugLogged = false;
+    var composerLogged = null;
 
     function readSlug(doc) {
       var bar = doc.querySelector(BAR_SELECTOR);
@@ -658,6 +664,11 @@
       }
       var slug = readSlug(document);
       if (!slug) {
+        // The fill runs on every mutation, so a failure prints once until it clears.
+        if (!slugLogged) {
+          slugLogged = true;
+          logEvent("fill", "no repo slug yet");
+        }
         var emptyComposer = document.querySelector(COMPOSER_SELECTOR);
         if (emptyComposer && emptyComposer.getAttribute("aria-disabled") !== "true") {
           var emptyText = String(emptyComposer.innerText || "").trim();
@@ -668,14 +679,20 @@
         lastSlug = null;
         return;
       }
+      slugLogged = false;
       rememberSlug(slug);
       // One write per page. The repo name leads the message, and the rules file
       // stays out of the composer: the agent reads it from the repository.
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
+        if (composerLogged !== slug) {
+          composerLogged = slug;
+          logEvent("fill", "no composer for " + slug);
+        }
         lastSlug = slug;
         return;
       }
+      composerLogged = null;
       var current = composer.innerText || "";
       if (!shouldWrite(current, slug, lastSlug, filledSlug)) {
         lastSlug = slug;
@@ -1837,6 +1854,7 @@
       );
       var route = stateDownloadRoute();
       if (route === "link") {
+        logEvent("state", "link download: " + name);
         linkDownload(url, name);
         setTimeout(function () {
           URL.revokeObjectURL(url);
@@ -1888,6 +1906,8 @@
           body.counts,
           GM_getValue(stampKey, ""),
         );
+        // One line per tick: the file name carries the stamp and the record counts.
+        logEvent("state", "tick " + plan.name);
         if (plan.kind !== "unchanged") {
           logEvent("state", plan.kind + ": " + plan.name);
         }
@@ -1904,6 +1924,7 @@
         ready.then(function (handle) {
           picked = handle || null;
           var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
+          logEvent("state", "route " + action);
           if (action === "unchanged" || action === "error") {
             if (manual) logEvent("state", "no write: " + plan.kind);
             return;
@@ -2407,13 +2428,40 @@
     var lastRepo = null;
     var lastPath = null;
 
+    // The anchors behind one decision, so a title a person questions shows its cause.
+    function titleAnchors(doc) {
+      var row = strongRow(doc) || liveRow(doc);
+      return (
+        "repo=" +
+        (repoForTitle(doc) || "none") +
+        " row=" +
+        (row ? rowSource(row) : "none")
+      );
+    }
+
+    var TITLE_LOG_MS = 1000;
+    var titleLoggedAt = 0;
+
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
       if (desired) {
         if (doc.title === desired) {
+          // The check runs on every mutation, so an unchanged title logs once a second.
+          if (Date.now() - titleLoggedAt >= TITLE_LOG_MS) {
+            titleLoggedAt = Date.now();
+            logEvent(
+              "title",
+              "unchanged " + (titleReason || "none"),
+              titleAnchors(doc),
+            );
+          }
           return false;
         }
-        logEvent("title", (titleReason || "title") + " -> " + desired);
+        logEvent(
+          "title",
+          (titleReason || "title") + " -> " + desired,
+          titleAnchors(doc),
+        );
         appliedTitle = desired;
         doc.title = desired;
         return true;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers ChatGPT
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.0
+// @version      1.3.1
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -34,12 +34,15 @@
   // the event a person needs and never the feature's own loop.
   var LOG_TAG = "[clankers]";
 
-  function logEvent(event, detail) {
+  // One tag carries every line, and the module rides a second bracket, so one filter shows
+  // one module alone.
+  function logEvent(module, event, detail) {
+    var line = LOG_TAG + "[" + module + "] " + event;
     try {
       if (detail === undefined) {
-        console.log(LOG_TAG + " " + event);
+        console.log(line);
       } else {
-        console.log(LOG_TAG + " " + event, detail);
+        console.log(line, detail);
       }
     } catch (err) {
       return;

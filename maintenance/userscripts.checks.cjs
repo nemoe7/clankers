@@ -46,13 +46,14 @@ function checkLogging(api) {
   try {
     logEvent("feature", "Prompt fill: ON");
     logEvent("fill", "wrote the initial message for clankers");
-    logEvent("state", "saved");
+    logEvent("state", "saved", "detail");
   } finally {
     console.log = original;
   }
-  assert.equal(lines[0], "[clankers] feature Prompt fill: ON");
-  assert.equal(lines[1], "[clankers] fill wrote the initial message for clankers");
-  assert.equal(lines[2], "[clankers] state saved");
+  // The module rides a second bracket, so one filter shows one module alone.
+  assert.equal(lines[0], "[clankers][feature] Prompt fill: ON");
+  assert.equal(lines[1], "[clankers][fill] wrote the initial message for clankers");
+  assert.equal(lines[2], "[clankers][state] saved detail");
   // A console that rejects must never break a feature.
   console.log = function () {
     throw new Error("closed console");
@@ -1283,19 +1284,26 @@ function checkTabTitle(api) {
     [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
     // Every title change prints one line: the signal, then the emoji the title takes.
     [
-      loggedTitle(captchaDoc()),
-      "[clankers] title security check -> " + TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI,
+      loggedTitleHead(captchaDoc()),
+      "[clankers][title] security check -> " + TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI,
     ],
+    // The anchors behind the decision ride the same line, so a title shows its cause.
+    [loggedTitleTail(captchaDoc()), "repo=clankers row=none"],
     // The label behind the row rides the line, so the cause is visible.
     [
-      loggedTitle(waitingDoc([pollMessage])),
-      "[clankers] title poll command (running Bash) -> " + TITLE_PREFIX + "clankers \uD83D\uDCA4",
+      loggedTitleHead(waitingDoc([pollMessage])),
+      "[clankers][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers \uD83D\uDCA4",
+    ],
+    [
+      loggedTitleTail(waitingDoc([pollMessage])),
+      "repo=clankers row=poll command (running Bash)",
     ],
     [expireHold(), null],
     [
-      loggedTitle(idleDoc),
-      "[clankers] title title -> " + TITLE_PREFIX + "clankers",
+      loggedTitleHead(idleDoc),
+      "[clankers][title] title -> " + TITLE_PREFIX + "clankers",
     ],
+    [loggedTitleTail(idleDoc), "repo=clankers row=none"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.
@@ -1312,6 +1320,13 @@ function checkTabTitle(api) {
       console.log = original;
     }
     return lines.length ? lines[lines.length - 1] : "";
+  }
+  // The line carries the decision and the anchors behind it; the cases read both halves.
+  function loggedTitleHead(doc) {
+    return loggedTitle(doc).split(" repo=")[0];
+  }
+  function loggedTitleTail(doc) {
+    return "repo=" + loggedTitle(doc).split(" repo=")[1];
   }
 
   function polls(text) {
