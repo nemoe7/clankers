@@ -25,6 +25,8 @@ function loadChecks(file) {
     console,
     URL,
     sessionStorage: session,
+    // The bundle asks for GM_download, so the manager hands it over outside a browser too.
+    GM_download: function () {},
     fetch: (...args) => globalThis.fetch(...args),
   };
   vm.runInNewContext(source, context, { filename: file });
@@ -1538,6 +1540,8 @@ function checkStateDownload(api, session) {
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
   var pagePicker = api.pagePicker;
+  var downloadRoute = api.downloadRoute;
+  var stateDownloadRoute = api.stateDownloadRoute;
   var counts = { notes: 12, tasks: 4 };
   var repo = "clankers";
   var branch = "main";
@@ -1626,6 +1630,10 @@ function checkStateDownload(api, session) {
   );
   session.value = null;
   assert.equal(stateRepo({ querySelector: function () { return null; } }), "");
+  // The manager's download beats the page link, because the page policy can block a link.
+  assert.equal(downloadRoute(true), "manager");
+  assert.equal(downloadRoute(false), "link");
+  assert.equal(stateDownloadRoute(), "manager");
   // A title without the arrow falls back to the href; a page without the bar stays empty.
   branchLink.getAttribute = function (name) {
     if (name === "href") return "https://github.com/other/repo/tree/feat%2Fx";
@@ -1640,7 +1648,7 @@ function checkStateDownload(api, session) {
   // The picker call runs on the page window; a realm without one yields no picker rather
   // than a throw, which is what keeps the download route alive.
   assert.equal(pagePicker(), null);
-  console.log("ok state download 26");
+  console.log("ok state download 28");
 }
 
 const { test } = require("node:test");

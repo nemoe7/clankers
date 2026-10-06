@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.4
+// @version      1.6.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -15,6 +15,7 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        unsafeWindow
+// @grant        GM_download
 // @grant        GM_unregisterMenuCommand
 // @connect      arena.site
 // ==/UserScript==
@@ -1680,6 +1681,8 @@
       stateScope: stateScope,
       stateRepo: stateRepo,
       pagePicker: pagePicker,
+      downloadRoute: downloadRoute,
+      stateDownloadRoute: stateDownloadRoute,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -1801,19 +1804,60 @@
       );
     }
 
-    function writeStateDownload(text, name) {
-      var url = URL.createObjectURL(
-        new Blob([text], { type: "application/x-ndjson" }),
-      );
+    // The manager's own download writes the file through the browser API, which the page's
+    // automatic-download policy cannot block. The link fallback stays for a manager without it.
+    function downloadRoute(hasManagerDownload) {
+      return hasManagerDownload ? "manager" : "link";
+    }
+
+    // The manager exposes GM_download only when the bundle asked for it, so the global is
+    // the whole test.
+    function stateDownloadRoute() {
+      return downloadRoute(typeof GM_download === "function");
+    }
+
+    function linkDownload(url, name) {
       var anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = name;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
-      setTimeout(function () {
-        URL.revokeObjectURL(url);
-      }, 1000);
+    }
+
+    function writeStateDownload(text, name) {
+      var url = URL.createObjectURL(
+        new Blob([text], { type: "application/x-ndjson" }),
+      );
+      var route = stateDownloadRoute();
+      if (route === "link") {
+        linkDownload(url, name);
+        setTimeout(function () {
+          URL.revokeObjectURL(url);
+        }, 1000);
+        return;
+      }
+      GM_download({
+        url: url,
+        name: name,
+        saveAs: false,
+        onload: function () {
+          logEvent("state", "manager download saved: " + name);
+          URL.revokeObjectURL(url);
+        },
+        onerror: function (err) {
+          logEvent(
+            "state",
+            "manager download failed (" +
+              ((err && err.error) || "unknown") +
+              "); using the link",
+          );
+          linkDownload(url, name);
+          setTimeout(function () {
+            URL.revokeObjectURL(url);
+          }, 1000);
+        },
+      });
     }
 
     function fetchStateFile(manual) {
