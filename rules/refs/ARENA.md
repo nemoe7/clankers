@@ -21,6 +21,7 @@
 ## Constitution
 
 - MUST do only requested work plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
+- NEVER create a local-only tool, commit it, or add a workflow that runs it.
 - Before every commit, print the planned final commit list.
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
@@ -112,7 +113,7 @@
 - NEVER add another question to the same ask_user batch without first stating the updated total.
 - Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
-- Run `arena-preview poll` with bash tool timeout 1800s.
+- Run every arena-preview poll as 1 Bash call with tool timeout 1800 s and no pipe. A shorter tool timeout is a failed wait, and NEVER a result.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
@@ -186,6 +187,7 @@
 - After every PATCH, re-fetch title and body and diff against the staged file to confirm the change is live; a 200 is not proof.
 - Keep the PR title current with the work; update it alongside the body.
 - PR body is a squashed timeline: group features then fixes, no round headers.
+- NEVER mention the owner in any public-facing material; it carries the change, not the people.
 - NEVER close or reopen a PR, not even to retrigger its checks.
 
 ## Workspace
