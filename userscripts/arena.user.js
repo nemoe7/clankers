@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.14
+// @version      1.6.15
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -24,8 +24,7 @@
 (function () {
   "use strict";
 
-  // Outside a browser each feature publishes its helpers, so the checks live in
-  // maintenance/ instead of shipping inside this bundle.
+  // Outside a browser each feature publishes its helpers, so the checks live in maintenance/.
   function exposeChecks(name, api) {
     if (typeof document !== "undefined") {
       return false;
@@ -36,12 +35,9 @@
     return true;
   }
 
-  // One tag filters the whole story of a page in the devtools console. A line names
-  // the event a person needs and never the feature's own loop.
   var LOG_TAG = "[clankers]";
 
-  // One tag carries every line, and the module rides a second bracket, so one filter shows
-  // one module alone.
+  // One tag filters the whole page story; the module rides a second bracket.
   function logEvent(module, event, detail) {
     var line = LOG_TAG + "[" + module + "] " + event;
     try {
@@ -121,6 +117,7 @@
     return null;
   }
 
+    // The fill writes the initial message: the repo name leads it, the rules stay in the files.
   runFeature("prompt-fill", "Prompt fill", function () {
 
     var BAR_SELECTOR =
@@ -129,8 +126,6 @@
     var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md)/;
     var SLUG_KEY = "clankers-arena-agent-slug";
 
-    // One test for the composer URL: the arena host at the bare /agent path. Arena serves the
-    // composer on /agent and on /agent/, so trailing slashes do not count.
     function isComposerUrl(urlString) {
       var url;
       try {
@@ -162,7 +157,6 @@
     var PROXY_MASTER_KEY = "clankers-arena-proxy-master";
 
     function proxyHost(raw) {
-      // One HTTPS origin, no path and no trailing slash: the route path is ours.
       var host = String(raw || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
       return /^https:\/\/[a-z0-9.-]+$/i.test(host) ? host : null;
     }
@@ -180,13 +174,10 @@
     var ROTATE_INTERVAL_MS = ROTATE_MIN_SECONDS * 1000;
     var ROTATE_DUE_KEY = "clankers-arena-rotate-due";
     var NOTED_KEY = "clankers-arena-noted-key";
-    // A container restart makes a new key at once, so the watch adopts it inside the
-    // rotation window instead of leaving the agent with a dead key for 15 minutes.
     var KEY_WATCH_MS = 60 * 1000;
     var PREVIEW_FRAME_TITLE = "App preview on port 8000";
 
     function previewBase(doc) {
-      // The Arena page carries the preview as an iframe; its title names the port.
       var frames = doc.querySelectorAll("iframe[title]");
       var i;
       var title;
@@ -224,7 +215,6 @@
       );
     }
 
-    // One quiet note per key: a reload or a second tab must not repeat it.
     function noteKey(key, host, kind) {
       if (GM_getValue(NOTED_KEY, "") === key) return;
       GM_setValue(NOTED_KEY, key);
@@ -235,15 +225,10 @@
       return incoming && incoming !== held ? incoming : null;
     }
 
-    // A key post runs when the preview is present and either the minute tick forces it
-    // or the frame just appeared. A refresh is a fresh page, so its first sight posts.
     function keyPostDue(base, posted, force) {
       return Boolean(base) && (force === true || base !== posted);
     }
 
-    // One countdown survives a reload and the other tabs: the due time is saved, so a
-    // reload resumes the wait instead of starting a fresh one. The server still holds
-    // the minimum age, so a second tab can only lose the race.
     function rotationDueAt(nowMs, ageSeconds, minSeconds) {
       return nowMs + Math.max(0, minSeconds - ageSeconds) * 1000;
     }
@@ -252,8 +237,6 @@
       return Math.max(0, dueMs - nowMs);
     }
 
-    // GM_xmlhttpRequest skips the page's cross-origin and CSP rules, so it carries
-    // both calls when it exists.
     function requestJson(method, url, payload, done) {
       function finish(text, status) {
         var body = null;
@@ -282,8 +265,6 @@
       done(0, null);
     }
 
-    // The proxy answers with a wildcard origin, so a plain fetch reads it. GM_xmlhttpRequest
-    // stays for the preview, and the connect tag names that one host only.
     function fetchJson(url, done) {
       fetch(url)
         .then(function (r) {
@@ -299,8 +280,6 @@
         });
     }
 
-    // The initial message. The repo name leads it; the rules stay in the files the agent
-    // reads, so the composer carries the block and never the rules text.
     var TEMPLATE_TAIL =
       "\n\nRead the task and every file it touches in full. Trace the real flow end to end before you plan." +
       "\n\nReuse first, one line second, new code last. Add nothing the task does not ask for." +
@@ -317,23 +296,17 @@
       " is open.";
 
     function promptForSlug(slug) {
-      // The full stop is the fix: the editor links AGENTS.md as a bare domain
-      // when a line break follows it; a space did not hold, a stop does
-      // (owner live test). The proxy rides the preview, not this text.
       return slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." + TEMPLATE_TAIL;
     }
 
     function shouldWrite(current, slug, lastSlug, filledSlug) {
       var text = String(current || "").trim();
-      // One fill per page per repo: after the write the editor owns the text, so an
-      // edited or emptied composer stays untouched and the observer cannot loop.
       if (filledSlug === slug) {
         return false;
       }
       if (text === "") {
         return true;
       }
-      // An earlier fill, in either wording, is ours to replace; a real draft is not.
       if (TEMPLATE_RE.test(text)) {
         return true;
       }
@@ -384,15 +357,12 @@
     var keyTried = false;
     var keyFetch = null;
 
-    // The preview shows the key and the host the agent uses, so a stale key is visible at once.
     function postAgentKey(key, host) {
       var base = previewBase(document);
       if (!base || !key) return;
       requestJson("POST", keyPostUrl(base), { key: key, host: host }, function () {});
     }
 
-    // The menu button posts the key the script holds to the preview. A missing key fetches
-    // the live one, which posts it too. No rotation call runs here.
     function postKeyNow(state, post, fetchNow) {
       if (!state.host) {
         return;
@@ -404,7 +374,6 @@
       fetchNow();
     }
 
-    // One quiet note announces the key, so a read finds it and a poll never wakes on it.
     function postKeyNote(text) {
       var base = previewBase(document);
       if (!base) return;
@@ -441,8 +410,6 @@
         });
     }
 
-    // One try per page until the key arrives: a wrong master key must not hammer the
-    // owner's host on every mutation, and the menu change clears the flag.
     function ensureAgentKey() {
       if (keyTried || keyFetch) return;
       keyFetch = fetchAgentKey().then(function () {
@@ -461,7 +428,6 @@
         GM_setValue(key, String(answer).trim());
         keyTried = false;
         keyFetch = null;
-        // A plain prompt is already in the composer, so the next pass rebuilds it.
         lastSlug = null;
         ensureAgentKey();
         sync();
@@ -478,10 +444,6 @@
       };
     }
 
-    // The preview can arrive after the key did: the composer observer watches the DOM, and
-    // the first sight of the frame posts the held key. The minute tick forces a post even
-    // when the key has not changed, so the preview stamp keeps moving. That was the gap
-    // the owner measured: the clock read 12:56 and the last update stood at 12:53.
     var postedBase = null;
     function postKeyToPreview(force) {
       var base = previewBase(document);
@@ -492,12 +454,9 @@
       postAgentKey(heldKey, pair.host);
     }
 
-    // One rotation pass: ask the backend to rotate when the key is old enough, then
-    // carry the new key into the prompt and tell the agent through the preview.
     function rotateKey(minSeconds, done) {
       var pair = settings();
       if (!pair.host || !pair.master) return;
-      // The timer skips a wait that has not elapsed. A manual press passes 0 and forces.
       if (
         minSeconds > 0 &&
         rotationWaitMs(Number(GM_getValue(ROTATE_DUE_KEY, 0)), Date.now()) > 0
@@ -512,7 +471,6 @@
             return;
           }
           if (body.rotated !== true || !body.key) {
-            // The server holds the minimum age and reports the key's age.
             var age = typeof body.age === "number" ? body.age : ROTATE_MIN_SECONDS;
             GM_setValue(
               ROTATE_DUE_KEY,
@@ -542,11 +500,9 @@
       );
     }
 
-    // A manual press forces the rotation; the timer holds the minimum age.
     menuItem(proxyMenus, "Arena proxy rotate now — run", function () {
       rotateKey(0, null);
     });
-    // A manual press posts the held key without a rotation call.
     menuItem(proxyMenus, "Arena proxy post key now — run", function () {
       var pair = settings();
       postKeyNow(
@@ -560,8 +516,6 @@
       );
     });
 
-    // The first call runs the saved countdown: after a reload the key is due, it rotates
-    // at once, and a fresh key only refreshes the due time.
     rotateKey(ROTATE_MIN_SECONDS, null);
 
     var rotateTimer = setInterval(function () {
@@ -576,9 +530,6 @@
           return r.ok ? r.json() : null;
         })
         .then(function (body) {
-          // The watch adopts a restart's key even when no page write is wanted, so
-          // the agent gets the key note. The composer keeps its own line until a real
-          // change demands a write, because shouldWrite sees the same key text.
           var key = keyChanged(heldKey, agentKeyFrom(body));
           if (key) {
             heldKey = key;
@@ -595,7 +546,6 @@
 
     var lastSlug = null;
     var filledSlug = null;
-    // The fill runs on every mutation, so each failure reports once until it clears.
     var slugLogged = false;
     var composerLogged = null;
 
@@ -656,7 +606,6 @@
       }
       var slug = readSlug(document);
       if (!slug) {
-        // The fill runs on every mutation, so a failure prints once until it clears.
         if (!slugLogged) {
           slugLogged = true;
           logEvent("fill", "no repo slug yet");
@@ -673,8 +622,6 @@
       }
       slugLogged = false;
       rememberSlug(slug);
-      // One write per page. The repo name leads the message, and the rules file
-      // stays out of the composer: the agent reads it from the repository.
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
         if (composerLogged !== slug) {
@@ -721,16 +668,15 @@
     };
   });
 
+    // The Steering row drifts on labels, so it is found by its words.
   runFeature("open-steering", "Open Steering", function () {
 
     var BAR_SELECTOR =
       "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
-    // Agents drift on the process name, so the row is found by its words, not its shape.
     var STEERING_LABEL_RE = /steering|preview/i;
     var SLUG_KEY = "clankers-arena-agent-slug";
     var CLICK_DELAY_MS = 1000;
 
-    // One test for a session URL: the arena host below /agent.
     function isSessionUrl(urlString) {
       var url;
       try {
@@ -770,8 +716,6 @@
         return null;
       }
       var head = trimmed.slice(0, match.index);
-      // A name needs a spaced separator before the term: `clankers - Steering` has one, while
-      // `arena-preview-steering` is a single name and carries no separate slug.
       if (!/\s[-:|]?\s*$/.test(head)) {
         return null;
       }
@@ -885,8 +829,6 @@
       return { label: label, slug: steeringSlugFromLabel(label), port: port };
     }
 
-    // Rank a running row, best first: this project's name, then no name, then another project.
-    // A Start row is a transcript card, and a click on one opens nothing, so it never counts.
     function steeringRank(label, slug, expectedSlug) {
       if (/^start\b/i.test(String(label || ""))) {
         return null;
@@ -913,7 +855,6 @@
         if (rank === null) {
           continue;
         }
-        // Equal ranks keep the newest row, which is the live one.
         if (rank <= bestRank) {
           best = buttons[i];
           bestRank = rank;
@@ -966,7 +907,6 @@
   var AUTO_TOGGLE_CLASS =
     "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 h-8 w-8 active:bg-interactive-cta-active rounded-[4px] font-normal touch-hitbox border-border-medium border text-text-primary";
 
-  // Each state has its own hover fill, so the on state stays visible under the pointer.
   function autoToggleClasses(on) {
     return (
       AUTO_TOGGLE_CLASS +
@@ -984,6 +924,7 @@
     autoToggleButton.setAttribute("aria-pressed", autoScroll.isOn() ? "true" : "false");
   }
 
+  // One toggle beside Stop mirrors the auto-scroll switch.
   var autoScroll = runFeature("auto-scroll", "Transcript auto-scroll", function () {
     var scroller = null;
     var content = null;
@@ -1099,6 +1040,7 @@
     ensureButton();
   })();
 
+    // A trim waits for a quiet page and keeps the newest rows.
   runFeature("transcript-trim", "Transcript trim", function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
     var DEFAULT_ROWS = 50;
@@ -1111,7 +1053,6 @@
     var QUESTION_SELECTOR = '[role="radiogroup"]';
     var SETTLE_MS = 1200;
 
-    // The plan keeps one global tail of transcript rows; old saved plans keep their row value.
     function normalizePlan(value) {
       var text = String(value == null ? "" : value).trim();
       var legacy = /^(\d+)\s*,\s*(\d+)$/.exec(text);
@@ -1144,8 +1085,6 @@
       );
     }
 
-    // The messages sit inside the log on the session page; a page change can take the log
-    // role away, so the whole document answers when no log holds one.
     function messageRoots(doc) {
       var logs = doc.querySelectorAll(LOG_SELECTOR);
       var roots = [];
@@ -1159,8 +1098,6 @@
       return roots;
     }
 
-    // A row is a part inside a message: text, tool call, thinking or status line.
-    // Only the outermost row box counts, so a card inside a message is not split.
     function rowsOfRoot(root) {
       var boxes = root.querySelectorAll(ROW_BOX_SELECTOR);
       var rows = [];
@@ -1180,7 +1117,6 @@
       }
     }
 
-    // Remove the oldest rows across roots, and keep each message root in Arena's tree.
     function trimPlan(doc, plan) {
       var roots = messageRoots(doc);
       var rootRows = [];
@@ -1189,8 +1125,6 @@
       var removed = 0;
       var i;
       for (i = 0; i < roots.length; i += 1) {
-        // A redraw drops a root or detaches its rows for a moment. Both states hold
-        // nothing the trim may touch, or the transcript reads as blank until a reload.
         var live = roots[i].isConnected !== false;
         var rows = live ? rowsOfRoot(roots[i]) : [];
         var rootAttached = 0;
@@ -1219,16 +1153,12 @@
       return removed;
     }
 
-    // Arena redraws the transcript while a turn runs, and a trim mid-redraw breaks it.
-    // The page settles when no turn is streaming, no live icon pulses, and no question
-    // widget waits for an answer: a paused turn still redraws the transcript.
     function isSettled(doc) {
       if (findStopGeneratingButton(doc)) return false;
       if (doc.querySelector(QUESTION_SELECTOR)) return false;
       return !doc.querySelector(LIVE_ICON_SELECTOR);
     }
 
-    // Only the rows still on the page count, and the oldest attached row leaves first.
     function trimRows(rows, keep) {
       var attached = 0;
       var excess = 0;
@@ -1283,7 +1213,6 @@
       countMenuId = GM_registerMenuCommand(countLabel(keepPlan(), trimmedTotal), setCount);
     }
 
-    // The menu shows the running count, refreshed once a second at most.
     function refreshLabel() {
       if (labelTimer !== null) return;
       labelTimer = setTimeout(function () {
@@ -1315,8 +1244,6 @@
       return removed;
     }
 
-    // A busy transcript mutates often, so the trim waits for a quiet moment, then for the
-    // page to settle. A turn that keeps changing the page only re-arms the wait.
     function schedule() {
       if (scheduled) return;
       scheduled = true;
@@ -1344,6 +1271,7 @@
     };
   }, null, false);
 
+    // The composer hides while a turn runs, and its spacer height returns on show.
   runFeature("hide-composer", "Hide composer", function () {
 
     var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
@@ -1355,7 +1283,6 @@
     var spacerStyles = new Map();
     var editorStates = new Map();
 
-    // One test for a session URL: the arena host below /agent.
     function isSessionUrl(urlString) {
       var url;
       try {
@@ -1547,14 +1474,6 @@
     };
   });
 
-  // The state leaves the sandbox through the owner's own browser, because the sandbox cannot
-  // push a file to the PC. The owner picks one file once; a minute tick compares the newest
-  // record stamp the server exports against the stamp of the last write and fills that file only
-  // when the state moved, so nothing piles up and a quiet minute writes nothing. A stamp that
-  // goes backward is a wiped or replaced preview and is refused, so a stale state never replaces
-  // the owner's file. The import stays the owner's own command: this side writes a file and never
-  // posts it back. The file name carries the repository, the branch, the stamp and the counts, so
-  // states from two repositories never collide in one folder.
   function stateFileName(repo, branch, stamp, counts) {
     function part(value) {
       return String(value || "")
@@ -1599,45 +1518,32 @@
     return { kind: "download", name: name, message: "Wrote " + name };
   }
 
-  // One decision point: a changed state goes to the chosen file, asks for one when the browser
-  // can write files, and falls back to a stamped download when it cannot.
   function stateDelivery(plan, hasHandle, hasPicker) {
     if (plan.kind !== "download") return plan.kind;
     if (hasHandle) return "write";
     return hasPicker ? "pick" : "download";
   }
 
-  // A menu click grants no browser gesture, so the picker cannot open on the automatic path:
-  // that path writes the stamped download, and the pick stays the owner's own menu action.
   function stateAction(route, manual) {
     if (route === "pick" && !manual) return "download";
     return route;
   }
 
-  // One tick line names the file, the server stamp and the last written stamp, so the
-  // write, wait and refuse routes show why they took that route.
   function stateTick(name, stamp, saved) {
     return name + " stamp=" + (stamp || "none") + " saved=" + (saved || "none");
   }
 
-  // The chosen file keeps its own name, so the save line names the file the write reached
-  // instead of the generated name the download route would use.
   function writtenName(handle, fallback) {
     return handle && handle.name ? handle.name : fallback;
   }
 
   var STATE_WATCH_MS = 60 * 1000;
 
-  // The Arena repo bar carries the owner/repo pair and the branch anchor; the anchor's title
-  // reads `main → arena/x` and its href ends in `/tree/<branch>`, so the branch comes from the
-  // bar too. A page without the bar leaves the branch empty and the name keeps the repo alone.
   var STATE_BAR_SELECTOR =
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
 
   var STATE_SLUG_KEY = "clankers-arena-agent-slug";
 
-  // The header leaves the page while a dialog holds it, so the slug the prompt fill saved
-  // stands in for the bar. The tab title this script wrote stands in when the slug is empty.
   var STATE_TITLE_RE = /^Arena \| (\S+)/;
 
   function titleRepo(doc) {
@@ -1700,6 +1606,7 @@
     return { repo: stateRepo(doc), branch: stateBranch(doc) };
   }
 
+  // The state leaves through the owner's browser: one picked file, written only when the stamp moves.
   runFeature("state-download", "Preview state download", function () {
     if (exposeChecks("stateDownload", {
       stateFileName: stateFileName,
@@ -1723,7 +1630,6 @@
     var stampKey = "clankers-arena-state-stamp";
     var staleWarned = false;
     var picked = null;
-    // One line per page per condition, so a failure is visible and the minute tick stays quiet.
     var frameLogged = false;
 
     function previewBase(doc) {
@@ -1759,8 +1665,6 @@
       });
     }
 
-    // The sandbox copy of the picker refuses the call with a TypeError, so the call runs on the
-    // page window the owner granted. A browser without the picker returns null.
     function pagePicker() {
       var page = typeof unsafeWindow !== "undefined" ? unsafeWindow : null;
       if (!page && typeof window !== "undefined") page = window;
@@ -1825,21 +1729,16 @@
       });
     }
 
-    // The owner reads the console, and a popup interrupts the preview: the note lands once.
     function hintStateFile() {
       if (GM_getValue(STATE_HINT_KEY, false)) return;
       GM_setValue(STATE_HINT_KEY, true);
       logEvent("state", "no file chosen; the stamped download lands each new stamp");
     }
 
-    // The manager's own download writes the file through the browser API, which the page's
-    // automatic-download policy cannot block. The link fallback stays for a manager without it.
     function downloadRoute(hasManagerDownload) {
       return hasManagerDownload ? "manager" : "link";
     }
 
-    // The manager exposes GM_download only when the bundle asked for it, so the global is
-    // the whole test.
     function stateDownloadRoute() {
       return downloadRoute(typeof GM_download === "function");
     }
@@ -1912,14 +1811,11 @@
           body.counts,
           savedStamp,
         );
-        // One line per tick: the file name carries the record counts, and the two stamps
-        // show what the route compared.
         logEvent("state", "tick " + stateTick(plan.name, body.stamp, savedStamp));
         if (plan.kind !== "unchanged") {
           logEvent("state", plan.kind + ": " + plan.name);
         }
         if (plan.kind === "stale") {
-          // A popup interrupts the owner, so the console carries the reason once.
           if (!staleWarned) {
             staleWarned = true;
             logEvent("state", "stale: " + plan.name);
@@ -1958,7 +1854,6 @@
             );
             return;
           }
-          // The picker cannot open without a click, so the note explains the download path.
           if (action === "download" && hasPicker && !handle) hintStateFile();
           logEvent("state", "stamped download: " + plan.name);
           writeStateDownload(body.text, plan.name);
@@ -1988,7 +1883,6 @@
         .then(function (handle) {
           return saveStateHandle(handle).then(function () {
             picked = handle;
-            // A fresh pick fills the file at once, even when the state has not moved.
             GM_setValue(stampKey, "");
             fetchStateFile(true);
           });
@@ -2024,27 +1918,20 @@
     };
   });
 
+    // The title mirrors the arena state: repo, poll, bubble, hourglass and shield.
   runFeature("tab-title", "Tab title", function () {
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
-    // The pulse sits on the icon in most live rows and on the label span of a collapsed
-    // edit row, so any pulsing element anchors the row.
     var LIVE_ICON_SELECTOR = ".animate-pulse";
-    // The live status text shimmers; a thinking row carries no pulsing icon, so its label leads.
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
-    // A read or edit group carries no shimmer and no pulse, so its own label is the only anchor.
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
-    // The live status row names the action; the emoji carries it in the title.
     var ACTION_EMOJI = [
       ["running", "\uD83D\uDDA5\uFE0F"],
-      // The Bash label changes with the call: running Bash, using Bash, used Bash,
-      // Running commands, Ran commands.
       ["bash", "\uD83D\uDDA5\uFE0F"],
       ["command", "\uD83D\uDDA5\uFE0F"],
       ["read", "\uD83D\uDCD6"],
-      // Explored, Exploring: the read group covers what a read-only pass reports.
       ["explor", "\uD83D\uDCD6"],
       ["edit", "\u270F\uFE0F"],
       ["write", "\u270F\uFE0F"],
@@ -2054,27 +1941,18 @@
       ["wait", "\uD83D\uDCA4"],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
-    // A gap between two calls blinks the live row away; the last mark holds the title steady.
     var EMOJI_HOLD_MS = 5000;
     var heldEmoji = null;
     var heldEmojiAt = 0;
     var lastSpeechMark = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
-    // The waiting line shows a 16px spinner canvas beside rotating monospace status text.
-    // The words rotate, so the anchors stay structural: the spinner and its animated ellipsis.
     var WAITING_SELECTOR =
       'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]';
     var HOURGLASS_EMOJI = "\u23F3";
-    // A security check blocks the page until the owner acts, so its dialog outranks every
-    // other mark. The container class and the reCAPTCHA frame are both stable anchors.
     var CAPTCHA_SELECTOR = '.recaptcha-v2-container, iframe[title="reCAPTCHA"]';
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
-    // The agent speaking in regular chat streams data-agent-word spans; the bubble rides
-    // the stream while the stop control holds the turn open.
     var SPEECH_SELECTOR = "[data-agent-word]";
     var SPEECH_EMOJI = "\uD83D\uDDE8\uFE0F";
-    // A poll call: the script name then the poll word, so a full path, the extensionless
-    // script and the .py form match while "polling", "polls" and a stray phrase stay clear.
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
 
     function repoFromLink(link) {
@@ -2098,7 +1976,6 @@
       return node ? String(node.textContent || "").replace(/\s+/g, " ").trim() : "";
     }
 
-    // Thinking rows are not always buttons, so the row is the nearest ancestor that carries text.
     function rowFromIcon(icon) {
       if (!icon) {
         return null;
@@ -2130,9 +2007,6 @@
       return label.parentElement || label;
     }
 
-    // The composer swaps Stop for Send when the turn ends. A loose word match rides out
-    // label drift that broke an exact-match gate before, and finished group labels persist
-    // after a turn, so this signal decides how long the fallback trusts them.
     function stopSignal(doc) {
       var buttons =
         typeof doc.querySelectorAll === "function" ? doc.querySelectorAll("button[aria-label]") : [];
@@ -2145,7 +2019,6 @@
       return false;
     }
 
-    // The live status text is the strongest anchor: a thinking row has it and no pulsing icon.
     function strongRow(doc) {
       var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
       var row = rowFromLabel(labels.length ? labels[labels.length - 1] : null);
@@ -2167,10 +2040,6 @@
       return row && knownLabel(liveLabel(row)) ? row : null;
     }
 
-    // A read or edit group never pulses, so its newest label names the action. The bound is
-    // the newest transcript message plus the stop signal: a finished group label persists
-    // after the turn ends, and without the signal the row would keep a stale emoji alive.
-    // The match is a loose stop word, so a label drift weakens the row but never sticks it.
     function liveRow(doc) {
       var row = strongRow(doc);
       if (row) {
@@ -2225,13 +2094,11 @@
       if (text) {
         return text;
       }
-      // A collapsed edit row pulses its label span, so the pulsing element names the action.
       var pulsing = typeof row.querySelectorAll === "function" ? row.querySelectorAll(LIVE_ICON_SELECTOR) : [];
       text = collapsed(pulsing.length ? pulsing[pulsing.length - 1] : null);
       if (text) {
         return text;
       }
-      // A read or edit row names its action in a plain span beside the toggle, not in a p.
       var group = typeof row.querySelectorAll === "function" ? row.querySelectorAll(GROUP_LABEL_SELECTOR) : [];
       text = collapsed(group.length ? group[group.length - 1] : null);
       if (text) {
@@ -2254,8 +2121,6 @@
       return ACTION_FALLBACK;
     }
 
-    // A poll command means the agent waits on the owner, whatever the row label says.
-    // Only the command panel counts: command output often mentions poll in prose.
     function rowCommand(row) {
       if (!row || typeof row.querySelector !== "function") {
         return "";
@@ -2264,8 +2129,6 @@
       return panel ? String(panel.textContent || "") : "";
     }
 
-    // A log line names the signal that won and the label behind it, so the console shows
-    // why the title took a mark.
     function rowSource(row) {
       var label = liveLabel(row);
       var text = String(label || "").replace(/\s+/g, " ").trim().slice(0, 40);
@@ -2289,8 +2152,6 @@
       return typeof location !== "undefined" ? String(location.pathname || "") : "";
     }
 
-    // The session header re-renders and can take the link with it, so the last name on this page
-    // holds until the page changes.
     function repoForTitle(doc) {
       var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR));
       var path = currentPath();
@@ -2302,9 +2163,6 @@
       return lastRepo && path === lastPath ? lastRepo : null;
     }
 
-    // A streaming chat message keeps adding and repainting word spans; a settled message
-    // stops changing. The mark compares between syncs, so the bubble lives only while the
-    // words move, and the stop signal keeps a late re-render from faking speech.
     function speechLive(doc) {
       if (typeof doc.querySelectorAll !== "function") {
         return false;
@@ -2321,8 +2179,6 @@
       return live;
     }
 
-    // The waiting line carries no named action and no streamed words, so the hourglass
-    // ranks below both and shows while the model works on its own.
     function waitingSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
@@ -2330,8 +2186,6 @@
       return doc.querySelectorAll(WAITING_SELECTOR).length > 0;
     }
 
-    // Radix keeps a closed dialog in the page behind data-state, so the nearest state
-    // ancestor decides. Without one the node counts, which covers a plain dialog.
     function openDialog(node) {
       var current = node;
       var depth = 0;
@@ -2347,8 +2201,6 @@
       return true;
     }
 
-    // A parked node keeps its place in the page after the widget closes, so the mark needs a
-    // rendered node: a hidden subtree reports no client rects.
     function renderedNode(node) {
       if (typeof node.getClientRects === "function") {
         return node.getClientRects().length > 0;
@@ -2356,7 +2208,6 @@
       return !node.hidden;
     }
 
-    // The security dialog takes the whole page, so nothing else can be done while it shows.
     function captchaSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
@@ -2369,8 +2220,6 @@
       return false;
     }
 
-    // Rank: the security check beats every other mark, a strong row beats the bubble,
-    // the bubble beats the waiting line, and the hold smooths the gap between bursts.
     function heldEmojiFor(doc) {
       if (captchaSignal(doc)) {
         titleReason = "security check";
@@ -2418,8 +2267,6 @@
         return null;
       }
       var emoji = heldEmojiFor(doc);
-      // The turn end clears only the emoji; the repository name stays in the title. The
-      // title reverts to its prior value only when this page holds no repository name.
       return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
     }
 
@@ -2429,7 +2276,6 @@
     var lastRepo = null;
     var lastPath = null;
 
-    // The anchors behind one decision, so a title a person questions shows its cause.
     function titleAnchors(doc) {
       var row = strongRow(doc) || liveRow(doc);
       return (
@@ -2447,7 +2293,6 @@
       var desired = desiredTitle(doc);
       if (desired) {
         if (doc.title === desired) {
-          // The check runs on every mutation, so an unchanged title logs once a second.
           if (Date.now() - titleLoggedAt >= TITLE_LOG_MS) {
             titleLoggedAt = Date.now();
             logEvent(
@@ -2531,8 +2376,6 @@
     }
     observeRoot();
     syncTitle(document);
-    // Arena writes its own title from its renders and a full remount detaches the observer, so the
-    // title is re-asserted every second; a write happens only when the value differs.
     var titleTimer = setInterval(function () {
       if (document.documentElement !== observedRoot) {
         observeRoot();
