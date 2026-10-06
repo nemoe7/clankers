@@ -36,6 +36,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Poll ceiling**: The poll wait spans 1800 seconds, the bash tool's own maximum.
 - **Bash call tally**: The header names the bash calls alone, without the phrase since your last message.
 
+#### system-prompts
+
+- **NEMOGPT refusal scope**: The safety block names the subjects a refusal must not block, and the decline list becomes three narrow guardrails.
+  The minors and copyright limits, the wellbeing lines and every tool and formatting line stay.
+
 #### userscripts
 
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.
