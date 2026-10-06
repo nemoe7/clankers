@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   The quote regrows the box and leaves the Markdown preview, so the quoted text is never cut off.
 - **Long call header**: While no call has reported for three minutes, the header counts the call instead of naming the agent gone.
   Past the 32-minute call cap it names the agent gone, as before.
+- **Note ID scope**: The note-ID rule now covers prose, task details, reports and notes by the first seven characters.
+  Two notes that share a prefix extend it, and the ack length stays with the skill.
 
 #### userscripts
 
