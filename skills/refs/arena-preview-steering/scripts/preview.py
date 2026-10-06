@@ -1822,21 +1822,29 @@ class Store:
       "reports": len(reports),
     }
 
-  def newest_stamp(self, notes):
-    """Return the newest note or answer stamp, in UTC, or None.
+  def newest_stamp(self):
+    """Return the newest stamp the state carries, in UTC, or None.
 
     The owner's browser names a downloaded state with this stamp, so the name comes
-    from the state the server exports rather than from the browser clock. The pair
-    matches the two tables the import guard compares.
+    from the state the server exports rather than from the browser clock. Any committed
+    change moves it, receipts included, so the file follows the state. The poll
+    heartbeat stays out, because it changes on every listing.
     """
-    stamps = [
-      stamp
-      for stamp in (
-        [import_stamp(record.get("at")) for record in notes]
-        + [import_stamp(record.get("at")) for record in self.submissions()]
-      )
-      if stamp
-    ]
+    tables = (
+      ("notes", ("at", "acknowledged_at", "ack_edited_at", "seen_at")),
+      ("submissions", ("at", "acknowledged_at", "seen_at")),
+      ("reports", ("updated_at", "published_at", "seen_at", "agent_seen_at")),
+      ("uploads", ("at",)),
+      ("tasks", ("updated_at",)),
+    )
+    stamps = []
+    with closing(self.connect()) as db:
+      for table, names in tables:
+        exprs = ", ".join(f"MAX({name})" for name in names)
+        for value in db.execute(f"SELECT {exprs} FROM {table}").fetchone():
+          stamp = import_stamp(value)
+          if stamp:
+            stamps.append(stamp)
     return max(stamps).isoformat() if stamps else None
 
   def save_state(self, payload):
@@ -3188,7 +3196,7 @@ def handler(store):
               {
                 "text": state_ndjson(lines),
                 "counts": counts,
-                "stamp": store.newest_stamp(notes),
+                "stamp": store.newest_stamp(),
               },
               ensure_ascii=False,
             ),

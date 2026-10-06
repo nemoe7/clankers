@@ -40,6 +40,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **State stamp scope**: The state stamp takes the newest change the state carries, receipts included, so a download follows every change. The poll heartbeat stays out.
 - **Skip poll on a message**: A note or a report answer clears an armed Skip poll flag, so the wait delivers it. An item that arrived before the press still outranks the skip.
 - **Paste line rule**: The composer stages a pasted text file when the paste holds more than 25 lines, counted in lines rather than characters.
 - **Poll ceiling**: The poll wait spans 1800 seconds, the bash tool's own maximum.

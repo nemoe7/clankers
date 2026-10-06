@@ -610,13 +610,16 @@ def test_http_boundaries():
         copy_payload["counts"][key] for key in ("notes", "tasks", "answers", "reports")
       ) == (len(copy_payload["text"].splitlines()))
       # The download names its file with this stamp, so the name comes from the export
-      # rather than from the browser clock.
+      # rather than from the browser clock. A receipt can push it past the messages.
       newest = max(
-        preview.import_stamp(record["at"])
-        for record in [*store.state()["notes"], *store.submissions()]
-        if record.get("at")
+        stamp
+        for stamp in (
+          preview.import_stamp(record.get("at"))
+          for record in [*store.state()["notes"], *store.submissions()]
+        )
+        if stamp
       )
-      assert copy_payload["stamp"] == newest.isoformat()
+      assert preview.import_stamp(copy_payload["stamp"]) >= newest
       lines = json.loads(sources)
       assert "first" in [line["id"] for line in lines]
       first = next(line for line in lines if line["id"] == "first")
@@ -3585,6 +3588,23 @@ def test_skip_poll_clears_on_owner_message():
     )
     assert store.skip_poll_requested() is False
     assert store.state()["skip_poll"] is None
+
+
+def test_newest_stamp_follows_every_mutation():
+  """Any committed change moves the state stamp, so a download follows the state."""
+  with tempfile.TemporaryDirectory() as stamp_dir:
+    store = preview.Store(stamp_dir, create=True)
+    assert store.newest_stamp() is None
+    store.note("stamp-note", "first")
+    note_stamp = store.newest_stamp()
+    assert note_stamp
+    # A receipt is a change to the state a restore carries, so an ack moves the stamp.
+    store.acknowledge(["stamp-note"], "reply", "done")
+    ack_stamp = store.newest_stamp()
+    assert ack_stamp and ack_stamp != note_stamp
+    # A task change moves it too.
+    store.write_task("stamp-task", "A task", order=1)
+    assert store.newest_stamp() != ack_stamp
 
 
 def test_notes_only_save():
