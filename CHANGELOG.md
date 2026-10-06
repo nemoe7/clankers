@@ -44,6 +44,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Message table spacing**: A table inside a message takes tight rows, so a three-column table no longer eats the Messages tab.
 - **Dropped upload**: A note upload the network drops replays once under the same note ID, so a lost response does not lose the send.
   The staged chips now carry each file's size, and the failure line names the combined upload.
 

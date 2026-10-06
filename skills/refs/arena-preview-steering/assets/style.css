@@ -210,7 +210,9 @@ a { color: #6ea3d6; text-underline-offset: 3px; }
 /* Message blockquotes take the reply's bar and padding but keep the message's font size. */
 .message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }
 .report table, .message-text table { border-collapse: collapse; width: 100%; font-size: 14px; }
-.report th, .report td, .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
+.report th, .report td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; }
+/* A message table is a receipt, not a document: tight rows stop three columns from eating the tab. */
+.message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 3px 8px; }
 /* Rendered message text used to borrow the report class, which said the wrong thing about a note. */
 /* The background belongs to the block wherever markdown renders, not to a report alone: a fence
    in a message or in the draft preview is the same block, and the owner read a missing background
