@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **URL and menu helpers**: Each feature carries one URL test instead of a parser and a wrapper, and the menu entries share one guard. No behavior changes. Arena 1.6.14.
 - **Script names**: The two bundles take new manager names: Arena.ai | NemoUtils and ChatGPT.com | NemoUtils. Both scripts add a favicon icon: arena.ai for Arena and chatgpt.com for ChatGPT. Arena 1.6.13, ChatGPT 1.3.3.
 - **State tick stamps**: The state tick line carries the server stamp and the last written stamp beside the file name. Arena 1.6.12.
 - **Module log tags**: Every `[clankers]` line carries the module in a second bracket, so one filter shows one module. New lines cover each state tick and its route, each title decision with its anchors, the fill failures, and the link download route. Arena 1.6.10, ChatGPT 1.3.1.

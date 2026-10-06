@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.13
+// @version      1.6.14
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -56,6 +56,12 @@
   }
 
   exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG });
+
+  // One menu entry with one guard, so a manager without a menu gets nothing.
+  function menuItem(list, label, run) {
+    if (typeof GM_registerMenuCommand !== "function") return;
+    list.push(GM_registerMenuCommand(label, run));
+  }
 
   function runFeature(key, label, run, onChange, defaultOn) {
     if (typeof document === "undefined") {
@@ -123,27 +129,19 @@
     var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md)/;
     var SLUG_KEY = "clankers-arena-agent-slug";
 
-    function parseArenaUrl(urlString) {
+    // One test for the composer URL: the arena host at the bare /agent path. Arena serves the
+    // composer on /agent and on /agent/, so trailing slashes do not count.
+    function isComposerUrl(urlString) {
       var url;
       try {
         url = new URL(urlString);
       } catch (err) {
-        return null;
-      }
-      var host = url.hostname.replace(/^www\./, "");
-      if (host !== "arena.ai") {
-        return null;
-      }
-      return url;
-    }
-
-    function isComposerUrl(urlString) {
-      var url = parseArenaUrl(urlString);
-      if (!url) {
         return false;
       }
-      // Arena serves the composer on /agent and on /agent/, so trailing slashes do not count.
-      return url.pathname.replace(/\/+$/, "") === "/agent";
+      return (
+        url.hostname.replace(/^www\./, "") === "arena.ai" &&
+        url.pathname.replace(/\/+$/, "") === "/agent"
+      );
     }
 
     function slugFromOwnerRepo(text) {
@@ -457,8 +455,7 @@
     var proxyMenus = [];
 
     function setProxyValue(key, label, ask) {
-      if (typeof GM_registerMenuCommand !== "function") return;
-      proxyMenus.push(GM_registerMenuCommand(label, function () {
+      menuItem(proxyMenus, label, function () {
         var answer = window.prompt(label, ask ? String(ask) : "");
         if (answer === null) return;
         GM_setValue(key, String(answer).trim());
@@ -468,7 +465,7 @@
         lastSlug = null;
         ensureAgentKey();
         sync();
-      }));
+      });
     }
 
     setProxyValue(PROXY_HOST_KEY, "Arena proxy host — set", GM_getValue(PROXY_HOST_KEY, ""));
@@ -545,29 +542,23 @@
       );
     }
 
-    if (typeof GM_registerMenuCommand === "function") {
-      proxyMenus.push(
-        // A manual press forces the rotation; the timer holds the minimum age.
-        GM_registerMenuCommand("Arena proxy rotate now — run", function () {
-          rotateKey(0, null);
-        }),
+    // A manual press forces the rotation; the timer holds the minimum age.
+    menuItem(proxyMenus, "Arena proxy rotate now — run", function () {
+      rotateKey(0, null);
+    });
+    // A manual press posts the held key without a rotation call.
+    menuItem(proxyMenus, "Arena proxy post key now — run", function () {
+      var pair = settings();
+      postKeyNow(
+        { host: pair.host, key: heldKey },
+        postAgentKey,
+        function () {
+          keyTried = false;
+          keyFetch = null;
+          fetchAgentKey();
+        },
       );
-      proxyMenus.push(
-        // A manual press posts the held key without a rotation call.
-        GM_registerMenuCommand("Arena proxy post key now — run", function () {
-          var pair = settings();
-          postKeyNow(
-            { host: pair.host, key: heldKey },
-            postAgentKey,
-            function () {
-              keyTried = false;
-              keyFetch = null;
-              fetchAgentKey();
-            },
-          );
-        }),
-      );
-    }
+    });
 
     // The first call runs the saved countdown: after a reload the key is due, it rotates
     // at once, and a fresh key only refreshes the due time.
@@ -739,23 +730,19 @@
     var SLUG_KEY = "clankers-arena-agent-slug";
     var CLICK_DELAY_MS = 1000;
 
-    function parseArenaUrl(urlString) {
+    // One test for a session URL: the arena host below /agent.
+    function isSessionUrl(urlString) {
       var url;
       try {
         url = new URL(urlString);
       } catch (err) {
-        return null;
+        return false;
       }
-      var host = url.hostname.replace(/^www\./, "");
-      if (host !== "arena.ai") {
-        return null;
-      }
-      return url;
-    }
-
-    function isSessionUrl(urlString) {
-      var url = parseArenaUrl(urlString);
-      return Boolean(url) && url.pathname.indexOf("/agent/") === 0 && url.pathname.length > 7;
+      return (
+        url.hostname.replace(/^www\./, "") === "arena.ai" &&
+        url.pathname.indexOf("/agent/") === 0 &&
+        url.pathname.length > 7
+      );
     }
 
     function slugFromOwnerRepo(text) {
@@ -1368,23 +1355,19 @@
     var spacerStyles = new Map();
     var editorStates = new Map();
 
-    function parseArenaUrl(urlString) {
+    // One test for a session URL: the arena host below /agent.
+    function isSessionUrl(urlString) {
       var url;
       try {
         url = new URL(urlString);
       } catch (err) {
-        return null;
+        return false;
       }
-      var host = url.hostname.replace(/^www\./, "");
-      if (host !== "arena.ai") {
-        return null;
-      }
-      return url;
-    }
-
-    function isSessionUrl(urlString) {
-      var url = parseArenaUrl(urlString);
-      return Boolean(url) && url.pathname.indexOf("/agent/") === 0 && url.pathname.length > 7;
+      return (
+        url.hostname.replace(/^www\./, "") === "arena.ai" &&
+        url.pathname.indexOf("/agent/") === 0 &&
+        url.pathname.length > 7
+      );
     }
 
     function shouldHideComposer(session, stopGenerating) {
@@ -2021,16 +2004,10 @@
     }
 
     var menus = [];
-    if (typeof GM_registerMenuCommand === "function") {
-      menus.push(
-        GM_registerMenuCommand("Arena preview state — choose the file", chooseStateFile),
-      );
-      menus.push(
-        GM_registerMenuCommand("Arena preview state — save now", function () {
-          fetchStateFile(true);
-        }),
-      );
-    }
+    menuItem(menus, "Arena preview state — choose the file", chooseStateFile);
+    menuItem(menus, "Arena preview state — save now", function () {
+      fetchStateFile(true);
+    });
 
     fetchStateFile(false);
     var timer = setInterval(function () {
