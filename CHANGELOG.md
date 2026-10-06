@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Quoted report ID**: A ctrl-click on a report ID quotes it into the Messages composer, the tab the box lives in.
   The quote regrows the box and leaves the Markdown preview, so the quoted text is never cut off.
+- **Long call header**: While no call has reported for three minutes, the header counts the call instead of naming the agent gone.
+  Past the 32-minute call cap it names the agent gone, as before.
 
 #### userscripts
 

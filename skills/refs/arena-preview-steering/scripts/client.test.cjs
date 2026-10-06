@@ -956,9 +956,22 @@ test('preview client', async (t) => {
     state.polling_since = null;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-text').textContent, '3 messages saved');
-    // A turn that ends leaves the preview up; the stamp of the agent's own calls turns the dot
-    // amber, so the owner reads a stale preview instead of a live connection to nobody.
+    // A long bash call holds the stamp of its start, so the header counts the call rather than
+    // calling the agent absent while that call can still be running.
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'ok');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
+    assert.match(get('#connection-text').textContent,
+      /^3 messages saved · agent in a long call 10m 0\ds$/);
+    // The call suffix counts its seconds on the tick, like the poll suffix.
+    get('#connection-text').textContent = 'stale';
+    context.paintConnection();
+    assert.match(get('#connection-text').textContent,
+      /^3 messages saved · agent in a long call 10m 0\ds$/);
+    // A turn that ends leaves the preview up; past the call cap the stamp of the agent's own calls
+    // turns the dot amber, so the owner reads a stale preview instead of a live connection to nobody.
+    state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');

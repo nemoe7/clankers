@@ -91,17 +91,30 @@ function scrollHistory(force) {
 let pollSince = null;
 let connectionBase = 'Connecting…';
 // A turn that ends leaves the preview up. The agent's own calls are stamped in the state, so the
-// header can say no agent has spoken instead of showing a live connection to nobody.
-const AGENT_IDLE_MS = 180_000;
+// header can say no agent has spoken instead of showing a live connection to nobody. The stamp
+// lands on the call's start, and a bash call may run to its own timeout, 30 minutes at the
+// longest: three minutes of silence is normal thinking time, so the header counts the call from
+// there, and only past the call cap does it call the agent gone.
+const AGENT_QUIET_MS = 180_000;
+const AGENT_CALL_MS = 1_920_000;
 let agentSeenAt = null;
 let agentSeenStamp = null;
+function agentSilentMs() {
+  return agentSeenAt === null ? null : Date.now() - agentSeenAt;
+}
+function agentInCall() {
+  const silent = agentSilentMs();
+  return pollSince === null && silent !== null && silent > AGENT_QUIET_MS && silent <= AGENT_CALL_MS;
+}
 function agentIdle() {
   // A live poll heartbeat proves the agent is present, so a long wait never reads as idle.
   if (pollSince !== null) return false;
-  return agentSeenAt !== null && Date.now() - agentSeenAt > AGENT_IDLE_MS;
+  const silent = agentSilentMs();
+  return silent !== null && silent > AGENT_CALL_MS;
 }
 function connectionText() {
-  return agentIdle() ? `No agent since ${time(agentSeenStamp)}` : connectionBase + pollSuffix();
+  if (agentIdle()) return `No agent since ${time(agentSeenStamp)}`;
+  return connectionBase + pollSuffix() + callSuffix();
 }
 function stampMs(value) {
   if (typeof value !== 'string') return null;
@@ -118,8 +131,11 @@ function duration(ms) {
 function pollSuffix() {
   return pollSince === null ? '' : ` · agent in poll ${duration(Date.now() - pollSince)}`;
 }
+function callSuffix() {
+  return agentInCall() ? ` · agent in a long call ${duration(agentSilentMs())}` : '';
+}
 function paintConnection() {
-  if (pollSince !== null) $('#connection-text').textContent = connectionText();
+  if (pollSince !== null || agentInCall()) $('#connection-text').textContent = connectionText();
   else if (agentIdle() && $('#connection-dot').dataset.state !== 'down') {
     setConnection('idle', connectionText());
   }
