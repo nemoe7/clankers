@@ -3521,9 +3521,9 @@ def test_skip_poll():
       # A disarm with nothing armed stays a no-op, so a stale button never fails a press.
       assert store.request_skip_poll(False) == {"skip_poll": None}
 
-      # A pending message outranks the skip: the poll delivers it, and the skip still waits.
+      # A pending message outranks a press: the poll delivers it, and the skip still waits.
+      store.note("skip-note", "arrived before the press")
       store.request_skip_poll()
-      store.note("skip-note", "arrived while a skip waits")
       assert store.skip_poll_requested() is True
       printed.clear()
       code, sleeps = run_poll()
@@ -3543,6 +3543,48 @@ def test_skip_poll():
       assert store.skip_poll_requested() is False
     finally:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
+def test_skip_poll_clears_on_owner_message():
+  """A note or a report answer clears an armed skip; the poll delivers it instead."""
+  with tempfile.TemporaryDirectory() as clear_dir:
+    store = preview.Store(clear_dir, create=True)
+    store.request_skip_poll()
+    assert store.skip_poll_requested() is True
+    # The owner writes after the press, and that item outranks the skip.
+    store.note("skip-cleared-note", "sent after a Skip poll press")
+    assert store.skip_poll_requested() is False
+    assert store.state()["skip_poll"] is None
+    assert store.read()["skip_poll"] is None
+    # The poll delivers the note instead of ending on the skip line.
+    printed = []
+    original = builtins.print
+
+    def capture(value, **kwargs):
+      printed.append(value)
+
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    sleeps = []
+    builtins.print = capture
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      code = preview.poll_inbox(store, sleeper=sleeps.append)
+    finally:
+      builtins.print = original
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+    assert code == 0 and sleeps == []
+    assert not any(str(item).startswith("SKIP") for item in printed)
+    assert [item["id"] for item in json.loads(printed[-1])["pending"]] == [
+      "skip-cleared-note"
+    ]
+    # A report answer clears it the same way.
+    store.request_skip_poll()
+    assert store.skip_poll_requested() is True
+    store.submission(
+      "skip-cleared-answer", "answer", "REPORT answer Answer:\n  verdict: Ship it"
+    )
+    assert store.skip_poll_requested() is False
+    assert store.state()["skip_poll"] is None
 
 
 def test_notes_only_save():

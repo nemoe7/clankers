@@ -164,6 +164,16 @@ def now():
   return datetime.now(timezone.utc).isoformat()
 
 
+def clear_skip_poll(db):
+  """Drop an armed Skip poll press when the owner writes.
+
+  The owner presses Skip poll and then writes a note or a report answer. The press would end
+  the next wait on an item that just arrived, so the arriving item clears the flag and the
+  wait delivers it instead.
+  """
+  db.execute("DELETE FROM meta WHERE key = ?", (SKIP_POLL_META,))
+
+
 def reset_poll_count(db):
   """Zero the hook-poll tally only when an item starts a fresh backlog.
 
@@ -1392,6 +1402,7 @@ class Store:
         ),
       )
       reset_poll_count(db)
+      clear_skip_poll(db)
       return message_row(
         db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
       )
@@ -1453,6 +1464,7 @@ class Store:
         ),
       )
       reset_poll_count(db)
+      clear_skip_poll(db)
       return message_row(
         db.execute(
           "SELECT * FROM submissions WHERE id = ?", (submission_id,)
