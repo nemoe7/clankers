@@ -68,8 +68,8 @@ def test_release_pipeline():
         "published_at": "2026-01-01T00:00:00Z",
       }
     ]
-    assert release.baseline(rows, "v2", target) == ("v1", root)
-    assert release.baseline([], "v2", target) == ("", "")
+    assert release.baseline(rows, target) == ("v1", root)
+    assert release.baseline([], target) == ("", "")
     with patch.object(release, "releases", return_value=rows):
       fails(lambda: release.current_base("owner/repo", target), "prerelease")
     with (
@@ -100,7 +100,10 @@ def test_release_pipeline():
       patch.object(release, "remote_tag_sha", return_value=root),
     ):
       fails(lambda: release.current_base("owner/repo", target), "notes are invalid")
-    fails(lambda: release.baseline(rows, "v2", target, "absent"), "no published")
+    # No published release is an ancestor of the target: the baseline refuses instead of
+    # falling back to an unrelated tag.
+    with patch.object(release, "ancestor", return_value=False):
+      fails(lambda: release.baseline(rows, target), "No published ancestor release")
     # One item per commit: its message and its diff, or the message alone.
     units = release.history(target, root)
     all_units = release.history(target, "")
@@ -833,9 +836,8 @@ def test_release_pipeline():
   workflow = (release.HERE / "gemini-release.yml").read_text()
   assert "python .github/workflows/gemini_release.py" in workflow
   assert "python github/workflows" not in workflow
-  assert release.version_tag("v0.2.0", "0.2.1") == "v0.2.1"
-  assert release.version_tag("0.2.0", "0.2.1") == "v0.2.1"
-  assert release.version_tag("", "0.1.0") == "v0.1.0"
+  assert release.version_tag("0.2.1") == "v0.2.1"
+  assert release.version_tag("") is None
   assert release.next_version("1.2.3", "major") == "2.0.0"
   assert release.next_version("1.2.3", "minor") == "1.3.0"
   fails(lambda: release.next_version("", "minor", promote=True), "Promotion requires")

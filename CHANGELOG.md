@@ -75,6 +75,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **NEMOGPT refusal scope**: The safety block names the subjects a refusal must not block, and the decline list becomes three narrow guardrails.
   The minors and copyright limits, the wellbeing lines and every tool and formatting line stay.
 
+#### workflows
+
+- **Release arithmetic**: `baseline` reads a target alone and `version_tag` reads a version alone, so the `tag` and `previous` parameters that only tests exercised go. The tests keep the surviving baseline, tag and version paths.
+
 #### userscripts
 
 - **Rollback guard on the state save**: The auto save remembers the newest note stamp and the newest task stamp of the state it wrote. When one of the two moves backward while the state stamp moves forward, the write is refused and the newer file stays. Arena 1.6.18.
