@@ -57,6 +57,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **State tick stamps**: The state tick line carries the server stamp and the last written stamp beside the file name. Arena 1.6.12.
 - **Module log tags**: Every `[clankers]` line carries the module in a second bracket, so one filter shows one module. New lines cover each state tick and its route, each title decision with its anchors, the fill failures, and the link download route. Arena 1.6.10, ChatGPT 1.3.1.
 - **Title log lines**: Each tab-title change prints one `[clankers]` line: the signal that won, the label behind it and the emoji the title takes. Version 1.6.6.
 - **State download route**: The stamped save goes through the manager's own download, which the page download policy cannot block. The page link stays as the fallback. Version 1.6.5.

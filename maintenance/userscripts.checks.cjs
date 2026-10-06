@@ -1620,6 +1620,7 @@ function checkStateDownload(api, session) {
   var stateRepo = api.stateRepo;
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
+  var stateTick = api.stateTick;
   var downloadRoute = api.downloadRoute;
   var stateDownloadRoute = api.stateDownloadRoute;
   var counts = { notes: 12, tasks: 4 };
@@ -1750,7 +1751,17 @@ function checkStateDownload(api, session) {
   assert.equal(stateAction("download", false), "download");
   assert.equal(stateAction("write", true), "write");
   assert.equal(stateAction("unchanged", false), "unchanged");
-  console.log("ok state download 30");
+  // The tick line names the file and shows the two stamps the route compared.
+  assert.equal(
+    stateTick("a.ndjson", "2026-10-06T09:45:05+00:00", ""),
+    "a.ndjson stamp=2026-10-06T09:45:05+00:00 saved=none",
+  );
+  assert.equal(
+    stateTick("a.ndjson", "2026-10-06T09:45:05+00:00", "2026-10-06T09:44:05+00:00"),
+    "a.ndjson stamp=2026-10-06T09:45:05+00:00 saved=2026-10-06T09:44:05+00:00",
+  );
+  assert.equal(stateTick("a.ndjson", "", ""), "a.ndjson stamp=none saved=none");
+  console.log("ok state download 31");
 }
 
 const { test } = require("node:test");

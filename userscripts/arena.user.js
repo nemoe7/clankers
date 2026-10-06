@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.11
+// @version      1.6.12
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -1630,6 +1630,12 @@
     return route;
   }
 
+  // One tick line names the file, the server stamp and the last written stamp, so the
+  // write, wait and refuse routes show why they took that route.
+  function stateTick(name, stamp, saved) {
+    return name + " stamp=" + (stamp || "none") + " saved=" + (saved || "none");
+  }
+
   // The chosen file keeps its own name, so the save line names the file the write reached
   // instead of the generated name the download route would use.
   function writtenName(handle, fallback) {
@@ -1716,6 +1722,7 @@
       stateDownload: stateDownload,
       stateDelivery: stateDelivery,
       stateAction: stateAction,
+      stateTick: stateTick,
       writtenName: writtenName,
       stateScope: stateScope,
       stateRepo: stateRepo,
@@ -1913,15 +1920,17 @@
           return;
         }
         var scope = stateScope(document);
+        var savedStamp = GM_getValue(stampKey, "");
         var plan = stateDownload(
           scope.repo,
           scope.branch,
           body.stamp,
           body.counts,
-          GM_getValue(stampKey, ""),
+          savedStamp,
         );
-        // One line per tick: the file name carries the stamp and the record counts.
-        logEvent("state", "tick " + plan.name);
+        // One line per tick: the file name carries the record counts, and the two stamps
+        // show what the route compared.
+        logEvent("state", "tick " + stateTick(plan.name, body.stamp, savedStamp));
         if (plan.kind !== "unchanged") {
           logEvent("state", plan.kind + ": " + plan.name);
         }
