@@ -60,6 +60,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Kilo path**: The `amending-violations` skill drops the directory path in the persistence item. The rule stays: re-inject the rules on long sessions and after compaction.
 
+#### userscripts
+
+- **Fill loop**: The prompt fill rewrote the composer on every DOM mutation when the editor changed the text, which made the page unresponsive. It writes once per repo per page now.
+
 #### preview
 
 - **Gateway error line**: A non-JSON error body keeps the connection line short. An HTML page becomes its HTTP status, and plain text folds to 120 characters.

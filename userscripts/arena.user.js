@@ -299,18 +299,22 @@
       return slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." + TEMPLATE_TAIL;
     }
 
-    function shouldWrite(current, slug, lastSlug) {
-      var desired = promptForSlug(slug).trim();
+    function shouldWrite(current, slug, lastSlug, filledSlug) {
       var text = String(current || "").trim();
-      if (text === desired) {
+      // One fill per page per repo: after the write the editor owns the text, so an
+      // edited or emptied composer stays untouched and the observer cannot loop.
+      if (filledSlug === slug) {
         return false;
+      }
+      if (text === "") {
+        return true;
       }
       // An earlier fill, in either wording, is ours to replace; a real draft is not.
       if (TEMPLATE_RE.test(text)) {
         return true;
       }
       if (lastSlug === null) {
-        return text === "";
+        return false;
       }
       return slug !== lastSlug;
     }
@@ -573,6 +577,7 @@
     }, KEY_WATCH_MS);
 
     var lastSlug = null;
+    var filledSlug = null;
 
     function readSlug(doc) {
       var bar = doc.querySelector(BAR_SELECTOR);
@@ -650,13 +655,14 @@
         return;
       }
       var current = composer.innerText || "";
-      if (!shouldWrite(current, slug, lastSlug)) {
+      if (!shouldWrite(current, slug, lastSlug, filledSlug)) {
         lastSlug = slug;
         ensureAgentKey();
         return;
       }
       setComposerText(composer, promptForSlug(slug));
       lastSlug = slug;
+      filledSlug = slug;
       ensureAgentKey();
     }
 

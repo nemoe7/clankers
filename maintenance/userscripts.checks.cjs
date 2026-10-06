@@ -77,16 +77,21 @@ function checkPromptFill(api) {
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
     [promptForSlug("clankers").indexOf("here is ARENA.md"), -1],
     [promptForSlug("clankers").indexOf("red first") > 0, true],
-    [shouldWrite("", "clankers", null), true],
-    [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null), true],
-    [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null), true],
-    [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null), true],
-    [shouldWrite(promptForSlug("clankers"), "clankers", null), false],
-    [shouldWrite("draft", "clankers", null), false],
-    [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers"), true],
-    [shouldWrite("draft", "clankers", "clankers"), false],
-    [shouldWrite(promptForSlug("clankers"), "clankers", "clankers"), false],
-    [shouldWrite(promptForSlug("other"), "clankers", "clankers"), true],
+    [shouldWrite("", "clankers", null, null), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null, null), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), true],
+    [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null, null), true],
+    [shouldWrite(promptForSlug("clankers"), "clankers", null, null), true],
+    [shouldWrite("draft", "clankers", null, null), false],
+    [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers", null), true],
+    [shouldWrite("draft", "clankers", "clankers", null), false],
+    [shouldWrite(promptForSlug("other"), "clankers", "other", "other"), true],
+    // One fill per repo per page: the observer sees no second write, even when the
+    // editor hands the text back with different whitespace or the send clears it.
+    [shouldWrite(promptForSlug("clankers"), "clankers", "clankers", "clankers"), false],
+    [shouldWrite("clankers read ARENA.md AGENTS.md in full before your first edit, and follow both.\n", "clankers", "clankers", "clankers"), false],
+    [shouldWrite("", "clankers", "clankers", "clankers"), false],
+    [shouldWrite("draft", "clankers", "clankers", "clankers"), false],
     [proxyHost("https://arena-proxy.example.ts.net/"), "https://arena-proxy.example.ts.net"],
     [proxyHost("https://arena-proxy.example.ts.net/v1"), "https://arena-proxy.example.ts.net"],
     [proxyHost("https://arena-proxy.example.ts.net/v1/"), "https://arena-proxy.example.ts.net"],
@@ -138,10 +143,9 @@ function checkPromptFill(api) {
       "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
       + " skills/arena-proxy holds the map. Never print it."],
-    // The same fill for the same repo holds, old or new wording.
-    [shouldWrite(promptForSlug("clankers"), "clankers", "clankers"), false],
-    // The older two-line fill is rebuilt without the rules text.
-    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers"), true],
+    // The older two-line fill is rebuilt once, without the rules text.
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", null), true],
+    [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "clankers"), false],
   ];
   var failed = 0;
   var i;
