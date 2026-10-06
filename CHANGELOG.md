@@ -17,6 +17,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Note ID scope**: The note-ID rule now covers prose, task details, reports and notes by the first seven characters.
   Two notes that share a prefix extend it, and the ack length stays with the skill.
 
+#### house
+
+- **Verbatim trigger**: The house clause names when a copy is verbatim: the user's word, the user's phrase `as is`, or a double-quoted passage.
+  A Markdown quote stays context.
+
 #### userscripts
 
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.
