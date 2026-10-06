@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.17
+// @version      1.6.18
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1478,7 +1478,29 @@
     return name + ".ndjson";
   }
 
-  function stateDownload(repo, branch, stamp, counts, remembered) {
+  function stateMemory(stamp, pair) {
+    return {
+      stamp: String(stamp || ""),
+      note: String((pair && pair.note) || ""),
+      task: String((pair && pair.task) || ""),
+    };
+  }
+
+  function stateRemembered(raw) {
+    if (raw && typeof raw === "object") return stateMemory(raw.stamp, raw);
+    if (!raw) return stateMemory("", null);
+    var text = String(raw);
+    if (text.charAt(0) !== "{") return stateMemory(text, null);
+    try {
+      var parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object") return stateMemory(parsed.stamp, parsed);
+    } catch (err) {
+      return stateMemory(text, null);
+    }
+    return stateMemory("", null);
+  }
+
+  function stateDownload(repo, branch, stamp, counts, remembered, pair) {
     if (!stamp) {
       return {
         kind: "error",
@@ -1486,19 +1508,34 @@
       };
     }
     var name = stateFileName(repo, branch, stamp, counts);
-    if (remembered && remembered === stamp) {
+    var memory = stateRemembered(remembered);
+    if (memory.stamp && memory.stamp === stamp) {
       return {
         kind: "unchanged",
         name: name,
         message: "State unchanged since the last write: " + name,
       };
     }
-    if (remembered && String(stamp) < String(remembered)) {
+    if (memory.stamp && String(stamp) < memory.stamp) {
       return {
         kind: "stale",
         name: name,
         message:
-          "Stale preview state (" + stamp + " is older than " + remembered + "); nothing written.",
+          "Stale preview state (" + stamp + " is older than " + memory.stamp + "); nothing written.",
+      };
+    }
+    // The approved pair: the newest note stamp and the newest task stamp. A rollback leaves the
+    // older records of a group behind while one new record moves the state stamp forward, so an
+    // older stamp of the pair refuses the write and the newer local file stays (answer a898024).
+    var held = [];
+    if (pair && memory.note && pair.note && String(pair.note) < memory.note) held.push("note");
+    if (pair && memory.task && pair.task && String(pair.task) < memory.task) held.push("task");
+    if (held.length) {
+      var phrase = held.join(" and ") + (held.length > 1 ? " stamps" : " stamp");
+      return {
+        kind: "stale",
+        name: name,
+        message: "Rolled-back preview state (" + phrase + " went backward); nothing written.",
       };
     }
     return { kind: "download", name: name, message: "Wrote " + name };
@@ -1595,6 +1632,8 @@
     if (exposeChecks("stateDownload", {
       stateFileName: stateFileName,
       stateDownload: stateDownload,
+      stateMemory: stateMemory,
+      stateRemembered: stateRemembered,
       stateDelivery: stateDelivery,
       stateAction: stateAction,
       stateTick: stateTick,
@@ -1787,15 +1826,16 @@
           return;
         }
         var scope = stateScope(document);
-        var savedStamp = GM_getValue(stampKey, "");
+        var memory = stateRemembered(GM_getValue(stampKey, ""));
         var plan = stateDownload(
           scope.repo,
           scope.branch,
           body.stamp,
           body.counts,
-          savedStamp,
+          memory,
+          body.stamps,
         );
-        logEvent("state", "tick " + stateTick(plan.name, body.stamp, savedStamp));
+        logEvent("state", "tick " + stateTick(plan.name, body.stamp, memory.stamp));
         if (plan.kind !== "unchanged") {
           logEvent("state", plan.kind + ": " + plan.name);
         }
@@ -1823,7 +1863,10 @@
           if (action === "write") {
             writeToHandle(handle, body.text).then(
               function () {
-                GM_setValue(stampKey, body.stamp);
+                GM_setValue(
+                  stampKey,
+                  JSON.stringify(stateMemory(body.stamp, body.stamps)),
+                );
                 logEvent("state", "saved " + writtenName(handle, plan.name));
               },
               function (err) {
@@ -1841,7 +1884,7 @@
           if (action === "download" && hasPicker && !handle) hintStateFile();
           logEvent("state", "stamped download: " + plan.name);
           writeStateDownload(body.text, plan.name);
-          GM_setValue(stampKey, body.stamp);
+          GM_setValue(stampKey, JSON.stringify(stateMemory(body.stamp, body.stamps)));
         });
       });
     }

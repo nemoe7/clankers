@@ -1614,6 +1614,8 @@ function run(name, check) {
 function checkStateDownload(api, session) {
   var stateFileName = api.stateFileName;
   var stateDownload = api.stateDownload;
+  var stateMemory = api.stateMemory;
+  var stateRemembered = api.stateRemembered;
   var stateDelivery = api.stateDelivery;
   var stateAction = api.stateAction;
   var stateScope = api.stateScope;
@@ -1664,6 +1666,85 @@ function checkStateDownload(api, session) {
   var unstamped = stateDownload(repo, branch, null, counts, "");
   assert.equal(unstamped.kind, "error");
   assert.match(unstamped.message, /carries no stamp/);
+  // The approved pair: the newest note stamp and the newest task stamp. A rollback leaves the
+  // older records behind while one new note moves the state stamp forward, so the pair refuses
+  // that write and the owner's file keeps the newer state.
+  var memory = stateMemory("2026-10-05T20:00:00", {
+    note: "2026-10-05T20:00:00",
+    task: "2026-10-05T19:00:00",
+  });
+  assert.equal(memory.stamp, "2026-10-05T20:00:00");
+  assert.equal(memory.note, "2026-10-05T20:00:00");
+  assert.equal(memory.task, "2026-10-05T19:00:00");
+  var restored = stateRemembered(JSON.stringify(memory));
+  assert.equal(restored.stamp, memory.stamp);
+  assert.equal(restored.note, memory.note);
+  assert.equal(restored.task, memory.task);
+  var legacy = stateRemembered("2026-10-05T20:00:00");
+  assert.equal(legacy.stamp, "2026-10-05T20:00:00");
+  assert.equal(legacy.note, "");
+  assert.equal(legacy.task, "");
+  var rolledBackTask = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    memory,
+    { note: "2026-10-06T06:12:33", task: "2026-10-05T18:00:00" },
+  );
+  assert.equal(rolledBackTask.kind, "stale");
+  assert.match(rolledBackTask.message, /task stamp went backward/);
+  var rolledBackNote = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    memory,
+    { note: "2026-10-05T18:00:00", task: "2026-10-06T06:00:00" },
+  );
+  assert.equal(rolledBackNote.kind, "stale");
+  assert.match(rolledBackNote.message, /note stamp went backward/);
+  // Both stamps of the pair move forward: the write lands.
+  var pairForward = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    memory,
+    { note: "2026-10-06T06:12:33", task: "2026-10-06T06:00:00" },
+  );
+  assert.equal(pairForward.kind, "download");
+  // One note deleted alone moves the note stamp back and leaves the state stamp still, so the
+  // write is unchanged, never a refusal and never a rewrite.
+  var deletion = stateDownload(
+    repo,
+    branch,
+    "2026-10-06T06:12:33",
+    counts,
+    {
+      stamp: "2026-10-06T06:12:33",
+      note: "2026-10-06T06:12:33",
+      task: "2026-10-05T19:00:00",
+    },
+    { note: "2026-10-05T20:00:00", task: "2026-10-05T19:00:00" },
+  );
+  assert.equal(deletion.kind, "unchanged");
+  // A payload without the pair, or a memory saved before the pair existed, keeps the old rule.
+  assert.equal(
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, memory).kind,
+    "download",
+  );
+  assert.equal(
+    stateDownload(
+      repo,
+      branch,
+      "2026-10-06T06:12:33",
+      counts,
+      "2026-10-05T20:00:00",
+      { note: "2026-10-06T06:12:33", task: "2026-10-05T19:00:00" },
+    ).kind,
+    "download",
+  );
   // One route per state: the chosen file, the one-time pick, or the stamped download on a
   // browser without the file picker.
   var fresh = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "");

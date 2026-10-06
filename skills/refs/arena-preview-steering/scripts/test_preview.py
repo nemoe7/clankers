@@ -3607,6 +3607,36 @@ def test_newest_stamp_follows_every_mutation():
     assert store.newest_stamp() != ack_stamp
 
 
+def test_copy_state_carries_the_note_and_task_stamps():
+  """The auto save compares the newest note stamp and the newest task stamp, so the route carries both."""
+  global app
+  with tempfile.TemporaryDirectory() as stamp_dir:
+    store = preview.Store(Path(stamp_dir) / "arena-preview", create=True)
+    store.note("pair-note", "first", at="2026-10-05T09:00:00")
+    store.write_task("pair-task", "A task after the note")
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    payload = json.loads(request("GET", "/api/copy-state")[2])
+    assert set(payload["stamps"]) == {"note", "task"}
+    note_stamp = max(
+      stamp
+      for stamp in (
+        preview.import_stamp(note[name])
+        for note in store.state()["notes"]
+        for name in ("at", "acknowledged_at", "ack_edited_at", "seen_at")
+      )
+      if stamp
+    )
+    assert preview.import_stamp(payload["stamps"]["note"]) == note_stamp
+    tasks = store.tasks()
+    task_stamp = max(
+      preview.import_stamp(task["updated_at"])
+      for task in [*tasks["upcoming"], *tasks["finished"]]
+    )
+    assert preview.import_stamp(payload["stamps"]["task"]) == task_stamp
+    assert preview.import_stamp(payload["stamp"]) >= max(note_stamp, task_stamp)
+
+
 def test_notes_only_save():
   with tempfile.TemporaryDirectory() as notes_only_dir:
     backup = Path(notes_only_dir) / "saved.ndjson"

@@ -61,6 +61,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Rollback guard on the state save**: The auto save remembers the newest note stamp and the newest task stamp of the state it wrote. When one of the two moves backward while the state stamp moves forward, the write is refused and the newer file stays. Arena 1.6.18.
 - **Shared page helpers**: The transcript bar, the slug key, the arena URL readers and the label reader live once for every feature. The file falls from 74,024 B to 72,488 B. Arena 1.6.16.
 - **Comment trim**: The userscript keeps one comment per feature and drops the rest. The file falls from 87,133 B to 74,024 B. Arena 1.6.15.
 - **URL and menu helpers**: Each feature carries one URL test instead of a parser and a wrapper, and the menu entries share one guard. No behavior changes. Arena 1.6.14.

@@ -1838,30 +1838,45 @@ class Store:
       "reports": len(reports),
     }
 
-  def newest_stamp(self):
+  def newest_stamps(self):
+    """Return the newest stamp per state group, in UTC, so a caller can compare one group alone.
+
+    A rollback leaves the older records of a group behind while a new record of another
+    group moves the state stamp forward, so the auto save compares the note stamp and the
+    task stamp against the pair from its last write (answer a898024).
+    """
+    groups = (
+      ("note", "notes", ("at", "acknowledged_at", "ack_edited_at", "seen_at")),
+      ("answer", "submissions", ("at", "acknowledged_at", "seen_at")),
+      ("report", "reports", ("updated_at", "published_at", "seen_at", "agent_seen_at")),
+      ("upload", "uploads", ("at",)),
+      ("task", "tasks", ("updated_at",)),
+    )
+    stamps = {}
+    with closing(self.connect()) as db:
+      for group, table, names in groups:
+        exprs = ", ".join(f"MAX({name})" for name in names)
+        newest = None
+        for value in db.execute(f"SELECT {exprs} FROM {table}").fetchone():
+          stamp = import_stamp(value)
+          if stamp and (newest is None or stamp > newest):
+            newest = stamp
+        stamps[group] = newest.isoformat() if newest else None
+    return stamps
+
+  def newest_stamp(self, stamps=None):
     """Return the newest stamp the state carries, in UTC, or None.
 
     The owner's browser names a downloaded state with this stamp, so the name comes
     from the state the server exports rather than from the browser clock. Any committed
     change moves it, receipts included, so the file follows the state. The poll
-    heartbeat stays out, because it changes on every listing.
+    heartbeat stays out, because it changes on every listing. A caller that already
+    holds the per-group stamps passes them, so the state is read once.
     """
-    tables = (
-      ("notes", ("at", "acknowledged_at", "ack_edited_at", "seen_at")),
-      ("submissions", ("at", "acknowledged_at", "seen_at")),
-      ("reports", ("updated_at", "published_at", "seen_at", "agent_seen_at")),
-      ("uploads", ("at",)),
-      ("tasks", ("updated_at",)),
-    )
-    stamps = []
-    with closing(self.connect()) as db:
-      for table, names in tables:
-        exprs = ", ".join(f"MAX({name})" for name in names)
-        for value in db.execute(f"SELECT {exprs} FROM {table}").fetchone():
-          stamp = import_stamp(value)
-          if stamp:
-            stamps.append(stamp)
-    return max(stamps).isoformat() if stamps else None
+    stamps = stamps or self.newest_stamps()
+    values = [import_stamp(value) for value in stamps.values()]
+    values = [value for value in values if value]
+    return max(values).isoformat() if values else None
 
   def save_state(self, payload):
     """Write the current state to the save file, in the shape the importer reads.
@@ -3206,13 +3221,17 @@ def handler(store):
           # The stamp names a downloaded state, so its file name comes from the server.
           notes = store.state()["notes"]
           lines, counts = store.state_lines(notes, store.tasks() or {})
+          stamps = store.newest_stamps()
           self.reply(
             200,
             json.dumps(
               {
                 "text": state_ndjson(lines),
                 "counts": counts,
-                "stamp": store.newest_stamp(),
+                "stamp": store.newest_stamp(stamps),
+                # The auto save compares the note stamp and the task stamp against its own
+                # pair, so those two ride the payload the script already reads.
+                "stamps": {"note": stamps["note"], "task": stamps["task"]},
                 # The preview checkout names the repository and its branch, so a saved
                 # file carries both, as the userscript's own downloads do.
                 "repo": store.path.parent.parent.name,
