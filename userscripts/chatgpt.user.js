@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers ChatGPT
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.2.2
+// @version      1.3.0
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -30,6 +30,24 @@
     return true;
   }
 
+  // One tag filters the whole story of a page in the devtools console. A line names
+  // the event a person needs and never the feature's own loop.
+  var LOG_TAG = "[clankers]";
+
+  function logEvent(event, detail) {
+    try {
+      if (detail === undefined) {
+        console.log(LOG_TAG + " " + event);
+      } else {
+        console.log(LOG_TAG + " " + event, detail);
+      }
+    } catch (err) {
+      return;
+    }
+  }
+
+  exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG });
+
   function runFeature(key, label, run) {
     if (typeof document === "undefined") {
       run();
@@ -38,6 +56,7 @@
     var enabled = GM_getValue(key, true) !== false;
     var menuId;
     var stop = null;
+    logEvent("feature", label + ": " + (enabled ? "ON" : "OFF"));
 
     function showMenu(value) {
       menuId = GM_registerMenuCommand(
@@ -45,6 +64,7 @@
         function () {
           var next = GM_getValue(key, true) === false;
           GM_setValue(key, next);
+          logEvent("feature", label + ": " + (next ? "ON" : "OFF"));
           if (stop) stop();
           stop = next ? run() : null;
           GM_unregisterMenuCommand(menuId);

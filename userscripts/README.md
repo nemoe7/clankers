@@ -26,6 +26,10 @@ Switches apply immediately in the current tab. Other open tabs use saved setting
 
 The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and they hold no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
+## Console log
+
+Both bundles log under one tag, `[clankers]`. The devtools console filter shows the page's story: feature switches on load and on toggle, the prompt fill write, and each state save. A log line never carries a loop, so a busy page stays quiet. No key or message text ever reaches the log.
+
 ## Arena Prompt Fill
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.

@@ -16,6 +16,38 @@ function loadChecks(file) {
   return context.CLANKERS_CHECKS;
 }
 
+function checkLogging(api) {
+  var LOG_TAG = api.LOG_TAG;
+  var logEvent = api.logEvent;
+  // One tag carries every line, so one filter shows the page's story.
+  assert.equal(LOG_TAG, "[clankers]");
+  var lines = [];
+  var original = console.log;
+  console.log = function () {
+    lines.push(Array.prototype.join.call(arguments, " "));
+  };
+  try {
+    logEvent("feature", "Prompt fill: ON");
+    logEvent("fill", "wrote the initial message for clankers");
+    logEvent("state", "saved");
+  } finally {
+    console.log = original;
+  }
+  assert.equal(lines[0], "[clankers] feature Prompt fill: ON");
+  assert.equal(lines[1], "[clankers] fill wrote the initial message for clankers");
+  assert.equal(lines[2], "[clankers] state saved");
+  // A console that rejects must never break a feature.
+  console.log = function () {
+    throw new Error("closed console");
+  };
+  try {
+    logEvent("state", "saved");
+  } finally {
+    console.log = original;
+  }
+  console.log("ok logging 3");
+}
+
 function checkPromptFill(api) {
   var isComposerUrl = api.isComposerUrl;
   var slugFromOwnerRepo = api.slugFromOwnerRepo;
@@ -1554,6 +1586,7 @@ const assert = require("node:assert/strict");
 
 const arena = loadChecks("arena.user.js");
 test("prompt fill", () => checkPromptFill(arena.promptFill));
+run("arena logging", () => checkLogging(arena.logging));
 run("open steering", () => checkOpenSteering(arena.openSteering));
 run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
@@ -1563,4 +1596,5 @@ run("state download", () => checkStateDownload(arena.stateDownload));
 
 const chatgpt = loadChecks("chatgpt.user.js");
 run("hide elements", () => checkHideElements(chatgpt.hideElements));
+run("chatgpt logging", () => checkLogging(chatgpt.logging));
 run("auto think", () => checkAutoThink(chatgpt.autoThink));

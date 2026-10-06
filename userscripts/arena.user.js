@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.5.0
+// @version      1.6.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -33,6 +33,24 @@
     return true;
   }
 
+  // One tag filters the whole story of a page in the devtools console. A line names
+  // the event a person needs and never the feature's own loop.
+  var LOG_TAG = "[clankers]";
+
+  function logEvent(event, detail) {
+    try {
+      if (detail === undefined) {
+        console.log(LOG_TAG + " " + event);
+      } else {
+        console.log(LOG_TAG + " " + event, detail);
+      }
+    } catch (err) {
+      return;
+    }
+  }
+
+  exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG });
+
   function runFeature(key, label, run, onChange, defaultOn) {
     if (typeof document === "undefined") {
       run();
@@ -42,10 +60,12 @@
     var enabled = GM_getValue(key, fallback) !== false;
     var menuId;
     var stop = null;
+    logEvent("feature", label + ": " + (enabled ? "ON" : "OFF"));
 
     function toggle() {
       var next = GM_getValue(key, fallback) === false;
       GM_setValue(key, next);
+      logEvent("feature", label + ": " + (next ? "ON" : "OFF"));
       if (stop) stop();
       stop = next ? run() : null;
       GM_unregisterMenuCommand(menuId);
@@ -661,6 +681,7 @@
         return;
       }
       setComposerText(composer, promptForSlug(slug));
+      logEvent("fill", "wrote the initial message for " + slug);
       lastSlug = slug;
       filledSlug = slug;
       ensureAgentKey();
@@ -1800,9 +1821,11 @@
             writeToHandle(handle, body.text).then(
               function () {
                 GM_setValue(stampKey, body.stamp);
+                logEvent("state", "saved");
               },
               function () {
                 picked = null;
+                logEvent("state", "write failed, asking for the file again");
                 if (manual) chooseStateFile();
                 else hintStateFile();
               },
