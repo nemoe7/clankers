@@ -8,6 +8,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### arena
+
+- **Quoted report ID**: A ctrl-click on a report ID quotes it into the Messages composer, the tab the box lives in.
+  The quote regrows the box and leaves the Markdown preview, so the quoted text is never cut off.
+
 #### userscripts
 
 - **Waiting line in the title**: A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.

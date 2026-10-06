@@ -1078,7 +1078,9 @@ test('preview client', async (t) => {
       'a report never republished shows the publish stamp');
     assert.match(get('#report-status').textContent, /· Submission /);
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
-    // The ID is on show, one click copies it, and a ctrl-click quotes it like a note ID.
+    // The ID is on show, one click copies it, and a ctrl-click quotes it like a note ID. The quote
+    // lands in the Messages tab with the box regrown: measured from the hidden panel the textarea
+    // collapsed to its border, which showed the quote cut off.
     const reportCode = part(get('#report-status'), 'note-id');
     assert.equal(reportCode.textContent, 'r1', 'the loaded report shows its ID');
     assert.equal(reportCode.dataset.full, 'r1');
@@ -1087,9 +1089,21 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(copied.at(-1), 'r1', 'a click copies the report ID');
     assert.equal(copied.length, copiedBeforeReport + 1);
+    const reportNote = get('#note');
+    reportNote.value = 'a draft already written';
+    reportNote.hidden = true;
+    get('#draft-preview').hidden = false;
+    reportNote.scrollHeight = 96;
     documentEvents.click({ target: reportCode, ctrlKey: true });
     assert.equal(copied.length, copiedBeforeReport + 1, 'a ctrl-click leaves the clipboard alone');
-    assert.match(get('#note').value, /^RE: r1\n/);
+    assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true',
+      'a quoted report ID opens the Messages tab');
+    assert.equal(get('#notes-panel').hidden, false);
+    assert.equal(get('#reports-panel').hidden, true);
+    assert.equal(reportNote.hidden, false, 'the quote leaves the preview for the box');
+    assert.equal(get('#draft-preview').hidden, true);
+    assert.equal(reportNote.style.height, '98px', 'the quote regrows the composer');
+    assert.equal(reportNote.value, 'RE: r1\n\na draft already written');
     assert.equal(otherBox.checked, true);
     assert.equal(otherText.value, 'make it red');
     otherText.value = '   ';

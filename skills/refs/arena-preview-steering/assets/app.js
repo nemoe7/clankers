@@ -845,11 +845,15 @@ async function copyNoteId(code, shift) {
 // line and the caret lands after it. A draft already written is kept below a blank line rather
 // than lost, and a first line that is already a quote is retargeted, so quoting a second note
 // replaces the prefix instead of stacking two. Meta is taken with ctrl, since that is the same
-// gesture on a Mac.
+// gesture on a Mac. The quote lands in the composer's own tab, and the box is regrown after the
+// value changes: measured while its panel is hidden, the textarea collapses to its border and the
+// quote shows cut off. The write mode comes back for the same reason, since a preview would leave
+// the quote off screen behind the rendered draft.
 function quoteId(id, control) {
+  showTab(tabs[0]);
   const rest = note.value.replace(/^RE: \S+\n/, '');
   note.value = `RE: ${id}\n${rest ? `\n${rest}` : ''}`;
-  if (note.hidden) writeMode();
+  writeMode();
   note.focus();
   const caret = id.length + 5;
   note.setSelectionRange(caret, caret);
@@ -885,7 +889,6 @@ async function copyTaskId(title) {
   }, 1500);
 }
 function quoteTaskId(title) {
-  showTab(tabs[0]);
   quoteId(title.dataset.taskId, title);
 }
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
