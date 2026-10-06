@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Paste line rule**: The composer stages a pasted text file when the paste holds more than 25 lines, counted in lines rather than characters.
 - **Poll ceiling**: The poll wait spans 1800 seconds, the bash tool's own maximum.
 - **Bash call tally**: The header names the bash calls alone, without the phrase since your last message.
 

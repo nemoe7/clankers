@@ -1901,13 +1901,13 @@ test('preview client', async (t) => {
   });
 
   await t.test("A long text paste stages one attachment and leaves the composer alone", async () => {
-    // A paste over the 2000 character limit becomes one text attachment named for its line count and
-    // the epoch, so a pasted log never fills the composer. A short paste stays a native paste.
+    // A paste over the 25-line limit becomes one text attachment named for its line count and the
+    // epoch, so a pasted log never fills the composer. A shorter paste stays a native paste.
     const paste = get('#compose').events.paste;
     const stamp = 1790674500000;
     context.Date = class extends Date { static now() { return stamp; } };
-    const lines = 501;
-    const text = 'line\n'.repeat(lines - 1) + 'line';
+    const lines = 26;
+    const text = 'x\n'.repeat(lines - 1) + 'x';
     const textEvent = () => event({ clipboardData: { files: [], getData: () => text } });
     try {
       get('#note').value = 'Review this log';
@@ -1915,6 +1915,10 @@ test('preview client', async (t) => {
       paste(shortPaste);
       assert.equal(shortPaste.prevented, undefined, 'a short paste stays native');
       assert.equal(get('#staged-files').hidden, true);
+      // One long line stays native: the rule counts lines, not characters.
+      const under = event({ clipboardData: { files: [], getData: () => 'y'.repeat(3000) } });
+      paste(under);
+      assert.equal(under.prevented, undefined, 'one long line stays native');
       const longPaste = textEvent();
       paste(longPaste);
       assert.equal(longPaste.prevented, true, 'a long paste never reaches the composer');
