@@ -897,6 +897,9 @@ POLLING_META = "polling_at"
 POLL_SINCE_META = "polling_since"
 # The page shows its polling dot while a poll heartbeat is no older than this.
 POLLING_FRESH_SECONDS = 5.0
+# The owner's Skip poll press is a one-shot request: the waiting poll ends at once, and no
+# note lands in the message log for a later turn to misread.
+SKIP_POLL_META = "skip_poll_at"
 
 
 INERT_COMMANDS = (
@@ -1011,6 +1014,17 @@ def poll_inbox(store, sleeper=None):
         # The early return must not read as an empty wait: the turn continues that task.
         print(
           f"CONTINUE: unblocked task {names} waits. Do not end the turn.",
+          file=sys.stderr,
+          flush=True,
+        )
+        print(cli_json(listing), flush=True)
+        return 0
+      # A message or an unblocked task outranks a skip: the turn reads that item first.
+      if store.skip_poll_requested():
+        store.take_skip_poll()
+        # The skip is one-shot and never a message: the turn ends here, and no note repeats.
+        print(
+          "SKIP: the owner pressed Skip poll; end the turn without another poll.",
           file=sys.stderr,
           flush=True,
         )
@@ -1554,6 +1568,8 @@ class Store:
         "polling_since": (
           clip_stamp(meta.get(POLL_SINCE_META)) if self.polling() else None
         ),
+        # The page paints its Skip poll button from this stamp until a poll consumes it.
+        "skip_poll": clip_stamp(meta.get(SKIP_POLL_META)),
         # The message log header names the bash calls since the owner's last message.
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
@@ -2431,6 +2447,24 @@ class Store:
     age = seconds_since(self.meta_value(POLLING_META))
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
+  def request_skip_poll(self):
+    """Record the owner's Skip poll press; the next poll consumes it once."""
+    self.set_meta(SKIP_POLL_META, now())
+    return {"skip_poll": clip_stamp(self.meta_value(SKIP_POLL_META))}
+
+  def skip_poll_requested(self):
+    """True while the owner's Skip poll press waits for a poll to end."""
+    return self.meta_value(SKIP_POLL_META) is not None
+
+  def take_skip_poll(self):
+    """Drop the Skip poll request and return its stamp, or None when none waits."""
+    stamp = self.meta_value(SKIP_POLL_META)
+    if stamp is None:
+      return None
+    with closing(self.connect()) as db, db:
+      db.execute("DELETE FROM meta WHERE key = ?", (SKIP_POLL_META,))
+    return clip_stamp(stamp)
+
   def set_meta(self, key, value):
     """Record one meta value, replacing any previous one."""
     with closing(self.connect()) as db, db:
@@ -2593,7 +2627,16 @@ class Store:
       pending.sort(key=lambda item: item["at"])
       checked = now()
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (checked,))
-      return {"checked_at": clip_stamp(checked), "pending": pending}
+      # An armed Skip poll press rides every listing. A read reports it, and the poll that
+      # consumes it prints the same stamp.
+      waiting = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (SKIP_POLL_META,)
+      ).fetchone()
+      return {
+        "checked_at": clip_stamp(checked),
+        "pending": pending,
+        "skip_poll": clip_stamp(waiting[0]) if waiting else None,
+      }
 
   def mark_seen(self, ids):
     """Receipt the IDs a delivered read printed or an explicit call named."""
@@ -3203,6 +3246,7 @@ def handler(store):
       )
       note_upload = path == "/api/notes/with-file"
       agent_key_post = path == "/api/key"
+      skip_poll_post = path == "/api/skip-poll"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
         path
@@ -3219,6 +3263,7 @@ def handler(store):
         and not note_upload
         and not fetch_post
         and not agent_key_post
+        and not skip_poll_post
       ):
         self.problem(404, "Not found")
         return
@@ -3321,6 +3366,9 @@ def handler(store):
             raise ValueError("host must be one https origin, with no path")
           store.set_agent_key(candidate, host)
           self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
+          return
+        if skip_poll_post:
+          self.reply(200, json.dumps(store.request_skip_poll(), ensure_ascii=False))
           return
         if path == "/api/fetch-jobs":
           record = store.enqueue_fetch(

@@ -14,6 +14,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   It writes only when the newest stamp moves, and an older stamp never overwrites the file.
   The name carries the repo, the branch, the stamp and the record counts. Version 1.4.0.
 
+#### preview
+
+- **Skip poll control**: The Message log toolbar carries a Skip poll button (⏭) beside the refresh and composer controls.
+  A press arms one flag and writes no note. The agent's poll consumes it and the wait ends at once. No stale line waits in the log for a later turn to misread.
+
 ### Changed
 
 #### arena

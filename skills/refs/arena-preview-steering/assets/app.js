@@ -623,6 +623,7 @@ async function refreshState() {
     renderTasksIfChanged(state.tasks);
     renderFetchIfChanged(state.fetch_jobs || []);
     renderAgentKey(state.agent_key);
+    paintSkipPoll(state.skip_poll);
     showWorkspace(state.workspace);
     queueReady = true;
     const signature = reportsSignature(state.reports);
@@ -1807,6 +1808,26 @@ $('#unpublish-report').addEventListener('click', async () => {
   } catch (error) {
     $('#report-status').textContent = `Delete failed: ${error.message}`;
   } finally { button.disabled = false; }
+});
+// The Skip poll press arms a one-shot flag the agent's poll consumes: the wait ends at once,
+// and no note lands in the log for a later turn to misread.
+function paintSkipPoll(skipPoll) {
+  const button = $('#skip-poll');
+  const armed = Boolean(skipPoll);
+  button.setAttribute('aria-pressed', armed ? 'true' : 'false');
+  button.dataset.state = armed ? 'good' : '';
+  label(button, armed
+    ? `Skip poll armed ${time(skipPoll)}; the agent ends its wait`
+    : 'Ask the agent to end its wait now');
+}
+$('#skip-poll').addEventListener('click', async () => {
+  try {
+    const answer = await (await request('/api/skip-poll', {
+      method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+    })).json();
+    paintSkipPoll(answer.skip_poll);
+    status.textContent = 'Skip poll armed; the agent ends its wait now.';
+  } catch (error) { status.textContent = `Skip poll failed: ${error.message}.`; }
 });
 $('#refresh-notes').addEventListener('click', refreshState);
 refreshState();

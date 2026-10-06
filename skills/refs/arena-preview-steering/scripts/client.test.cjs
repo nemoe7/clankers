@@ -103,6 +103,7 @@ let reportHtmlWait = null;
 let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
+const skipCalls = [];
 const replySeenCalls = [];
 const unpublished = [];
 const uploadCalls = [];
@@ -172,6 +173,12 @@ const context = {
         counts: { notes: (state.notes || []).length, tasks: taskLines.length,
           answers: (state.submissions || []).length, reports: (state.reportSources || []).length },
       });
+    }
+    if (url === '/api/skip-poll') {
+      // The press arms one flag and writes no note, so the harness records the call alone.
+      skipCalls.push(JSON.parse(options.body || '{}'));
+      state.skip_poll = '2026-10-06T09:00:00';
+      return response({ skip_poll: state.skip_poll });
     }
     if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
     if (url === '/api/notes') {
@@ -2297,5 +2304,29 @@ test('preview client', async (t) => {
     // The copy state still carries it: the quiet note rides the cache, not the log.
     const cached = JSON.parse(storage.get('arena-preview-v1:state-cache'));
     assert.equal(cached.notes.length, 2, 'the cached state keeps the quiet note');
+  });
+
+  await t.test('Skip poll arms one flag, and the press paints until a poll consumes it', async () => {
+    // The press must write no note: the agent reads the flag, ends its wait, and no stale
+    // "skip poll" line waits in the log for a later turn to misread.
+    state.skip_poll = null;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
+    assert.equal(get('#skip-poll').dataset.state, '');
+    assert.equal(get('#skip-poll').getAttribute('aria-label'), 'Ask the agent to end its wait now');
+    state.notes = [];
+    get('#skip-poll').events.click();
+    await tick();
+    assert.deepEqual(skipCalls.at(-1), {}, 'the press posts an empty JSON body');
+    assert.equal(state.notes.length, 0, 'no note rides the press');
+    assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'true');
+    assert.equal(get('#skip-poll').dataset.state, 'good');
+    assert.match(get('#skip-poll').getAttribute('aria-label'), /^Skip poll armed /);
+    assert.equal(get('#send-status').textContent, 'Skip poll armed; the agent ends its wait now.');
+    // The agent's poll consumes the flag, and the next poll paints the button unarmed again.
+    state.skip_poll = null;
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
+    assert.equal(get('#skip-poll').dataset.state, '');
   });
 });

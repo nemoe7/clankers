@@ -3454,6 +3454,87 @@ def test_poll_blocked_tasks():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
 
 
+def test_skip_poll():
+  """The page's Skip poll press ends one wait, leaves no note, and never repeats."""
+  with tempfile.TemporaryDirectory() as skip_dir:
+    store = preview.Store(skip_dir, create=True)
+    printed = []
+
+    def capture(value, **kwargs):
+      printed.append(value)
+
+    def run_poll():
+      sleeps = []
+      original = builtins.print
+      builtins.print = capture
+      try:
+        code = preview.poll_inbox(store, sleeper=sleeps.append)
+      finally:
+        builtins.print = original
+      return code, sleeps
+
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      # A fresh state waits, and the listing says no skip is armed.
+      assert store.state()["skip_poll"] is None
+      assert store.read()["skip_poll"] is None
+      assert store.skip_poll_requested() is False
+      code, sleeps = run_poll()
+      assert code == 1 and sleeps == [10, 10]
+      assert json.loads(printed[-1])["skip_poll"] is None
+
+      # A press arms it. A read reports the stamp and leaves it armed for the poll.
+      armed = store.request_skip_poll()
+      stamp = armed["skip_poll"]
+      assert stamp
+      assert store.read()["skip_poll"] == stamp
+      assert store.state()["skip_poll"] == stamp
+      assert store.skip_poll_requested() is True
+      assert store.state()["notes"] == [], "the press never writes a note"
+
+      # The poll ends at once, prints the stamp it consumed, and names the skip on stderr.
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 0
+      assert sleeps == [], "a skip ends the wait before the first sleep"
+      assert printed[0] == (
+        "SKIP: the owner pressed Skip poll; end the turn without another poll."
+      )
+      assert json.loads(printed[-1])["skip_poll"] == stamp
+      assert store.skip_poll_requested() is False
+      assert store.state()["skip_poll"] is None
+
+      # One press ends one wait: the next poll runs its whole span.
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 1 and sleeps == [10, 10]
+      assert json.loads(printed[-1])["skip_poll"] is None
+
+      # A pending message outranks the skip: the poll delivers it, and the skip still waits.
+      store.request_skip_poll()
+      store.note("skip-note", "arrived while a skip waits")
+      assert store.skip_poll_requested() is True
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 0 and sleeps == []
+      assert [item["id"] for item in json.loads(printed[-1])["pending"]] == [
+        "skip-note"
+      ]
+      assert store.skip_poll_requested() is True
+      # Once the ack empties the queue, the next poll consumes the skip it held.
+      store.acknowledge(["skip-note"], "reply", "done")
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 0 and sleeps == []
+      assert printed[0] == (
+        "SKIP: the owner pressed Skip poll; end the turn without another poll."
+      )
+      assert store.skip_poll_requested() is False
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
 def test_notes_only_save():
   with tempfile.TemporaryDirectory() as notes_only_dir:
     backup = Path(notes_only_dir) / "saved.ndjson"
@@ -3770,6 +3851,36 @@ def test_quiet_note_route():
     assert store.gate(pending_only=True) is True
     # The page still shows it.
     assert [note["id"] for note in store.state()["notes"]] == ["key-note"]
+
+
+def test_skip_poll_route():
+  """POST /api/skip-poll arms the page's skip; the state and the poll report it."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "arena-preview", create=True)
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    assert json.loads(request("GET", "/api/state")[2])["skip_poll"] is None
+    # The route needs the JSON content type every write carries.
+    assert request("POST", "/api/skip-poll", "{}")[0] == 415
+    status, _, body = request(
+      "POST", "/api/skip-poll", "{}", {"Content-Type": "application/json"}
+    )
+    assert status == 200
+    stamp = json.loads(body)["skip_poll"]
+    assert stamp
+    assert json.loads(request("GET", "/api/state")[2])["skip_poll"] == stamp
+    assert store.state()["notes"] == [], "the route writes no note"
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      sleeps = []
+      rc = preview.poll_inbox(store, sleeper=lambda seconds: sleeps.append(seconds))
+      assert rc == 0 and sleeps == []
+      # The poll consumed the press, so the page paints its button unarmed again.
+      assert json.loads(request("GET", "/api/state")[2])["skip_poll"] is None
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
 
 
 def test_push_gate_identical_to_main():
