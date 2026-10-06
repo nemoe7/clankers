@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Clankers Arena
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.6
+// @version      1.6.7
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @license      MIT
@@ -2309,12 +2309,34 @@
       return doc.querySelectorAll(WAITING_SELECTOR).length > 0;
     }
 
+    // Radix keeps a closed dialog in the page behind data-state, so the nearest state
+    // ancestor decides. Without one the node counts, which covers a plain dialog.
+    function openDialog(node) {
+      var current = node;
+      var depth = 0;
+      while (current && depth < 8) {
+        if (typeof current.getAttribute === "function") {
+          var state = current.getAttribute("data-state");
+          if (state === "closed") return false;
+          if (state === "open") return true;
+        }
+        current = current.parentElement || null;
+        depth += 1;
+      }
+      return true;
+    }
+
     // The security dialog takes the whole page, so nothing else can be done while it shows.
     function captchaSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
       }
-      return doc.querySelectorAll(CAPTCHA_SELECTOR).length > 0;
+      var nodes = doc.querySelectorAll(CAPTCHA_SELECTOR);
+      var i;
+      for (i = 0; i < nodes.length; i += 1) {
+        if (openDialog(nodes[i])) return true;
+      }
+      return false;
     }
 
     // Rank: the security check beats every other mark, a strong row beats the bubble,
@@ -2424,6 +2446,7 @@
       CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
       CAPTCHA_EMOJI: CAPTCHA_EMOJI,
       captchaSignal: captchaSignal,
+      openDialog: openDialog,
       rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       resetSpeech: function () { lastSpeechMark = null; },

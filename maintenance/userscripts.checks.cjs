@@ -677,6 +677,7 @@ function checkTabTitle(api) {
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
   var rowSource = api.rowSource;
+  var openDialog = api.openDialog;
   var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
   var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
   var captchaSignal = api.captchaSignal;
@@ -1042,8 +1043,23 @@ function checkTabTitle(api) {
   }
   // The owner's security dialog: Arena shows it over the page and it holds until the
   // check passes, so it outranks the poll row, the bubble and the waiting line.
-  function captchaDoc(messages) {
-    var frame = { title: "reCAPTCHA" };
+  function captchaDoc(messages, state) {
+    var frame = {
+      title: "reCAPTCHA",
+      getAttribute: function (name) {
+        return null;
+      },
+    };
+    if (state) {
+      // Radix keeps the dialog in the page after it closes, one data-state away.
+      var dialog = {
+        getAttribute: function (name) {
+          return name === "data-state" ? state : null;
+        },
+      };
+      var middle = { parentElement: dialog, getAttribute: function () { return null; } };
+      frame.parentElement = middle;
+    }
     return {
       title: "ChatGPT",
       querySelector: function (selector) {
@@ -1248,6 +1264,10 @@ function checkTabTitle(api) {
     [CAPTCHA_SELECTOR, '.recaptcha-v2-container, iframe[title="reCAPTCHA"]'],
     [captchaSignal(captchaDoc()), true],
     [captchaSignal(idleDoc), false],
+    // A closed dialog stays in the DOM, so the shield clears with it.
+    [captchaSignal(captchaDoc(null, "closed")), false],
+    [captchaSignal(captchaDoc(null, "open")), true],
+    [openDialog({ getAttribute: function () { return null; } }), true],
     [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
     [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
     [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
