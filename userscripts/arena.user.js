@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.6.15
+// @version      1.6.16
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -57,6 +57,66 @@
   function menuItem(list, label, run) {
     if (typeof GM_registerMenuCommand !== "function") return;
     list.push(GM_registerMenuCommand(label, run));
+  }
+
+  // The transcript bar, the saved slug key and the arena URL readers are page-wide, so one
+  // copy serves every feature.
+  var BAR_SELECTOR =
+    "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
+  var SLUG_KEY = "clankers-arena-agent-slug";
+
+  function arenaUrl(urlString) {
+    var url;
+    try {
+      url = new URL(urlString);
+    } catch (err) {
+      return null;
+    }
+    return url.hostname.replace(/^www\./, "") === "arena.ai" ? url : null;
+  }
+
+  function isComposerUrl(urlString) {
+    var url = arenaUrl(urlString);
+    return Boolean(url) && url.pathname.replace(/\/+$/, "") === "/agent";
+  }
+
+  function isSessionUrl(urlString) {
+    var url = arenaUrl(urlString);
+    return Boolean(url) && url.pathname.indexOf("/agent/") === 0 && url.pathname.length > 7;
+  }
+
+  function slugFromOwnerRepo(text) {
+    var trimmed = String(text || "").trim();
+    var slash = trimmed.indexOf("/");
+    if (slash <= 0 || slash === trimmed.length - 1) {
+      return null;
+    }
+    var owner = trimmed.slice(0, slash);
+    var repo = trimmed.slice(slash + 1);
+    if (!owner || !repo || repo.indexOf("/") !== -1 || /\s/.test(trimmed)) {
+      return null;
+    }
+    return repo;
+  }
+
+  function readSlug(doc) {
+    var bar = doc.querySelector(BAR_SELECTOR);
+    if (!bar) {
+      return null;
+    }
+    if (!String(bar.textContent || "").trim()) {
+      return null;
+    }
+    var spans = bar.querySelectorAll("span.truncate");
+    var i;
+    var slug;
+    for (i = 0; i < spans.length; i += 1) {
+      slug = slugFromOwnerRepo(spans[i].textContent || "");
+      if (slug) {
+        return slug;
+      }
+    }
+    return null;
   }
 
   function runFeature(key, label, run, onChange, defaultOn) {
@@ -120,38 +180,8 @@
     // The fill writes the initial message: the repo name leads it, the rules stay in the files.
   runFeature("prompt-fill", "Prompt fill", function () {
 
-    var BAR_SELECTOR =
-      "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
     var COMPOSER_SELECTOR = 'div.tiptap.ProseMirror[contenteditable="true"]';
     var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md)/;
-    var SLUG_KEY = "clankers-arena-agent-slug";
-
-    function isComposerUrl(urlString) {
-      var url;
-      try {
-        url = new URL(urlString);
-      } catch (err) {
-        return false;
-      }
-      return (
-        url.hostname.replace(/^www\./, "") === "arena.ai" &&
-        url.pathname.replace(/\/+$/, "") === "/agent"
-      );
-    }
-
-    function slugFromOwnerRepo(text) {
-      var trimmed = String(text || "").trim();
-      var slash = trimmed.indexOf("/");
-      if (slash <= 0 || slash === trimmed.length - 1) {
-        return null;
-      }
-      var owner = trimmed.slice(0, slash);
-      var repo = trimmed.slice(slash + 1);
-      if (!owner || !repo || repo.indexOf("/") !== -1 || /\s/.test(trimmed)) {
-        return null;
-      }
-      return repo;
-    }
 
     var PROXY_HOST_KEY = "clankers-arena-proxy-host";
     var PROXY_MASTER_KEY = "clankers-arena-proxy-master";
@@ -549,26 +579,6 @@
     var slugLogged = false;
     var composerLogged = null;
 
-    function readSlug(doc) {
-      var bar = doc.querySelector(BAR_SELECTOR);
-      if (!bar) {
-        return null;
-      }
-      if (!String(bar.textContent || "").trim()) {
-        return null;
-      }
-      var spans = bar.querySelectorAll("span.truncate");
-      var i;
-      var slug;
-      for (i = 0; i < spans.length; i += 1) {
-        slug = slugFromOwnerRepo(spans[i].textContent || "");
-        if (slug) {
-          return slug;
-        }
-      }
-      return null;
-    }
-
     function setComposerText(el, text) {
       el.focus();
       var selection = window.getSelection();
@@ -671,39 +681,8 @@
     // The Steering row drifts on labels, so it is found by its words.
   runFeature("open-steering", "Open Steering", function () {
 
-    var BAR_SELECTOR =
-      "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
     var STEERING_LABEL_RE = /steering|preview/i;
-    var SLUG_KEY = "clankers-arena-agent-slug";
     var CLICK_DELAY_MS = 1000;
-
-    function isSessionUrl(urlString) {
-      var url;
-      try {
-        url = new URL(urlString);
-      } catch (err) {
-        return false;
-      }
-      return (
-        url.hostname.replace(/^www\./, "") === "arena.ai" &&
-        url.pathname.indexOf("/agent/") === 0 &&
-        url.pathname.length > 7
-      );
-    }
-
-    function slugFromOwnerRepo(text) {
-      var trimmed = String(text || "").trim();
-      var slash = trimmed.indexOf("/");
-      if (slash <= 0 || slash === trimmed.length - 1) {
-        return null;
-      }
-      var owner = trimmed.slice(0, slash);
-      var repo = trimmed.slice(slash + 1);
-      if (!owner || !repo || repo.indexOf("/") !== -1 || /\s/.test(trimmed)) {
-        return null;
-      }
-      return repo;
-    }
 
     function isSteeringLabel(text) {
       return STEERING_LABEL_RE.test(String(text || ""));
@@ -789,26 +768,6 @@
       }
       button.click();
       clickedPath = path;
-    }
-
-    function readSlug(doc) {
-      var bar = doc.querySelector(BAR_SELECTOR);
-      if (!bar) {
-        return null;
-      }
-      if (!String(bar.textContent || "").trim()) {
-        return null;
-      }
-      var spans = bar.querySelectorAll("span.truncate");
-      var i;
-      var slug;
-      for (i = 0; i < spans.length; i += 1) {
-        slug = slugFromOwnerRepo(spans[i].textContent || "");
-        if (slug) {
-          return slug;
-        }
-      }
-      return null;
     }
 
     function parseSteeringButton(button) {
@@ -1283,20 +1242,6 @@
     var spacerStyles = new Map();
     var editorStates = new Map();
 
-    function isSessionUrl(urlString) {
-      var url;
-      try {
-        url = new URL(urlString);
-      } catch (err) {
-        return false;
-      }
-      return (
-        url.hostname.replace(/^www\./, "") === "arena.ai" &&
-        url.pathname.indexOf("/agent/") === 0 &&
-        url.pathname.length > 7
-      );
-    }
-
     function shouldHideComposer(session, stopGenerating) {
       return Boolean(session) && Boolean(stopGenerating);
     }
@@ -1539,8 +1484,6 @@
 
   var STATE_WATCH_MS = 60 * 1000;
 
-  var STATE_BAR_SELECTOR =
-    "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
 
   var STATE_SLUG_KEY = "clankers-arena-agent-slug";
 
@@ -1560,7 +1503,7 @@
   }
 
   function stateRepo(doc) {
-    var bar = doc.querySelector(STATE_BAR_SELECTOR);
+    var bar = doc.querySelector(BAR_SELECTOR);
     if (!bar) return savedSlug() || titleRepo(doc);
     var spans = bar.querySelectorAll("span.truncate");
     var i;
@@ -1576,7 +1519,7 @@
   }
 
   function stateBranch(doc) {
-    var bar = doc.querySelector(STATE_BAR_SELECTOR);
+    var bar = doc.querySelector(BAR_SELECTOR);
     if (!bar) return "";
     var links = bar.querySelectorAll("a");
     var i;
@@ -2078,7 +2021,7 @@
         }
       }
       var button = row.querySelector("button");
-      var text = collapsed(button && typeof button.querySelector === "function" ? button.querySelector("p") : null);
+      text = collapsed(button && typeof button.querySelector === "function" ? button.querySelector("p") : null);
       if (text) {
         return text;
       }

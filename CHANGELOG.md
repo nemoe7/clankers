@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Shared page helpers**: The transcript bar, the slug key, the arena URL readers and the label reader live once for every feature. The file falls from 74,024 B to 72,488 B. Arena 1.6.16.
 - **Comment trim**: The userscript keeps one comment per feature and drops the rest. The file falls from 87,133 B to 74,024 B. Arena 1.6.15.
 - **URL and menu helpers**: Each feature carries one URL test instead of a parser and a wrapper, and the menu entries share one guard. No behavior changes. Arena 1.6.14.
 - **Script names**: The two bundles take new manager names: Arena.ai | NemoUtils and ChatGPT.com | NemoUtils. Both scripts add a favicon icon: arena.ai for Arena and chatgpt.com for ChatGPT. Arena 1.6.13, ChatGPT 1.3.3.
