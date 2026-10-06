@@ -676,6 +676,7 @@ function checkTabTitle(api) {
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
   var SPEECH_EMOJI = api.SPEECH_EMOJI;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
+  var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
   var rowSource = api.rowSource;
   var openDialog = api.openDialog;
@@ -1024,23 +1025,63 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's waiting line: a 16px spinner canvas beside rotating monospace status
-  // text. The words rotate, so the mock returns the line for the structural selector.
-  function waitingDoc(messages, words) {
-    var line = { textContent: "descending gradients" };
+  // The owner's two blocks (note 37b3a4e). Both rows carry the same 16px canvas; only the
+  // waiting line adds the monospace text block beside it. A tree node answers the text
+  // selector with its own descendants, the way a row answers a descendant selector.
+  function pageTree(text, children) {
+    var node = {
+      text: text || "",
+      textContent: text || "",
+      children: children || [],
+      querySelectorAll: function (selector) {
+        var hits = [];
+        if (selector !== WAITING_TEXT_SELECTOR) return hits;
+        (function walk(item) {
+          var i;
+          for (i = 0; i < item.children.length; i += 1) {
+            if (item.children[i].text) hits.push(item.children[i]);
+            walk(item.children[i]);
+          }
+        })(node);
+        return hits;
+      },
+    };
+    var i;
+    for (i = 0; i < node.children.length; i += 1) node.children[i].parentElement = node;
+    return node;
+  }
+  function canvasDoc(canvases, messages, words) {
     return {
       title: "ChatGPT",
       querySelector: function (selector) {
         return selector === REPO_LINK_SELECTOR ? repoLink : null;
       },
       querySelectorAll: function (selector) {
-        if (selector === WAITING_SELECTOR) return [line];
+        if (selector === WAITING_SELECTOR) return canvases;
         if (selector === MESSAGE_SELECTOR) return messages || [];
         if (selector === SPEECH_SELECTOR) return words || [];
         if (selector === "button[aria-label]") return [stopButton("Stop generating")];
         return [];
       },
     };
+  }
+  // One row of the owner's blocks: the icon block with the canvas, and, on the waiting
+  // line alone, the text block that holds the rotating words.
+  function rowCanvas(withText) {
+    var canvas = pageTree("", []);
+    var icon = pageTree("", [pageTree("", [canvas])]);
+    var kids = [icon];
+    if (withText) kids.push(pageTree("", [pageTree("The cat sat on the", [])]));
+    return { canvas: canvas, row: pageTree("", kids) };
+  }
+  // The owner's waiting line: a 16px spinner canvas beside rotating monospace status
+  // text. The words rotate, so the row carries the text and the canvas together.
+  function waitingDoc(messages, words) {
+    return canvasDoc([rowCanvas(true).canvas], messages, words);
+  }
+  // The owner's action row: the same canvas alone, with no text block beside it.
+  function actionCanvasDoc(messages, words) {
+    return canvasDoc([rowCanvas(false).canvas], messages, words);
   }
   // The owner's security dialog: Arena shows it over the page and it holds until the
   // check passes, so it outranks the poll row, the bubble and the waiting line.
@@ -1251,10 +1292,18 @@ function checkTabTitle(api) {
     [polls("python preview.py polls"), false],
     [polls('python - <<PY\np = Path("skills/arena-preview-steering/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
     // The owner's waiting line: rotating words, one structural selector, one hourglass.
-    [WAITING_SELECTOR, 'canvas[width="16"][height="16"], [aria-hidden="true"][class*="min-w-[3ch]"]'],
+    [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
+    [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
     [waitingSignal(waitingDoc()), true],
+    // The owner's action row carries the very same canvas as its icon (note 37b3a4e), so
+    // the canvas alone never reads as a waiting line and never outranks the Bash row.
+    [waitingSignal(actionCanvasDoc()), false],
     [waitingSignal(setDoc), false],
+    [expireHold(), null],
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers"],
+    [expireHold(), null],
     // A named action outranks the line, so the poll row keeps its own emoji.
     [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers \uD83D\uDCA4"],
     // Streamed words outrank the line too; the first burst raises the bubble.
