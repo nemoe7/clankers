@@ -9,7 +9,7 @@
 - Initial reads of this file and the preview skill may precede that reply.
 - Load the named skills for Arena work: `arena-preview-steering` for the inbox, the reports and the gate, and `arena-proxy` for a source the sandbox cannot reach.
 - Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
-- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md and every AGENTS.md in the repository end-to-end before any other tool call; a partial read, such as head, tail or a grep excerpt, does not count; the gate and read cadence mechanics live in .agents/skills/arena-preview-steering/references/REFERENCE.md.
+- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, the arena-preview-steering skill with its reference, and the arena-proxy skill end-to-end before any other tool call; a partial read, such as head, tail or a grep excerpt, does not count; the gate and read cadence mechanics live in .agents/skills/arena-preview-steering/references/REFERENCE.md.
 - After a rebase onto `main`, or a new `main` change to a rule or skill file, MUST reread every affected file end-to-end before the next work step; a partial read, such as head, tail or a grep excerpt, does not count.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
 - Before your first tool call that is not a read of a rule or skill file, write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
