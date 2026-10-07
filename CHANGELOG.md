@@ -19,6 +19,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Push cadence boundary**: The Constitution now pushes verified commits to origin after each task completion, and it never holds verified batches across tasks.
 - **One arena skill**: `arena-preview-steering` and `arena-proxy` merge into `arena`. The proxy pages join its SKILL.md, the proxy code moves to `skills/arena/proxy/`, and the turn-read, install, report, gate and workflow pointers name the one skill. Target repositories receive the skill without its proxy directory, so the docker files stay in this repository beside the published image.
 - **Read cadence**: The read bullet and the skill reference now say a read never waits for the Bash gate to block. A read that comes only after a blocked call is late.
+- **Tooling installs**: The Workspace rules now install dependencies and virtual environments with the background process tool, so an install runs while the turn continues. The arena installer never runs that way.
 
 ### Added
 

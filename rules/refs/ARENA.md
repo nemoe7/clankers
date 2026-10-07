@@ -29,7 +29,7 @@
 - Push only when the branch tree differs from `origin/main`; when the trees match, NEVER push, even when the branch shows commits ahead.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
-- In an Arena session, ALWAYS install the `arena` skill with its installer from the repository root before activating it, never by hand, even when ntfy or no steering is selected, and read its inbox at every cadence point.
+- In an Arena session, ALWAYS install the `arena` skill with its installer from the repository root before activating it, never by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - ALWAYS merge rebase.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
@@ -196,6 +196,7 @@
 ## Workspace
 
 - If Chromium is needed, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
+- Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
 - Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist.
