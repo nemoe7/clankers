@@ -1,18 +1,86 @@
 ---
-name: arena-proxy
-description: Reach data outside the Arena sandbox through an owner-run backend that holds the credentials. Use when a session needs privileged sources, such as GitHub code scanning alerts, workflow run logs, artifact bytes, or a model endpoint the owner runs, that the sandbox token and the egress filter cannot reach, and the fetch_page tool can. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
+name: arena
+description: Steer an Arena.ai agent mid-turn through a local preview inbox, publish rendered Markdown reports, and reach data outside the sandbox through the owner's proxy backend. Use in Arena Agent Mode when the user wants steering or a report, or ARENA.md requires it, and when a source the sandbox cannot reach is needed. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
 license: MIT
-compatibility: Arena.ai Agent Mode with the fetch_page tool, a Python 3.10+ backend run by the owner on a machine or in a container, and a public HTTPS URL for that backend.
+compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace and long-lived process tools; serve needs markdown-it-py; the proxy routes need the fetch_page tool, an owner-run Python 3.10+ backend and a public HTTPS URL for it.
 metadata:
   origin: first-party, maintained in this repository
   arena-only: "true"
 ---
 
-# Arena Proxy
+# Arena
+
+Use one server and one state directory per session; do not start a second server.
+
+Use this guide and its Markdown references for workflow; read shipped scripts only for code changes or source analysis.
+
+## Start here
+
+1. Run `<skill>/scripts/install.sh` from the repository root, once per session.
+2. Start the preview with the long-lived process tool, named `<repo> - Steering`, and run one command in it: `arena-preview serve --port 8000`.
+3. Read the inbox with `arena-preview read`, and answer with `arena-preview ack`.
+4. When a call needs the recorded agent key, run `arena-preview key`; it prints the key, the host and the stamp and needs no server.
+5. When a read cannot leave the sandbox, use the proxy routes in [When the proxy is needed](#when-the-proxy-is-needed) through `fetch_page`.
+
+## Setup
+
+1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
+2. Use an ignored, persisted state directory, default `arena-state`. Verify `core.excludesFile` with `git check-ignore`; never add this directory to the repository `.gitignore`, put it in a cache/build folder, or commit/push its state and reports.
+3. Run `<skill>/scripts/install.sh` once per session. Use `arena-preview <command>` for CLI calls, never the script path. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task`, `publish` and every other command as one-shot shell calls:
+
+   ```bash
+   arena-preview serve --port 8000
+   ```
+
+   After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it.
+4. Name the preview in chat. At first setup, when it starts, ask one `ask_user` visibility question: Yes, No, ntfy, or Continue without steering. Block non-setup work until answered. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running; the first `read` follows the answer. Do not claim visibility before confirmation. If hidden, ask how to continue with `ask_user`. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
+
+## Read, acknowledge, and track work
+
+```bash
+arena-preview read
+arena-preview poll
+```
+
+When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged, and stamps the parent report read by the agent. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call. When ending a turn or a form awaits answers, run `poll`. When a listing carries a `skip_poll` stamp, the owner pressed Skip poll in the page: the poll consumes it, and the turn ends there with no note and no second poll. A blocked call hears which noisy commands to drop, and a call that spells the preview path hears the bare form once a shell. A blocked push says so, and a code-scanning-alert or workflow-log read hears the proxy route.
+
+Acknowledge each delivered ID separately where the owner reads it. Use `--reply <Markdown>` for rendered Markdown or `--note <text>` for one plain line. Never acknowledge all blindly or share one answer across notes. Use the full ID, not a sequence number. A second ack appends a reply below the first; it does not replace it. Receipt is not completion. Ack immediately; failure earns a negative rating. After acking a work note, add it via `task <id> ... --msg-id <full-id>`; `ack` reminds you.
+
+```bash
+arena-preview ack <id> --reply <markdown>
+```
+
+If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
+
+When a call needs the recorded agent key, such as after a 401 or from an owner question, run arena-preview key; it prints the key, the host and the stamp and needs no server.
+
+Run `task-list` at turn start. Before implementation, add approved work with `task <kebab-title-id> "<title>" [details ...]`; put it first with `--order 1` and update status (`upcoming`/`finished` only)/details as work changes; backtick task IDs in acks so the log links them. For a task from a note or report answer, use `--msg-id <full-message-id>` and queue/ack it in the same tool block. The task marker does not replace `ack`. Mark it finished only after verification. A task waiting on a report takes `--report <report-id>`; the report's answer clears its blocked mark.
+
+## Publish reports and forms
+
+Short answers stay in chat. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result.
+
+```bash
+arena-preview publish <source.md> --id <id> --title <title>
+```
+
+Republish the same ID after each source update; if answers exist, use a new ID. A stale report leaves with `unpublish <id>`; answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Write an option set's custom slot inside the group, as `- ( ) custom: ___`.
+
+`read` lists report submissions as `kind: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
+
+## Files and downloads
+
+For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss.
+
+Run `download-request <url>` to queue a pending job. It does not download. The owner approves or denies it in Downloads. Add `--allow-proxy` only for that URL. URLs cannot contain credentials. Read the saved-file inbox note and acknowledge it. Report failed or missing files.
+
+## Recovery
+
+Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes in the ignored state directory. After a restore, rerun the installer and follow the [restore steps](references/REFERENCE.md#restore). Never call an unconfirmed save successful. If the preview fails, report the failure and use `ask_user` to ask how to continue; do not silently switch channels or commit reports. Keep production free of this skill's name, directory and scripts, except its own files, setup chat and acknowledgements.
+
+## When the proxy is needed
 
 The owner runs this backend. It holds the provider credentials and answers over one public HTTPS URL. An Arena session reads it through `fetch_page`, with a key in the URL.
-
-## When to use
 
 - Read-only data that neither the sandbox nor its token can reach: code scanning alerts, secret scanning alerts, workflow run logs, run artifacts, or another service the owner fronts.
 - A binary file, a page, or a signed URL, as text the session can carry.
@@ -119,7 +187,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 ## Owner setup
 
 The install detail, the container notes and the other exposure options live in
-[`INSTALL.md`](https://github.com/nemoe7/clankers/blob/main/skills/arena-proxy/INSTALL.md)
+[`proxy/INSTALL.md`](https://github.com/nemoe7/clankers/blob/main/skills/arena/proxy/INSTALL.md)
 in this repository, beside the skill source.
 
 ## Failure modes

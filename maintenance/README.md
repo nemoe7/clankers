@@ -19,7 +19,7 @@ Repository checks live in `maintenance/`.
 
 ### Arena file
 
-Arena uses the `arena-preview-steering` skill for one Notes / Reports preview. Keep reports and session state ignored and uncommitted. The steering migration reference records former ntfy and local-report-commit workflows, neither an automatic fallback. Preview permanence is not guaranteed.
+Arena uses the `arena` skill for one Notes / Reports preview. Keep reports and session state ignored and uncommitted. The steering migration reference records former ntfy and local-report-commit workflows, neither an automatic fallback. Preview permanence is not guaranteed.
 
 Compress wording and sections, not meaning. Keep every negation, condition, command, number, and caveat. Match the generic core in meaning, not byte for byte, except for push, PR, and merge authorization. ARENA.md always pushes and keeps a PR open so work survives a limit. Core forbids pushes and PRs unless asked but has no merge clause. Arena never merges without owner authorization, then uses rebase only: rebase onto the target, then merge, so no merge commit lands. Do not repeat Arena-managed branch mechanics beyond that.
 
@@ -100,7 +100,7 @@ The checker is maintenance tooling.
 
 ## Minified assets and scripts
 
-The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena-preview-steering/` sources, never generated copies. Markdown compression is separate. A dispatch workflow writes the `.agents/skills/arena-preview-steering/` copy in each target repository. `.github/workflows/distribute.yml` carries it, so markdown drift there ends at the next dispatch. Compact Python gives less useful traceback line numbers.
+The preview ships minified JavaScript, CSS, HTML and Python in two distributed copies, including all three `scripts/` files. Edit readable `skills/refs/arena/` sources, never generated copies. Markdown compression is separate. A dispatch workflow writes the `.agents/skills/arena/` copy in each target repository. `.github/workflows/distribute.yml` carries it, so markdown drift there ends at the next dispatch. Compact Python gives less useful traceback line numbers.
 
 ```bash
 npm ci

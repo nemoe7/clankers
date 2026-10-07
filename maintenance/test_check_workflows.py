@@ -248,8 +248,7 @@ def test_distribute_triggers_and_inputs():
   assert triggers["push"]["branches"] == ["main"]
   assert triggers["push"]["paths"] == [
     "rules/ARENA.md",
-    "skills/arena-preview-steering/**",
-    "skills/arena-proxy/**",
+    "skills/arena/**",
     "github/workflows/gemini-release.yml",
     "github/workflows/gemini_release.py",
     ".github/workflows/distribute.yml",

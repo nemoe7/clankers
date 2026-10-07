@@ -223,11 +223,11 @@ function checkPromptFill(api) {
     [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
       "Arena proxy https://h.example key replaced at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-      + " skills/arena-proxy holds the map. Never print it."],
+      + " skills/arena/proxy holds the map. Never print it."],
     [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
       "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-      + " skills/arena-proxy holds the map. Never print it."],
+      + " skills/arena/proxy holds the map. Never print it."],
     // The older two-line fill is rebuilt once, without the rules text.
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "clankers"), false],
@@ -321,7 +321,7 @@ function checkOpenSteering(api) {
     [steeringSlugFromLabel("daedalus - Steering"), "daedalus"],
     [steeringSlugFromLabel("clankers - preview"), "clankers"],
     [steeringSlugFromLabel("clankers preview"), "clankers"],
-    [steeringSlugFromLabel("arena-preview-steering"), null],
+    [steeringSlugFromLabel("arena"), null],
     [steeringSlugFromLabel("Steering"), null],
     [steeringSlugFromLabel("daedalus - Website"), null],
     [isSteeringLabel("CLANKERS - PREVIEW"), true],
@@ -338,8 +338,8 @@ function checkOpenSteering(api) {
       "daedalus - Steering :8000"],
     [steeringRowText([["clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
       "clankers"), "clankers - Steering :8000"],
-    [steeringRowText([["Website", ":3000"], ["arena-preview-steering", ":8000"]], "clankers"),
-      "arena-preview-steering :8000"],
+    [steeringRowText([["Website", ":3000"], ["arena - preview", ":8000"]], "clankers"),
+      "arena - preview :8000"],
     // A Start row is a transcript card; a click on one opens nothing, so it never counts.
     [steeringRowText([["Start clankers - Steering", ":8000"]], "clankers"), null],
     [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
@@ -359,8 +359,8 @@ function checkOpenSteering(api) {
       "Steering :8000"],
     // A renamed live row still wins, and it is the only running row here.
     [steeringRowText([["Start clankers - Steering", ":8000"],
-      ["daedalus - preview", ":8000"], ["arena-preview-steering", ":8000"]], "clankers"),
-      "arena-preview-steering :8000"],
+      ["daedalus - preview", ":8000"], ["arena - preview", ":8000"]], "clankers"),
+      "arena - preview :8000"],
     [CLICK_DELAY_MS, 1000],
   ];
   var failed = 0;
@@ -1175,8 +1175,8 @@ function checkTabTitle(api) {
   var settledChat = speechDoc(false);
   var busyMessage = liveMessage("  running\n Bash  ", "$ npm test");
   var pollMessage = liveMessage("running Bash", "$ arena-preview poll");
-  var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll");
-  var pyMessage = liveMessage("running Bash", "$ python skills/refs/arena-preview-steering/scripts/preview.py poll");
+  var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena/scripts/arena-preview poll");
+  var pyMessage = liveMessage("running Bash", "$ python skills/refs/arena/scripts/preview.py poll");
   var chainMessage = liveMessage("running Bash", "$ git fetch origin && arena-preview poll");
   var readMessage = liveMessage("running Bash", "Read the inbox");
   readMessage.row.textContent = "stderr End the turn with `poll` to wait for more work.";
@@ -1317,15 +1317,15 @@ function checkTabTitle(api) {
     [resetSpeech(), null],
     [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
     [
-      polls("/home/user/clankers/.agents/skills/arena-preview-steering/scripts/arena-preview poll"),
+      polls("/home/user/clankers/.agents/skills/arena/scripts/arena-preview poll"),
       true,
     ],
     [polls("arena-preview poll --max 1"), true],
     [polls("python preview.py poll"), true],
-    [polls("cat arena-preview-steering/README.md | grep polling"), false],
+    [polls("cat skills/arena/README.md | grep polling"), false],
     [polls('cat > "$HOOK" <<EOF\n# arena-preview-hook: poll the steering inbox'), false],
     [polls("python preview.py polls"), false],
-    [polls('python - <<PY\np = Path("skills/arena-preview-steering/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
+    [polls('python - <<PY\np = Path("skills/arena/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
     // The owner's waiting line: rotating words, one structural selector, one hourglass.
     [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
     [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],

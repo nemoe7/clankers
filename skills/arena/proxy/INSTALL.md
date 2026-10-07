@@ -4,7 +4,7 @@ This page carries the install detail that the agent does not need to use the end
 
 ## Container
 
-The repository holds the source. `scripts/` is the server, and the [`Dockerfile`](https://github.com/nemoe7/clankers/blob/main/skills/arena-proxy/Dockerfile) copies it into a `python:3.12-alpine` image. The image runs as a non-root user and needs no build step.
+The repository holds the source. `scripts/` is the server, and the [`Dockerfile`](https://github.com/nemoe7/clankers/blob/main/skills/arena/proxy/Dockerfile) copies it into a `python:3.12-alpine` image. The image runs as a non-root user and needs no build step.
 
 ```
 docker build -t arena-proxy .

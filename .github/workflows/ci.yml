@@ -65,7 +65,7 @@ jobs:
       - name: Check Budget Generator And Shipped Script Syntax
         run: |
           python maintenance/check_measurements.py
-          node --check skills/arena-preview-steering/assets/app.js
+          node --check skills/arena/assets/app.js
 
       # The AGENTS.md clause on Simplified Technical English: text you add or change in docs/ and the
       # The covered list lives in maintenance/check.py (STE_DOCS), shared with the local gate.
@@ -148,9 +148,9 @@ jobs:
             exit 0
           fi
           files=$(git diff --name-only "$base" HEAD -- \
-            skills/refs/arena-preview-steering \
-            skills/arena-preview-steering \
-            .agents/skills/arena-preview-steering \
+            skills/refs/arena \
+            skills/arena \
+            .agents/skills/arena \
             maintenance/minify.py \
             maintenance/check_minify.py \
             github/workflows \
@@ -182,4 +182,4 @@ jobs:
         if: steps.preview.outputs.run == 'true'
         run: |
           python maintenance/check_minify.py
-          node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-preview-steering/scripts/client.test.cjs
+          node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena/scripts/client.test.cjs

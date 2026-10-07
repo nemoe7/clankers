@@ -16,12 +16,12 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules, `SKILL.md` entries, and the live system prompt by `cl100k_base` tokens. Both preview entries instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and three `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
+Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules, `SKILL.md` entries, and the live system prompt by `cl100k_base` tokens. The shipped preview assets and scripts instead use UTF-8 bytes, independent of tokenizer/cache access. The check excludes supporting files and skill refs except the three `assets/` and two `scripts/` rows. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `cl100k_base` | 1,535 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 18,173 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 18,084 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,497 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,475 `chars` |
 | `rules/CLINE.md` | `cl100k_base` | 460 `tok` |
@@ -32,13 +32,12 @@ Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md b
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 91 `tok` |
 | `system-prompts/NEMOGPT.md` | `cl100k_base` | 3,022 `tok` |
 | `skills/amending-violations/SKILL.md` | `cl100k_base` | 1,604 `tok` |
-| `skills/arena-proxy/SKILL.md` | `cl100k_base` | 2,461 `tok` |
-| `skills/arena-preview-steering/SKILL.md` | `UTF-8 file size` | 6,874 `B` |
-| `skills/arena-preview-steering/assets/app.js` | `UTF-8 file size` | 46,909 `B` |
-| `skills/arena-preview-steering/assets/index.html` | `UTF-8 file size` | 8,333 `B` |
-| `skills/arena-preview-steering/assets/style.css` | `UTF-8 file size` | 12,900 `B` |
-| `skills/arena-preview-steering/scripts/preview.py` | `UTF-8 file size` | 98,399 `B` |
-| `skills/arena-preview-steering/scripts/install.sh` | `UTF-8 file size` | 11,272 `B` |
+| `skills/arena/SKILL.md` | `cl100k_base` | 4,037 `tok` |
+| `skills/arena/assets/app.js` | `UTF-8 file size` | 46,909 `B` |
+| `skills/arena/assets/index.html` | `UTF-8 file size` | 8,333 `B` |
+| `skills/arena/assets/style.css` | `UTF-8 file size` | 12,900 `B` |
+| `skills/arena/scripts/preview.py` | `UTF-8 file size` | 98,399 `B` |
+| `skills/arena/scripts/install.sh` | `UTF-8 file size` | 11,212 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,250 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,552 `tok` |

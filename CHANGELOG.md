@@ -17,12 +17,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **stderr count**: A pending count on the Bash-call stderr line now brings the inbox read before the next work step.
 - **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
 - **Push cadence boundary**: The Constitution now pushes verified commits to origin after each task completion, and it never holds verified batches across tasks.
+- **One arena skill**: `arena-preview-steering` and `arena-proxy` merge into `arena`. The proxy pages join its SKILL.md, the proxy code moves to `skills/arena/proxy/`, and the turn-read, install, report, gate and workflow pointers name the one skill. Target repositories receive the skill without its proxy directory, so the docker files stay in this repository beside the published image.
 
 ### Added
 
 #### userscripts
 
-- **Save cards**: A card in the page corner warns when no save file is set, with a Choose file button. A force save reports the file it wrote. Arena 1.8.6.
+- **Save cards**: A card in the page corner warns when the page has no save file, with a Choose file button. A force save reports the file it wrote. Arena 1.8.6.
 - **Menu press logs**: Every menu press writes its own line under the `menu` module before the command runs. Arena 1.8.1.
 - **State comparison logs**: Every comparison in the auto save writes its own line, from the stamp verdict to each pair check. Arena 1.8.1.
 

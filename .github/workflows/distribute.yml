@@ -12,8 +12,7 @@ on:
     branches: [main]
     paths:
       - "rules/ARENA.md"
-      - "skills/arena-preview-steering/**"
-      - "skills/arena-proxy/**"
+      - "skills/arena/**"
       - "github/workflows/gemini-release.yml"
       - "github/workflows/gemini_release.py"
       - ".github/workflows/distribute.yml"
@@ -47,12 +46,10 @@ jobs:
       cancel-in-progress: false
     env:
       DEST: ARENA.md
-      SKILLS: "arena-preview-steering arena-proxy"
-      # A documents-only skill ships its pages and its configuration, not its code.
-      DOCS_ONLY: "arena-proxy"
+      SKILLS: "arena"
       SKILL_ROOT: skills
       SKILL_DEST_ROOT: .agents/skills
-      LEGACY_SKILLS: "arena-live-steering arena-preview-reporting"
+      LEGACY_SKILLS: "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy"
       SRC_ROOT: github/workflows
       DEST_ROOT: .github/workflows
       FILES: "gemini-release.yml gemini_release.py"
@@ -85,15 +82,13 @@ jobs:
             case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
           }
 
-          # One skill's shipped file list: tracked files, minus the pages that stay
-          # in this repository, and minus the code paths for a documents-only skill.
+          # One skill's shipped file list: tracked files, minus the pages that stay in
+          # this repository and minus the owner-run backend under proxy/. The docker
+          # files and the proxy code stay here beside the published image.
           skill_files() {
             local out
-            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md)
-            case " ${DOCS_ONLY:-} " in
-              *" $1 "*) printf '%s\n' "$out" | grep -vE '^(scripts/|Dockerfile$)' || true ;;
-              *) printf '%s\n' "$out" ;;
-            esac
+            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md | grep -v '^proxy/' || true)
+            printf '%s\n' "$out"
           }
 
           union=""

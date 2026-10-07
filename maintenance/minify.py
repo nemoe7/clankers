@@ -1,6 +1,6 @@
 """Build compact preview assets and scripts from their readable refs sources.
 
-The readable sources live in `skills/refs/arena-preview-steering/`. Both distributed
+The readable sources live in `skills/refs/arena/`. Both distributed
 copies carry minified JavaScript, CSS, HTML and Python, each budgeted in README.md.
 Markdown compression is editorial, never part of this build.
 
@@ -28,10 +28,10 @@ from importlib.metadata import version
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "skills/refs/arena-preview-steering"
+SOURCE = ROOT / "skills/refs/arena"
 TARGETS = (
-  ROOT / "skills/arena-preview-steering",
-  ROOT / ".agents/skills/arena-preview-steering",
+  ROOT / "skills/arena",
+  ROOT / ".agents/skills/arena",
 )
 BIN = ROOT / "node_modules/.bin"
 PYTHON_MINIFIER_VERSION = "3.3.0"

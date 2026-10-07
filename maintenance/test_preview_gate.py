@@ -15,14 +15,12 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena-preview-steering" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena" / "scripts"))
 
 import preview as preview_module
 
 quiet_inbox_line = preview_module.quiet_inbox_line
-INSTALLER = (
-  ROOT / "skills" / "refs" / "arena-preview-steering" / "scripts" / "install.sh"
-)
+INSTALLER = ROOT / "skills" / "refs" / "arena" / "scripts" / "install.sh"
 
 STUB = """#!/bin/sh
 # The classifier is pure, so the stub answers with the real one.
@@ -58,9 +56,7 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
     stub = root / "stub.sh"
     import sys
 
-    preview_module = (
-      ROOT / "skills" / "refs" / "arena-preview-steering" / "scripts" / "preview.py"
-    )
+    preview_module = ROOT / "skills" / "refs" / "arena" / "scripts" / "preview.py"
     stub.write_text(
       STUB.replace("__PYTHON__", sys.executable).replace(
         "__PREVIEW__", str(preview_module)
@@ -83,7 +79,7 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
       "set -o functrace\n"
       "STUB=" + str(stub) + "\n"
       "REPO_ROOT=" + str(ROOT) + "\n"
-      "SKILL_REL=.agents/skills/arena-preview-steering\n"
+      "SKILL_REL=.agents/skills/arena\n"
       '. "'
       + str(gate_file)
       + '"\n'
@@ -178,7 +174,7 @@ def test_push_in_a_quiet_chain_still_meets_the_push_gate():
 def test_a_full_path_hears_the_bare_command_line():
   # The command sits on PATH in every shell the installer touched, so a call that
   # spells the path is told once, and the bare form is what reaches the log.
-  spelled = f"{ROOT}/.agents/skills/arena-preview-steering/scripts/arena-preview"
+  spelled = f"{ROOT}/.agents/skills/arena/scripts/arena-preview"
   result = run(f': "{spelled} read"')
   assert "arena-preview works" in result.stderr, result.stderr
   # One line a shell, not one a call.
@@ -190,13 +186,13 @@ def test_a_full_path_hears_the_bare_command_line():
 def test_an_unreachable_read_hears_the_proxy_line():
   # Code-scanning alerts and workflow run logs need the proxy, so the hook says so.
   result = run("gh api repos/o/r/code-scanning/alerts")
-  assert "arena-proxy" in result.stderr, result.stderr
+  assert "carries the routes" in result.stderr, result.stderr
   # One line a shell, not one a call.
-  assert result.stderr.count("arena-proxy") == 1
+  assert result.stderr.count("carries the routes") == 1
   logs = run("gh run view 7 --log")
-  assert "arena-proxy" in logs.stderr, logs.stderr
+  assert "carries the routes" in logs.stderr, logs.stderr
   plain = run("gh pr checks 7")
-  assert "arena-proxy" not in plain.stderr
+  assert "carries the routes" not in plain.stderr
 
 
 def git_repo(root: Path) -> Path:
