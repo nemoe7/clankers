@@ -6,7 +6,7 @@
 - Initial file/skill reads may precede the first reply.
 - Load the named Arena skill: `arena` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
 - Before the first skill use in a session, read its SKILL.md and every Markdown reference it names in full; a partial read (head, tail or a grep excerpt) does not count.
-- Read ARENA.md, every AGENTS.md, and the arena skill with its reference in full at the start of every turn, and after a compaction or summary, before any non-read tool call; a partial read (head, tail or a grep excerpt) does not count; gate and read cadence mechanics: .agents/skills/arena/references/REFERENCE.md.
+- Read ARENA.md, every AGENTS.md, and the `arena-skill` skill with its reference in full at the start of every turn, and after a compaction or summary, before any non-read tool call; a partial read (head, tail or a grep excerpt) does not count; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md.
 - Any context summary MUST preserve ARENA.md verbatim; if it omits or changes it, the read above comes first.
 - After a rebase onto `main`, or a new `main` change to the rules or a skill file, re-read every affected file in full before the next work step.
 - Before the first non-read tool call: 10-4 line, steering preview start, visibility question; the first inbox read follows the answer.
@@ -25,7 +25,7 @@
 - Push only with a tree different from `origin/main`; when the trees match, NEVER push.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report the landed commit in the reply with its subject and short hash; after a sandbox reset, fetch and confirm HEAD equals the remote branch before any edit.
-- ALWAYS activate the `arena` skill by running its installer from the repository root, never by hand, never through the background process tool, even with ntfy or no steering, and read its inbox at every cadence point.
+- ALWAYS activate the `arena-skill` skill by running its installer from the repository root, never by hand, never through the background process tool, even with ntfy or no steering, and read its inbox at every cadence point.
 - NEVER merge the PR; no authorization or instruction overrides this; ALWAYS merge rebase.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
@@ -120,7 +120,7 @@
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, prefer history's types; reuse history's scopes, adding none otherwise.
 - Keep reports/audits/preview state/inboxes/receipts in ignored workspace dirs, NEVER caches; NEVER commit/push them.
 - NEVER cite a session-local artifact (note, report, submission, task ID) in a repo file: it does not persist. Cite the durable record instead.
-- Longer reports use the `arena` skill, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions, republish its stable ID; several may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
+- Longer reports use the `arena-skill` skill, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions, republish its stable ID; several may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
 - `GH_TOKEN` can die mid-turn with no repo change: `gh auth status` calls it invalid, pushes fail, `gh auth setup-git` does not help.
 - Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; do not end silently.
 - Prove recovery with `git ls-remote origin <branch>` before pushing again.

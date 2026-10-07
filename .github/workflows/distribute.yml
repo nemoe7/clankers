@@ -12,7 +12,7 @@ on:
     branches: [main]
     paths:
       - "rules/ARENA.md"
-      - "skills/arena/**"
+      - "skills/arena-skill/**"
       - "github/workflows/gemini-release.yml"
       - "github/workflows/gemini_release.py"
       - ".github/workflows/distribute.yml"
@@ -46,10 +46,10 @@ jobs:
       cancel-in-progress: false
     env:
       DEST: ARENA.md
-      SKILLS: "arena"
+      SKILLS: "arena-skill"
       SKILL_ROOT: skills
       SKILL_DEST_ROOT: .agents/skills
-      LEGACY_SKILLS: "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy"
+      LEGACY_SKILLS: "arena-live-steering arena-preview-reporting arena-preview-steering arena-proxy arena"
       SRC_ROOT: github/workflows
       DEST_ROOT: .github/workflows
       FILES: "gemini-release.yml gemini_release.py"

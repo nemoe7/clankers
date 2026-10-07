@@ -15,12 +15,12 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena" / "scripts"))
+sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena-skill" / "scripts"))
 
 import preview as preview_module
 
 quiet_inbox_line = preview_module.quiet_inbox_line
-INSTALLER = ROOT / "skills" / "refs" / "arena" / "scripts" / "install.sh"
+INSTALLER = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
 
 STUB = """#!/bin/sh
 # The classifier is pure, so the stub answers with the real one.
@@ -56,7 +56,7 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
     stub = root / "stub.sh"
     import sys
 
-    preview_module = ROOT / "skills" / "refs" / "arena" / "scripts" / "preview.py"
+    preview_module = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "preview.py"
     stub.write_text(
       STUB.replace("__PYTHON__", sys.executable).replace(
         "__PREVIEW__", str(preview_module)
@@ -79,7 +79,7 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
       "set -o functrace\n"
       "STUB=" + str(stub) + "\n"
       "REPO_ROOT=" + str(ROOT) + "\n"
-      "SKILL_REL=.agents/skills/arena\n"
+      "SKILL_REL=.agents/skills/arena-skill\n"
       '. "'
       + str(gate_file)
       + '"\n'
@@ -174,7 +174,7 @@ def test_push_in_a_quiet_chain_still_meets_the_push_gate():
 def test_a_full_path_hears_the_bare_command_line():
   # The command sits on PATH in every shell the installer touched, so a call that
   # spells the path is told once, and the bare form is what reaches the log.
-  spelled = f"{ROOT}/.agents/skills/arena/scripts/arena-preview"
+  spelled = f"{ROOT}/.agents/skills/arena-skill/scripts/arena-preview"
   result = run(f': "{spelled} read"')
   assert "arena-preview works" in result.stderr, result.stderr
   # One line a shell, not one a call.

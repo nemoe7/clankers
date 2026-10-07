@@ -47,16 +47,16 @@ EXPECTED_BUDGETS = {
   "rules/COMMIT-SPEC.txt": "cl100k_base",
   "system-prompts/NEMOGPT.md": "cl100k_base",
   "skills/amending-violations/SKILL.md": "cl100k_base",
-  "skills/arena/SKILL.md": "cl100k_base",
+  "skills/arena-skill/SKILL.md": "cl100k_base",
   # The distributed assets and scripts carry the minified build from `maintenance/minify.py`.
   # Their recorded size is their budget: any growth fails this check until the table is
   # updated on purpose. The `.agents/skills/` twins are byte-identical by construction, and
   # this script never reads that tree.
-  "skills/arena/assets/app.js": "UTF-8 file size",
-  "skills/arena/assets/index.html": "UTF-8 file size",
-  "skills/arena/assets/style.css": "UTF-8 file size",
-  "skills/arena/scripts/preview.py": "UTF-8 file size",
-  "skills/arena/scripts/install.sh": "UTF-8 file size",
+  "skills/arena-skill/assets/app.js": "UTF-8 file size",
+  "skills/arena-skill/assets/index.html": "UTF-8 file size",
+  "skills/arena-skill/assets/style.css": "UTF-8 file size",
+  "skills/arena-skill/scripts/preview.py": "UTF-8 file size",
+  "skills/arena-skill/scripts/install.sh": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",

@@ -9,7 +9,7 @@
 - Initial reads of this file and the preview skill may precede that reply.
 - Load the named skill for Arena work: `arena` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
 - Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
-- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the arena skill with its reference end-to-end before any other tool call; a partial read, such as head, tail or a grep excerpt, does not count; the gate and read cadence mechanics live in .agents/skills/arena/references/REFERENCE.md.
+- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the `arena-skill` skill with its reference end-to-end before any other tool call; a partial read, such as head, tail or a grep excerpt, does not count; the gate and read cadence mechanics live in .agents/skills/arena-skill/references/REFERENCE.md.
 - After a rebase onto `main`, or a new `main` change to a rule or skill file, MUST reread every affected file end-to-end before the next work step; a partial read, such as head, tail or a grep excerpt, does not count.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
 - Before your first tool call that is not a read of a rule or skill file, write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
@@ -29,12 +29,12 @@
 - Push only when the branch tree differs from `origin/main`; when the trees match, NEVER push, even when the branch shows commits ahead.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
-- In an Arena session, ALWAYS install the `arena` skill with its installer from the repository root before activating it, never by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
+- In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, never by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - ALWAYS merge rebase.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - After every file edit, grep-verify the change actually landed before building on it.
-- NEVER edit this file nor the arena skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
+- NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
 - Upon any rule violation, ALWAYS suggest an amendment to the rule that failed or that should have prevented it, in the reply that reports the violation.
 
 ## General
@@ -174,7 +174,7 @@
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
 - NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
-- Publish longer reports through the `arena` skill in the shared preview; do not create local report commits for the native diff viewer.
+- Publish longer reports through the `arena-skill` skill in the shared preview; do not create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
 - Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.

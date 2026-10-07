@@ -1,12 +1,12 @@
 #!/bin/bash
 # Installer for the arena automatic poll hook and the state directory.
 # Idempotent: safe to run repeatedly, and a sandbox restore requires it again.
-# Run from the repository root, where the skill lives at .agents/skills/arena.
+# Run from the repository root, where the skill lives at .agents/skills/arena-skill.
 set -u
 
 VENV="$HOME/.agents/.arena-preview-venv"
 REPO_ROOT="$(pwd)"
-SKILL_REL=".agents/skills/arena"
+SKILL_REL=".agents/skills/arena-skill"
 STATE_REL="arena-state"
 GLOBAL_IGNORE="$HOME/.gitignore_global"
 HOOK="$HOME/.arena-preview-hook.sh"
@@ -239,7 +239,7 @@ strip_block "$PATH_MARKER"
 # arena-preview-path
 # The root is pinned at install time: a source-time lookup reads the cwd of the
 # sourcing shell, so a shell outside the checkout would miss the command.
-_arena_preview_scripts="__ARENA_PREVIEW_ROOT__/.agents/skills/arena/scripts"
+_arena_preview_scripts="__ARENA_PREVIEW_ROOT__/.agents/skills/arena-skill/scripts"
 if [ -x "$_arena_preview_scripts/arena-preview" ]; then
   case ":$PATH:" in
     *":$_arena_preview_scripts:"*) ;;

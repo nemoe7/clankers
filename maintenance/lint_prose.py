@@ -11,7 +11,7 @@ from pathlib import Path
 LINTER = Path(".agents/skills/asd-ste100/scripts/ste-lint.py")
 TARGETS = ("maintenance", "rules")
 SKIP_PARTS = {".git", ".venv", "node_modules", ".agents", "arena-state", "__pycache__"}
-GENERATED = {Path("skills/arena/scripts/preview.py")}
+GENERATED = {Path("skills/arena-skill/scripts/preview.py")}
 ADR_REFERENCE = re.compile(r"\bADR[- ]?\d|docs/adr")
 
 

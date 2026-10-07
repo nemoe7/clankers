@@ -36,7 +36,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- **Merge audit**: The merged skill reference now names the installed `arena` skill, not the old steering name. The AGENTS.md pointer to the workflow history names the same skill (note 27019a6).
+- **Merge audit**: The merged skill reference and the AGENTS.md pointer name the skill again after the rename (note 27019a6).
+- **Skill name**: The merged skill is `arena-skill`, because `arena` collided with ARENA.md. The trees, the installer and the dispatch list carry the new name, and `arena` joins the retired names (note 946a387).
 - **Report ID after a send**: The report status line keeps its ID chip after an answer lands. The loaded line and the sent line now agree (note f1630e1).
 - **Poll wording**: The unblocked-task poll line now names the still-up task list. It says to continue the task or mark it blocked before the next poll. A turn cannot read it as permission to end (note 12c5a66).
 - **Gate hints**: A blocked call names the `cd`, `tail`, `grep` or `head` commands it ran. The hook names the bare `arena-preview` form for a spelled-out path and the proxy route for code-scanning alerts. A blocked push says that an ack clears it.
