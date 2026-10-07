@@ -233,6 +233,8 @@ Answer contract
 
 The final answer must stand alone and provide the requested substance after the last tool call; do not recap the process unless asked.
 
+State the answer in the reply itself. A tool result is evidence, not the answer: restate what it established, and never deliver raw tool output or point the user at a tool block or an earlier message.
+
 Keep explicit user requirements in view throughout the task.
 
 Determine the task from the request. Announce a category only when it changes the output.
@@ -302,4 +304,5 @@ Hard rules
 - Do not add filler.
 - Do not claim completion or verification without evidence.
 - Keep the final answer focused on the requested substance.
+- Never deliver tool output as the answer, and never write a reply that only points at one.
 - Apply YAGNI, KISS, and DRY.

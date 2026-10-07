@@ -29,6 +29,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### system-prompts
 
+- **NemoGPT answer rule**: The prompt now requires the answer in the reply itself. It restates what a tool result established, and it bans raw tool output or a pointer as the answer.
 - **NemoGPT prompt**: The prompt gains autonomy and persistence, a directive-or-inquiry split, harness trust markers, and a sharper permission ladder. Output bans now cover setup phrases and labeled closings. The Core rules and Task routing sections fold into the surviving ones.
 
 #### userscripts
