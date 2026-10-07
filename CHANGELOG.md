@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **Assessment for a described problem**: A described problem or a how-question yields the findings, and the fix waits for a request.
 - **stderr count**: A pending count on the Bash-call stderr line now brings the inbox read before the next work step.
 - **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
 - **Push cadence boundary**: The Constitution now pushes verified commits to origin after each task completion, and it never holds verified batches across tasks.

@@ -71,6 +71,7 @@
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - Report every unrelated finding; fix only the ones that block the work.
+- When the user describes a problem, asks how something works, or thinks out loud, deliver the assessment: report the findings and stop; implement only after the user asks for the change.
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
 - Ask before implementing rather than after, on deviating reasoning or material ambiguity.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
