@@ -3019,9 +3019,50 @@ def test_bash_gate():
     assert cleared_push.returncode == 0
 
 
-def test_gate_hint_names_the_noise_words():
-  # A blocked call that runs grep, head, tail or cd hears which commands to drop,
-  # and a clean line hears the plain block alone.
+def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
+  # A cd prefix is fine on the writer's line, on the way to a read or a poll; the banned
+  # readers end the quiet-line exemption, so their call blocks instead of riding along
+  # (owner notes 37f8956 and bf26910).
+  assert preview.quiet_inbox_line("cd /home/user/clankers && arena-preview read") is True
+  assert preview.quiet_inbox_line("cd /home/user/clankers && arena-preview poll") is True
+  for banned in ("tail", "head", "grep"):
+    line = f"cd /home/user/clankers && {banned} -5 state.jsonl && arena-preview read"
+    assert preview.quiet_inbox_line(line) is False, line
+  assert preview.quiet_inbox_line("arena-preview read | tail -1") is False
+
+
+def test_gate_blocks_a_cd_line_past_the_threshold():
+  # cd is fine on the line, but the count gate still holds it: with a pending note past
+  # the threshold a plain cd line meets READ INBOX NOW, and the block names no command,
+  # because cd is never the noise (owner note bf26910).
+  with tempfile.TemporaryDirectory() as cd_dir:
+    cd_store = preview.Store(cd_dir, create=True)
+    cd_store.note("cd-note", "Pending work")
+    cd_store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+    cd_run = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "gate",
+        "--line",
+        "cd /home/user/clankers && python3 work.py",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=cd_dir,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": cd_dir},
+    )
+    assert cd_run.returncode == 1
+    assert cd_run.stdout.startswith("READ INBOX NOW. "), cd_run.stdout
+    assert "omit those commands" not in cd_run.stdout
+    assert "`cd`" not in cd_run.stdout
+
+
+def test_gate_hint_names_the_banned_tools_without_cd():
+  # A blocked call that runs grep, head or tail hears which commands to drop; cd is fine
+  # on the line, so the hint never names it, and a clean line hears the plain block alone
+  # (owner note bf26910).
   with tempfile.TemporaryDirectory() as hint_dir:
     hint_store = preview.Store(hint_dir, create=True)
     hint_store.note("hint-note", "Pending work")
@@ -3040,10 +3081,15 @@ def test_gate_hint_names_the_noise_words():
 
     noisy = run_gate("cd /home/user && grep note arena-state/log.jsonl | tail -1")
     assert noisy.returncode == 1
-    for word in ("`cd`", "`grep`", "`tail`"):
+    for word in ("`grep`", "`tail`"):
       assert word in noisy.stdout, noisy.stdout
+    assert "`cd`" not in noisy.stdout, noisy.stdout
     assert "omit those commands" in noisy.stdout
-    assert "head" not in noisy.stdout.split("omit")[0]
+    assert "`head`" not in noisy.stdout.split("omit")[0]
+    with_head = run_gate("cd /home/user && head -5 arena-state/log.jsonl")
+    assert with_head.returncode == 1
+    assert "`head`" in with_head.stdout, with_head.stdout
+    assert "`cd`" not in with_head.stdout, with_head.stdout
     plain = run_gate("git status")
     assert plain.returncode == 1
     assert "omit those commands" not in plain.stdout

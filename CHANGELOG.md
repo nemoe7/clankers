@@ -41,7 +41,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Skill name**: The merged skill is `arena-skill`, because `arena` collided with ARENA.md. The trees, the installer and the dispatch list carry the new name, and `arena` joins the retired names (note 946a387).
 - **Report ID after a send**: The report status line keeps its ID chip after an answer lands. The loaded line and the sent line now agree (note f1630e1).
 - **Poll wording**: The unblocked-task poll line now names the still-up task list. It says to continue the task or mark it blocked before the next poll. A turn cannot read it as permission to end (note 12c5a66).
-- **Gate hints**: A blocked call names the `cd`, `tail`, `grep` or `head` commands it ran. The hook names the bare `arena-preview` form for a spelled-out path and the proxy route for code-scanning alerts. A blocked push says that an ack clears it.
+- **Gate hints**: A blocked call names the `tail`, `grep` or `head` commands it ran. A `cd` prefix stays fine, and the count gate still holds a `cd` line. The hook names the bare `arena-preview` form, the proxy route for code-scanning alerts, and the clearing ack for a blocked push.
 - **Task report links**: A blocked task now names the report it waits on with `--report`. The owner's answer clears the blocked mark, and the link rides the save file.
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
 

@@ -1031,8 +1031,10 @@ def quiet_inbox_line(line):
 
 
 # The commands an agent chains around an inbox call. Each one ends the quiet-line
-# exemption, so a blocked call names the ones it ran (owner note 2939ee1).
-GATE_NOISE = ("cd", "tail", "grep", "head")
+# exemption, so a blocked call names the ones it ran (owner note 2939ee1). A cd prefix
+# is fine on the line, so the hint never names it; the count gate still holds a cd line
+# past the threshold (owner note bf26910).
+GATE_NOISE = ("tail", "grep", "head")
 
 
 def gate_line_hint(line):

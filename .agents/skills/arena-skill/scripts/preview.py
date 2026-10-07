@@ -382,7 +382,7 @@ def quiet_inbox_line(line):
 			continue
 		return False
 	return True
-GATE_NOISE='cd','tail','grep','head'
+GATE_NOISE='tail','grep','head'
 def gate_line_hint(line):
 	words={token for token in re.split('[^A-Za-z0-9_.-]+',line or'')};found=[name for name in GATE_NOISE if name in words]
 	if not found:return None
