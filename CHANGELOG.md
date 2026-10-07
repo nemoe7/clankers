@@ -25,6 +25,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Log texts**: The no-file hint reads `no file selected; launching dialog`, and that path alerts with the card. Its blocked line is gone, a closed picker reads `no file selected;`, and a stale state reads `history does not match`. Arena 1.8.9.
+- **Fill and title lines**: The fill lines read `no repo detected`, `no composer detected for <repo>` and `filled composer for <repo>`. The unchanged title line is gone, and a title change still writes its line. Arena 1.8.9.
 - **Console log shape**: Both bundles log under the `[NemoUtils]` tag, and the state lines carry short stamp hashes now. The userscripts README lists the new write, quiet tick and force save lines in place of the long stamps and the route words. Arena 1.8.8, ChatGPT 1.3.4.
 - **Writing row emoji**: The title emoji now shows the pencil for a Writing action row. The earlier table held only `write`, so `Writing` fell to the gear emoji. Arena 1.8.7.
 - **Save cards**: A card in the page corner warns when the page has no save file, with a Choose file button. A force save reports the file it wrote. Arena 1.8.6.

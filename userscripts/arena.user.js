@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.8
+// @version      1.8.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -780,7 +780,7 @@
       if (!slug) {
         if (!slugLogged) {
           slugLogged = true;
-          logEvent("fill", "no repo slug yet");
+          logEvent("fill", "no repo detected");
         }
         var emptyComposer = document.querySelector(COMPOSER_SELECTOR);
         if (emptyComposer && emptyComposer.getAttribute("aria-disabled") !== "true") {
@@ -805,7 +805,7 @@
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
         if (composerLogged !== slug) {
           composerLogged = slug;
-          logEvent("fill", "no composer for " + slug);
+          logEvent("fill", "no composer detected for " + slug);
         }
         lastSlug = slug;
         return;
@@ -819,7 +819,7 @@
         return;
       }
       setComposerText(composer, promptForSlug(slug, arenaMdCache));
-      logEvent("fill", "wrote the initial message for " + slug);
+      logEvent("fill", "filled composer for " + slug);
       lastSlug = slug;
       filledSlug = slug;
       ensureAgentKey();
@@ -1759,6 +1759,15 @@
     return ("0000000" + (hash >>> 0).toString(16)).slice(-7);
   }
 
+  // The owner's line texts for the save path (answer 5ca4f63): the no-file hint names the dialog
+  // it launches, a stale state reads as a history mismatch, and a closed picker reads as a plain
+  // no-file line.
+  var STATE_LINES = {
+    hint: "no file selected; launching dialog",
+    history: "history does not match",
+    pickerClosed: "no file selected;",
+  };
+
   function writtenName(handle, fallback) {
     return handle && handle.name ? handle.name : fallback;
   }
@@ -1833,6 +1842,7 @@
   // The state leaves through the owner's browser: one picked file, written only when the stamp moves.
   runFeature("state-download", "State — download", function () {
     if (exposeChecks("stateDownload", {
+      STATE_LINES: STATE_LINES,
       stampHash: stampHash,
       getLine: getLine,
       noopLine: noopLine,
@@ -2039,7 +2049,7 @@
       var shown = GM_getValue(STATE_HINT_KEY, false);
       if (!shown) {
         GM_setValue(STATE_HINT_KEY, true);
-        logEvent("state", "no file chosen; nothing is written until the choose entry runs");
+        logEvent("state", STATE_LINES.hint);
       }
       if (panelNeeded(manual, shown)) {
         statePanel(
@@ -2135,7 +2145,7 @@
         if (plan.kind === "stale") {
           if (!staleWarned) {
             staleWarned = true;
-            logEvent("state", "stale: " + plan.name);
+            logEvent("state", STATE_LINES.history);
           }
           return;
         }
@@ -2165,8 +2175,8 @@
             return;
           }
           if (action === "block") {
+            // The card is the alert (answer 5ca4f63), so the blocked tick needs no line.
             hintStateFile(manual);
-            logEvent("state", "blocked: no file chosen, nothing written");
             return;
           }
           if (action === "hint") {
@@ -2244,13 +2254,8 @@
             fetchStateFile(true);
           });
         })
-        .catch(function (err) {
-          var name = (err && err.name) || "unknown";
-          var message = (err && err.message) || "";
-          logEvent(
-            "state",
-            "picker closed without a file (" + name + (message ? ": " + message : "") + ")",
-          );
+        .catch(function () {
+          logEvent("state", STATE_LINES.pickerClosed);
         });
     }
 
@@ -2648,23 +2653,11 @@
       );
     }
 
-    var TITLE_LOG_MS = 1000;
-    var titleLoggedAt = 0;
-
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
       if (desired) {
-        if (doc.title === desired) {
-          if (Date.now() - titleLoggedAt >= TITLE_LOG_MS) {
-            titleLoggedAt = Date.now();
-            logEvent(
-              "title",
-              "unchanged " + (titleReason || "none"),
-              titleAnchors(doc),
-            );
-          }
-          return false;
-        }
+        // Only a change writes a line (answer e8fc4f6); a title already in place stays quiet.
+        if (doc.title === desired) return false;
         logEvent(
           "title",
           (titleReason || "title") + " -> " + desired,

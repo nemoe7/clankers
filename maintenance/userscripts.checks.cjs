@@ -52,14 +52,14 @@ function checkLogging(api, menus) {
   };
   try {
     logEvent("feature", "Prompt fill: ON");
-    logEvent("fill", "wrote the initial message for clankers");
+    logEvent("fill", "filled composer for clankers");
     logEvent("state", "saved", "detail");
   } finally {
     console.log = original;
   }
   // The module rides a second bracket, so one filter shows one module alone.
   assert.equal(lines[0], "[NemoUtils][feature] Prompt fill: ON");
-  assert.equal(lines[1], "[NemoUtils][fill] wrote the initial message for clankers");
+  assert.equal(lines[1], "[NemoUtils][fill] filled composer for clankers");
   assert.equal(lines[2], "[NemoUtils][state] saved detail");
   // A console that rejects must never break a feature.
   console.log = function () {
@@ -1430,6 +1430,25 @@ function checkTabTitle(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
+  // One line per change stays, and the plain unchanged line is gone (answer e8fc4f6): a second
+  // sync with the title already in place writes nothing at all.
+  var quiet = [];
+  var louder = console.log;
+  console.log = function () {
+    quiet.push(Array.prototype.join.call(arguments, " "));
+  };
+  try {
+    // The line carried a one-second throttle while it existed, and the module keeps its own
+    // Date, so the check waits the window out before the second sync.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
+    api.syncTitle(idleDoc);
+  } finally {
+    console.log = louder;
+  }
+  if (quiet.length) {
+    console.error("check fail", "unchanged title line", quiet.join(" | "));
+    throw new Error("the unchanged title line still fires: " + quiet.join(" | "));
+  }
   console.log("ok tab title " + cases.length);
 }
 
@@ -1712,6 +1731,7 @@ function checkStateDownload(api, session) {
   var stateScopeKey = api.stateScopeKey;
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
+  var STATE_LINES = api.STATE_LINES;
   var stampHash = api.stampHash;
   var getLine = api.getLine;
   var noopLine = api.noopLine;
@@ -1973,6 +1993,11 @@ function checkStateDownload(api, session) {
   assert.match(stampHash("2026-10-06T09:45:05+00:00"), /^[0-9a-f]{7}$/);
   assert.equal(stampHash(""), "none");
   assert.equal(stampHash("2026-10-06T09:45:05+00:00"), stampHash("2026-10-06T09:45:05+00:00"));
+  // The owner's line texts (answer 5ca4f63): the no-file hint names the dialog it launches, a
+  // stale state reads as a history mismatch, and a closed picker reads as a plain no-file line.
+  assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
+  assert.equal(STATE_LINES.history, "history does not match");
+  assert.equal(STATE_LINES.pickerClosed, "no file selected;");
   // Every comparison in the save path writes its own line, so one filter shows which test
   // refused a write (owner note e60e311).
   var compared = [];
