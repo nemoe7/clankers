@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **NemoGPT working rules**: The prompt now treats a failed tool call as a signal to change approach. It reaches for a tool instead of memory, names what a newer instruction replaces, and reads harness memory files.
 - **NemoGPT memory rule**: Documentation and version answers now require a source the model read. Memory alone no longer counts, and an unreachable source means an unverified answer.
 - **Assessment for a described problem**: A described problem or a how-question yields the findings, and the fix waits for a request.
 - **stderr count**: A pending count on the Bash-call stderr line now brings the inbox read before the next work step.
