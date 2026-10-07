@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.5
+// @version      1.8.6
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1828,6 +1828,7 @@
       stateDelivery: stateDelivery,
       stateAction: stateAction,
       stateTick: stateTick,
+      panelNeeded: panelNeeded,
       writtenName: writtenName,
       handleMatchesScope: handleMatchesScope,
       stateScope: stateScope,
@@ -1952,10 +1953,85 @@
       });
     }
 
-    function hintStateFile() {
-      if (GM_getValue(STATE_HINT_KEY, false)) return;
-      GM_setValue(STATE_HINT_KEY, true);
-      logEvent("state", "no file chosen; nothing is written until the choose entry runs");
+    // A save problem the console hides becomes a small card in the page corner (owner note
+    // 3c0d3a2). The checks run without a DOM, so the card is skipped there.
+    var STATE_PANEL_ID = "clankers-state-panel";
+    var STATE_PANEL_MS = 6000;
+
+    // The card appears on a manual press whatever the flag says, and once a period while
+    // no file is set: the owner needs the nudge, not a nag on every watch tick.
+    function panelNeeded(manual, shown) {
+      return Boolean(manual) || !shown;
+    }
+
+    function removeStatePanel() {
+      try {
+        var node = document.getElementById ? document.getElementById(STATE_PANEL_ID) : null;
+        if (node && node.parentNode) node.parentNode.removeChild(node);
+      } catch (err) {
+        return;
+      }
+    }
+
+    function statePanel(message, actionLabel, action, autoHide) {
+      try {
+        if (typeof document === "undefined" || typeof document.createElement !== "function" || !document.body) return;
+        removeStatePanel();
+        var card = document.createElement("div");
+        card.id = STATE_PANEL_ID;
+        card.setAttribute("role", "status");
+        card.style.cssText =
+          "position:fixed;right:16px;bottom:16px;z-index:2147483647;max-width:320px;" +
+          "padding:12px 14px;border-radius:10px;background:#1f2430;color:#f2f4f8;" +
+          "font:13px/1.45 system-ui,-apple-system,sans-serif;" +
+          "box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid #3a4152";
+        var text = document.createElement("div");
+        text.textContent = message;
+        card.appendChild(text);
+        var row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:8px;margin-top:10px";
+        if (actionLabel && typeof action === "function") {
+          var go = document.createElement("button");
+          go.type = "button";
+          go.textContent = actionLabel;
+          go.style.cssText =
+            "cursor:pointer;border:0;border-radius:6px;padding:5px 10px;" +
+            "background:#4f7cff;color:#fff;font:inherit";
+          go.addEventListener("click", function () {
+            removeStatePanel();
+            action();
+          });
+          row.appendChild(go);
+        }
+        var close = document.createElement("button");
+        close.type = "button";
+        close.textContent = "Dismiss";
+        close.style.cssText =
+          "cursor:pointer;border:1px solid #3a4152;border-radius:6px;padding:5px 10px;" +
+          "background:transparent;color:inherit;font:inherit";
+        close.addEventListener("click", removeStatePanel);
+        row.appendChild(close);
+        card.appendChild(row);
+        document.body.appendChild(card);
+        if (autoHide) setTimeout(removeStatePanel, STATE_PANEL_MS);
+      } catch (err) {
+        return;
+      }
+    }
+
+    function hintStateFile(manual) {
+      var shown = GM_getValue(STATE_HINT_KEY, false);
+      if (!shown) {
+        GM_setValue(STATE_HINT_KEY, true);
+        logEvent("state", "no file chosen; nothing is written until the choose entry runs");
+      }
+      if (panelNeeded(manual, shown)) {
+        statePanel(
+          "No save file is set, so state saves are blocked.",
+          "Choose file",
+          chooseStateFile
+        );
+      }
     }
 
     function downloadRoute(hasManagerDownload) {
@@ -2073,12 +2149,12 @@
             return;
           }
           if (action === "block") {
-            hintStateFile();
+            hintStateFile(manual);
             logEvent("state", "blocked: no file chosen, nothing written");
             return;
           }
           if (action === "hint") {
-            hintStateFile();
+            hintStateFile(manual);
             // The picker needs the press itself: this save waited, so the gesture is spent.
             logEvent("state", "no picker from a deferred save; press the choose entry");
             return;
@@ -2091,6 +2167,9 @@
                   JSON.stringify(stateMemory(body.stamp, body.stamps)),
                 );
                 logEvent("state", "saved " + writtenName(handle, plan.name));
+                if (force) {
+                  statePanel("Force save wrote " + writtenName(handle, plan.name) + ".", null, null, true);
+                }
               },
               function (err) {
                 picked = null;
@@ -2101,13 +2180,16 @@
                     "); press the choose entry for the file again",
                 );
                 // The write ran after the press, so the picker would refuse a spent gesture.
-                hintStateFile();
+                hintStateFile(true);
               },
             );
             return;
           }
           // Only a manual press reaches here, and only where the browser offers no picker.
           logEvent("state", "stamped download: " + plan.name);
+          if (force) {
+            statePanel("Force save downloaded " + plan.name + ".", null, null, true);
+          }
           writeStateDownload(body.text, plan.name);
           GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(body.stamp, body.stamps)));
         });
@@ -2139,6 +2221,9 @@
             picked = handle;
             pickedKey = storeKey;
             GM_setValue(stampKey(storeKey), "");
+            // A file is set, so the next unconfigured period may speak again.
+            GM_setValue(STATE_HINT_KEY, false);
+            removeStatePanel();
             fetchStateFile(true);
           });
         })

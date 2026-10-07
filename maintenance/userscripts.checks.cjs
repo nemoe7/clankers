@@ -1702,6 +1702,7 @@ function checkStateDownload(api, session) {
   var stateRemembered = api.stateRemembered;
   var stateDelivery = api.stateDelivery;
   var stateAction = api.stateAction;
+  var panelNeeded = api.panelNeeded;
   var handleMatchesScope = api.handleMatchesScope;
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
@@ -1951,6 +1952,12 @@ function checkStateDownload(api, session) {
   assert.equal(stateAction("download", false), "block");
   assert.equal(stateAction("download", true), "download");
   assert.equal(stateAction("write", true), "write");
+  // The no-file card: a manual press always gets it, and an automatic tick gets it once
+  // per unconfigured period (owner note 3c0d3a2).
+  assert.equal(panelNeeded(true, true), true);
+  assert.equal(panelNeeded(true, false), true);
+  assert.equal(panelNeeded(false, false), true);
+  assert.equal(panelNeeded(false, true), false);
   assert.equal(stateAction("unchanged", false), "unchanged");
   // The tick line names the file and shows the two stamps the route compared.
   assert.equal(
