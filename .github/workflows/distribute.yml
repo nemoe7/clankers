@@ -11,17 +11,17 @@ on:
   push:
     branches: [main]
     paths:
-      - 'rules/ARENA.md'
-      - 'skills/arena-preview-steering/**'
-      - 'skills/arena-proxy/**'
-      - 'github/workflows/gemini-release.yml'
-      - 'github/workflows/gemini_release.py'
-      - '.github/workflows/distribute.yml'
+      - "rules/ARENA.md"
+      - "skills/arena-preview-steering/**"
+      - "skills/arena-proxy/**"
+      - "github/workflows/gemini-release.yml"
+      - "github/workflows/gemini_release.py"
+      - ".github/workflows/distribute.yml"
   schedule:
     # Daily reconciliation: 03:17 UTC stays away from the top of the hour, when
     # scheduled runs queue behind peak load. The schedule repairs missed, failed
     # and partial synchronization in both target groups.
-    - cron: '17 3 * * *'
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       repos:
@@ -35,7 +35,7 @@ on:
 permissions:
   contents: read
 env:
-  REPOS_ARENA: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki"
+  REPOS_ARENA: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki nemoe7/f360"
   REPOS_GEMINI: "nemoe7/daedalus"
 jobs:
   distribute:
