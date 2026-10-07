@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.1
+// @version      1.9.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2328,6 +2328,9 @@
       // Writ covers write, writing, writes and written; the owner's Writing row fell to the gear.
       ["writ", "\u270F\uFE0F"],
       ["search", "\uD83D\uDD0D"],
+      // Fetch covers fetch, fetching and fetched: a web page read is a search, and the owner's
+      // Fetching row fell to the gear without it (note 619a133).
+      ["fetch", "\uD83D\uDD0D"],
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
       ["wait", "\uD83D\uDCA4"],

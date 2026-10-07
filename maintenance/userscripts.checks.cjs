@@ -1121,8 +1121,6 @@ function checkTabTitle(api) {
   function actionCanvasDoc(messages, words) {
     return canvasDoc([rowCanvas(false).canvas], messages, words);
   }
-  // The owner's security dialog: Arena shows it over the page and it holds until the
-  // check passes, so it outranks the poll row, the bubble and the waiting line.
   // The ask_user card from the owner's captured outerHTML: a radiogroup with an aria-label.
   function questionCard(label) {
     return {
@@ -1153,6 +1151,8 @@ function checkTabTitle(api) {
     };
   }
 
+  // The owner's security dialog: Arena shows it over the page and it holds until the
+  // check passes, so it outranks the poll row, the bubble and the waiting line.
   function captchaDoc(messages, state, parked) {
     var frame = {
       title: "reCAPTCHA",
@@ -1279,6 +1279,9 @@ function checkTabTitle(api) {
     [emojiForRow(liveRow(pulseLabelDoc("span"))), "\u270F\uFE0F"],
     // The owner's bug: the Writing row fell to the gear emoji through the unmatched label.
     [emojiForRow(liveRow(pulseLabelDoc("span", "Writing"))), "\u270F\uFE0F"],
+    // The next owner's bug: a Fetching row (a web page read) fell to the gear emoji.
+    [emojiForRow(liveRow(pulseLabelDoc("span", "Fetching"))), "\uD83D\uDD0D"],
+    [actionEmoji("Fetching web page"), "\uD83D\uDD0D"],
     [emojiForRow(liveRow(pulseLabelDoc("svg"))), "\u270F\uFE0F"],
     [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
     [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
