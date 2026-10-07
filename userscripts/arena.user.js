@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.4
+// @version      1.8.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -128,7 +128,7 @@
   // The global pause stops every feature where it stands and honors the pause on the next
   // load; the resume brings back the features whose own switch is ON (form answer 74b99a5).
   var PAUSE_KEY = "clankers-arena-userscript-paused";
-  var PAUSE_LABEL = "Arena userscript";
+  var PAUSE_LABEL = "Userscript";
   var pauseUnits = [];
   var pauseMenuId = null;
 
@@ -231,7 +231,7 @@
 
     function showMenu(value) {
       menuId = GM_registerMenuCommand(
-        label + ": " + (value ? "ON" : "OFF") + " — toggle",
+        label + " (" + (value ? "ON" : "OFF") + ")",
         toggle,
       );
     }
@@ -304,7 +304,7 @@
   }
 
     // The fill writes the initial message: the repo name leads it, the rules stay in the files.
-  runFeature("prompt-fill", "Prompt fill", function () {
+  runFeature("prompt-fill", "Composer — fill", function () {
 
     var COMPOSER_SELECTOR = 'div.tiptap.ProseMirror[contenteditable="true"]';
     var TEMPLATE_RE = /^(\S+) read (?:AGENTS\.md ARENA\.md|ARENA\.md AGENTS\.md)/;
@@ -620,8 +620,8 @@
       });
     }
 
-    setProxyValue(PROXY_HOST_KEY, "Arena proxy host — set", GM_getValue(PROXY_HOST_KEY, ""));
-    setProxyValue(PROXY_MASTER_KEY, "Arena proxy master key — set", "");
+    setProxyValue(PROXY_HOST_KEY, "Proxy — host", GM_getValue(PROXY_HOST_KEY, ""));
+    setProxyValue(PROXY_MASTER_KEY, "Proxy — master key", "");
 
     function settings() {
       return {
@@ -687,10 +687,10 @@
       );
     }
 
-    menuItem(proxyMenus, "Arena proxy rotate now — run", function () {
+    menuItem(proxyMenus, "Proxy — rotate now", function () {
       rotateKey(0, null);
     });
-    menuItem(proxyMenus, "Arena proxy post key now — run", function () {
+    menuItem(proxyMenus, "Proxy — post key now", function () {
       var pair = settings();
       postKeyNow(
         { host: pair.host, key: heldKey },
@@ -847,7 +847,7 @@
   });
 
     // The Steering row drifts on labels, so it is found by its words.
-  runFeature("open-steering", "Open Steering", function () {
+  runFeature("open-steering", "Steering — open", function () {
 
     var STEERING_LABEL_RE = /steering|preview/i;
     var CLICK_DELAY_MS = 1000;
@@ -1053,7 +1053,7 @@
   }
 
   // One toggle beside Stop mirrors the auto-scroll switch.
-  var autoScroll = runFeature("auto-scroll", "Transcript auto-scroll", function () {
+  var autoScroll = runFeature("auto-scroll", "Transcript — auto-scroll", function () {
     var scroller = null;
     var content = null;
     var frame = null;
@@ -1182,7 +1182,7 @@
   })();
 
     // A trim waits for a quiet page and keeps the newest rows.
-  runFeature("transcript-trim", "Transcript trim", function () {
+  runFeature("transcript-trim", "Transcript — trim", function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
     var DEFAULT_ROWS = 50;
     var MIN_ROWS = 20;
@@ -1218,11 +1218,10 @@
     function countLabel(plan, removed) {
       var kept = planParts(plan);
       return (
-        "Transcript trim: " +
+        "Transcript — keep " +
         kept.rows +
         " rows" +
-        (removed ? " (" + removed + " removed)" : "") +
-        " \u2014 set"
+        (removed ? " (" + removed + " removed)" : "")
       );
     }
 
@@ -1413,7 +1412,7 @@
   }, null, false);
 
     // The composer hides while a turn runs, and its spacer height returns on show.
-  runFeature("hide-composer", "Hide composer", function () {
+  runFeature("hide-composer", "Composer — hide", function () {
 
     var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
     var EDITOR_CONTENT_SELECTOR = "div.editor-content";
@@ -1819,7 +1818,7 @@
   }
 
   // The state leaves through the owner's browser: one picked file, written only when the stamp moves.
-  runFeature("state-download", "Preview state download", function () {
+  runFeature("state-download", "State — download", function () {
     if (exposeChecks("stateDownload", {
       stateFileName: stateFileName,
       stateScopeKey: stateScopeKey,
@@ -2154,12 +2153,12 @@
     }
 
     var menus = [];
-    menuItem(menus, "Arena preview state — choose the file", chooseStateFile);
-    menuItem(menus, "Arena preview state — save now", function () {
+    menuItem(menus, "State — choose the file", chooseStateFile);
+    menuItem(menus, "State — save now", function () {
       fetchStateFile(true);
     });
     // A forced save writes whatever the state holds and moves the reference to it.
-    menuItem(menus, "Arena preview state — force save", function () {
+    menuItem(menus, "State — force save", function () {
       fetchStateFile(true, true);
     });
 
@@ -2180,7 +2179,7 @@
   });
 
     // The title mirrors the arena state: repo, poll, bubble, hourglass and shield.
-  runFeature("tab-title", "Tab title", function () {
+  runFeature("tab-title", "Page — tab title", function () {
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";

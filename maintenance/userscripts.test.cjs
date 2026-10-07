@@ -7,20 +7,22 @@ const bundles = {
   arena: {
     features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0 },
     labels: {
-      "prompt-fill": "Prompt fill",
-      "open-steering": "Open Steering",
-      "hide-composer": "Hide composer",
-      "auto-scroll": "Transcript auto-scroll",
-      "transcript-trim": "Transcript trim",
-      "tab-title": "Tab title",
-      "state-download": "Preview state download",
+      "prompt-fill": "Composer — fill",
+      "open-steering": "Steering — open",
+      "hide-composer": "Composer — hide",
+      "auto-scroll": "Transcript — auto-scroll",
+      "transcript-trim": "Transcript — trim",
+      "tab-title": "Page — tab title",
+      "state-download": "State — download",
     },
+    // Every Arena entry leads with its module and carries no role word; a switch ends in (ON)/(OFF).
+    moduleSwitch: true,
     offByDefault: ["transcript-trim"],
     // The prompt fill owns the four proxy entries; the state download owns its two.
     extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 3 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
-    countMenu: "Transcript trim: ",
+    countMenu: "Transcript — keep ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
     // The prompt fill owns two timers: the paint and the key watch. Both ride the one switch.
@@ -117,12 +119,43 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     return { menus, active };
   }
 
+  const moduleSwitch = bundle.moduleSwitch === true;
   function menuFor(page, key) {
-    return [...page.menus.values()].find((item) => item.label.startsWith(`${labels[key]}:`) && item.label.endsWith("— toggle"));
+    return [...page.menus.values()].find((item) =>
+      item.label.startsWith(labels[key] + (moduleSwitch ? " (" : ":")));
   }
+  // A switch label reads (ON)/(OFF) for the Arena bundle and `: ON — toggle` for ChatGPT.
+  const reads = (label, on) => label.includes(moduleSwitch ? (on ? "(ON)" : "(OFF)") : (on ? ": ON" : ": OFF"));
+  const switchLike = (label) => moduleSwitch ? / \((ON|OFF)\)$/.test(label) : label.includes("— toggle");
 
   const defaults = load();
   assert.equal(defaults.menus.size, menusFor(stored));
+  if (domain === "arena") {
+    // The owner's shape decision: one module's entries share a prefix, a switch names its state
+    // in parentheses, and no entry carries a role word (report answer 035a48c).
+    const expected = [
+      "Composer — fill (ON)",
+      "Proxy — host",
+      "Proxy — master key",
+      "Proxy — rotate now",
+      "Proxy — post key now",
+      "Steering — open (ON)",
+      "Transcript — auto-scroll (ON)",
+      "Transcript — trim (OFF)",
+      "Composer — hide (ON)",
+      "State — download (ON)",
+      "State — choose the file",
+      "State — save now",
+      "State — force save",
+      "Page — tab title (ON)",
+      "Userscript — pause all",
+    ];
+    assert.deepEqual(
+      [...defaults.menus.values()].map((item) => item.label),
+      expected,
+      "Every entry leads with its module, in registration order",
+    );
+  }
   assert.equal(defaults.active.observers, observersFor(stored));
   assert.equal(defaults.active.intervals, intervalsFor(stored));
   assert.equal(defaults.active.clicks, domain === "chatgpt" ? 1 : 0);
@@ -138,14 +171,14 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(page.active.clicks, key === "auto-think" ? 0 : defaults.active.clicks);
     const menu = menuFor(page, key);
     assert.ok(menu, `Missing menu for ${key}`);
-    assert.ok(menu.label.includes(startsOn ? ": OFF" : ": ON"), `The ${key} menu shows the saved switch`);
+    assert.ok(reads(menu.label, !startsOn), `The ${key} menu shows the saved switch`);
     menu.callback();
     assert.equal(stored.get(key), startsOn, "A toggle returns the feature to its default");
     assert.equal(page.active.observers, observersFor(stored));
     assert.equal(page.active.intervals, intervalsFor(stored));
     assert.equal(page.menus.size, menusFor(stored));
     assert.deepEqual(page.active, defaults.active, "The default state returns");
-    assert.ok(menuFor(page, key).label.includes(startsOn ? ": ON" : ": OFF"));
+    assert.ok(reads(menuFor(page, key).label, startsOn));
     assert.deepEqual(load().active, defaults.active, "Reload must apply the saved switch");
   }
 
@@ -154,11 +187,11 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const counted = load();
     const toggle = menuFor(counted, "transcript-trim");
     assert.ok(toggle, "Missing the transcript trim toggle");
-    assert.ok(toggle.label.includes(": OFF"), "Transcript trim ships OFF");
+    assert.ok(reads(toggle.label, false), "Transcript trim ships OFF");
     toggle.callback();
     assert.equal(stored.get("transcript-trim"), true);
     // The plan menu is the one that names rows; the switch menu reads ": ON/OFF".
-    const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("row"));
+    const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("keep"));
     assert.ok(findCount(), "Missing the transcript trim count menu");
     assert.ok(
       findCount().label.includes("50 rows"),
@@ -194,8 +227,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(allOff.menus.size, keys.length + (bundle.globalMenus || 0));
   assert.ok(
     [...allOff.menus.values()]
-      .filter((item) => item.label.includes("— toggle"))
-      .every((item) => item.label.includes(": OFF")),
+      .filter((item) => switchLike(item.label))
+      .every((item) => reads(item.label, false)),
     "Every feature switch reads OFF",
   );
   assert.deepEqual(allOff.active, { observers: baseObservers, intervals: 0, clicks: 0 });
@@ -224,7 +257,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "The pause stops every observer and timer where it stands",
     );
     assert.equal(live.menus.size, keys.length + bundle.globalMenus, "Every feature switch stays usable while paused");
-    assert.ok(menuFor(live, "tab-title").label.includes(": ON"), "A paused feature keeps its own switch label");
+    assert.ok(reads(menuFor(live, "tab-title").label, true), "A paused feature keeps its own switch label");
     assert.ok(resumeMenu(), "The pause entry flips to resume");
     // A switch flipped while paused is stored, and the resume honors it.
     menuFor(live, "tab-title").callback();
@@ -340,7 +373,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   scroller.scrollTop = 20;
   observers[0](); flush();
   assert.equal(scroller.scrollTop, 2100, 'Enabled mode follows on navigation');
-  const toggleMenu = () => [...menus].find(([label]) => label.startsWith('Transcript auto-scroll:'))[1]();
+  const toggleMenu = () => [...menus].find(([label]) => label.startsWith('Transcript — auto-scroll ('))[1]();
   toggleButton.listeners.click();
   assert.equal(enabled, false, 'Button click turns follow off');
   assert.equal(toggleButton.attrs['aria-pressed'], 'false', 'Button shows unpressed when off');

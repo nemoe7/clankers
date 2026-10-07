@@ -74,12 +74,12 @@ function checkLogging(api, menus) {
   if (menuItem) {
     var ran = [];
     var list = [];
-    menuItem(list, "Arena preview state — save now", function () {
+    menuItem(list, "State — save now", function () {
       ran.push("save");
     });
     assert.equal(list.length, 1);
     var registered = menus[menus.length - 1];
-    assert.equal(registered.label, "Arena preview state — save now");
+    assert.equal(registered.label, "State — save now");
     lines.length = 0;
     var pressed = [];
     console.log = function () {
@@ -91,7 +91,7 @@ function checkLogging(api, menus) {
       console.log = original;
     }
     assert.deepEqual(ran, ["save"]);
-    assert.equal(pressed[0], "[clankers][menu] Arena preview state — save now");
+    assert.equal(pressed[0], "[clankers][menu] State — save now");
   }
   console.log("ok logging 3");
 }
@@ -539,8 +539,8 @@ function checkTranscriptTrim(api) {
     [planParts("").rows, DEFAULT_ROWS],
     [planParts("4,75").rows, 75],
     [MIN_ROWS, 20],
-    [countLabel("50", 0), "Transcript trim: 50 rows \u2014 set"],
-    [countLabel("50", 3), "Transcript trim: 50 rows (3 removed) \u2014 set"],
+    [countLabel("50", 0), "Transcript \u2014 keep 50 rows"],
+    [countLabel("50", 3), "Transcript \u2014 keep 50 rows (3 removed)"],
     [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],

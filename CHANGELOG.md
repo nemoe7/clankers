@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Menu modules**: Every Arena menu entry leads with its module, such as `Proxy — host` or `State — save now`. A switch names its state in parentheses, and no entry carries a role word. Arena 1.8.5.
 - **State file names**: The auto save names the file after the repository and the branch. A stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
 
 ### Removed

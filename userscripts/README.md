@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Auto Think: ON — toggle`. The label shows the saved setting.
+Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
@@ -40,7 +40,7 @@ The message names the rules files, and the fill appends `rules/ARENA.md` fetched
 
 ### Arena proxy settings and key rotation
 
-The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Two menu entries save the settings, `Arena proxy host — set` and `Arena proxy master key — set`, and a third, `Arena proxy rotate now — run`, rotates at once. A fourth, `Arena proxy post key now — run`, posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
+The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Four `Proxy` entries sit with the fill: `Proxy — host` and `Proxy — master key` save the settings, `Proxy — rotate now` rotates at once, and `Proxy — post key now` posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
 
 - The host is one HTTPS origin with no path. The script trims a trailing `/v1`.
 - With both settings saved, the script asks `/v1/key` for the live agent key. The composer holds the rules line only.
@@ -71,7 +71,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. It also removes the sibling action container, `div.mt-3.flex.flex-col.gap-3`, from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree. The row limit cannot fall below `20`.
 
-The menu command reads `Transcript trim: 50 rows — set`. After a trim it adds the running row count, such as `Transcript trim: 50 rows (12 removed) — set`, so a plan above the transcript size reads as no change. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
+The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`, so a plan above the transcript size reads as no change. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
 
 The trim waits for the page to settle. It touches nothing while a turn streams, a live icon pulses, or a question widget waits for an answer. It waits for a quiet window after the last change. A root the document dropped, and a root whose row nodes sit detached during a redraw, stay untouched.
 
@@ -83,7 +83,7 @@ The page holds fewer nodes, so the tab uses less memory. The Arena client may ke
 
 The feature saves the preview state to one file, without a click. It asks the preview once a minute, and the request lands at a random moment inside a 15-second band after the beat. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
 
-The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file on a manual save press. With no file set, an automatic save writes nothing. The picker needs the press itself, and a save that waited on the network has none. Press `Arena preview state — choose the file` to pick one.
+The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file on a manual save press. With no file set, an automatic save writes nothing. The picker needs the press itself, and a save that waited on the network has none. Press `State — choose the file` to pick one.
 
 The name leads with the repository and the branch, and a stamped save adds the stamp and the record counts, such as `clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
 
@@ -93,7 +93,7 @@ A stamp older than the last write never overwrites the file. The script says so 
 
 The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file. A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
 
-Three menu entries sit with the feature: `Arena preview state — choose the file`, `Arena preview state — save now`, and `Arena preview state — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
+Three menu entries sit with the feature: `State — choose the file`, `State — save now`, and `State — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
 
 ## Arena Tab Title
 
@@ -106,7 +106,7 @@ The held work is the prompt fill, the Open Steering click and the proxy key post
 
 ## Arena Userscript Pause
 
-One entry, `Arena userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Arena userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
+One entry, `Userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
 
 The script saves the pause, so a reload keeps it: a paused page starts with nothing running and still offers the resume. Each feature switch stays in the menu while paused, and a flip is saved for the resume. The security check hold is independent of the pause.
 
