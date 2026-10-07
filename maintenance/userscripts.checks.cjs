@@ -1683,25 +1683,25 @@ function checkStateDownload(api, session) {
   var counts = { notes: 12, tasks: 4 };
   var repo = "clankers";
   var branch = "main";
-  // The name carries the repository, the branch, the server's stamp and the record counts, so
-  // two repos never collide in one folder and the newest file is obvious.
+  // The name carries the repository, then the branch, then the server's stamp and the record
+  // counts, so two repos and their branches never collide in one folder (owner note 495ae89).
   assert.equal(
     stateFileName(repo, branch, "2026-10-06T06:12:33.123456+00:00", counts),
-    "arena-state-clankers-main-20261006T061233-n12-t4.ndjson",
+    "clankers-main-20261006T061233-n12-t4.ndjson",
   );
   assert.equal(
     stateFileName("my repo", "feat/x", "2026-10-06T06:12:33", counts),
-    "arena-state-my-repo-feat-x-20261006T061233-n12-t4.ndjson",
+    "my-repo-feat-x-20261006T061233-n12-t4.ndjson",
   );
   assert.equal(
     stateFileName("", "", "2026-10-06T06:12:33", counts),
-    "arena-state-arena-20261006T061233-n12-t4.ndjson",
+    "arena-20261006T061233-n12-t4.ndjson",
   );
   assert.equal(
     stateFileName(repo, branch, "2026-10-06T06:12:33", { notes: 0, tasks: 0 }),
-    "arena-state-clankers-main-20261006T061233-n0-t0.ndjson",
+    "clankers-main-20261006T061233-n0-t0.ndjson",
   );
-  assert.equal(stateFileName(repo, branch, null, counts), "arena-state-clankers-main-n12-t4.ndjson");
+  assert.equal(stateFileName(repo, branch, null, counts), "clankers-main-n12-t4.ndjson");
   // Only a stamp that differs from the last write fills the file.
   assert.equal(stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "").kind, "download");
   assert.equal(
@@ -1710,7 +1710,7 @@ function checkStateDownload(api, session) {
   );
   var repeated = stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
   assert.equal(repeated.kind, "unchanged");
-  assert.equal(repeated.name, "arena-state-clankers-main-20261006T061233-n12-t4.ndjson");
+  assert.equal(repeated.name, "clankers-main-20261006T061233-n12-t4.ndjson");
   assert.match(repeated.message, /unchanged since the last write/);
   // A stamp that goes backward is a wiped or replaced preview, so nothing overwrites the
   // owner's file with an older state.
@@ -1852,12 +1852,12 @@ function checkStateDownload(api, session) {
   assert.equal(scope.branch, "arena/01a0fd4f-clankers");
   assert.equal(
     stateFileName(scope.repo, scope.branch, "2026-10-06T06:12:33", counts),
-    "arena-state-clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
+    "clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
   );
   // The server stamp carries the timezone; the name keeps the seconds alone.
   assert.equal(
     stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
-    "arena-state-clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
+    "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
   );
   // The header leaves the page while a dialog holds it, so the fill's saved slug names the
   // repository; the branch stays empty.

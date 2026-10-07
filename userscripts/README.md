@@ -85,7 +85,7 @@ The feature saves the preview state to one file, without a click. It asks the pr
 
 The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file instead.
 
-The name carries the repository, the branch, the stamp and the record counts, such as `arena-state-clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
+The name leads with the repository and the branch, and a stamped save adds the stamp and the record counts, such as `clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
 
 The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. The same repository and branch keeps one file, and the picker asks once per repository and branch.
 

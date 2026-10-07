@@ -1604,13 +1604,15 @@
     return [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
   }
 
+  // The name leads with the repository, then the branch (owner note 495ae89): the bare pair,
+  // and the stamp and the counts follow the branch part when the save is stamped.
   function stateFileName(repo, branch, stamp, counts) {
     var scope = stateScopeKey(repo, branch);
     var when = String(stamp || "")
       .replace(/[-:]/g, "")
       .replace(/\..*$/, "")
       .replace(/\+.*$/, "");
-    var name = "arena-state-" + scope + (when ? "-" + when : "");
+    var name = scope + (when ? "-" + when : "");
     if (counts) {
       name += "-n" + (counts.notes || 0) + "-t" + (counts.tasks || 0);
     }
