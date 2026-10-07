@@ -3550,7 +3550,8 @@ def test_poll_blocked_tasks():
       assert [item["id"] for item in payload["tasks"]] == ["open-task"]
       # The early return names the task on stderr, so no session reads it as an empty wait.
       assert printed[0] == (
-        "CONTINUE: unblocked task open-task waits. Do not end the turn."
+        "CONTINUE: unblocked task open-task waits, and the task list is still up. "
+        "Continue the task or mark it blocked before polling again; do not end the turn."
       )
       assert payload["tasks"][0]["blocked"] is False
       assert payload["pending"] == []

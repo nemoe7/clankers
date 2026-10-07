@@ -36,6 +36,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Poll wording**: The unblocked-task poll line now names the still-up task list. It says to continue the task or mark it blocked before the next poll. A turn cannot read it as permission to end (note 12c5a66).
 - **Gate hints**: A blocked call names the `cd`, `tail`, `grep` or `head` commands it ran. The hook names the bare `arena-preview` form for a spelled-out path and the proxy route for code-scanning alerts. A blocked push says that an ack clears it.
 - **Task report links**: A blocked task now names the report it waits on with `--report`. The owner's answer clears the blocked mark, and the link rides the save file.
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
