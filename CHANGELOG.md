@@ -27,6 +27,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### system-prompts
+
+- **NemoGPT prompt**: The prompt gains autonomy and persistence, a directive-or-inquiry split, harness trust markers, and a sharper permission ladder. Output bans now cover setup phrases and labeled closings. The Core rules and Task routing sections fold into the surviving ones.
+
 #### userscripts
 
 - **Menu modules**: Every Arena menu entry leads with its module, such as `Proxy — host` or `State — save now`. A switch names its state in parentheses, and no entry carries a role word. Arena 1.8.5.
