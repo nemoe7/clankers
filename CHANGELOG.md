@@ -67,6 +67,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Reference parity**: `check_minify.py` no longer requires the shipped references to match the refs copies. The refs tree is the full wording, and the lives carry the squash.
 - **Skill rows**: The budget table lists the arena suite file by file. Each arena-skill file takes one row, Markdown in tokens and shipped files in bytes.
 
+#### house
+
+- **Suite definition**: The house glossary defines the arena suite as `ARENA.md` and arena-skill files.
+
 ### Removed
 
 #### preview
