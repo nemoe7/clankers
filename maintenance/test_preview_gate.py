@@ -51,7 +51,7 @@ def gate_source() -> str:
   )
 
 
-def run(command: str) -> subprocess.CompletedProcess[str]:
+def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
@@ -94,6 +94,7 @@ def run(command: str) -> subprocess.CompletedProcess[str]:
       capture_output=True,
       text=True,
       check=False,
+      cwd=cwd,
       env={**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"]},
     )
 
@@ -164,3 +165,58 @@ def test_the_inbox_line_classifier():
 def test_push_in_a_quiet_chain_still_meets_the_push_gate():
   result = run("arena-preview read && git push origin branch")
   assert result.returncode == 130, result.stderr
+
+
+def git_repo(root: Path) -> Path:
+  """One repository whose origin/main carries a commit the branch lacks."""
+  repo = root / "repo"
+  repo.mkdir()
+  environment = {
+    **os.environ,
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@t",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@t",
+  }
+
+  def git(*args: str) -> None:
+    subprocess.run(
+      ["git", *args],
+      cwd=repo,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+
+  git("init", "-q", "-b", "work")
+  git("config", "user.name", "t")
+  git("config", "user.email", "t@t")
+  (repo / "a").write_text("one\n", encoding="utf-8")
+  git("add", "a")
+  git("commit", "-qm", "one")
+  (repo / "b").write_text("two\n", encoding="utf-8")
+  git("add", "b")
+  git("commit", "-qm", "two")
+  git("update-ref", "refs/remotes/origin/main", "HEAD")
+  git("reset", "-q", "--hard", "HEAD~1")
+  return repo
+
+
+def test_a_branch_behind_main_hears_the_replay_line():
+  with tempfile.TemporaryDirectory() as directory:
+    repo = git_repo(Path(directory))
+    result = run("git commit --allow-empty -m three", cwd=str(repo))
+    assert result.returncode == 0, result.stderr
+    assert "origin/main carries 1 commit(s) this branch lacks" in result.stderr
+    assert "Replay your commits over main" in result.stderr
+    # A replayed branch: origin/main is no longer ahead, and the line stays away.
+    subprocess.run(
+      ["git", "update-ref", "refs/remotes/origin/main", "HEAD"],
+      cwd=repo,
+      capture_output=True,
+      check=True,
+    )
+    result = run("git commit --allow-empty -m four", cwd=str(repo))
+    assert result.returncode == 0, result.stderr
+    assert "Replay your commits over main" not in result.stderr
