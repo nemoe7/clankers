@@ -1033,6 +1033,25 @@ test('preview client', async (t) => {
     context.paintConnection();
     assert.match(get('#connection-text').textContent,
       /^3 messages saved · agent in a long call 10m 0\ds$/);
+    // A poll that returned ends the turn: the mark suppresses the long call text, and three
+    // quiet minutes name the agent gone without waiting out the call cap a running bash call
+    // needs. The mark holds the agent's last act, so the amber line names the turn end.
+    state.turn_ended_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'idle');
+    assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
+    assert.doesNotMatch(get('#connection-text').textContent, /long call/);
+    assert.match(get('#connection-text').textContent, /^No agent since /);
+    // A fresh turn end keeps the plain line until the quiet window passes.
+    state.turn_ended_at = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-dot').dataset.state, 'ok');
+    assert.equal(get('#connection-text').textContent, '3 messages saved');
+    // The agent's next call clears the mark, and the call cap covers a running bash call again.
+    state.turn_ended_at = null;
+    await get('#refresh-notes').events.click();
+    assert.match(get('#connection-text').textContent,
+      /^3 messages saved · agent in a long call 10m 0\ds$/);
     // A turn that ends leaves the preview up; past the call cap the stamp of the agent's own calls
     // turns the dot amber, so the owner reads a stale preview instead of a live connection to nobody.
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);

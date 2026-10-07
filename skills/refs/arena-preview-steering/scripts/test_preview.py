@@ -3555,6 +3555,54 @@ def test_skip_poll():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
 
 
+def test_turn_end_marker():
+  """A poll that ends the turn marks it; the next agent call and a live turn clear the mark."""
+  with tempfile.TemporaryDirectory() as end_dir:
+    store = preview.Store(end_dir, create=True)
+    printed = []
+
+    def capture(value, **kwargs):
+      printed.append(value)
+
+    def run_poll():
+      original = builtins.print
+      builtins.print = capture
+      try:
+        return preview.poll_inbox(store, sleeper=lambda seconds: None)
+      finally:
+        builtins.print = original
+
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      store.touch_agent()
+      assert store.state()["turn_ended_at"] is None
+      # A wait that runs out with nothing to read ends the turn: the marker lands.
+      assert run_poll() == 1
+      assert store.state()["turn_ended_at"]
+      # The agent's own call clears the mark, so a working agent never reads as gone.
+      store.touch_agent()
+      assert store.state()["turn_ended_at"] is None
+      # A skip ends the turn too.
+      store.request_skip_poll()
+      assert run_poll() == 0
+      assert store.state()["turn_ended_at"]
+      # A note arriving continues the turn: no mark for the waking agent.
+      store.touch_agent()
+      store.note("end-note", "work arrived")
+      assert run_poll() == 0
+      assert store.state()["turn_ended_at"] is None
+      # An unblocked task continues the turn as well.
+      store.touch_agent()
+      store.acknowledge(["end-note"], "reply", "done")
+      store.write_task("end-task", "Work waits")
+      assert run_poll() == 0
+      assert store.state()["turn_ended_at"] is None
+      store.write_task("end-task", status="finished")
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
 def test_skip_poll_clears_on_owner_message():
   """A note or a report answer clears an armed skip; the poll delivers it instead."""
   with tempfile.TemporaryDirectory() as clear_dir:

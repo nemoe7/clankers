@@ -19,6 +19,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
 
+### Fixed
+
+#### preview
+
+- **Turn end in the header**: A returned poll marks the turn end, and the agent's next call clears the mark. The header drops the long call text at that mark. After three quiet minutes it names the agent gone, instead of counting a call that no longer runs.
+
 ## 2026-10-06
 
 ### Added

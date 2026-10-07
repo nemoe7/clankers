@@ -94,26 +94,36 @@ let connectionBase = 'Connecting…';
 // header can say no agent has spoken instead of showing a live connection to nobody. The stamp
 // lands on the call's start, and a bash call may run to its own timeout, 30 minutes at the
 // longest: three minutes of silence is normal thinking time, so the header counts the call from
-// there, and only past the call cap does it call the agent gone.
+// there, and only past the call cap does it call the agent gone. A returned poll ends the turn
+// and sets its own mark, so the silence after it names the agent gone without the wait, and the
+// next agent call clears the mark.
 const AGENT_QUIET_MS = 180_000;
 const AGENT_CALL_MS = 1_920_000;
 let agentSeenAt = null;
 let agentSeenStamp = null;
+let turnEndedAt = null;
+let turnEndedStamp = null;
 function agentSilentMs() {
   return agentSeenAt === null ? null : Date.now() - agentSeenAt;
 }
 function agentInCall() {
+  // A returned poll ended the turn, so the silence that follows is not a running call.
+  if (turnEndedAt !== null) return false;
   const silent = agentSilentMs();
   return pollSince === null && silent !== null && silent > AGENT_QUIET_MS && silent <= AGENT_CALL_MS;
 }
 function agentIdle() {
   // A live poll heartbeat proves the agent is present, so a long wait never reads as idle.
   if (pollSince !== null) return false;
+  if (turnEndedAt !== null) return Date.now() - turnEndedAt > AGENT_QUIET_MS;
   const silent = agentSilentMs();
   return silent !== null && silent > AGENT_CALL_MS;
 }
 function connectionText() {
-  if (agentIdle()) return `No agent since ${time(agentSeenStamp)}`;
+  if (agentIdle()) {
+    const stamp = turnEndedStamp === null ? agentSeenStamp : turnEndedStamp;
+    return `No agent since ${time(stamp)}`;
+  }
   return connectionBase + pollSuffix() + callSuffix();
 }
 function stampMs(value) {
@@ -612,6 +622,8 @@ async function refreshState() {
     pollSince = state.polling ? stampMs(state.polling_since) : null;
     agentSeenAt = stampMs(state.agent_seen_at);
     agentSeenStamp = state.agent_seen_at;
+    turnEndedAt = stampMs(state.turn_ended_at);
+    turnEndedStamp = state.turn_ended_at || null;
     connectionBase = saved + callsText;
     setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
     if (state.rendering_error) {

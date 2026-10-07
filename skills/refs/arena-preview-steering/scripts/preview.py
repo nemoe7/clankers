@@ -155,6 +155,9 @@ AGENT_KEY_META = "agent_key"
 AGENT_KEY_EXPIRY_SECONDS = 1200
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
+# A poll that returns with nothing to read ends the turn. The header reads this mark, so the
+# silence after a turn never reads as a running bash call; the agent's next call clears it.
+TURN_ENDED_META = "turn_ended_at"
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -1048,6 +1051,8 @@ def poll_inbox(store, sleeper=None):
       # A message or an unblocked task outranks a skip: the turn reads that item first.
       if store.skip_poll_requested():
         store.take_skip_poll()
+        # The skip ends the turn here, so the header learns the turn is over.
+        store.mark_turn_ended()
         # The skip is one-shot and never a message: the turn ends here, and no note repeats.
         print(
           "SKIP: the owner pressed Skip poll; end the turn without another poll.",
@@ -1061,6 +1066,8 @@ def poll_inbox(store, sleeper=None):
         store.stamp_polling()
   finally:
     store.clear_polling()
+  # The wait ran its whole span with nothing to read: the turn ends here.
+  store.mark_turn_ended()
   print(cli_json(listing), flush=True)
   return 1
 
@@ -1604,6 +1611,9 @@ class Store:
         "agent_key": self.agent_key(),
         # The header turns amber when this stamp ages, so a stale preview shows itself.
         "agent_seen_at": clip_stamp(meta.get(AGENT_SEEN_META)),
+        # The header suppresses the long call text after this mark and turns amber past the
+        # quiet window, since silence after a returned poll is not a running call.
+        "turn_ended_at": clip_stamp(meta.get(TURN_ENDED_META)),
       }
 
   def tasks(self):
@@ -2518,8 +2528,21 @@ class Store:
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
 
   def touch_agent(self):
-    """Stamp the agent's own call: the liveness signal the preview header reads."""
+    """Stamp the agent's own call: the liveness signal the preview header reads.
+
+    The call also clears the turn-end mark: a working agent never reads as gone.
+    """
     self.set_meta(AGENT_SEEN_META, now())
+    self.clear_turn_ended()
+
+  def mark_turn_ended(self):
+    """Record that the turn ended here; the header reads the mark."""
+    self.set_meta(TURN_ENDED_META, now())
+
+  def clear_turn_ended(self):
+    """Drop the turn-end mark, so the next turn starts clean."""
+    with closing(self.connect()) as db, db:
+      db.execute("DELETE FROM meta WHERE key = ?", (TURN_ENDED_META,))
 
   def set_agent_key(self, key, host=None):
     """Record the key the userscript holds and the proxy host, with the stamp."""
