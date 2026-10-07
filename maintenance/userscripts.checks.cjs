@@ -1702,6 +1702,7 @@ function checkStateDownload(api, session) {
   var stateRemembered = api.stateRemembered;
   var stateDelivery = api.stateDelivery;
   var stateAction = api.stateAction;
+  var handleMatchesScope = api.handleMatchesScope;
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
   var stateScopeKey = api.stateScopeKey;
@@ -1991,6 +1992,22 @@ function checkStateDownload(api, session) {
     compared.join("\n"),
   );
   assert.ok(comparedLine("compare stamp: none, no stamp to compare"), compared.join("\n"));
+  // A remembered file belongs to the scope that chose it: the name carries the scope, and a
+  // handle outside the current scope is refused so one repo never writes into another's file
+  // (owner note 1cfdedd).
+  assert.equal(handleMatchesScope({ name: "clankers-main.ndjson" }, "clankers", "main"), true);
+  assert.equal(
+    handleMatchesScope({ name: "clankers-main-20261006T061233-n12-t4.ndjson" }, "clankers", "main"),
+    true,
+  );
+  assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "clankers", "main"), false);
+  assert.equal(handleMatchesScope({ name: "clankers-mainx.ndjson" }, "clankers", "main"), false);
+  assert.equal(handleMatchesScope({ name: "my-backup.ndjson" }, "clankers", "main"), false);
+  assert.equal(handleMatchesScope(null, "clankers", "main"), false);
+  assert.equal(handleMatchesScope({}, "clankers", "main"), false);
+  // An unknown scope adopts nothing: the fallback name alone passes, so the owner is asked again.
+  assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "", ""), false);
+  assert.equal(handleMatchesScope({ name: "arena.ndjson" }, "", ""), true);
   console.log("ok state download 32");
 }
 

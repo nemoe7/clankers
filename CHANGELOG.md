@@ -36,6 +36,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Turn end in the header**: A returned poll marks the turn end, and the agent's next call clears the mark. The header drops the long call text at that mark. After three quiet minutes it names the agent gone, instead of counting a call that no longer runs.
 
+#### userscripts
+
+- **State file scope**: A remembered file is reused only when its name belongs to the current repository and branch. A handle outside that scope is refused, and the owner picks the file again. Arena 1.8.2.
+
 ## 2026-10-06
 
 ### Added

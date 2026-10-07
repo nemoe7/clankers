@@ -87,7 +87,7 @@ The first save asks for the file through the browser's own picker. After that th
 
 The name leads with the repository and the branch, and a stamped save adds the stamp and the record counts, such as `clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
 
-The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. The same repository and branch keeps one file, and the picker asks once per repository and branch.
+The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. A remembered file is reused only when its name carries the current scope, so a file from another repository or branch is never written. The same repository and branch keeps one file, and the picker asks once per repository and branch.
 
 A stamp older than the last write never overwrites the file. The script says so once, quietly, and keeps the older file. A state with no stamp writes nothing.
 

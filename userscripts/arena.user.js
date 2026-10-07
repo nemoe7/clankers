@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.1
+// @version      1.8.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1716,6 +1716,17 @@
     return { kind: "download", name: name, message: "Wrote " + name };
   }
 
+  // A remembered file belongs to the scope that chose it. The name carries the scope, so a handle
+  // whose name lies outside the current scope is refused and the owner is asked again. Without
+  // this guard a reused handle wrote one repo's state into another repo's backup (note 1cfdedd).
+  function handleMatchesScope(handle, repo, branch) {
+    if (!handle || !handle.name) return false;
+    var scope = stateScopeKey(repo, branch);
+    var name = String(handle.name);
+    if (name.slice(-7) === ".ndjson") name = name.slice(0, -7);
+    return name === scope || name.indexOf(scope + "-") === 0;
+  }
+
   function stateDelivery(plan, hasHandle, hasPicker) {
     if (plan.kind !== "download") return plan.kind;
     if (hasHandle) return "write";
@@ -1814,6 +1825,7 @@
       stateAction: stateAction,
       stateTick: stateTick,
       writtenName: writtenName,
+      handleMatchesScope: handleMatchesScope,
       stateScope: stateScope,
       stateRepo: stateRepo,
       pagePicker: pagePicker,
@@ -2040,6 +2052,14 @@
           ? Promise.resolve(picked)
           : stateHandle(fileKey(storeKey));
         ready.then(function (handle) {
+          if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
+            logEvent(
+              "state",
+              "handle out of scope: " + handle.name + " is not " +
+                stateFileName(scope.repo, scope.branch, "", null),
+            );
+            handle = null;
+          }
           picked = handle || null;
           pickedKey = handle ? storeKey : null;
           var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
