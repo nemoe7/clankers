@@ -13,6 +13,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
 - **Push cadence boundary**: The Constitution now pushes verified commits to origin after each task completion, and it never holds verified batches across tasks.
 
+### Added
+
+#### preview
+
+- **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
+
 ## 2026-10-06
 
 ### Added
@@ -56,7 +62,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   The refs copy carries the full line, and the live and root copies the compressed form. It lands on the approved proposal in report `arena-skill-names-2`.
 - **Quoted report ID**: A ctrl-click on a report ID quotes it, whole, into the Messages composer, the tab the box lives in.
   The quote regrows the box and leaves the Markdown preview, so the ID and the text stay complete.
-- **Long call header**: While no call has reported for three minutes, the header counts the call instead of naming the agent gone.
+- **Long call header**: While no call reports for three minutes, the header counts the call instead of naming the agent gone.
   Past the 32-minute call cap it names the agent gone, as before.
 - **Note ID scope**: The note-ID rule now covers prose, task details, reports and notes by the first seven characters.
   Two notes that share a prefix extend it, and the ack length stays with the skill.
@@ -98,7 +104,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- **Rollback guard on the state save**: The auto save remembers the newest note stamp and the newest task stamp of the state it wrote. When one of the two moves backward while the state stamp moves forward, the write is refused and the newer file stays. Arena 1.6.18.
+- **Rollback guard on the state save**: The auto save remembers the newest note stamp and the newest task stamp of the state it wrote. When one of the two moves backward while the state stamp moves forward, the save refuses the write and keeps the newer file. Arena 1.6.18.
 - **Shared page helpers**: The transcript bar, the slug key, the arena URL readers and the label reader live once for every feature. The file falls from 74,024 B to 72,488 B. Arena 1.6.16.
 - **Comment trim**: The userscript keeps one comment per feature and drops the rest. The file falls from 87,133 B to 74,024 B. Arena 1.6.15.
 - **URL and menu helpers**: Each feature carries one URL test instead of a parser and a wrapper, and the menu entries share one guard. No behavior changes. Arena 1.6.14.
@@ -287,7 +293,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Fetch guard**: The fetch route refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes. Public HTTPS and the owner's loopback stay open. `maintenance/test_arena_proxy.py` covers the blocked and allowed shapes.
 - **Rename**: The skill, its Python package and its budget row become `arena-proxy`, and the environment prefix becomes `ARENA_PROXY_`.
 - **Plugin release**: `release-gpt-plugins.yml` publishes `gpt-plugins.zip` as a GitHub Release on the tag `gpt-plugins-v<version>` from `plugin.json`, and the workflow contract gains that file.
-- **CodeQL scope**: `.github/codeql/codeql-config.yml` excludes `py/full-ssrf`, whose reports describe the fetch design. The `allowed_url` guard and its tests carry the control. An inline `# codeql[py/full-ssrf]` comment was tried first and the check ignored it.
+- **CodeQL scope**: `.github/codeql/codeql-config.yml` excludes `py/full-ssrf`, whose reports describe the fetch design. The `allowed_url` guard and its tests carry the control. An inline `# codeql[py/full-ssrf]` comment came first, and the check ignored it.
 - **Core rules in the prompt**: The NemoGPT prompt gains a Core rules section with the operative repository rules. It covers controlled English, terseness, ambiguity, YAGNI, verification, and unasked pushes, on owner direction.
 - **Proxy key rotation**: the server makes a new random key on every start and prints it once. It never reads the key from the environment, on owner direction.
 - **Image publish**: `publish-arena-proxy-image.yml` builds `skills/arena-proxy/Dockerfile` for amd64 and arm64, and pushes `ghcr.io/nemoe7/arena-proxy` under the one mutable tag `latest`. The skill ships a compose file with a Tailscale sidecar and the funnel serve config.
