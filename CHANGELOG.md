@@ -30,6 +30,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **State file names**: The auto save names the file after the repository and the branch. A stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
 
+### Removed
+
+#### preview
+
+- **Save control**: The message toolbar drops its save-state button (owner note ffa0cbd). The userscript owns the file path, and the page keeps the copy route.
+
 ### Fixed
 
 #### preview

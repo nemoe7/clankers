@@ -1023,52 +1023,6 @@ setInterval(showClock, 1000);
 // Copy state exports notes, tasks and report answers for `import-state`; the server
 // builds the NDJSON and one fetch carries the copy.
 const copyStateButton = $('#copy-state');
-const saveStateButton = $('#save-state');
-function stateSaveName(payload) {
-  // The name carries the repository, the branch, the stamp and the record counts, the
-  // save-file shape. A checkout without a branch keeps the repository alone.
-  const counts = payload.counts || {};
-  const parts = ['arena-state', payload.repo || 'state'];
-  if (payload.branch) parts.push(payload.branch);
-  parts.push(payload.stamp || 'nostamp', `n${counts.notes || 0}-t${counts.tasks || 0}.ndjson`);
-  return parts.join('-');
-}
-saveStateButton.addEventListener('click', async () => {
-  // A click is the gesture the picker needs, so this control is the reliable pick: the
-  // userscript menu path cannot open one. The write goes to the file the owner chose.
-  let payload = null;
-  try { payload = await (await request('/api/copy-state')).json(); }
-  catch { payload = null; }
-  if (!payload || !payload.text) {
-    status.textContent = 'The state route did not answer; nothing is saved.';
-    return;
-  }
-  if (typeof window.showSaveFilePicker !== 'function') {
-    status.textContent = 'This browser cannot pick a file; use Copy State.';
-    return;
-  }
-  let handle = null;
-  try {
-    handle = await window.showSaveFilePicker({
-      suggestedName: stateSaveName(payload),
-      types: [{ description: 'NDJSON state', accept: { 'application/x-ndjson': ['.ndjson'] } }],
-    });
-  } catch (error) {
-    status.textContent = error && error.name === 'AbortError'
-      ? 'No file chosen; the state is not saved.'
-      : 'The picker did not open; use Copy State.';
-    return;
-  }
-  try {
-    const writable = await handle.createWritable();
-    await writable.write(payload.text);
-    await writable.close();
-    status.textContent = `Saved the state to ${handle.name}.`;
-  } catch {
-    status.textContent = 'The file write failed; use Copy State.';
-  }
-});
-
 copyStateButton.addEventListener('click', async () => {
   // The server holds the same NDJSON the save file carries, so one fetch carries the copy.
   let payload = null;

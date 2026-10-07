@@ -104,8 +104,6 @@ let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
 const skipCalls = [];
-const pickerOptions = [];
-const savedWrites = [];
 const replySeenCalls = [];
 const unpublished = [];
 const uploadCalls = [];
@@ -130,13 +128,7 @@ let pageFetches = 0;
 const writeTokens = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
 const context = {
-  window: { addEventListener: (name, callback) => { windowEvents[name] = callback; },
-    showSaveFilePicker: async options => {
-      // The harness records the pick and returns a handle whose writable collects the text.
-      pickerOptions.push(options);
-      return { name: options.suggestedName,
-        createWritable: async () => ({ write: async text => savedWrites.push(text), close: async () => {} }) };
-    } },
+  window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
@@ -733,30 +725,14 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(get('#copy-state').dataset.state, 'good', 'the server export needs no client cache');
     assert.ok(copied.at(-1).endsWith('\n'), 'the copy stays NDJSON with one trailing newline');
-    // The save-state control opens the picker from a real click, so the gesture always holds.
-    pickerOptions.length = 0;
-    savedWrites.length = 0;
-    get('#save-state').events.click();
-    await tick();
-    assert.equal(pickerOptions.length, 1, 'the click opens the picker');
-    const saveCounts = { notes: (state.notes || []).length,
-      tasks: ((state.tasks || {}).upcoming || []).length + ((state.tasks || {}).finished || []).length };
-    assert.equal(pickerOptions[0].suggestedName,
-      `arena-state-clankers-main-2026-10-06T09:00:00-n${saveCounts.notes}-t${saveCounts.tasks}.ndjson`,
-      'the name carries the repo, the stamp and the counts');
-    assert.equal(savedWrites.length, 1, 'the click writes the state into the chosen file');
-    assert.ok(savedWrites[0].endsWith('\n'), 'the file carries the save-file NDJSON');
-    assert.match(get('#send-status').textContent, /^Saved the state to arena-state-/,
-      'the receipt names the file the write reached');
-    // A browser without the picker keeps the copy route, and says so.
-    const savePicker = context.window.showSaveFilePicker;
-    delete context.window.showSaveFilePicker;
-    pickerOptions.length = 0;
-    get('#save-state').events.click();
-    await tick();
-    assert.equal(pickerOptions.length, 0, 'no picker, no pick');
-    assert.equal(get('#send-status').textContent, 'This browser cannot pick a file; use Copy State.');
-    context.window.showSaveFilePicker = savePicker;
+    // The toolbar no longer carries a save control: the userscript owns the file path (owner
+    // note ffa0cbd). The page keeps the copy route alone.
+    const pageHtml = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+    assert.ok(!pageHtml.includes('save-state'), 'the page carries no save control');
+    assert.ok(
+      !fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8').includes('saveState'),
+      'the page script wires no save control',
+    );
 
     assert.equal(get('#tasks-status').textContent, 'No task list yet.');
     assert.equal(get('#notes-tab').focused, true);
