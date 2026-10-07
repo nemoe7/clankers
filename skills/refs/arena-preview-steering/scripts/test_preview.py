@@ -3017,6 +3017,41 @@ def test_bash_gate():
     assert cleared_push.returncode == 0
 
 
+def test_gate_hint_names_the_noise_words():
+  # A blocked call that runs grep, head, tail or cd hears which commands to drop,
+  # and a clean line hears the plain block alone.
+  with tempfile.TemporaryDirectory() as hint_dir:
+    hint_store = preview.Store(hint_dir, create=True)
+    hint_store.note("hint-note", "Pending work")
+    hint_store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+    hint_script = str(Path(preview.__file__))
+
+    def run_gate(line):
+      return subprocess.run(
+        [sys.executable, hint_script, "gate", "--line", line],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=hint_dir,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": hint_dir},
+      )
+
+    noisy = run_gate("cd /home/user && grep note arena-state/log.jsonl | tail -1")
+    assert noisy.returncode == 1
+    for word in ("`cd`", "`grep`", "`tail`"):
+      assert word in noisy.stdout, noisy.stdout
+    assert "omit those commands" in noisy.stdout
+    assert "head" not in noisy.stdout.split("omit")[0]
+    plain = run_gate("git status")
+    assert plain.returncode == 1
+    assert "omit those commands" not in plain.stdout
+    # A line that passes the gate keeps its own counsel, whatever it runs.
+    hint_store.acknowledge(["hint-note"], "note", "Cleared")
+    passing = run_gate("cd /home/user && grep note log")
+    assert passing.returncode == 0
+    assert passing.stdout.strip() == ""
+
+
 def test_dispatch_reminder():
   # Every dispatch carries a reminder without changing stdout; only a delivered read
   # marks a note seen.

@@ -1030,6 +1030,24 @@ def quiet_inbox_line(line):
   return True
 
 
+# The commands an agent chains around an inbox call. Each one ends the quiet-line
+# exemption, so a blocked call names the ones it ran (owner note 2939ee1).
+GATE_NOISE = ("cd", "tail", "grep", "head")
+
+
+def gate_line_hint(line):
+  """Name the extra commands on a blocked call, so the next read keeps the exemption."""
+  words = {token for token in re.split(r"[^A-Za-z0-9_.-]+", line or "")}
+  found = [name for name in GATE_NOISE if name in words]
+  if not found:
+    return None
+  named = ", ".join(f"`{name}`" for name in found)
+  return (
+    f"This call runs {named}; omit those commands:"
+    " a bare `arena-preview read` is the only call that passes."
+  )
+
+
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -3620,6 +3638,11 @@ def main():
     action="store_true",
     help="Block while any note or answer awaits an ack, whatever the call count",
   )
+  gate.add_argument(
+    "--line",
+    default="",
+    help="The command line, as the hook read it; a blocked call then names the commands to drop",
+  )
   commands.add_parser("poll")
   download = commands.add_parser(
     "download-request",
@@ -3718,6 +3741,9 @@ def main():
           " or `arena-preview ack <id> --note <text>` call, one call per note.",
           flush=True,
         )
+        hint = gate_line_hint(args.line)
+        if hint:
+          print(hint, flush=True)
         return 1
       # A push whose content equals origin/main leaves the pull request without a diff,
       # and GitHub then closes it. The checkpoint holds before any such push.

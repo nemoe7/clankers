@@ -82,6 +82,8 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
     script = (
       "set -o functrace\n"
       "STUB=" + str(stub) + "\n"
+      "REPO_ROOT=" + str(ROOT) + "\n"
+      "SKILL_REL=.agents/skills/arena-preview-steering\n"
       '. "'
       + str(gate_file)
       + '"\n'
@@ -171,6 +173,18 @@ def test_the_inbox_line_classifier():
 def test_push_in_a_quiet_chain_still_meets_the_push_gate():
   result = run("arena-preview read && git push origin branch")
   assert result.returncode == 130, result.stderr
+
+
+def test_a_full_path_hears_the_bare_command_line():
+  # The command sits on PATH in every shell the installer touched, so a call that
+  # spells the path is told once, and the bare form is what reaches the log.
+  spelled = f"{ROOT}/.agents/skills/arena-preview-steering/scripts/arena-preview"
+  result = run(f': "{spelled} read"')
+  assert "arena-preview works" in result.stderr, result.stderr
+  # One line a shell, not one a call.
+  assert result.stderr.count("arena-preview works") == 1
+  plain = run(': "arena-preview read"')
+  assert "arena-preview works" not in plain.stderr
 
 
 def git_repo(root: Path) -> Path:

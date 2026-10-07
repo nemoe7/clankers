@@ -167,7 +167,7 @@ def check_preview_path():
     # Arena's own probe shells: a killed probe reads as a dead preview or sandbox
     # while the process it probed stays up. Only an agent call shell meets the gate.
     python.write_text(
-      '#!/usr/bin/env bash\ncase " $*" in *" gate") exit 1 ;; esac\nexit 0\n',
+      '#!/usr/bin/env bash\ncase " $*" in *" gate "*|*" gate") exit 1 ;; esac\nexit 0\n',
       encoding="utf-8",
     )
     python.chmod(0o755)
@@ -228,7 +228,7 @@ def check_preview_path():
 
     # The count gate holds mid-work commands. A push waits on any pending item.
     python.write_text(
-      '#!/usr/bin/env bash\ncase " $*" in *" gate --push") exit 1 ;; esac\nexit 0\n',
+      '#!/usr/bin/env bash\ncase " $*" in *" gate --push "*) exit 1 ;; esac\nexit 0\n',
       encoding="utf-8",
     )
     python.chmod(0o755)
