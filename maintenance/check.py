@@ -48,6 +48,7 @@ EXPECTED_BUDGETS = {
   "system-prompts/NEMOGPT.md": "cl100k_base",
   "skills/amending-violations/SKILL.md": "cl100k_base",
   "skills/arena-skill/SKILL.md": "cl100k_base",
+  "skills/arena-skill/ (suite)": "cl100k_base",
   # The distributed assets and scripts carry the minified build from `maintenance/minify.py`.
   # Their recorded size is their budget: any growth fails this check until the table is
   # updated on purpose. The `.agents/skills/` twins are byte-identical by construction, and
@@ -69,6 +70,23 @@ EXPECTED_BUDGETS = {
 # Root `ARENA.md` is the copy `.github/workflows/distribute.yml` pushes to
 # the target repositories, so it must stay byte-identical to its source.
 ROOT_COPIES = ("ARENA.md",)
+
+# A suite row sums the Markdown one skill loads, in the order it loads it.
+SUITES = {
+  "skills/arena-skill/ (suite)": (
+    "skills/arena-skill/SKILL.md",
+    "skills/arena-skill/references/REFERENCE.md",
+  ),
+}
+
+
+def budget_parts(relative: str) -> tuple[str, ...]:
+  return SUITES.get(relative, (relative,))
+
+
+def measure_budget(relative: str, kind: str) -> int:
+  return sum(measure(ROOT / part, kind) for part in budget_parts(relative))
+
 
 REFS = RULES / "refs"
 LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
@@ -408,10 +426,10 @@ def update_readme_measurements() -> bool:
 
   table = [header, "| --- | --- | --- |\n"]
   for relative, kind in EXPECTED_BUDGETS.items():
-    path = ROOT / relative
-    if not path.is_file():
-      raise RuntimeError(f"README budget path missing: {relative}")
-    current = f"{measure(path, kind):,}"
+    missing = [part for part in budget_parts(relative) if not (ROOT / part).is_file()]
+    if missing:
+      raise RuntimeError(f"README budget path missing: {missing[0]}")
+    current = f"{measure_budget(relative, kind):,}"
     table.append(f"| `{relative}` | `{kind}` | {current} `{format_unit(kind)}` |\n")
 
   updated = "".join(lines[:start] + table + lines[end:])
@@ -779,14 +797,14 @@ def validate(errors: list[str]) -> tuple[int, int]:
         )
         continue
 
-      path = ROOT / relative
+      missing = [part for part in budget_parts(relative) if not (ROOT / part).is_file()]
 
-      if not path.is_file():
-        errors.append(f"README budget path missing: {relative}")
+      if missing:
+        errors.append(f"README budget path missing: {missing[0]}")
         continue
 
       try:
-        actual = measure(path, expected_kind)
+        actual = measure_budget(relative, expected_kind)
       except RuntimeError as exc:
         errors.append(str(exc))
         continue

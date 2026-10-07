@@ -33,6 +33,7 @@ Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md b
 | `system-prompts/NEMOGPT.md` | `cl100k_base` | 3,022 `tok` |
 | `skills/amending-violations/SKILL.md` | `cl100k_base` | 1,604 `tok` |
 | `skills/arena-skill/SKILL.md` | `cl100k_base` | 4,068 `tok` |
+| `skills/arena-skill/ (suite)` | `cl100k_base` | 6,696 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 46,883 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 8,333 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 12,900 `B` |
