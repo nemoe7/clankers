@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
 - **Push cadence boundary**: The Constitution now pushes verified commits to origin after each task completion, and it never holds verified batches across tasks.
 - **One arena skill**: `arena-preview-steering` and `arena-proxy` merge into `arena`. The proxy pages join its SKILL.md, the proxy code moves to `skills/arena/proxy/`, and the turn-read, install, report, gate and workflow pointers name the one skill. Target repositories receive the skill without its proxy directory, so the docker files stay in this repository beside the published image.
+- **Read cadence**: The read bullet and the skill reference now say a read never waits for the Bash gate to block. A read that comes only after a blocked call is late.
 
 ### Added
 

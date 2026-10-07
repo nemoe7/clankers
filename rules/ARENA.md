@@ -34,7 +34,7 @@
 
 ## General
 
-- Read the inbox via `arena-preview read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. Block mechanics: skill reference, Read cadence.
+- Read the inbox via `arena-preview read` at turn start, each reasoning boundary, before/after each tool block, before expensive/irreversible work and before turn end. NEVER wait for the Bash gate to block; it is a repair, never the schedule. Block mechanics: skill reference, Read cadence.
 - When a Bash call reports a pending note or answer count above zero on stderr, read the inbox before the next work step.
 - Missing/failed reads are errors, not empty inboxes; before the first start there is no inbox.
 - Ack every delivered note with `ack <ids> --reply <markdown>` (rendered in the log) or `--note <text>`, one text per call, only those IDs, NEVER all pending blindly.
