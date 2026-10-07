@@ -3023,8 +3023,10 @@ def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
   # A cd prefix is fine on the writer's line, on the way to a read or a poll; the banned
   # readers end the quiet-line exemption, so their call blocks instead of riding along
   # (owner notes 37f8956 and bf26910).
-  assert preview.quiet_inbox_line("cd /home/user/clankers && arena-preview read") is True
-  assert preview.quiet_inbox_line("cd /home/user/clankers && arena-preview poll") is True
+  clean = "cd /home/user/clankers && arena-preview read"
+  poll = "cd /home/user/clankers && arena-preview poll"
+  assert preview.quiet_inbox_line(clean) is True
+  assert preview.quiet_inbox_line(poll) is True
   for banned in ("tail", "head", "grep"):
     line = f"cd /home/user/clankers && {banned} -5 state.jsonl && arena-preview read"
     assert preview.quiet_inbox_line(line) is False, line
