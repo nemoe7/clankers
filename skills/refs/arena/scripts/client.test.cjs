@@ -1182,6 +1182,10 @@ test('preview client', async (t) => {
     shipBox.checked = true;
     await get('#report-form').events.submit(event({}));
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Ship it' });
+    // The report ID stays on show after a send (note f1630e1): the status line carried the chip
+    // on load and dropped it on the sent answer.
+    assert.equal(part(get('#report-status'), 'note-id').textContent, 'r1',
+      'a sent answer keeps the report ID on show');
     await get('#refresh-report').events.click();
     await tick();
     assert.equal(shipBox.checked, true);

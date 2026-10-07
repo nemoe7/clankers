@@ -1212,8 +1212,12 @@ $('#report-form').addEventListener('submit', async event => {
     save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
-    $('#report-status').textContent =
-      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)}`;
+    // The report ID keeps its chip after a send (note f1630e1): the plain text assignment
+    // dropped it, so the loaded line and the sent line disagreed.
+    reportStatusLine(
+      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)}`,
+      id,
+    );
     const report = lastState?.reports.find(item => item.id === id);
     if (report) {
       report.latest_answer_id = result.id;
@@ -1223,7 +1227,12 @@ $('#report-form').addEventListener('submit', async event => {
     }
     void refreshState();
   } catch (error) {
-    if ($('#report').dataset.reportId === id) $('#report-status').textContent = `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`;
+    if ($('#report').dataset.reportId === id) {
+      reportStatusLine(
+        `Submission not confirmed: ${error.message}. Entries are kept; resending creates a new answer.`,
+        id,
+      );
+    }
   } finally { button.disabled = false; }
 });
 // The Tasks tab is the agent's own status: two divs, written by the CLI, read on the same poll.
