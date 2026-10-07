@@ -189,7 +189,7 @@
 - Keep the PR title current with the work; update it alongside the body.
 - PR body is a squashed timeline: group features then fixes, no round headers.
 - NEVER mention the owner in any public-facing material; it carries the change, not the people.
-- NEVER close or reopen a PR, not even to retrigger its checks.
+- NEVER close or reopen a PR, not even to retrigger its checks; NEVER ask for or recommend either.
 
 ## Workspace
 

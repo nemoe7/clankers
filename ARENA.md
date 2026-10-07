@@ -126,7 +126,7 @@
 - **NEVER `-f body=@path`**; stage PR text in the workspace, NEVER /tmp. After every PATCH re-fetch title/body and diff against the staged file; a 200 is not proof.
 - PR body is a squashed timeline: features then fixes, no round headers.
 - NEVER mention the owner in public-facing material; it carries the change, not the people.
-- NEVER close or reopen a PR, not even to retrigger its checks.
+- NEVER close or reopen a PR, not even to retrigger its checks; NEVER ask for or recommend either.
 
 ## Workspace
 

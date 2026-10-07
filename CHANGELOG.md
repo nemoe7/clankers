@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-07
+
+### Changed
+
+#### arena
+
+- **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
+
 ## 2026-10-06
 
 ### Added
