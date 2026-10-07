@@ -1,6 +1,6 @@
 # Preview transport: commands and recovery
 
-Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. The state directory is `ARENA_PREVIEW_STATE_DIR` when that is set, and the repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts. The installed wrapper finds the repository from its own path, so every CLI call works from any working directory and needs no `cd`.
+Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. The state directory is `ARENA_PREVIEW_STATE_DIR` when that is set, and the repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts. The installed wrapper finds the repository from its own path, so every CLI call works from any directory and needs no `cd`.
 
 ## Commands
 
@@ -22,7 +22,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 
 Use complete IDs in CLI calls; cite their first seven characters in prose. `read` does not acknowledge an item. Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers. A repeated `ack` on an ID appends one more reply block and keeps the earlier ones. The same on a submission ID appends reply blocks to its receipt. An unknown ID fails the whole receipt batch. Answer later submissions under their own IDs. If the preview is unavailable, use `ACK:` in chat for delivered notes.
 
-Refer to a note in prose by the first seven characters of its ID, NEVER by its sequence number (`seq`) or list position. Use the full ID in CLI calls. Before sending a note reference, check it against the ID returned by `read`.
+Refer to a note in prose by the first seven characters of its ID, NEVER by its sequence number (`seq`) or list position. Use the full ID in CLI calls; before sending a note reference, check it against the ID `read` returned.
 
 When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks; the seven-character shortening applies to note IDs only. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
 
@@ -91,7 +91,7 @@ Which checks must pass first? {#release-checks}
 
 Each file on a composed note is 1–50MB. `read` returns the note with an `attachments[]` list; read each record's `path` before acknowledging the single note ID. `present: false` means the record remains but the bytes do not.
 
-An agent asks with `download-request <url>`. That queues a pending job. The owner approves or denies it before the browser fetches the URL. Add `--allow-proxy` only for that URL. Credentials in URLs are rejected. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes.
+An agent asks with `download-request <url>`; that queues a pending job the owner approves or denies before the browser fetches the URL. Add `--allow-proxy` only for that URL. Credentials in URLs are rejected. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes.
 
 ## Restore
 
