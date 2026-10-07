@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Writing row emoji**: The title emoji now shows the pencil for a Writing action row. The earlier table held only `write`, so `Writing` fell to the gear emoji. Arena 1.8.7.
 - **Save cards**: A card in the page corner warns when the page has no save file, with a Choose file button. A force save reports the file it wrote. Arena 1.8.6.
 - **Menu press logs**: Every menu press writes its own line under the `menu` module before the command runs. Arena 1.8.1.
 - **State comparison logs**: Every comparison in the auto save writes its own line, from the stamp verdict to each pair check. Arena 1.8.1.

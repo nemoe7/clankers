@@ -955,11 +955,11 @@ function checkTabTitle(api) {
     });
   }
   // A collapsed edit row pulses its label span, not an svg, so the mock matches by class.
-  function pulseLabelDoc(tagName) {
+  function pulseLabelDoc(tagName, text) {
     var label = {
       tagName: tagName,
       className: "shrink-0 text-text-tertiary animate-pulse",
-      textContent: "Editing",
+      textContent: text || "Editing",
       parentElement: null,
       closest: function () { return null; },
     };
@@ -1244,6 +1244,8 @@ function checkTabTitle(api) {
     [liveRow(strayDoc), null],
     [emojiForRow(liveRow(olderPulseDoc)), "\uD83D\uDDA5\uFE0F"],
     [emojiForRow(liveRow(pulseLabelDoc("span"))), "\u270F\uFE0F"],
+    // The owner's bug: the Writing row fell to the gear emoji through the unmatched label.
+    [emojiForRow(liveRow(pulseLabelDoc("span", "Writing"))), "\u270F\uFE0F"],
     [emojiForRow(liveRow(pulseLabelDoc("svg"))), "\u270F\uFE0F"],
     [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
     [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
@@ -1263,6 +1265,7 @@ function checkTabTitle(api) {
     [actionEmoji("Edit"), "\u270F\uFE0F"],
     [actionEmoji("Editing files"), "\u270F\uFE0F"],
     [actionEmoji("Write"), "\u270F\uFE0F"],
+    [actionEmoji("Writing"), "\u270F\uFE0F"],
     // The owner's reading group: Explored, Read.
     [actionEmoji("Explored"), "\uD83D\uDCD6"],
     [actionEmoji("Exploring"), "\uD83D\uDCD6"],
