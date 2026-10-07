@@ -13,15 +13,22 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
 - **Push cadence boundary**: The Constitution now pushes verified commits to origin after each task completion, and it never holds verified batches across tasks.
 
+### Added
+
 #### userscripts
 
-- **State file names**: The auto save names the file after the repository and the branch, and a stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
-
-### Added
+- **Menu press logs**: Every menu press writes its own line under the `menu` module before the command runs. Arena 1.8.1.
+- **State comparison logs**: Every comparison in the auto save writes its own line, from the stamp verdict to each pair check. Arena 1.8.1.
 
 #### preview
 
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
+
+### Changed
+
+#### userscripts
+
+- **State file names**: The auto save names the file after the repository and the branch. A stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
 
 ### Fixed
 

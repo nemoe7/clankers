@@ -21,21 +21,28 @@ function loadChecks(file) {
       session.value = value;
     },
   };
+  // The manager menu keeps every registered command, so a case can press one by hand.
+  const menus = [];
   const context = {
     console,
     URL,
     sessionStorage: session,
     // The bundle asks for GM_download, so the manager hands it over outside a browser too.
     GM_download: function () {},
+    GM_registerMenuCommand: function (label, run) {
+      menus.push({ label: label, run: run });
+    },
+    GM_unregisterMenuCommand: function () {},
     fetch: (...args) => globalThis.fetch(...args),
   };
   vm.runInNewContext(source, context, { filename: file });
-  return { checks: context.CLANKERS_CHECKS, session };
+  return { checks: context.CLANKERS_CHECKS, session, menus };
 }
 
-function checkLogging(api) {
+function checkLogging(api, menus) {
   var LOG_TAG = api.LOG_TAG;
   var logEvent = api.logEvent;
+  var menuItem = api.menuItem;
   // One tag carries every line, so one filter shows the page's story.
   assert.equal(LOG_TAG, "[clankers]");
   var lines = [];
@@ -62,6 +69,29 @@ function checkLogging(api) {
     logEvent("state", "saved");
   } finally {
     console.log = original;
+  }
+  // Every menu press writes its own line before the command runs (owner note e60e311).
+  if (menuItem) {
+    var ran = [];
+    var list = [];
+    menuItem(list, "Arena preview state — save now", function () {
+      ran.push("save");
+    });
+    assert.equal(list.length, 1);
+    var registered = menus[menus.length - 1];
+    assert.equal(registered.label, "Arena preview state — save now");
+    lines.length = 0;
+    var pressed = [];
+    console.log = function () {
+      pressed.push(Array.prototype.join.call(arguments, " "));
+    };
+    try {
+      registered.run();
+    } finally {
+      console.log = original;
+    }
+    assert.deepEqual(ran, ["save"]);
+    assert.equal(pressed[0], "[clankers][menu] Arena preview state — save now");
   }
   console.log("ok logging 3");
 }
@@ -1926,6 +1956,41 @@ function checkStateDownload(api, session) {
     "a.ndjson stamp=2026-10-06T09:45:05+00:00 saved=2026-10-06T09:44:05+00:00",
   );
   assert.equal(stateTick("a.ndjson", "", ""), "a.ndjson stamp=none saved=none");
+  // Every comparison in the save path writes its own line, so one filter shows which test
+  // refused a write (owner note e60e311).
+  var compared = [];
+  var originalLog = console.log;
+  console.log = function () {
+    compared.push(Array.prototype.join.call(arguments, " "));
+  };
+  try {
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
+    stateDownload(repo, branch, "2026-10-05T20:00:00", counts, "2026-10-06T06:12:33");
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "");
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, {
+      stamp: "2026-10-05T20:00:00",
+      note: "2026-10-06T05:30:00",
+      task: "2026-10-06T05:00:00",
+    }, { note: "2026-10-06T05:00:00", task: "2026-10-06T06:00:00" });
+    stateDownload(repo, branch, null, counts, "");
+  } finally {
+    console.log = originalLog;
+  }
+  function comparedLine(expected) {
+    return compared.indexOf("[clankers][state] " + expected) !== -1;
+  }
+  assert.ok(comparedLine("compare stamp: same as 2026-10-06T06:12:33"), compared.join("\n"));
+  assert.ok(comparedLine("compare stamp: older than 2026-10-06T06:12:33"), compared.join("\n"));
+  assert.ok(comparedLine("compare stamp: first write at 2026-10-06T06:12:33"), compared.join("\n"));
+  assert.ok(
+    comparedLine("compare note stamp: 2026-10-06T05:00:00 is older than 2026-10-06T05:30:00"),
+    compared.join("\n"),
+  );
+  assert.ok(
+    comparedLine("compare task stamp: 2026-10-06T06:00:00 is forward of 2026-10-06T05:00:00"),
+    compared.join("\n"),
+  );
+  assert.ok(comparedLine("compare stamp: none, no stamp to compare"), compared.join("\n"));
   console.log("ok state download 32");
 }
 
@@ -1935,7 +2000,7 @@ const assert = require("node:assert/strict");
 const arenaModule = loadChecks("arena.user.js");
 const arena = arenaModule.checks;
 test("prompt fill", () => checkPromptFill(arena.promptFill));
-run("arena logging", () => checkLogging(arena.logging));
+run("arena logging", () => checkLogging(arena.logging, arenaModule.menus));
 run("open steering", () => checkOpenSteering(arena.openSteering));
 run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));

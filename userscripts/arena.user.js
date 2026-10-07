@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.0
+// @version      1.8.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -51,13 +51,19 @@
     }
   }
 
-  exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG });
-
-  // One menu entry with one guard, so a manager without a menu gets nothing.
+  // One menu entry with one guard, so a manager without a menu gets nothing. The press writes
+  // its own line before the command runs, so one filter shows every menu press (note e60e311).
   function menuItem(list, label, run) {
     if (typeof GM_registerMenuCommand !== "function") return;
-    list.push(GM_registerMenuCommand(label, run));
+    list.push(
+      GM_registerMenuCommand(label, function () {
+        logEvent("menu", label);
+        run();
+      }),
+    );
   }
+
+  exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG, menuItem: menuItem });
 
   // The transcript bar, the saved slug key and the arena URL readers are page-wide, so one
   // copy serves every feature.
@@ -1643,6 +1649,7 @@
 
   function stateDownload(repo, branch, stamp, counts, remembered, pair, force) {
     if (!stamp) {
+      logEvent("state", "compare stamp: none, no stamp to compare");
       return {
         kind: "error",
         message: "The state carries no stamp; the next save names it.",
@@ -1650,7 +1657,10 @@
     }
     var name = stateFileName(repo, branch, stamp, counts);
     var memory = stateRemembered(remembered);
+    // Every comparison writes its own line, so one filter shows which test decided the save
+    // (owner note e60e311).
     if (!force && memory.stamp && memory.stamp === stamp) {
+      logEvent("state", "compare stamp: same as " + memory.stamp);
       return {
         kind: "unchanged",
         name: name,
@@ -1658,6 +1668,7 @@
       };
     }
     if (!force && memory.stamp && String(stamp) < memory.stamp) {
+      logEvent("state", "compare stamp: older than " + memory.stamp);
       return {
         kind: "stale",
         name: name,
@@ -1665,13 +1676,35 @@
           "Stale preview state (" + stamp + " is older than " + memory.stamp + "); nothing written.",
       };
     }
+    if (!force) {
+      logEvent(
+        "state",
+        memory.stamp
+          ? "compare stamp: newer than " + memory.stamp
+          : "compare stamp: first write at " + stamp,
+      );
+    }
     // The approved pair: the newest note stamp and the newest task stamp. A rollback leaves the
     // older records of a group behind while one new record moves the state stamp forward, so an
     // older stamp of the pair refuses the write and the newer local file stays (answer a898024).
     // A forced save skips the refusal on purpose: the menu entry takes the state as it stands.
     var held = [];
-    if (!force && pair && memory.note && pair.note && String(pair.note) < memory.note) held.push("note");
-    if (!force && pair && memory.task && pair.task && String(pair.task) < memory.task) held.push("task");
+    if (!force && pair && memory.note && pair.note) {
+      if (String(pair.note) < memory.note) {
+        held.push("note");
+        logEvent("state", "compare note stamp: " + pair.note + " is older than " + memory.note);
+      } else {
+        logEvent("state", "compare note stamp: " + pair.note + " is forward of " + memory.note);
+      }
+    }
+    if (!force && pair && memory.task && pair.task) {
+      if (String(pair.task) < memory.task) {
+        held.push("task");
+        logEvent("state", "compare task stamp: " + pair.task + " is older than " + memory.task);
+      } else {
+        logEvent("state", "compare task stamp: " + pair.task + " is forward of " + memory.task);
+      }
+    }
     if (held.length) {
       var phrase = held.join(" and ") + (held.length > 1 ? " stamps" : " stamp");
       return {
