@@ -1141,6 +1141,7 @@ def main():
 			except FileNotFoundError:allowed=True
 			except Exception:return 2
 			if not allowed:
+				if args.push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, then push again.',flush=True)
 				print('READ INBOX NOW. The only call that passes is a bare `arena-preview read`. Then ack every note with a bare `arena-preview ack <id> --reply <markdown>` or `arena-preview ack <id> --note <text>` call, one call per note.',flush=True);hint=gate_line_hint(args.line)
 				if hint:print(hint,flush=True)
 				return 1

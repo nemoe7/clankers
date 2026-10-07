@@ -2996,11 +2996,13 @@ def test_bash_gate():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert pushed.returncode == 1
+    # A blocked push says what was stopped and what clears it, then the inbox block.
+    assert pushed.stdout.startswith("PUSH BLOCKED: "), pushed.stdout
     assert (
-      pushed.stdout.strip()
-      == "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
+      "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
       " Then ack every note with a bare `arena-preview ack <id> --reply <markdown>`"
       " or `arena-preview ack <id> --note <text>` call, one call per note."
+      in pushed.stdout
     )
     gate_store.acknowledge(["push-note"], "note", "Cleared")
     assert gate_store.gate(pending_only=True) is True

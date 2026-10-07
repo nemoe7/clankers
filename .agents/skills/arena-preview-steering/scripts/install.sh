@@ -192,6 +192,15 @@ _arena_preview_gate() {
       fi
       ;;
   esac
+  # A read the sandbox cannot reach on its own: the hook names the proxy route once a shell.
+  case "\$_arena_preview_line" in
+    *code-scanning*|*code_scanning*|*"gh run view"*|*"gh run download"*|*actions/runs*)
+      if [ -z "\${_arena_preview_proxy_told:-}" ]; then
+        _arena_preview_proxy_told=1
+        printf '%s\n' 'Read that through the proxy: load the arena-proxy skill for code-scanning alerts and workflow run logs.' >&2
+      fi
+      ;;
+  esac
   case "\$BASH_COMMAND" in *preview*|*profile*|*bashrc*|*arena-state*|gh*|sleep*|true*|:*|test*|"git status"*|"git diff"*|"git add"*|"git commit"*|*arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*) return 0 ;; esac
   # A push is a checkpoint: an unread note can change what leaves the sandbox,
   # so it waits for an ack whatever the call count.

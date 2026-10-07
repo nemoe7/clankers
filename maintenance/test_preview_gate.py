@@ -187,6 +187,18 @@ def test_a_full_path_hears_the_bare_command_line():
   assert "arena-preview works" not in plain.stderr
 
 
+def test_an_unreachable_read_hears_the_proxy_line():
+  # Code-scanning alerts and workflow run logs need the proxy, so the hook says so.
+  result = run("gh api repos/o/r/code-scanning/alerts")
+  assert "arena-proxy" in result.stderr, result.stderr
+  # One line a shell, not one a call.
+  assert result.stderr.count("arena-proxy") == 1
+  logs = run("gh run view 7 --log")
+  assert "arena-proxy" in logs.stderr, logs.stderr
+  plain = run("gh pr checks 7")
+  assert "arena-proxy" not in plain.stderr
+
+
 def git_repo(root: Path) -> Path:
   """One repository whose origin/main carries a commit the branch lacks."""
   repo = root / "repo"
