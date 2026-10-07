@@ -1942,9 +1942,13 @@ function checkStateDownload(api, session) {
   );
   // A menu click grants no browser gesture, so the automatic path writes the stamped
   // download and the pick stays a manual action.
-  assert.equal(stateAction("pick", false), "download");
+  // No file is set: an automatic tick blocks instead of dropping a stamped download on the
+  // owner (note 78e582d). A manual press still opens the picker, and keeps the download only
+  // where the browser cannot offer one.
+  assert.equal(stateAction("pick", false), "block");
   assert.equal(stateAction("pick", true), "pick");
-  assert.equal(stateAction("download", false), "download");
+  assert.equal(stateAction("download", false), "block");
+  assert.equal(stateAction("download", true), "download");
   assert.equal(stateAction("write", true), "write");
   assert.equal(stateAction("unchanged", false), "unchanged");
   // The tick line names the file and shows the two stamps the route compared.

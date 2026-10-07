@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.2
+// @version      1.8.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1733,8 +1733,11 @@
     return hasPicker ? "pick" : "download";
   }
 
+  // With no file set, an automatic tick blocks: a stamped download lands instead of the owner's
+  // file and fills the downloads folder (owner note 78e582d). A manual press still opens the
+  // picker, and keeps the download only where the browser cannot offer one.
   function stateAction(route, manual) {
-    if (route === "pick" && !manual) return "download";
+    if (!manual && (route === "pick" || route === "download")) return "block";
     return route;
   }
 
@@ -1951,7 +1954,7 @@
     function hintStateFile() {
       if (GM_getValue(STATE_HINT_KEY, false)) return;
       GM_setValue(STATE_HINT_KEY, true);
-      logEvent("state", "no file chosen; the stamped download lands each new stamp");
+      logEvent("state", "no file chosen; nothing is written until the choose entry runs");
     }
 
     function downloadRoute(hasManagerDownload) {
@@ -2068,6 +2071,11 @@
             if (manual) logEvent("state", "no write: " + plan.kind);
             return;
           }
+          if (action === "block") {
+            hintStateFile();
+            logEvent("state", "blocked: no file chosen, nothing written");
+            return;
+          }
           if (action === "pick") {
             chooseStateFile();
             return;
@@ -2094,7 +2102,7 @@
             );
             return;
           }
-          if (action === "download" && hasPicker && !handle) hintStateFile();
+          // Only a manual press reaches here, and only where the browser offers no picker.
           logEvent("state", "stamped download: " + plan.name);
           writeStateDownload(body.text, plan.name);
           GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(body.stamp, body.stamps)));
