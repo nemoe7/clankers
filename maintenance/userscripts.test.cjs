@@ -465,8 +465,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
       click() { clicked += 1; },
     };
+    const logged = [];
     const context = {
-      console: { log() {} },
+      console: { log: (...args) => logged.push(args.join(" ")) },
       URL,
       location: { href: "https://arena.ai/agent", pathname: "/agent" },
       document: {
@@ -580,6 +581,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     popstates.forEach((fn) => fn());
     flush();
     await settle();
+    // The fill names the repo it filled (answer e8fc4f6), so one filter shows which page wrote
+    // the composer.
+    assert.ok(
+      logged.includes("[NemoUtils][fill] filled composer for clankers"),
+      `the fill line names the repo it filled: ${logged.join(" | ")}`,
+    );
     assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns when the check clears");
     assert.ok(composer.innerText.includes("here is ARENA.md:\n# Rules"), "The fill carries the rules file under the message");
     // The pause clears a scattered call that waits, so no request leaves after the press.
