@@ -20,7 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **One arena skill**: `arena-preview-steering` and `arena-proxy` merge into `arena`. The proxy pages join its SKILL.md, the proxy code moves to `skills/arena/proxy/`, and the turn-read, install, report, gate and workflow pointers name the one skill. Target repositories receive the skill without its proxy directory, so the docker files stay in this repository beside the published image.
 - **Read cadence**: The read bullet and the skill reference now say a read never waits for the Bash gate to block. A read that comes only after a blocked call is late.
 - **Tooling installs**: The Workspace rules now install dependencies and virtual environments with the background process tool, so an install runs while the turn continues. The arena installer never runs that way.
-- **Rule text re-squash**: ARENA.md keeps every rule with fewer words, and the arena skill drops one duplicated key paragraph. The README measurements follow the smaller files.
+- **Rule text re-squash**: The live files carry the squash and the refs trees keep the full wording. ARENA.md drops 49 bytes and the arena skill 318. The README measurements follow the smaller files.
 
 ### Added
 
@@ -61,6 +61,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Menu modules**: Every Arena menu entry leads with its module, such as `Proxy — host` or `State — save now`. A switch names its state in parentheses, and no entry carries a role word. Arena 1.8.5.
 - **State file names**: The auto save names the file after the repository and the branch. A stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
+
+#### maintenance
+
+- **Reference parity**: `check_minify.py` no longer requires the shipped references to match the refs copies. The refs tree is the full wording, and the lives carry the squash.
 
 ### Removed
 
