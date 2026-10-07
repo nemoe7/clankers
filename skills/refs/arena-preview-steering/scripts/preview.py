@@ -962,7 +962,8 @@ def unquote_commands(line):
       if char == "\\" and quote == '"':
         index += 2
         continue
-      if text.startswith("$(", index) or char == "`":
+      # Only double quotes substitute: backticks and $() inside single quotes stay text.
+      if quote == '"' and (text.startswith("$(", index) or char == "`"):
         kept.append(" $(")
       if char == quote:
         quote = ""

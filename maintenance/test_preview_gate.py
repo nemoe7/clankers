@@ -156,6 +156,12 @@ def test_the_inbox_line_classifier():
   assert not quiet("arena-preview read 2>/dev/null")
   assert not quiet("arena-preview ack abc &>/dev/null")
   assert not quiet('arena-preview ack abc --reply "$(rm -rf /tmp/x)"')
+  # Single quotes never substitute in bash, so formatting and dollars ride an ack unchecked.
+  # Double quotes keep their substitution refused (owner report report-stderr-read-investigation).
+  assert quiet("arena-preview ack abc --reply 'task `x` is queued'")
+  assert quiet("arena-preview ack abc --reply 'the $(pwd) path'")
+  assert not quiet('arena-preview ack abc --reply "task `x` is queued"')
+  assert not quiet('arena-preview ack abc --reply "the $(pwd) path"')
   assert not quiet("pytest -q; arena-preview read >/dev/null 2>&1")
   assert not quiet("cd /x && echo ran && arena-preview read")
   assert not quiet("git push origin main && arena-preview ack a")

@@ -352,7 +352,7 @@ def unquote_commands(line):
 		char=text[index]
 		if quote:
 			if char=='\\'and quote=='"':index+=2;continue
-			if text.startswith('$(',index)or char=='`':kept.append(' $(')
+			if quote=='"'and(text.startswith('$(',index)or char=='`'):kept.append(' $(')
 			if char==quote:quote=''
 			index+=1;continue
 		if char in("'",'"'):quote=char;index+=1;continue

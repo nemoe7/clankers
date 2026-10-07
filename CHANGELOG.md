@@ -40,6 +40,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Quoted reply text**: The gate read a backtick or `$()` beside a read as work, but single quotes keep both literal in bash. Only double quotes now mark a substitution, so a reply with formatting passes the quiet-line test.
 - **Main drift notice**: The gate prints one stderr line when origin/main carries commits the branch lacks. The line lands on a commit or push line, once per shell, and names the replay: fetch origin, rebase over main, then push.
 - **Turn end in the header**: A returned poll marks the turn end, and the agent's next call clears the mark. The header drops the long call text at that mark. After three quiet minutes it names the agent gone, instead of counting a call that no longer runs.
 
