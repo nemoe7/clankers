@@ -547,7 +547,7 @@ MAX_TASK_DETAILS = 40
 # A task detail is one step: a longer line is a wall of text, and the tool refuses it.
 TASK_STEP_MAX = 120
 ECHO_DETAIL = 200
-TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked"
+TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked, report_id"
 # The save file carries note, task and answer lines through one importer. Keys are named
 # here so the writer and reader cannot drift apart.
 #
@@ -568,7 +568,7 @@ NOTE_LINE_KEYS = (
   "seen_at",
   "task_id",
 )
-TASK_LINE_KEYS = ("id", "title", "details", "status", "order")
+TASK_LINE_KEYS = ("id", "title", "details", "status", "order", "report_id")
 SUBMISSION_LINE_KEYS = (
   "id",
   "report_id",
@@ -587,8 +587,12 @@ REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at")
 
 
 def task_row(row):
-  """Shape one stored task for the state payload, keeping its details a list."""
-  return {
+  """Shape one stored task for the state payload, keeping its details a list.
+
+  A task carries its report link only while it waits on that report, so an unlinked
+  task keeps the shape it had before the link existed.
+  """
+  shaped = {
     "id": row[0],
     "title": row[1],
     "details": json.loads(row[2]),
@@ -597,11 +601,14 @@ def task_row(row):
     "updated_at": row[5],
     "blocked": bool(row[6]) if len(row) > 6 else False,
   }
+  if len(row) > 7 and row[7]:
+    shaped["report_id"] = row[7]
+  return shaped
 
 
 def echo_task(record, before=None, after=None):
   """The confirmation an agent gets back: whole title, details cut, neighbours named."""
-  return {
+  echo = {
     "id": record["id"],
     "title": record["title"],
     "status": record["status"],
@@ -613,6 +620,9 @@ def echo_task(record, before=None, after=None):
       for detail in record["details"]
     ],
   }
+  if record.get("report_id"):
+    echo["report_id"] = record["report_id"]
+  return echo
 
 
 def saved_note_line(record):
@@ -642,11 +652,17 @@ def state_ndjson(lines):
 
 
 def saved_task_line(record):
-  """Return the keys a saved task line carries; details keep their list shape."""
+  """Return the keys a saved task line carries; details keep their list shape.
+
+  The report link rides only when a task has one, so a task line stays disjoint from an
+  answer line, which is the only other line that carries a `report_id`.
+  """
   if not isinstance(record, dict):
     raise TypeError("Every saved task is an object")
   line = {key: record.get(key) for key in TASK_LINE_KEYS}
   line["details"] = [str(item) for item in record.get("details") or []]
+  if not line.get("report_id"):
+    line.pop("report_id", None)
   return line
 
 
@@ -1306,6 +1322,8 @@ class Store:
       columns = {row["name"] for row in db.execute("PRAGMA table_info(tasks)")}
       if "blocked" not in columns:
         db.execute("ALTER TABLE tasks ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
+      if "report_id" not in columns:
+        db.execute("ALTER TABLE tasks ADD COLUMN report_id TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
       if "ack_edited_at" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT")
@@ -1470,6 +1488,7 @@ class Store:
       if existing:
         if existing["text"] != text:
           raise ValueError("This message ID already belongs to different text")
+        self.release_report_tasks(db, report_id)
         return message_row(existing)
       db.execute(
         "INSERT INTO submissions"
@@ -1487,6 +1506,7 @@ class Store:
           seen_reply_count,
         ),
       )
+      self.release_report_tasks(db, report_id)
       reset_poll_count(db)
       clear_skip_poll(db)
       return message_row(
@@ -1664,6 +1684,7 @@ class Store:
     status=None,
     order=None,
     blocked=None,
+    report_id=None,
     shared=None,
   ):
     """Insert or update one task and return it as stored.
@@ -1693,6 +1714,13 @@ class Store:
       status = status or (stored["status"] if stored else "upcoming")
       if blocked is None:
         blocked = stored["blocked"] if stored else False
+      if report_id is None:
+        report_id = stored.get("report_id") if stored else None
+      if report_id:
+        identifier(report_id)
+      if report_id and blocked and self.report_has_answers(db, report_id):
+        # The wait is over before it starts when the report already has its answer.
+        blocked = False
       if status == "finished" and blocked:
         raise ValueError(
           f"Task {task_id} is blocked; clear the mark with --unblocked first"
@@ -1713,6 +1741,7 @@ class Store:
         "order": len(siblings) + 1,
         "updated_at": stamp,
         "blocked": bool(blocked),
+        "report_id": report_id,
       }
       if order is not None:
         index = max(0, min(order - 1, len(siblings)))
@@ -1723,11 +1752,11 @@ class Store:
       siblings.insert(index, record)
       record["order"] = index + 1
       db.execute(
-        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(id) DO UPDATE SET title = excluded.title,"
         " details = excluded.details, status = excluded.status,"
         " position = excluded.position, updated_at = excluded.updated_at,"
-        " blocked = excluded.blocked",
+        " blocked = excluded.blocked, report_id = excluded.report_id",
         (
           task_id,
           title,
@@ -1737,6 +1766,7 @@ class Store:
           stamp,
           stamp,
           1 if blocked else 0,
+          report_id,
         ),
       )
       # Positions are written from the computed list, because the row just upserted can tie
@@ -1745,6 +1775,29 @@ class Store:
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, item["id"]))
       self.renumber(db)
     return record
+
+  @staticmethod
+  def report_has_answers(db, report_id):
+    """Whether this report already holds an answer, so no task waits on it."""
+    return bool(
+      db.execute(
+        "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
+      ).fetchone()
+    )
+
+  @staticmethod
+  def release_report_tasks(db, report_id):
+    """Clear the blocked mark on every task waiting on this report.
+
+    A task blocked on a report waits for one thing, the owner's answer, so the answer
+    releases it (owner note 060bf7f). The task stays upcoming, and the next poll then
+    returns it as work instead of as a wait.
+    """
+    db.execute(
+      "UPDATE tasks SET blocked = 0, updated_at = ?"
+      " WHERE report_id = ? AND blocked = 1",
+      (now(), report_id),
+    )
 
   def remove_task(self, task_id):
     """Delete one task and return what was stored, so the echo can confirm it."""
@@ -1794,8 +1847,8 @@ class Store:
     stamp = now()
     with self.transaction() as db:
       row = db.execute(
-        "SELECT id, title, details, status, position, created_at, blocked FROM tasks"
-        " WHERE id = ?",
+        "SELECT id, title, details, status, position, created_at, blocked, report_id"
+        " FROM tasks WHERE id = ?",
         (prev_id,),
       ).fetchone()
       if row is None:
@@ -1805,8 +1858,8 @@ class Store:
       self.refuse_shared_id(db, "tasks", "reports", task_id)
       db.execute("DELETE FROM tasks WHERE id = ?", (prev_id,))
       db.execute(
-        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (task_id, row[1], row[2], row[3], row[4], row[5], stamp, row[6]),
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (task_id, row[1], row[2], row[3], row[4], row[5], stamp, row[6], row[7]),
       )
       self.renumber(db)
 
@@ -2443,6 +2496,7 @@ class Store:
           status,
           record.get("order") or index,
           record.get("blocked"),
+          record.get("report_id"),
         )
       )
     with self.transaction(shared, autosave=autosave) as db:
@@ -2451,7 +2505,7 @@ class Store:
         # row. Refusing before the delete names the offending record; refusing after it would
         # still roll back, but the error would arrive with the table emptied inside the
         # transaction and the record that caused it already written.
-        for task_id, title, _, _, _, _ in prepared:
+        for task_id, title, _, _, _, _, _ in prepared:
           stored = db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
           if title is None and not stored:
             raise ValueError(f"A new task needs a title: {task_id}")
@@ -3614,6 +3668,11 @@ def main():
     help="Message this task answers; marks that message as having a task",
   )
   task.add_argument(
+    "--report",
+    metavar="REPORT-ID",
+    help="Report this task waits on; its answer clears the blocked mark",
+  )
+  task.add_argument(
     "--amend",
     metavar="PREV-ID",
     help="Rename the task stored under this ID to the one given",
@@ -3742,6 +3801,11 @@ def main():
         check_task_steps(details)
       if args.amend:
         store.amend_task(args.amend, task_id)
+      if args.report:
+        try:
+          store.report(args.report)
+        except FileNotFoundError:
+          raise ValueError(f"No report is stored under {args.report}") from None
       if args.msg_id:
         # One transaction: a message ID that matches nothing takes the task with it, rather than
         # leaving a task whose marker never landed.
@@ -3753,6 +3817,7 @@ def main():
             args.status,
             args.order,
             args.blocked,
+            args.report,
             shared=shared,
           )
           store.mark_task(args.msg_id, task_id, shared=shared)
@@ -3764,6 +3829,7 @@ def main():
           args.status,
           args.order,
           args.blocked,
+          args.report,
         )
       before, after = store.neighbours(task_id)
       echo = echo_task(record, before, after)

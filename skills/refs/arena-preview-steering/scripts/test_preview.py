@@ -2381,6 +2381,76 @@ def test_task_finish_blocked_refused():
     assert cleared["status"] == "finished" and cleared["blocked"] is False
 
 
+def test_task_report_link_unblocks_on_answer():
+  # A blocked task names the report it waits on; the owner's answer clears the mark.
+  with tempfile.TemporaryDirectory() as link_dir:
+    link_store = preview.Store(link_dir, create=True)
+    source = Path(link_dir) / "pick.md"
+    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+    link_store.publish("pick", "Pick one", source)
+    linked = link_store.write_task(
+      "ship", "Ship the change", ["wait for the pick"], blocked=True, report_id="pick"
+    )
+    assert linked["blocked"] is True and linked["report_id"] == "pick"
+    assert link_store.list_tasks()[0]["report_id"] == "pick"
+    # The mark holds through an unrelated update while the report stays unanswered.
+    held = link_store.write_task("ship", details=["wait for the pick still"])
+    assert held["blocked"] is True and held["report_id"] == "pick"
+    link_store.write_task("other", "Other wait", blocked=True)
+    revision = link_store.report("pick")["updated_at"]
+    link_store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
+    tasks = {item["id"]: item for item in link_store.list_tasks()}
+    assert tasks["ship"]["blocked"] is False
+    assert tasks["other"]["blocked"] is True
+    # A link to a report that already has its answer never keeps the mark.
+    late = link_store.write_task("late", "Late link", blocked=True, report_id="pick")
+    assert late["blocked"] is False
+
+
+def test_task_report_link_refuses_missing_report():
+  # The CLI refuses a link to a report that is not stored, before the task is written.
+  with tempfile.TemporaryDirectory() as cli_dir:
+    cli_store = preview.Store(cli_dir, create=True)
+    cli_store.write_task("keep", "Keep")
+    missing = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "task",
+        "wait",
+        "Wait",
+        "--report",
+        "never-published",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=cli_dir,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": cli_dir},
+    )
+    assert missing.returncode == 1
+    assert "never-published" in missing.stderr
+    assert [item["id"] for item in cli_store.list_tasks()] == ["keep"]
+
+
+def test_task_report_link_survives_save_and_import():
+  # A save file carries the link, so a restore keeps the task waiting on the same report.
+  with tempfile.TemporaryDirectory() as save_dir:
+    save_store = preview.Store(save_dir, create=True)
+    source = Path(save_dir) / "pick.md"
+    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+    save_store.publish("pick", "Pick one", source)
+    save_store.write_task("ship", "Ship it", blocked=True, report_id="pick")
+    save_store.save_state({"notes": [], "tasks": save_store.tasks()})
+    lines = [json.loads(line) for line in save_store.save_path.read_text().splitlines()]
+    saved = next(line for line in lines if line.get("id") == "ship")
+    assert saved["report_id"] == "pick"
+    restored = preview.Store(Path(save_dir) / "restored", create=True)
+    assert restored.import_state(save_store.save_path.read_text())["tasks"] == 1
+    restored.report("pick")
+    assert restored.list_tasks()[0]["report_id"] == "pick"
+
+
 def test_task_amend():
   with tempfile.TemporaryDirectory() as amend_dir:
     amend_store = preview.Store(amend_dir, create=True)

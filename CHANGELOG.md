@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Task report links**: A blocked task now names the report it waits on with `--report`. The owner's answer clears the blocked mark, and the link rides the save file.
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
 
 ### Changed
