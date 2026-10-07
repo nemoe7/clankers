@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.0
+// @version      1.9.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -289,6 +289,23 @@
       return node.getClientRects().length > 0;
     }
     return !node.hidden;
+  }
+
+  // The ask_user card (note 6652cdd): one radiogroup with an aria-label, taken from the owner's
+  // captured outerHTML. It holds the title while the question waits for an answer.
+  var QUESTION_SELECTOR = 'div[role="radiogroup"][aria-label]';
+  var QUESTION_EMOJI = "\u2753";
+
+  function questionSignal(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") {
+      return false;
+    }
+    var nodes = doc.querySelectorAll(QUESTION_SELECTOR);
+    var i;
+    for (i = 0; i < nodes.length; i += 1) {
+      if (renderedNode(nodes[i])) return true;
+    }
+    return false;
   }
 
   function captchaSignal(doc) {
@@ -2601,6 +2618,12 @@
         heldEmojiAt = Date.now();
         return CAPTCHA_EMOJI;
       }
+      if (questionSignal(doc)) {
+        titleReason = "question card";
+        heldEmoji = QUESTION_EMOJI;
+        heldEmojiAt = Date.now();
+        return QUESTION_EMOJI;
+      }
       var row = strongRow(doc);
       var emoji = emojiForRow(row);
       if (emoji) {
@@ -2711,6 +2734,9 @@
       CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
       CAPTCHA_EMOJI: CAPTCHA_EMOJI,
       captchaSignal: captchaSignal,
+      QUESTION_SELECTOR: QUESTION_SELECTOR,
+      QUESTION_EMOJI: QUESTION_EMOJI,
+      questionSignal: questionSignal,
       openDialog: openDialog,
       rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },

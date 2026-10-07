@@ -718,6 +718,9 @@ function checkTabTitle(api) {
   var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
   var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
   var captchaSignal = api.captchaSignal;
+  var questionSignal = api.questionSignal;
+  var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
+  var QUESTION_EMOJI = api.QUESTION_EMOJI;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
@@ -1120,6 +1123,36 @@ function checkTabTitle(api) {
   }
   // The owner's security dialog: Arena shows it over the page and it holds until the
   // check passes, so it outranks the poll row, the bubble and the waiting line.
+  // The ask_user card from the owner's captured outerHTML: a radiogroup with an aria-label.
+  function questionCard(label) {
+    return {
+      getAttribute: function (name) {
+        return name === "aria-label" ? label || "Pick one" : null;
+      },
+    };
+  }
+  function questionDoc(card, withCaptcha) {
+    var frame = {
+      title: "reCAPTCHA",
+      getAttribute: function () {
+        return null;
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === QUESTION_SELECTOR) return card ? [card] : [];
+        if (selector === CAPTCHA_SELECTOR) return withCaptcha ? [frame] : [];
+        if (selector === MESSAGE_SELECTOR) return [];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
+
   function captchaDoc(messages, state, parked) {
     var frame = {
       title: "reCAPTCHA",
@@ -1286,6 +1319,18 @@ function checkTabTitle(api) {
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
     [syncTitle(idleDoc), true],
     [idleDoc.title, TITLE_PREFIX + "clankers"],
+    // The ask_user card holds the title with a question mark (note 6652cdd), and the security
+    // check beats it, like every other mark.
+    [questionSignal(questionDoc(questionCard())), true],
+    [questionSignal(questionDoc(null)), false],
+    [expireHold(), null],
+    [desiredTitle(questionDoc(questionCard())), TITLE_PREFIX + "clankers " + QUESTION_EMOJI],
+    [loggedTitleHead(questionDoc(questionCard())),
+      "[NemoUtils][title] question card -> " + TITLE_PREFIX + "clankers " + QUESTION_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(questionDoc(questionCard(), true)), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
+    // Drop the shield hold, so the next cases start from a quiet title.
+    [expireHold(), null],
     [GROUP_LABEL_SELECTOR, "span.text-text-secondary"],
     [emojiForRow(liveRow(groupDoc(true))), "\uD83D\uDCD6"],
     // The turn-end bound: the same label persists, but the stop control is gone.
