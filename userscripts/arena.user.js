@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.9
+// @version      1.9.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1739,6 +1739,11 @@
     return "GET " + status + " " + base;
   }
 
+  // The refused read names its own route, so the copy-state failure reads as a GET (answer 2f6b5a7).
+  function copyLine(status, base) {
+    return getLine(status, base + "/api/copy-state");
+  }
+
   function noopLine(repo, base) {
     return "NOOP " + repo + " " + base;
   }
@@ -1766,6 +1771,7 @@
     hint: "no file selected; launching dialog",
     history: "history does not match",
     pickerClosed: "no file selected;",
+    noPreview: "no preview detected",
   };
 
   function writtenName(handle, fallback) {
@@ -1843,6 +1849,7 @@
   runFeature("state-download", "State — download", function () {
     if (exposeChecks("stateDownload", {
       STATE_LINES: STATE_LINES,
+      copyLine: copyLine,
       stampHash: stampHash,
       getLine: getLine,
       noopLine: noopLine,
@@ -2118,13 +2125,13 @@
       if (!base) {
         if (!frameLogged) {
           frameLogged = true;
-          logEvent("state", "no preview frame yet");
+          logEvent("state", STATE_LINES.noPreview);
         }
         return;
       }
       getJson(base + "/api/copy-state", function (status, body) {
         if (status !== 200 || !body) {
-          logEvent("state", "copy-state answered HTTP " + status);
+          logEvent("state", copyLine(status, base));
           return;
         }
         var scope = stateScope(document);

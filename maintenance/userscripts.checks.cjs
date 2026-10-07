@@ -1732,6 +1732,7 @@ function checkStateDownload(api, session) {
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
   var STATE_LINES = api.STATE_LINES;
+  var copyLine = api.copyLine;
   var stampHash = api.stampHash;
   var getLine = api.getLine;
   var noopLine = api.noopLine;
@@ -1998,6 +1999,12 @@ function checkStateDownload(api, session) {
   assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
   assert.equal(STATE_LINES.history, "history does not match");
   assert.equal(STATE_LINES.pickerClosed, "no file selected;");
+  // The refused copy reads as a GET too, and the missing frame reads plainly (answer 2f6b5a7).
+  assert.equal(STATE_LINES.noPreview, "no preview detected");
+  assert.equal(
+    copyLine(500, "http://localhost:8000"),
+    "GET 500 http://localhost:8000/api/copy-state",
+  );
   // Every comparison in the save path writes its own line, so one filter shows which test
   // refused a write (owner note e60e311).
   var compared = [];
