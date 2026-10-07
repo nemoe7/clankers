@@ -39,7 +39,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **State file scope**: A remembered file is reused only when its name belongs to the current repository and branch. A handle outside that scope is refused, and the owner picks the file again. Arena 1.8.2.
-- **Blocked save without a file**: With no file set, the automatic save blocks and writes nothing. A manual save press opens the picker, and keeps the download only where the browser cannot offer one. Arena 1.8.3.
+- **Blocked save without a file**: With no file set, the automatic save writes nothing. A manual save press keeps the download only where the browser cannot offer a picker. Arena 1.8.3.
+- **Deferred picker**: A save that waited on the network never opens the picker, which needs the press itself. It points to the choose entry instead, and the write-failure path does the same. Arena 1.8.4.
 
 ## 2026-10-06
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.3
+// @version      1.8.4
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1734,11 +1734,13 @@
   }
 
   // With no file set, an automatic tick blocks: a stamped download lands instead of the owner's
-  // file and fills the downloads folder (owner note 78e582d). A manual press still opens the
-  // picker, and keeps the download only where the browser cannot offer one.
+  // file and fills the downloads folder (owner note 78e582d). A save that waited on the network
+  // cannot open the picker either: the browser needs the press itself, and the wait spends it
+  // (owner note aeef54c: a SecurityError from a spent gesture). That route asks for the choose
+  // entry, which runs on the press. A manual press keeps the download where no picker exists.
   function stateAction(route, manual) {
-    if (!manual && (route === "pick" || route === "download")) return "block";
-    return route;
+    if (!manual) return route === "pick" || route === "download" ? "block" : route;
+    return route === "pick" ? "hint" : route;
   }
 
   function stateTick(name, stamp, saved) {
@@ -2076,8 +2078,10 @@
             logEvent("state", "blocked: no file chosen, nothing written");
             return;
           }
-          if (action === "pick") {
-            chooseStateFile();
+          if (action === "hint") {
+            hintStateFile();
+            // The picker needs the press itself: this save waited, so the gesture is spent.
+            logEvent("state", "no picker from a deferred save; press the choose entry");
             return;
           }
           if (action === "write") {
@@ -2094,10 +2098,11 @@
                 pickedKey = null;
                 logEvent(
                   "state",
-                  "write failed (" + ((err && err.name) || "unknown") + "), asking for the file again",
+                  "write failed (" + ((err && err.name) || "unknown") +
+                    "); press the choose entry for the file again",
                 );
-                if (manual) chooseStateFile();
-                else hintStateFile();
+                // The write ran after the press, so the picker would refuse a spent gesture.
+                hintStateFile();
               },
             );
             return;

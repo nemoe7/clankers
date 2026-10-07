@@ -1943,10 +1943,11 @@ function checkStateDownload(api, session) {
   // A menu click grants no browser gesture, so the automatic path writes the stamped
   // download and the pick stays a manual action.
   // No file is set: an automatic tick blocks instead of dropping a stamped download on the
-  // owner (note 78e582d). A manual press still opens the picker, and keeps the download only
-  // where the browser cannot offer one.
+  // owner (note 78e582d). A deferred save never opens the picker, because the browser needs the
+  // press itself and a save that waited on the network has spent it (note aeef54c): it asks for
+  // the choose entry instead. A manual press keeps the download where no picker exists.
   assert.equal(stateAction("pick", false), "block");
-  assert.equal(stateAction("pick", true), "pick");
+  assert.equal(stateAction("pick", true), "hint");
   assert.equal(stateAction("download", false), "block");
   assert.equal(stateAction("download", true), "download");
   assert.equal(stateAction("write", true), "write");

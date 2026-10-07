@@ -83,7 +83,7 @@ The page holds fewer nodes, so the tab uses less memory. The Arena client may ke
 
 The feature saves the preview state to one file, without a click. It asks the preview once a minute, and the request lands at a random moment inside a 15-second band after the beat. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
 
-The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file instead.
+The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file on a manual save press. With no file set, an automatic save writes nothing. The picker needs the press itself, and a save that waited on the network has none. Press `Arena preview state — choose the file` to pick one.
 
 The name leads with the repository and the branch, and a stamped save adds the stamp and the record counts, such as `clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
 
