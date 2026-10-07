@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **NemoGPT memory rule**: Documentation and version answers now require a source the model read. Memory alone no longer counts, and an unreachable source means an unverified answer.
 - **Assessment for a described problem**: A described problem or a how-question yields the findings, and the fix waits for a request.
 - **stderr count**: A pending count on the Bash-call stderr line now brings the inbox read before the next work step.
 - **Close and reopen scope**: The Git clause now also bans asking for or recommending a close or reopen.
