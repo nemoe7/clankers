@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.8.7
+// @version      1.8.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -35,7 +35,7 @@
     return true;
   }
 
-  var LOG_TAG = "[clankers]";
+  var LOG_TAG = "[NemoUtils]";
 
   // One tag filters the whole page story; the module rides a second bracket.
   function logEvent(module, event, detail) {
@@ -1656,10 +1656,31 @@
     }
     var name = stateFileName(repo, branch, stamp, counts);
     var memory = stateRemembered(remembered);
-    // Every comparison writes its own line, so one filter shows which test decided the save
-    // (owner note e60e311).
+    // The owner's comparison lines (answers 1fcb4bd and 9602cb5): one short line per stamp pair,
+    // note then task, with hashes in place of the long stamps. The pair compares first, so a
+    // quiet tick shows its two lines before the no-op. A backward stamp still refuses the plain
+    // write and the newer local file stays (answer a898024). A forced save keeps no refusal, so
+    // it announces the update instead: the menu entry takes the state as it stands.
+    var held = [];
+    var keys = ["note", "task"];
+    var index;
+    for (index = 0; index < keys.length; index += 1) {
+      var key = keys[index];
+      var was = memory[key];
+      var now = pair && pair[key] ? String(pair[key]) : "";
+      if (!was || !now) continue;
+      if (force) {
+        logEvent(
+          "state",
+          "updating " + key + " stamp from " + stampHash(was) + " to " + stampHash(now),
+        );
+        continue;
+      }
+      var verdict = now < was ? "older" : now === was ? "same" : "forward";
+      if (verdict === "older") held.push(key);
+      logEvent("state", key + " - " + verdict + " - " + stampHash(now) + " vs " + stampHash(was));
+    }
     if (!force && memory.stamp && memory.stamp === stamp) {
-      logEvent("state", "compare stamp: same as " + memory.stamp);
       return {
         kind: "unchanged",
         name: name,
@@ -1667,42 +1688,12 @@
       };
     }
     if (!force && memory.stamp && String(stamp) < memory.stamp) {
-      logEvent("state", "compare stamp: older than " + memory.stamp);
       return {
         kind: "stale",
         name: name,
         message:
           "Stale preview state (" + stamp + " is older than " + memory.stamp + "); nothing written.",
       };
-    }
-    if (!force) {
-      logEvent(
-        "state",
-        memory.stamp
-          ? "compare stamp: newer than " + memory.stamp
-          : "compare stamp: first write at " + stamp,
-      );
-    }
-    // The approved pair: the newest note stamp and the newest task stamp. A rollback leaves the
-    // older records of a group behind while one new record moves the state stamp forward, so an
-    // older stamp of the pair refuses the write and the newer local file stays (answer a898024).
-    // A forced save skips the refusal on purpose: the menu entry takes the state as it stands.
-    var held = [];
-    if (!force && pair && memory.note && pair.note) {
-      if (String(pair.note) < memory.note) {
-        held.push("note");
-        logEvent("state", "compare note stamp: " + pair.note + " is older than " + memory.note);
-      } else {
-        logEvent("state", "compare note stamp: " + pair.note + " is forward of " + memory.note);
-      }
-    }
-    if (!force && pair && memory.task && pair.task) {
-      if (String(pair.task) < memory.task) {
-        held.push("task");
-        logEvent("state", "compare task stamp: " + pair.task + " is older than " + memory.task);
-      } else {
-        logEvent("state", "compare task stamp: " + pair.task + " is forward of " + memory.task);
-      }
     }
     if (held.length) {
       var phrase = held.join(" and ") + (held.length > 1 ? " stamps" : " stamp");
@@ -1742,8 +1733,30 @@
     return route === "pick" ? "hint" : route;
   }
 
-  function stateTick(name, stamp, saved) {
-    return name + " stamp=" + (stamp || "none") + " saved=" + (saved || "none");
+  // The owner's line shapes (answers 1fcb4bd and 9602cb5): the fetch on a write, the no-op on a
+  // quiet tick, and short stamp hashes in place of the long stamps.
+  function getLine(status, base) {
+    return "GET " + status + " " + base;
+  }
+
+  function noopLine(repo, base) {
+    return "NOOP " + repo + " " + base;
+  }
+
+  function writeLine(repo, name) {
+    return "WRITE " + repo + " state to " + name;
+  }
+
+  function stampHash(value) {
+    var text = String(value || "");
+    if (!text) return "none";
+    var hash = 2166136261;
+    var i;
+    for (i = 0; i < text.length; i += 1) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return ("0000000" + (hash >>> 0).toString(16)).slice(-7);
   }
 
   function writtenName(handle, fallback) {
@@ -1820,6 +1833,10 @@
   // The state leaves through the owner's browser: one picked file, written only when the stamp moves.
   runFeature("state-download", "State — download", function () {
     if (exposeChecks("stateDownload", {
+      stampHash: stampHash,
+      getLine: getLine,
+      noopLine: noopLine,
+      writeLine: writeLine,
       stateFileName: stateFileName,
       stateScopeKey: stateScopeKey,
       stateDownload: stateDownload,
@@ -1827,7 +1844,6 @@
       stateRemembered: stateRemembered,
       stateDelivery: stateDelivery,
       stateAction: stateAction,
-      stateTick: stateTick,
       panelNeeded: panelNeeded,
       writtenName: writtenName,
       handleMatchesScope: handleMatchesScope,
@@ -2104,6 +2120,9 @@
         var scope = stateScope(document);
         var storeKey = stateScopeKey(scope.repo, scope.branch);
         var memory = stateRemembered(GM_getValue(stampKey(storeKey), ""));
+        if (force) {
+          logEvent("state", "forced save");
+        }
         var plan = stateDownload(
           scope.repo,
           scope.branch,
@@ -2113,13 +2132,6 @@
           body.stamps,
           force,
         );
-        if (force) {
-          logEvent("state", "forced save");
-        }
-        logEvent("state", "tick " + stateTick(plan.name, body.stamp, memory.stamp));
-        if (plan.kind !== "unchanged") {
-          logEvent("state", plan.kind + ": " + plan.name);
-        }
         if (plan.kind === "stale") {
           if (!staleWarned) {
             staleWarned = true;
@@ -2143,8 +2155,12 @@
           picked = handle || null;
           pickedKey = handle ? storeKey : null;
           var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
-          logEvent("state", "route " + action);
-          if (action === "unchanged" || action === "error") {
+          if (action === "unchanged") {
+            if (manual) logEvent("state", "no write: " + plan.kind);
+            else logEvent("state", noopLine(scope.repo, base));
+            return;
+          }
+          if (action === "error") {
             if (manual) logEvent("state", "no write: " + plan.kind);
             return;
           }
@@ -2160,13 +2176,14 @@
             return;
           }
           if (action === "write") {
+            logEvent("state", getLine(status, base));
             writeToHandle(handle, body.text).then(
               function () {
                 GM_setValue(
                   stampKey(storeKey),
                   JSON.stringify(stateMemory(body.stamp, body.stamps)),
                 );
-                logEvent("state", "saved " + writtenName(handle, plan.name));
+                logEvent("state", writeLine(scope.repo, writtenName(handle, plan.name)));
                 if (force) {
                   statePanel("Force save wrote " + writtenName(handle, plan.name) + ".", null, null, true);
                 }

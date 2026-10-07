@@ -44,7 +44,7 @@ function checkLogging(api, menus) {
   var logEvent = api.logEvent;
   var menuItem = api.menuItem;
   // One tag carries every line, so one filter shows the page's story.
-  assert.equal(LOG_TAG, "[clankers]");
+  assert.equal(LOG_TAG, "[NemoUtils]");
   var lines = [];
   var original = console.log;
   console.log = function () {
@@ -58,9 +58,9 @@ function checkLogging(api, menus) {
     console.log = original;
   }
   // The module rides a second bracket, so one filter shows one module alone.
-  assert.equal(lines[0], "[clankers][feature] Prompt fill: ON");
-  assert.equal(lines[1], "[clankers][fill] wrote the initial message for clankers");
-  assert.equal(lines[2], "[clankers][state] saved detail");
+  assert.equal(lines[0], "[NemoUtils][feature] Prompt fill: ON");
+  assert.equal(lines[1], "[NemoUtils][fill] wrote the initial message for clankers");
+  assert.equal(lines[2], "[NemoUtils][state] saved detail");
   // A console that rejects must never break a feature.
   console.log = function () {
     throw new Error("closed console");
@@ -91,7 +91,7 @@ function checkLogging(api, menus) {
       console.log = original;
     }
     assert.deepEqual(ran, ["save"]);
-    assert.equal(pressed[0], "[clankers][menu] State — save now");
+    assert.equal(pressed[0], "[NemoUtils][menu] State — save now");
   }
   console.log("ok logging 3");
 }
@@ -1372,14 +1372,14 @@ function checkTabTitle(api) {
     // Every title change prints one line: the signal, then the emoji the title takes.
     [
       loggedTitleHead(captchaDoc()),
-      "[clankers][title] security check -> " + TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI,
+      "[NemoUtils][title] security check -> " + TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI,
     ],
     // The anchors behind the decision ride the same line, so a title shows its cause.
     [loggedTitleTail(captchaDoc()), "repo=clankers row=none"],
     // The label behind the row rides the line, so the cause is visible.
     [
       loggedTitleHead(waitingDoc([pollMessage])),
-      "[clankers][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers \uD83D\uDCA4",
+      "[NemoUtils][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers \uD83D\uDCA4",
     ],
     [
       loggedTitleTail(waitingDoc([pollMessage])),
@@ -1388,7 +1388,7 @@ function checkTabTitle(api) {
     [expireHold(), null],
     [
       loggedTitleHead(idleDoc),
-      "[clankers][title] title -> " + TITLE_PREFIX + "clankers",
+      "[NemoUtils][title] title -> " + TITLE_PREFIX + "clankers",
     ],
     [loggedTitleTail(idleDoc), "repo=clankers row=none"],
   ];
@@ -1712,7 +1712,10 @@ function checkStateDownload(api, session) {
   var stateScopeKey = api.stateScopeKey;
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
-  var stateTick = api.stateTick;
+  var stampHash = api.stampHash;
+  var getLine = api.getLine;
+  var noopLine = api.noopLine;
+  var writeLine = api.writeLine;
   var downloadRoute = api.downloadRoute;
   var stateDownloadRoute = api.stateDownloadRoute;
   var counts = { notes: 12, tasks: 4 };
@@ -1962,16 +1965,14 @@ function checkStateDownload(api, session) {
   assert.equal(panelNeeded(false, false), true);
   assert.equal(panelNeeded(false, true), false);
   assert.equal(stateAction("unchanged", false), "unchanged");
-  // The tick line names the file and shows the two stamps the route compared.
-  assert.equal(
-    stateTick("a.ndjson", "2026-10-06T09:45:05+00:00", ""),
-    "a.ndjson stamp=2026-10-06T09:45:05+00:00 saved=none",
-  );
-  assert.equal(
-    stateTick("a.ndjson", "2026-10-06T09:45:05+00:00", "2026-10-06T09:44:05+00:00"),
-    "a.ndjson stamp=2026-10-06T09:45:05+00:00 saved=2026-10-06T09:44:05+00:00",
-  );
-  assert.equal(stateTick("a.ndjson", "", ""), "a.ndjson stamp=none saved=none");
+  // The owner's line shapes: the fetch on a write, the no-op on a quiet tick, and short
+  // stamp hashes in place of the long stamps (answers 1fcb4bd and 9602cb5).
+  assert.equal(writeLine("clankers", "clankers.ndjson"), "WRITE clankers state to clankers.ndjson");
+  assert.equal(noopLine("clankers", "http://localhost:8000"), "NOOP clankers http://localhost:8000");
+  assert.equal(getLine(200, "http://localhost:8000"), "GET 200 http://localhost:8000");
+  assert.match(stampHash("2026-10-06T09:45:05+00:00"), /^[0-9a-f]{7}$/);
+  assert.equal(stampHash(""), "none");
+  assert.equal(stampHash("2026-10-06T09:45:05+00:00"), stampHash("2026-10-06T09:45:05+00:00"));
   // Every comparison in the save path writes its own line, so one filter shows which test
   // refused a write (owner note e60e311).
   var compared = [];
@@ -1989,24 +1990,73 @@ function checkStateDownload(api, session) {
       task: "2026-10-06T05:00:00",
     }, { note: "2026-10-06T05:00:00", task: "2026-10-06T06:00:00" });
     stateDownload(repo, branch, null, counts, "");
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, {
+      stamp: "2026-10-06T06:12:33",
+      note: "2026-10-06T06:12:33",
+      task: "2026-10-06T06:12:33",
+    }, { note: "2026-10-06T06:12:33", task: "2026-10-06T06:12:33" });
+    stateDownload(repo, branch, "2026-10-06T06:12:33", counts, {
+      stamp: "2026-10-05T20:00:00",
+      note: "2026-10-06T05:30:00",
+      task: "2026-10-06T05:00:00",
+    }, { note: "2026-10-06T05:00:00", task: "2026-10-06T06:00:00" }, true);
   } finally {
     console.log = originalLog;
   }
   function comparedLine(expected) {
-    return compared.indexOf("[clankers][state] " + expected) !== -1;
+    return compared.indexOf("[NemoUtils][state] " + expected) !== -1;
   }
-  assert.ok(comparedLine("compare stamp: same as 2026-10-06T06:12:33"), compared.join("\n"));
-  assert.ok(comparedLine("compare stamp: older than 2026-10-06T06:12:33"), compared.join("\n"));
-  assert.ok(comparedLine("compare stamp: first write at 2026-10-06T06:12:33"), compared.join("\n"));
   assert.ok(
-    comparedLine("compare note stamp: 2026-10-06T05:00:00 is older than 2026-10-06T05:30:00"),
+    comparedLine(
+      "note - older - " + stampHash("2026-10-06T05:00:00") + " vs " + stampHash("2026-10-06T05:30:00"),
+    ),
     compared.join("\n"),
   );
   assert.ok(
-    comparedLine("compare task stamp: 2026-10-06T06:00:00 is forward of 2026-10-06T05:00:00"),
+    comparedLine(
+      "task - forward - " + stampHash("2026-10-06T06:00:00") + " vs " + stampHash("2026-10-06T05:00:00"),
+    ),
     compared.join("\n"),
   );
   assert.ok(comparedLine("compare stamp: none, no stamp to compare"), compared.join("\n"));
+  // A quiet tick with the pair at rest shows both lines as `same` (answer 1fcb4bd).
+  assert.ok(
+    comparedLine(
+      "note - same - " + stampHash("2026-10-06T06:12:33") + " vs " + stampHash("2026-10-06T06:12:33"),
+    ),
+    compared.join("\n"),
+  );
+  assert.ok(
+    comparedLine(
+      "task - same - " + stampHash("2026-10-06T06:12:33") + " vs " + stampHash("2026-10-06T06:12:33"),
+    ),
+    compared.join("\n"),
+  );
+  // A forced save announces the update from the old stamp to the new one (answer 86ba0cc).
+  assert.ok(
+    comparedLine(
+      "updating note stamp from " + stampHash("2026-10-06T05:30:00") + " to " + stampHash("2026-10-06T05:00:00"),
+    ),
+    compared.join("\n"),
+  );
+  assert.ok(
+    comparedLine(
+      "updating task stamp from " + stampHash("2026-10-06T05:00:00") + " to " + stampHash("2026-10-06T06:00:00"),
+    ),
+    compared.join("\n"),
+  );
+  // The long stamp lines and the route words are gone from the state watch.
+  var leftovers = compared.filter(function (line) {
+    return (
+      line.indexOf("[NemoUtils][state] tick ") !== -1 ||
+      line.indexOf("[NemoUtils][state] route ") !== -1 ||
+      line.indexOf("[NemoUtils][state] download: ") !== -1 ||
+      line.indexOf("[NemoUtils][state] saved ") !== -1 ||
+      line.indexOf("[NemoUtils][state] compare stamp") !== -1 &&
+        line.indexOf("no stamp to compare") === -1
+    );
+  });
+  assert.deepEqual(leftovers, [], compared.join("\n"));
   // A remembered file belongs to the scope that chose it: the name carries the scope, and a
   // handle outside the current scope is refused so one repo never writes into another's file
   // (owner note 1cfdedd).

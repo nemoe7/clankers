@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT.com | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.3
+// @version      1.3.4
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @icon         https://chatgpt.com/favicon.ico
@@ -33,7 +33,7 @@
 
   // One tag filters the whole story of a page in the devtools console. A line names
   // the event a person needs and never the feature's own loop.
-  var LOG_TAG = "[clankers]";
+  var LOG_TAG = "[NemoUtils]";
 
   // One tag carries every line, and the module rides a second bracket, so one filter shows
   // one module alone.
