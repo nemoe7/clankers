@@ -65,7 +65,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - **Reference parity**: `check_minify.py` no longer requires the shipped references to match the refs copies. The refs tree is the full wording, and the lives carry the squash.
-- **Suite budget**: The budget table gains one arena suite row, the token sum of `SKILL.md` and its reference. `check.py` sums suite rows when it measures or updates the table.
+- **Skill rows**: The budget table lists the arena suite file by file. Each arena-skill file takes one row, Markdown in tokens and shipped files in bytes.
 
 ### Removed
 

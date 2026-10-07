@@ -48,16 +48,30 @@ EXPECTED_BUDGETS = {
   "system-prompts/NEMOGPT.md": "cl100k_base",
   "skills/amending-violations/SKILL.md": "cl100k_base",
   "skills/arena-skill/SKILL.md": "cl100k_base",
-  "skills/arena-skill/ (suite)": "cl100k_base",
-  # The distributed assets and scripts carry the minified build from `maintenance/minify.py`.
-  # Their recorded size is their budget: any growth fails this check until the table is
-  # updated on purpose. The `.agents/skills/` twins are byte-identical by construction, and
-  # this script never reads that tree.
+  "skills/arena-skill/README.md": "cl100k_base",
+  "skills/arena-skill/references/REFERENCE.md": "cl100k_base",
+  # The table covers the arena suite: ARENA.md and every arena-skill file, one row per file.
+  # The shipped assets and scripts keep byte budgets from `maintenance/minify.py`, so growth
+  # fails this check until the table is updated on purpose. The `.agents/skills/` twins are
+  # byte-identical by construction, and this script never reads that tree.
   "skills/arena-skill/assets/app.js": "UTF-8 file size",
   "skills/arena-skill/assets/index.html": "UTF-8 file size",
   "skills/arena-skill/assets/style.css": "UTF-8 file size",
-  "skills/arena-skill/scripts/preview.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/Dockerfile": "UTF-8 file size",
+  "skills/arena-skill/proxy/INSTALL.md": "cl100k_base",
+  "skills/arena-skill/proxy/docker-compose.yml": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/__init__.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/__main__.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/core.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/github_api.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/llm.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/store.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/arena_proxy/transfers.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/scripts/server.py": "UTF-8 file size",
+  "skills/arena-skill/proxy/tailscale-serve.json": "UTF-8 file size",
+  "skills/arena-skill/scripts/arena-preview": "UTF-8 file size",
   "skills/arena-skill/scripts/install.sh": "UTF-8 file size",
+  "skills/arena-skill/scripts/preview.py": "UTF-8 file size",
   "skills/squash/SKILL.md": "cl100k_base",
   "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
   "workflows/init-docs.md": "cl100k_base",
@@ -70,23 +84,6 @@ EXPECTED_BUDGETS = {
 # Root `ARENA.md` is the copy `.github/workflows/distribute.yml` pushes to
 # the target repositories, so it must stay byte-identical to its source.
 ROOT_COPIES = ("ARENA.md",)
-
-# A suite row sums the Markdown one skill loads, in the order it loads it.
-SUITES = {
-  "skills/arena-skill/ (suite)": (
-    "skills/arena-skill/SKILL.md",
-    "skills/arena-skill/references/REFERENCE.md",
-  ),
-}
-
-
-def budget_parts(relative: str) -> tuple[str, ...]:
-  return SUITES.get(relative, (relative,))
-
-
-def measure_budget(relative: str, kind: str) -> int:
-  return sum(measure(ROOT / part, kind) for part in budget_parts(relative))
-
 
 REFS = RULES / "refs"
 LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
@@ -426,10 +423,10 @@ def update_readme_measurements() -> bool:
 
   table = [header, "| --- | --- | --- |\n"]
   for relative, kind in EXPECTED_BUDGETS.items():
-    missing = [part for part in budget_parts(relative) if not (ROOT / part).is_file()]
-    if missing:
-      raise RuntimeError(f"README budget path missing: {missing[0]}")
-    current = f"{measure_budget(relative, kind):,}"
+    path = ROOT / relative
+    if not path.is_file():
+      raise RuntimeError(f"README budget path missing: {relative}")
+    current = f"{measure(path, kind):,}"
     table.append(f"| `{relative}` | `{kind}` | {current} `{format_unit(kind)}` |\n")
 
   updated = "".join(lines[:start] + table + lines[end:])
@@ -797,14 +794,14 @@ def validate(errors: list[str]) -> tuple[int, int]:
         )
         continue
 
-      missing = [part for part in budget_parts(relative) if not (ROOT / part).is_file()]
+      path = ROOT / relative
 
-      if missing:
-        errors.append(f"README budget path missing: {missing[0]}")
+      if not path.is_file():
+        errors.append(f"README budget path missing: {relative}")
         continue
 
       try:
-        actual = measure_budget(relative, expected_kind)
+        actual = measure(path, expected_kind)
       except RuntimeError as exc:
         errors.append(str(exc))
         continue
