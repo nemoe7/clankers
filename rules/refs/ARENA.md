@@ -40,6 +40,7 @@
 ## General
 
 - Read the inbox with `arena-preview read` at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. Block mechanics: the skill reference, Read cadence.
+- When a Bash call reports a pending note or answer count above zero on stderr, MUST read the inbox before the next work step.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read; once the inbox exists, missing or failed reads are errors, NEVER empty inboxes.
 - Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so acknowledge notes separately when the answers differ. NEVER blindly acknowledge all pending notes.
 - Refer to a note by its ID, NEVER by its sequence number or list position: the first seven characters in prose, task details, reports and notes. Extend the prefix when two notes share it.
