@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.2
+// @version      1.9.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2340,6 +2340,8 @@
     var heldEmoji = null;
     var heldEmojiAt = 0;
     var lastSpeechMark = null;
+    var lastAgentMark = null;
+    var lastAgentPath = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
     var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
     var WAITING_TEXT_SELECTOR = 'span[class*="whitespace-pre"]';
@@ -2347,6 +2349,9 @@
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
     var SPEECH_EMOJI = "\uD83D\uDDE8\uFE0F";
+    // An agent chat message that lands with no turn open holds the title with the solid
+    // speech balloon (owner note 02a0675). The outline bubble above stays the streaming mark.
+    var AGENT_EMOJI = "\uD83D\uDCAC";
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
 
     function repoFromLink(link) {
@@ -2573,6 +2578,28 @@
       return live;
     }
 
+    // The same word spans, read without the stop control: a message that grows while no turn
+    // runs is an agent chat message. The first look only sets the mark, so a page load or a
+    // chat switch stays quiet; the count rides the mark, so appended words count as growth.
+    function agentMessageLive(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") {
+        return false;
+      }
+      var words = doc.querySelectorAll(SPEECH_SELECTOR);
+      if (!words.length) {
+        lastAgentMark = null;
+        return false;
+      }
+      var last = words[words.length - 1];
+      var mark = words.length + ":" + String(last.textContent || "");
+      var path = currentPath();
+      // A chat switch swaps the whole transcript; its own path is not a message.
+      var live = lastAgentMark !== null && mark !== lastAgentMark && path === lastAgentPath;
+      lastAgentMark = mark;
+      lastAgentPath = path;
+      return live;
+    }
+
     // The waiting line is a spinner canvas beside the rotating monospace text. An action row
     // carries the very same canvas as its own icon (note 37b3a4e), so the canvas alone proves
     // nothing: the row must hold the text block too, beside the icon.
@@ -2635,6 +2662,10 @@
       if (!emoji && stopSignal(doc) && speechLive(doc)) {
         emoji = SPEECH_EMOJI;
         titleReason = "streaming words";
+      }
+      if (!emoji && agentMessageLive(doc)) {
+        emoji = AGENT_EMOJI;
+        titleReason = "agent message";
       }
       if (!emoji && waitingSignal(doc)) {
         emoji = HOURGLASS_EMOJI;
@@ -2718,6 +2749,8 @@
       strongRow: strongRow,
       stopSignal: stopSignal,
       speechLive: speechLive,
+      agentMessageLive: agentMessageLive,
+      AGENT_EMOJI: AGENT_EMOJI,
       waitingSignal: waitingSignal,
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
@@ -2744,6 +2777,10 @@
       rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       resetSpeech: function () { lastSpeechMark = null; },
+      resetAgentMessage: function () {
+        lastAgentMark = null;
+        lastAgentPath = null;
+      },
       forgetPath: function () { lastPath = "/elsewhere"; },
       setPriorTitle: function (value) { priorTitle = value; },
     })) {
@@ -2778,6 +2815,7 @@
       lastRepo = null;
       lastPath = null;
       lastSpeechMark = null;
+      lastAgentMark = null;
       syncTitle(document);
     }
     window.addEventListener("popstate", onRoute);

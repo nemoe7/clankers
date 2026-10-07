@@ -617,3 +617,100 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     console.log("ok captcha hold: fill, steering click, proxy posts wait for the check");
   });
 }
+{
+  const { test } = require("node:test");
+  // An agent chat message that lands with no turn open raises the solid speech balloon, while
+  // a chat switch never reads as a message (owner note 02a0675).
+  test("agent message mark", async () => {
+    const source = fs.readFileSync(path.join(__dirname, "../userscripts/arena.user.js"), "utf8");
+    const page = { title: "" };
+    const words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
+    const intervals = [];
+    const timeouts = new Map();
+    let nextTimeout = 0;
+    const composer = { innerText: "", attrs: {}, focus() {}, getAttribute() { return null; } };
+    const bar = {
+      textContent: "nemoe7/clankers",
+      querySelectorAll(selector) {
+        return selector === "span.truncate" ? [{ textContent: "nemoe7/clankers" }] : [];
+      },
+    };
+    const repoLink = {
+      getAttribute(name) {
+        if (name === "href") return "https://github.com/nemoe7/clankers";
+        if (name === "aria-label") return "Open nemoe7/clankers on GitHub";
+        return null;
+      },
+    };
+    const context = {
+      console: { log() {} },
+      URL,
+      location: { href: "https://arena.ai/c/one", pathname: "/c/one" },
+      document: {
+        documentElement: {},
+        execCommand(command, show, text) { composer.innerText = text; return true; },
+        createRange() { return { selectNodeContents() {} }; },
+        querySelector(selector) {
+          if (selector === 'div.tiptap.ProseMirror[contenteditable="true"]') return composer;
+          if (selector.indexOf("div.relative.z-10") === 0) return bar;
+          if (selector.indexOf('a[aria-label^="Open "]') === 0) return repoLink;
+          return null;
+        },
+        querySelectorAll(selector) {
+          // No stop control stands on this page: the turn is over.
+          if (selector === "[data-agent-word]") return words.slice();
+          return [];
+        },
+        get title() { return page.title; },
+        set title(value) { page.title = value; },
+      },
+      window: { addEventListener() {}, removeEventListener() {} },
+      getComputedStyle() { return { overflowY: "auto" }; },
+      MutationObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      requestAnimationFrame() { return 1; },
+      cancelAnimationFrame() {},
+      setInterval(fn, ms) { intervals.push({ ms, fn }); return intervals.length; },
+      clearInterval() {},
+      setTimeout(fn) { nextTimeout += 1; timeouts.set(nextTimeout, fn); return nextTimeout; },
+      clearTimeout(id) { timeouts.delete(id); },
+      fetch() {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve(""),
+        });
+      },
+      sessionStorage: { getItem() { return null; }, setItem() {} },
+      prompt() { return null; },
+      GM_getValue(key, fallback) { return fallback; },
+      GM_setValue() {},
+      GM_registerMenuCommand(label) { return label; },
+      GM_unregisterMenuCommand() {},
+      GM_xmlhttpRequest() {},
+    };
+    vm.runInNewContext(source, context, { filename: "arena.user.js" });
+    const sync = () => intervals.forEach((item) => item.fn());
+    const goto = (path) => {
+      context.location.pathname = path;
+      context.location.href = "https://arena.ai" + path;
+    };
+
+    sync();
+    assert.equal(page.title, "Arena | clankers", `The first look sets the mark in silence: ${page.title}`);
+    // A chat switch swaps the whole transcript, so its fresh words are not a new message.
+    goto("/c/two");
+    words.push({ textContent: "elsewhere" });
+    sync();
+    assert.equal(page.title, "Arena | clankers", `A chat switch stays quiet: ${page.title}`);
+    // On the new path a further word is a message again.
+    words.push({ textContent: "here" });
+    sync();
+    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `A message on the new path raises the balloon: ${page.title}`);
+    // The hold bridges the pause between two bursts of words.
+    sync();
+    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
+    console.log("ok agent message mark: silent first look, growth burns, a chat switch stays quiet");
+  });
+}

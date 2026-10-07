@@ -707,6 +707,8 @@ function checkTabTitle(api) {
   var strongRow = api.strongRow;
   var stopSignal = api.stopSignal;
   var speechLive = api.speechLive;
+  var agentMessageLive = api.agentMessageLive;
+  var AGENT_EMOJI = api.AGENT_EMOJI;
   var waitingSignal = api.waitingSignal;
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
   var SPEECH_EMOJI = api.SPEECH_EMOJI;
@@ -1193,6 +1195,10 @@ function checkTabTitle(api) {
     api.resetSpeech();
     return null;
   }
+  function resetAgentMessage() {
+    api.resetAgentMessage();
+    return null;
+  }
   function addWord(doc, text) {
     doc.words.push({ textContent: text });
     return doc.words.length;
@@ -1360,13 +1366,35 @@ function checkTabTitle(api) {
     [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
     // A settled message stops changing; mid-turn the repo name holds the title.
     [resetSpeech(), null],
+    [resetAgentMessage(), null],
     [speechLive(talking), true],
     [speechLive(talking), false],
     [expireHold(), null],
     [desiredTitle(talking), TITLE_PREFIX + "clankers"],
     // After the turn no bubble rises; the title keeps the repository name and drops the emoji.
     [resetSpeech(), null],
+    [resetAgentMessage(), null],
     [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
+    // An agent chat message that lands with no turn open raises the solid speech balloon
+    // (owner note 02a0675). The first look sets the mark in silence: opening a chat is not
+    // a message.
+    [agentMessageLive(settledChat), false],
+    [addWord(settledChat, "again"), 3],
+    [agentMessageLive(settledChat), true],
+    [agentMessageLive(settledChat), false],
+    [resetAgentMessage(), null],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
+    [addWord(settledChat, "later"), 4],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    // The hold bridges the pause, then the settled message leaves the bare title.
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
+    // While the turn is open the outline bubble keeps the streaming-words mark; the agent
+    // message mark never replaces it.
+    [resetAgentMessage(), null],
+    [resetSpeech(), null],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
     [
       polls("/home/user/clankers/.agents/skills/arena-skill/scripts/arena-preview poll"),
       true,
@@ -1394,6 +1422,7 @@ function checkTabTitle(api) {
     [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers \uD83D\uDCA4"],
     // Streamed words outrank the line too; the first burst raises the bubble.
     [resetSpeech(), null],
+    [resetAgentMessage(), null],
     [
       desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }])),
       TITLE_PREFIX + "clankers " + SPEECH_EMOJI,
