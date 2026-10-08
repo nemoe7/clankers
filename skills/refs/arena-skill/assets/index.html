@@ -6,7 +6,7 @@
   <title>Workspace · Notes & reports</title>
   <style>__STYLE__</style>
 </head>
-<body data-composer="open" data-token="__TOKEN__">
+<body data-token="__TOKEN__">
   <header class="topbar">
     <div id="topbar-row" class="topbar-row">
       <nav role="tablist" aria-label="Workspace views">
@@ -32,10 +32,8 @@
               <p id="last-check" class="muted">Not checked yet.</p>
             </div>
             <span class="row tight">
-              <span class="filter-wrap"><select id="log-filter" aria-label="Filter the message log by state"><option value="all">All</option><option value="sent">Sent</option><option value="seen">Seen</option><option value="said">Said</option></select></span>
-              <button id="refresh-notes" class="icon-button" type="button" aria-label="Refresh messages" title="Refresh messages">↻</button>
+              <input id="log-search" type="search" placeholder="Search messages" aria-label="Search the message log">
               <button id="skip-poll" class="icon-button" type="button" aria-pressed="false" aria-label="Ask the agent to end its wait now" title="Ask the agent to end its wait now"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 5l9 7-9 7z" fill="currentColor"></path><path d="M16.5 5h3v14h-3z" fill="currentColor"></path></svg></button>
-              <button id="composer-toggle" class="icon-button" type="button" aria-expanded="true" aria-controls="compose" aria-label="Hide composer" title="Hide composer">✎</button>
             </span>
           </div>
           <div class="log-scroll">

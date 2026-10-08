@@ -94,15 +94,14 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
 #compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
 #preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
-body[data-composer="closed"] .compose { display: none; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
-/* The filter keeps the row of buttons on every width: a wrap inside this
-   span would drop the select under the buttons and read as a row of its own. */
+/* The log's toolbar keeps one line on every width: a wrap would drop the search box under the
+   skip button and read as a row of its own. */
 .stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .stack h2, .stack p { margin: 0; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
 label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 8px; }
-button, select, textarea, input[type="url"] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
+button, select, textarea, input[type="url"], input[type="search"] { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
 button { padding: 7px 11px; min-height: 36px; cursor: pointer; }
 button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: .55; cursor: wait; }
@@ -124,7 +123,6 @@ small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13p
 #form > div:last-child { margin-bottom: 0; padding-bottom: 0; }
 p.muted { margin-block: 4px; }
 .icon-button { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; line-height: 1; font-size: 19px; display: inline-flex; align-items: center; justify-content: center; }
-body[data-composer="closed"] #composer-toggle { color: var(--muted); opacity: .55; }
 #preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 /* The log's scroll area wraps the list so a jump bar can sit over its bottom edge: a strip rather
@@ -205,21 +203,13 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
   border-top: 5px solid var(--muted); pointer-events: none;
 }
 #report-select { appearance: none; padding-right: 26px; }
-/* The log filter is a control in a header row, not a form field: the row reads as one row only when
-   its boxes line up, so it takes the icon buttons' 34px and no minimum of its own. Only the width
-   its four words need, so it costs the log no vertical space, and an aria-label carries the name
-   instead of a visible label, on owner direction. */
-/* The preview CSP blocks data images. Draw a visible dropdown caret on the wrapper without
-   changing the select's 34px box, native menu, or keyboard behavior. */
-.filter-wrap { position: relative; display: inline-flex; flex: none; }
-.filter-wrap::after {
-  content: ""; position: absolute; top: 50%; right: 7px; transform: translateY(-50%);
-  border-left: 5px solid transparent; border-right: 5px solid transparent;
-  border-top: 5px solid var(--muted); pointer-events: none;
-}
-#log-filter {
-  flex: 0 0 auto; width: auto; max-width: 8em; height: 34px; min-height: 0;
-  padding: 0 24px 0 6px; line-height: 32px; appearance: none;
+/* The log's search box is a control in a header row, not a form field: it takes the icon buttons'
+   34px and no minimum of its own, so it costs the log no vertical space. It gives way on a narrow
+   screen rather than pushing the skip button out, and an aria-label carries the name instead of a
+   visible label, on owner direction (owner note 0ccee47). */
+#log-search {
+  flex: 0 1 auto; width: 100%; max-width: 13em; min-width: 0; height: 34px; min-height: 0;
+  padding: 0 8px;
 }
 #copy-report, #refresh-report, #unpublish-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }

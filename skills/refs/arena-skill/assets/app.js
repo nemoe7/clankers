@@ -60,12 +60,7 @@ $('#theme').addEventListener('click', () => {
   setTheme(theme);
   save('theme', theme);
 });
-function setPanel(name, button, open, labels) {
-  document.body.dataset[name] = open ? 'open' : 'closed';
-  button.setAttribute('aria-expanded', open ? 'true' : 'false');
-  button.textContent = open ? labels.text[0] : labels.text[1];
-  if (labels.name) label(button, open ? labels.name[0] : labels.name[1]);
-}
+
 // The accessible name and the hover text say the same thing, so a button that explains itself to a
 // screen reader also explains itself to a mouse; owner note bef51970.
 function label(button, text) {
@@ -160,29 +155,19 @@ function paintConnection() {
     setConnection('idle', connectionText());
   }
 }
-const composerButton = $('#composer-toggle');
-const composerLabels = { text: ['✎', '✎'], name: ['Hide composer', 'Show composer'] };
-setPanel('composer', composerButton, stored('composer') !== 'closed', composerLabels);
-composerButton.addEventListener('click', () => {
-  const open = document.body.dataset.composer === 'closed';
-  setPanel('composer', composerButton, open, composerLabels);
-  save('composer', open ? 'open' : 'closed');
-  if (open) {
-    grow();
-    scrollHistory(true);
-  }
-});
+// The hide-composer control went with the log's other spare buttons: the composer stays open, so
+// nothing carries a closed state any more (owner note 0ccee47).
 // A placeholder is a hint rather than a draft: past three lines it keeps two and an ellipsis.
 function clipPlaceholder(text) {
   const lines = String(text).split('\n');
   return lines.length > 3 ? `${lines.slice(0, 2).join('\n')}\n\u2026` : lines.join('\n');
 }
 const STATE_WORDS = { sent: 'Sent', seen: 'Seen', said: 'Said' };
-// The log's dots already say where each message stands, so the filter selects over that and adds no
-// new notion: Sent is unread and unanswered, Seen is read by the agent's poll but unanswered, Said
-// is answered. The copy button stays whole-log, because it is the restore path and a filtered copy
-// would restore a partial log as if it were all of it.
-const LOG_FILTERS = { all: 'All messages', sent: 'Sent', seen: 'Seen', said: 'Said' };
+// The log's search narrows the rows by substring, over each row as it stands: the message text, a
+// rendered answer, and the receipt's own ID are all in there, so a note's ID finds its note. The
+// copy button stays whole-log, because it is the restore path and a narrowed copy would restore a
+// partial log as if it were all of it (owner note 0ccee47).
+let logQuery = '';
 
 function grow() {
   // The textarea grows with the draft instead of scrolling inside itself, so it expands upward and
@@ -429,9 +414,7 @@ $('#log-edited').addEventListener('click', async () => {
   const item = unreadEdits[0];
   if (!item) return;
   showTab($('#notes-tab'));
-  $('#log-filter').value = 'all';
-  save('log-filter', 'all');
-  applyLogFilter();
+  clearLogSearch();
   const answer = messageNodes.get(item.id).children[1];
   answer.scrollIntoView({block: 'center'});
   answer.setAttribute('tabindex', '-1');
@@ -560,7 +543,7 @@ function showHistory(notes) {
   for (const id of [...messageNodes.keys()]) if (!current.has(id)) messageNodes.delete(id);
   renderHistoryWindow(notes);
   updateEdits(notes);
-  applyLogFilter();
+  applyLogSearch();
   if (logPinned) history.scrollTop = history.scrollHeight;
   updateLogJump();
 }
@@ -580,7 +563,7 @@ function loadOlderMessages() {
   const before = history.scrollHeight;
   historyShown = Math.min(historyShown + HISTORY_PAGE, notes.length);
   renderHistoryWindow(notes);
-  applyLogFilter();
+  applyLogSearch();
   history.scrollTop += history.scrollHeight - before;
 }
 // The log's own place: a filter change can make the view shorter, and the browser clamps the
@@ -608,30 +591,35 @@ $('#log-newest').addEventListener('click', () => {
   logPinned = true;
   updateLogJump();
 });
-function applyLogFilter() {
-  const filter = $('#log-filter').value;
+function applyLogSearch() {
+  const query = logQuery.trim().toLowerCase();
   let shown = 0;
   for (const node of messageNodes.values()) {
-    const visible = filter === 'all' || node.dataset.state === filter;
+    const visible = !query || node.textContent.toLowerCase().includes(query);
     node.hidden = !visible;
     if (visible) shown += 1;
   }
   const total = messageNodes.size;
-  $('#history').setAttribute('aria-label', filter === 'all'
-    ? 'Messages, oldest first'
-    : `Messages, oldest first, ${LOG_FILTERS[filter]} only`);
+  $('#history').setAttribute('aria-label', query
+    ? `Messages matching "${logQuery.trim()}", oldest first`
+    : 'Messages, oldest first');
   const empty = $('#log-empty');
   empty.hidden = shown > 0 || total === 0;
-  empty.textContent = `Nothing here is ${LOG_FILTERS[filter]} yet; ${total} message`
+  empty.textContent = `Nothing here matches "${logQuery.trim()}"; ${total} message`
     + `${total === 1 ? '' : 's'} saved, and the copy button still carries all of them.`;
   if (logPinned) $('#history').scrollTop = $('#history').scrollHeight;
   updateLogJump();
 }
-const savedLogFilter = stored('log-filter');
-$('#log-filter').value = LOG_FILTERS[savedLogFilter] ? savedLogFilter : 'all';
-$('#log-filter').addEventListener('change', () => {
-  save('log-filter', $('#log-filter').value);
-  applyLogFilter();
+// The search is a look at the log rather than a setting, so nothing writes it down. A reference
+// jump clears it, because a narrowed log could hide the row the jump is heading for.
+function clearLogSearch() {
+  $('#log-search').value = '';
+  logQuery = '';
+  applyLogSearch();
+}
+$('#log-search').addEventListener('input', () => {
+  logQuery = $('#log-search').value;
+  applyLogSearch();
 });
 async function refreshState() {
   if (stateBusy) return;
@@ -1503,9 +1491,7 @@ function followReference(type, id) {
   if (type === 'note') {
     if (!(lastState.notes || []).some(item => item.id === id)) return;
     showTab($('#notes-tab'));
-    $('#log-filter').value = 'all';
-    save('log-filter', 'all');
-    applyLogFilter();
+    clearLogSearch();
     const row = messageNodes.get(id);
     if (!row) return;
     row.scrollIntoView({block: 'center'});
@@ -1898,7 +1884,6 @@ $('#skip-poll').addEventListener('click', async () => {
       : 'Skip poll cleared; the agent keeps waiting.';
   } catch (error) { status.textContent = `Skip poll failed: ${error.message}.`; }
 });
-$('#refresh-notes').addEventListener('click', refreshState);
 refreshState();
 setInterval(refreshState, 3000);
 // The wait timer repaints between state refreshes, so the seconds move without a fetch.

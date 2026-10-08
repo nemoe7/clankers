@@ -65,6 +65,7 @@ class Element {
 }
 const elements = new Map();
 const documentEvents = {};
+const intervals = [];
 const windowEvents = {};
 const copied = [];
 let clipboardFails = false;
@@ -151,7 +152,7 @@ const context = {
   URL,
   setTimeout,
   clearTimeout,
-  setInterval: () => 1,
+  setInterval: callback => { intervals.push(callback); return 1; },
   clearInterval: () => {},
   fetch: async (url, options) => {
     if (url === '/api/state') {
@@ -372,6 +373,10 @@ const context = {
   }
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
+// The page's own poll timer is the test's refresh: the toolbar button it used to share that work
+// with is gone with the state select (owner note 0ccee47). The reload test loads a second client
+// into the same document, and its timer is the live one, so the last refresh wins.
+const refresh = () => intervals.filter(callback => callback.name === 'refreshState').at(-1)();
 // Receipts are built from named parts, so a test reads the part it means instead of counting.
 const part = (node, cls) => node.children.find(child => (child.className || '') === cls);
 const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
@@ -516,27 +521,21 @@ test('preview client', async (t) => {
     assert.equal(storage.get('arena-preview-v1:theme'), 'light');
     body = context.document.body;
     log = get('#history');
-    // The collapse button is gone, so the bar never hides and no handler of its own is wired
-    // (owner note ca3fc1a).
+    // The bar's collapse control and the composer's hide button both went, so neither closed state
+    // survives and nothing is saved for either (owner notes ca3fc1a and 0ccee47).
     assert.equal(body.dataset.chrome, undefined, 'the closed state is gone');
     assert.equal(get('#chrome').events.click, undefined, 'no collapse handler');
-    get('#composer-toggle').events.click();
-    assert.equal(body.dataset.composer, 'closed');
-    assert.equal(get('#composer-toggle').getAttribute('aria-expanded'), 'false');
-    assert.equal(get('#composer-toggle').getAttribute('aria-label'), 'Show composer');
-    assert.equal(get('#composer-toggle').textContent, '✎');
-    assert.equal(storage.get('arena-preview-v1:composer'), 'closed');
-    log.scrollHeight = 500; log.clientHeight = 100; log.scrollTop = 0;
-    get('#note').scrollHeight = 96;
-    get('#composer-toggle').events.click();
-    assert.equal(body.dataset.composer, 'open');
-    assert.equal(log.scrollTop, 500);
+    assert.equal(body.dataset.composer, undefined, 'the composer has no closed state');
+    assert.equal(get('#composer-toggle').events.click, undefined, 'no composer handler');
+    assert.equal(storage.get('arena-preview-v1:composer'), undefined, 'nothing is saved for it');
   });
 
   await t.test("An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box op", async () => {
     // An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box open.
     assert.equal(get('#note').style.height, '');
     get('#note').value = 'a draft';
+    // The stub carries the height the browser would measure for three lines.
+    get('#note').scrollHeight = 96;
     context.grow();
     assert.equal(get('#note').style.height, '98px');
     get('#note').value = '**draft**';
@@ -593,7 +592,7 @@ test('preview client', async (t) => {
       ],
       updated_at: new Date().toISOString()
     };
-    await get('#refresh-notes').events.click();
+    await refresh();
     upcomingBody = get('#tasks-upcoming-body');
     finishedBody = get('#tasks-finished-body');
   });
@@ -632,11 +631,11 @@ test('preview client', async (t) => {
   await t.test("Finished tasks display newest first without changing saved order", async () => {
     const original = state.tasks.finished.slice();
     state.tasks.finished.push({ id: 'latest', title: 'Latest finished', details: [], status: 'finished', order: 2 });
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.deepEqual(get('#tasks-finished-body').children.map(row => row.title), ['latest', 'shipped']);
     assert.deepEqual(state.tasks.finished.map(task => task.id), ['shipped', 'latest']);
     state.tasks.finished = original;
-    await get('#refresh-notes').events.click();
+    await refresh();
   });
 
   await t.test("A hostile title is text in the current row, because a row is built with textContent", async () => {
@@ -685,7 +684,7 @@ test('preview client', async (t) => {
     // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
     opened = upcomingBody.children[0].children[1];
     opened.open = true;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
     assert.equal(upcomingBody.children[0].children[1].open, true);
   });
@@ -738,12 +737,12 @@ test('preview client', async (t) => {
     assert.equal(get('#send-status').textContent, 'Copied state as NDJSON.',
       'the receipt names the state copy without counts');
     state.tasks.upcoming = [];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
     assert.equal(currentBody.children.length, 0);
     assert.equal(get('#tasks-upcoming').hidden, false, 'the section still renders, empty');
     delete state.tasks;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#tasks-finished').hidden, true);
     assert.equal(get('#tasks-current').hidden, true, 'no task list, no current div');
     // The server route answers whatever the poll cached, so the copy needs no client cache.
@@ -813,7 +812,7 @@ test('preview client', async (t) => {
     assert.equal(get('#note').value, 'new unsent draft');
     await tick();
     state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
     assert.match(get('#history').children[0].children[2].textContent, /^one ·  · [A-Z][a-z]{2} /);
   });
@@ -829,11 +828,11 @@ test('preview client', async (t) => {
     // A message that became a task says so, so a line that was read is never mistaken for one that
     // was dropped; the task ID rides in the marker's title.
     state.notes[0].task_id = 'dots-in-receipt';
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(get('#history').children[0].children[2].textContent, / · Task added$/);
     assert.equal(part(get('#history').children[0].children[2], 'receipt-task').title, 'Task dots-in-receipt');
     delete state.notes[0].task_id;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'receipt-task'), undefined,
       'a message with no task carries no marker');
   });
@@ -851,7 +850,7 @@ test('preview client', async (t) => {
       at: new Date().toISOString(),
       acknowledged_at: null
     });
-    await get('#refresh-notes').events.click();
+    await refresh();
     agentReceipt = get('#history').children.at(-1).children[2];
     assert.deepEqual(agentReceipt.children.map(child => child.className).filter(Boolean),
       ['note-id', 'receipt-sep', 'state-dot'],
@@ -863,7 +862,7 @@ test('preview client', async (t) => {
   await t.test("The fixture note is this block's own; the tests after it read the log that was there befor", async () => {
     // The fixture note is this block's own; the tests after it read the log that was there before.
     state.notes.pop();
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Sent');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').attributes['aria-label'], 'Sent');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').attributes.role, 'img');
@@ -899,13 +898,13 @@ test('preview client', async (t) => {
     assert.match(get('#history').children[0].children[1].className, /^answer/);
     assert.equal(get('#history').children[0].children[2].className, 'receipt');
     state.notes[0].seen_at = new Date().toISOString();
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'seen');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Seen');
     state.notes[0].html = '<p>&lt;img onerror=alert(1)&gt;</p>';
     state.notes[0].acknowledged_at = new Date().toISOString();
     state.last_check = new Date().toISOString();
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
     assert.match(get('#last-check').textContent, /^Last read\/ack: [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
@@ -913,7 +912,7 @@ test('preview client', async (t) => {
     state.notes[0].ack_kind = 'reply';
     state.notes[0].ack_text = '**done**';
     state.notes[0].ack_html = '<p><strong>done</strong></p>';
-    await get('#refresh-notes').events.click();
+    await refresh();
     answer = get('#history').children[0].children[1];
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
@@ -976,7 +975,7 @@ test('preview client', async (t) => {
     state.notes[0].ack_kind = 'note';
     state.notes[0].ack_text = 'rechecked';
     delete state.notes[0].ack_html;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(answer.textContent, 'rechecked');
     assert.equal(answer.children.length, 1);
     assert.equal(answer.children[0].tagName, 'p');
@@ -987,64 +986,64 @@ test('preview client', async (t) => {
     assert.equal(get('#note').value, 'new unsent draft');
     state.notes.push({ id: 'two', text: 'second', at: new Date().toISOString(), acknowledged_at: null });
     log.scrollHeight = 400; log.clientHeight = 200; log.scrollTop = 200;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.deepEqual(log.children.map(item => item.children[2].children[0].textContent), ['one', 'two']);
     assert.deepEqual(log.children.map(item => item.children[2].children[0].tagName), ['code', 'code']);
     assert.deepEqual(log.children.map(item => part(item.children[2], 'receipt-sep').tagName), ['span', 'span']);
     assert.equal(log.scrollTop, 400);
     log.scrollTop = 0;
     state.notes.push({ id: 'three', text: 'third', at: new Date().toISOString(), acknowledged_at: null });
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(log.scrollTop, 0);
     assert.equal(log.children.at(-1).children[2].children[0].textContent, 'three');
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     stateFails = true;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'down');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Disconnected');
     assert.match(get('#connection-text').textContent, /Connection failed: server gone/);
     // A Cloudflare page for the dead sandbox must not land in the header; the status stands in.
     stateGatewayBody = '<!DOCTYPE html><html class="no-js ie6 oldie" lang="en-US"><head><title>arena-site.site | 502: Bad gateway</title></head><body><h2>Bad gateway</h2><p>Error code 502</p></body></html>';
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-text').textContent, 'Connection failed: HTTP 502 Bad Gateway. Draft kept; history may be stale.');
     // A proxy that answers plain text keeps one short line of it, folded to 120 characters.
     stateGatewayBody = `proxy refused\n${'x'.repeat(200)}`;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-text').textContent, `Connection failed: proxy refused ${'x'.repeat(106)}. Draft kept; history may be stale.`);
     stateGatewayBody = null;
     stateFails = false;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     // A running agent poll turns the dot blue and leaves the text alone.
     state.polling = true;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'polling');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     // A poll start times the wait in the header; the clock ticks between state refreshes.
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
     await tick();
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
     // A wait outlives the idle window: the live heartbeat keeps the wait text, not the gone mark.
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'polling');
     assert.match(get('#connection-text').textContent, /^Polling… /);
     assert.doesNotMatch(get('#connection-text').textContent, /Agent 404/);
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     state.polling = false;
     state.polling_since = null;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     // Between calls the line names the last call's stamp once the hook has written one, so the
     // long-call wording has no line of its own (owner note cc6edd4).
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
@@ -1052,65 +1051,65 @@ test('preview client', async (t) => {
     // A poll that returned ends the turn: the mark holds the agent's last act, and three quiet
     // minutes name the agent absent without waiting out the call cap a running bash call needs.
     state.turn_ended_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
     // No call stamp is known yet, so the gone mark stands alone (owner note c08732a).
     assert.equal(get('#connection-text').textContent, 'Agent 404');
     // A fresh turn end keeps the plain line until the quiet window passes.
     state.turn_ended_at = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     // The agent's next call clears the mark, and the line names the last call's stamp.
     state.turn_ended_at = null;
     state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
     // The hook stamps every bash call's end, so a call that finished is not a running one,
     // whatever the agent does between calls (owner note bd93043).
     state.agent_call_ended_at = new Date(Date.now() - 700_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick();
     assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
     assert.doesNotMatch(get('#connection-text').textContent, /long call/);
     // A stamp and an absent agent share the line: the call's end, then the gone mark.
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
     assert.match(get('#connection-text').textContent,
       /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · Agent 404$/);
     state.agent_call_ended_at = null;
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     // The header names the bash calls, singular and plural, and nothing else.
     state.calls_since_message = 94;
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · 94 bash calls');
     state.calls_since_message = 1;
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · 1 bash call');
     // The tally rides every line the header shows, not just the quiet one: a poll and a finished
     // call are the lines the owner watches while the count climbs (owner note 03471eb).
     state.polling = true;
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s · 1 bash call$/);
     state.polling = false;
     state.polling_since = null;
     state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · 1 bash call$/);
     state.agent_call_ended_at = null;
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, 'Agent 404 · 1 bash call');
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
     state.calls_since_message = 0;
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
@@ -1264,7 +1263,7 @@ test('preview client', async (t) => {
     releaseHtml = undefined;
     reportHtmlWait = new Promise(resolve => { releaseHtml = resolve; });
     state.reports[0].updated_at = '2026-09-22T12:00:00';
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     textInput.value = 'keep this draft';
     get('#report-form').events.input(event({target:textInput}));
     releaseHtml(); await tick();
@@ -1274,7 +1273,7 @@ test('preview client', async (t) => {
     oldRevision = reportRevision;
     reportRevision = '2026-09-22T12:00:01.200000+00:00';
     state.reports[0].updated_at = '2026-09-22T12:00:01';
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#report').renders, beforeDirtyRefresh, 'automatic updates must keep unsent answers');
     reportConflict = true;
     await get('#report-form').events.submit(event({}));
@@ -1296,7 +1295,7 @@ test('preview client', async (t) => {
     sendingReport = get('#report-form').events.submit(event({}));
     reportRevision = '2026-09-22T12:00:02.300000+00:00';
     state.reports[0].updated_at = '2026-09-22T12:00:02';
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#report').renders, beforeSendingUpdate, 'keep a submitted form until its request completes');
     reportConflict = true;
     releaseSubmission(); await sendingReport;
@@ -1325,7 +1324,7 @@ test('preview client', async (t) => {
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
       seen_at: '2026-09-20T22:00:00' }];
     await tick();
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(pip.hidden, true, 'a report carrying a read stamp is not unread');
     assert.equal(pip.title, 'No unread reports');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
@@ -1335,12 +1334,12 @@ test('preview client', async (t) => {
   await t.test("An unanswered form moves neither marker: the star and the pip report unread, and nothing e", async () => {
     // An unanswered form moves neither marker: the star and the pip report unread, and nothing else.
     state.reports[0].needs_answer = true;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(pip.hidden, true, 'an unanswered form leaves the pip alone');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. Fielded', 'an unanswered form leaves the star alone');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(), seen_at: null }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(pip.hidden, false, 'a report with no read stamp is unread');
     assert.equal(pip.title, 'A report is unread');
     assert.equal(pip.attributes['aria-label'], 'Unread report');
@@ -1353,7 +1352,7 @@ test('preview client', async (t) => {
     state.reports[0].latest_answer_at = '2026-09-24T10:00:00';
     state.reports[0].latest_answer_acknowledged_at = null;
     state.reports[0].agent_seen_at = '2026-09-24T10:00:30';
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
     assert.match(agentAck.textContent, /Submission a123456/);
     assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
@@ -1368,14 +1367,14 @@ test('preview client', async (t) => {
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     assert.equal(get('#report-agent-ack-footer').hidden, agentAck.hidden);
     state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(part(agentAck, 'state-dot').dataset.state, 'said');
     assert.match(part(agentAck, 'state-dot').title, /^Acked Sep /);
     assert.match(agentAck.textContent, / · Sep 24, 10:01$/,
       'the ack time is the latest stamp and ends the line');
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#report-ack-history').hidden, false);
     assert.equal(get('#report-ack-history').children.length, 2);
     assert.equal(get('#report-ack-history').children[0].innerHTML, '<p>First</p>');
@@ -1384,7 +1383,7 @@ test('preview client', async (t) => {
     state.reports[0].latest_answer_id = 'b765432-bbbbbbbbbbbbbbbbbbbbbbbbb';
     state.reports[0].latest_answer_at = '2026-09-24T10:02:00';
     state.reports[0].latest_answer_acknowledged_at = null;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(agentAck.textContent, /Submission b765432/);
     assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
     assert.equal(part(agentAck, 'state-dot').title, 'Sent',
@@ -1392,7 +1391,7 @@ test('preview client', async (t) => {
     assert.match(agentAck.textContent, / · Sep 24, 10:02$/,
       'a later answer brings its own stamp');
     state.reports = [];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(agentAck.hidden, true, 'hide receipts when no report is selected');
     assert.equal(get('#report-agent-ack-footer').hidden, true);
     assert.equal(pip.hidden, true, 'with no reports there is nothing unread');
@@ -1402,13 +1401,13 @@ test('preview client', async (t) => {
     // An edited report keeps its star but drops the pip: ever_seen remembers the open.
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
       seen_at: null, ever_seen: 1 }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(pip.hidden, true, 'an opened report edited later shows no dot');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. * Fielded', 'the star still marks the changed text');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
       seen_at: null, ever_seen: 0 }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(pip.hidden, false, 'a report nobody opened shows the dot');
   });
 
@@ -1422,7 +1421,7 @@ test('preview client', async (t) => {
       latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
       latest_answer_at: '2026-09-24T10:00:00',
       latest_answer_acknowledged_at: '2026-09-24T10:01:00', ack_seen_at: null }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(pip.hidden, false, 'an acked answer nobody opened shows the dot');
     assert.equal(pip.title, 'A report is unread');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
@@ -1452,7 +1451,7 @@ test('preview client', async (t) => {
       latest_answer_at: '2026-09-24T10:00:00',
       latest_answer_acknowledged_at: '2026-09-24T10:01:00',
       ack_seen_at: '2026-09-24T10:02:00' }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. Fielded', 'an opened ack leaves no star');
     assert.equal(pip.hidden, true, 'an opened ack leaves no dot');
@@ -1469,7 +1468,7 @@ test('preview client', async (t) => {
       latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
       latest_answer_at: '2026-09-24T10:00:00',
       latest_answer_acknowledged_at: null, ack_seen_at: null }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     await get('#reports-tab').events.click();
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, [], 'nothing to stamp before the ack lands');
@@ -1478,7 +1477,7 @@ test('preview client', async (t) => {
       latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
       latest_answer_at: '2026-09-24T10:00:00',
       latest_answer_acknowledged_at: '2026-09-24T10:01:00', ack_seen_at: null }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
       'an ack in view is stamped on the refresh');
@@ -1529,7 +1528,7 @@ test('preview client', async (t) => {
     assert.deepEqual(readStamps, [], 'an unscrolled long report is not stamped');
     // The owner reaches the end, but no scroll event follows the position.
     panel.scrollTop = 600;
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick(); await tick();
     assert.deepEqual(readStamps, ['/api/reports/r1/seen'],
       'the poll stamps a report that shows its end');
@@ -1568,7 +1567,7 @@ test('preview client', async (t) => {
     // its place and that report's label loses its asterisk at once, which is the bug the owner hit
     // when reading a report threw the page back to the top.
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick();
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. * Long', 'an unseen report is starred before the stamp lands');
@@ -1591,7 +1590,7 @@ test('preview client', async (t) => {
       { id: 'r1', title: 'Long', updated_at: new Date(Date.now() + 1000).toISOString(), seen_at: new Date().toISOString() },
       { id: 'r2', title: 'Other', updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }
     ];
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick(); await tick();
     assert.equal(panel.scrollTop, 450, 'a report update keeps the panel where the owner left it');
     get('#report-select').value = 'r2';
@@ -1600,72 +1599,79 @@ test('preview client', async (t) => {
     assert.equal(panel.scrollTop, 0, 'a report the owner switched to starts at its top');
   });
 
-  await t.test("The log filter selects over the dots the log already draws, adds no new notion, and leaves", async () => {
-    // The log filter selects over the dots the log already draws, adds no new notion, and leaves the
-    // copy alone: that is the restore path, and a filtered copy would restore a partial log.
+  await t.test("The log search narrows the rows by substring and leaves the copy whole", async () => {
+    // The log search narrows the rows by substring over each row as it stands, and leaves the copy
+    // alone: that is the restore path, and a narrowed copy would restore a partial log (owner note
+    // 0ccee47).
     logStamp = new Date().toISOString();
     state.notes = [
-      { id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null },
-      { id: 'n2', text: 'read', at: logStamp, seen_at: logStamp, acknowledged_at: null },
-      { id: 'n3', text: 'answered', at: logStamp, seen_at: logStamp, acknowledged_at: logStamp,
-        ack_kind: 'note', ack_text: 'ok' }
+      { id: 'n1', text: 'alpha', at: logStamp, acknowledged_at: null },
+      { id: 'n2', text: 'beta', at: logStamp, seen_at: logStamp, acknowledged_at: null },
+      { id: 'n3', text: 'gamma', at: logStamp, seen_at: logStamp, acknowledged_at: logStamp,
+        ack_kind: 'note', ack_text: 'delta' }
     ];
     await tick();
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick();
-    assert.equal(get('#log-filter').value, 'all', 'the log opens unfiltered');
+    assert.equal(get('#log-search').value, '', 'the log opens with an empty search');
     messageRow = id => get('#history').children.find(node =>
       node.children[2].children[0].textContent === id);
     visibleRows = () => ['n1', 'n2', 'n3'].filter(id => !messageRow(id).hidden);
-    assert.deepEqual(visibleRows(), ['n1', 'n2', 'n3'], 'every message shows under All');
-    assert.equal(get('#log-empty').hidden, true, 'nothing to explain while the filter matches');
+    assert.deepEqual(visibleRows(), ['n1', 'n2', 'n3'], 'every message shows with no query');
+    assert.equal(get('#log-empty').hidden, true, 'nothing to explain while the search matches');
     assert.equal(messageRow('n1').dataset.state, 'sent');
     assert.equal(messageRow('n2').dataset.state, 'seen');
     assert.equal(messageRow('n3').dataset.state, 'said');
-    for (const [filter, expected] of [['sent', ['n1']], ['seen', ['n2']], ['said', ['n3']]]) {
-      get('#log-filter').value = filter;
-      get('#log-filter').events.change();
-      assert.deepEqual(visibleRows(), expected, `the ${filter} filter shows its own state only`);
+    for (const [query, expected] of [['alp', ['n1']], ['BET', ['n2']], ['delta', ['n3']]]) {
+      get('#log-search').value = query;
+      get('#log-search').events.input();
+      assert.deepEqual(visibleRows(), expected, `the search for ${query} shows its own rows`);
       assert.equal(get('#log-empty').hidden, true);
     }
-    assert.equal([...storage.keys()].some(key => key.endsWith(':log-filter')), true,
-      'the chosen filter is remembered');
+    get('#log-search').value = 'n2';
+    get('#log-search').events.input();
+    assert.deepEqual(visibleRows(), ['n2'], 'the ID on the row finds the row');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
+    assert.deepEqual(visibleRows(), ['n1', 'n2', 'n3'], 'clearing the box brings every row back');
+    assert.equal([...storage.keys()].some(key => key.endsWith(':log-filter')), false,
+      'a search is a look, not a setting, so nothing is remembered');
   });
 
-  await t.test("A filter that matches nothing says so and counts what it is holding back", async () => {
-    // A filter that matches nothing says so and counts what it is holding back.
+  await t.test("A search that matches nothing says so and counts what it is holding back", async () => {
+    // A search that matches nothing says so and counts what it is holding back.
     state.notes = [{ id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null }];
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick();
-    get('#log-filter').value = 'said';
-    get('#log-filter').events.change();
+    get('#log-search').value = 'nothing here';
+    get('#log-search').events.input();
     assert.equal(messageRow('n1').hidden, true);
-    assert.equal(get('#log-empty').hidden, false, 'a filter with no match explains itself');
-    assert.match(get('#log-empty').textContent, /Nothing here is Said yet/);
+    assert.equal(get('#log-empty').hidden, false, 'a search with no match explains itself');
+    assert.match(get('#log-empty').textContent, /Nothing here matches "nothing here"/);
   });
 
-  await t.test("The filter keeps the log's place: at its end, the log returns there when rows come back,", async () => {
-    // The filter keeps the log's place: at its end, the log returns there when rows come back,
+  await t.test("The search keeps the log's place: at its end, the log returns there when rows come back,", async () => {
+    // The search keeps the log's place: at its end, the log returns there when rows come back,
     // because the browser clamps the scroll while the view is short and never puts it back.
     logView = get('#history');
     state.notes = [
-      { id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null },
-      { id: 'n2', text: 'read', at: logStamp, seen_at: logStamp, acknowledged_at: null }
+      { id: 'n1', text: 'alpha', at: logStamp, acknowledged_at: null },
+      { id: 'n2', text: 'beta', at: logStamp, seen_at: logStamp, acknowledged_at: null }
     ];
-    await get('#refresh-notes').events.click();
+    await refresh();
     await tick();
     logView.scrollHeight = 900; logView.clientHeight = 300; logView.scrollTop = 600;
     logView.events.scroll();
-    get('#log-filter').value = 'sent';
-    get('#log-filter').events.change();
-    assert.equal(logView.scrollTop, 900, 'a filtered view with one row sits at its end');
-    get('#log-filter').value = 'all';
-    get('#log-filter').events.change();
+    get('#log-search').value = 'alpha';
+    get('#log-search').events.input();
+    assert.equal(logView.scrollTop, 900, 'a narrowed view with one row sits at its end');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
     assert.equal(logView.scrollTop, 900, 'the log returns to its end when the rows come back');
     logView.scrollTop = 0;
     logView.events.scroll();
-    get('#log-filter').value = 'seen';
-    get('#log-filter').events.change();
+    get('#log-search').value = 'beta';
+    get('#log-search').events.input();
     assert.equal(logView.scrollTop, 0, 'a log the owner scrolled away from stays where they left it');
   });
 
@@ -1682,7 +1688,7 @@ test('preview client', async (t) => {
       reports: [],
       last_check: null,
     };
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#history').children.length, 20, 'the newest page renders');
     assert.equal(get('#history').children[0].children[0].textContent, 'message 5');
     assert.equal(get('#history').children.at(-1).children[0].textContent, 'message 24');
@@ -1724,7 +1730,7 @@ test('preview client', async (t) => {
         status: 'upcoming', order: 1, updated_at: new Date().toISOString() }] },
       last_check: null
     };
-    await get('#refresh-notes').events.click();
+    await refresh();
     stateCopyButton = get('#copy-state');
     cacheKey = [...storage.keys()].find(item => item.endsWith(':state-cache'));
     assert.ok(cacheKey, 'every successful poll caches the copy the state button copies');
@@ -1776,7 +1782,7 @@ test('preview client', async (t) => {
     servedToken = 'token-two';
     sendsBefore = sent.length;
     fetchesBefore = pageFetches;
-    await get('#refresh-notes').events.click();
+    await refresh();
     await sendNote('after the poll');
     assert.equal(pageFetches, fetchesBefore, 'the poll already refreshed the token');
     assert.equal(sent.length, sendsBefore + 1, 'the send lands on the token from the poll');
@@ -1798,20 +1804,20 @@ test('preview client', async (t) => {
     // Give the page back the token its own page carried, so a later test that writes does not
     // inherit this one's stand-in token; the poll is what hands it over.
     servedToken = '__TOKEN__';
-    await get('#refresh-notes').events.click();
+    await refresh();
   });
 
   await t.test("The fixture above is this test's own; later tests read the state that was live before it", async () => {
     // The fixture above is this test's own; later tests read the state that was live before it.
     state = priorState;
-    await get('#refresh-notes').events.click();
+    await refresh();
   });
 
-  await t.test("With the filter matching nothing, the state copy still carries every message: the cache is", async () => {
-    // With the filter matching nothing, the state copy still carries every message: the cache is the
-    // restore path, and a filtered copy would restore a partial log as if it were all of it.
-    get('#log-filter').value = 'said';
-    get('#log-filter').events.change();
+  await t.test("With the search matching nothing, the state copy still carries every message: the cache is", async () => {
+    // With the search matching nothing, the state copy still carries every message: the cache is the
+    // restore path, and a narrowed copy would restore a partial log as if it were all of it.
+    get('#log-search').value = 'nothing here';
+    get('#log-search').events.input();
     copied.length = 0;
     get('#copy-state').events.click();
     await tick();
@@ -1819,15 +1825,15 @@ test('preview client', async (t) => {
       .map(line => JSON.parse(line)).filter(line => 'title' in line === false);
     assert.ok(filteredNotes.length > 0, 'the fixture holds messages to carry');
     assert.equal(filteredNotes.length, state.notes.length,
-      'the state copies whatever the filter shows, not the filtered view of it');
-    get('#log-filter').value = 'all';
-    get('#log-filter').events.change();
+      'the state copies whatever the log holds, not the narrowed view of it');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
     await tick();
     state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(get('#history').children.at(-1).children[2].textContent, /[A-Z][a-z]{2} \d{2} \d{2}, \d{2}:\d{2}/);
     state = { notes: [{ id: 'a66700e4-37f0-4182-b782-33c38a83728d', text: 'long id', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
-    await get('#refresh-notes').events.click();
+    await refresh();
     longReceipt = get('#history').children.at(-1).children[2];
     assert.equal(longReceipt.children[0].textContent, 'a66700e');
     assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
@@ -2089,7 +2095,7 @@ test('preview client', async (t) => {
       ['report card.pdf', 'notes.txt', 'photo.png']);
     await get('#form').events.submit(event({}));
     await tick();
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(uploadCalls.length, 2);
     assert.equal(uploadCalls[0].id, uploadCalls[1].id, 'unchanged retries reuse the note ID');
     assert.equal(state.notes.length, notesBeforeFile + 1);
@@ -2242,7 +2248,7 @@ test('preview client', async (t) => {
     state.fetch_jobs = [{ id: 'agent-1', url: requested, allow_proxy: false, status: 'queued',
       approval: 'pending', source: null, error: null, size: null, file: null, present: false }];
     await tick(); // The preceding file-send completion can still be finishing its state poll.
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#downloads-pip').hidden, false, 'a pending request lights the Downloads dot');
     assert.equal(get('#downloads-pip').attributes['aria-label'], '1 download awaiting approval');
     assert.equal(get('#fetch-approvals').children.length, 1);
@@ -2261,7 +2267,7 @@ test('preview client', async (t) => {
     state.fetch_jobs.unshift({ id: 'agent-2', url: deniedURL, allow_proxy: true, status: 'queued',
       approval: 'pending', source: null, error: null, size: null, file: null, present: false });
     fetchedBeforeDeny = remoteCalls.length;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#downloads-pip').hidden, false);
     await approvalButton(deniedURL, 'Deny').events.click();
     assert.equal(state.fetch_jobs[0].approval, 'denied');
@@ -2272,7 +2278,7 @@ test('preview client', async (t) => {
     assert.match(get('#fetch-list').children[0].children[1].textContent, /denied/);
     assert.equal(get('#fetch-list').children[0].children.some(item => item.textContent === 'Retry same URL'), false);
     state.fetch_jobs = [];
-    await get('#refresh-notes').events.click();
+    await refresh();
     get('#notes-tab').events.click();
     resultCalls.length = 0;
     remoteCalls.length = 0;
@@ -2380,7 +2386,7 @@ test('preview client', async (t) => {
       state.fetch_jobs.unshift({ id: `agent-${suffix}`, url, origin: suffix === 'declared' ? 'agent' : undefined, status: 'queued', approval: 'approved', allow_proxy: true });
       callsBeforeLimit = remoteCalls.length;
       resultsBeforeLimit = resultCalls.length;
-      await get('#refresh-notes').events.click();
+      await refresh();
       await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
       assert.equal(remoteCalls.length, callsBeforeLimit + 1);
       assert.equal(resultCalls.length, resultsBeforeLimit);
@@ -2395,21 +2401,21 @@ test('preview client', async (t) => {
     await get('#fetch-form').events.submit(event({}));
     assert.equal(queuedCalls.length, beforeLost + 1, 'a lost enqueue response is not blindly retried');
     assert.match(get('#fetch-status').textContent, /Queue not confirmed.*Check the list/);
-    await get('#refresh-notes').events.click();
+    await refresh();
     await waitFor(() => state.fetch_jobs.find(item => item.url === lost)?.status === 'saved');
     state.fetch_jobs = [];
-    await get('#refresh-notes').events.click();
+    await refresh();
 
     state.notes = [
       {id: 'edited-old', text: 'Older question', at: '2026-09-22T00:00:00', acknowledged_at: '2026-09-22T00:01:00', ack_kind: 'reply', ack_text: 'First answer', ack_edited_at: null},
       {id: 'newer-note', text: 'Newer question', at: '2026-09-22T00:02:00'}
     ];
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#log-edited').hidden, true);
     // A re-ack appends a block: the first answer stays, the new one lands under it with its stamp.
     state.notes[0].replies = [{kind: 'reply', text: 'Second answer', at: '2026-09-22T00:03:00', html: '<p>Second answer</p>'}];
     state.notes[0].ack_edited_at = '2026-09-22T00:03:00';
-    await get('#refresh-notes').events.click();
+    await refresh();
     editedNode = get('#history').children[0];
     assert.match(editedNode.children[2].textContent, / · Replied again Sep 22, /);
     const grown = editedNode.children[1];
@@ -2422,18 +2428,18 @@ test('preview client', async (t) => {
     assert.equal(get('#history').children[1].children[2].children[0].dataset.full, 'newer-note', 'edits keep log order');
     assert.equal(get('#notes-pip').hidden, false);
     assert.equal(get('#log-edited').hidden, false);
-    get('#log-filter').value = 'sent';
-    get('#log-filter').events.change();
+    get('#log-search').value = 'zzz';
+    get('#log-search').events.input();
     await get('#log-edited').events.click();
     assert.equal(editedNode.children[1].scrolledIntoView, true);
-    assert.equal(get('#log-filter').value, 'all');
+    assert.equal(get('#log-search').value, '', 'the jump clears a search that could hide its target');
     assert.equal(get('#notes-pip').hidden, true);
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#log-edited').hidden, true, 'an unchanged poll does not notify again');
     assert.deepEqual(replySeenCalls, [{url: '/api/messages/edited-old/replies/seen', count: 1}], 'viewed reply count is written to the server');
     state.notes[0].replies.push({kind: 'note', text: 'Third block, same second'});
     state.notes[0].replies[1].at = '2026-09-22T00:03:00';
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#log-edited').hidden, false, 'same-second replies still notify');
     assert.equal(editedNode.children[1].children.length, 3);
     assert.equal(editedNode.children[1].children[2].children[0].textContent, 'Third block, same second', 'a note ack renders as plain text');
@@ -2443,19 +2449,19 @@ test('preview client', async (t) => {
     assert.deepEqual(replySeenCalls.map(call => call.count), [1, 2], 'same-second replies get distinct viewed counts');
     assert.equal(get('#log-edited').hidden, true, 'the SQLite-backed viewed count survives a reload');
     state.reports = [{id: 'stable', title: 'Stable', updated_at: '2026-09-22T00:00:00', seen_at: '2026-09-22T00:00:01'}];
-    await get('#refresh-notes').events.click();
+    await refresh();
     get('#report-select').value = 'stable';
     get('#reports-tab').events.click();
     await tick(); await tick();
     renders = get('#report').renders;
     state.reports.push({id: 'other', title: 'Other report', updated_at: '2026-09-22T01:00:00'});
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#report').renders, renders, 'another report must not render the unchanged current report');
     state.last_check = new Date().toISOString();
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#report').renders, renders, 'CLI inbox checks do not render the report');
     state.reports[0].updated_at = '2026-09-22T02:00:00';
-    await get('#refresh-notes').events.click(); await tick();
+    await refresh(); await tick();
     assert.equal(get('#report').renders, renders + 1, 'current-report updates still render');
     renders = get('#report').renders;
     replacements = get('#report').replacements;
@@ -2465,7 +2471,7 @@ test('preview client', async (t) => {
     assert.equal(get('#report').renders, renders + 1, 'explicit refresh still renders');
     state.notes = [{id:'notes-only', text:'No tasks yet', at:'2026-09-22T12:00:00'}];
     state.tasks = null;
-    await get('#refresh-notes').events.click();
+    await refresh();
     copiesBeforeNotesOnly = copied.length;
     await get('#copy-state').events.click();
     await tick();
@@ -2495,7 +2501,7 @@ test('preview client', async (t) => {
       },
       fetch_jobs: [], last_check: null
     };
-    await get('#refresh-notes').events.click();
+    await refresh();
     const row = id => get('#history').children.find(item => item.children[2].children[0].dataset.full === id);
     const answer = row('question').children[1];
     for (const [type, id, panel] of [
@@ -2517,8 +2523,8 @@ test('preview client', async (t) => {
       documentEvents.click({ target, preventDefault: () => { prevented = true; } });
       assert.equal(prevented, true, `${type} navigation prevents the fragment jump`);
     };
-    get('#log-filter').value = 'said';
-    get('#log-filter').events.change();
+    get('#log-search').value = 'zzz';
+    get('#log-search').events.input();
     follow('report', 'report-ref');
     assert.equal(get('#reports-panel').hidden, false);
     assert.equal(get('#report-select').value, 'report-ref');
@@ -2526,7 +2532,7 @@ test('preview client', async (t) => {
 
     follow('note', 'message-ref');
     assert.equal(get('#notes-panel').hidden, false);
-    assert.equal(get('#log-filter').value, 'all', 'note links clear filters that hide their target');
+    assert.equal(get('#log-search').value, '', 'note links clear a search that could hide their target');
     assert.equal(row('message-ref').hidden, false);
     assert.equal(row('message-ref').scrolledIntoView, true);
 
@@ -2543,7 +2549,7 @@ test('preview client', async (t) => {
       host: 'https://arena-proxy.example.ts.net',
       at: '2026-10-03T15:00:00+00:00',
     };
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(get('#agent-key').textContent, /^Key K{7} · \d{2}:\d{2}$/,
       'seven characters and the hour name the key');
     assert.doesNotMatch(get('#agent-key').textContent, /K{8}/, 'the full key never prints');
@@ -2555,11 +2561,11 @@ test('preview client', async (t) => {
     assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set \w{3} \d{2}, \d{2}:\d{2}$/,
       'the tooltip keeps the host and the full stamp');
     state.agent_key = { key: 'K'.repeat(43), host: null, at: '2026-10-03T15:00:00+00:00' };
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.match(get('#agent-key').title, /^set \w{3} \d{2}, \d{2}:\d{2}$/,
       'a hostless record leaves the tooltip with the stamp alone');
     state.agent_key = null;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#agent-key').textContent, 'No key recorded.');
     assert.equal(get('#agent-key').title, '', 'the tooltip clears with the record');
   });
@@ -2569,7 +2575,7 @@ test('preview client', async (t) => {
       { id: 'loud', text: 'Owner-facing line', at: '2026-10-05T05:00:00' },
       { id: 'murmur', text: 'The recorded agent key expired.', at: '2026-10-05T05:01:00', quiet: 1 },
     ];
-    await get('#refresh-notes').events.click();
+    await refresh();
     const texts = get('#history').children.map(node => node.children[0].textContent);
     assert.deepEqual(texts, ['Owner-facing line'], 'the quiet note never renders');
     assert.match(get('#connection-text').textContent, /^1 messages saved/, 'the tally counts the log');
@@ -2582,7 +2588,7 @@ test('preview client', async (t) => {
     // The press must write no note: the agent reads the flag, ends its wait, and no stale
     // "skip poll" line waits in the log for a later turn to misread.
     state.skip_poll = null;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
     assert.equal(get('#skip-poll').dataset.state, '');
     assert.equal(get('#skip-poll').getAttribute('aria-label'), 'Ask the agent to end its wait now');
@@ -2608,7 +2614,7 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'true');
     state.skip_poll = null;
-    await get('#refresh-notes').events.click();
+    await refresh();
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
     assert.equal(get('#skip-poll').dataset.state, '');
   });

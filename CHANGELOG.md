@@ -63,6 +63,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Unpublish guard**: `unpublish` refuses while the owner has an unseen answer ack, and refuses the minute after the owner's last look at the report. A refusal answers `409` and names the wait it read. The owner's own press passes the view window (owner notes 6960520 and 46ba603).
 - **Task reference row**: `references/REFERENCE.md` now states that `--msg-id` is optional. It also states that one task holds one job: several jobs mean several tasks, not one task with many details. The refs copy and both live twins stay in step.
+- **Log search**: the log's toolbar is a search box and the skip button. The hide-composer toggle, the refresh button and the All, Sent, Seen, Said select leave. A substring narrows the rows in their place, and the state copy still carries every message (owner note 0ccee47).
 
 #### userscripts
 

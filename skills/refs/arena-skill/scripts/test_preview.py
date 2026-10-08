@@ -434,8 +434,11 @@ def test_http_boundaries():
       )
       assert status == 200 and "__STYLE__" not in page and "__SCRIPT__" not in page
       assert 'data-theme="dark"' in page and 'role="tab"' in page
-      # The log filter ships in the page with its three states and its empty line.
-      assert 'id="log-filter"' in page and 'id="log-empty"' in page
+      # The log's toolbar is a search box and the skip button, with the empty line beside them
+      # (owner note 0ccee47).
+      assert 'id="log-search"' in page and 'id="log-empty"' in page
+      assert 'id="log-filter"' not in page and 'id="refresh-notes"' not in page
+      assert 'id="composer-toggle"' not in page and "data-composer" not in page
       # The log's jump bar ships in the page, inside the wrapper that positions it over the scroll area.
       assert 'id="log-newest"' in page and 'class="log-scroll"' in page
       assert 'aria-label="Scroll to bottom"' in page
@@ -451,21 +454,19 @@ def test_http_boundaries():
       assert re.search(r"\.log-edited\s*\{[^}]*border-radius:\s*4px", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
       # The save button sits in the top bar after the theme button rather than in the log's own row, on
-      # owner note 0f27a2b6; the log's row keeps the filter immediately left of copy-log, on owner notes
-      # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught. The log's own
-      # copy and the tasks' copy are gone, and one copy button carries the state to the clipboard.
+      # owner note 0f27a2b6. The log's own copy and the tasks' copy are gone, and one copy button
+      # carries the state to the clipboard.
       assert (
         page.index('id="theme"')
         < page.index('id="copy-state"')
         < page.index('id="notes-panel"')
       )
-      assert page.index('id="log-filter"') < page.index('id="refresh-notes"')
+      assert page.index('id="log-search"') < page.index('id="skip-poll"')
       assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
       assert "Copy the log, answers and tasks to the clipboard as NDJSON" in page
       # Every icon button carries a title that repeats its accessible name.
       for control in (
         "copy-state",
-        "refresh-notes",
         "attach-file",
         "unpublish-report",
         "copy-report",
@@ -495,8 +496,13 @@ def test_http_boundaries():
         r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page
       )
       assert 'id="log-newest"' in page and 'stroke="#fff"' in page
-      for value in ("all", "sent", "seen", "said"):
-        assert f'<option value="{value}">' in page
+      # The search box says what it does without a visible label: the placeholder names the
+      # gesture and the aria-label carries it for the screen reader (owner note 0ccee47).
+      assert re.search(
+        r'<input id="log-search" type="search" placeholder="Search messages"'
+        r' aria-label="[^"]+">',
+        page,
+      )
       assert "frame-ancestors" not in headers["Content-Security-Policy"]
       assert "connect-src 'self' https:" in headers["Content-Security-Policy"]
       assert "default-src 'none'" in headers["Content-Security-Policy"]
@@ -834,7 +840,7 @@ def test_http_boundaries():
       # stack and the toolbar keep their places.
       assert "history-title" not in page
       assert '<section class="card log-card" aria-label="Message log">' in page
-      assert page.index('id="connection"') < page.index('id="log-filter"')
+      assert page.index('id="connection"') < page.index('id="log-search"')
       # A phone keeps the tabs alone and drops the composer hint, and the footer's Send button
       # leads the row so it sits right under the composer at the right edge (owner notes 5284fbb,
       # 8b7e49b and 2fc9b33).
@@ -896,12 +902,15 @@ def test_http_boundaries():
         "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--bg)"
         in page
       )
-      # The log filter draws its own box like the icon buttons beside it, after a second owner note
-      # that the heights still differed.
-      assert "appearance:none" in page and "#log-filter" in page
-      assert 'class="filter-wrap"' in page
+      # The log's search box draws its own box like the icon buttons beside it: the same 34px
+      # height, and no native search decoration to fight the row (owner note 0ccee47).
+      assert re.search(r"#log-search\{[^}]*height:34px;[^}]*min-height:0;", page)
+      assert 'button,select,textarea,input[type="url"],input[type="search"]{' in page, (
+        "the search box shares the form controls' border and radius"
+      )
+      assert "#log-filter" not in page and ".filter-wrap" not in page
       assert "border-top:5px solid var(--muted)" in page, (
-        "the filter caret needs no blocked data image"
+        "the report select keeps its drawn caret, and it needs no blocked data image"
       )
       assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
       # The collapse button is gone, its closed state with it, and the strip can no longer push
