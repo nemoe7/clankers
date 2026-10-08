@@ -2045,6 +2045,26 @@ function checkStateDownload(api, session) {
     stateRepo({ querySelector: function () { return null; }, title: "ChatGPT" }),
     "",
   );
+  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
+  // the conversation header still opens with the repository name, and its first word is the
+  // repository (owner note 72882a0). That read comes before the tab title.
+  var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
+  var headerDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      return selector.indexOf("aria-haspopup") !== -1 ? [headerSpan] : [];
+    },
+    title: "Arena | other",
+  };
+  assert.equal(stateRepo(headerDoc), "clankers");
+  // A header span with no slug-like first word falls through to the tab title.
+  headerSpan.textContent = "";
+  assert.equal(stateRepo(headerDoc), "other");
+  // The saved slug still wins over the header read.
+  session.value = "saved";
+  headerSpan.textContent = "clankers read ARENA.md";
+  assert.equal(stateRepo(headerDoc), "saved");
+  session.value = null;
   // A menu click grants no browser gesture, so the automatic path writes the stamped
   // download and the pick stays a manual action.
   // No file is set: an automatic tick blocks instead of dropping a stamped download on the

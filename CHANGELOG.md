@@ -28,6 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Report task text input**: a report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
 - **Amendment proposals first**: the house rules now run an amendment proposal task before any other queued work.
 - **Message pagination**: the log renders only the newest 20 messages, and scrolling up loads the next older page.
+- **Repo header fallback**: the state scope reads the first word of the conversation header before defaulting to the tab title.
 
 ## 2026-10-07
 
