@@ -78,7 +78,12 @@ function checkLogging(api, menus) {
       ran.push("save");
     });
     assert.equal(list.length, 1);
-    var registered = menus[menus.length - 1];
+    // The registry reopens the list in module order, so the entry is found by its label rather
+    // than by sitting last in the array (owner note 7ac0309).
+    var registered = menus.filter(function (item) {
+      return item.label === "State — force save";
+    }).pop();
+    assert.ok(registered, "the registered entry is reachable by its label");
     assert.equal(registered.label, "State — force save");
     lines.length = 0;
     var pressed = [];

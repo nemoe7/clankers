@@ -58,6 +58,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Task reference row**: `references/REFERENCE.md` now states that `--msg-id` is optional. It also states that one task holds one job: several jobs mean several tasks, not one task with many details. The refs copy and both live twins stay in step.
 
+#### userscripts
+
+- **Menu order**: every entry registers through one ordered list, so each module's entries sit together: Composer, Proxy, Steering, Transcript, State, Page, Userscript. The transcript keep-rows line draws inside the Transcript group, and a toggle redraws its label in place. Arena 1.9.7.
+
 #### skills
 
 - **CodeQL scope**: `.github/codeql/codeql-config.yml` also excludes `js/request-forgery`. Its report names the preview proxy's forwarding request, whose target passes the `sbx-*.arena.site` guard and a signed-origin cookie.

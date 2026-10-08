@@ -133,15 +133,17 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   if (domain === "arena") {
     // The owner's shape decision: one module's entries share a prefix, a switch names its state
     // in parentheses, and no entry carries a role word (report answer 035a48c).
+    // The modules sit in one order, and one module's entries stay together: Composer, Proxy,
+    // Steering, Transcript, State, Page, Userscript (owner note 7ac0309).
     const expected = [
       "Composer — fill (ON)",
+      "Composer — hide (ON)",
       "Proxy — host",
       "Proxy — master key",
       "Proxy — post key now",
       "Steering — open (ON)",
       "Transcript — auto-scroll (ON)",
       "Transcript — trim (OFF)",
-      "Composer — hide (ON)",
       "State — download (ON)",
       "State — choose the file",
       "State — force save",
@@ -151,7 +153,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.deepEqual(
       [...defaults.menus.values()].map((item) => item.label),
       expected,
-      "Every entry leads with its module, in registration order",
+      "Every entry leads with its module, and one module's entries sit together",
     );
   }
   assert.equal(defaults.active.observers, observersFor(stored));
@@ -194,6 +196,28 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.ok(
       findCount().label.includes("50 rows"),
       "The count menu shows the default row limit",
+    );
+    // The count line belongs to the Transcript group, so it sits with its two switches rather
+    // than at the bottom the manager appends it to (owner note 7ac0309).
+    assert.deepEqual(
+      [...counted.menus.values()].map((item) => item.label),
+      [
+        "Composer — fill (ON)",
+        "Composer — hide (ON)",
+        "Proxy — host",
+        "Proxy — master key",
+        "Proxy — post key now",
+        "Steering — open (ON)",
+        "Transcript — auto-scroll (ON)",
+        "Transcript — trim (ON)",
+        "Transcript — keep 50 rows",
+        "State — download (ON)",
+        "State — choose the file",
+        "State — force save",
+        "Page — tab title (ON)",
+        "Userscript — pause all",
+      ],
+      "The keep-rows line sits in the Transcript group",
     );
     findCount().callback();
     assert.equal(stored.has(countKey), false, "A cancel keeps the plan unset");

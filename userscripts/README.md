@@ -20,7 +20,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. The modules sit in one order: Composer, Proxy, Steering, Transcript, State, Page, Userscript. One module's entries stay together, whatever order the features load in. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 

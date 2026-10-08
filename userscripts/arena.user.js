@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.6
+// @version      1.9.7
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -51,12 +51,78 @@
     }
   }
 
+  // The manager appends every command in the order it arrives, so the entries come from one
+  // ordered list: each script registers an entry, and the whole list opens in module order. One
+  // module's entries then sit together whatever order the features load in (owner note 7ac0309).
+  var MENU_ORDER = [
+    "Composer",
+    "Proxy",
+    "Steering",
+    "Transcript",
+    "State",
+    "Page",
+    "Userscript",
+  ];
+  var menuEntries = [];
+  var menuNextSeq = 0;
+  var menuOpened = false;
+
+  function menuRank(label) {
+    var index = MENU_ORDER.indexOf(String(label).split(" — ")[0]);
+    return index === -1 ? MENU_ORDER.length : index;
+  }
+
+  function menuRegister(entry) {
+    if (typeof GM_registerMenuCommand !== "function") return;
+    entry.id = GM_registerMenuCommand(entry.label(), entry.press);
+  }
+
+  function menuUnregister(entry) {
+    if (entry.id !== null && typeof GM_unregisterMenuCommand === "function") {
+      GM_unregisterMenuCommand(entry.id);
+    }
+    entry.id = null;
+  }
+
+  // One refresh writes the whole list in module order, so a label that moved or an entry that
+  // arrived after the load lands in its own group.
+  function menuRefresh() {
+    if (typeof GM_registerMenuCommand !== "function") return;
+    var ordered = menuEntries.slice().sort(function (a, b) {
+      return menuRank(a.label()) - menuRank(b.label()) || a.seq - b.seq;
+    });
+    menuEntries.forEach(menuUnregister);
+    menuEntries = ordered;
+    ordered.forEach(menuRegister);
+  }
+
+  function menuAdd(label, press) {
+    var entry = { seq: menuNextSeq, label: label, press: press, id: null };
+    menuNextSeq += 1;
+    menuEntries.push(entry);
+    menuRegister(entry);
+    if (menuOpened) menuRefresh();
+    return entry;
+  }
+
+  function menuDrop(entry) {
+    var index = menuEntries.indexOf(entry);
+    if (index !== -1) menuEntries.splice(index, 1);
+    menuUnregister(entry);
+  }
+
+  function menuOpen() {
+    menuOpened = true;
+    menuRefresh();
+  }
+
   // One menu entry with one guard, so a manager without a menu gets nothing. The press writes
   // its own line before the command runs, so one filter shows every menu press (note e60e311).
   function menuItem(list, label, run) {
-    if (typeof GM_registerMenuCommand !== "function") return;
     list.push(
-      GM_registerMenuCommand(label, function () {
+      menuAdd(function () {
+        return label;
+      }, function () {
         logEvent("menu", label);
         run();
       }),
@@ -130,7 +196,7 @@
   var PAUSE_KEY = "clankers-arena-userscript-paused";
   var PAUSE_LABEL = "Userscript";
   var pauseUnits = [];
-  var pauseMenuId = null;
+  var pauseEntry = null;
 
   function pauseStored() {
     // The checks load this file without the manager grants, so the pause reads as off there.
@@ -146,9 +212,11 @@
     pauseUnits.push({ label: label, start: start, halt: halt, stored: stored });
   }
 
-  function showPauseMenu(paused) {
-    if (typeof GM_registerMenuCommand !== "function") return;
-    pauseMenuId = GM_registerMenuCommand(pauseLabel(paused), function () {
+  function showPauseMenu() {
+    if (pauseEntry !== null) return;
+    pauseEntry = menuAdd(function () {
+      return pauseLabel(pauseStored());
+    }, function () {
       setPause(!pauseStored());
     });
   }
@@ -162,10 +230,7 @@
         unit.start();
       }
     });
-    if (typeof GM_unregisterMenuCommand === "function" && pauseMenuId !== null) {
-      GM_unregisterMenuCommand(pauseMenuId);
-    }
-    showPauseMenu(next);
+    menuRefresh();
     logEvent("pause", "all: " + (next ? "PAUSED" : "RESUMED"));
   }
 
@@ -199,7 +264,6 @@
     }
     var fallback = defaultOn !== false;
     var enabled = GM_getValue(key, fallback) !== false;
-    var menuId;
     var stop = null;
     logEvent("feature", label + ": " + (enabled ? "ON" : "OFF"));
 
@@ -218,25 +282,21 @@
       }
     }
 
+    function menuLabel() {
+      return label + " (" + (storedOn() ? "ON" : "OFF") + ")";
+    }
+
     function toggle() {
       var next = GM_getValue(key, fallback) === false;
       GM_setValue(key, next);
       logEvent("feature", label + ": " + (next ? "ON" : "OFF"));
       halt();
       if (next && !pauseStored()) start();
-      GM_unregisterMenuCommand(menuId);
-      showMenu(next);
+      menuRefresh();
       if (typeof onChange === "function") onChange();
     }
 
-    function showMenu(value) {
-      menuId = GM_registerMenuCommand(
-        label + " (" + (value ? "ON" : "OFF") + ")",
-        toggle,
-      );
-    }
-
-    showMenu(enabled);
+    menuAdd(menuLabel, toggle);
     registerPauseUnit(label, start, halt, storedOn);
     if (enabled && !pauseStored()) {
       stop = run();
@@ -853,9 +913,7 @@
       stopRotate();
       stopKeyWatch();
       for (var m = 0; m < proxyMenus.length; m += 1) {
-        if (typeof GM_unregisterMenuCommand === "function") {
-          GM_unregisterMenuCommand(proxyMenus[m]);
-        }
+        menuDrop(proxyMenus[m]);
       }
     };
   });
@@ -1354,7 +1412,7 @@
       return;
     }
 
-    var countMenuId;
+    var countEntry = null;
     var timer = null;
     var scheduled = false;
     var observer = null;
@@ -1370,8 +1428,10 @@
     }
 
     function registerCount() {
-      if (countMenuId) GM_unregisterMenuCommand(countMenuId);
-      countMenuId = GM_registerMenuCommand(countLabel(keepPlan(), trimmedTotal), setCount);
+      if (countEntry !== null) menuDrop(countEntry);
+      countEntry = menuAdd(function () {
+        return countLabel(keepPlan(), trimmedTotal);
+      }, setCount);
     }
 
     function refreshLabel() {
@@ -1431,7 +1491,10 @@
       if (timer !== null) clearTimeout(timer);
       if (labelTimer !== null) clearTimeout(labelTimer);
       observer.disconnect();
-      if (countMenuId) GM_unregisterMenuCommand(countMenuId);
+      if (countEntry !== null) {
+        menuDrop(countEntry);
+        countEntry = null;
+      }
     };
   }, null, false);
 
@@ -2332,11 +2395,7 @@
     }, STATE_WATCH_MS, HTTP_JITTER_MS);
     return function () {
       stopStateWatch();
-      if (typeof GM_unregisterMenuCommand === "function") {
-        menus.forEach(function (id) {
-          GM_unregisterMenuCommand(id);
-        });
-      }
+      menus.forEach(menuDrop);
       menus = [];
     };
   });
@@ -2862,9 +2921,12 @@
     };
   });
 
-  // The pause entry registers once, after every feature has offered its stop closure.
+  // The pause entry registers once, after every feature has offered its stop closure, and the
+  // list opens last so every entry lands in its module group.
   exposeChecks("pause", { PAUSE_KEY: PAUSE_KEY, pauseLabel: pauseLabel });
+  exposeChecks("menus", { menuRank: menuRank, MENU_ORDER: MENU_ORDER });
   exposeChecks("timers", { jitteredTimer: jitteredTimer, HTTP_JITTER_MS: HTTP_JITTER_MS });
-  showPauseMenu(pauseStored());
+  showPauseMenu();
+  menuOpen();
 
 })();
