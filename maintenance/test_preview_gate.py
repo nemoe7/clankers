@@ -248,3 +248,83 @@ def test_a_branch_behind_main_hears_the_replay_line():
     result = run("git commit --allow-empty -m four", cwd=str(repo))
     assert result.returncode == 0, result.stderr
     assert "Replay your commits over main" not in result.stderr
+
+
+def shallow_repo(root: Path, *, lone_tip: bool) -> Path:
+  """Return one repository whose graft hides the remote tip's history.
+
+  The branch root sits in .git/shallow, the shape a depth-one fetch leaves. The
+  remote tip is either a lone root commit or a two-commit line whose parent is
+  visible locally.
+  """
+  repo = root / "repo"
+  repo.mkdir()
+  environment = {
+    **os.environ,
+    "GIT_AUTHOR_NAME": "t",
+    "GIT_AUTHOR_EMAIL": "t@t",
+    "GIT_COMMITTER_NAME": "t",
+    "GIT_COMMITTER_EMAIL": "t@t",
+  }
+
+  def git(*args: str) -> str:
+    result = subprocess.run(
+      ["git", *args],
+      cwd=repo,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+    return result.stdout.strip()
+
+  git("init", "-q", "-b", "work")
+  git("config", "user.name", "t")
+  git("config", "user.email", "t@t")
+  (repo / "a").write_text("one\n", encoding="utf-8")
+  git("add", "a")
+  git("commit", "-qm", "one")
+  (repo / "b").write_text("two\n", encoding="utf-8")
+  git("add", "b")
+  git("commit", "-qm", "two")
+  branch_root = git("rev-parse", "HEAD")
+  git("checkout", "-q", "--orphan", "remote")
+  git("rm", "-q", "-rf", "--cached", ".")
+  (repo / "t").write_text("tip\n", encoding="utf-8")
+  git("add", "t")
+  git("commit", "-qm", "tip-old")
+  tip = git("rev-parse", "HEAD")
+  if not lone_tip:
+    (repo / "u").write_text("more\n", encoding="utf-8")
+    git("add", "u")
+    git("commit", "-qm", "tip-new")
+    tip = git("rev-parse", "HEAD")
+  git("checkout", "-qf", "work")
+  git("update-ref", "refs/remotes/origin/main", tip)
+  # A graft at the branch root is what a depth-one fetch leaves behind.
+  (repo / ".git" / "shallow").write_text(branch_root + "\n", encoding="utf-8")
+  return repo
+
+
+def test_a_lone_grafted_tip_keeps_the_drift_line_quiet():
+  # One commit with no parents proves nothing about main, so the count stays
+  # unspoken (owner note 94e3313).
+  with tempfile.TemporaryDirectory() as directory:
+    repo = shallow_repo(Path(directory), lone_tip=True)
+    assert (repo / ".git" / "shallow").exists()
+    result = run("git commit --allow-empty -m three", cwd=str(repo))
+    assert result.returncode == 0, result.stderr
+    assert "origin/main carries" not in result.stderr, result.stderr
+    assert "Replay your commits over main" not in result.stderr, result.stderr
+
+
+def test_a_grafted_tip_with_visible_history_hears_the_replay_line():
+  # The tip's own parent is present, so the count speaks for main.
+  with tempfile.TemporaryDirectory() as directory:
+    repo = shallow_repo(Path(directory), lone_tip=False)
+    result = run("git commit --allow-empty -m three", cwd=str(repo))
+    assert result.returncode == 0, result.stderr
+    assert "origin/main carries 2 commit(s) this branch lacks" in result.stderr, (
+      result.stderr
+    )
+    assert "Replay your commits over main" in result.stderr
