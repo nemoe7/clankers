@@ -334,8 +334,9 @@ const context = {
       const id = decodeURIComponent(url.split('/')[3]);
       const stamp = new Date().toISOString();
       ackSeenCalls.push(url);
-      const item = (state.reports || []).find(report => report.id === id);
-      if (item) item.ack_seen_at = stamp;
+      // The stamp is the reply's alone: the client folds it into the state it holds. Writing it
+      // into the shared fixture as well let a late reply from one case light the marks of the
+      // next case, which made the suite flaky (owner note 217ad5d's investigation).
       return response({ id, ack_seen_at: stamp });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
@@ -1468,6 +1469,37 @@ test('preview client', async (t) => {
     panel.events.scroll();
     await tick();
     assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'reaching the end stamps it at once');
+  });
+
+  await t.test("A report showing its end stays read when the last scroll event missed: the poll rechecks", async () => {
+    // Owner note 217ad5d: the dot and star outlived a reload because the end-scroll stamp can miss
+    // its event, and nothing looked at the panel again. The state poll now rechecks it, so a report
+    // showing its end stamps without another scroll.
+    state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
+    readStamps.length = 0;
+    panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
+    get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(readStamps, [], 'an unscrolled long report is not stamped');
+    // The owner reaches the end, but no scroll event follows the position.
+    panel.scrollTop = 600;
+    await get('#refresh-notes').events.click();
+    await tick(); await tick();
+    assert.deepEqual(readStamps, ['/api/reports/r1/seen'],
+      'the poll stamps a report that shows its end');
+  });
+
+  await t.test("Sending answers reads the report, so the submission stamps the read too", async () => {
+    // Owner note 217ad5d: an answered report is a read report, whatever the panel position says.
+    state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
+    readStamps.length = 0;
+    panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
+    get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(readStamps, [], 'an unscrolled long report is not stamped yet');
+    await get('#report-form').events.submit(event({}));
+    await tick();
+    assert.deepEqual(readStamps, ['/api/reports/r1/seen'], 'a submission stamps the read');
   });
 
   await t.test("Leaving the tab before the dwell is over stamps nothing, so a flick past a short report do", async () => {

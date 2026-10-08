@@ -699,6 +699,10 @@ async function refreshState() {
     // receipt tracks the selected report's latest answer.
     updateReportPip(state.reports);
     renderReportAcknowledgement();
+    // The panel can show a report's end while its last scroll event was lost (a re-render moved the
+    // panel, or the event landed a pixel short), so the poll takes the same look the tab click does
+    // (owner note 217ad5d).
+    checkReportRead();
   } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
     stateBusy = false;
@@ -1255,6 +1259,10 @@ $('#report-form').addEventListener('submit', async event => {
       body: JSON.stringify({ id: newId(), answers, revision })
     })).json();
     save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
+    // An accepted answer is proof the owner read the report, so the read stamps with the send, and
+    // a report already stamped keeps its earlier stamp (owner note 217ad5d).
+    const answered = lastState?.reports.find(item => item.id === id);
+    if (answered && !answered.seen_at) void markReportRead(id);
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
     // The report ID keeps its chip after a send (note f1630e1): the plain text assignment
