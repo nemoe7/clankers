@@ -7,7 +7,8 @@ description: >
   command, and caveat survives. Use when the user supplies or points to text and
   asks to squash it, compress it, fit it into a budget, context window, prompt
   field, or character limit, or get it under a stated token, word, character, or
-  byte count. The request must be about the size of specific text; ignore the
+  byte count, or asks to squash it as small as still faithful with no count
+  named. The request must be about the size of specific text; ignore the
   bare words "shorten", "trim", "condense", or "tighten" when they describe
   writing something new, cutting scope, shortening a process, or reducing an
   unrelated quantity. Do NOT use to summarize, abridge, outline, paraphrase, or
@@ -24,7 +25,7 @@ metadata:
 
 # Squash
 
-Compress text against a stated budget without losing anything the text says.
+Compress text without losing anything the text says.
 
 Squashing is editorial, not lossy: it removes words, never content.
 
@@ -56,7 +57,7 @@ Resolve the unit in this order, stopping at the first step that applies:
 
 Never substitute a proxy silently. Say which unit governs, and label any count you could not measure directly an estimate rather than presenting it as measured.
 
-Set the target before the first pass. A target is an explicit budget, a percentage, or "as small as still faithful". With no target, stop when a pass yields nothing safe to remove.
+Set the target before the first pass. A target is an explicit budget, a percentage, or "as small as still faithful", the default when the user states no budget. With no target, stop when a pass yields nothing safe to remove.
 
 ### Mixed units
 

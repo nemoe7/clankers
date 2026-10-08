@@ -36,6 +36,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Background runs**: ARENA.md lets a background test or PR-check run start with `start_process` on a stable tree. The agent scouts the next task while it runs, and reads the result before any push.
 - **Task detail required**: a task write must leave at least one detail, so a bare title and clearing the last detail are both refused.
 - **Call end stamp**: the hook stamps every bash call's end. The header clears the long call text once a call finished, so work between calls never reads as a running one.
+- **Optional squash budget**: the squash skill now calls a target optional. It names "as small as still faithful" as the default when the user states no budget. Its description matches a request with no count named.
 
 ### Removed
 
