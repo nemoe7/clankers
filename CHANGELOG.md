@@ -13,6 +13,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Clear state command**: `arena-preview clear-state` empties every state table in one transaction and refreshes the save file to match. The agent key record survives, and a running server keeps its page token, so the page needs no reload.
 - **Poll timeout ban**: the gate refuses a poll wrapped in the shell `timeout` command, because it kills the wait mid-flight. Give the bash tool's timeout 1800 instead.
 
+#### skills
+
+- **Caveman register**: the squash skill names a caveman register for "caveman squash" requests. Articles drop, fragments are fine, and every fact and verbatim span still holds.
+- **Caveman refs experiment**: the arena suite refs are caveman-squashed into a new `caveman/` directory outside the gates. The copies keep every heading, table, code block, number, path and URL. The measured saving is 2.6% of tokens.
+
 #### userscripts
 
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.

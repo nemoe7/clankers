@@ -98,6 +98,10 @@ Keep the structure: headings, section order, list versus prose, tables, code blo
 
 Keep the register and audience. Do not turn prose into telegraphic notes, invent abbreviations, or drop articles until the text reads as a different document. Terse, but unambiguous: cryptic is a failed pass.
 
+### Caveman register
+
+The one named exception to the paragraph above. When the user asks for it by name or intent ("caveman squash", "make it caveman", "squash into caveman"), drop articles, use fragments, put the answer first: the terse voice the `caveman` skill defines. Every rule under [What must survive](#what-must-survive) still holds; code, commands, paths, numbers and error strings stay verbatim; a sentence with two readings becomes a full sentence. Name the register in the report. Without that request, keep the register the text arrived in.
+
 Keep verbatim spans verbatim: quotations, code, commands, error strings, identifiers, anything the reader must copy exactly.
 
 Preserve voice, person, and tense. A rule saying "never push" must not become "avoid pushing".

@@ -8,7 +8,8 @@ description: >
   asks to squash it, compress it, fit it into a budget, context window, prompt
   field, or character limit, or get it under a stated token, word, character, or
   byte count, or asks to squash it as small as still faithful with no count
-  named. The request must be about the size of specific text; ignore the
+  named, or asks for a caveman squash. The request must be about the size of
+  specific text; ignore the
   bare words "shorten", "trim", "condense", or "tighten" when they describe
   writing something new, cutting scope, shortening a process, or reducing an
   unrelated quantity. Do NOT use to summarize, abridge, outline, paraphrase, or
@@ -106,6 +107,10 @@ Keep each pass small enough to review.
 Keep the structure: headings, section order, list versus prose, tables, and code blocks. Squashing shortens; it never reorganizes. Reorganizing is a separate request.
 
 Keep the register and the audience. Do not turn prose into telegraphic notes, invent abbreviations, or drop articles until the text reads as a different document. Terse, but unambiguous, is the passing result; cryptic is a failed pass.
+
+### Caveman register
+
+The caveman register is the one named exception to the paragraph above. When the user asks for it, by name or by intent ("caveman squash", "make it caveman", "squash into caveman"), the pass may drop articles, use fragments, and put the answer first: the terse voice the `caveman` skill defines. Every rule under [What must survive](#what-must-survive) still holds, code, commands, paths, numbers and error strings stay verbatim, and a sentence with two readings becomes a full sentence. Name the register in the report, so the wording change reads apart from the size change. Without that request, keep the register the text arrived in.
 
 Keep verbatim spans verbatim: quotations, code, commands, error strings, identifiers, and anything else the reader must copy exactly.
 
