@@ -73,6 +73,7 @@
 - Questions with 3+ options or an open choice need a recommended answer, marked among options; yes/no or confirm questions need none.
 - ALL reports MUST go through the preview skill.
 - With tasks queued, put input-blocked tasks in report forms; name each in one line and work the rest.
+- A report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; if a form awaits answers and no unblocked work remains, run `poll`.
 - Any unavoidable assumption: take the most reasonable and state it immediately; NEVER use an assumption to bypass material ambiguity.
 
