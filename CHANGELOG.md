@@ -90,6 +90,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:` (owner notes cc6edd4 and c08732a).
+- **Call tally**: the EXIT hook counts the agent's own calls. The platform's hosted shells and probes are named and skipped, so a background run adds nothing to the tally (owner note ef180f0). The call-end stamp skips them too.
 - **Read stamp**: the state poll rechecks the reports panel, so a report showing its end stamps even when the last scroll event went missing. Sending answers stamps the read too, because an answered report is a read one (owner note 217ad5d).
 - **Main drift notice**: A shallow fetch leaves `origin/main` as one grafted commit, so the count measured the graft rather than main (owner note 94e3313). The gate stays quiet then, and a tip with visible history keeps the replay line.
 - **Download header name**: the `Content-Disposition` file name now passes through `header_filename`, which strips CR, LF and quote with `replace` calls. The CodeQL header-splitting query counts that call shape as a sanitizer.
