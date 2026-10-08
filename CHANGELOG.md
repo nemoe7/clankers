@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### house
 
 - **Vendored caveman**: the house copies `JuliusBrussee/caveman` at `7d76b13` (Apache-2.0) verbatim into `.agents/skills/caveman/`, skill, readme and licence included. It lives under `.agents/skills/` only, because it changes how an agent speaks rather than belonging to this repository, and takes no part in the parity gates.
+- **No seq on notes**: note and answer records drop their sequence number and order by the arrival stamp, so agents cite the ID. Reports keep their first-publish sequence.
 
 ## 2026-10-07
 

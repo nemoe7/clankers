@@ -1284,7 +1284,11 @@ def test_http_boundaries():
         [line for line in saved_lines if "report_id" in line]
       )
       answer_ids = [line["id"] for line in saved_lines if "report_id" in line]
-      assert written["answers"] >= 1 and answer_ids[-1] == "saved-answer"
+      # Answers order by their arrival stamps: the restored 2026-09-21 answer sorts
+      # first, and the just-sent one lands last.
+      assert written["answers"] >= 1
+      assert answer_ids[0] == "saved-answer"
+      assert answer_ids[-1] == "sub-over"
       # Report lines follow the answers, so the last line carries a report source.
       assert written["reports"] >= 1 and "markdown" in saved_lines[-1]
       # This block passes an explicit sibling path, so the file lands outside the state
@@ -2090,6 +2094,36 @@ def test_autosave_export():
     assert rebuilt.save_path.read_text(encoding="utf-8") == first, (
       "a fresh database overwrote the export"
     )
+
+
+def test_notes_carry_no_seq():
+  # Note and answer records carry no seq: the arrival stamp orders and identifies a
+  # note, and a surfaced sequence number only invites citing it instead of the ID
+  # (owner note 2e3b490).
+  with tempfile.TemporaryDirectory() as seq_dir:
+    store = preview.Store(seq_dir, create=True)
+    store.note("seq-first", "First stamp", at="2026-10-08T05:00:00+00:00")
+    store.note("seq-second", "Second stamp", at="2026-10-08T05:00:01+00:00")
+    store.note("seq-late", "Later stamp", at="2026-10-08T05:00:05+00:00")
+    store.note("seq-early", "Earlier stamp", at="2026-10-08T05:00:02+00:00")
+    notes = store.state()["notes"]
+    assert "seq" not in notes[0], (
+      "a note record carries its arrival stamp, not a number"
+    )
+    assert [row["id"] for row in notes] == [
+      "seq-first",
+      "seq-second",
+      "seq-early",
+      "seq-late",
+    ], "the order follows the timestamps"
+    pending = store.read()["pending"]
+    assert pending and all("seq" not in item for item in pending)
+    source = Path(seq_dir) / "pick.md"
+    source.write_text("# Pick\n\nChoice? {#pick}\n- (x) one\n", encoding="utf-8")
+    store.publish("pick", "Pick one", source)
+    store.submission("seq-answer", "pick", "REPORT pick: one")
+    answer = store.submissions()[0]
+    assert "seq" not in answer, "an answer record carries its stamp, not a number"
 
 
 def test_clear_state():
