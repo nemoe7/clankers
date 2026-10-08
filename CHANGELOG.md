@@ -109,6 +109,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Read stamp**: the state poll rechecks the reports panel, so a report showing its end stamps even when the last scroll event went missing. Sending answers stamps the read too, because an answered report is a read one (owner note 217ad5d).
 - **Main drift notice**: A shallow fetch leaves `origin/main` as one grafted commit, so the count measured the graft rather than main (owner note 94e3313). The gate stays quiet then, and a tip with visible history keeps the replay line.
 - **Download header name**: the `Content-Disposition` file name now passes through `header_filename`, which strips CR, LF and quote with `replace` calls. The CodeQL header-splitting query counts that call shape as a sanitizer.
+- **Task name guard**: a task write refuses a note ID and names the fix (owner note c6b0af0). An agent that copies the note ID it answers would put one ID on two things. The refusal tells it to give the task a proper name.
 - **ID quote**: one click on a note, report or task ID quotes it. The composer takes the `RE:` line on a phone as much as a desk. The copy path went (owner notes 4d4b659 and 4a69d4e).
 - **Log heading**: the log card carries no `Message log` heading. The tab above already names the panel, and the heading only spent height (owner note 9d3540d).
 - **Phone bar**: a phone keeps the tabs alone. The clock, the theme toggle and copy state hide behind a coarse-pointer rule (owner note 5284fbb).

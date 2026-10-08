@@ -2243,6 +2243,43 @@ def test_task_needs_one_detail():
     assert store.write_task("kept", status="finished")["details"] == ["Step one"]
 
 
+def test_task_refuses_a_note_id_as_its_name():
+  # A task named after the note it answers puts one ID on two things: the board reads
+  # "task c6b0af0" and the log reads "note c6b0af0". The write refuses a note ID and names the
+  # fix, so the agent gives the task a proper name instead (owner note c6b0af0).
+  with tempfile.TemporaryDirectory() as note_id_dir:
+    store = preview.Store(note_id_dir, create=True)
+    for note_id in ("c6b0af0", "c6b0af0-462e549f387100613fcede90b"):
+      try:
+        store.write_task(note_id, "Named after the note", ["Step one"])
+        raise AssertionError(f"A note ID was accepted as a task ID: {note_id}")
+      except ValueError as error:
+        assert "proper name" in str(error), error
+    # A plain name still lands, and a name that only looks hex stays a name.
+    store.write_task("fix-the-widget", "Name the job", ["Step one"])
+    store.write_task("deadbeef", "Eight hex characters", ["Step one"])
+    assert [task["id"] for task in store.list_tasks()] == ["fix-the-widget", "deadbeef"]
+    # The CLI prints the same refusal for the agent to read.
+    cli = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "task",
+        "954ee49-9ac144955adcda4bcbd227497",
+        "Named after the note",
+        "--task-details",
+        "Step one",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=note_id_dir,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(Path(note_id_dir))},
+    )
+    assert cli.returncode != 0, cli.stdout
+    assert "proper name" in cli.stdout + cli.stderr
+
+
 def test_clear_state():
   # The CLI clear empties every table in place: the schema, the database file and the
   # agent key survive, and the save file is refreshed to match.

@@ -582,6 +582,9 @@ def field_html(question):
 
 TASK_STATUSES = ("upcoming", "finished")
 TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+# A note ID is seven hex characters, alone or followed by a hyphen and the rest, and the
+# shape check above accepts it as a task name without this (owner note c6b0af0).
+NOTE_ID = re.compile(r"^[0-9a-f]{7}(?:-[0-9a-f]+)?$")
 MAX_TASK_TITLE = 200
 MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
@@ -1285,6 +1288,14 @@ def check_task(task_id, title, details):
     raise ValueError(
       "A task ID is 1-64 characters of lowercase letters, digits and hyphens,"
       " and starts with a letter or digit"
+    )
+  # A note ID passes the shape check, so it needs its own refusal: a task named after the note
+  # it answers puts one ID on two things, and the agent that reaches for the note ID reads the
+  # fix here (owner note c6b0af0).
+  if NOTE_ID.match(task_id or ""):
+    raise ValueError(
+      "That ID is a note ID. A task ID names the job: give the task a proper name,"
+      " like fix-the-widget"
     )
   if title is not None and len(title) > MAX_TASK_TITLE:
     raise ValueError(f"A task title must be {MAX_TASK_TITLE} characters or fewer")
