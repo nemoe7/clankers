@@ -208,7 +208,10 @@ a { color: #6ea3d6; text-underline-offset: 3px; }
    called the paragraphs too far apart, so they take the heading's 6px rhythm at 8. */
 .report p, .message-text p { margin: 8px 0; }
 /* The allowlisted list passes through as-is; give it the paragraph spacing and the marker indent. */
-.report ul, .report ol { margin: 8px 0; padding-left: 22px; }
+/* An ack thread carries message text, and its lists keep the report's own step rather than
+   the browser's default, which sits the bullets deeper than their paragraph (owner note
+   612f803). */
+.report ul, .report ol, .message-text ul, .message-text ol { margin: 8px 0; padding-left: 22px; }
 .report li { margin: 2px 0; }
 /* Message blockquotes take the reply's bar and padding but keep the message's font size. */
 .message-text blockquote { margin: 8px 0; padding-left: 12px; color: var(--muted); border-left: 2px solid rgb(199, 194, 188); }

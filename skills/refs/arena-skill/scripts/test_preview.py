@@ -930,6 +930,13 @@ def test_http_boundaries():
       assert "h2{margin:0 0 8px" in page
       assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)
       assert re.search(r"\.message-text p[^{}]*\{margin:8px 0", page)
+      # A list inside message text keeps the report's own step: the browser default would sit the
+      # bullets deeper than the paragraph they belong to (owner screenshots f6e1f33, 612f803).
+      for selector in (".message-text ul", ".message-text ol"):
+        assert selector in page, selector
+        assert (
+          "padding-left:22px" in page[page.index(selector) : page.index(selector) + 160]
+        ), f"{selector} keeps the 22px step"
       for level in ("h1", "h2", "h3", "h4", "h5", "h6"):
         assert f"{level}{{font-size" not in page
 
