@@ -83,11 +83,12 @@ jobs:
           }
 
           # One skill's shipped file list: tracked files, minus the pages that stay in
-          # this repository and minus the owner-run backend under proxy/. The docker
-          # files and the proxy code stay here beside the published image.
+          # this repository and minus the owner-run packages under proxy/ and
+          # preview-proxy/. The docker files and the proxy code stay here beside the
+          # published images.
           skill_files() {
             local out
-            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md | grep -v '^proxy/' || true)
+            out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md | grep -vE '^(proxy|preview-proxy)/' || true)
             printf '%s\n' "$out"
           }
 

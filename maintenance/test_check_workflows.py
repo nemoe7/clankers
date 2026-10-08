@@ -261,3 +261,14 @@ def test_distribute_triggers_and_inputs():
   assert list(document["jobs"]) == ["distribute"]
   for name in document["jobs"]:
     assert document["jobs"][name]["concurrency"]["cancel-in-progress"] is False
+
+
+def test_distribute_keeps_the_owner_run_packages_home():
+  document = load_workflow("distribute.yml")
+  script = "\n".join(
+    step.get("run", "") for step in document["jobs"]["distribute"]["steps"]
+  )
+  # The owner pages and the docker packages stay in this repository. Only files
+  # a session loads at runtime ride to the target repositories.
+  assert "grep -vFx -e README.md -e INSTALL.md" in script
+  assert "grep -vE '^(proxy|preview-proxy)/'" in script
