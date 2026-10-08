@@ -714,12 +714,12 @@ function checkTabTitle(api) {
   var liveRow = api.liveRow;
   var strongRow = api.strongRow;
   var stopSignal = api.stopSignal;
-  var speechLive = api.speechLive;
-  var agentMessageLive = api.agentMessageLive;
+  var processRow = api.processRow;
+  var PLAY_SELECTOR = api.PLAY_SELECTOR;
+  var speechGrowth = api.speechGrowth;
   var AGENT_EMOJI = api.AGENT_EMOJI;
   var waitingSignal = api.waitingSignal;
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
-  var SPEECH_EMOJI = api.SPEECH_EMOJI;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
@@ -1044,6 +1044,110 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's bug page (note 1114510): the finished row keeps its shimmer label after the
+  // turn, and the stop control is the only thing that leaves. The same page, one flag apart.
+  function lingeringRowDoc(stopGenerating) {
+    var message = divMessage("Thinking\u2026", true);
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") {
+          return stopGenerating ? [stopButton("Stop generating")] : [];
+        }
+        return [];
+      },
+    };
+  }
+  // The same end for a row whose only live mark is the pulsing icon.
+  function lingeringPulseDoc(stopGenerating) {
+    var icon = {
+      textContent: "Running bash",
+      parentElement: null,
+      closest: function () {
+        return null;
+      },
+    };
+    var row = {
+      textContent: "Running bash",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
+      },
+    };
+    icon.parentElement = row;
+    var message = {
+      querySelectorAll: function (selector) {
+        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") {
+          return stopGenerating ? [stopButton("Stop generating")] : [];
+        }
+        return [];
+      },
+    };
+  }
+  // The owner's captured start-process card (note 6dffc38): a button holding the play icon,
+  // the process name and the success check beside it. It runs with no stop control.
+  function processDoc(stopGenerating) {
+    var play = {
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    var name = { textContent: "Start PR checks" };
+    var button = {
+      textContent: "Start PR checks",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    var card = {
+      textContent: "Start PR checks",
+      querySelector: function (selector) {
+        return selector === PLAY_SELECTOR ? play : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    button.parentElement = card;
+    var message = {
+      querySelectorAll: function (selector) {
+        return selector === PLAY_SELECTOR ? [play] : [];
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") {
+          return stopGenerating ? [stopButton("Stop generating")] : [];
+        }
+        return [];
+      },
+    };
+  }
   // A regular-chat message streams data-agent-word spans; the mock grows them on demand.
   function speechDoc(withStop) {
     var words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
@@ -1098,7 +1202,7 @@ function checkTabTitle(api) {
     for (i = 0; i < node.children.length; i += 1) node.children[i].parentElement = node;
     return node;
   }
-  function canvasDoc(canvases, messages, words) {
+  function canvasDoc(canvases, messages, words, withStop) {
     return {
       title: "ChatGPT",
       querySelector: function (selector) {
@@ -1108,7 +1212,9 @@ function checkTabTitle(api) {
         if (selector === WAITING_SELECTOR) return canvases;
         if (selector === MESSAGE_SELECTOR) return messages || [];
         if (selector === SPEECH_SELECTOR) return words || [];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        if (selector === "button[aria-label]") {
+          return withStop === false ? [] : [stopButton("Stop generating")];
+        }
         return [];
       },
     };
@@ -1201,10 +1307,6 @@ function checkTabTitle(api) {
   }
   function resetSpeech() {
     api.resetSpeech();
-    return null;
-  }
-  function resetAgentMessage() {
-    api.resetAgentMessage();
     return null;
   }
   function addWord(doc, text) {
@@ -1365,44 +1467,55 @@ function checkTabTitle(api) {
     [desiredTitle(endedPage), TITLE_PREFIX + "clankers"],
     [syncTitle(endedPage), true],
     [endedPage.title, TITLE_PREFIX + "clankers"],
-    // Streaming chat words raise the bubble while the turn is open.
+    // The owner's newer bug (note 1114510): a finished row keeps its shimmer label or its
+    // pulsing icon, and the stop control is the only thing that leaves. Without the control
+    // no row holds the title, and a row's hold dies with the control instead of bridging it.
+    [expireHold(), null],
+    [desiredTitle(lingeringRowDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDCAD"],
+    [desiredTitle(lingeringRowDoc(false)), TITLE_PREFIX + "clankers"],
+    [expireHold(), null],
+    [desiredTitle(lingeringPulseDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+    [desiredTitle(lingeringPulseDoc(false)), TITLE_PREFIX + "clankers"],
+    // The waiting line is a turn mark too: no control, no hourglass.
+    [expireHold(), null],
+    [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers"],
+    // The start-process card (owner note 6dffc38): a play icon and the process name. It runs
+    // past the turn, so the card alone raises the bash emoji, stop control or none.
+    [expireHold(), null],
+    [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+    [desiredTitle(processDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+    [typeof processRow(processDoc(false)), "object"],
+    [processRow(idleDoc), null],
+    // One mark for the agent's words (owner notes 02a0675 and df73987): growth of the newest
+    // data-agent-word message raises the solid balloon, whatever the turn state. The first
+    // look only sets the mark in silence, so a page load or a chat switch stays quiet.
+    [expireHold(), null],
     [resetSpeech(), null],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
-    // The hold bridges the pause between two bursts of words.
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
+    [speechGrowth(talking), false],
     [addWord(talking, "again"), 3],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
-    // A settled message stops changing; mid-turn the repo name holds the title.
+    [speechGrowth(talking), true],
+    [speechGrowth(talking), false],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers"],
+    // The next burst raises the one mark, and the same message keeps that one emoji: no
+    // second mark ever replaces it.
     [resetSpeech(), null],
-    [resetAgentMessage(), null],
-    [speechLive(talking), true],
-    [speechLive(talking), false],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers"],
+    [addWord(talking, "later"), 4],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    // The hold bridges the pause between two bursts of words.
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    [addWord(talking, "again"), 5],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
     [expireHold(), null],
     [desiredTitle(talking), TITLE_PREFIX + "clankers"],
-    // After the turn no bubble rises; the title keeps the repository name and drops the emoji.
+    // A message that lands with no turn open takes the very same mark and emoji: one
+    // condition, one balloon.
     [resetSpeech(), null],
-    [resetAgentMessage(), null],
     [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
-    // An agent chat message that lands with no turn open raises the solid speech balloon
-    // (owner note 02a0675). The first look sets the mark in silence: opening a chat is not
-    // a message.
-    [agentMessageLive(settledChat), false],
-    [addWord(settledChat, "again"), 3],
-    [agentMessageLive(settledChat), true],
-    [agentMessageLive(settledChat), false],
-    [resetAgentMessage(), null],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
-    [addWord(settledChat, "later"), 4],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
-    // The hold bridges the pause, then the settled message leaves the bare title.
+    [addWord(settledChat, "later"), 3],
     [desiredTitle(settledChat), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
     [expireHold(), null],
     [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
-    // While the turn is open the outline bubble keeps the streaming-words mark; the agent
-    // message mark never replaces it.
-    [resetAgentMessage(), null],
-    [resetSpeech(), null],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + SPEECH_EMOJI],
     [
       polls("/home/user/clankers/.agents/skills/arena-skill/scripts/arena-preview poll"),
       true,
@@ -1428,12 +1541,16 @@ function checkTabTitle(api) {
     [expireHold(), null],
     // A named action outranks the line, so the poll row keeps its own emoji.
     [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers \uD83D\uDCA4"],
-    // Streamed words outrank the line too; the first burst raises the bubble.
+    // Streamed words outrank the line too: the first burst sets the mark, and the next one
+    // raises the same balloon over the line.
+    [expireHold(), null],
     [resetSpeech(), null],
-    [resetAgentMessage(), null],
+    [desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }])),
+      TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+    [expireHold(), null],
     [
-      desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }])),
-      TITLE_PREFIX + "clankers " + SPEECH_EMOJI,
+      desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }, { textContent: "again" }])),
+      TITLE_PREFIX + "clankers " + AGENT_EMOJI,
     ],
     [expireHold(), null],
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],

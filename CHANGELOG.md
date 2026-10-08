@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.
 - **State error cards**: a state-module failure shows the page corner card as well as its console line, and the card stays until a dismiss. The write failure carries the Choose file button. Arena 1.9.6.
+- **Process card emoji**: a started process card carries a play icon and the process name, so it takes the bash emoji. The card runs past the turn, so no stop-generating control is needed (owner note 6dffc38). Arena 1.9.8.
 
 #### preview
 
@@ -61,6 +62,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **Menu order**: every entry registers through one ordered list, so each module's entries sit together: Composer, Proxy, Steering, Transcript, State, Page, Userscript. The transcript keep-rows line draws inside the Transcript group, and a toggle redraws its label in place. Arena 1.9.7.
+- **One words mark**: the outline bubble and the agent-message balloon fold into one. The newest `data-agent-word` message raises the same balloon once, in any turn state (owner note df73987). Arena 1.9.8.
 
 #### skills
 
@@ -80,6 +82,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Owner setup section**: The skill pages drop their `## Owner setup` section (owner note 1de7dcb). It named an install page that the distributed copies do not ship. The install pages stay in this repository beside the packages.
 
 ### Fixed
+
+#### userscripts
+
+- **Tab title clear**: a finished row keeps its shimmer label or its pulsing icon in the page. Rows, words and the waiting line count only while the stop-generating control is up, and a held emoji dies with it (owner note 1114510). Arena 1.9.8.
 
 #### preview
 

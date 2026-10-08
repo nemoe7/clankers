@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.7
+// @version      1.9.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2409,10 +2409,14 @@
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
+    // One constant for the bash mark: the start-process card takes the very emoji a bash call
+    // takes (owner note 6dffc38).
+    var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
+    var PLAY_SELECTOR = "svg.lucide-play";
     var ACTION_EMOJI = [
-      ["running", "\uD83D\uDDA5\uFE0F"],
-      ["bash", "\uD83D\uDDA5\uFE0F"],
-      ["command", "\uD83D\uDDA5\uFE0F"],
+      ["running", BASH_EMOJI],
+      ["bash", BASH_EMOJI],
+      ["command", BASH_EMOJI],
       ["read", "\uD83D\uDCD6"],
       ["explor", "\uD83D\uDCD6"],
       ["edit", "\u270F\uFE0F"],
@@ -2430,18 +2434,20 @@
     var EMOJI_HOLD_MS = 5000;
     var heldEmoji = null;
     var heldEmojiAt = 0;
+    // Whether the held mark came from a row, the words or the waiting line: those marks end
+    // with the stop control, so the hold must not outlive it (owner note 1114510).
+    var heldEmojiNeedsTurn = false;
     var lastSpeechMark = null;
-    var lastAgentMark = null;
-    var lastAgentPath = null;
+    var lastSpeechPath = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
     var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
     var WAITING_TEXT_SELECTOR = 'span[class*="whitespace-pre"]';
     var HOURGLASS_EMOJI = "\u23F3";
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
-    var SPEECH_EMOJI = "\uD83D\uDDE8\uFE0F";
-    // An agent chat message that lands with no turn open holds the title with the solid
-    // speech balloon (owner note 02a0675). The outline bubble above stays the streaming mark.
+    // One mark for the agent's words: a message that grows holds the title with the solid
+    // speech balloon, whatever the turn state (owner notes 02a0675 and df73987). The outline
+    // bubble that stood for the streaming state is folded into it.
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
 
@@ -2545,6 +2551,26 @@
       return row && knownLabel(liveLabel(row)) && stopSignal(doc) ? row : null;
     }
 
+    // A started process card (owner note 6dffc38): a play icon in the newest message. It runs
+    // with no stop control, so the card alone is the news.
+    function processRow(doc) {
+      if (!doc || typeof doc.querySelectorAll !== "function") {
+        return null;
+      }
+      var messages = doc.querySelectorAll(MESSAGE_SELECTOR);
+      var i;
+      for (i = messages.length - 1; i >= 0; i -= 1) {
+        var icons =
+          typeof messages[i].querySelectorAll === "function"
+            ? messages[i].querySelectorAll(PLAY_SELECTOR)
+            : [];
+        if (icons.length) {
+          return rowFromIcon(icons[icons.length - 1]);
+        }
+      }
+      return null;
+    }
+
     function knownLabel(text) {
       var lower = String(text || "").toLowerCase();
       var i;
@@ -2635,6 +2661,11 @@
       if (POLL_RE.test(rowCommand(row).toLowerCase())) {
         return WAITING_EMOJI;
       }
+      // The start-process card wears a play icon and the process name, so it reads as the
+      // bash call it starts (owner note 6dffc38).
+      if (typeof row.querySelector === "function" && row.querySelector(PLAY_SELECTOR)) {
+        return BASH_EMOJI;
+      }
       return actionEmoji(liveLabel(row));
     }
 
@@ -2653,41 +2684,27 @@
       return lastRepo && path === lastPath ? lastRepo : null;
     }
 
-    function speechLive(doc) {
-      if (typeof doc.querySelectorAll !== "function") {
-        return false;
-      }
-      var words = doc.querySelectorAll(SPEECH_SELECTOR);
-      if (!words.length) {
-        lastSpeechMark = null;
-        return false;
-      }
-      var last = words[words.length - 1];
-      var mark = words.length + ":" + String(last.textContent || "");
-      var live = mark !== lastSpeechMark;
-      lastSpeechMark = mark;
-      return live;
-    }
-
-    // The same word spans, read without the stop control: a message that grows while no turn
-    // runs is an agent chat message. The first look only sets the mark, so a page load or a
-    // chat switch stays quiet; the count rides the mark, so appended words count as growth.
-    function agentMessageLive(doc) {
+    // The agent's words grow: the newest data-agent-word message takes one more word. One
+    // predicate covers every turn state (owner note df73987), so a single message never
+    // raises a second mark. The first look only sets the mark, so a page load or a chat
+    // switch stays quiet; the count rides the mark, so appended words count as growth.
+    function speechGrowth(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
       }
       var words = doc.querySelectorAll(SPEECH_SELECTOR);
       if (!words.length) {
-        lastAgentMark = null;
+        lastSpeechMark = null;
+        lastSpeechPath = null;
         return false;
       }
       var last = words[words.length - 1];
       var mark = words.length + ":" + String(last.textContent || "");
       var path = currentPath();
       // A chat switch swaps the whole transcript; its own path is not a message.
-      var live = lastAgentMark !== null && mark !== lastAgentMark && path === lastAgentPath;
-      lastAgentMark = mark;
-      lastAgentPath = path;
+      var live = lastSpeechMark !== null && mark !== lastSpeechMark && path === lastSpeechPath;
+      lastSpeechMark = mark;
+      lastSpeechPath = path;
       return live;
     }
 
@@ -2737,48 +2754,68 @@
         titleReason = "security check";
         heldEmoji = CAPTCHA_EMOJI;
         heldEmojiAt = Date.now();
+        heldEmojiNeedsTurn = false;
         return CAPTCHA_EMOJI;
       }
       if (questionSignal(doc)) {
         titleReason = "question card";
         heldEmoji = QUESTION_EMOJI;
         heldEmojiAt = Date.now();
+        heldEmojiNeedsTurn = false;
         return QUESTION_EMOJI;
       }
-      var row = strongRow(doc);
-      var emoji = emojiForRow(row);
+      // A finished row keeps its shimmer label or its pulsing icon in the page, so the row
+      // is news only while the stop control is up (owner note 1114510).
+      var live = stopSignal(doc);
+      var needsTurn = false;
+      var row = live ? strongRow(doc) : null;
+      var emoji = live ? emojiForRow(row) : null;
       if (emoji) {
         titleReason = rowSource(row);
-      }
-      if (!emoji && stopSignal(doc) && speechLive(doc)) {
-        emoji = SPEECH_EMOJI;
-        titleReason = "streaming words";
-      }
-      if (!emoji && agentMessageLive(doc)) {
-        emoji = AGENT_EMOJI;
-        titleReason = "agent message";
-      }
-      if (!emoji && waitingSignal(doc)) {
-        emoji = HOURGLASS_EMOJI;
-        titleReason = "waiting line";
+        needsTurn = true;
       }
       if (!emoji) {
-        row = liveRow(doc);
+        row = processRow(doc);
         emoji = emojiForRow(row);
         if (emoji) {
           titleReason = rowSource(row);
         }
       }
+      if (!emoji && speechGrowth(doc)) {
+        emoji = AGENT_EMOJI;
+        titleReason = "agent message";
+      }
+      if (!emoji && live && waitingSignal(doc)) {
+        emoji = HOURGLASS_EMOJI;
+        titleReason = "waiting line";
+        needsTurn = true;
+      }
+      if (!emoji && live) {
+        row = liveRow(doc);
+        emoji = emojiForRow(row);
+        if (emoji) {
+          titleReason = rowSource(row);
+          needsTurn = true;
+        }
+      }
       if (emoji) {
         heldEmoji = emoji;
         heldEmojiAt = Date.now();
+        heldEmojiNeedsTurn = needsTurn;
         return emoji;
       }
-      if (heldEmoji && Date.now() - heldEmojiAt < EMOJI_HOLD_MS) {
+      // The hold bridges the gaps inside a turn; a hold taken from a turn mark ends with the
+      // stop control, so a vanished button clears the title at once (owner note 1114510).
+      if (
+        heldEmoji &&
+        Date.now() - heldEmojiAt < EMOJI_HOLD_MS &&
+        (!heldEmojiNeedsTurn || live)
+      ) {
         titleReason = "hold";
         return heldEmoji;
       }
       heldEmoji = null;
+      heldEmojiNeedsTurn = false;
       titleReason = null;
       return null;
     }
@@ -2838,9 +2875,11 @@
       liveLabel: liveLabel,
       liveRow: liveRow,
       strongRow: strongRow,
+      processRow: processRow,
       stopSignal: stopSignal,
-      speechLive: speechLive,
-      agentMessageLive: agentMessageLive,
+      BASH_EMOJI: BASH_EMOJI,
+      PLAY_SELECTOR: PLAY_SELECTOR,
+      speechGrowth: speechGrowth,
       AGENT_EMOJI: AGENT_EMOJI,
       waitingSignal: waitingSignal,
       emojiForRow: emojiForRow,
@@ -2854,7 +2893,6 @@
       GROUP_LABEL_SELECTOR: GROUP_LABEL_SELECTOR,
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
       SPEECH_SELECTOR: SPEECH_SELECTOR,
-      SPEECH_EMOJI: SPEECH_EMOJI,
       WAITING_SELECTOR: WAITING_SELECTOR,
       WAITING_TEXT_SELECTOR: WAITING_TEXT_SELECTOR,
       HOURGLASS_EMOJI: HOURGLASS_EMOJI,
@@ -2867,10 +2905,9 @@
       openDialog: openDialog,
       rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
-      resetSpeech: function () { lastSpeechMark = null; },
-      resetAgentMessage: function () {
-        lastAgentMark = null;
-        lastAgentPath = null;
+      resetSpeech: function () {
+        lastSpeechMark = null;
+        lastSpeechPath = null;
       },
       forgetPath: function () { lastPath = "/elsewhere"; },
       setPriorTitle: function (value) { priorTitle = value; },
@@ -2906,7 +2943,7 @@
       lastRepo = null;
       lastPath = null;
       lastSpeechMark = null;
-      lastAgentMark = null;
+      lastSpeechPath = null;
       syncTitle(document);
     }
     window.addEventListener("popstate", onRoute);
