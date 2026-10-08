@@ -174,6 +174,9 @@ TURN_ENDED_META = "turn_ended_at"
 # state stamp reads this mark too, so a save that still carries a removed report is rewritten
 # by its own stamp trigger (owner notes 4753ae4 and 88e64df).
 REMOVED_META = "state_removed_at"
+# A report being read stays put: the agent's unpublish waits this long after the owner's
+# newest view of it, so a removal never lands under their eyes (owner note 46ba603).
+UNPUBLISH_VIEW_SECONDS = 60
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -1323,6 +1326,12 @@ class FetchChanged(ValueError):
   pass
 
 
+# A removal the owner's own live state holds: an unseen answer ack or a fresh view. The API
+# reads it as a conflict with that state rather than bad input.
+class UnpublishHeld(ValueError):
+  pass
+
+
 class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
@@ -1352,7 +1361,7 @@ class Store:
           markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,
           seq INTEGER, seen_at TEXT,
           ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,
-          ack_seen_at TEXT
+          ack_seen_at TEXT, viewed_at TEXT
         );
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
@@ -1457,6 +1466,10 @@ class Store:
         # The ack mark is about the answer, not the report text: the owner clears it by
         # opening the report, so its stamp moves where seen_at keeps the first read.
         db.execute("ALTER TABLE reports ADD COLUMN ack_seen_at TEXT")
+      if "viewed_at" not in columns:
+        # The view stamp moves on every look, because the unpublish guard reads how
+        # fresh the last one is rather than when the report was first read.
+        db.execute("ALTER TABLE reports ADD COLUMN viewed_at TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "published_at" not in columns:
         # A store from before this column keeps no first-publish stamp, so the date the
@@ -3070,10 +3083,43 @@ class Store:
     identifier(report_id)
     with self.transaction() as db:
       row = db.execute(
-        "SELECT title FROM reports WHERE id = ?", (report_id,)
+        "SELECT title, seen_at, ack_seen_at, viewed_at FROM reports WHERE id = ?",
+        (report_id,),
       ).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
+      # An ack the owner has not opened yet holds the report: removing it would hide the
+      # answer's receipt before it was read. The unread star reads the same pair (owner note
+      # 6960520). The page stamps that open while the owner presses delete, so the hold never
+      # blocks the owner's own two clicks.
+      acked = db.execute(
+        "SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?",
+        (report_id,),
+      ).fetchone()[0]
+      if acked and not (row["ack_seen_at"] and row["ack_seen_at"] >= acked):
+        raise UnpublishHeld(
+          "The report waits for the owner: its answer ack "
+          + str(clip_stamp(acked))
+          + " is newer than their last open of it. The open clears the wait."
+        )
+      # A report on the owner's screen waits out the view window, so a removal never lands
+      # under their eyes (owner note 46ba603). The owner's own press is the decision and
+      # passes the window.
+      if not dismissed_by_owner:
+        views = [
+          value
+          for value in (row["viewed_at"], row["seen_at"], row["ack_seen_at"])
+          if value
+        ]
+        age = seconds_since(max(views)) if views else None
+        if age is not None and 0 <= age < UNPUBLISH_VIEW_SECONDS:
+          raise UnpublishHeld(
+            "The owner is reading this report: the last view is "
+            + str(int(age))
+            + " s old. Retry after "
+            + str(max(1, int(UNPUBLISH_VIEW_SECONDS - age)))
+            + " s without a view."
+          )
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
       # still carries the removed report (owner notes 4753ae4 and 88e64df).
@@ -3158,6 +3204,22 @@ class Store:
       return dict(
         db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       )
+
+  def mark_report_viewed(self, report_id):
+    """Stamp the moment the owner's page shows a report, for the unpublish guard.
+
+    The stamp moves on every look, because the guard reads how fresh the last one is rather
+    than when the report was first read (owner note 46ba603). The write skips the autosave:
+    a view is not saved state, so it neither changes the save file nor the state stamp.
+    """
+    identifier(report_id)
+    with closing(self.connect()) as db, db:
+      row = db.execute("SELECT 1 FROM reports WHERE id = ?", (report_id,)).fetchone()
+      if row is None:
+        raise FileNotFoundError("Report not found")
+      stamp = now()
+      db.execute("UPDATE reports SET viewed_at = ? WHERE id = ?", (stamp, report_id))
+    return {"id": report_id, "viewed_at": clip_stamp(stamp)}
 
   def report(self, report_id, shared=None):
     identifier(report_id)
@@ -3547,6 +3609,7 @@ def handler(store):
       report_ack_seen = re.fullmatch(
         r"/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen", path
       )
+      report_view = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/view", path)
       message_replies_seen = re.fullmatch(
         r"/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen", path
       )
@@ -3572,6 +3635,7 @@ def handler(store):
         and not report_submit
         and not report_seen
         and not report_ack_seen
+        and not report_view
         and not message_replies_seen
         and not report_unpublish
         and not note_upload
@@ -3723,6 +3787,16 @@ def handler(store):
             report[key] = clip_stamp(report[key])
           self.reply(200, json.dumps(report, ensure_ascii=False))
           return
+        if report_view:
+          # The page stamps a look while it shows a report, so the owner's unpublish guard
+          # reads a fresh view rather than a first read (owner note 46ba603).
+          self.reply(
+            200,
+            json.dumps(
+              store.mark_report_viewed(report_view.group(1)), ensure_ascii=False
+            ),
+          )
+          return
         if report_ack_seen:
           report = store.mark_report_ack_seen(report_ack_seen.group(1))
           for key in ("updated_at", "seen_at", "ack_seen_at"):
@@ -3758,7 +3832,8 @@ def handler(store):
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))
-      except (ReportChanged, FetchChanged) as error:
+      except (ReportChanged, FetchChanged, UnpublishHeld) as error:
+        # A held removal is a conflict with the owner's live state, not bad input.
         self.problem(409, error)
       except FileNotFoundError as error:
         self.problem(404, error)

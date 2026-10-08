@@ -104,6 +104,7 @@ let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
 const ackSeenCalls = [];
+const viewCalls = [];
 const skipCalls = [];
 const replySeenCalls = [];
 const unpublished = [];
@@ -329,6 +330,12 @@ const context = {
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
       return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
+    }
+    if (url.startsWith('/api/reports/') && url.endsWith('/view')) {
+      // The view stamp is the reader's side of the unpublish guard: a report the panel shows
+      // must not vanish under the owner (owner note 46ba603).
+      viewCalls.push(url);
+      return response({ id: decodeURIComponent(url.split('/')[3]), viewed_at: new Date().toISOString() });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/ack-seen')) {
       const id = decodeURIComponent(url.split('/')[3]);
@@ -1378,6 +1385,8 @@ test('preview client', async (t) => {
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
       'opening the report stamps the ack open once');
+    assert.deepEqual(viewCalls, ['/api/reports/r1/view'],
+      'showing the report stamps the view once, and the half-minute throttle holds it there');
     assert.equal(pip.hidden, true, 'the dot goes with the open');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. Fielded', 'the ack star goes with the open');
@@ -1911,6 +1920,38 @@ test('preview client', async (t) => {
     assert.ok(statusLines.some(line => /^Report gone1 · Deleted · /.test(line)),
       `the delete receipt flashed; flow wrote: ${statusLines.join(' | ')}`);
     delete statusNode.textContent;
+    state.reports = keptReports;
+    unpublished.length = 0;
+    get('#reports-tab').events.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    get('#report-select').value = keptSelect;
+  });
+
+  await t.test("The delete press stamps the open first, so the server's hold clears", async () => {
+    // The press is the owner's open: the receipt shows at the top of the panel they delete
+    // from, so the page stamps the ack the server's hold reads before the removal lands (owner
+    // note 6960520). The ack time sits past every stamp, so the tab's own open cannot clear it.
+    const keptReports = state.reports;
+    const keptSelect = get('#report-select').value;
+    ackSeenCalls.length = 0;
+    unpublished.length = 0;
+    state.reports = [{ id: 'held1', title: 'Held', updated_at: '2026-09-25T10:00:00',
+      seen_at: '2026-09-25T10:05:00',
+      latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
+      latest_answer_at: '2026-09-25T10:06:00',
+      latest_answer_acknowledged_at: '2099-01-01T00:00:00', ack_seen_at: null }];
+    get('#reports-tab').events.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    get('#report-select').value = 'held1';
+    ackSeenCalls.length = 0;
+    get('#unpublish-report').events.click();
+    await tick();
+    assert.deepEqual(unpublished, [], 'the first click still only arms');
+    get('#unpublish-report').events.click();
+    await tick();
+    assert.deepEqual(ackSeenCalls, ['/api/reports/held1/ack-seen'],
+      'the confirm stamps the open the hold reads');
+    assert.deepEqual(unpublished, ['held1'], 'the removal lands with the stamp');
     state.reports = keptReports;
     unpublished.length = 0;
     get('#reports-tab').events.click();

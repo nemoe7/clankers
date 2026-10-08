@@ -1452,8 +1452,31 @@ async function markAckSeen(id) {
   }
   foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at || new Date().toISOString());
 }
+// The owner's view is what holds an unpublish: while the Reports tab shows a report, the page
+// stamps the look, so a removal waits out the guard window on the server instead of landing
+// under the owner's eyes (owner note 46ba603). One stamp per half minute keeps the window open
+// through a long read without writing on every poll, and no state field carries the stamp.
+const REPORT_VIEW_MS = 30 * 1000;
+const reportView = { id: null, at: 0 };
+async function markReportViewed(id) {
+  const now = Date.now();
+  if (reportView.id === id && now - reportView.at < REPORT_VIEW_MS) return;
+  reportView.id = id;
+  reportView.at = now;
+  try {
+    await (await request(`/api/reports/${encodeURIComponent(id)}/view`, {
+      method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+    })).json();
+  } catch (error) {
+    // A view stamp the owner never sees costs them nothing; the next look retries.
+  }
+}
 function checkReportRead() {
   const panel = $('#reports-panel');
+  if (!panel.hidden) {
+    const shown = $('#report-select').value;
+    if (shown) void markReportViewed(shown);
+  }
   const id = panel.hidden ? null : unseenReportId();
   const viewport = panel.clientHeight;
   // A panel with no height yet has no report in it to read, and a report still being fetched is
@@ -1834,6 +1857,11 @@ $('#unpublish-report').addEventListener('click', async () => {
   unpublishArmed = null;
   button.disabled = true;
   try {
+    // The press is the owner's open: the receipt shows at the top of the panel they delete
+    // from, so the ack the server's hold reads is stamped before the removal lands (owner
+    // note 6960520).
+    const report = ((lastState && lastState.reports) || []).find(item => item.id === id);
+    if (report && ackUnread(report)) await markAckSeen(id);
     await request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {
       method: 'POST', headers: writeHeaders('application/json'), body: '{}'
     });

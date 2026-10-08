@@ -4680,6 +4680,103 @@ def test_unpublish_moves_the_state_stamp():
     assert after and after > before, "the removal left the state stamp still"
 
 
+def test_unpublish_waits_for_the_owner_to_see_the_ack():
+  """An unseen answer ack holds the report until the owner opens it.
+
+  A removal that hides a fresh ack loses it for the owner (owner note 6960520), so the agent's
+  call and the page's press both wait. The page stamps the open as the owner presses delete, so
+  their own two clicks clear the hold on the way.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.acknowledge(["answer-1"], "reply", "Read it")
+    for owner_press in (False, True):
+      try:
+        store.unpublish("pick", dismissed_by_owner=owner_press)
+        raise AssertionError("An unseen ack did not hold the report")
+      except preview.UnpublishHeld as error:
+        assert "ack" in str(error)
+    assert store.state()["reports"], "the report stayed"
+    # The open the page's press stamps is what clears the hold: the same press lands, because
+    # the owner's own click passes the view window their open just moved.
+    store.mark_report_ack_seen("pick")
+    store.unpublish("pick", dismissed_by_owner=True)
+    assert store.state()["reports"] == []
+
+
+def test_unpublish_waits_out_a_fresh_view():
+  """The agent's unpublish waits out the view window, and the owner's press passes it.
+
+  A report on the owner's screen must not vanish under them (owner note 46ba603), so a fresh
+  view refuses the removal. The owner's own two-click delete is the decision and passes, and
+  a stale view leaves nothing to wait for.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.mark_report_viewed("pick")
+    try:
+      store.unpublish("pick")
+      raise AssertionError("A fresh view did not hold the report")
+    except preview.UnpublishHeld as error:
+      assert "reading" in str(error)
+    store.unpublish("pick", dismissed_by_owner=True)
+    assert store.state()["reports"] == []
+    store.publish("later", "Pick one again", source)
+    with patch.object(preview, "now", return_value="2020-01-01T00:00:00+00:00"):
+      store.mark_report_viewed("later")
+    store.unpublish("later")
+    assert store.state()["reports"] == []
+
+
+def test_unpublish_route_holds_and_the_view_route_stamps():
+  """POST /unpublish conflicts while the ack is unseen, and POST /view stamps the look.
+
+  A held removal is a conflict with the owner's live state rather than bad input, so the API
+  answers 409 and the page shows the reason. The view route is the reader's half of the view
+  window (owner notes 6960520 and 46ba603).
+  """
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "arena-preview", create=True)
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    headers = {"Content-Type": "application/json"}
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.acknowledge(["answer-1"], "reply", "Read it")
+    status, _, body = request("POST", "/api/reports/pick/unpublish", "{}", headers)
+    assert status == 409
+    assert "ack" in json.loads(body)["error"]
+    assert [report["id"] for report in store.state()["reports"]] == ["pick"]
+    status, _, body = request("POST", "/api/reports/pick/view", "{}", headers)
+    assert status == 200
+    stamped = json.loads(body)
+    assert stamped["id"] == "pick" and stamped["viewed_at"]
+    # A view of a report that is not there is a 404 rather than a silent stamp.
+    assert request("POST", "/api/reports/none/view", "{}", headers)[0] == 404
+    # The owner's open clears the ack hold, and their own press then lands.
+    assert request("POST", "/api/reports/pick/ack-seen", "{}", headers)[0] == 200
+    status, _, body = request("POST", "/api/reports/pick/unpublish", "{}", headers)
+    assert status == 200
+    assert json.loads(body) == {"unpublished": "pick"}
+    assert store.state()["reports"] == []
+
+
 def test_task_detail_steps():
   # A task detail is one step per line: a block splits on its line breaks, and a wall of
   # text is refused before anything is written.
