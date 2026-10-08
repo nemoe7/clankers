@@ -34,6 +34,10 @@ let draftPreviewSequence = 0;
 let fetchSignature = '';
 let fetchBusy = false;
 const messageNodes = new Map();
+// Only the newest page of the log renders on load; scrolling up renders the next older page,
+// so a long session does not pay for every message at once (owner note 3f4b37b).
+const HISTORY_PAGE = 20;
+let historyShown = HISTORY_PAGE;
 
 function stored(name) {
   try { return localStorage.getItem(`${key}:${name}`); }
@@ -545,11 +549,30 @@ function showHistory(notes) {
   // that is not there any more.
   const current = new Set(notes.map(item => item.id));
   for (const id of [...messageNodes.keys()]) if (!current.has(id)) messageNodes.delete(id);
-  history.replaceChildren(...notes.map(item => messageNodes.get(item.id)));
+  renderHistoryWindow(notes);
   updateEdits(notes);
   applyLogFilter();
   if (logPinned) history.scrollTop = history.scrollHeight;
   updateLogJump();
+}
+
+// The rendered window is the newest `historyShown` messages. Growing it is the scroll-up
+// path: the older rows land above the viewport, so the scroll offset moves down by the
+// height they add and the owner keeps the message they were reading.
+function renderHistoryWindow(notes) {
+  const history = $('#history');
+  history.replaceChildren(...notes.slice(-historyShown).map(item => messageNodes.get(item.id)));
+}
+
+function loadOlderMessages() {
+  const notes = (lastState && lastState.notes) || [];
+  if (notes.length <= historyShown) return;
+  const history = $('#history');
+  const before = history.scrollHeight;
+  historyShown = Math.min(historyShown + HISTORY_PAGE, notes.length);
+  renderHistoryWindow(notes);
+  applyLogFilter();
+  history.scrollTop += history.scrollHeight - before;
 }
 // The log's own place: a filter change can make the view shorter, and the browser clamps the
 // scroll without putting it back, so the next filter that shows rows again would leave the owner
@@ -559,7 +582,9 @@ let logPinned = true;
 const historyAtEnd = history =>
   history.scrollHeight - history.scrollTop - history.clientHeight < 80;
 $('#history').addEventListener('scroll', () => {
-  logPinned = historyAtEnd($('#history'));
+  const history = $('#history');
+  logPinned = historyAtEnd(history);
+  if (history.scrollTop < 80) loadOlderMessages();
   updateLogJump();
 });
 // The jump bar is the remedy for a log that is longer than its panel: it appears only while the

@@ -1497,6 +1497,35 @@ test('preview client', async (t) => {
     assert.equal(logView.scrollTop, 0, 'a log the owner scrolled away from stays where they left it');
   });
 
+  await t.test("Only the newest twenty messages render, and scrolling up loads the older ones", async () => {
+    // The log renders its newest page only, so a long session does not pay for every message
+    // at once; scrolling to the top renders the next older page (owner note 3f4b37b).
+    state = {
+      notes: Array.from({ length: 25 }, (_, index) => ({
+        id: `page-${index}`,
+        text: `message ${index}`,
+        at: logStamp,
+        acknowledged_at: null,
+      })),
+      reports: [],
+      last_check: null,
+    };
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#history').children.length, 20, 'the newest page renders');
+    assert.equal(get('#history').children[0].children[0].textContent, 'message 5');
+    assert.equal(get('#history').children.at(-1).children[0].textContent, 'message 24');
+    logView = get('#history');
+    const priorHeight = logView.scrollHeight;
+    const priorClient = logView.clientHeight;
+    logView.scrollHeight = 500; logView.clientHeight = 100; logView.scrollTop = 0;
+    logView.events.scroll();
+    assert.equal(get('#history').children.length, 25, 'scrolling up loads the older messages');
+    assert.equal(get('#history').children[0].children[0].textContent, 'message 0');
+    logView.events.scroll();
+    assert.equal(get('#history').children.length, 25, 'a second scroll past the oldest page adds nothing');
+    logView.scrollHeight = priorHeight; logView.clientHeight = priorClient;
+  });
+
   await t.test("The jump bar is the remedy for a long log: hidden at the end, shown once the log is scroll", async () => {
     // The jump bar is the remedy for a long log: hidden at the end, shown once the log is scrolled
     // away from it, and taking the log back to the newest message when it is used.

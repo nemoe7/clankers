@@ -27,6 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **No seq on notes**: note and answer records drop their sequence number and order by the arrival stamp, so agents cite the ID. Reports keep their first-publish sequence.
 - **Report task text input**: a report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
 - **Amendment proposals first**: the house rules now run an amendment proposal task before any other queued work.
+- **Message pagination**: the log renders only the newest 20 messages, and scrolling up loads the next older page.
 
 ## 2026-10-07
 
