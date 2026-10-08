@@ -1050,6 +1050,26 @@ def gate_line_hint(line):
   )
 
 
+def poll_timeout_line(line):
+  """True when the shell `timeout` command wraps an arena-preview poll.
+
+  The poll holds its own 1800-second span, so a `timeout` wrapper only kills the
+  wait mid-flight and the turn loses its listing. The bash tool's own timeout
+  parameter ends the wait cleanly instead (owner note 9d0c3b2).
+  """
+  words = [token for token in re.split(r"[^A-Za-z0-9_.-]+", line or "") if token]
+  if "timeout" not in words:
+    return False
+  for index, word in enumerate(words):
+    if (
+      word in ("arena-preview", "preview.py")
+      and index + 1 < len(words)
+      and words[index + 1] == "poll"
+    ):
+      return True
+  return False
+
+
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -3765,6 +3785,14 @@ def main():
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
     if args.command == "gate":
+      if poll_timeout_line(args.line):
+        print(
+          "TIMEOUT BANNED: do not wrap `arena-preview poll` in the shell `timeout`"
+          " command. The poll holds its own 1800-second span; set the bash tool's"
+          " timeout to 1800 instead, so a cut wait still returns its listing.",
+          flush=True,
+        )
+        return 1
       try:
         allowed = Store(state_dir).gate(pending_only=args.push)
       except FileNotFoundError:

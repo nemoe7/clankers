@@ -387,6 +387,12 @@ def gate_line_hint(line):
 	words={token for token in re.split('[^A-Za-z0-9_.-]+',line or'')};found=[name for name in GATE_NOISE if name in words]
 	if not found:return None
 	named=', '.join(f"`{name}`"for name in found);return f"This call runs {named}; omit those commands: a bare `arena-preview read` is the only call that passes."
+def poll_timeout_line(line):
+	words=[token for token in re.split('[^A-Za-z0-9_.-]+',line or'')if token]
+	if'timeout'not in words:return False
+	for(index,word)in enumerate(words):
+		if word in('arena-preview','preview.py')and index+1<len(words)and words[index+1]=='poll':return True
+	return False
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
 	listing={'checked_at':None,'pending':[]};store.start_poll()
@@ -1144,6 +1150,7 @@ def main():
 		if not args.command:parser.error('a command is required')
 		if args.command=='inbox-line':return 0 if quiet_inbox_line(args.line)else 1
 		if args.command=='gate':
+			if poll_timeout_line(args.line):print("TIMEOUT BANNED: do not wrap `arena-preview poll` in the shell `timeout` command. The poll holds its own 1800-second span; set the bash tool's timeout to 1800 instead, so a cut wait still returns its listing.",flush=True);return 1
 			try:allowed=Store(state_dir).gate(pending_only=args.push)
 			except FileNotFoundError:allowed=True
 			except Exception:return 2
