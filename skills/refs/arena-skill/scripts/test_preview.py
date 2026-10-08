@@ -3101,6 +3101,9 @@ def test_gate_bans_timeout_on_poll():
   assert preview.poll_timeout_line("arena-preview poll") is False
   assert preview.poll_timeout_line("timeout 5 arena-preview read") is False
   assert preview.poll_timeout_line("git push origin main") is False
+  # A line that only mentions both words, like a script that documents the ban, is fine.
+  script = "python3 - <<'PY'\nentry = \"timeout 1800\"\narena-preview poll\nPY"
+  assert preview.poll_timeout_line(script) is False
   with tempfile.TemporaryDirectory() as ban_dir:
     ban_script = str(Path(preview.__file__))
 
@@ -3686,7 +3689,8 @@ def test_poll_blocked_tasks():
       payload = json.loads(printed[-1])
       assert [item["id"] for item in payload["tasks"]] == ["open-task"]
       # The early return names the task on stderr, so no session reads it as an empty wait.
-      assert printed[0] == (
+      assert printed[0].startswith("POLL: this wait can run its full 1800 seconds")
+      assert printed[1] == (
         "CONTINUE: unblocked task open-task waits, and the task list is still up. "
         "Continue the task or mark it blocked before polling again; do not end the turn."
       )
@@ -3707,6 +3711,31 @@ def test_poll_blocked_tasks():
       assert code == 0, "clearing the mark makes the next poll return at once"
     finally:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
+def test_poll_retry_disclaimer():
+  # The poll announces its own span up front: a call that ends early with nothing to
+  # read was cut by the bash tool timeout, and the retry needs the tool timeout 1800
+  # (owner note a7e39b3).
+  with tempfile.TemporaryDirectory() as disclaimer_dir:
+    store = preview.Store(disclaimer_dir, create=True)
+    printed = []
+
+    def capture(value, **kwargs):
+      printed.append(value)
+
+    original = builtins.print
+    builtins.print = capture
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 1
+      code = preview.poll_inbox(store, sleeper=lambda seconds: None)
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+      builtins.print = original
+    assert code == 1
+    assert printed[0].startswith("POLL: this wait can run its full 1800 seconds")
+    assert "retry with the tool timeout 1800" in printed[0]
 
 
 def test_skip_poll():
@@ -3753,7 +3782,8 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0] == (
+      assert printed[0].startswith("POLL: this wait can run its full 1800 seconds")
+      assert printed[1] == (
         "SKIP: the owner pressed Skip poll; end the turn without another poll."
       )
       assert json.loads(printed[-1])["skip_poll"] == stamp
@@ -3792,7 +3822,8 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0] == (
+      assert printed[0].startswith("POLL: this wait can run its full 1800 seconds")
+      assert printed[1] == (
         "SKIP: the owner pressed Skip poll; end the turn without another poll."
       )
       assert store.skip_poll_requested() is False

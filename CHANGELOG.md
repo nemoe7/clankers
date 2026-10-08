@@ -19,6 +19,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Absorbed work clause**: ARENA.md now says to check whether `origin/main` absorbed the branch's commits before rebasing, and to reset hard to `origin/main` instead of replaying them.
 - **Flush-left lists**: The message log renders lists flush-left, matching the composer's plain text, so a sent message reads the same after it lands.
+- **Poll retry disclaimer**: the poll prints a disclaimer at the start that names its 1800-second span. A call that ends early was cut by the tool timeout, so retry with the tool timeout 1800.
 
 ## 2026-10-07
 

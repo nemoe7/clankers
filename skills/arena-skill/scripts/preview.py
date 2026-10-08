@@ -388,14 +388,18 @@ def gate_line_hint(line):
 	if not found:return None
 	named=', '.join(f"`{name}`"for name in found);return f"This call runs {named}; omit those commands: a bare `arena-preview read` is the only call that passes."
 def poll_timeout_line(line):
-	words=[token for token in re.split('[^A-Za-z0-9_.-]+',line or'')if token]
-	if'timeout'not in words:return False
-	for(index,word)in enumerate(words):
-		if word in('arena-preview','preview.py')and index+1<len(words)and words[index+1]=='poll':return True
+	text=unquote_commands(line or'')
+	for separator in('&&','||',';','|','\n'):text=text.replace(separator,'\x00')
+	for piece in text.split('\x00'):
+		tokens=[token for token in piece.split()if token]
+		if not tokens or tokens[0].rsplit('/',1)[-1]!='timeout':continue
+		words=tokens[1:]
+		for(index,word)in enumerate(words):
+			if word in('arena-preview','preview.py')and index+1<len(words)and words[index+1]=='poll':return True
 	return False
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};store.start_poll()
+	listing={'checked_at':None,'pending':[]};print('POLL: this wait can run its full 1800 seconds; if the call ends early with no new messages or unblocked tasks, the bash tool timeout cut it, so retry with the tool timeout 1800.',file=sys.stderr,flush=True);store.start_poll()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
