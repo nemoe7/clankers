@@ -1055,18 +1055,25 @@ def poll_timeout_line(line):
 
   The poll holds its own 1800-second span, so a `timeout` wrapper only kills the
   wait mid-flight and the turn loses its listing. The bash tool's own timeout
-  parameter ends the wait cleanly instead (owner note 9d0c3b2).
+  parameter ends the wait cleanly instead (owner note 9d0c3b2). The check reads
+  command pieces, so a line that merely mentions both words, like a script that
+  documents the ban, stays fine.
   """
-  words = [token for token in re.split(r"[^A-Za-z0-9_.-]+", line or "") if token]
-  if "timeout" not in words:
-    return False
-  for index, word in enumerate(words):
-    if (
-      word in ("arena-preview", "preview.py")
-      and index + 1 < len(words)
-      and words[index + 1] == "poll"
-    ):
-      return True
+  text = unquote_commands(line or "")
+  for separator in ("&&", "||", ";", "|", "\n"):
+    text = text.replace(separator, "\x00")
+  for piece in text.split("\x00"):
+    tokens = [token for token in piece.split() if token]
+    if not tokens or tokens[0].rsplit("/", 1)[-1] != "timeout":
+      continue
+    words = tokens[1:]
+    for index, word in enumerate(words):
+      if (
+        word in ("arena-preview", "preview.py")
+        and index + 1 < len(words)
+        and words[index + 1] == "poll"
+      ):
+        return True
   return False
 
 
@@ -1077,6 +1084,16 @@ def poll_inbox(store, sleeper=None):
   # The wait always runs its span; only a new message or an unblocked task breaks
   # it, and the check sits inside the loop so a task arriving mid-wait breaks too.
   # One heartbeat a second, so the page can light its dot while the agent waits here.
+  # The wait can run its full span, but the bash tool's own timeout can cut the call
+  # first. Say so up front: a call that ends early with nothing to read was cut, and
+  # the retry needs the tool timeout at 1800 (owner note a7e39b3).
+  print(
+    "POLL: this wait can run its full 1800 seconds; if the call ends early with no"
+    " new messages or unblocked tasks, the bash tool timeout cut it, so retry with"
+    " the tool timeout 1800.",
+    file=sys.stderr,
+    flush=True,
+  )
   store.start_poll()
   try:
     for index in range(POLL_MAX_LOOPS):
