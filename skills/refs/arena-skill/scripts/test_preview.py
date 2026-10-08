@@ -4704,3 +4704,17 @@ def test_option_join_stops_at_a_block_start():
   assert questions[0]["options"] == ["only option"]
   assert questions[1]["options"] == ["after heading"]
   assert questions[2]["prompt"] == "Note"
+
+
+def test_ack_stamps_the_read_line():
+  """An ack writes the header's last-read stamp, so its label stays true (owner note cc6edd4)."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / "arena-preview"
+    store = preview.Store(root, create=True)
+    store.note("stamped-note", "Question")
+    with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
+      store.read()
+      assert store.state()["last_check"] == "2026-09-22T12:00:00"
+    with patch.object(preview, "now", return_value="2026-09-22T12:05:00"):
+      store.acknowledge(["stamped-note"], "note", "Handled")
+      assert store.state()["last_check"] == "2026-09-22T12:05:00"

@@ -108,6 +108,7 @@ let agentSeenStamp = null;
 let turnEndedAt = null;
 let turnEndedStamp = null;
 let callEndAt = null;
+let callEndStamp = null;
 function agentSilentMs() {
   return agentSeenAt === null ? null : Date.now() - agentSeenAt;
 }
@@ -128,11 +129,13 @@ function agentIdle() {
   return silent !== null && silent > AGENT_CALL_MS;
 }
 function connectionText() {
-  if (agentIdle()) {
-    const stamp = turnEndedStamp === null ? agentSeenStamp : turnEndedStamp;
-    return `No agent since ${time(stamp)}`;
-  }
-  return connectionBase + pollSuffix() + callSuffix();
+  // The header names what the agent is doing (owner note cc6edd4): the wait while a poll runs,
+  // else the stamp of the last bash call. An absent agent carries its own marker in place of
+  // the sentence that stood here (owner note c08732a).
+  const tail = agentIdle() ? ' · Agent 404' : '';
+  if (pollSince !== null) return `Polling… ${duration(Date.now() - pollSince)}${tail}`;
+  if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}`;
+  return agentIdle() ? 'Agent 404' : connectionBase;
 }
 function stampMs(value) {
   if (typeof value !== 'string') return null;
@@ -145,12 +148,6 @@ function duration(ms) {
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   return minutes ? `${minutes}m ${String(seconds).padStart(2, '0')}s` : `${seconds}s`;
-}
-function pollSuffix() {
-  return pollSince === null ? '' : ` · agent in poll ${duration(Date.now() - pollSince)}`;
-}
-function callSuffix() {
-  return agentInCall() ? ` · agent in a long call ${duration(agentSilentMs())}` : '';
 }
 function paintConnection() {
   if (pollSince !== null || agentInCall()) $('#connection-text').textContent = connectionText();
@@ -654,13 +651,15 @@ async function refreshState() {
     turnEndedAt = stampMs(state.turn_ended_at);
     turnEndedStamp = state.turn_ended_at || null;
     callEndAt = stampMs(state.agent_call_ended_at);
+    callEndStamp = state.agent_call_ended_at || null;
     connectionBase = saved + callsText;
     setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
     if (state.rendering_error) {
       connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
       paintConnection();
     }
-    $('#last-check').textContent = state.last_check ? `Last checked ${time(state.last_check)}` : 'Not checked yet.';
+    // The ack writes the same stamp as a read does, so the label is true (owner note cc6edd4).
+    $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
     showHistory(logNotes);
     renderTasksIfChanged(state.tasks);
     renderFetchIfChanged(state.fetch_jobs || []);

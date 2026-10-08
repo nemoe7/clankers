@@ -934,6 +934,7 @@ class Store:
 					if table=='submissions':db.execute('UPDATE reports SET agent_seen_at = ? WHERE id = (SELECT report_id FROM submissions WHERE id = ?)',(stamp,record_id))
 					break
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
+			db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(stamp,))
 			if not any(db.execute(f"SELECT 1 FROM {table} WHERE acknowledged_at IS NULL LIMIT 1").fetchone()for table in('notes','submissions')):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 	def publish(self,report_id,title,source):
 		identifier(report_id)

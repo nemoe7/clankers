@@ -2984,6 +2984,9 @@ class Store:
           break
         else:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
+      # The header labels one stamp as the last read or ack, so an ack writes it too
+      # (owner note cc6edd4).
+      db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (stamp,))
       # An emptied inbox resets the tally now, not at the next hook poll.
       if not any(
         db.execute(

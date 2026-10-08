@@ -844,7 +844,7 @@ test('preview client', async (t) => {
     get('#note').value = beforeGrow; get('#note').scrollHeight = 96; context.grow();
     assert.doesNotMatch(get('#history').children[0].children[2].textContent,
       /Awaiting|ACK-ed|Saved|Delivered|Sent|Seen|Said| id /);
-    assert.equal(get('#last-check').textContent, 'Not checked yet.');
+    assert.equal(get('#last-check').textContent, 'No read or ack yet.');
     stamp = get('#history').children[0].children[2].textContent;
     assert.match(stamp, /[A-Z][a-z]{2} \d{2}, \d{2}:\d{2}/);
     assert.doesNotMatch(stamp, /\d{2}:\d{2}:\d{2}/);
@@ -876,7 +876,7 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
-    assert.match(get('#last-check').textContent, /^Last checked [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
+    assert.match(get('#last-check').textContent, /^Last read\/ack: [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
     assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
     state.notes[0].ack_kind = 'reply';
     state.notes[0].ack_text = '**done**';
@@ -992,71 +992,62 @@ test('preview client', async (t) => {
     // A poll start times the wait in the header; the clock ticks between state refreshes.
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
-    assert.match(get('#connection-text').textContent, /^3 messages saved · agent in poll 1m 0[5-9]s$/);
+    assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
     await tick();
-    // A wait outlives the idle window: the live heartbeat keeps the wait text, not the stale note.
+    assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
+    // A wait outlives the idle window: the live heartbeat keeps the wait text, not the gone mark.
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'polling');
-    assert.match(get('#connection-text').textContent, /^3 messages saved · agent in poll /);
-    assert.doesNotMatch(get('#connection-text').textContent, /No agent since/);
+    assert.match(get('#connection-text').textContent, /^Polling… /);
+    assert.doesNotMatch(get('#connection-text').textContent, /Agent 404/);
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     state.polling = false;
     state.polling_since = null;
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-text').textContent, '3 messages saved');
-    // A long bash call holds the stamp of its start, so the header counts the call rather than
-    // calling the agent absent while that call can still be running.
+    // Between calls the line names the last call's stamp once the hook has written one, so the
+    // long-call wording has no line of its own (owner note cc6edd4).
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
-    assert.match(get('#connection-text').textContent,
-      /^3 messages saved · agent in a long call 10m 0\ds$/);
-    // The call suffix counts its seconds on the tick, like the poll suffix.
-    get('#connection-text').textContent = 'stale';
-    context.paintConnection();
-    assert.match(get('#connection-text').textContent,
-      /^3 messages saved · agent in a long call 10m 0\ds$/);
-    // A poll that returned ends the turn: the mark suppresses the long call text, and three
-    // quiet minutes name the agent gone without waiting out the call cap a running bash call
-    // needs. The mark holds the agent's last act, so the amber line names the turn end.
+    assert.equal(get('#connection-text').textContent, '3 messages saved');
+    assert.doesNotMatch(get('#connection-text').textContent, /long call/);
+    // A poll that returned ends the turn: the mark holds the agent's last act, and three quiet
+    // minutes name the agent absent without waiting out the call cap a running bash call needs.
     state.turn_ended_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
-    assert.doesNotMatch(get('#connection-text').textContent, /long call/);
-    assert.match(get('#connection-text').textContent, /^No agent since /);
+    // No call stamp is known yet, so the gone mark stands alone (owner note c08732a).
+    assert.equal(get('#connection-text').textContent, 'Agent 404');
     // A fresh turn end keeps the plain line until the quiet window passes.
     state.turn_ended_at = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
-    // The agent's next call clears the mark, and the call cap covers a running bash call again.
+    // The agent's next call clears the mark, and the line names the last call's stamp.
     state.turn_ended_at = null;
-    await get('#refresh-notes').events.click();
-    assert.match(get('#connection-text').textContent,
-      /^3 messages saved · agent in a long call 10m 0\ds$/);
-    // The hook stamps every bash call's end, so a call that finished is not a running one,
-    // whatever the agent does between calls (owner note bd93043).
     state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
-    assert.equal(get('#connection-text').textContent, '3 messages saved');
-    // A call that started after the last recorded end still reads as running.
+    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
+    // The hook stamps every bash call's end, so a call that finished is not a running one,
+    // whatever the agent does between calls (owner note bd93043).
     state.agent_call_ended_at = new Date(Date.now() - 700_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     await tick();
-    assert.match(get('#connection-text').textContent,
-      /^3 messages saved · agent in a long call 10m 0\ds$/);
-    state.agent_call_ended_at = null;
-    // A turn that ends leaves the preview up; past the call cap the stamp of the agent's own calls
-    // turns the dot amber, so the owner reads a stale preview instead of a live connection to nobody.
+    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
+    assert.doesNotMatch(get('#connection-text').textContent, /long call/);
+    // A stamp and an absent agent share the line: the call's end, then the gone mark.
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
-    assert.match(get('#connection-text').textContent, /^No agent since /);
+    assert.match(get('#connection-text').textContent,
+      /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · Agent 404$/);
+    state.agent_call_ended_at = null;
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
     await get('#refresh-notes').events.click();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
