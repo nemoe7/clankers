@@ -41,10 +41,10 @@ arena-preview poll
 
 When a pending count is nonzero, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged, and stamps the parent report read by the agent. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call. When ending a turn or a report form awaits answers, run `poll`. When a listing carries a `skip_poll` stamp, the owner pressed Skip poll in the page: the poll consumes it and the turn ends there, with no note for it and no second poll.
 
-Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack on the same ID appends a reply block under the earlier answer; nothing is replaced. Receipt is not completion. Failure to ack immediately earns a negative rating. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
+Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. A text that carries a backtick rides `--reply-file` or `--note-file`: the shell runs a backtick inside double quotes as a command, so the ticks never reach the tool. Single-quote the text when it stays inline. The gate warns when an inline ack text carries that backtick. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack on the same ID appends a reply block under the earlier answer; nothing is replaced. Receipt is not completion. Failure to ack immediately earns a negative rating. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
 
 ```bash
-arena-preview ack <id> --reply <markdown>
+arena-preview ack <id> --reply 'a reply with `backticks`'
 ```
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.

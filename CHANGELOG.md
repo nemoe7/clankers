@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- **Ack file form**: `ack` reads `--reply-file` and `--note-file`, so a text that carries a backtick rides a file rather than a shell argument. The shell runs a backtick inside double quotes as a command, so the ticks never reached the tool (owner notes 97ec0cd and 6367253). The gate warns on that exact shape before the ack runs, because the trap reads the command line before the shell expands it.
 - **Clear state command**: `arena-preview clear-state` empties every state table in one transaction and refreshes the save file to match. The agent key record survives, and a running server keeps its page token, so the page needs no reload.
 - **Poll timeout ban**: the gate refuses a poll wrapped in the shell `timeout` command, because it kills the wait mid-flight. Give the bash tool's timeout 1800 instead.
 

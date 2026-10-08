@@ -4777,6 +4777,104 @@ def test_unpublish_route_holds_and_the_view_route_stamps():
     assert store.state()["reports"] == []
 
 
+def test_ack_reads_a_file_when_the_text_carries_backticks():
+  """An ack takes its text from a file, so the shell never quotes it.
+
+  A backtick inside double quotes runs as a command, so the shell eats the ticks before the
+  tool sees them (owner note 97ec0cd). The file form carries the text as it stands, backticks
+  and quotes included, and one source alone is required.
+  """
+  script = str(Path(preview.__file__))
+  with tempfile.TemporaryDirectory() as ack_dir:
+    preview.Store(ack_dir, create=True)
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir}
+    store = preview.Store(ack_dir)
+    store.note("first-note", "First question")
+    store.note("second-note", "Second question")
+    text = "Use `arena-preview read` and 'single quotes' here.\n\nA second line."
+    source = Path(ack_dir) / "reply.md"
+    source.write_text(text, encoding="utf-8")
+    out = subprocess.run(
+      [sys.executable, script, "ack", "first-note", "--reply-file", str(source)],
+      capture_output=True,
+      text=True,
+      check=True,
+      env=env,
+    ).stdout
+    assert "Acknowledged: first-note" in out
+    note = preview.Store(ack_dir).state()["notes"][0]
+    assert note["ack_kind"] == "reply"
+    assert note["ack_text"] == text, "the stored text keeps every backtick and quote"
+    # The plain note form reads a file too, and its stored kind follows the flag.
+    plain = Path(ack_dir) / "note.txt"
+    plain.write_text("Kept `as is`", encoding="utf-8")
+    subprocess.run(
+      [sys.executable, script, "ack", "second-note", "--note-file", str(plain)],
+      capture_output=True,
+      text=True,
+      check=True,
+      env=env,
+    )
+    assert preview.Store(ack_dir).state()["notes"][1]["ack_text"] == "Kept `as is`"
+    # Two sources, or none, are refused before anything is written.
+    both = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "ack",
+        "first-note",
+        "--reply",
+        "one",
+        "--reply-file",
+        str(source),
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert both.returncode != 0 and "exactly one" in both.stderr
+    # A missing file is a clean refusal, not a traceback.
+    missing = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "ack",
+        "second-note",
+        "--reply-file",
+        "/nope/missing.md",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert missing.returncode != 0 and "Cannot read" in missing.stderr
+
+
+def test_tick_warning_reads_the_quoting_shape():
+  """The gate's classifier names a backtick the shell will substitute, and only then.
+
+  The trap reads the command line before expansion, so the lossy shape is visible: an inline
+  ack text in double quotes with a backtick in it (owner note 6367253).
+  """
+  lossy = preview.tick_warning('arena-preview ack abc --reply "see `read` now"')
+  assert lossy and "backtick" in lossy and "--reply-file" in lossy
+  assert preview.tick_warning('arena-preview ack abc --note "see `read` now"')
+  # A quoted line, a file form, a tick before the flag and a plain line all stay quiet.
+  assert preview.tick_warning("arena-preview ack abc --reply 'see `read` now'") is None
+  assert (
+    preview.tick_warning("arena-preview ack abc --reply-file /tmp/reply.md") is None
+  )
+  assert (
+    preview.tick_warning('echo `date` && arena-preview ack abc --reply "plain"') is None
+  )
+  assert (
+    preview.tick_warning("arena-preview task x title --task-details 'a `tick`'") is None
+  )
+  assert preview.tick_warning("") is None and preview.tick_warning(None) is None
+
+
 def test_task_detail_steps():
   # A task detail is one step per line: a block splits on its line breaks, and a wall of
   # text is refused before anything is written.

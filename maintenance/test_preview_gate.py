@@ -23,9 +23,12 @@ quiet_inbox_line = preview_module.quiet_inbox_line
 INSTALLER = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
 
 STUB = """#!/bin/sh
-# The classifier is pure, so the stub answers with the real one.
+# The classifiers are pure, so the stub answers with the real ones.
 if [ "$1" = "inbox-line" ]; then
   exec __PYTHON__ __PREVIEW__ inbox-line "$2"
+fi
+if [ "$1" = "ack-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ ack-tick "$2"
 fi
 exit 1
 """
@@ -188,6 +191,22 @@ def test_an_ack_beside_work_meets_the_gate():
 def test_chained_acks_stay_quiet():
   result = run(': "arena-preview ack a" && : "arena-preview ack b"')
   assert result.returncode == 0, result.stderr
+
+
+def test_the_gate_names_a_backtick_the_shell_will_eat():
+  """An ack whose inline text sits in double quotes draws a warning before the loss.
+
+  The trap reads the command line before the shell expands it, so the backtick is still there
+  to see. The warning names the file form, and the ack still runs (owner note 6367253).
+  """
+  lossy = run(': "arena-preview ack abc" --reply "use `echo tick` now"')
+  assert lossy.returncode == 0, lossy.stderr
+  assert "backtick" in lossy.stderr, lossy.stderr
+  assert "--reply-file" in lossy.stderr, lossy.stderr
+  # Single quotes keep the ticks: the line stays quiet.
+  safe = run(": \"arena-preview ack abc\" --reply 'use `echo tick` now'")
+  assert safe.returncode == 0, safe.stderr
+  assert "backtick" not in safe.stderr, safe.stderr
 
 
 def test_a_silenced_read_meets_the_count_gate():

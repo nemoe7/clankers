@@ -1043,6 +1043,27 @@ def unquote_commands(line):
   return "".join(kept)
 
 
+# An inline ack text in double quotes, which is the shape the shell substitutes (owner note 6367253).
+INLINE_ACK_RE = re.compile(r"--(?:reply|note)\s+\"")
+
+
+def tick_warning(line):
+  """A warning when an inline ack text carries a backtick inside double quotes.
+
+  The shell runs a backtick in double quotes as a command and substitutes its output, so the
+  ticks vanish before the tool sees the text. The gate reads the command line before that
+  expansion, so this is the one place the loss can be named before it happens.
+  """
+  found = INLINE_ACK_RE.search(line or "")
+  if not found or "`" not in line[found.end() :]:
+    return None
+  return (
+    "arena-preview gate: that ack text sits in double quotes, so the shell runs each"
+    " backtick as a command and the ticks vanish. Single-quote the text, or pass"
+    " --reply-file <path>."
+  )
+
+
 def quiet_inbox_line(line):
   """True when a command line that names an inbox call runs nothing else.
 
@@ -3874,6 +3895,11 @@ def main():
     help="Report whether a command line that names an inbox call runs nothing else",
   )
   inbox_line.add_argument("line", help="The command line, as the hook read it")
+  ack_tick = commands.add_parser(
+    "ack-tick",
+    help="Warn when an inline ack text holds a backtick the shell will substitute",
+  )
+  ack_tick.add_argument("line", help="The command line, as the hook read it")
   gate = commands.add_parser("gate")
   gate.add_argument(
     "--push",
@@ -3900,6 +3926,14 @@ def main():
   ack.add_argument("ids", nargs="+")
   ack.add_argument("--reply", help="Markdown answer shown in the message log")
   ack.add_argument("--note", help="Short plain answer shown in the message log")
+  # A backtick inside double quotes runs as a command, so the shell eats the ticks before this
+  # tool sees the text. The file forms carry it as it stands (owner note 97ec0cd).
+  ack.add_argument(
+    "--reply-file", type=Path, help="Read the Markdown answer from this file"
+  )
+  ack.add_argument(
+    "--note-file", type=Path, help="Read the plain answer from this file"
+  )
   publish = commands.add_parser("publish")
   publish.add_argument("source", type=Path)
   publish.add_argument("--id", required=True)
@@ -3977,6 +4011,11 @@ def main():
       parser.error("a command is required")
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
+    if args.command == "ack-tick":
+      warning = tick_warning(args.line)
+      if warning:
+        print(warning, file=sys.stderr)
+      return 0
     if args.command == "gate":
       if poll_timeout_line(args.line):
         print(
@@ -4058,10 +4097,23 @@ def main():
       # The agent path is pending; the browser form keeps its existing immediate queue path.
       print(cli_json(store.enqueue_fetch(args.url, args.allow_proxy, pending=True)))
     elif args.command == "ack":
-      if bool(args.reply) == bool(args.note):
-        raise ValueError("Choose exactly one of --reply or --note")
-      kind = "reply" if args.reply else "note"
-      store.acknowledge(args.ids, kind, args.reply or args.note)
+      sources = (args.reply, args.note, args.reply_file, args.note_file)
+      if sum(source is not None for source in sources) != 1:
+        raise ValueError(
+          "Choose exactly one of --reply, --note, --reply-file or --note-file"
+        )
+      if args.reply is not None:
+        kind, text = "reply", args.reply
+      elif args.note is not None:
+        kind, text = "note", args.note
+      else:
+        source = args.reply_file if args.reply_file is not None else args.note_file
+        kind = "reply" if args.reply_file is not None else "note"
+        try:
+          text = source.read_text(encoding="utf-8")
+        except OSError as error:
+          raise ValueError(f"Cannot read {source}: {error.strerror or error}") from None
+      store.acknowledge(args.ids, kind, text)
       print("Acknowledged: " + ", ".join(args.ids))
       print(
         "Note asks for work? Add the task: "
