@@ -24,7 +24,9 @@ const PREVIEW_HOST = /^sbx-[a-z0-9-]+\.arena\.site$/i;
 const ASSET_TYPES = {
   'register.js': 'text/javascript; charset=utf-8',
   'service-worker.js': 'text/javascript; charset=utf-8',
-  'icon.svg': 'image/svg+xml'
+  'icon.svg': 'image/svg+xml',
+  'icon-192.png': 'image/png',
+  'icon-512.png': 'image/png'
 };
 const ASSETS = path.join(__dirname, 'assets');
 // The head rewrite buffers one small page; a larger body streams untouched.
@@ -137,6 +139,9 @@ function manifestJson(origin) {
   return JSON.stringify({
     name: 'Arena preview',
     short_name: 'Preview',
+    // The start URL carries the preview origin, so it changes with the signed cookie. A fixed id
+    // keeps one installed app across those changes.
+    id: '/',
     start_url: origin ? `/?url=${encodeURIComponent(`${origin}/`)}` : '/',
     scope: '/',
     display: 'standalone',
@@ -151,7 +156,13 @@ function manifestJson(origin) {
       method: 'GET',
       params: { title: 'title', text: 'text', url: 'url' }
     },
-    icons: [{ src: '/pwa/icon.svg', sizes: 'any', type: 'image/svg+xml' }]
+    // Chrome offers the install from an icon that resolves at 192px and 512px, so the two
+    // raster icons ship beside the scalable one (owner note 31023b2).
+    icons: [
+      { src: '/pwa/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/pwa/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { src: '/pwa/icon.svg', sizes: 'any', type: 'image/svg+xml' }
+    ]
   });
 }
 

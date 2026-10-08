@@ -83,6 +83,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Main drift notice**: A shallow fetch leaves `origin/main` as one grafted commit, so the count measured the graft rather than main (owner note 94e3313). The gate stays quiet then, and a tip with visible history keeps the replay line.
 - **Download header name**: the `Content-Disposition` file name now passes through `header_filename`, which strips CR, LF and quote with `replace` calls. The CodeQL header-splitting query counts that call shape as a sanitizer.
 
+#### skills
+
+- **Preview app install**: the worker now registers on the viewer root, so the manifest's start URL sits inside its scope. The manifest also carries 192 and 512 PNG icons and a stable `id`. Chrome then offers the install (owner note 31023b2).
+
 #### house
 
 - **Distribution scope**: The distribute workflow keeps `preview-proxy/` home with `proxy/`, and the `.agents` mirror drops its copy (owner note 278a122). The docker files, the server code and the install page stay beside the published image. Only files a session loads at runtime ride to the target repositories.
