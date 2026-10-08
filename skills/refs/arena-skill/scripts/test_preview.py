@@ -3089,6 +3089,39 @@ def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
   assert preview.quiet_inbox_line("arena-preview read | tail -1") is False
 
 
+def test_gate_bans_timeout_on_poll():
+  # The shell timeout command must not wrap a poll: it kills the wait mid-flight and
+  # the turn loses its listing, so the gate refuses the line even with an empty inbox
+  # (owner note 9d0c3b2). Other inbox calls and clean poll lines stay fine.
+  assert preview.poll_timeout_line("timeout 300 arena-preview poll") is True
+  assert preview.poll_timeout_line("timeout 1800 arena-preview poll --max 1") is True
+  assert (
+    preview.poll_timeout_line("cd /home/user && timeout 60 preview.py poll") is True
+  )
+  assert preview.poll_timeout_line("arena-preview poll") is False
+  assert preview.poll_timeout_line("timeout 5 arena-preview read") is False
+  assert preview.poll_timeout_line("git push origin main") is False
+  with tempfile.TemporaryDirectory() as ban_dir:
+    ban_script = str(Path(preview.__file__))
+
+    def run_gate(line):
+      return subprocess.run(
+        [sys.executable, ban_script, "gate", "--line", line],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=ban_dir,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": ban_dir},
+      )
+
+    banned = run_gate("timeout 300 arena-preview poll")
+    assert banned.returncode == 1
+    assert banned.stdout.startswith("TIMEOUT BANNED: "), banned.stdout
+    assert "1800" in banned.stdout
+    clean = run_gate("arena-preview poll")
+    assert clean.returncode == 0, clean.stdout
+
+
 def test_gate_blocks_a_cd_line_past_the_threshold():
   # cd is fine on the line, but the count gate still holds it: with a pending note past
   # the threshold a plain cd line meets READ INBOX NOW, and the block names no command,
