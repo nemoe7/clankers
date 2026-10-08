@@ -132,7 +132,7 @@ def restore_replies(replies,acknowledged):
 	return json.dumps(checked,ensure_ascii=False)
 def replies_list(value):return json.loads(value)if value else[]
 def message_row(row):
-	record=dict(row)
+	record=dict(row);record.pop('seq',None)
 	if'replies'in record:record['replies']=replies_list(record['replies'])
 	return record
 def restore_reply_seen_count(value,replies):
@@ -334,7 +334,7 @@ def stream_note_attachments(content_type,stream,length):
 			if ending!=b'\r\n':raise ValueError('Invalid multipart delimiter')
 		if set(fields)!={'id','text'}or not files:raise ValueError('Send one note ID, text and at least one file')
 		yield(fields['id'],fields['text'],files)
-def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];return dict(row)|{'path':str(path),'present':path.exists()}
+def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];record=dict(row)|{'path':str(path),'present':path.exists()};record.pop('seq',None);return record
 def add_note_attachments(note,records):
 	if records:note['attachment_name']=records[0]['name'];note['attachment_path']=records[0]['path'];note['attachments']=records
 	return note
@@ -512,13 +512,13 @@ class Store:
 				self.release_report_tasks(db,report_id);return message_row(existing)
 			db.execute('INSERT INTO submissions (id, report_id, text, at, acknowledged_at, ack_kind, ack_text, ack_edited_at, seen_at, task_id, replies, ack_edited_seen_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',(submission_id,report_id,text,at or now(),*receipt,when(seen_at)if seen_at is not None else None,task_id,more,seen_reply_count));self.release_report_tasks(db,report_id);reset_poll_count(db);clear_skip_poll(db);return message_row(db.execute('SELECT * FROM submissions WHERE id = ?',(submission_id,)).fetchone())
 	def submissions(self):
-		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY seq')]
+		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM submissions ORDER BY at, seq')]
 	def report_sources(self):
 		with closing(self.connect())as db:return[dict(row)for row in db.execute('SELECT id, title, markdown, published_at FROM reports ORDER BY seq, id')]
 	def state(self):
 		tasks=self.tasks()
 		with closing(self.connect())as db:
-			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[message_row(row)for row in db.execute('SELECT * FROM notes ORDER BY seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, published_at, seq, seen_at, ever_seen, agent_seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')];latest_answers={row['report_id']:row for row in db.execute('SELECT * FROM submissions ORDER BY seq')}
+			meta=dict(db.execute('SELECT key, value FROM meta'));notes=[message_row(row)for row in db.execute('SELECT * FROM notes ORDER BY at, seq')];reports=[dict(row)for row in db.execute('SELECT id, title, updated_at, published_at, seq, seen_at, ever_seen, agent_seen_at, markdown, EXISTS(SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered FROM reports ORDER BY seq, id')];latest_answers={row['report_id']:row for row in db.execute('SELECT * FROM submissions ORDER BY seq')}
 			for report in reports:
 				answered=report.pop('answered');latest=latest_answers.get(report['id']);report['acknowledgements']=[message_row(row)for row in db.execute('SELECT * FROM submissions WHERE report_id = ? AND acknowledged_at IS NOT NULL ORDER BY seq',(report['id'],))]
 				for ack in report['acknowledgements']:ack.pop('text',None)
@@ -869,7 +869,7 @@ class Store:
 	def read(self,include_quiet=True):
 		quiet_filter=''if include_quiet else' AND quiet = 0'
 		with self.transaction()as db:
-			pending=[dict(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY seq")];pending+=[dict(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq')];attachments={}
+			pending=[message_row(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];attachments={}
 			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
 			for item in pending:
 				if item['kind']=='note':add_note_attachments(item,attachments.get(item['id'],[]))

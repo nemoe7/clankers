@@ -367,8 +367,14 @@ def replies_list(value):
 
 
 def message_row(row):
-  """One note or answer row as a record, its replies parsed."""
+  """One note or answer row as a record, its replies parsed.
+
+  The record carries no seq: the arrival stamp orders and identifies a note, and a
+  surfaced sequence number only invites citing it instead of the ID (owner note
+  2e3b490).
+  """
   record = dict(row)
+  record.pop("seq", None)
   if "replies" in record:
     record["replies"] = replies_list(record["replies"])
   return record
@@ -883,7 +889,9 @@ def stream_note_attachments(content_type, stream, length):
 def upload_row(row, directory):
   """A stored upload, plus the two things the row cannot say: where the bytes are and whether they are there."""
   path = directory / UPLOAD_DIR / row["file"]
-  return dict(row) | {"path": str(path), "present": path.exists()}
+  record = dict(row) | {"path": str(path), "present": path.exists()}
+  record.pop("seq", None)
+  return record
 
 
 def add_note_attachments(note, records):
@@ -1577,7 +1585,8 @@ class Store:
   def submissions(self):
     with closing(self.connect()) as db:
       return [
-        message_row(row) for row in db.execute("SELECT * FROM submissions ORDER BY seq")
+        message_row(row)
+        for row in db.execute("SELECT * FROM submissions ORDER BY at, seq")
       ]
 
   def report_sources(self):
@@ -1601,7 +1610,7 @@ class Store:
     with closing(self.connect()) as db:
       meta = dict(db.execute("SELECT key, value FROM meta"))
       notes = [
-        message_row(row) for row in db.execute("SELECT * FROM notes ORDER BY seq")
+        message_row(row) for row in db.execute("SELECT * FROM notes ORDER BY at, seq")
       ]
       reports = [
         dict(row)
@@ -2787,16 +2796,16 @@ class Store:
     quiet_filter = "" if include_quiet else " AND quiet = 0"
     with self.transaction() as db:
       pending = [
-        dict(row) | {"kind": "note"}
+        message_row(row) | {"kind": "note"}
         for row in db.execute(
           "SELECT * FROM notes WHERE acknowledged_at IS NULL"
-          f"{quiet_filter} ORDER BY seq"
+          f"{quiet_filter} ORDER BY at, seq"
         )
       ]
       pending += [
-        dict(row) | {"kind": "report"}
+        message_row(row) | {"kind": "report"}
         for row in db.execute(
-          "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY seq"
+          "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq"
         )
       ]
       attachments = {}
