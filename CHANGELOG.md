@@ -13,6 +13,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Clear state command**: `arena-preview clear-state` empties every state table in one transaction and refreshes the save file to match. The agent key record survives, and a running server keeps its page token, so the page needs no reload.
 - **Poll timeout ban**: the gate refuses a poll wrapped in the shell `timeout` command, because it kills the wait mid-flight. Give the bash tool's timeout 1800 instead.
 
+### Changed
+
+#### arena
+
+- **Absorbed work clause**: ARENA.md now says to check whether `origin/main` absorbed the branch's commits before rebasing, and to reset hard to `origin/main` instead of replaying them.
+
 ## 2026-10-07
 
 ### Changed
