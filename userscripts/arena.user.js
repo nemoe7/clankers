@@ -1815,9 +1815,22 @@
     }
   }
 
+  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
+  // the conversation header still opens with the repository name, and its first word is the
+  // repository (owner note 72882a0). Read that before falling back to the tab title.
+  function headerRepo(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return "";
+    var spans = doc.querySelectorAll('button[aria-haspopup="menu"] span.truncate');
+    for (var i = 0; i < spans.length; i += 1) {
+      var first = String(spans[i].textContent || "").trim().split(/\s+/)[0];
+      if (/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(first)) return first;
+    }
+    return "";
+  }
+
   function stateRepo(doc) {
     var bar = doc.querySelector(BAR_SELECTOR);
-    if (!bar) return savedSlug() || titleRepo(doc);
+    if (!bar) return savedSlug() || headerRepo(doc) || titleRepo(doc);
     var spans = bar.querySelectorAll("span.truncate");
     var i;
     for (i = 0; i < spans.length; i += 1) {
@@ -1828,7 +1841,7 @@
         if (repo.indexOf("/") === -1 && !/\s/.test(text)) return repo;
       }
     }
-    return savedSlug() || titleRepo(doc);
+    return savedSlug() || headerRepo(doc) || titleRepo(doc);
   }
 
   function stateBranch(doc) {
