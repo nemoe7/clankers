@@ -26,6 +26,7 @@
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
+- Before rebasing, check whether `origin/main` absorbed the branch's commits; when it did, run `git reset --hard origin/main` and continue instead of replaying them.
 - Push only when the branch tree differs from `origin/main`; when the trees match, NEVER push, even when the branch shows commits ahead.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
