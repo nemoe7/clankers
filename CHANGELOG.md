@@ -95,6 +95,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Phone bar fit**: the tab strip shrinks and scrolls, so the bar never outgrows the viewport (owner notes f6e1f33 and e9b026a). The four tabs stay on screen with no phone-only rule, and the header's collapse button leaves with its closed state (owner note ca3fc1a). The composer footer fits one line: shorter hints, and the key line keeps the hour while the host rides its tooltip (owner note 7019452).
+- **Touch newline**: a touch keyboard carries no Shift key. There the Return key writes the newline and the Send button sends, while a desk keyboard keeps Enter-to-send. The composer hint names whichever the Return key does (owner notes da405c2 and cbebaa3).
+- **Flush lists**: a list in message text sat on the browser's own step. The ack thread under a report now sits flush with the log's lists and the composer (owner notes 612f803 and 21bf675).
 - **Header tally**: the bash-call tally rode the quiet header line alone, so a running turn never showed it. The count now ends every shape of the line: the poll, the finished call and the gone mark (owner note 03471eb).
 - **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner had removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file (owner notes 88e64df and b5949c3).
 - **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:` (owner notes cc6edd4 and c08732a).

@@ -784,8 +784,18 @@ $('#form').addEventListener('submit', async event => {
   }
   finally { send.disabled = picker.disabled = $('#attach-file').disabled = false; }
 });
+// A touch keyboard offers no Shift key, so there the Return key writes the newline and the Send
+// button sends. The hint names whichever the Return key does (owner notes da405c2, cbebaa3).
+const touchPointer = window.matchMedia?.('(pointer: coarse)');
+function paintSendHint() {
+  $('#send-hint').textContent = touchPointer?.matches
+    ? 'Return: new line · Send sends'
+    : 'Enter sends · Shift+Enter: new line';
+}
+touchPointer?.addEventListener?.('change', paintSendHint);
+paintSendHint();
 note.addEventListener('keydown', event => {
-  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !touchPointer?.matches) {
     event.preventDefault();
     if (!send.disabled) $('#form').requestSubmit();
   }

@@ -129,8 +129,17 @@ let servedToken = 'token-one';
 let pageFetches = 0;
 const writeTokens = [];
 const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
+let coarsePointer = false;
+const pointerListeners = [];
 const context = {
-  window: { addEventListener: (name, callback) => { windowEvents[name] = callback; } },
+  window: {
+    addEventListener: (name, callback) => { windowEvents[name] = callback; },
+    matchMedia: query => ({
+      // A live getter: the client reads the query once and the pointer may change later.
+      get matches() { return query === '(pointer: coarse)' && coarsePointer; },
+      addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
+    }),
+  },
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
@@ -749,6 +758,20 @@ test('preview client', async (t) => {
     get('#note').events.keydown(event({ key: 'Enter', shiftKey: true, isComposing: false }));
     get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: true }));
     assert.equal(get('#form').submissions, 1);
+    // A touch keyboard has no Shift key, so there the Return key writes the newline and the Send
+    // button sends; a mouse-and-keyboard device keeps Enter-to-send (owner notes da405c2, cbebaa3).
+    coarsePointer = true;
+    pointerListeners.forEach(callback => callback({ matches: true }));
+    const newline = event({ key: 'Enter', shiftKey: false, isComposing: false });
+    get('#note').events.keydown(newline);
+    assert.equal(newline.prevented, undefined, 'the browser writes the newline');
+    assert.equal(get('#form').submissions, 1, 'no send from the Return key');
+    assert.match(get('#send-hint').textContent, /Return: new line/);
+    coarsePointer = false;
+    pointerListeners.forEach(callback => callback({ matches: false }));
+    get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: false }));
+    assert.equal(get('#form').submissions, 2, 'a desk Enter sends again');
+    assert.match(get('#send-hint').textContent, /Enter sends/);
     sendHandler = async () => { throw new Error('response lost'); };
     await get('#form').events.submit(event({}));
     assert.equal(get('#note').value, 'keep draft');

@@ -893,7 +893,21 @@ def test_http_boundaries():
         "the tab strip shrinks rather than pushing the bar"
       )
       # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
-      assert "Enter sends · Shift+Enter" in page
+      # The hint is its own span, so the client swaps it with the pointer: a touch keyboard writes
+      # the newline and the Send button sends (owner notes da405c2, cbebaa3).
+      assert '<span id="send-hint">Enter sends · Shift+Enter:new line</span>' in page
+      # A list in message text sits flush, matching the log's lists and the composer: the ack
+      # thread under a report was the last outlier, on the browser's own step (owner notes 612f803,
+      # 21bf675).
+      assert (
+        "#history li ul,#history li ol{margin:8px 0;padding-left:0;list-style-position:inside"
+        in page
+      )
+      assert re.search(
+        r"\.message-text (ol,\.message-text ul|ul,\.message-text ol)\{margin:8px 0;"
+        r"padding-left:0;list-style-position:inside",
+        page,
+      ), "message text lists sit flush"
       assert page.count("#send{") == 0
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
@@ -930,13 +944,6 @@ def test_http_boundaries():
       assert "h2{margin:0 0 8px" in page
       assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)
       assert re.search(r"\.message-text p[^{}]*\{margin:8px 0", page)
-      # A list inside message text keeps the report's own step: the browser default would sit the
-      # bullets deeper than the paragraph they belong to (owner screenshots f6e1f33, 612f803).
-      for selector in (".message-text ul", ".message-text ol"):
-        assert selector in page, selector
-        assert (
-          "padding-left:22px" in page[page.index(selector) : page.index(selector) + 160]
-        ), f"{selector} keeps the 22px step"
       for level in ("h1", "h2", "h3", "h4", "h5", "h6"):
         assert f"{level}{{font-size" not in page
 
