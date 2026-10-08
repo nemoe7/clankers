@@ -14,7 +14,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line |
 | `task-list` | List tasks and their stored status, order and details |
-| `task ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and a write that leaves none is refused; use `--msg-id` for note-born and report-born tasks, and `--blocked` or `--unblocked` for the blocked mark |
+| `task ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and a write that leaves none is refused; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--blocked` or `--unblocked` sets the blocked mark |
 | `task-remove ID` | Remove a task entered by mistake |
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; `--replace-tasks` replaces only tasks; an import older than the live state is refused unless `--force` |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
@@ -49,7 +49,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 | `--order N` | Set 1-based position in the task's status group |
 | Repeatable `--task-details` | Set the detail lines; the arguments replace the stored details |
 | `--task-details ""` | Clear stored details |
-| `--msg-id <full-message-id>` | Link a note or report answer to its task; still call `ack` |
+| `--msg-id <full-message-id>` | Link the note or report answer a task came from; optional, and only a note-born or report-born task carries it; still call `ack` |
 | `--report <report-id>` | Link a blocked task to the report it waits on; an answer to that report clears the blocked mark |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |
 
