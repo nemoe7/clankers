@@ -94,6 +94,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Phone bar fit**: the tab strip shrinks and scrolls, so the bar never outgrows the viewport (owner notes f6e1f33 and e9b026a). The four tabs stay on screen with no phone-only rule, and the header's collapse button leaves with its closed state (owner note ca3fc1a). The composer footer fits one line: shorter hints, and the key line keeps the hour while the host rides its tooltip (owner note 7019452).
 - **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner had removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file (owner notes 88e64df and b5949c3).
 - **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:` (owner notes cc6edd4 and c08732a).
 - **Call tally**: the EXIT hook counts the agent's own calls. The platform's hosted shells and probes are named and skipped, so a background run adds nothing to the tally (owner note ef180f0). The call-end stamp skips them too.

@@ -507,19 +507,10 @@ test('preview client', async (t) => {
     assert.equal(storage.get('arena-preview-v1:theme'), 'light');
     body = context.document.body;
     log = get('#history');
-    assert.equal(body.dataset.chrome, 'open');
-    assert.equal(get('#chrome').getAttribute('aria-expanded'), 'true');
-    assert.equal(get('#chrome').getAttribute('aria-label'), 'Collapse bar');
-    assert.equal(get('#chrome').textContent, '▲');
-    get('#chrome').events.click();
-    assert.equal(body.dataset.chrome, 'closed');
-    assert.equal(get('#chrome').getAttribute('aria-expanded'), 'false');
-    assert.equal(get('#chrome').getAttribute('aria-label'), 'Expand bar');
-    assert.equal(get('#chrome').textContent, '▼');
-    assert.equal(storage.get('arena-preview-v1:chrome'), 'closed');
-    get('#chrome').events.click();
-    assert.equal(body.dataset.chrome, 'open');
-    assert.equal(get('#chrome').textContent, '▲');
+    // The collapse button is gone, so the bar never hides and no handler of its own is wired
+    // (owner note ca3fc1a).
+    assert.equal(body.dataset.chrome, undefined, 'the closed state is gone');
+    assert.equal(get('#chrome').events.click, undefined, 'no collapse handler');
     get('#composer-toggle').events.click();
     assert.equal(body.dataset.composer, 'closed');
     assert.equal(get('#composer-toggle').getAttribute('aria-expanded'), 'false');
@@ -2487,25 +2478,31 @@ test('preview client', async (t) => {
     assert.equal(taskTitle.focused, true);
   });
 
-  await t.test("The composer footer shows the key the userscript holds, and says so while none stands", async () => {
+  await t.test("The composer footer names the key and its hour, and the tooltip keeps the host", async () => {
     state.agent_key = {
       key: 'K'.repeat(43),
       host: 'https://arena-proxy.example.ts.net',
       at: '2026-10-03T15:00:00+00:00',
     };
     await get('#refresh-notes').events.click();
-    assert.match(get('#agent-key').textContent, /^Key K{7} · /, 'seven characters name the key');
+    assert.match(get('#agent-key').textContent, /^Key K{7} · \d{2}:\d{2}$/,
+      'seven characters and the hour name the key');
     assert.doesNotMatch(get('#agent-key').textContent, /K{8}/, 'the full key never prints');
     assert.equal(get('#agent-key').children.find(child => child.tagName === 'code')?.textContent,
       'KKKKKKK', 'only the key characters carry the code element');
     assert.equal(get('#agent-key').children[0], 'Key ', 'the label stays prose');
-    assert.match(get('#agent-key').textContent, /https:\/\/arena-proxy\.example\.ts\.net/);
+    assert.doesNotMatch(get('#agent-key').textContent, /example/,
+      'the host leaves the line, so the footer fits a narrow width (owner note 7019452)');
+    assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set \w{3} \d{2}, \d{2}:\d{2}$/,
+      'the tooltip keeps the host and the full stamp');
     state.agent_key = { key: 'K'.repeat(43), host: null, at: '2026-10-03T15:00:00+00:00' };
     await get('#refresh-notes').events.click();
-    assert.doesNotMatch(get('#agent-key').textContent, /example/);
+    assert.match(get('#agent-key').title, /^set \w{3} \d{2}, \d{2}:\d{2}$/,
+      'a hostless record leaves the tooltip with the stamp alone');
     state.agent_key = null;
     await get('#refresh-notes').events.click();
     assert.equal(get('#agent-key').textContent, 'No key recorded.');
+    assert.equal(get('#agent-key').title, '', 'the tooltip clears with the record');
   });
 
   await t.test('A quiet note informs the agent and stays out of the log', async () => {

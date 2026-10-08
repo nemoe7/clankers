@@ -155,17 +155,9 @@ function paintConnection() {
     setConnection('idle', connectionText());
   }
 }
-const chromeButton = $('#chrome');
 const composerButton = $('#composer-toggle');
-const chromeLabels = { text: ['▲', '▼'], name: ['Collapse bar', 'Expand bar'] };
 const composerLabels = { text: ['✎', '✎'], name: ['Hide composer', 'Show composer'] };
-setPanel('chrome', chromeButton, stored('chrome') !== 'closed', chromeLabels);
 setPanel('composer', composerButton, stored('composer') !== 'closed', composerLabels);
-chromeButton.addEventListener('click', () => {
-  const open = document.body.dataset.chrome === 'closed';
-  setPanel('chrome', chromeButton, open, chromeLabels);
-  save('chrome', open ? 'open' : 'closed');
-});
 composerButton.addEventListener('click', () => {
   const open = document.body.dataset.composer === 'closed';
   setPanel('composer', composerButton, open, composerLabels);
@@ -369,15 +361,26 @@ function bytes(value) {
   if (value < 1000000) return `${Math.round(value / 1000)} kB`;
   return `${(value / 1000000).toFixed(2)} MB`;
 }
-function time(value) {
+function stampDate(value) {
   // The state surface cuts stamps to seconds and drops the UTC offset. Date would read
   // those digits as local time and show the server's wall clock in every zone, so a
   // seconds-only ISO stamp is pinned to UTC before the local formatter sees it.
-  const date = new Date(
+  return new Date(
     typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)
       ? `${value}Z`
       : value
   );
+}
+function clock(value) {
+  // The composer footer names the key's freshness in the room a narrow width leaves:
+  // the hour and minute alone (owner note 7019452).
+  const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(stampDate(value)).map(part => [part.type, part.value]));
+  return `${parts.hour}:${parts.minute}`;
+}
+function time(value) {
+  const date = stampDate(value);
   const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
     month: 'short', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
   }).formatToParts(date).map(part => [part.type, part.value]));
@@ -1678,18 +1681,21 @@ function approvalRow(item) {
   return row;
 }
 // The composer footer shows the key the userscript holds, so a stale key is visible at once.
-// Seven characters name the key without printing it in full into the log.
+// Seven characters name the key without printing it in full into the log, and the hour names
+// its freshness. The host and the full stamp ride the tooltip, which keeps the line inside the
+// width a phone leaves (owner note 7019452).
 function renderAgentKey(record) {
   const line = $('#agent-key');
   if (!record) {
     line.textContent = 'No key recorded.';
+    line.title = '';
     return;
   }
-  // Only the key characters are monospace, so the host and the stamp read as prose.
+  // Only the key characters are monospace, so the label and the hour read as prose.
   const key = document.createElement('code');
   key.textContent = record.key.slice(0, 7);
-  const host = record.host ? ` · ${record.host}` : '';
-  line.replaceChildren('Key ', key, `${host} · set ${time(record.at)}`);
+  line.replaceChildren('Key ', key, ` · ${clock(record.at)}`);
+  line.title = `${record.host ? `${record.host} · ` : ''}set ${time(record.at)}`;
 }
 function renderFetchIfChanged(jobs) {
   const signature = JSON.stringify(jobs);

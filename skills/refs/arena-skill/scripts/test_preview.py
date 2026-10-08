@@ -886,9 +886,14 @@ def test_http_boundaries():
         "the filter caret needs no blocked data image"
       )
       assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
-      assert re.search(r"\.topbar\{[^}]*gap:8px;", page), (
-        "collapse button uses the same 8px gap"
+      # The collapse button is gone, its closed state with it, and the strip can no longer push
+      # past the bar: it shrinks and scrolls at any width instead (owner notes ca3fc1a, e9b026a).
+      assert "#chrome" not in page and "data-chrome" not in page
+      assert re.search(r"nav\{[^}]*min-width:0;", page), (
+        "the tab strip shrinks rather than pushing the bar"
       )
+      # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
+      assert "Enter sends · Shift+Enter" in page
       assert page.count("#send{") == 0
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
