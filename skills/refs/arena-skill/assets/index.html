@@ -25,9 +25,8 @@
   <main>
     <section id="notes-panel" role="tabpanel" aria-labelledby="notes-tab">
       <div class="notes-layout">
-        <section class="card log-card" aria-labelledby="history-title">
+        <section class="card log-card" aria-label="Message log">
           <div class="row">
-            <h2 id="history-title">Message log</h2>
             <div class="stack">
               <p id="connection" role="status"><span id="connection-dot" class="dot" role="img" aria-label="Connecting"></span><span id="connection-text">Connecting…</span></p>
               <p id="last-check" class="muted">Not checked yet.</p>
@@ -56,7 +55,7 @@
             <div id="draft-preview" class="report draft-preview" tabindex="0" role="region" aria-label="Markdown draft preview, not sent" hidden></div>
             <div class="row">
               <div class="stack">
-                <small><span id="send-hint">Enter sends · Shift+Enter: new line</span> · <span id="agent-key" class="key-line" role="status">No key recorded.</span></small>
+                <small><span id="send-hint">Enter sends · Shift+Enter: new line · </span><span id="agent-key" class="key-line" role="status">No key recorded.</span></small>
                 <p id="send-status" role="status" aria-live="polite">Nothing sent yet.</p>
               </div>
               <button id="send" type="submit">Send note</button>

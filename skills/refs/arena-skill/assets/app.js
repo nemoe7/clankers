@@ -788,9 +788,11 @@ $('#form').addEventListener('submit', async event => {
 // button sends. The hint names whichever the Return key does (owner notes da405c2, cbebaa3).
 const touchPointer = window.matchMedia?.('(pointer: coarse)');
 function paintSendHint() {
+  // The separator rides the hint, so a phone that drops the hint leaves the key line whole
+  // (owner note 2fc9b33).
   $('#send-hint').textContent = touchPointer?.matches
-    ? 'Return: new line · Send sends'
-    : 'Enter sends · Shift+Enter: new line';
+    ? 'Return: new line · Send sends · '
+    : 'Enter sends · Shift+Enter: new line · ';
 }
 touchPointer?.addEventListener?.('change', paintSendHint);
 paintSendHint();
@@ -929,28 +931,15 @@ async function copyCode(button) {
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => rest(button), 1500);
 }
-// A receipt's ID is the handle the owner quotes back, so a click copies the whole of it
-// rather than the seven characters on show, and says which clipboard path it took.
-// A plain click copies the seven characters on show; a shift-click copies the whole ID.
-async function copyNoteId(code, shift) {
-  const full = code.dataset.full || code.textContent;
-  const text = shift ? full : code.textContent;
-  const words = await copyText(text);
-  code.dataset.copied = words ? 'good' : 'bad';
-  code.title = words ? `${words}: ${text}` : `Clipboard blocked; the ID is ${text}`;
-  setTimeout(() => {
-    delete code.dataset.copied;
-    code.title = full;
-  }, 1500);
-}
-// A ctrl-click quotes the note back instead of copying it: the composer takes a `RE: <shortid>`
-// line and the caret lands after it. A draft already written is kept below a blank line rather
-// than lost, and a first line that is already a quote is retargeted, so quoting a second note
-// replaces the prefix instead of stacking two. Meta is taken with ctrl, since that is the same
-// gesture on a Mac. The quote lands in the composer's own tab, and the box is regrown after the
-// value changes: measured while its panel is hidden, the textarea collapses to its border and the
-// quote shows cut off. The write mode comes back for the same reason, since a preview would leave
-// the quote off screen behind the rendered draft.
+// A click quotes the note back: the composer takes a `RE: <shortid>` line and the caret lands
+// after it. A draft already written is kept below a blank line rather than lost, and a first line
+// that is already a quote is retargeted, so quoting a second note replaces the prefix instead of
+// stacking two. One gesture serves every device, so a phone with no ctrl key quotes like a desk
+// does, and no copy path sits beside it (owner notes 4d4b659 and 4a69d4e). The quote lands in the
+// composer's own tab, and the box is regrown after the value changes: measured while its panel is
+// hidden, the textarea collapses to its border and the quote shows cut off. The write mode comes
+// back for the same reason, since a preview would leave the quote off screen behind the rendered
+// draft.
 function quoteId(id, control) {
   showTab(tabs[0]);
   const rest = note.value.replace(/^RE: \S+\n/, '');
@@ -968,8 +957,8 @@ function quoteNoteId(code) {
   const full = code.dataset.full || code.textContent;
   quoteId(code.dataset.quote === 'full' ? full : full.slice(0, 7), code);
 }
-// The report ID rides the status line as a copyable code element. A click copies it and a
-// ctrl-click quotes it to the composer, the gestures the log's note IDs and the task titles use.
+// The report ID rides the status line as a code element that quotes the report to the composer,
+// the one gesture the log's note IDs and the task titles carry too.
 function reportStatusLine(text, id) {
   const status = $('#report-status');
   if (!id) {
@@ -983,16 +972,6 @@ function reportStatusLine(text, id) {
   code.dataset.quote = 'full';
   code.title = id;
   status.replaceChildren(text, ' · ', code);
-}
-async function copyTaskId(title) {
-  const id = title.dataset.taskId;
-  const words = await copyText(id);
-  title.dataset.copied = words ? 'good' : 'bad';
-  title.title = words ? `${words}: ${id}` : `Clipboard blocked; the ID is ${id}`;
-  setTimeout(() => {
-    delete title.dataset.copied;
-    title.title = id;
-  }, 1500);
 }
 function quoteTaskId(title) {
   quoteId(title.dataset.taskId, title);
@@ -1046,14 +1025,9 @@ document.addEventListener('click', event => {
   if (!target || typeof target.className !== 'string') return;
   const classes = target.className.split(' ');
   if (classes.includes('copy-code')) copyCode(target);
-  else if (classes.includes('note-id')) {
-    // Three modifiers on one element: plain copies the short ID, shift the whole one, ctrl quotes.
-    if (event.ctrlKey || event.metaKey) quoteNoteId(target);
-    else copyNoteId(target, event.shiftKey);
-  } else if (classes.includes('task-title')) {
-    if (event.ctrlKey || event.metaKey) quoteTaskId(target);
-    else void copyTaskId(target);
-  }
+  // An ID takes one gesture on every device: a click quotes it, with or without a modifier.
+  else if (classes.includes('note-id')) quoteNoteId(target);
+  else if (classes.includes('task-title')) quoteTaskId(target);
 });
 document.addEventListener('keydown', event => {
   const target = event.target;
@@ -1061,8 +1035,7 @@ document.addEventListener('keydown', event => {
       !target.className.split(' ').includes('task-title')) return;
   if (event.key !== 'Enter' && event.key !== ' ') return;
   event.preventDefault();
-  if (event.ctrlKey || event.metaKey) quoteTaskId(target);
-  else void copyTaskId(target);
+  quoteTaskId(target);
 });
 // The header clock is the log's own face with seconds appended, so the two never disagree.
 function showClock() {
@@ -1321,7 +1294,7 @@ function taskRow(task) {
   }
   title.tabIndex = 0;
   title.setAttribute('role', 'button');
-  title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to copy it`);
+  title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to quote it`);
   const rows = [title];
   if (task.details.length) {
     // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row

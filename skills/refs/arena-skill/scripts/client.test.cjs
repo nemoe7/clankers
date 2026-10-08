@@ -652,12 +652,23 @@ test('preview client', async (t) => {
     assert.equal(taskControl.dataset.taskId, 'docs-archive');
     assert.equal(taskControl.attributes.role, 'button');
     assert.equal(taskControl.tabIndex, 0, 'keyboard users can reach the task ID');
-    documentEvents.click(event({ target: taskControl }));
-    await tick();
-    assert.equal(copied.at(-1), 'docs-archive', 'click copies the full task ID');
-    assert.equal(taskControl.dataset.copied, 'good');
+    assert.match(taskControl.getAttribute('aria-label'), /Press Enter to quote it$/,
+      'the keyboard label names the quote, not a copy');
     taskDraft = get('#note').value;
     taskCopied = copied.length;
+    get('#note').value = 'a draft already written';
+    documentEvents.click(event({ target: taskControl }));
+    await tick();
+    assert.equal(copied.length, taskCopied, 'a click quotes rather than copies');
+    assert.equal(get('#note').value, 'RE: docs-archive\n\na draft already written');
+    assert.equal(get('#notes-panel').hidden, false, 'quoting a task opens the Notes tab');
+    assert.equal(get('#note').focused, true);
+    get('#note').value = 'a draft already written';
+    documentEvents.keydown(event({ target: taskControl, key: 'Enter' }));
+    await tick();
+    assert.equal(get('#note').value, 'RE: docs-archive\n\na draft already written',
+      'the Enter key quotes like the click does');
+    get('#note').value = taskDraft;
     documentEvents.click(event({ target: taskControl, ctrlKey: true }));
     assert.equal(copied.length, taskCopied, 'Ctrl-click quotes without copying');
     assert.equal(get('#note').value, `RE: docs-archive\n\n${taskDraft}`);
@@ -945,18 +956,20 @@ test('preview client', async (t) => {
     assert.ok(get('#clock').title.length > 3);
   });
 
-  await t.test("A receipt ID copies on a click, and a blocked clipboard says so on the ID itself", async () => {
-    // A receipt ID copies on a click, and a blocked clipboard says so on the ID itself.
+  await t.test("A receipt ID quotes on a plain click, with no copy path left on the ID", async () => {
+    // A receipt ID quotes on a plain click, with no copy path left on the ID (owner note 4a69d4e).
     idCode = get('#history').children[0].children[2].children[0];
     assert.equal(idCode.className, 'note-id');
-    clipboardFails = true;
-    execCommandResult = false;
+    const draftBeforeQuote = get('#note').value;
+    copiedBefore = copied.length;
+    get('#note').value = '';
     documentEvents.click({ target: idCode });
     await tick();
-    assert.equal(idCode.dataset.copied, 'bad');
-    assert.match(idCode.title, /^Clipboard blocked; the ID is /);
-    clipboardFails = false;
-    execCommandResult = true;
+    assert.equal(copied.length, copiedBefore, 'the click leaves the clipboard alone');
+    assert.equal(get('#note').value, `RE: ${idCode.textContent}\n`);
+    assert.equal(get('#note').focused, true);
+    assert.equal(idCode.title, `Quoted in the composer: RE: ${idCode.textContent}`);
+    get('#note').value = draftBeforeQuote;
     assert.equal(answer.innerHTML, '<p><strong>done</strong></p>');
     assert.match(answer.className, /answer reply message-text/);
     assert.equal(answer.hidden, false);
@@ -1200,24 +1213,27 @@ test('preview client', async (t) => {
       'a report never republished shows the publish stamp');
     assert.match(get('#report-status').textContent, /· Submission /);
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
-    // The ID is on show, one click copies it, and a ctrl-click quotes it like a note ID. The quote
-    // lands in the Messages tab with the box regrown: measured from the hidden panel the textarea
-    // collapsed to its border, which showed the quote cut off.
+    // The ID is on show, a click quotes it like a note ID, and a ctrl-click is the same gesture. The
+    // quote lands in the Messages tab with the box regrown: measured from the hidden panel the
+    // textarea collapsed to its border, which showed the quote cut off.
     const reportCode = part(get('#report-status'), 'note-id');
     assert.equal(reportCode.textContent, 'r1', 'the loaded report shows its ID');
     assert.equal(reportCode.dataset.full, 'r1');
     const copiedBeforeReport = copied.length;
+    get('#note').value = '';
     documentEvents.click({ target: reportCode });
-    await tick();
-    assert.equal(copied.at(-1), 'r1', 'a click copies the report ID');
-    assert.equal(copied.length, copiedBeforeReport + 1);
+    assert.equal(copied.length, copiedBeforeReport, 'a click on a report ID quotes it, no copy');
+    assert.equal(get('#note').value, 'RE: r1\n', 'the report ID lands whole in the composer');
+    assert.equal(get('#notes-panel').hidden, false, 'the quote brings the Messages tab up');
+    get('#reports-tab').events.click();
+    assert.equal(get('#reports-panel').hidden, false, 'the panel comes back for the rest of the flow');
     const reportNote = get('#note');
     reportNote.value = 'a draft already written';
     reportNote.hidden = true;
     get('#draft-preview').hidden = false;
     reportNote.scrollHeight = 96;
     documentEvents.click({ target: reportCode, ctrlKey: true });
-    assert.equal(copied.length, copiedBeforeReport + 1, 'a ctrl-click leaves the clipboard alone');
+    assert.equal(copied.length, copiedBeforeReport, 'a ctrl-click leaves the clipboard alone');
     assert.equal(get('#notes-tab').getAttribute('aria-selected'), 'true',
       'a quoted report ID opens the Messages tab');
     assert.equal(get('#notes-panel').hidden, false);
@@ -1821,18 +1837,21 @@ test('preview client', async (t) => {
     assert.equal(part(longReceipt, 'state-dot').dataset.state, 'sent');
   });
 
-  await t.test("A plain click copies the seven characters on show; a shift-click copies the whole ID", async () => {
-    // A plain click copies the seven characters on show; a shift-click copies the whole ID.
+  await t.test("A plain click quotes the seven characters on show; no copy gesture is left on an ID", async () => {
+    // A plain click quotes the seven characters on show; no copy gesture is left on an ID. The
+    // shift-click that copied the whole UUID goes with the copy path (owner note 4a69d4e).
     longId = longReceipt.children[0];
     assert.notEqual(longId.textContent, longId.dataset.full);
+    get('#note').value = '';
+    copiedBefore = copied.length;
     documentEvents.click({ target: longId });
-    await tick();
-    assert.equal(copied.at(-1), longId.textContent);
-    assert.equal(longId.dataset.copied, 'good');
+    assert.equal(copied.length, copiedBefore, 'the click leaves the clipboard alone');
+    assert.equal(get('#note').value, `RE: ${longId.textContent}\n`);
+    assert.equal(longId.title, `Quoted in the composer: RE: ${longId.textContent}`);
+    get('#note').value = '';
     documentEvents.click({ target: longId, shiftKey: true });
-    await tick();
-    assert.equal(copied.at(-1), longId.dataset.full);
-    assert.match(longId.title, /^Copied through the clipboard API: /);
+    assert.equal(copied.length, copiedBefore, 'a shift-click copies nothing either');
+    assert.equal(get('#note').value, `RE: ${longId.textContent}\n`);
   });
 
   await t.test("A ctrl-click quotes instead of copying: the composer takes a `RE: <shortid>` line, the car", async () => {
@@ -1867,16 +1886,17 @@ test('preview client', async (t) => {
     assert.equal(noteBox.value, `RE: ${longId.textContent}\n\nsomething typed after it`);
   });
 
-  await t.test("Meta is the same gesture on a Mac, and a plain click still copies rather than quotes", async () => {
-    // Meta is the same gesture on a Mac, and a plain click still copies rather than quotes.
+  await t.test("Meta is the same gesture on a Mac, and a plain click is the same quote", async () => {
+    // Meta is the same gesture on a Mac, and a plain click is the same quote. Neither touches the
+    // clipboard any more (owner note 4a69d4e).
     noteBox.value = '';
+    copiedBefore = copied.length;
     documentEvents.click({ target: longId, metaKey: true });
     assert.equal(noteBox.value, `RE: ${longId.textContent}\n`);
     noteBox.value = '';
     documentEvents.click({ target: longId });
-    await tick();
-    assert.equal(copied.at(-1), longId.textContent, 'a plain click still copies');
-    assert.equal(noteBox.value, '', 'and does not fill the composer');
+    assert.equal(copied.length, copiedBefore, 'a plain click copies nothing');
+    assert.equal(noteBox.value, `RE: ${longId.textContent}\n`, 'a plain click quotes');
   });
 
   await t.test("A report ID quotes whole: its seven-character prefix names nothing", async () => {

@@ -820,21 +820,30 @@ def test_http_boundaries():
       assert re.search(
         r"textarea::placeholder\{color:var\(--muted\);opacity:(?:0)?\.5", page
       )
-      assert re.search(
-        r'code\.note-id\[data-copied="?good"?\]\{color:var\(--dot-said\)', page
-      )
-      assert re.search(r'code\.note-id\[data-copied="?bad"?\]\{color:#ef4444', page)
+      # An ID carries one gesture now: a click quotes it, and no copy path is left to colour
+      # (owner note 4a69d4e).
+      assert "data-copied" not in page
       assert "#clock{font-size:inherit;font-variant-numeric:tabular-nums" in page
       assert re.search(
         r'\.icon-button\[data-state="?good"?\]\{color:var\(--dot-said\);', page
       )
       assert re.search(r'\.icon-button\[data-state="?bad"?\]\{color:#ef4444;', page)
       assert 'id="copy-log"' not in page, "the log lost its copy button"
-      # The log header is two rows tall, not three: the title stands alone and the
-      # connection and last-check lines stack to its right.
-      assert '<h2 id="history-title">Message log</h2>' in page
-      assert page.index('id="history-title"') < page.index('class="stack"')
-      assert "#history-title{margin:0" in page
+      # The log card carries no heading: the tab above already names the panel, and the title
+      # only repeated it while spending a line of height (owner note 9d3540d). The status
+      # stack and the toolbar keep their places.
+      assert "history-title" not in page
+      assert '<section class="card log-card" aria-label="Message log">' in page
+      assert page.index('id="connection"') < page.index('id="log-filter"')
+      # A phone keeps the tabs alone and drops the composer hint, and the footer's Send button
+      # leads the row so it sits right under the composer at the right edge (owner notes 5284fbb,
+      # 8b7e49b and 2fc9b33).
+      assert (
+        "@media (pointer:coarse){.topbar-row>.row.tight{display:none;}#send-hint{display:none;}}"
+        in page
+      )
+      assert "nav button{padding:7px 4px;font-size:14px;}" in page
+      assert "#send{order:-1;margin-left:auto;}}" in page
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
@@ -911,7 +920,8 @@ def test_http_boundaries():
       # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
       # The hint is its own span, so the client swaps it with the pointer: a touch keyboard writes
       # the newline and the Send button sends (owner notes da405c2, cbebaa3).
-      assert '<span id="send-hint">Enter sends · Shift+Enter:new line</span>' in page
+      # The hint carries its own separator, so a phone that hides it leaves the key line whole.
+      assert '<span id="send-hint">Enter sends · Shift+Enter:new line ·</span>' in page
       # A list in message text sits flush, matching the log's lists and the composer: the ack
       # thread under a report was the last outlier, on the browser's own step (owner notes 612f803,
       # 21bf675).
@@ -924,7 +934,9 @@ def test_http_boundaries():
         r"padding-left:0;list-style-position:inside",
         page,
       ), "message text lists sit flush"
-      assert page.count("#send{") == 0
+      # The send button carries one rule, the narrow-screen position fix, and no resize of its
+      # own (owner notes 8b7e49b and 2efcd29).
+      assert re.findall(r"#send\{([^}]*)\}", page) == ["order:-1;margin-left:auto;"]
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
         "#notes-panel,#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto"

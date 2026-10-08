@@ -120,7 +120,6 @@ small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13p
 .dot[data-state="polling"] { background: #3b82f6; }
 .dot[data-state="idle"] { background: #f59e0b; }
 #connection, #last-check { margin-block: 0; padding-block: 0; }
-#history-title { margin: 0; }
 #form > div:first-child { margin-top: 0; padding-top: 0; }
 #form > div:last-child { margin-bottom: 0; padding-bottom: 0; }
 p.muted { margin-block: 4px; }
@@ -168,9 +167,6 @@ body[data-composer="closed"] #composer-toggle { color: var(--muted); opacity: .5
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
 /* A receipt ID is text rather than a chip, so it opts out by class instead of by ancestry. */
 code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background: none; padding: 0; cursor: pointer; }
-/* A click copies the whole ID; the colour is the confirmation, and it clears after a moment. */
-code.note-id[data-copied="good"] { color: var(--dot-said); }
-code.note-id[data-copied="bad"] { color: #ef4444; }
 /* The clock takes the tab size rather than the muted 13px, and tabular numerals keep the
    seconds from nudging the theme button once a second. */
 #clock { font-size: inherit; font-variant-numeric: tabular-nums; }
@@ -274,6 +270,19 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
      step down rather than a track giving way (owner notes 8a47260, df6e6bf). */
   nav { gap: 6px; }
   nav button { padding: 7px 4px; font-size: 14px; }
+  /* The footer wraps and the lone Send button would drop left; it leads the footer instead, so it
+     sits right under the composer box at the right edge, ahead of the status line (owner notes
+     8b7e49b and 2efcd29). */
+  #send { order: -1; margin-left: auto; }
+}
+
+/* A phone's top bar keeps the tabs alone: the clock, the theme toggle and copy state are desk
+   furniture, and the width they take crowds the four tracks (owner note 5284fbb). The composer
+   hint goes too: a touch Return key needs no caption, and its separator rides the hint, so the
+   key line stays whole beside it (owner note 2fc9b33). */
+@media (pointer: coarse) {
+  .topbar-row > .row.tight { display: none; }
+  #send-hint { display: none; }
 }
 
 #send-status { margin: 0; }
@@ -294,8 +303,6 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-div { min-width: 0; overflow-wrap: anywhere; }
 .task-list { margin: 0; padding-left: 20px; }
 .task-title { cursor: pointer; }
-.task-title[data-copied="good"] { color: var(--dot-said); }
-.task-title[data-copied="bad"] { color: #ef4444; }
 /* A blocked task is not actionable yet, so it drops to the muted tone the details use. */
 .task-title[data-blocked="true"] { color: var(--muted); }
 /* Details sit under the title in the muted face as a real list, and repeat in the row hover. */
