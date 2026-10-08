@@ -48,6 +48,7 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
+BLOCK_START=re.compile('^ {0,3}(?:#{1,6}(?:\\s|$)|>|[-*+](?:\\s|$)|\\d+[.)](?:\\s|$)|(?:[-*_]\\s*){3,}$|`{3,}|~{3,})')
 TASK_REMINDER='{remaining} tasks left.'
 def fill_reminder(tail,remaining):
 	if'{remaining}'in tail and remaining==0:return None
@@ -158,6 +159,9 @@ def custom_answer(field,value):
 		typed=value[len(label)+2:]
 		if typed.strip():return True
 	return False
+def option_continuation(line):
+	if not line.strip()or BLOCK_START.match(line):return False
+	return not BLANK.match(line)and not ANCHOR.match(line)
 def parse_fields(markdown):
 	lines=markdown.splitlines();blocks,chunk,questions,used=[],[],[],set();fence,prompt,anchor,index,position=None,'',None,0,0
 	while position<len(lines):
@@ -181,9 +185,13 @@ def parse_fields(markdown):
 			while position<len(lines):
 				item=pattern.match(lines[position])
 				if not item:break
-				options.append(item.group(2))
-				if item.group(1).lower()=='x':default.append(item.group(2))
+				preselected=item.group(1).lower()=='x';options.append(item.group(2))
+				if preselected:default.append(item.group(2))
 				position+=1
+				while position<len(lines)and option_continuation(lines[position]):
+					options[-1]=f"{options[-1]} {lines[position].strip()}"
+					if preselected:default[-1]=options[-1]
+					position+=1
 			if len(set(options))!=len(options):raise ValueError(f"Field '{prompt or index}' repeats an option; make each unique")
 			question={'type':kind,'options':options,'default':default}
 		else:

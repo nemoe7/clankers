@@ -52,7 +52,7 @@ Latest measurements as of 2026-10-08. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/proxy/tailscale-serve.json` | `UTF-8 file size` | 265 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 11,216 `B` |
-| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 100,193 `B` |
+| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 100,675 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,399 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,552 `tok` |

@@ -22,6 +22,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.
 
+#### preview
+
+- **Multiline form inputs**: an option label that wraps onto the next line joins into one option, indented or not. A blank line, a fence, a heading, a list marker, a text-field marker or an anchor ends the group.
+
 ### Changed
 
 #### arena

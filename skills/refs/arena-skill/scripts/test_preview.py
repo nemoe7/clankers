@@ -4642,3 +4642,42 @@ def test_download_header_name_is_safe():
   """A CR, LF or quote in a download name never reaches the response header."""
   assert preview.header_filename('a\nb\rc"d') == "a_b_c_d"
   assert preview.header_filename("first.md") == "first.md"
+
+
+def test_option_labels_join_wrapped_lines():
+  """A wrapped option label joins into one option, indented or not, and a blank line ends it."""
+  wrapped = (
+    "Pick one {#pick}\n\n"
+    "- (x) head tree: `ref: ${{ github.event.pull_request.head.sha || github.sha }}`. A pull\n"
+    "  request can then clear its own check, and three workflow tests need the new literal.\n"
+    "- ( ) undented wrap\n"
+    "on the next line\n"
+    "- ( ) plain\n"
+    "\n"
+    "Trailing prose stays a paragraph.\n"
+  )
+  blocks, questions = preview.parse_fields(wrapped)
+  assert [question["type"] for question in questions] == ["choice"]
+  assert questions[0]["options"] == [
+    (
+      "head tree: `ref: ${{ github.event.pull_request.head.sha || github.sha }}`. A pull "
+      "request can then clear its own check, and three workflow tests need the new literal."
+    ),
+    "undented wrap on the next line",
+    "plain",
+  ]
+  assert questions[0]["default"] == [questions[0]["options"][0]]
+  assert [text.strip() for kind, text in blocks if kind == "markdown"] == [
+    "Pick one",
+    "Trailing prose stays a paragraph.",
+  ]
+
+
+def test_option_join_stops_at_a_block_start():
+  """A heading or a new field ends an option group instead of joining it."""
+  markdown = "- ( ) only option\n## Section\n- ( ) after heading\nNote: ___\n"
+  _, questions = preview.parse_fields(markdown)
+  assert [question["type"] for question in questions] == ["choice", "choice", "text"]
+  assert questions[0]["options"] == ["only option"]
+  assert questions[1]["options"] == ["after heading"]
+  assert questions[2]["prompt"] == "Note"

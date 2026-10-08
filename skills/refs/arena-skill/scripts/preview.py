@@ -100,6 +100,17 @@ CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
 BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
 ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
+# A wrapped option label may run past its marker line; a block start ends the option instead.
+BLOCK_START = re.compile(
+  r"^ {0,3}(?:"
+  r"#{1,6}(?:\s|$)|"
+  r">|"
+  r"[-*+](?:\s|$)|"
+  r"\d+[.)](?:\s|$)|"
+  r"(?:[-*_]\s*){3,}$|"
+  r"`{3,}|~{3,}"
+  r")"
+)
 # One repeated tail reads as noise, so the reminder rotates through rules an agent most often
 # drops. The cursor lives in meta, so a cycle covers every string before one repeats.
 TASK_REMINDER = "{remaining} tasks left."
@@ -438,6 +449,13 @@ def custom_answer(field, value):
   return False
 
 
+def option_continuation(line):
+  """True when a line wraps the option above it instead of starting a new block."""
+  if not line.strip() or BLOCK_START.match(line):
+    return False
+  return not BLANK.match(line) and not ANCHOR.match(line)
+
+
 def parse_fields(markdown):
   """Split Markdown into prose blocks and answer fields written as list markers."""
   lines = markdown.splitlines()
@@ -479,10 +497,16 @@ def parse_fields(markdown):
         item = pattern.match(lines[position])
         if not item:
           break
+        preselected = item.group(1).lower() == "x"
         options.append(item.group(2))
-        if item.group(1).lower() == "x":
+        if preselected:
           default.append(item.group(2))
         position += 1
+        while position < len(lines) and option_continuation(lines[position]):
+          options[-1] = f"{options[-1]} {lines[position].strip()}"
+          if preselected:
+            default[-1] = options[-1]
+          position += 1
       if len(set(options)) != len(options):
         raise ValueError(
           f"Field '{prompt or index}' repeats an option; make each unique"
