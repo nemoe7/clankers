@@ -1101,8 +1101,9 @@ function checkTabTitle(api) {
     };
   }
   // The owner's captured start-process card (note 6dffc38): a button holding the play icon,
-  // the process name and the success check beside it. It runs with no stop control.
-  function processDoc(stopGenerating) {
+  // the process name and the success check beside it. It runs with no stop control. `behind`
+  // adds a newer plain message, so the card sits in the transcript's history (note 20c9c43).
+  function processDoc(stopGenerating, behind) {
     var play = {
       closest: function (selector) {
         return selector === "button" ? button : null;
@@ -1140,7 +1141,11 @@ function checkTabTitle(api) {
         return null;
       },
       querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === MESSAGE_SELECTOR) {
+          return behind
+            ? [message, { querySelectorAll: function () { return []; } }]
+            : [message];
+        }
         if (selector === "button[aria-label]") {
           return stopGenerating ? [stopButton("Stop generating")] : [];
         }
@@ -1479,12 +1484,17 @@ function checkTabTitle(api) {
     // The waiting line is a turn mark too: no control, no hourglass.
     [expireHold(), null],
     [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers"],
-    // The start-process card (owner note 6dffc38): a play icon and the process name. It runs
-    // past the turn, so the card alone raises the bash emoji, stop control or none.
+    // The start-process card (owner note 6dffc38): a play icon and the process name, so the
+    // card alone raises the bash emoji while the turn runs. A finished card keeps its play icon
+    // in the page, so it marks no longer once the stop control leaves, and a newer message
+    // takes the title (owner note 20c9c43).
     [expireHold(), null],
-    [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
     [desiredTitle(processDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
-    [typeof processRow(processDoc(false)), "object"],
+    [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers"],
+    [desiredTitle(processDoc(true, true)), TITLE_PREFIX + "clankers"],
+    [typeof processRow(processDoc(true)), "object"],
+    [processRow(processDoc(false)), null],
+    [processRow(processDoc(true, true)), null],
     [processRow(idleDoc), null],
     // One mark for the agent's words (owner notes 02a0675 and df73987): growth of the newest
     // data-agent-word message raises the solid balloon, whatever the turn state. The first

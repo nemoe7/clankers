@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.8
+// @version      1.9.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2552,23 +2552,20 @@
     }
 
     // A started process card (owner note 6dffc38): a play icon in the newest message. It runs
-    // with no stop control, so the card alone is the news.
+    // with no stop control of its own, so the card alone is the news while the turn runs. A
+    // finished card keeps its play icon in the page, so an older card never marks, and the
+    // turn's stop control bounds the card like every other row (owner note 20c9c43).
     function processRow(doc) {
-      if (!doc || typeof doc.querySelectorAll !== "function") {
+      if (!doc || typeof doc.querySelectorAll !== "function" || !stopSignal(doc)) {
         return null;
       }
       var messages = doc.querySelectorAll(MESSAGE_SELECTOR);
-      var i;
-      for (i = messages.length - 1; i >= 0; i -= 1) {
-        var icons =
-          typeof messages[i].querySelectorAll === "function"
-            ? messages[i].querySelectorAll(PLAY_SELECTOR)
-            : [];
-        if (icons.length) {
-          return rowFromIcon(icons[icons.length - 1]);
-        }
+      var newest = messages.length ? messages[messages.length - 1] : null;
+      if (!newest || typeof newest.querySelectorAll !== "function") {
+        return null;
       }
-      return null;
+      var icons = newest.querySelectorAll(PLAY_SELECTOR);
+      return icons.length ? rowFromIcon(icons[icons.length - 1]) : null;
     }
 
     function knownLabel(text) {
@@ -2779,6 +2776,7 @@
         emoji = emojiForRow(row);
         if (emoji) {
           titleReason = rowSource(row);
+          needsTurn = true;
         }
       }
       if (!emoji && speechGrowth(doc)) {

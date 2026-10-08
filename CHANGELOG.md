@@ -26,6 +26,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.
 - **State error cards**: a state-module failure shows the page corner card as well as its console line, and the card stays until a dismiss. The write failure carries the Choose file button. Arena 1.9.6.
 - **Process card emoji**: a started process card carries a play icon and the process name, so it takes the bash emoji. The card runs past the turn, so no stop-generating control is needed (owner note 6dffc38). Arena 1.9.8.
+- **Card mark bounds**: the process card's 🖥️ mark reads the newest message alone, and only while the stop control is up. A finished card keeps its play icon in the page, so it marks nothing once a newer row arrives (owner note 20c9c43). Arena 1.9.9.
 
 #### preview
 
