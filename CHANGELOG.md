@@ -45,6 +45,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Call end stamp**: the hook stamps every bash call's end. The header clears the long call text once a call finished, so work between calls never reads as a running one.
 - **Optional squash budget**: the squash skill now calls a target optional. It names "as small as still faithful" as the default when the user states no budget. Its description matches a request with no count named.
 
+#### skills
+
+- **Egress image rename**: The published image becomes `ghcr.io/nemoe7/arena-egress-proxy:latest`. The workflow, the install page, the compose file and the workflow check lists use the new name. The Python package and the environment prefix keep `arena_proxy` and `ARENA_PROXY_`.
+
 ### Removed
 
 #### userscripts

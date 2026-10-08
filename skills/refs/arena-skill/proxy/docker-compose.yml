@@ -1,11 +1,11 @@
-# Runs the published arena-proxy image behind a Tailscale sidecar.
+# Runs the published arena-egress-proxy image behind a Tailscale sidecar.
 # Set TS_AUTHKEY and GITHUB_TOKEN in the environment, or in a .env file.
 # Every start makes a new agent key and prints it once in the log.
 # The sidecar applies tailscale-serve.json and publishes the funnel URL
 # https://arena-proxy.<tailnet>.ts.net to the public internet on port 443.
 services:
   proxy:
-    image: ghcr.io/nemoe7/arena-proxy:latest
+    image: ghcr.io/nemoe7/arena-egress-proxy:latest
     container_name: arena-proxy
     restart: unless-stopped
     # The Tailscale sidecar owns the network namespace, so the proxy takes no ports.
