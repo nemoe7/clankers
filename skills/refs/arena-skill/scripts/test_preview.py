@@ -132,6 +132,11 @@ def test_reply_seen_persistence():
     backup = Path(directory) / "saved-state.ndjson"
     store = preview.Store(root, create=True, save_path=backup)
     store.note("edited-note", "Question")
+    # The answer rides in the save only while its report is published, which every real
+    # answer's report is (owner notes 88e64df and b5949c3).
+    form = Path(directory) / "form.md"
+    form.write_text("# Form\n\nNo fields here.\n", encoding="utf-8")
+    store.publish("form", "Form", form)
     store.submission("edited-answer", "form", "REPORT form: answer")
     ids = ["edited-note", "edited-answer"]
     with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
@@ -215,7 +220,11 @@ def test_reply_seen_persistence():
       assert reopened.submissions()[0]["ack_edited_seen_count"] == 2
       saved = reopened.save_state({"notes": reopened.state()["notes"]})
       assert saved["notes"] == 1 and saved["answers"] == 1
-      saved_lines = [json.loads(line) for line in backup.read_text().splitlines()]
+      saved_lines = [
+        json.loads(line)
+        for line in backup.read_text().splitlines()
+        if "ack_edited_seen_count" in line
+      ]
       assert [line["ack_edited_seen_count"] for line in saved_lines] == [2, 2]
 
       restored_dir = Path(directory) / "restored"
@@ -4625,6 +4634,50 @@ def test_report_sources_ride_in_the_saved_state():
     assert report["title"] == "Pick one"
     assert "Choice? {#pick}" in report["markdown"]
     assert report["published_at"]
+
+
+def test_removed_report_leaves_nothing_in_the_save():
+  """A removed report leaves nothing in the ndjson, its answer lines included.
+
+  The report line already went with the report; the answer line stayed, so a save still
+  carried the id of a report the owner had unpublished (owner notes 88e64df and b5949c3).
+  The database keeps the answer as the agent's read history; the save does not.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    before = [json.loads(line) for line in store.save_path.read_text().splitlines()]
+    assert [line["id"] for line in before if line.get("report_id")] == ["answer-1"]
+    store.unpublish("pick")
+    lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
+    assert [line["id"] for line in lines if line.get("report_id")] == []
+    assert all(line.get("id") != "pick" for line in lines)
+    assert store.submissions()[0]["report_id"] == "pick", "sent answers stay history"
+
+
+def test_unpublish_moves_the_state_stamp():
+  """An unpublish moves the state stamp, so the save's own trigger rewrites the file.
+
+  The write trigger is the stamp comparison alone (owner notes 4753ae4 and 6451370), so a
+  removal that left the stamp still would leave a file that already carries the removed
+  report untouched. The report rows are gone, so the removal has to carry the stamp.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    before = store.newest_stamp()
+    store.unpublish("pick")
+    after = store.newest_stamp()
+    assert after and after > before, "the removal left the state stamp still"
 
 
 def test_task_detail_steps():

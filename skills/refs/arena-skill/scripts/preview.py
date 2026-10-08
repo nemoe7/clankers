@@ -170,6 +170,10 @@ AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
 # silence after a turn never reads as a running bash call; the agent's next call clears it.
 TURN_ENDED_META = "turn_ended_at"
+# A removal deletes rows, so the group stamps alone can only hold still or move back. The
+# state stamp reads this mark too, so a save that still carries a removed report is rewritten
+# by its own stamp trigger (owner notes 4753ae4 and 88e64df).
+REMOVED_META = "state_removed_at"
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -1990,7 +1994,9 @@ class Store:
     page, because the owner's report answers are stored here the moment they are sent, and an
     answer that a restore drops is an answer the owner has to type again. Report lines carry
     each report's markdown, so a restore that rebuilds the database brings the report pages
-    back instead of leaving the answers without their reports.
+    back instead of leaving the answers without their reports. An answer whose report is no
+    longer published stays out of the save, because a removed report leaves nothing behind
+    (owner notes 88e64df and b5949c3).
     """
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
@@ -1998,9 +2004,15 @@ class Store:
     for status in TASK_STATUSES:
       for record in tasks.get(status) or []:
         lines.append(saved_task_line(record))
-    answers = [saved_answer_line(record) for record in self.submissions()]
+    sources = self.report_sources()
+    live = {record["id"] for record in sources}
+    answers = [
+      saved_answer_line(record)
+      for record in self.submissions()
+      if record.get("report_id") in live
+    ]
     lines.extend(answers)
-    reports = [saved_report_line(record) for record in self.report_sources()]
+    reports = [saved_report_line(record) for record in sources]
     lines.extend(reports)
     return lines, {
       "notes": len(notes),
@@ -2033,6 +2045,14 @@ class Store:
           if stamp and (newest is None or stamp > newest):
             newest = stamp
         stamps[group] = newest.isoformat() if newest else None
+      # A removal deletes the newest row of its group, so the group maxes alone can hold
+      # still or move back. The removal mark carries the stamp forward, so the save's own
+      # stamp trigger rewrites a file that still carries the removed report.
+      removed = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (REMOVED_META,)
+      ).fetchone()
+      mark = import_stamp(removed[0]) if removed else None
+      stamps["removed"] = mark.isoformat() if mark else None
     return stamps
 
   def newest_stamp(self, stamps=None):
@@ -3055,6 +3075,11 @@ class Store:
       if row is None:
         raise FileNotFoundError("Report not found")
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
+      # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
+      # still carries the removed report (owner notes 4753ae4 and 88e64df).
+      db.execute(
+        "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMOVED_META, now())
+      )
       if dismissed_by_owner:
         # A dismissal informs the agent without waking a poll: the agent looks, it is not
         # roused for a report the owner already read.

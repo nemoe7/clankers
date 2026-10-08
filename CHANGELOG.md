@@ -89,6 +89,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner had removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file (owner notes 88e64df and b5949c3).
 - **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:` (owner notes cc6edd4 and c08732a).
 - **Call tally**: the EXIT hook counts the agent's own calls. The platform's hosted shells and probes are named and skipped, so a background run adds nothing to the tally (owner note ef180f0). The call-end stamp skips them too.
 - **Read stamp**: the state poll rechecks the reports panel, so a report showing its end stamps even when the last scroll event went missing. Sending answers stamps the read too, because an answered report is a read one (owner note 217ad5d).
