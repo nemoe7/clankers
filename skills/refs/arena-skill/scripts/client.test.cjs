@@ -1411,6 +1411,35 @@ test('preview client', async (t) => {
     assert.equal(pip.hidden, true, 'an opened ack leaves no dot');
   });
 
+  await t.test("An ack that lands while the panel shows the report clears at once", async () => {
+    // The open is the gesture, and a panel already showing the report is that open: an ack that
+    // lands in view must stamp without waiting for a tab switch the owner has no reason to make
+    // (owner note 0b9fb71).
+    pip = get('#report-pip');
+    ackSeenCalls.length = 0;
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: '2026-09-24T09:59:00',
+      seen_at: '2026-09-20T22:00:00', ever_seen: 1,
+      latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
+      latest_answer_at: '2026-09-24T10:00:00',
+      latest_answer_acknowledged_at: null, ack_seen_at: null }];
+    await get('#refresh-notes').events.click();
+    await get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, [], 'nothing to stamp before the ack lands');
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: '2026-09-24T09:59:00',
+      seen_at: '2026-09-20T22:00:00', ever_seen: 1,
+      latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
+      latest_answer_at: '2026-09-24T10:00:00',
+      latest_answer_acknowledged_at: '2026-09-24T10:01:00', ack_seen_at: null }];
+    await get('#refresh-notes').events.click();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
+      'an ack in view is stamped on the refresh');
+    assert.equal(pip.hidden, true, 'the dot goes with the in-view ack');
+    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+      '1. Fielded', 'the star goes with the in-view ack');
+  });
+
   await t.test("What stamps a report is the browser showing it: one second in view for one that fits the", async () => {
     // What stamps a report is the browser showing it: one second in view for one that fits the
     // panel with nothing to scroll, and the moment its end is reached for one that does not.

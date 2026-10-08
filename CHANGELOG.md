@@ -28,7 +28,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Multiline form inputs**: an option label that wraps onto the next line joins into one option, indented or not. A blank line, a fence, a heading, a list marker, a text-field marker or an anchor ends the group.
-- **Ack unread mark**: a submission the agent acked stars its report in the report picker and lights the Reports tab pip. The mark clears when the owner opens that report. The open stamp moves on every call, so a later ack holds a mark of its own.
+- **Ack unread mark**: a submission the agent acked stars its report in the report picker and lights the Reports tab pip. The mark clears on open, and an ack already in view clears at once (owner note 0b9fb71). The open stamp moves on every call, so a later ack holds a mark of its own.
 
 ### Changed
 

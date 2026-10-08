@@ -690,6 +690,10 @@ async function refreshState() {
       if (!$('#reports-panel').hidden &&
           ($('#report').dataset.reportId !== select.value ||
            $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
+      // A panel already showing the report is the open, so an ack that lands in view stamps at
+      // once rather than waiting for a tab switch the owner has no reason to make (owner note
+      // 0b9fb71).
+      else if (!$('#reports-panel').hidden && ackUnread(selectedReport)) void markAckSeen(select.value);
     }
     // The pip tracks reports never opened; an edited report keeps its star alone; the separate
     // receipt tracks the selected report's latest answer.
