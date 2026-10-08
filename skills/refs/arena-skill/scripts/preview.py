@@ -683,6 +683,11 @@ def upload_name(name):
   return cleaned
 
 
+def header_filename(name):
+  """A download file name with the characters that split a response header replaced."""
+  return str(name).replace("\n", "_").replace("\r", "_").replace('"', "_")
+
+
 def fetch_url(value, *, agent=True):
   """Accept one HTTPS URL without credentials or control characters; the server never fetches it."""
   if not isinstance(value, str) or not value.strip() or (agent and len(value) > 2048):
@@ -3329,7 +3334,7 @@ def handler(store):
       )
       if filename:
         # A CR or LF here splits the response header; a quote ends the value early.
-        safe = re.sub(r'[\r\n"]', "_", str(filename))
+        safe = header_filename(filename)
         self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
       self.end_headers()
       self.wfile.write(data)

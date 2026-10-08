@@ -591,7 +591,9 @@ def test_http_boundaries():
       assert "<table>" in rendered["html"] and "<script>" not in rendered["html"]
       assert 'href="javascript:' not in rendered["html"]
       assert request("GET", "/api/reports/first/export")[0] == 404
-      assert request("GET", "/api/reports/first/source")[0] == 200
+      status, headers, _ = request("GET", "/api/reports/first/source")
+      assert status == 200
+      assert headers["Content-Disposition"] == 'attachment; filename="first.md"'
       # The copy button asks for the report lines, so the clipboard carries the same
       # fields as the save file.
       status, _, sources = request("GET", "/api/report-sources")
@@ -4647,3 +4649,9 @@ def test_task_detail_steps():
     )
     assert wall.returncode != 0 and "one step per line" in wall.stderr
     assert "wall" not in {item["id"] for item in preview.Store(tasks_dir).list_tasks()}
+
+
+def test_download_header_name_is_safe():
+  """A CR, LF or quote in a download name never reaches the response header."""
+  assert preview.header_filename('a\nb\rc"d') == "a_b_c_d"
+  assert preview.header_filename("first.md") == "first.md"

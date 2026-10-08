@@ -33,6 +33,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Task detail required**: a task write must leave at least one detail, so a bare title and clearing the last detail are both refused.
 - **Call end stamp**: the hook stamps every bash call's end. The header clears the long call text once a call finished, so work between calls never reads as a running one.
 
+### Fixed
+
+#### preview
+
+- **Download header name**: the `Content-Disposition` file name now passes through `header_filename`, which strips CR, LF and quote with `replace` calls. The CodeQL header-splitting query counts that call shape as a sanitizer.
+
 ## 2026-10-07
 
 ### Changed
