@@ -16,7 +16,7 @@ Rules, skills, and workflows for AI agents.
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules, `SKILL.md` entries, and the live system prompt by `cl100k_base` tokens. The shipped preview assets and scripts instead use UTF-8 bytes, independent of tokenizer/cache access. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file. Skill refs stay out. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
+Latest measurements as of 2026-10-08. `maintenance/check.py` measures ARENA.md by uploaded size, ChatGPT files by character limits, and other rules, `SKILL.md` entries, and the live system prompt by `cl100k_base` tokens. The shipped preview assets and scripts instead use UTF-8 bytes, independent of tokenizer/cache access. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file. Skill refs stay out. These minified files use their recorded sizes as budgets. `maintenance/minify.py` builds them from readable refs.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md b
 | `skills/amending-violations/SKILL.md` | `cl100k_base` | 1,604 `tok` |
 | `skills/arena-skill/SKILL.md` | `cl100k_base` | 4,068 `tok` |
 | `skills/arena-skill/README.md` | `cl100k_base` | 1,654 `tok` |
-| `skills/arena-skill/references/REFERENCE.md` | `cl100k_base` | 2,628 `tok` |
+| `skills/arena-skill/references/REFERENCE.md` | `cl100k_base` | 2,664 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 46,883 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 8,333 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 12,900 `B` |
@@ -52,7 +52,7 @@ Latest measurements as of 2026-10-07. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/proxy/tailscale-serve.json` | `UTF-8 file size` | 265 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 11,230 `B` |
-| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 98,484 `B` |
+| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 99,142 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,250 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,552 `tok` |

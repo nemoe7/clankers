@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-08
+
+### Added
+
+#### arena
+
+- **Clear state command**: `arena-preview clear-state` empties every state table in one transaction and refreshes the save file to match. The agent key record survives, and a running server keeps its page token, so the page needs no reload.
+
 ## 2026-10-07
 
 ### Changed

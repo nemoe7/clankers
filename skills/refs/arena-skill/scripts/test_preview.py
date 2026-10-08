@@ -2092,6 +2092,62 @@ def test_autosave_export():
     )
 
 
+def test_clear_state():
+  # The CLI clear empties every table in place: the schema, the database file and the
+  # agent key survive, and the save file is refreshed to match.
+  with tempfile.TemporaryDirectory() as clear_dir:
+    clear_root = Path(clear_dir)
+    store = preview.Store(clear_root, create=True)
+    store.note("clear-note", "Pending work")
+    store.acknowledge(["clear-note"], "note", "Receipt")
+    store.write_task("clear-task", "Track it")
+    source = clear_root / "pick.md"
+    source.write_text("# Pick\n\nChoice? {#pick}\n- (x) one\n", encoding="utf-8")
+    store.publish("pick", "Pick one", source)
+    store.submission("clear-answer", "pick", "REPORT pick: one")
+    store.set_agent_key("clear-key-0123456789abcdef", "https://example.com")
+    store.set_meta("probe", "1")
+    counts = store.clear_state()
+    assert counts == {
+      "notes": 1,
+      "reports": 1,
+      "submissions": 1,
+      "tasks": 1,
+      "uploads": 0,
+      "fetch_jobs": 0,
+    }
+    assert store.state()["notes"] == []
+    assert store.state()["reports"] == []
+    assert store.list_tasks() == []
+    assert store.submissions() == []
+    assert store.agent_key()["key"] == "clear-key-0123456789abcdef"
+    assert store.meta_value("probe") is None
+    assert "clear-note" not in store.save_path.read_text(encoding="utf-8")
+    # The schema survives: the cleared store still writes.
+    store.note("after-clear", "Written after the clear")
+    assert [row["id"] for row in store.state()["notes"]] == ["after-clear"]
+    # The CLI form clears the same way and prints the counts.
+    cli = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "clear-state"],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=clear_dir,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(clear_root)},
+    )
+    assert cli.returncode == 0, cli.stderr
+    assert json.loads(cli.stdout) == {
+      "notes": 1,
+      "reports": 0,
+      "submissions": 0,
+      "tasks": 0,
+      "uploads": 0,
+      "fetch_jobs": 0,
+    }
+    assert store.state()["notes"] == []
+    assert store.path.is_file(), "the clear keeps the database file"
+
+
 def test_legacy_note_import():
 
   with tempfile.TemporaryDirectory() as legacy_dir:
