@@ -1428,6 +1428,26 @@ def test_http_boundaries():
       )
       store.publish("seen", "Seen report revised", source)
       assert store.state()["reports"][-1]["seen_at"] is None
+      # The ack open stamp is its own route, and it moves on every call: the mark belongs to the
+      # answer the owner just looked at, so a later ack needs its own open.
+      assert request("POST", "/api/reports/seen/ack-seen", "{}")[0] == 415
+      assert request("POST", "/api/reports/missing/ack-seen", "{}", auth)[0] == 404
+      assert request("GET", "/api/reports/seen/ack-seen")[0] == 404
+      status, _, ack_body = request("POST", "/api/reports/seen/ack-seen", "{}", auth)
+      ack_stamp = json.loads(ack_body)["ack_seen_at"]
+      assert status == 200 and ack_stamp
+      assert store.state()["reports"][-1]["ack_seen_at"] == ack_stamp
+      with patch.object(
+        preview,
+        "now",
+        side_effect=["2026-10-08T00:00:01+00:00", "2026-10-08T00:00:02+00:00"],
+      ):
+        first_open = store.mark_report_ack_seen("seen")["ack_seen_at"]
+        second_open = store.mark_report_ack_seen("seen")["ack_seen_at"]
+      assert (first_open, second_open) == (
+        "2026-10-08T00:00:01+00:00",
+        "2026-10-08T00:00:02+00:00",
+      ), "each open moves the stamp"
       store.publish("scoped", "Scoped", source)
       store.submission("scoped-answer", "scoped", "REPORT scoped: noted")
       assert any(
@@ -3604,6 +3624,9 @@ def test_report_ever_seen_migration():
     state = {row["id"]: row for row in migrated.state()["reports"]}
     assert state["opened"]["ever_seen"] == 1
     assert state["fresh"]["ever_seen"] == 0
+    # The ack open stamp arrives with the same migration and starts empty on an old store.
+    assert state["opened"]["ack_seen_at"] is None
+    assert migrated.mark_report_ack_seen("opened")["ack_seen_at"]
     migrated.mark_report_seen("fresh")
     migrated.publish("fresh", "Fresh", source)
     state = {row["id"]: row for row in migrated.state()["reports"]}

@@ -1095,6 +1095,13 @@ function submissionState(report) {
   if (report.latest_answer_acknowledged_at) return 'said';
   return submissionSeenAt(report) ? 'seen' : 'sent';
 }
+// An ack the owner has not opened yet: the answer carries an agent receipt, and the report has
+// not been opened since. The star and the tab dot carry it, and opening the report clears it
+// (owner note dae396b).
+function ackUnread(report) {
+  return Boolean(report?.latest_answer_acknowledged_at &&
+    (!report.ack_seen_at || report.ack_seen_at < report.latest_answer_acknowledged_at));
+}
 function submissionStateWord(report) {
   if (report.latest_answer_acknowledged_at) return `Acked ${time(report.latest_answer_acknowledged_at)}`;
   return submissionSeenAt(report) ? 'Awaiting ack' : 'Sent';
@@ -1217,6 +1224,10 @@ async function loadReport(force = false) {
       (stampSource ? ` · ${stampSource}` : '') + submissionParts(report),
       id,
     );
+    // Opening the report is the gesture that clears an unread ack: the receipt sits at the top
+    // of the panel, so the mark goes out on this visit rather than on a later scroll (owner
+    // note dae396b).
+    if (report && ackUnread(report)) void markAckSeen(id);
     checkReportRead();
   } catch (error) {
     if (sequence === reportRequest) $('#report-status').textContent = `Report unavailable: ${error.message}`;
@@ -1352,17 +1363,21 @@ const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#downloads
 // been shown it, and that reading is stamped on the report itself rather than kept in browser
 // storage, so it survives a cleared browser, holds across browsers, and tells the agent the
 // report was read instead of leaving it to infer one.
-// The agent receipt moves on the server side while the owner reads, and a moved signature
-// would rebuild the select under them, so the signature leaves agent_seen_at out.
+// The agent receipt and the ack-open stamp move on the server side while the owner reads, and a
+// moved signature would rebuild the select under them, so the signature leaves both out.
 function reportsSignature(reports) {
-  return JSON.stringify(reports, (key, value) => key === 'agent_seen_at' ? undefined : value);
+  return JSON.stringify(reports, (key, value) =>
+    key === 'agent_seen_at' || key === 'ack_seen_at' ? undefined : value);
 }
 function reportLabel(report, position) {
-  return `${position + 1}.${report.seen_at ? '' : ' *'} ${report.title}`;
+  return `${position + 1}.${!report.seen_at || ackUnread(report) ? ' *' : ''} ${report.title}`;
 }
 function updateReportPip(reports) {
   const pip = $('#report-pip');
-  const unseen = reports.filter(report => !report.seen_at && !report.ever_seen);
+  // A report nobody opened, or one whose answer carries an ack the owner has not opened since,
+  // is unread (owner note dae396b).
+  const unseen = reports.filter(report =>
+    (!report.seen_at && !report.ever_seen) || ackUnread(report));
   pip.hidden = unseen.length === 0;
   pip.title = unseen.length ? 'A report is unread' : 'No unread reports';
   pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread reports');
@@ -1380,6 +1395,20 @@ function unseenReportId() {
   const report = reports.find(item => item.id === $('#report-select').value);
   return report && !report.seen_at ? report.id : null;
 }
+// The stamp is folded into the state rather than fetched again. A poll after it would see a
+// changed reports signature, rebuild the select and re-fetch the report, which loses the
+// owner's place in a long report. The server's own stamp is stored and the signature is moved
+// with it, so the next poll matches this state and renders nothing.
+function foldReportStamp(id, key, value) {
+  const reports = (lastState && lastState.reports) || [];
+  const report = reports.find(item => item.id === id);
+  if (!report) return;
+  report[key] = value;
+  listSignature = reportsSignature(reports);
+  updateReportPip(reports);
+  const option = [...$('#report-select').children].find(item => item.value === id);
+  if (option) option.textContent = reportLabel(report, reports.indexOf(report));
+}
 async function markReportRead(id) {
   clearReadTimer();
   let stamped;
@@ -1393,18 +1422,24 @@ async function markReportRead(id) {
     // A stamp that fails costs the owner nothing they have to act on, and the next look retries.
     return;
   }
-  // The stamp is folded into the state rather than fetched again. A poll after it would see a
-  // changed reports signature, rebuild the select and re-fetch the report, which loses the
-  // owner's place in a long report. The server's own stamp is stored and the signature is moved
-  // with it, so the next poll matches this state and renders nothing.
-  const reports = (lastState && lastState.reports) || [];
-  const report = reports.find(item => item.id === id);
-  if (!report) return;
-  report.seen_at = stamped.seen_at || new Date().toISOString();
-  listSignature = reportsSignature(reports);
-  updateReportPip(reports);
-  const option = [...$('#report-select').children].find(item => item.value === id);
-  if (option) option.textContent = reportLabel(report, reports.indexOf(report));
+  foldReportStamp(id, 'seen_at', stamped.seen_at || new Date().toISOString());
+}
+// An agent ack holds a star and the tab dot until the owner opens the report. The open is the
+// gesture, not the read: the receipt sits at the top of the panel, so the visit clears it
+// (owner note dae396b).
+async function markAckSeen(id) {
+  let stamped;
+  try {
+    stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
+      method: 'POST',
+      headers: writeHeaders('application/json'),
+      body: '{}'
+    })).json();
+  } catch (error) {
+    // A stamp that fails costs the owner nothing: the mark stays and the next open retries.
+    return;
+  }
+  foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at || new Date().toISOString());
 }
 function checkReportRead() {
   const panel = $('#reports-panel');

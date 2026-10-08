@@ -103,6 +103,7 @@ let reportHtmlWait = null;
 let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
+const ackSeenCalls = [];
 const skipCalls = [];
 const replySeenCalls = [];
 const unpublished = [];
@@ -328,6 +329,14 @@ const context = {
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
       return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
+    }
+    if (url.startsWith('/api/reports/') && url.endsWith('/ack-seen')) {
+      const id = decodeURIComponent(url.split('/')[3]);
+      const stamp = new Date().toISOString();
+      ackSeenCalls.push(url);
+      const item = (state.reports || []).find(report => report.id === id);
+      if (item) item.ack_seen_at = stamp;
+      return response({ id, ack_seen_at: stamp });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
       const target = decodeURIComponent(url.split('/')[3]);
@@ -1356,6 +1365,50 @@ test('preview client', async (t) => {
       seen_at: null, ever_seen: 0 }];
     await get('#refresh-notes').events.click();
     assert.equal(pip.hidden, false, 'a report nobody opened shows the dot');
+  });
+
+  await t.test("An acked answer stars the report and lights the pip until the owner opens it", async () => {
+    // An agent ack is unread until the owner opens the report that carries it: the star and the
+    // tab dot mark it, and that open writes the stamp which clears both.
+    pip = get('#report-pip');
+    ackSeenCalls.length = 0;
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
+      seen_at: '2026-09-20T22:00:00', ever_seen: 1,
+      latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
+      latest_answer_at: '2026-09-24T10:00:00',
+      latest_answer_acknowledged_at: '2026-09-24T10:01:00', ack_seen_at: null }];
+    await get('#refresh-notes').events.click();
+    assert.equal(pip.hidden, false, 'an acked answer nobody opened shows the dot');
+    assert.equal(pip.title, 'A report is unread');
+    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+      '1. * Fielded', 'an acked answer stars a report already read once');
+    await get('#reports-tab').events.click();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
+      'opening the report stamps the ack open once');
+    assert.equal(pip.hidden, true, 'the dot goes with the open');
+    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+      '1. Fielded', 'the ack star goes with the open');
+    await get('#refresh-report').events.click();
+    await tick(); await tick();
+    assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
+      'a later open stamps nothing, because the ack is already seen');
+  });
+
+  await t.test("An ack the owner already opened leaves neither marker", async () => {
+    // The open stamp is what clears the mark: an ack whose stamp is at or after its own time is
+    // already seen, so the report keeps only the marker its own text carries.
+    pip = get('#report-pip');
+    state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(),
+      seen_at: '2026-09-20T22:00:00', ever_seen: 1,
+      latest_answer_id: 'a123456-aaaaaaaaaaaaaaaaaaaaaaaaa',
+      latest_answer_at: '2026-09-24T10:00:00',
+      latest_answer_acknowledged_at: '2026-09-24T10:01:00',
+      ack_seen_at: '2026-09-24T10:02:00' }];
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
+      '1. Fielded', 'an opened ack leaves no star');
+    assert.equal(pip.hidden, true, 'an opened ack leaves no dot');
   });
 
   await t.test("What stamps a report is the browser showing it: one second in view for one that fits the", async () => {

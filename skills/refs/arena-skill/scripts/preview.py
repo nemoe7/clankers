@@ -1347,7 +1347,8 @@ class Store:
           id TEXT PRIMARY KEY, title TEXT NOT NULL,
           markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,
           seq INTEGER, seen_at TEXT,
-          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT
+          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,
+          ack_seen_at TEXT
         );
         CREATE TABLE IF NOT EXISTS submissions (
           seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,
@@ -1448,6 +1449,10 @@ class Store:
         db.execute("UPDATE reports SET ever_seen = 1 WHERE seen_at IS NOT NULL")
       if "agent_seen_at" not in columns:
         db.execute("ALTER TABLE reports ADD COLUMN agent_seen_at TEXT")
+      if "ack_seen_at" not in columns:
+        # The ack mark is about the answer, not the report text: the owner clears it by
+        # opening the report, so its stamp moves where seen_at keeps the first read.
+        db.execute("ALTER TABLE reports ADD COLUMN ack_seen_at TEXT")
       columns = {row["name"] for row in db.execute("PRAGMA table_info(reports)")}
       if "published_at" not in columns:
         # A store from before this column keeps no first-publish stamp, so the date the
@@ -1642,7 +1647,7 @@ class Store:
         dict(row)
         for row in db.execute(
           "SELECT id, title, updated_at, published_at, seq, seen_at, ever_seen,"
-          " agent_seen_at, markdown, EXISTS("
+          " agent_seen_at, ack_seen_at, markdown, EXISTS("
           "SELECT 1 FROM submissions WHERE report_id = reports.id) AS answered "
           "FROM reports ORDER BY seq, id"
         )
@@ -1694,6 +1699,7 @@ class Store:
           "acknowledged_at",
           "ack_edited_at",
           "seen_at",
+          "ack_seen_at",
           "updated_at",
           "published_at",
         ):
@@ -3108,6 +3114,23 @@ class Store:
         db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       )
 
+  def mark_report_ack_seen(self, report_id):
+    """Stamp the moment the owner opened a report whose answer carries an agent ack.
+
+    The answer reaches the page as a star and the tab dot, and the open is what clears them.
+    The read stamp keeps its own once-only rule, so this one moves on every call: an ack the
+    owner has already looked at leaves no mark on a later open.
+    """
+    identifier(report_id)
+    with self.transaction() as db:
+      row = db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+      if row is None:
+        raise FileNotFoundError("Report not found")
+      db.execute("UPDATE reports SET ack_seen_at = ? WHERE id = ?", (now(), report_id))
+      return dict(
+        db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
+      )
+
   def report(self, report_id, shared=None):
     identifier(report_id)
     with self.transaction(shared) as db:
@@ -3493,6 +3516,9 @@ def handler(store):
       path = urlsplit(self.path).path
       report_submit = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/submit", path)
       report_seen = re.fullmatch(r"/api/reports/([a-zA-Z0-9_-]{1,80})/seen", path)
+      report_ack_seen = re.fullmatch(
+        r"/api/reports/([a-zA-Z0-9_-]{1,80})/ack-seen", path
+      )
       message_replies_seen = re.fullmatch(
         r"/api/messages/([a-zA-Z0-9_-]{1,80})/replies/seen", path
       )
@@ -3517,6 +3543,7 @@ def handler(store):
         }
         and not report_submit
         and not report_seen
+        and not report_ack_seen
         and not message_replies_seen
         and not report_unpublish
         and not note_upload
@@ -3665,6 +3692,12 @@ def handler(store):
         if report_seen:
           report = store.mark_report_seen(report_seen.group(1))
           for key in ("updated_at", "seen_at"):
+            report[key] = clip_stamp(report[key])
+          self.reply(200, json.dumps(report, ensure_ascii=False))
+          return
+        if report_ack_seen:
+          report = store.mark_report_ack_seen(report_ack_seen.group(1))
+          for key in ("updated_at", "seen_at", "ack_seen_at"):
             report[key] = clip_stamp(report[key])
           self.reply(200, json.dumps(report, ensure_ascii=False))
           return
