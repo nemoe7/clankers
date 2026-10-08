@@ -901,11 +901,13 @@ def test_http_boundaries():
       assert re.search(r"nav\{[^}]*min-width:0;", page), (
         "the tab strip shrinks rather than pushing the bar"
       )
-      # The four tabs fit a phone strip at a shorter minimum and padding, so the strip reads whole
-      # without a scroll of its own (owner note 8a47260). The max-width block steps it down again.
-      assert re.search(r"nav button\{[^}]*min-width:76px;[^}]*padding:7px 9px;", page)
+      # The four tabs share one width: the grid gives every track 1fr, so no label sets a tab's
+      # shape (owner note df6e6bf). The narrow block steps the padding and the font down, and the
+      # tracks stay equal then (owner note 8a47260).
+      assert re.search(r"nav\{[^}]*grid-template-columns:repeat\(4,1fr\)", page)
+      assert re.search(r"nav button\{[^}]*min-width:0;[^}]*padding:7px 9px;", page)
       assert re.search(r"nav button\{[^}]*white-space:nowrap", page)
-      assert "nav button{min-width:68px;padding:7px 8px" in page
+      assert "nav button{padding:7px 4px;font-size:14px" in page
       # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
       # The hint is its own span, so the client swaps it with the pointer: a touch keyboard writes
       # the newline and the Send button sends (owner notes da405c2, cbebaa3).
