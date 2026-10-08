@@ -33,7 +33,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 
 - A web app cannot capture `https://` links on another host, so tapping a raw `sbx-*.arena.site` link never opens this app directly. That dialog belongs to native apps.
 - A share does reach the app: the manifest registers `share_target`, so the Android share sheet lists the installed app, and it opens the shared preview at once.
-- A click on an `sbx-*.arena.site` link inside the preview stays in the app window; the page routes it through the proxy.
+- A link inside the preview keeps its own behavior: the proxy adds no click interception.
 
 ## Tailnet notes
 
