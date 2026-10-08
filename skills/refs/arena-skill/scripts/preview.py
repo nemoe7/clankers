@@ -3123,9 +3123,7 @@ class Store:
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
       # still carries the removed report (owner notes 4753ae4 and 88e64df).
-      db.execute(
-        "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMOVED_META, now())
-      )
+      db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMOVED_META, now()))
       if dismissed_by_owner:
         # A dismissal informs the agent without waking a poll: the agent looks, it is not
         # roused for a report the owner already read.
