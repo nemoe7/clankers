@@ -219,14 +219,16 @@ function decodeBody(buffer, encoding) {
   return null;
 }
 
-function manifestJson(origin) {
+function manifestJson() {
   return JSON.stringify({
     name: 'Arena preview',
     short_name: 'Preview',
-    // The start URL carries the preview origin, so it changes with the signed cookie. A fixed id
-    // keeps one installed app across those changes.
+    // Every launch starts on the home page: the start URL once carried the preview origin, so
+    // opening the installed app reopened a sandbox whose address had died, and the owner had to
+    // reinstall to escape it. The share sheet and the URL box pick a preview from there, and a
+    // fixed id keeps one installed app across those changes (owner note ec56b4d).
     id: '/',
-    start_url: origin ? `/?url=${encodeURIComponent(`${origin}/`)}` : '/',
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     background_color: '#1f2430',
@@ -270,13 +272,12 @@ function sharePreview(incoming, res) {
 function servePwa(incoming, req, res) {
   if (incoming.pathname === '/pwa/share') return sharePreview(incoming, res);
   if (incoming.pathname === '/pwa/manifest.webmanifest') {
-    const origin = verifyOriginToken(readCookie(req.headers.cookie, COOKIE_NAME));
     res.writeHead(200, {
       'content-type': 'application/manifest+json; charset=utf-8',
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff'
     });
-    return res.end(manifestJson(origin));
+    return res.end(manifestJson());
   }
   const name = incoming.pathname.slice('/pwa/'.length);
   if (!Object.hasOwn(ASSET_TYPES, name) || name.includes('/')) {

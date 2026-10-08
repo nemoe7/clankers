@@ -8,6 +8,9 @@ This test starts the real server on a loopback port and reads what it answers.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
 import socket
 import subprocess
@@ -41,9 +44,12 @@ def node(script: str) -> str:
   return result.stdout.strip()
 
 
-def get(port: int, path: str) -> tuple[int, str, str]:
+def get(port: int, path: str, cookie: str = "") -> tuple[int, str, str]:
+  request = urllib.request.Request(f"http://127.0.0.1:{port}{path}")
+  if cookie:
+    request.add_header("Cookie", cookie)
   try:
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=10) as answer:
+    with urllib.request.urlopen(request, timeout=10) as answer:
       return (
         answer.status,
         answer.headers.get("content-type", ""),
@@ -130,3 +136,64 @@ def test_injection_survives_a_page_without_a_head():
   assert result["fragment"].startswith(MANIFEST), result["fragment"]
   assert result["gzip"] == "<html></html>", result["gzip"]
   assert result["broken"] is None, "a body that will not decode must stay untouched"
+
+
+def sign_origin(origin: str) -> str:
+  """The cookie the proxy hands a viewer, signed the way the server signs it."""
+  payload = base64.urlsafe_b64encode(origin.encode()).decode().rstrip("=")
+  signature = (
+    base64.urlsafe_b64encode(
+      hmac.new(SECRET.encode(), payload.encode(), hashlib.sha256).digest()
+    )
+    .decode()
+    .rstrip("=")
+  )
+  return f"{payload}.{signature}"
+
+
+def test_the_installed_app_opens_the_proxy_home():
+  """The installed app opens on the URL box, never on the sandbox the install came from.
+
+  The manifest's start URL carried the preview origin, so opening the app without a shared link
+  reopened a sandbox whose address was dead. Every open lands on the home page, and the URL box
+  or the share sheet picks the preview from there (owner note ec56b4d).
+  """
+  port = free_port()
+  server = subprocess.Popen(
+    ["node", "server.js"],
+    cwd=str(SERVER.parent),
+    env={
+      "PATH": "/usr/local/bin:/usr/bin:/bin",
+      "PORT": str(port),
+      "PROXY_COOKIE_SECRET": SECRET,
+    },
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+  )
+  try:
+    deadline = time.time() + 15
+    while time.time() < deadline:
+      try:
+        if get(port, "/healthz")[0] == 200:
+          break
+      except OSError:
+        time.sleep(0.1)
+    else:
+      raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
+
+    status, kind, body = get(port, "/pwa/manifest.webmanifest")
+    assert status == 200 and "manifest" in kind, (status, kind)
+    assert json.loads(body)["start_url"] == "/", (
+      "a fresh install starts on the home page"
+    )
+    cookie = f"arena_preview_target={sign_origin('https://sbx-demo.arena.site')}"
+    status, _, body = get(port, "/pwa/manifest.webmanifest", cookie=cookie)
+    assert status == 200, status
+    manifest = json.loads(body)
+    assert manifest["start_url"] == "/", "a signed target still starts on the home page"
+    assert manifest["id"] == "/", "the installed app keeps one identity across targets"
+    assert manifest["scope"] == "/"
+  finally:
+    server.terminate()
+    server.wait(timeout=10)

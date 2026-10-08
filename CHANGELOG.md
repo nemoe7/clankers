@@ -117,6 +117,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### skills
 
 - **Preview app install**: the worker now registers on the viewer root, so the manifest's start URL sits inside its scope. The manifest also carries 192 and 512 PNG icons and a stable `id`. Chrome then offers the install (owner note 31023b2).
+- **Install start page**: the installed proxy app opens on the home page. Its start URL once carried the preview origin, so reopening the app landed on a dead sandbox address (owner note ec56b4d). The URL box and the share sheet pick the preview from there.
 
 #### house
 
