@@ -21,6 +21,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Flush-left lists**: The message log renders lists flush-left, matching the composer's plain text, so a sent message reads the same after it lands.
 - **Poll retry disclaimer**: the poll prints a disclaimer at the start that names its 1800-second span. A call that ends early was cut by the tool timeout, so retry with the tool timeout 1800.
 
+#### house
+
+- **Vendored caveman**: the house copies `JuliusBrussee/caveman` at `7d76b13` (Apache-2.0) verbatim into `.agents/skills/caveman/`, skill, readme and licence included. It lives under `.agents/skills/` only, because it changes how an agent speaks rather than belonging to this repository, and takes no part in the parity gates.
+
 ## 2026-10-07
 
 ### Changed

@@ -8,3 +8,4 @@ Copies keep upstream layouts for release comparisons: ponytail’s six skills si
 | --- | --- | --- | --- | --- | --- |
 | `asd-ste100` | `danyuchn/asd-ste100-skill` | `7d4a135`, 2026-09-08 | 2026-09-21 | MIT | Simplified Technical English: rewrite rules and a report-only linter for human-facing text |
 | `ponytail` | `DietrichGebert/ponytail` | `e3ba2aa`, 2026-09-14 | 2026-09-21 | MIT | Over-engineering audit: ranked `delete:`/`stdlib:`/`native:`/`yagni:`/`shrink:` findings and a verdict. The tool is `.agents/skills/ponytail/skills/ponytail-audit/SKILL.md` |
+| `caveman` | `JuliusBrussee/caveman` | `7d76b13`, 2026-10-06 | 2026-10-08 | Apache-2.0 | Terse caveman voice: answer first, fluff gone, every technical fact kept |
