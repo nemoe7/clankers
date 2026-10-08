@@ -444,6 +444,12 @@ def test_http_boundaries():
       assert re.search(r"\.log-newest\s*\{[^}]*border-radius:\s*4px", page)
       # The bar hugs its label rather than spanning the pane.
       assert "translateX(-50%)" in page
+      # The new-reply pill floats the same way, at the log's top: the placement says the reply
+      # waits above, and the two pills can never meet (owner notes f7bc6bc, afa75fa).
+      assert re.search(r"\.log-edited\s*\{[^}]*position:\s*absolute", page)
+      assert re.search(r"\.log-edited\s*\{[^}]*top:\s*8px", page)
+      assert re.search(r"\.log-edited\s*\{[^}]*border-radius:\s*4px", page)
+      assert page.index('id="log-edited"') > page.index('class="log-scroll"')
       # The save button sits in the top bar after the theme button rather than in the log's own row, on
       # owner note 0f27a2b6; the log's row keeps the filter immediately left of copy-log, on owner notes
       # 1006cb38 and 7f52e5fe: a button moved between them is what the first note caught. The log's own
