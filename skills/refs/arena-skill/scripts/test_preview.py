@@ -1698,7 +1698,9 @@ def test_upload_record_migration():
     old_db = Path(old_upload_dir) / "state.sqlite3"
     with sqlite3.connect(old_db) as db:
       db.execute(
-        "CREATE TABLE uploads (seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL)"
+        "CREATE TABLE uploads (seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, "
+        "name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL, "
+        "sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL)"
       )
       db.execute(
         "INSERT INTO uploads (id, name, type, size, sha256, file, at) VALUES (?, ?, ?, ?, ?, ?, ?)",

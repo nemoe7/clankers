@@ -1389,7 +1389,9 @@ class Store:
     existed = self.path.is_file()
     if not create and not existed:
       raise FileNotFoundError(
-        f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the start_process tool, then `arena-preview read`."
+        f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore "
+        f"routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` "
+        f"with the start_process tool, then `arena-preview read`."
       )
     if create and not existed:
       directory.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -3419,8 +3421,9 @@ def unescape_fences(source):
   A backslash before a line-leading fence makes markdown-it read a literal ``` inside a
   paragraph, so the block never reaches the rule that carries the code background. The owner
   reported exactly that: the fence was meant as a block, and the marker is
-  unescaped here so it opens one. A tilde fence is a fence too, so the run takes either marker. An escape anywhere else is left alone, because inline
-  backticks are the other thing an escape can mean.
+  unescaped here so it opens one. A tilde fence is a fence too, so the run takes either marker.
+  An escape anywhere else is left alone, because inline backticks are the other thing an escape
+  can mean.
   """
   return ESCAPED_FENCE.sub(
     lambda match: match.group("indent") + match.group("fence"), source

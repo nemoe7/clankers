@@ -10,4 +10,11 @@ extend-exclude = [
 
 [lint]
 ignore = ["BLE001", "S110"]
+# E501 is not in ruff's default rule set, and the formatter's own `line-length` must stay where
+# `ruff format` put it. The 120-character limit rides the pycodestyle setting alone, so lint and
+# format keep their separate widths (owner note 61d53d5).
+extend-select = ["E501"]
 extend-safe-fixes = ["C408", "PERF102", "RUF059"]
+
+[lint.pycodestyle]
+max-line-length = 120

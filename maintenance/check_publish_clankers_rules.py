@@ -339,5 +339,7 @@ assert sync.gist_index("root\n", set()) == (
 )
 
 print(
-  "PASS: workflow trigger/concurrency/permissions, secret Gist creation and ID storage, multiline JSON, authoritative update/add/delete/move/exclusions, collision preservation, empty-result cleanup, invalid input and rollback, gist index strip"
+  "PASS: workflow trigger/concurrency/permissions, secret Gist creation and ID storage, "
+  "multiline JSON, authoritative update/add/delete/move/exclusions, collision preservation, "
+  "empty-result cleanup, invalid input and rollback, gist index strip"
 )
