@@ -107,12 +107,16 @@ let agentSeenAt = null;
 let agentSeenStamp = null;
 let turnEndedAt = null;
 let turnEndedStamp = null;
+let callEndAt = null;
 function agentSilentMs() {
   return agentSeenAt === null ? null : Date.now() - agentSeenAt;
 }
 function agentInCall() {
   // A returned poll ended the turn, so the silence that follows is not a running call.
   if (turnEndedAt !== null) return false;
+  // The hook stamps every bash call's end, so a call that finished is not a running one,
+  // whatever the agent does between calls (owner note bd93043).
+  if (callEndAt !== null && agentSeenAt !== null && agentSeenAt <= callEndAt) return false;
   const silent = agentSilentMs();
   return pollSince === null && silent !== null && silent > AGENT_QUIET_MS && silent <= AGENT_CALL_MS;
 }
@@ -649,6 +653,7 @@ async function refreshState() {
     agentSeenStamp = state.agent_seen_at;
     turnEndedAt = stampMs(state.turn_ended_at);
     turnEndedStamp = state.turn_ended_at || null;
+    callEndAt = stampMs(state.agent_call_ended_at);
     connectionBase = saved + callsText;
     setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
     if (state.rendering_error) {

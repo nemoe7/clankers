@@ -31,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Repo header fallback**: the state scope reads the first word of the conversation header before defaulting to the tab title.
 - **Background runs**: ARENA.md lets a background test or PR-check run start with `start_process` on a stable tree. The agent scouts the next task while it runs, and reads the result before any push.
 - **Task detail required**: a task write must leave at least one detail, so a bare title and clearing the last detail are both refused.
+- **Call end stamp**: the hook stamps every bash call's end. The header clears the long call text once a call finished, so work between calls never reads as a running one.
 
 ## 2026-10-07
 

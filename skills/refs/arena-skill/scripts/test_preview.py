@@ -3622,6 +3622,34 @@ def test_report_ever_seen_migration():
     assert state["fresh"]["ever_seen"] == 1
 
 
+def test_reminder_stamps_the_call_end():
+  # The hook runs --reminder after every bash call, so the stamp marks the call's end and
+  # the page clears the long call text once a call finished (owner note bd93043).
+  with tempfile.TemporaryDirectory() as end_dir:
+    store = preview.Store(end_dir, create=True)
+    assert store.state()["agent_call_ended_at"] is None
+    hold = socket.socket()
+    hold.bind(("127.0.0.1", 0))
+    port = hold.getsockname()[1]
+    hold.listen(1)
+    try:
+      store.set_meta("port", str(port))
+      result = subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "--reminder"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=end_dir,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": end_dir},
+      )
+      assert result.returncode == 0, result.stderr
+      ended = store.state()["agent_call_ended_at"]
+      assert ended, "the post-call reminder stamps the call end"
+      assert preview.import_stamp(ended) is not None
+    finally:
+      hold.close()
+
+
 def test_require_server_names_the_restart_command():
   """A dead server fails the poll with the exact restart command and its port."""
   with tempfile.TemporaryDirectory() as directory:

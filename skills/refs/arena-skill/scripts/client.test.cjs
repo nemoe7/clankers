@@ -1028,6 +1028,18 @@ test('preview client', async (t) => {
     await get('#refresh-notes').events.click();
     assert.match(get('#connection-text').textContent,
       /^3 messages saved · agent in a long call 10m 0\ds$/);
+    // The hook stamps every bash call's end, so a call that finished is not a running one,
+    // whatever the agent does between calls (owner note bd93043).
+    state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    assert.equal(get('#connection-text').textContent, '3 messages saved');
+    // A call that started after the last recorded end still reads as running.
+    state.agent_call_ended_at = new Date(Date.now() - 700_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click();
+    await tick();
+    assert.match(get('#connection-text').textContent,
+      /^3 messages saved · agent in a long call 10m 0\ds$/);
+    state.agent_call_ended_at = null;
     // A turn that ends leaves the preview up; past the call cap the stamp of the agent's own calls
     // turns the dot amber, so the owner reads a stale preview instead of a live connection to nobody.
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);

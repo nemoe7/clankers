@@ -155,6 +155,7 @@ AGENT_KEY_META = "agent_key"
 AGENT_KEY_EXPIRY_SECONDS = 1200
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
+AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
 # silence after a turn never reads as a running bash call; the agent's next call clears it.
 TURN_ENDED_META = "turn_ended_at"
@@ -1703,6 +1704,9 @@ class Store:
         # The header suppresses the long call text after this mark and turns amber past the
         # quiet window, since silence after a returned poll is not a running call.
         "turn_ended_at": clip_stamp(meta.get(TURN_ENDED_META)),
+        # The hook stamps this after every bash call; the long call text holds only while
+        # the last seen stamp is newer, so a finished call never reads as running.
+        "agent_call_ended_at": clip_stamp(meta.get(AGENT_CALL_ENDED_META)),
       }
 
   def tasks(self):
@@ -3809,6 +3813,10 @@ def main():
       store = Store(state_dir, create=False)
       require_server(store)
       print(store.reminder(advance=True), flush=True)
+      # The hook runs this after every bash call, so the stamp marks the call's end:
+      # the page keeps the long call text only while a call started after the last
+      # recorded end (owner note bd93043).
+      store.set_meta(AGENT_CALL_ENDED_META, now())
       return 0
     if not args.command:
       parser.error("a command is required")
