@@ -7,7 +7,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | Command | Use |
 | --- | --- |
 | `init` | Create a missing state database without starting the server |
-| `serve --port 8000` | Start the shared preview with `start_process`, prefixed with `setsid` so no shell exit reaches it |
+| `serve --port 8000` | Start the shared preview with `start_process` |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after the quiet note is acknowledged |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list while an upcoming task is unblocked, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
@@ -33,11 +33,9 @@ Use this only after the owner selects the external channel. The owner supplies a
 
 ## Read cadence
 
-Read the inbox at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. NEVER wait for the Bash gate to block before a read: a read that arrives only after a blocked call is late. When ending a turn or a report form awaits answers, run `poll`. Co-issue a read inside each parallel block and read again after it returns; a block is the cadence unit. A count that changes inside a block is a read now, not at the next boundary: the reminder prints only a count, so a higher count means notes nobody has read. ALWAYS run `poll` on the bash call that ends the turn, chained or not. Between two reads, NEVER run a fourth bash call; a read MUST come before it. NEVER set or export `_arena_preview_platform`; a blocked gate is repaired, NEVER bypassed. A blocking-only call needs its read after return. Initial discovery may precede the first read; startup MUST. A blocked call that runs `tail`, `head` or `grep` hears which commands to drop. A call that spells the preview path hears the bare `arena-preview` form once a shell. A call that reads code-scanning alerts or workflow run logs hears the proxy route once a shell. A blocked push says that an ack clears it.
+Read the inbox at turn start, each reasoning boundary, before and after every tool-call block, before expensive or irreversible work, and before turn end. NEVER wait for the Bash gate to block before a read. When ending a turn or a report form awaits answers, run `poll`. Co-issue a read inside each parallel block and read again after it returns; a block is the cadence unit. A count that changes inside a block is a read now, not at the next boundary. ALWAYS run `poll` on the bash call that ends the turn, chained or not. Between two reads, NEVER run a fourth bash call; a read MUST come before it. NEVER set or export `_arena_preview_platform`; a blocked gate is repaired, NEVER bypassed. A blocking-only call needs its read after return. Initial discovery may precede the first read; startup MUST. A blocked call that runs `tail`, `head` or `grep` hears which commands to drop. A call that spells the preview path hears the bare `arena-preview` form once a shell. A call that reads code-scanning alerts or workflow run logs hears the proxy route once a shell. A blocked push says that an ack clears it.
 
-The page's Message log toolbar carries a Skip poll button. A press arms one flag and writes no note, so no stale line waits in the log for a later turn to misread. A second press clears the flag, so the owner can take the skip back before the poll reads it. A listing that carries a `skip_poll` stamp reports it: the poll that finds it consumes it, prints `SKIP: owner pressed Skip poll. End the turn, no second poll.` on stderr, and the turn ends there. Never poll again after a skip. A note or a report answer clears the flag as it arrives, so the wait delivers it; an item that arrived before the press, or an unblocked task, still outranks the skip and keeps the flag armed.
-
-Every CLI call stamps `agent_seen_at`. The preview header turns amber with `No agent since <time>` after three quiet minutes, so a preview left open after a turn says no agent has spoken.
+The page's Message log toolbar carries a Skip poll button. A listing that carries a `skip_poll` stamp reports it: the poll that finds it consumes it, prints `SKIP: owner pressed Skip poll. End the turn, no second poll.` on stderr, and the turn ends there. Never poll again after a skip.
 
 ## Tasks
 
@@ -53,7 +51,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 | `--report <report-id>` | Link a blocked task to the report it waits on; an answer to that report clears the blocked mark |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |
 
-A task linked with `--report` stays blocked until the owner answers that report. The answer clears the mark once, and the link then only records what the wait was. The link rides the save file, so a restore keeps the wait. The command refuses a report ID that no report holds.
+A task linked with `--report` stays blocked until the owner answers that report. The answer clears the mark once, and the link then only records what the wait was. The command refuses a report ID that no report holds.
 
 `import-state` merges by ID and preserves existing message receipts. It refuses an import whose newest message is older than the newest message in the live state, and names both stamps. `--force` overrides the guard. Use `--replace-tasks` only after checking the input. Never infer a finished task from a commit alone.
 

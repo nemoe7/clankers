@@ -63,6 +63,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **CodeQL scope**: `.github/codeql/codeql-config.yml` also excludes `js/request-forgery`. Its report names the preview proxy's forwarding request, whose target passes the `sbx-*.arena.site` guard and a signed-origin cookie.
 - **Egress image rename**: The published image becomes `ghcr.io/nemoe7/arena-egress-proxy:latest`. The workflow, the install page, the compose file and the workflow check lists use the new name. The Python package and the environment prefix keep `arena_proxy` and `ARENA_PROXY_`.
 
+- **Skill text trim**: `SKILL.md` and `REFERENCE.md` drop 23 pieces of rationale and owner detail (owner note 8fa7612). The live pages shrink by 2,348 bytes and 534 `cl100k_base` tokens. Rules, routes and examples stay.
+
 ### Removed
 
 #### userscripts
