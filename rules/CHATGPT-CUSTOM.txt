@@ -14,7 +14,7 @@ NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
 SOLID vs YAGNI/KISS/DRY: ask while planning which governs; follow the answer.
 
-FORMAT: 2-space; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
+FORMAT: 2-space; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
 Comments only where complexity needs them.
 
 DOCS: no storyline/narrative unless asked.

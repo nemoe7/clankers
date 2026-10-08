@@ -2,6 +2,8 @@
 
 Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
 
+2026-10-08: Owner request. `rules/AGENTS.md` +25 `tok`, 1,535 to 1,560. `rules/ARENA.md` +79 `B`, 19,022 to 19,101, and the root copy follows. `rules/CHATGPT-CUSTOM.txt` +2 `chars`, 1,497 to 1,499, under the 1,500 cap. `rules/wenyan/CHATGPT-CUSTOM.txt` +51 `chars`, 1,335 to 1,386. The core rule files name the E501 120 lint limit and the settings that hold it.
+
 2026-10-06: Owner request. `rules/ARENA.md` +160 `B`, 17,168 to 17,328, and the root copy follows. A rule names the shallow sandbox clone and its check.
 
 2026-10-02: Owner request. `skills/arena-preview-steering/scripts/preview.py` +55 `B`, 83,754 to 83,809. A reminder names the gh command for pull request checks.

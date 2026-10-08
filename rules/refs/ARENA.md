@@ -150,9 +150,9 @@
 - These rules apply to repositories owned by `nemoe7`; other repositories follow their own conventions.
 - 2-space indentation overrides formatter defaults.
 - Markdown: defaults + MD060, MD013 off.
-- For a Python project, use Ruff with its default rule selection.
+- For a Python project, use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
 - Keep architecture; leave unrelated code alone.
-- For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding these conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `required-version = "0.16.6"`, nothing else until flagged).
+- For a Python project, Ruff is configured by the project's own `ruff.toml` when it has one, holding these conventions (Ruff defaults, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`, nothing else until flagged).
 - For a Python project with no `ruff.toml`, create one with exactly that before running gates.
 - For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
 - NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.

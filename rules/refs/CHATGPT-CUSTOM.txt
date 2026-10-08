@@ -25,7 +25,7 @@ No speculative behavior or tests; trivial one-liners need no test; mechanical-on
 NEVER weaken a test to pass.
 MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
 
-FORMAT: 2-space; other repos keep their conventions; Ruff defaults + ruff.toml; markdownlint defaults + MD060, MD013 off.
+FORMAT: 2-space; other repos keep their conventions; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
 Add a code or config comment only when the method is complex enough to need it.
 
 DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.

@@ -49,6 +49,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Env ignore**: `.gitignore` gains `.env`, so the compose secret file for the proxy packages stays untracked (owner note 5444e42). No `.env` is tracked today.
 - **Ruff line limit**: the core `ruff.toml` turns on E501 with a 120-character limit. The limit rides the pycodestyle setting, so the formatter keeps its own width (owner note 61d53d5).
+- **Core E501 120**: the core rule files name the E501 120 limit. The refs baselines, the live mirrors, the wenyan field and the root `ARENA.md` copy hold the same wording (owner notes 0e49d47 and 88a0560).
 - **Vendored caveman**: the house copies `JuliusBrussee/caveman` at `7d76b13` (Apache-2.0) verbatim into `.agents/skills/caveman/`, skill, readme and licence included. It lives under `.agents/skills/` only, because it changes how an agent speaks rather than belonging to this repository, and takes no part in the parity gates.
 - **No seq on notes**: note and answer records drop their sequence number and order by the arrival stamp, so agents cite the ID. Reports keep their first-publish sequence.
 - **Report task text input**: a report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
