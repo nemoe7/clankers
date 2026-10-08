@@ -1,6 +1,7 @@
 __pycache__/
 .venv/
 .tiktoken-cache/
+.env
 reports/
 node_modules/
 
