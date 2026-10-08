@@ -2983,6 +2983,35 @@ class Store:
           ),
         )
 
+  def clear_state(self):
+    """Empty every state table in one transaction and return the row counts.
+
+    The owner asked for the page's clear as a command, so it runs while the server
+    stays up: rows go, the schema and the page token stay. The transaction's autosave
+    refreshes the save file to match, so the export does not keep the cleared state;
+    copy the state first to keep a backup. The agent key is channel plumbing the
+    page re-posts on load, not state the owner reads, so the record survives.
+    """
+    counts = {}
+    with self.transaction() as db:
+      for table in (
+        "notes",
+        "reports",
+        "submissions",
+        "tasks",
+        "uploads",
+        "fetch_jobs",
+      ):
+        counts[table] = db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+        db.execute(f"DELETE FROM {table}")
+      key = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (AGENT_KEY_META,)
+      ).fetchone()
+      db.execute("DELETE FROM meta")
+      if key is not None:
+        db.execute("INSERT INTO meta VALUES (?, ?)", (AGENT_KEY_META, key[0]))
+    return counts
+
   def mark_report_seen(self, report_id):
     """Stamp the moment the owner reached the end of a report, and only the first one.
 
@@ -3719,6 +3748,10 @@ def main():
     action="store_true",
     help="import even when the live state holds newer messages",
   )
+  commands.add_parser(
+    "clear-state",
+    help="Empty every state table in place; the agent key record survives",
+  )
   args = parser.parse_args()
   state_dir = resolve_state_dir()
   try:
@@ -3882,6 +3915,8 @@ def main():
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
       print(cli_json(store.import_state(text, args.replace_tasks, args.force)))
+    elif args.command == "clear-state":
+      print(cli_json(store.clear_state()))
 
   except (
     OSError,
