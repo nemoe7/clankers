@@ -29,6 +29,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Amendment proposals first**: the house rules now run an amendment proposal task before any other queued work.
 - **Message pagination**: the log renders only the newest 20 messages, and scrolling up loads the next older page.
 - **Repo header fallback**: the state scope reads the first word of the conversation header before defaulting to the tab title.
+- **Background runs**: ARENA.md lets a background test or PR-check run start with `start_process` on a stable tree. The agent scouts the next task while it runs, and reads the result before any push.
 
 ## 2026-10-07
 
