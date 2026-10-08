@@ -44,6 +44,7 @@ def test_required_file_set_is_exact():
     "pr-check.yml",
     "release-gpt-plugins.yml",
     "publish-arena-egress-proxy-image.yml",
+    "publish-arena-preview-proxy-image.yml",
   )
 
 

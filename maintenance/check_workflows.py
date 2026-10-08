@@ -27,6 +27,7 @@ REQUIRED_FILES = (
   "pr-check.yml",
   "release-gpt-plugins.yml",
   "publish-arena-egress-proxy-image.yml",
+  "publish-arena-preview-proxy-image.yml",
 )
 
 # A pull request can run untrusted code, so these scopes stay out of its workflows.
