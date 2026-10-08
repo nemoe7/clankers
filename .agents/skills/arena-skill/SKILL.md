@@ -182,12 +182,6 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 - Use the smallest read that answers the question: `per_page` and `state` filters on GitHub, `mode=text` when the bytes are text, and one chunk when a file is partly needed.
 - Prefer a workflow that writes alerts or logs into a pull request comment when a read must repeat many times.
 
-## Owner setup
-
-The install detail, the container notes and the other exposure options live in
-[`proxy/INSTALL.md`](https://github.com/nemoe7/clankers/blob/main/skills/arena-skill/proxy/INSTALL.md)
-in this repository, beside the skill source.
-
 ## Failure modes
 
 - An HTML page instead of JSON means the tunnel or the proxy answered, not the backend. A cold tunnel needs a retry.

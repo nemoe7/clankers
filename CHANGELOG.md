@@ -69,6 +69,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Menu entries**: `State — save now` and `Proxy — rotate now` leave the menu. Force save covers the first, and rotation stays on its timer. Arena 1.9.4.
 
+#### skills
+
+- **Owner setup section**: The skill pages drop their `## Owner setup` section (owner note 1de7dcb). It named an install page that the distributed copies do not ship. The install pages stay in this repository beside the packages.
+
 ### Fixed
 
 #### preview
