@@ -17,6 +17,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Caveman register**: the squash skill names a caveman register for "caveman squash" requests. Articles drop, fragments are fine, and every fact and verbatim span still holds.
 - **Caveman refs experiment**: the arena suite refs are caveman-squashed into a new `caveman/` directory outside the gates. The copies keep every heading, table, code block, number, path and URL. The measured saving is 2.6% of tokens.
+- **Ultracave refs experiment**: the arena suite refs are ultracave-squashed into a new `ultracave/` directory beside `caveman/`. The copies keep every heading, table, code block, number, path and URL. The measured saving is 4.9% of tokens, against 2.6% for the caveman copies.
 
 #### userscripts
 
