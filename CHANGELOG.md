@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### arena
 
 - **Absorbed work clause**: ARENA.md now says to check whether `origin/main` absorbed the branch's commits before rebasing, and to reset hard to `origin/main` instead of replaying them.
+- **Flush-left lists**: The message log renders lists flush-left, matching the composer's plain text, so a sent message reads the same after it lands.
 
 ## 2026-10-07
 

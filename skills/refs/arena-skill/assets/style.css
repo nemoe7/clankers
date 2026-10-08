@@ -135,6 +135,9 @@ body[data-chrome="closed"] .topbar { padding: 2px 5vw; }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
 .message:last-child { margin-bottom: 0; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }
+/* Lists render flush-left like the composer's plain text, so a sent message reads the
+   same before and after it lands (owner note 10d817b). */
+#history li ul, #history li ol { margin: 8px 0; padding-left: 0; list-style-position: inside; }
 .receipt { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; margin-top: 8px; }
 /* A receipt ID is text rather than a chip, so it opts out by class instead of by ancestry. */
 code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background: none; padding: 0; cursor: pointer; }
