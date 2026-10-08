@@ -102,7 +102,7 @@ BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
 ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
 # One repeated tail reads as noise, so the reminder rotates through rules an agent most often
 # drops. The cursor lives in meta, so a cycle covers every string before one repeats.
-TASK_REMINDER = "You have {remaining} tasks remaining."
+TASK_REMINDER = "{remaining} tasks left."
 
 
 def fill_reminder(tail, remaining):
@@ -126,24 +126,24 @@ def reminder_tail(cursor, remaining):
 
 
 REMINDERS = (
-  "Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.",
-  "Run `task-list` at turn start and update it as work changes.",
+  "Refresh context: ARENA.md, SKILL.md, REFERENCE.md.",
+  "`task-list` at turn start. Update it as work changes.",
   "Take the smallest open task next.",
   "Always push.",
   "`ask_user` on GH_TOKEN failure.",
   "Keep docs terse but clear.",
-  "Ask questions ASAP through fielded reports; keep other work moving.",
-  "Don't forget to publish your reports.",
+  "Ask questions ASAP in reports; keep other work moving.",
+  "Publish your reports.",
   "Never end a turn with unblocked tasks.",
-  "Remove stale reports with unpublish.",
-  "End the turn with `poll` to wait for more work.",
-  "Grep-verify each edit landed.",
+  "Unpublish stale reports.",
+  "End the turn with `poll`.",
+  "Grep-verify each edit.",
   TASK_REMINDER,
   "Rebase on `origin/main` before pushing.",
   "No PR checks run? Rebase onto main first.",
   "Check the PR's CI before ending a pushed turn.",
-  "Read the PR checks with `gh pr checks <PR> --watch`.",
-  "Don't use the full path. Run `arena-preview` instead.",
+  "Read PR checks: `gh pr checks <PR> --watch`.",
+  "Run `arena-preview`, not the full path.",
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
@@ -1058,10 +1058,7 @@ def gate_line_hint(line):
   if not found:
     return None
   named = ", ".join(f"`{name}`" for name in found)
-  return (
-    f"This call runs {named}; omit those commands:"
-    " a bare `arena-preview read` is the only call that passes."
-  )
+  return f"This call runs {named}. Omit them: only a bare `arena-preview read` passes."
 
 
 def poll_timeout_line(line):
@@ -1102,9 +1099,8 @@ def poll_inbox(store, sleeper=None):
   # first. Say so up front: a call that ends early with nothing to read was cut, and
   # the retry needs the tool timeout at 1800 (owner note a7e39b3).
   print(
-    "POLL: this wait can run its full 1800 seconds; if the call ends early with no"
-    " new messages or unblocked tasks, the bash tool timeout cut it, so retry with"
-    " the tool timeout 1800.",
+    "POLL: this wait runs up to 1800 s. Ends early with no new messages or"
+    " unblocked tasks? The bash tool timeout cut it. Retry with the tool timeout 1800.",
     file=sys.stderr,
     flush=True,
   )
@@ -1131,8 +1127,8 @@ def poll_inbox(store, sleeper=None):
         # The early return must not read as an empty wait: the turn continues that task, and the
         # still-up list must be handled before the next poll (owner note 12c5a66).
         print(
-          f"CONTINUE: unblocked task {names} waits, and the task list is still up. "
-          "Continue the task or mark it blocked before polling again; do not end the turn.",
+          f"CONTINUE: unblocked task {names} waits. Task list still up. Work it or"
+          " mark it blocked before the next poll. Do not end the turn.",
           file=sys.stderr,
           flush=True,
         )
@@ -1145,7 +1141,7 @@ def poll_inbox(store, sleeper=None):
         store.mark_turn_ended()
         # The skip is one-shot and never a message: the turn ends here, and no note repeats.
         print(
-          "SKIP: the owner pressed Skip poll; end the turn without another poll.",
+          "SKIP: owner pressed Skip poll. End the turn, no second poll.",
           file=sys.stderr,
           flush=True,
         )
@@ -2774,16 +2770,12 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_MESSAGE, str(polls))
         )
     counts = [
-      f"{count} {kind}/s."
-      for count, kind in (
-        (notes, "message"),
-        (reports, "form answer"),
-        (uploads, "upload"),
-      )
+      f"{count} {kind}{'s' if count != 1 else ''}."
+      for count, kind in ((notes, "note"), (reports, "answer"), (uploads, "upload"))
       if count
     ]
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
-    head = [f"{polls} call/s since user messaged."] if polls and counts else []
+    head = [f"Calls since user message: {polls}."] if polls and counts else []
     tail = reminder_tail(cursor, remaining)
     return " ".join([*head, *counts, *ack, tail])
 
@@ -3204,7 +3196,7 @@ def open_link(renderer, tokens, index, options, env):
 def require_renderer():
   if not HAS_RENDERER:
     raise SystemExit(
-      "serve needs markdown-it-py: install it into the preview venv with "
+      "serve needs markdown-it-py: install it in the preview venv with "
       "`python -m pip install markdown-it-py`, then start the server with that "
       "venv's Python. read, ack and publish work without it."
     )
@@ -3830,9 +3822,9 @@ def main():
     if args.command == "gate":
       if poll_timeout_line(args.line):
         print(
-          "TIMEOUT BANNED: do not wrap `arena-preview poll` in the shell `timeout`"
-          " command. The poll holds its own 1800-second span; set the bash tool's"
-          " timeout to 1800 instead, so a cut wait still returns its listing.",
+          "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."
+          " The poll holds its own 1800-second span. Set the bash tool timeout"
+          " 1800 instead, so a cut wait still returns its listing.",
           flush=True,
         )
         return 1
@@ -3846,14 +3838,14 @@ def main():
         if args.push:
           # The owner asked a blocked push to say what stopped and what clears it.
           print(
-            "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox."
-            " Read the inbox, ack every item, then push again.",
+            "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the"
+            " sandbox. Read the inbox, ack every item, push again.",
             flush=True,
           )
         print(
-          "READ INBOX NOW. The only call that passes is a bare `arena-preview read`."
-          " Then ack every note with a bare `arena-preview ack <id> --reply <markdown>`"
-          " or `arena-preview ack <id> --note <text>` call, one call per note.",
+          "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack"
+          " every note, one call per note: `arena-preview ack <id> --reply"
+          " <markdown>` or `arena-preview ack <id> --note <text>`.",
           flush=True,
         )
         hint = gate_line_hint(args.line)
@@ -3864,7 +3856,7 @@ def main():
       # and GitHub then closes it. The checkpoint holds before any such push.
       if args.push and main_identical():
         print(
-          "HEAD content equals `origin/main`, so the push carries nothing."
+          "HEAD equals `origin/main`, so the push carries nothing."
           " Start new work from `origin/main`.",
           flush=True,
         )
@@ -3884,7 +3876,7 @@ def main():
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
         store.set_meta("port", str(server.server_port))
         print(
-          f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",
+          f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",
           flush=True,
         )
         server.serve_forever()
@@ -3897,7 +3889,7 @@ def main():
       # session reads the recorded key here instead of waiting for a new note.
       record = store.agent_key()
       if not record:
-        print("No agent key recorded yet.", file=sys.stderr)
+        print("No agent key recorded.", file=sys.stderr)
         return 1
       print(cli_json(record))
     elif args.command == "poll":
@@ -3914,22 +3906,22 @@ def main():
       store.acknowledge(args.ids, kind, args.reply or args.note)
       print("Acknowledged: " + ", ".join(args.ids))
       print(
-        "If a note asks for work, add it to the task list: "
+        "Note asks for work? Add the task: "
         + "; ".join(f'task <id> "<title>" --msg-id {i}' for i in args.ids)
       )
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
-      print(f"Published {args.id} with {count} fields; select it in the Reports tab")
+      print(f"Published {args.id}, {count} fields. Select it in Reports.")
       if not count and "{#" in Path(args.source).read_text("utf-8"):
         # A `{#id}` marker on its own parses as prose; the owner then sees no answer form.
         print(
-          "Warning: 0 fields parsed; a `{#id}` marker ends a prompt line and the"
-          " `- ( ) option` lines follow it",
+          "Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then"
+          " the `- ( ) option` lines follow.",
           file=sys.stderr,
         )
     elif args.command == "unpublish":
       store.unpublish(args.report_id)
-      print(f"Unpublished {args.report_id}; its answers and source file remain")
+      print(f"Unpublished {args.report_id}. Answers and source file remain.")
     elif args.command == "task":
       task_id = args.id_arg
       if not task_id:

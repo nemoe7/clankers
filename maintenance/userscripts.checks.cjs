@@ -1221,7 +1221,7 @@ function checkTabTitle(api) {
   var pyMessage = liveMessage("running Bash", "$ python skills/refs/arena-skill/scripts/preview.py poll");
   var chainMessage = liveMessage("running Bash", "$ git fetch origin && arena-preview poll");
   var readMessage = liveMessage("running Bash", "Read the inbox");
-  readMessage.row.textContent = "stderr End the turn with `poll` to wait for more work.";
+  readMessage.row.textContent = "stderr End the turn with `poll`.";
   var busyDoc = actionDoc(repoLink, busyMessage);
   var idleDoc = actionDoc(repoLink, null);
   var thinkingMessage = divMessage("Thinking\u2026", true);

@@ -29,6 +29,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Absorbed work clause**: ARENA.md now says to check whether `origin/main` absorbed the branch's commits before rebasing, and to reset hard to `origin/main` instead of replaying them.
 - **Flush-left lists**: The message log renders lists flush-left, matching the composer's plain text, so a sent message reads the same after it lands.
 - **Poll retry disclaimer**: the poll prints a disclaimer at the start that names its 1800-second span. A call that ends early was cut by the tool timeout, so retry with the tool timeout 1800.
+- **Caveman CLI output**: the preview CLI and its hook speak in the caveman register. The reminder, gate, poll and hint lines drop filler and keep every fact. The message set measures 8.7% fewer tokens, and this adds no budget row.
+- **Reminder counts**: pending items count as `1 note`, `2 notes`, `1 answer` or `1 upload`, and the call tally reads `Calls since user message: N.`
 
 #### house
 

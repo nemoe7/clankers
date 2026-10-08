@@ -162,7 +162,7 @@ _arena_preview_gate() {
     *"git commit"*|*"git push"*|*"gh pr checks"*)
       if [ -z "\${_arena_preview_reminded:-}" ]; then
         _arena_preview_reminded=1
-        printf '%s\n' "Finished a task? Update your task-list with arena-preview task <id> --status finished." >&2
+        printf '%s\n' "Finished a task? Update the task list: arena-preview task <id> --status finished." >&2
       fi
       ;;
   esac
@@ -197,7 +197,7 @@ _arena_preview_gate() {
     *code-scanning*|*code_scanning*|*"gh run view"*|*"gh run download"*|*actions/runs*)
       if [ -z "\${_arena_preview_proxy_told:-}" ]; then
         _arena_preview_proxy_told=1
-        printf '%s\n' 'Read that through the proxy: the arena skill carries the routes for code-scanning alerts and workflow run logs.' >&2
+        printf '%s\n' 'Read that through the proxy: the arena skill carries the routes for code-scanning alerts and run logs.' >&2
       fi
       ;;
   esac

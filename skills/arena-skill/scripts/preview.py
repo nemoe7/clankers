@@ -48,7 +48,7 @@ CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
 BLANK=re.compile('^(?:(.*?)[\\s:])?_{3,}\\s*$')
 ANCHOR=re.compile('\\s*\\{#([a-zA-Z0-9_-]{1,80})\\}\\s*$')
-TASK_REMINDER='You have {remaining} tasks remaining.'
+TASK_REMINDER='{remaining} tasks left.'
 def fill_reminder(tail,remaining):
 	if'{remaining}'in tail and remaining==0:return None
 	count=f"{remaining} task"if remaining==1 else f"{remaining} tasks";return tail.replace('{remaining} tasks',count)
@@ -57,7 +57,7 @@ def reminder_tail(cursor,remaining):
 		tail=fill_reminder(REMINDERS[(cursor+step)%len(REMINDERS)],remaining)
 		if tail:return tail
 	return REMINDERS[cursor%len(REMINDERS)]
-REMINDERS='Refresh context with ARENA.md, SKILL.md, and REFERENCE.md.','Run `task-list` at turn start and update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP through fielded reports; keep other work moving.',"Don't forget to publish your reports.",'Never end a turn with unblocked tasks.','Remove stale reports with unpublish.','End the turn with `poll` to wait for more work.','Grep-verify each edit landed.',TASK_REMINDER,'Rebase on `origin/main` before pushing.','No PR checks run? Rebase onto main first.',"Check the PR's CI before ending a pushed turn.",'Read the PR checks with `gh pr checks <PR> --watch`.',"Don't use the full path. Run `arena-preview` instead."
+REMINDERS='Refresh context: ARENA.md, SKILL.md, REFERENCE.md.','`task-list` at turn start. Update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP in reports; keep other work moving.','Publish your reports.','Never end a turn with unblocked tasks.','Unpublish stale reports.','End the turn with `poll`.','Grep-verify each edit.',TASK_REMINDER,'Rebase on `origin/main` before pushing.','No PR checks run? Rebase onto main first.',"Check the PR's CI before ending a pushed turn.",'Read PR checks: `gh pr checks <PR> --watch`.','Run `arena-preview`, not the full path.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 GATE_THRESHOLD=10
@@ -388,7 +388,7 @@ GATE_NOISE='tail','grep','head'
 def gate_line_hint(line):
 	words={token for token in re.split('[^A-Za-z0-9_.-]+',line or'')};found=[name for name in GATE_NOISE if name in words]
 	if not found:return None
-	named=', '.join(f"`{name}`"for name in found);return f"This call runs {named}; omit those commands: a bare `arena-preview read` is the only call that passes."
+	named=', '.join(f"`{name}`"for name in found);return f"This call runs {named}. Omit them: only a bare `arena-preview read` passes."
 def poll_timeout_line(line):
 	text=unquote_commands(line or'')
 	for separator in('&&','||',';','|','\n'):text=text.replace(separator,'\x00')
@@ -401,14 +401,14 @@ def poll_timeout_line(line):
 	return False
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};print('POLL: this wait can run its full 1800 seconds; if the call ends early with no new messages or unblocked tasks, the bash tool timeout cut it, so retry with the tool timeout 1800.',file=sys.stderr,flush=True);store.start_poll()
+	listing={'checked_at':None,'pending':[]};print('POLL: this wait runs up to 1800 s. Ends early with no new messages or unblocked tasks? The bash tool timeout cut it. Retry with the tool timeout 1800.',file=sys.stderr,flush=True);store.start_poll()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
 			if listing['pending']:full=store.read();print(cli_json(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);print(f"CONTINUE: unblocked task {names} waits, and the task list is still up. Continue the task or mark it blocked before polling again; do not end the turn.",file=sys.stderr,flush=True);print(cli_json(listing),flush=True);return 0
-			if store.skip_poll_requested():store.take_skip_poll();store.mark_turn_ended();print('SKIP: the owner pressed Skip poll; end the turn without another poll.',file=sys.stderr,flush=True);print(cli_json(listing),flush=True);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);print(f"CONTINUE: unblocked task {names} waits. Task list still up. Work it or mark it blocked before the next poll. Do not end the turn.",file=sys.stderr,flush=True);print(cli_json(listing),flush=True);return 0
+			if store.skip_poll_requested():store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',file=sys.stderr,flush=True);print(cli_json(listing),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
 	store.mark_turn_ended();print(cli_json(listing),flush=True);return 1
@@ -864,7 +864,7 @@ class Store:
 		with closing(self.connect())as db,db:
 			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {kind}/s."for(count,kind)in((notes,'message'),(reports,'form answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];head=[f"{polls} call/s since user messaged."]if polls and counts else[];tail=reminder_tail(cursor,remaining);return' '.join([*head,*counts,*ack,tail])
+		counts=[f"{count} {kind}{'s'if count!=1 else''}."for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];head=[f"Calls since user message: {polls}."]if polls and counts else[];tail=reminder_tail(cursor,remaining);return' '.join([*head,*counts,*ack,tail])
 	def gate(self,threshold=GATE_THRESHOLD,pending_only=False):
 		with closing(self.connect())as db,db:pending=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0];polls=meta_number(db,POLLS_SINCE_MESSAGE)
 		if pending_only:return not pending
@@ -1012,7 +1012,7 @@ def open_link(renderer,tokens,index,options,env):
 	if href and not href.startswith('#'):token.attrSet('target','_blank');token.attrSet('rel','noopener noreferrer')
 	return renderer.renderToken(tokens,index,options,env)
 def require_renderer():
-	if not HAS_RENDERER:raise SystemExit("serve needs markdown-it-py: install it into the preview venv with `python -m pip install markdown-it-py`, then start the server with that venv's Python. read, ack and publish work without it.")
+	if not HAS_RENDERER:raise SystemExit("serve needs markdown-it-py: install it in the preview venv with `python -m pip install markdown-it-py`, then start the server with that venv's Python. read, ack and publish work without it.")
 CODE_BLOCK=re.compile('<pre>(.*?)</pre>',re.DOTALL)
 CODE_TAG=re.compile('<[^>]+>')
 def add_copy_buttons(rendered):
@@ -1157,36 +1157,36 @@ def main():
 		if not args.command:parser.error('a command is required')
 		if args.command=='inbox-line':return 0 if quiet_inbox_line(args.line)else 1
 		if args.command=='gate':
-			if poll_timeout_line(args.line):print("TIMEOUT BANNED: do not wrap `arena-preview poll` in the shell `timeout` command. The poll holds its own 1800-second span; set the bash tool's timeout to 1800 instead, so a cut wait still returns its listing.",flush=True);return 1
+			if poll_timeout_line(args.line):print('TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`. The poll holds its own 1800-second span. Set the bash tool timeout 1800 instead, so a cut wait still returns its listing.',flush=True);return 1
 			try:allowed=Store(state_dir).gate(pending_only=args.push)
 			except FileNotFoundError:allowed=True
 			except Exception:return 2
 			if not allowed:
-				if args.push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, then push again.',flush=True)
-				print('READ INBOX NOW. The only call that passes is a bare `arena-preview read`. Then ack every note with a bare `arena-preview ack <id> --reply <markdown>` or `arena-preview ack <id> --note <text>` call, one call per note.',flush=True);hint=gate_line_hint(args.line)
+				if args.push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, push again.',flush=True)
+				print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note, one call per note: `arena-preview ack <id> --reply <markdown>` or `arena-preview ack <id> --note <text>`.',flush=True);hint=gate_line_hint(args.line)
 				if hint:print(hint,flush=True)
 				return 1
-			if args.push and main_identical():print('HEAD content equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
+			if args.push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
 			return 0
 		store=Store(state_dir,create=args.command in{'serve','init','import-state'});print(store.reminder(),file=sys.stderr,flush=True)
 		if args.command!='serve':store.touch_agent()
 		if args.command=='serve':
 			require_renderer()
-			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));print(f"Preview listening on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
+			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:store.set_meta('port',str(server.server_port));print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);server.serve_forever()
 		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)
 		elif args.command=='key':
 			record=store.agent_key()
-			if not record:print('No agent key recorded yet.',file=sys.stderr);return 1
+			if not record:print('No agent key recorded.',file=sys.stderr);return 1
 			print(cli_json(record))
 		elif args.command=='poll':require_server(store);store.notice_expired_key();return poll_inbox(store)
 		elif args.command=='download-request':print(cli_json(store.enqueue_fetch(args.url,args.allow_proxy,pending=True)))
 		elif args.command=='ack':
 			if bool(args.reply)==bool(args.note):raise ValueError('Choose exactly one of --reply or --note')
-			kind='reply'if args.reply else'note';store.acknowledge(args.ids,kind,args.reply or args.note);print('Acknowledged: '+', '.join(args.ids));print('If a note asks for work, add it to the task list: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in args.ids))
+			kind='reply'if args.reply else'note';store.acknowledge(args.ids,kind,args.reply or args.note);print('Acknowledged: '+', '.join(args.ids));print('Note asks for work? Add the task: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in args.ids))
 		elif args.command=='publish':
-			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id} with {count} fields; select it in the Reports tab")
-			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed; a `{#id}` marker ends a prompt line and the `- ( ) option` lines follow it',file=sys.stderr)
-		elif args.command=='unpublish':store.unpublish(args.report_id);print(f"Unpublished {args.report_id}; its answers and source file remain")
+			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id}, {count} fields. Select it in Reports.")
+			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
+		elif args.command=='unpublish':store.unpublish(args.report_id);print(f"Unpublished {args.report_id}. Answers and source file remain.")
 		elif args.command=='task':
 			task_id=args.id_arg
 			if not task_id:raise ValueError('A task needs an ID')
