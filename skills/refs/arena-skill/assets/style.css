@@ -42,7 +42,9 @@
 ::-webkit-scrollbar-thumb { background: #302e2c; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: #666261; }
 [hidden] { display: none !important; }
-html, body { height: 100%; }
+/* The document never scrolls: each panel owns its own scrolling, and a touch drag on the page
+   behind them bounces nothing (owner note df1dacd). */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body { background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 /* No heading carries a font size: the browser defaults descend 32, 24, 18.72, 16, 13.28 and
    10.72px, and an explicit 19px on h2 once put it within 0.28px of the default h3. */
@@ -55,19 +57,29 @@ p, li { line-height: 1.6; }
    tabs must fit a phone as they fit a desk, with no width of its own to fight (owner notes
    f6e1f33, e9b026a). */
 nav { display: flex; gap: 8px; max-width: 100%; min-width: 0; overflow-x: auto; }
-nav button { min-width: 116px; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-color: var(--tab-border); }
+/* The four labels fit a phone strip at a shorter minimum, so the whole strip reads without a
+   scroll of its own (owner note 8a47260). */
+nav button { min-width: 76px; padding: 7px 9px; flex: none; white-space: nowrap; position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-color: var(--tab-border); }
 /* nav button outranks the global :focus-visible, so focus needs its own rule here. */
 nav button:focus-visible { border-color: var(--focus); }
 nav [aria-selected="true"] { background: var(--bubble); }
 /* The pip is the tab's unread mark. `[hidden] { display: none !important; }` above is what keeps
    it hidden against the inline-block that gives it a shape. */
-#report-pip, #notes-pip, #downloads-pip { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+/* The pip is a corner badge rather than an inline box, so a tab keeps one width whether the dot
+   shows or not (owner note ed43278). */
+#report-pip, #notes-pip, #downloads-pip { position: absolute; top: 5px; right: 5px; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 #notes-panel, #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
-.log-card { flex: 1 1 auto; min-height: 500px; display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
-.log-card > .row:first-child { margin-block: 0; }
+/* The floor steps down on a short viewport: 500px would push the column past a small
+   phone's screen, and then the panel scrolls even with the composer closed (owner notes
+   df1dacd, 6a9401b). */
+.log-card { flex: 1 1 auto; min-height: min(500px, 60dvh); display: flex; flex-direction: column; overflow: hidden; padding-block: 12px; }
+/* The log header wraps into four short lines on a narrow width, and the row's 12px wrap gap
+   spread them into dead space. The lines sit close now, so the header reads as one block
+   (owner note a16eb0c). */
+.log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
 .card.compose { flex: 0 0 auto; padding: 8px 18px; }
 .compose .row { margin: 6px 0; }
 .composer-heading { flex-wrap: wrap; gap: 8px; }
@@ -256,7 +268,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
   main { padding: 14px 16px 16px; }
   .card { padding: 18px; }
   .compose { max-height: 55%; }
-  nav button { min-width: 98px; }
+  nav button { min-width: 68px; padding: 7px 8px; }
 }
 
 #send-status { margin: 0; }

@@ -858,13 +858,16 @@ def test_http_boundaries():
       assert 'id="report-agent-ack"' in page
       assert "report-count" not in page
       # The minified sheet splits or reorders merged selectors, so each pip matches its own block.
+      # The pip is a corner badge, so it adds no width to the tab it marks (owner note ed43278).
       assert re.search(
-        r"#report-pip[^{}]*\{display:inline-block;width:7px;height:7px;"
+        r"#report-pip[^{}]*\{position:absolute;top:5px;right:5px;"
+        r"display:inline-block;width:7px;height:7px;"
         r"border-radius:50%;background:var\(--accent\)",
         page,
       )
       assert re.search(
-        r"#notes-pip[^{}]*\{display:inline-block;width:7px;height:7px;"
+        r"#notes-pip[^{}]*\{position:absolute;top:5px;right:5px;"
+        r"display:inline-block;width:7px;height:7px;"
         r"border-radius:50%;background:var\(--accent\)",
         page,
       )
@@ -898,6 +901,11 @@ def test_http_boundaries():
       assert re.search(r"nav\{[^}]*min-width:0;", page), (
         "the tab strip shrinks rather than pushing the bar"
       )
+      # The four tabs fit a phone strip at a shorter minimum and padding, so the strip reads whole
+      # without a scroll of its own (owner note 8a47260). The max-width block steps it down again.
+      assert re.search(r"nav button\{[^}]*min-width:76px;[^}]*padding:7px 9px;", page)
+      assert re.search(r"nav button\{[^}]*white-space:nowrap", page)
+      assert "nav button{min-width:68px;padding:7px 8px" in page
       # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
       # The hint is its own span, so the client swaps it with the pointer: a touch keyboard writes
       # the newline and the Send button sends (owner notes da405c2, cbebaa3).
@@ -945,7 +953,14 @@ def test_http_boundaries():
         ".notes-layout{display:flex;flex-direction:column;gap:14px;height:100%" in page
       )
       assert "resize:none;min-height:72px;overflow:hidden" in page
-      assert ".log-card{flex:1 1 auto;min-height:500px" in page
+      # The document itself never scrolls: the panels own their scrolling. The log card's floor
+      # steps down on a short viewport, so a small phone keeps the whole column on screen with the
+      # composer closed (owner notes df1dacd, 6a9401b).
+      assert "html,body{height:100%;overflow:hidden;overscroll-behavior:none" in page
+      # The log header wraps into four short lines on a narrow width, and the 12px wrap gap read
+      # as dead space; the lines sit close now (owner note a16eb0c).
+      assert ".log-card>.row:first-child{margin-block:0;row-gap:2px" in page
+      assert ".log-card{flex:1 1 auto;min-height:min(500px,60dvh)" in page
       assert "h1{letter-spacing:-.035em;margin:4px 0" in page
       assert "h2{margin:0 0 8px" in page
       assert re.search(r"\.report p[^{}]*\{margin:8px 0", page)
