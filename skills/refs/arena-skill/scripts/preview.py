@@ -1779,6 +1779,10 @@ class Store:
       title = title if title is not None else stored["title"]
       if details is None:
         details = stored["details"] if stored else []
+      if not details:
+        # A task with no detail is a title alone, and the queue works from its steps
+        # (owner note 8c13de5).
+        raise ValueError("A task needs at least one detail")
       status = status or (stored["status"] if stored else "upcoming")
       if blocked is None:
         blocked = stored["blocked"] if stored else False

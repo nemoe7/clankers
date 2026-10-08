@@ -560,6 +560,7 @@ class Store:
 			if stored is None:self.refuse_shared_id(db,'tasks','reports',task_id)
 			title=title if title is not None else stored['title']
 			if details is None:details=stored['details']if stored else[]
+			if not details:raise ValueError('A task needs at least one detail')
 			status=status or(stored['status']if stored else'upcoming')
 			if blocked is None:blocked=stored['blocked']if stored else False
 			if report_id is None:report_id=stored.get('report_id')if stored else None
