@@ -3,6 +3,14 @@
 # metadata and single-label hosts, and its tests pin that behaviour. The
 # `py/full-ssrf` rule therefore reports the design of this proxy, not a bug in it,
 # so the rule is excluded here. Every other Python rule still runs.
+#
+# The viewer route of arena-skill/preview-proxy forwards a caller-supplied Arena preview URL
+# on purpose too: that is the feature. `isAllowedPreview` accepts only HTTPS roots on
+# sbx-*.arena.site, with no credentials, no port and no path, and the saved origin rides an
+# HMAC-signed cookie. The `js/request-forgery` rule cannot model that pattern allowlist, so it
+# is excluded here as well. Every other JavaScript rule still runs.
 query-filters:
   - exclude:
       id: py/full-ssrf
+  - exclude:
+      id: js/request-forgery

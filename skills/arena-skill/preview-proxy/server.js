@@ -284,6 +284,10 @@ const server = http.createServer((req, res) => {
   else delete headers.cookie;
   headers.host = target.host;
 
+  // The target origin comes from parseSelectedUrl or the signed cookie, and isAllowedPreview
+  // pins both to HTTPS roots on sbx-*.arena.site with no credentials, port or path. CodeQL
+  // cannot model that pattern allowlist, so .github/codeql/codeql-config.yml excludes
+  // js/request-forgery for this forwarding request.
   const upstream = https.request(target, { method: req.method, headers, timeout: 120000 },
     upstreamRes => {
       const responseHeaders = { ...upstreamRes.headers };

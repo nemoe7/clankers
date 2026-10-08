@@ -56,7 +56,7 @@ Latest measurements as of 2026-10-08. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/preview-proxy/assets/register.js` | `UTF-8 file size` | 392 `B` |
 | `skills/arena-skill/preview-proxy/assets/service-worker.js` | `UTF-8 file size` | 380 `B` |
 | `skills/arena-skill/preview-proxy/docker-compose.yml` | `UTF-8 file size` | 1,531 `B` |
-| `skills/arena-skill/preview-proxy/server.js` | `UTF-8 file size` | 11,619 `B` |
+| `skills/arena-skill/preview-proxy/server.js` | `UTF-8 file size` | 11,945 `B` |
 | `skills/arena-skill/preview-proxy/tailscale-serve.json` | `UTF-8 file size` | 266 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 11,216 `B` |

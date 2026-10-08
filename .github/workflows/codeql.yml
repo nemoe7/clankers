@@ -46,7 +46,8 @@ jobs:
           languages: ${{ matrix.language }}
           # Every language here is interpreted or declarative, so no build is needed.
           build-mode: none
-          # The shared config excludes py/full-ssrf, which reports the fetch design.
+          # The shared config excludes py/full-ssrf and js/request-forgery, the two
+          # proxy fetches that carry a guarded, caller-supplied URL by design.
           config-file: ./.github/codeql/codeql-config.yml
 
       - name: Analyze
