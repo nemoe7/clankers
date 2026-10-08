@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.
+- **State error cards**: a state-module failure shows the page corner card as well as its console line, and the card stays until a dismiss. The write failure carries the Choose file button. Arena 1.9.6.
 
 #### preview
 

@@ -1817,6 +1817,9 @@ function checkStateDownload(api, session) {
   var getLine = api.getLine;
   var noopLine = api.noopLine;
   var writeLine = api.writeLine;
+  var writeFailLine = api.writeFailLine;
+  var managerFailLine = api.managerFailLine;
+  var stateError = api.stateError;
   var downloadRoute = api.downloadRoute;
   var stateDownloadRoute = api.stateDownloadRoute;
   var counts = { notes: 12, tasks: 4 };
@@ -2089,6 +2092,37 @@ function checkStateDownload(api, session) {
   // The owner's line shapes: the fetch on a write, the no-op on a quiet tick, and short
   // stamp hashes in place of the long stamps (answers 1fcb4bd and 9602cb5).
   assert.equal(writeLine("clankers", "clankers.ndjson"), "WRITE clankers state to clankers.ndjson");
+  // The failure lines name the error and the way on, and each heads the corner card too
+  // (owner note dad0e1c).
+  assert.equal(
+    writeFailLine({ name: "NotAllowedError" }),
+    "write failed (NotAllowedError); press the choose entry for the file again",
+  );
+  assert.equal(
+    writeFailLine(null),
+    "write failed (unknown); press the choose entry for the file again",
+  );
+  assert.equal(
+    managerFailLine({ error: "NETWORK" }),
+    "manager download failed (NETWORK); using the link",
+  );
+  assert.equal(managerFailLine(null), "manager download failed (unknown); using the link");
+  // The card does not replace the console line: the same words reach both, and a card-less
+  // run (the checks) still logs (owner note dad0e1c).
+  var errorLines = [];
+  var restoreLog = console.log;
+  console.log = function () {
+    errorLines.push(Array.prototype.join.call(arguments, " "));
+  };
+  try {
+    stateError("GET 500 http://localhost:8000/api/copy-state");
+  } finally {
+    console.log = restoreLog;
+  }
+  assert.ok(
+    errorLines.indexOf("[NemoUtils][state] GET 500 http://localhost:8000/api/copy-state") !== -1,
+    errorLines.join("\n"),
+  );
   assert.equal(noopLine("clankers", "http://localhost:8000"), "NOOP clankers http://localhost:8000");
   assert.equal(getLine(200, "http://localhost:8000"), "GET 200 http://localhost:8000");
   assert.match(stampHash("2026-10-06T09:45:05+00:00"), /^[0-9a-f]{7}$/);

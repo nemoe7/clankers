@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.5
+// @version      1.9.6
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1776,6 +1776,19 @@
     return "WRITE " + repo + " state to " + name;
   }
 
+  // A failed write and a failed manager download name the error that stopped them, so the
+  // console line and the page card read the same words (owner note dad0e1c).
+  function writeFailLine(err) {
+    return (
+      "write failed (" + ((err && err.name) || "unknown") +
+      "); press the choose entry for the file again"
+    );
+  }
+
+  function managerFailLine(err) {
+    return "manager download failed (" + ((err && err.error) || "unknown") + "); using the link";
+  }
+
   function stampHash(value) {
     var text = String(value || "");
     if (!text) return "none";
@@ -1891,6 +1904,9 @@
       getLine: getLine,
       noopLine: noopLine,
       writeLine: writeLine,
+      writeFailLine: writeFailLine,
+      managerFailLine: managerFailLine,
+      stateError: stateError,
       stateFileName: stateFileName,
       stateScopeKey: stateScopeKey,
       stateDownload: stateDownload,
@@ -2089,6 +2105,14 @@
       }
     }
 
+    // A failed read or write reaches the page as well as the console. The card carries the
+    // same line, and it stays until a dismiss (owner note dad0e1c). The checks run without a
+    // DOM, where the card is skipped.
+    function stateError(line, actionLabel, action) {
+      logEvent("state", line);
+      statePanel(line, actionLabel, action);
+    }
+
     function hintStateFile(manual) {
       var shown = GM_getValue(STATE_HINT_KEY, false);
       if (!shown) {
@@ -2143,12 +2167,7 @@
           URL.revokeObjectURL(url);
         },
         onerror: function (err) {
-          logEvent(
-            "state",
-            "manager download failed (" +
-              ((err && err.error) || "unknown") +
-              "); using the link",
-          );
+          stateError(managerFailLine(err));
           linkDownload(url, name);
           setTimeout(function () {
             URL.revokeObjectURL(url);
@@ -2168,7 +2187,7 @@
       }
       getJson(base + "/api/copy-state", function (status, body) {
         if (status !== 200 || !body) {
-          logEvent("state", copyLine(status, base));
+          stateError(copyLine(status, base));
           return;
         }
         var scope = stateScope(document);
@@ -2189,7 +2208,7 @@
         if (plan.kind === "stale") {
           if (!staleWarned) {
             staleWarned = true;
-            logEvent("state", STATE_LINES.history);
+            stateError(STATE_LINES.history);
           }
           return;
         }
@@ -2199,8 +2218,7 @@
           : stateHandle(fileKey(storeKey));
         ready.then(function (handle) {
           if (handle && !handleMatchesScope(handle, scope.repo, scope.branch)) {
-            logEvent(
-              "state",
+            stateError(
               "handle out of scope: " + handle.name + " is not " +
                 stateFileName(scope.repo, scope.branch, "", null),
             );
@@ -2245,13 +2263,10 @@
               function (err) {
                 picked = null;
                 pickedKey = null;
-                logEvent(
-                  "state",
-                  "write failed (" + ((err && err.name) || "unknown") +
-                    "); press the choose entry for the file again",
-                );
-                // The write ran after the press, so the picker would refuse a spent gesture.
+                // The write ran after the press, so the picker would refuse a spent gesture;
+                // the card carries the choose action instead.
                 hintStateFile(true);
+                stateError(writeFailLine(err), "Choose file", chooseStateFile);
               },
             );
             return;
@@ -2270,7 +2285,7 @@
     function chooseStateFile() {
       var pick = pagePicker();
       if (!pick) {
-        logEvent("state", "this browser cannot write files; the stamped download is used");
+        stateError("this browser cannot write files; the stamped download is used");
         return;
       }
       pick({
