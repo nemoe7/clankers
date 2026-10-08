@@ -1057,6 +1057,22 @@ test('preview client', async (t) => {
     state.calls_since_message = 1;
     await get('#refresh-notes').events.click(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · 1 bash call');
+    // The tally rides every line the header shows, not just the quiet one: a poll and a finished
+    // call are the lines the owner watches while the count climbs (owner note 03471eb).
+    state.polling = true;
+    state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click(); await tick();
+    assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s · 1 bash call$/);
+    state.polling = false;
+    state.polling_since = null;
+    state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click(); await tick();
+    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · 1 bash call$/);
+    state.agent_call_ended_at = null;
+    state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
+    await get('#refresh-notes').events.click(); await tick();
+    assert.equal(get('#connection-text').textContent, 'Agent 404 · 1 bash call');
+    state.agent_seen_at = new Date().toISOString().slice(0, 19);
     state.calls_since_message = 0;
     await get('#refresh-notes').events.click(); await tick();
     assert.equal(get('#connection-dot').dataset.state, 'ok');

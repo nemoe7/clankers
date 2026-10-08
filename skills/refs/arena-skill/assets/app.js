@@ -94,6 +94,7 @@ function scrollHistory(force) {
 // trailing Z is added back for the browser's parser.
 let pollSince = null;
 let connectionBase = 'Connecting…';
+let callTally = '';
 // A turn that ends leaves the preview up. The agent's own calls are stamped in the state, so the
 // header can say no agent has spoken instead of showing a live connection to nobody. The stamp
 // lands on the call's start, and a bash call may run to its own timeout, 30 minutes at the
@@ -133,9 +134,13 @@ function connectionText() {
   // else the stamp of the last bash call. An absent agent carries its own marker in place of
   // the sentence that stood here (owner note c08732a).
   const tail = agentIdle() ? ' · Agent 404' : '';
-  if (pollSince !== null) return `Polling… ${duration(Date.now() - pollSince)}${tail}`;
-  if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}`;
-  return agentIdle() ? 'Agent 404' : connectionBase;
+  // The tally ends every shape of the line: a poll, a finished call and the quiet line are all
+  // read while the count climbs (owner note 03471eb).
+  if (pollSince !== null) {
+    return `Polling… ${duration(Date.now() - pollSince)}${tail}${callTally}`;
+  }
+  if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}${callTally}`;
+  return agentIdle() ? `Agent 404${callTally}` : connectionBase + callTally;
 }
 function stampMs(value) {
   if (typeof value !== 'string') return null;
@@ -647,7 +652,7 @@ async function refreshState() {
     // The header carries the same tally the gate keeps, so the owner sees the call count
     // the stderr banner names without leaving the page.
     const calls = state.calls_since_message || 0;
-    const callsText = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'}` : '';
+    callTally = calls ? ` · ${calls} bash call${calls === 1 ? '' : 's'}` : '';
     pollSince = state.polling ? stampMs(state.polling_since) : null;
     agentSeenAt = stampMs(state.agent_seen_at);
     agentSeenStamp = state.agent_seen_at;
@@ -655,7 +660,7 @@ async function refreshState() {
     turnEndedStamp = state.turn_ended_at || null;
     callEndAt = stampMs(state.agent_call_ended_at);
     callEndStamp = state.agent_call_ended_at || null;
-    connectionBase = saved + callsText;
+    connectionBase = saved;
     setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
     if (state.rendering_error) {
       connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
