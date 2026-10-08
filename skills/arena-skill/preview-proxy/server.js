@@ -5,6 +5,7 @@ const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const zlib = require('node:zlib');
 
 const PORT = Number(process.env.PORT || 8080);
 const COOKIE_NAME = 'arena_preview_target';
@@ -31,11 +32,6 @@ const ASSET_TYPES = {
 const ASSETS = path.join(__dirname, 'assets');
 // The head rewrite buffers one small page; a larger body streams untouched.
 const HEAD_CAP = 1_000_000;
-
-if (COOKIE_SECRET.length < 32) {
-  console.error('PROXY_COOKIE_SECRET must be at least 32 characters.');
-  process.exit(1);
-}
 
 function isAllowedPreview(url) {
   return url.protocol === 'https:' &&
@@ -119,6 +115,15 @@ function sendText(res, status, text) {
   res.end(text);
 }
 
+function sendHtml(res, status, body) {
+  res.writeHead(status, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  });
+  res.end(body);
+}
+
 function rewriteArenaCookie(cookie) {
   // The browser is on the tailnet host, so make Arena's cookie host-only there;
   // the proxy forwards it upstream on later requests.
@@ -126,13 +131,92 @@ function rewriteArenaCookie(cookie) {
 }
 
 function pwaHead() {
+  // The manifest link rides the served head, so installability never waits on script.
   return '<link rel="manifest" href="/pwa/manifest.webmanifest">' +
     '<script src="/pwa/register.js" defer></script>';
 }
 
 function injectPwa(html) {
-  const found = html.search(/<\/head\s*>/i);
-  return found < 0 ? null : html.slice(0, found) + pwaHead() + html.slice(found);
+  // The tags go before </head>, and a page without one still takes them: after its <body> or
+  // <html> opener, or after its doctype. A served page always carries the manifest link.
+  const close = /<\/head\s*>/i.exec(html);
+  if (close) return html.slice(0, close.index) + pwaHead() + html.slice(close.index);
+  const open = /<body[^>]*>/i.exec(html) || /<html[^>]*>/i.exec(html);
+  if (open) {
+    const at = open.index + open[0].length;
+    return html.slice(0, at) + pwaHead() + html.slice(at);
+  }
+  const type = /^\s*<!doctype[^>]*>/i.exec(html);
+  const at = type ? type[0].length : 0;
+  return html.slice(0, at) + pwaHead() + html.slice(at);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[character]);
+}
+
+function viewerPage(message) {
+  // The viewer root is the main page of the installed app: it carries the manifest link and a
+  // URL box, so the page installs and opens a preview without a hand-made query string. The
+  // root once answered a bare text line, so the page had no head and no manifest landed
+  // (owner notes 59ec9e1 and fd9315b).
+  const reason = message ? `<p class="reason">${escapeHtml(message)}</p>` : '';
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Arena preview</title>
+${pwaHead()}
+<style>
+body { margin: 0; padding: 2rem 1rem; font: 16px/1.5 system-ui, sans-serif;
+  background: #1f2430; color: #e8ecf4; }
+main { max-width: 34rem; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+.reason { padding: .6rem .8rem; border-radius: .4rem; background: #3a2b34; color: #ffd9e0; }
+form { display: flex; gap: .5rem; margin: 1rem 0; }
+input { flex: 1; padding: .6rem .7rem; border-radius: .4rem; border: 1px solid #48506a;
+  background: #141922; color: inherit; font: inherit; min-width: 0; }
+button { padding: .6rem 1rem; border-radius: .4rem; border: 0; background: #4f7cff;
+  color: #fff; font: inherit; }
+.hint { color: #a8b0c4; font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Arena preview</h1>
+${reason}
+<form method="get" action="/">
+<label for="url" hidden>Preview URL</label>
+<input id="url" name="url" type="url" inputmode="url" required autocomplete="off"
+  placeholder="https://sbx-xxxx.arena.site/">
+<button type="submit">Open</button>
+</form>
+<p class="hint">Only HTTPS preview roots on <code>sbx-*.arena.site</code>. Install this page
+as an app from the browser menu to reopen the preview in one tap.</p>
+</main>
+</body>
+</html>
+`;
+}
+
+function decodeBody(buffer, encoding) {
+  // The proxy forwards the browser's Accept-Encoding, so an upstream page often arrives
+  // compressed. The rewrite reads plain HTML, so decode it here; a body that will not decode
+  // returns null and passes through untouched.
+  const name = String(encoding || '').trim().toLowerCase();
+  if (!name || name === 'identity') return buffer;
+  try {
+    if (name === 'gzip' || name === 'x-gzip') return zlib.gunzipSync(buffer);
+    if (name === 'deflate') return zlib.inflateSync(buffer);
+    if (name === 'br') return zlib.brotliDecompressSync(buffer);
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function manifestJson(origin) {
@@ -238,9 +322,15 @@ function rewriteHtml(upstreamRes, res, status, headers) {
   });
   upstreamRes.on('end', () => {
     if (capped) return;
-    const html = Buffer.concat(chunks).toString('utf8');
-    const rewritten = injectPwa(html);
-    const body = Buffer.from(rewritten === null ? html : rewritten, 'utf8');
+    const raw = Buffer.concat(chunks);
+    const decoded = decodeBody(raw, headers['content-encoding']);
+    if (decoded === null || decoded.length > HEAD_CAP * 4) {
+      // Undecodable or oversized: the bytes pass through untouched, with no injection.
+      res.writeHead(status, headers);
+      return res.end(raw);
+    }
+    const body = Buffer.from(injectPwa(decoded.toString('utf8')), 'utf8');
+    delete headers['content-encoding'];
     headers['content-length'] = String(body.length);
     res.writeHead(status, headers);
     res.end(body);
@@ -279,11 +369,19 @@ const server = http.createServer((req, res) => {
     } else {
       const origin = verifyOriginToken(readCookie(req.headers.cookie, COOKIE_NAME));
       if (!origin) {
-        return sendText(res, 400, 'Choose a preview first: /?url=<URL-encoded https://sbx-….arena.site/>');
+        // No target yet: the main page itself answers, so it installs and carries the
+        // manifest link (owner note fd9315b).
+        return sendHtml(res, 200, viewerPage(
+          'Choose a preview: paste its URL, or open this page from a share or a link that'
+          + ' carries one.'
+        ));
       }
       target = makeTarget(origin, incoming.pathname, incoming.search);
     }
   } catch (err) {
+    if (incoming.pathname === '/') {
+      return sendHtml(res, 400, viewerPage(err.message || 'Invalid preview URL.'));
+    }
     return sendText(res, 400, err.message || 'Invalid preview URL.');
   }
 
@@ -323,7 +421,7 @@ const server = http.createServer((req, res) => {
       responseHeaders['cache-control'] = 'no-store';
       const status = upstreamRes.statusCode || 502;
       const isHtml = /\btext\/html\b/i.test(String(responseHeaders['content-type'] || ''));
-      if (isHtml && req.method !== 'HEAD' && !responseHeaders['content-encoding']) {
+      if (isHtml && req.method !== 'HEAD') {
         delete responseHeaders['content-length'];
         return rewriteHtml(upstreamRes, res, status, responseHeaders);
       }
@@ -342,7 +440,19 @@ const server = http.createServer((req, res) => {
 
 server.headersTimeout = 65_000;
 server.requestTimeout = 10 * 60 * 1000;
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Arena preview proxy listening on 127.0.0.1:${PORT}`);
-  console.log('Allowed target pattern: https://sbx-*.arena.site/');
-});
+
+// The pure helpers are exported for the checks; the image runs this file directly, so the
+// listening server stays out of a require.
+module.exports = { injectPwa, decodeBody, viewerPage };
+
+if (require.main === module) {
+  // A served proxy refuses a short signing secret; a require for the checks needs none.
+  if (COOKIE_SECRET.length < 32) {
+    console.error('PROXY_COOKIE_SECRET must be at least 32 characters.');
+    process.exit(1);
+  }
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`Arena preview proxy listening on 127.0.0.1:${PORT}`);
+    console.log('Allowed target pattern: https://sbx-*.arena.site/');
+  });
+}

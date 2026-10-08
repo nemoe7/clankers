@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Caveman register**: the squash skill names a caveman register for "caveman squash" requests. Articles drop, fragments are fine, and every fact and verbatim span still holds.
 - **Caveman refs experiment**: the arena suite refs are caveman-squashed into a new `caveman/` directory outside the gates. The copies keep every heading, table, code block, number, path and URL. The measured saving is 2.6% of tokens.
 - **Ultracave refs experiment**: the arena suite refs are ultracave-squashed into a new `ultracave/` directory beside `caveman/`. The copies keep every heading, table, code block, number, path and URL. The measured saving is 4.9% of tokens, against 2.6% for the caveman copies.
+- **Proxy main page**: the preview proxy answers its root with an installable page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, and the rewrite decodes a compressed page before it injects the link. The root once answered a bare text line, so no head or manifest landed (owner notes 59ec9e1 and fd9315b).
 - **Preview proxy package**: `skills/arena-skill/preview-proxy/` holds a Node image, a compose file with a Tailscale sidecar, a Serve route with Funnel off, and an install page. The workflow publishes `ghcr.io/nemoe7/arena-preview-proxy:latest`. The proxy page installs as a web app, takes a shared Arena link, and serves it in-page.
 
 #### userscripts
