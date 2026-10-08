@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.3
+// @version      1.9.4
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -704,9 +704,6 @@
       );
     }
 
-    menuItem(proxyMenus, "Proxy — rotate now", function () {
-      rotateKey(0, null);
-    });
     menuItem(proxyMenus, "Proxy — post key now", function () {
       var pair = settings();
       postKeyNow(
@@ -2298,9 +2295,6 @@
 
     var menus = [];
     menuItem(menus, "State — choose the file", chooseStateFile);
-    menuItem(menus, "State — save now", function () {
-      fetchStateFile(true);
-    });
     // A forced save writes whatever the state holds and moves the reference to it.
     menuItem(menus, "State — force save", function () {
       fetchStateFile(true, true);

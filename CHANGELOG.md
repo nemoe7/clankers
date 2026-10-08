@@ -33,6 +33,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Task detail required**: a task write must leave at least one detail, so a bare title and clearing the last detail are both refused.
 - **Call end stamp**: the hook stamps every bash call's end. The header clears the long call text once a call finished, so work between calls never reads as a running one.
 
+### Removed
+
+#### userscripts
+
+- **Menu entries**: `State — save now` and `Proxy — rotate now` leave the menu. Force save covers the first, and rotation stays on its timer. Arena 1.9.4.
+
 ### Fixed
 
 #### preview

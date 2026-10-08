@@ -18,8 +18,8 @@ const bundles = {
     // Every Arena entry leads with its module and carries no role word; a switch ends in (ON)/(OFF).
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
-    // The prompt fill owns the four proxy entries; the state download owns its two.
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 4, "state-download": 3 },
+    // The prompt fill owns the three proxy entries; the state download owns its two.
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 3, "state-download": 2 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
     countMenu: "Transcript — keep ",
@@ -137,7 +137,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Composer — fill (ON)",
       "Proxy — host",
       "Proxy — master key",
-      "Proxy — rotate now",
       "Proxy — post key now",
       "Steering — open (ON)",
       "Transcript — auto-scroll (ON)",
@@ -145,7 +144,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Composer — hide (ON)",
       "State — download (ON)",
       "State — choose the file",
-      "State — save now",
       "State — force save",
       "Page — tab title (ON)",
       "Userscript — pause all",

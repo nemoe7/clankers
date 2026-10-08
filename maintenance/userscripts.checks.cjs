@@ -74,12 +74,12 @@ function checkLogging(api, menus) {
   if (menuItem) {
     var ran = [];
     var list = [];
-    menuItem(list, "State — save now", function () {
+    menuItem(list, "State — force save", function () {
       ran.push("save");
     });
     assert.equal(list.length, 1);
     var registered = menus[menus.length - 1];
-    assert.equal(registered.label, "State — save now");
+    assert.equal(registered.label, "State — force save");
     lines.length = 0;
     var pressed = [];
     console.log = function () {
@@ -91,7 +91,7 @@ function checkLogging(api, menus) {
       console.log = original;
     }
     assert.deepEqual(ran, ["save"]);
-    assert.equal(pressed[0], "[NemoUtils][menu] State — save now");
+    assert.equal(pressed[0], "[NemoUtils][menu] State — force save");
   }
   console.log("ok logging 3");
 }

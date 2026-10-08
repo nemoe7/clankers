@@ -40,7 +40,7 @@ The message names the rules files, and the fill appends `rules/ARENA.md` fetched
 
 ### Arena proxy settings and key rotation
 
-The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Four `Proxy` entries sit with the fill: `Proxy — host` and `Proxy — master key` save the settings, `Proxy — rotate now` rotates at once, and `Proxy — post key now` posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
+The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Three `Proxy` entries sit with the fill: `Proxy — host` and `Proxy — master key` save the settings, and `Proxy — post key now` posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
 
 - The host is one HTTPS origin with no path. The script trims a trailing `/v1`.
 - With both settings saved, the script asks `/v1/key` for the live agent key. The composer holds the rules line only.
@@ -93,7 +93,7 @@ A stamp older than the last write never overwrites the file. The script says so 
 
 The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file. A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
 
-Three menu entries sit with the feature: `State — choose the file`, `State — save now`, and `State — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
+Two menu entries sit with the feature: `State — choose the file` and `State — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
 
 ## Arena Tab Title
 
