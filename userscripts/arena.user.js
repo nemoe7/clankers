@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.4
+// @version      1.9.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1239,6 +1239,12 @@
       );
     }
 
+    function trimMessage(removed, keep) {
+      return (
+        "removed " + removed + " " + (removed === 1 ? "row" : "rows") + " (kept " + keep + ")"
+      );
+    }
+
     function messageRoots(doc) {
       var logs = doc.querySelectorAll(LOG_SELECTOR);
       var roots = [];
@@ -1334,6 +1340,7 @@
       normalizePlan: normalizePlan,
       planParts: planParts,
       countLabel: countLabel,
+      trimMessage: trimMessage,
       messageRoots: messageRoots,
       rowsOfRoot: rowsOfRoot,
       trimPlan: trimPlan,
@@ -1390,9 +1397,12 @@
     }
 
     function trim() {
-      var removed = trimPlan(document, keepPlan());
+      var keep = keepPlan();
+      var removed = trimPlan(document, keep);
       if (removed) {
         trimmedTotal += removed;
+        // The cut is silent on the page, so the console line carries what left.
+        logEvent("trim", trimMessage(removed, keep));
         refreshLabel();
       }
       return removed;

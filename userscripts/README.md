@@ -71,7 +71,7 @@ The feature uses the transcript message marker and its scrollable `role="log"` a
 
 This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. It also removes the sibling action container, `div.mt-3.flex.flex-col.gap-3`, from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree. The row limit cannot fall below `20`.
 
-The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`, so a plan above the transcript size reads as no change. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
+The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`, so a plan above the transcript size reads as no change. A trim that removes rows also writes one console line, such as `[NemoUtils][trim] removed 12 rows (kept 50)`. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
 
 The trim waits for the page to settle. It touches nothing while a turn streams, a live icon pulses, or a question widget waits for an answer. It waits for a quiet window after the last change. A root the document dropped, and a root whose row nodes sit detached during a redraw, stay untouched.
 

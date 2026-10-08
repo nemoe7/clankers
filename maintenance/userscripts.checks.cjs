@@ -419,6 +419,7 @@ function checkTranscriptTrim(api) {
   var rowsOfRoot = api.rowsOfRoot;
   var trimPlan = api.trimPlan;
   var trimRows = api.trimRows;
+  var trimMessage = api.trimMessage;
   var isSettled = api.isSettled;
   var ACTION_SELECTOR = api.ACTION_SELECTOR;
   var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
@@ -541,6 +542,8 @@ function checkTranscriptTrim(api) {
     [MIN_ROWS, 20],
     [countLabel("50", 0), "Transcript \u2014 keep 50 rows"],
     [countLabel("50", 3), "Transcript \u2014 keep 50 rows (3 removed)"],
+    [trimMessage(12, "50"), "removed 12 rows (kept 50)"],
+    [trimMessage(1, "20"), "removed 1 row (kept 20)"],
     [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
