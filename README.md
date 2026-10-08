@@ -32,9 +32,9 @@ Latest measurements as of 2026-10-08. `maintenance/check.py` measures ARENA.md b
 | `rules/COMMIT-SPEC.txt` | `cl100k_base` | 91 `tok` |
 | `system-prompts/NEMOGPT.md` | `cl100k_base` | 3,022 `tok` |
 | `skills/amending-violations/SKILL.md` | `cl100k_base` | 1,604 `tok` |
-| `skills/arena-skill/SKILL.md` | `cl100k_base` | 3,730 `tok` |
+| `skills/arena-skill/SKILL.md` | `cl100k_base` | 3,740 `tok` |
 | `skills/arena-skill/README.md` | `cl100k_base` | 1,654 `tok` |
-| `skills/arena-skill/references/REFERENCE.md` | `cl100k_base` | 2,727 `tok` |
+| `skills/arena-skill/references/REFERENCE.md` | `cl100k_base` | 2,741 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 48,582 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 8,333 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 12,985 `B` |
@@ -59,8 +59,8 @@ Latest measurements as of 2026-10-08. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/preview-proxy/server.js` | `UTF-8 file size` | 16,900 `B` |
 | `skills/arena-skill/preview-proxy/tailscale-serve.json` | `UTF-8 file size` | 266 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
-| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 12,707 `B` |
-| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 104,937 `B` |
+| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 13,046 `B` |
+| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 105,721 `B` |
 | `skills/squash/SKILL.md` | `cl100k_base` | 1,399 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `cl100k_base` | 531 `tok` |
 | `workflows/init-docs.md` | `cl100k_base` | 4,552 `tok` |

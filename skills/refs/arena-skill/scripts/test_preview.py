@@ -4875,6 +4875,24 @@ def test_tick_warning_reads_the_quoting_shape():
   assert preview.tick_warning("") is None and preview.tick_warning(None) is None
 
 
+def test_serve_warning_reads_the_port():
+  """The gate's classifier names a port other than the default, and only then.
+
+  The poll and the owner's page follow the port the skill names, so an off-default
+  serve hides both (owner note 61100d7).
+  """
+  off = preview.serve_warning("arena-preview serve --port 8123")
+  assert off and "8123" in off and "8000" in off
+  assert preview.serve_warning("arena-preview serve --port=8123")
+  assert preview.serve_warning("cd repo && preview.py serve --port 8123")
+  # The default, an absent flag and a non-serve line all stay quiet.
+  assert preview.serve_warning("arena-preview serve --port 8000") is None
+  assert preview.serve_warning("arena-preview serve") is None
+  assert preview.serve_warning("arena-preview read") is None
+  assert preview.serve_warning("arena-preview serve-tick 'arena-preview serve'") is None
+  assert preview.serve_warning("") is None and preview.serve_warning(None) is None
+
+
 def test_task_detail_steps():
   # A task detail is one step per line: a block splits on its line breaks, and a wall of
   # text is refused before anything is written.

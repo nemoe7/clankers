@@ -159,6 +159,9 @@ REMINDERS = (
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
 GATE_THRESHOLD = 10
+# The port the skill names. A serve on another one hides the owner's page from the
+# address they expect, so the gate names the difference (owner note 61100d7).
+DEFAULT_PORT = 8000
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
 # The userscript replaces the record inside its 15-minute rotation window, so an older
@@ -1061,6 +1064,28 @@ def tick_warning(line):
     "arena-preview gate: that ack text sits in double quotes, so the shell runs each"
     " backtick as a command and the ticks vanish. Single-quote the text, or pass"
     " --reply-file <path>."
+  )
+
+
+SERVE_PORT_RE = re.compile(
+  r"(?:arena-preview|preview\.py)\s+serve\b[^\n]*?--port(?:=|\s+)(\d+)"
+)
+
+
+def serve_warning(line):
+  """A warning when a serve names a port other than the default.
+
+  The poll follows the port the state records, and the owner's page lives on the address
+  the skill names, so an off-default serve hides both. The gate reads the line before the
+  call runs, so the port is named while the change is still cheap (owner note 61100d7).
+  """
+  found = SERVE_PORT_RE.search(line or "")
+  if not found or int(found.group(1)) == DEFAULT_PORT:
+    return None
+  return (
+    f"arena-preview gate: that serve names port {found.group(1)}, not the standard"
+    f" {DEFAULT_PORT}. The owner's page and the poll follow the standard port. Name"
+    " another only when 8000 is taken, and say so."
   )
 
 
@@ -3885,7 +3910,10 @@ def main():
   commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve")
   serve.add_argument(
-    "--port", type=int, default=8000, help="Port to bind (default: 8000)"
+    "--port",
+    type=int,
+    default=DEFAULT_PORT,
+    help=f"Port to bind (default: {DEFAULT_PORT})",
   )
   commands.add_parser("init")
   commands.add_parser("read")
@@ -3900,6 +3928,11 @@ def main():
     help="Warn when an inline ack text holds a backtick the shell will substitute",
   )
   ack_tick.add_argument("line", help="The command line, as the hook read it")
+  serve_tick = commands.add_parser(
+    "serve-tick",
+    help="Warn when a serve names a port other than the default",
+  )
+  serve_tick.add_argument("line", help="The command line, as the hook read it")
   gate = commands.add_parser("gate")
   gate.add_argument(
     "--push",
@@ -4013,6 +4046,11 @@ def main():
       return 0 if quiet_inbox_line(args.line) else 1
     if args.command == "ack-tick":
       warning = tick_warning(args.line)
+      if warning:
+        print(warning, file=sys.stderr)
+      return 0
+    if args.command == "serve-tick":
+      warning = serve_warning(args.line)
       if warning:
         print(warning, file=sys.stderr)
       return 0

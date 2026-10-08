@@ -30,6 +30,9 @@ fi
 if [ "$1" = "ack-tick" ]; then
   exec __PYTHON__ __PREVIEW__ ack-tick "$2"
 fi
+if [ "$1" = "serve-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ serve-tick "$2"
+fi
 exit 1
 """
 
@@ -207,6 +210,25 @@ def test_the_gate_names_a_backtick_the_shell_will_eat():
   safe = run(": \"arena-preview ack abc\" --reply 'use `echo tick` now'")
   assert safe.returncode == 0, safe.stderr
   assert "backtick" not in safe.stderr, safe.stderr
+
+
+def test_the_gate_names_a_port_that_is_not_the_default():
+  """A serve on another port draws a warning before the call runs.
+
+  The owner's page and the poll follow the port the skill names, so an off-default
+  serve hides both. The warning names the port and the default (owner note 61100d7).
+  """
+  off = run("arena-preview serve --port 8123")
+  assert off.returncode == 0, off.stderr
+  assert "8123" in off.stderr, off.stderr
+  assert "8000" in off.stderr, off.stderr
+  # The default port, an absent flag and a plain read all stay quiet.
+  safe = run("arena-preview serve --port 8000")
+  assert safe.returncode == 0, safe.stderr
+  assert "8123" not in safe.stderr, safe.stderr
+  quiet = run("arena-preview read")
+  assert quiet.returncode == 0, quiet.stderr
+  assert "8000" not in quiet.stderr, quiet.stderr
 
 
 def test_a_silenced_read_meets_the_count_gate():

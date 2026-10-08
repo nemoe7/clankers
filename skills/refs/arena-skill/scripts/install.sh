@@ -229,6 +229,13 @@ _arena_preview_gate() {
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" ack-tick "\$BASH_COMMAND"
       ;;
   esac
+  # A serve on another port hides the owner's page from the address the skill names.
+  # The warning lands before the call runs (owner note 61100d7).
+  case "\$BASH_COMMAND" in
+    *"arena-preview serve"*|*"preview.py serve"*)
+      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" serve-tick "\$BASH_COMMAND"
+      ;;
+  esac
   case "\$BASH_COMMAND" in *preview*|*profile*|*bashrc*|*arena-state*|gh*|sleep*|true*|:*|test*|"git status"*|"git diff"*|"git add"*|"git commit"*|*arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*) return 0 ;; esac
   # A push is a checkpoint: an unread note can change what leaves the sandbox,
   # so it waits for an ack whatever the call count.
