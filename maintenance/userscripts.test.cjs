@@ -21,8 +21,9 @@ const bundles = {
     // The prompt fill owns the three proxy entries; the state download owns its two; the auto
     // trim gates its interval line behind the switch alone.
     extraMenus: { "transcript-trim": 1, "prompt-fill": 3, "state-download": 2, "tab-title": 1 },
-    // The keep-rows plan and the trim-now press stay on the menu whatever the switch says.
-    alwaysMenus: { "transcript-trim": 2 },
+    // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
+    // the switch says.
+    alwaysMenus: { "transcript-trim": 3 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
     countMenu: "Transcript — keep ",
@@ -156,6 +157,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Transcript — auto-scroll (ON)",
       "Transcript — auto trim (OFF)",
       "Transcript — keep 50 rows",
+      "Transcript — trim cap 200 rows",
       "Transcript — trim now",
       "State — download (ON)",
       "State — choose the file",
@@ -232,6 +234,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Transcript — auto-scroll (ON)",
         "Transcript — auto trim (ON)",
         "Transcript — keep 50 rows",
+        "Transcript — trim cap 200 rows",
         "Transcript — trim now",
         "Transcript — auto trim interval 5 s",
         "State — download (ON)",
