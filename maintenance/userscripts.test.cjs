@@ -19,7 +19,7 @@ const bundles = {
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
     // The prompt fill owns the three proxy entries; the state download owns its two.
-    extraMenus: { "transcript-trim": 2, "prompt-fill": 3, "state-download": 2 },
+    extraMenus: { "transcript-trim": 3, "prompt-fill": 3, "state-download": 2, "tab-title": 1 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
     countMenu: "Transcript — keep ",
@@ -95,8 +95,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
       setInterval(callback, ms) {
         assert.ok(
-          [1000, 5000, 60000, 900000].includes(ms),
-          `An interval runs the paint, the trim tick, the key watch or the key rotation, not ${ms} ms`,
+          (Number.isInteger(ms) && ms >= 1000 && ms <= 60000) || ms === 900000,
+          `An interval stays inside the 1 s to 60 s owner range or the 15 min key rotation, not ${ms} ms`,
         );
         active.intervals += 1;
       },
@@ -153,6 +153,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "State — choose the file",
       "State — force save",
       "Page — tab title (ON)",
+      "Tab title — every 1 s",
       "Userscript — pause all",
     ];
     assert.deepEqual(
@@ -206,6 +207,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       findCount().label.includes("50 rows"),
       "The count menu shows the default row limit",
     );
+
     // The count line belongs to the Transcript group, so it sits with its two switches rather
     // than at the bottom the manager appends it to.
     assert.deepEqual(
@@ -221,14 +223,43 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Transcript — trim (ON)",
         "Transcript — keep 50 rows",
         "Transcript — trim now",
+        "Transcript — trim every 5 s",
         "State — download (ON)",
         "State — choose the file",
         "State — force save",
         "Page — tab title (ON)",
+        "Tab title — every 1 s",
         "Userscript — pause all",
       ],
       "The keep-rows line sits in the Transcript group",
     );
+    const findEvery = () =>
+      [...counted.menus.values()].find((item) => item.label.startsWith("Transcript — trim every"));
+    assert.ok(findEvery(), "Missing the trim interval menu");
+    assert.ok(findEvery().label.includes("5 s"), "The interval line shows the default tick");
+    promptAnswer = "3";
+    findEvery().callback();
+    promptAnswer = null;
+    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 3000, "The prompt sets the trim tick");
+    assert.ok(findEvery().label.includes("3 s"), "The interval line shows the saved tick");
+    promptAnswer = "120";
+    findEvery().callback();
+    promptAnswer = null;
+    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "A huge answer clamps to a minute");
+    promptAnswer = "zero";
+    findEvery().callback();
+    promptAnswer = null;
+    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "Garbage keeps the saved tick");
+    findEvery().callback();
+    assert.equal(stored.get("clankers-arena-trim-interval-ms"), 60000, "A cancel keeps the saved tick");
+    const findTitleEvery = () =>
+      [...counted.menus.values()].find((item) => item.label.startsWith("Tab title — every"));
+    assert.ok(findTitleEvery(), "Missing the tab title interval menu");
+    promptAnswer = "2";
+    findTitleEvery().callback();
+    promptAnswer = null;
+    assert.equal(stored.get("clankers-arena-title-interval-ms"), 2000, "The prompt sets the title tick");
+    assert.ok(findTitleEvery().label.includes("2 s"), "The title line shows the saved tick");
     findCount().callback();
     assert.equal(stored.has(countKey), false, "A cancel keeps the plan unset");
     stored.set(countKey, "2,120");

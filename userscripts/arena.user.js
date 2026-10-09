@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.5
+// @name         Arena.ai | NemoUtils | v1.10.6
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.5
+// @version      1.10.6
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -61,6 +61,7 @@
     "Transcript",
     "State",
     "Page",
+    "Tab title",
     "Userscript",
   ];
   var menuEntries = [];
@@ -1453,6 +1454,7 @@
 
     var countEntry = null;
     var nowEntry = null;
+    var intervalEntry = null;
     var timer = null;
     var observer = null;
     var labelTimer = null;
@@ -1497,6 +1499,47 @@
       }, 1000);
     }
 
+    // The owner sets the tick in seconds; the bounds hold it between one second and a minute.
+    var INTERVAL_KEY = "clankers-arena-trim-interval-ms";
+    var MAX_TICK_MS = 60000;
+
+    function tickMs() {
+      var ms = Number(GM_getValue(INTERVAL_KEY, SETTLE_MS));
+      if (!isFinite(ms) || ms < 1000) return SETTLE_MS;
+      return Math.min(Math.round(ms), MAX_TICK_MS);
+    }
+
+    function intervalLabel() {
+      return "Transcript — trim every " + Math.round(tickMs() / 1000) + " s";
+    }
+
+    function restartTick() {
+      if (timer !== null) clearInterval(timer);
+      timer = setInterval(tick, tickMs());
+    }
+
+    function registerInterval() {
+      if (intervalEntry !== null) menuDrop(intervalEntry);
+      intervalEntry = menuAdd(intervalLabel, setTickByPrompt);
+    }
+
+    function setTickByPrompt() {
+      if (typeof prompt !== "function") return;
+      var answer = prompt("Trim tick in seconds (1 to 60)", String(Math.round(tickMs() / 1000)));
+      if (answer === null) {
+        registerInterval();
+        return;
+      }
+      var seconds = Number(String(answer).trim());
+      if (!isFinite(seconds) || seconds < 1) {
+        registerInterval();
+        return;
+      }
+      GM_setValue(INTERVAL_KEY, Math.min(Math.round(seconds), 60) * 1000);
+      restartTick();
+      registerInterval();
+    }
+
     function setCount() {
       if (typeof prompt !== "function") return;
       var answer = prompt("Transcript rows to keep", keepPlan());
@@ -1536,7 +1579,7 @@
       settleState.mutationAt = Date.now();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    timer = setInterval(tick, SETTLE_MS);
+    timer = setInterval(tick, tickMs());
     registerCount();
     // The owner's button: one press runs the cut at once, whatever the interval says.
     nowEntry = menuAdd(function () {
@@ -1544,10 +1587,15 @@
     }, function () {
       trim();
     });
+    registerInterval();
     return function () {
       if (timer !== null) clearInterval(timer);
       if (labelTimer !== null) clearTimeout(labelTimer);
       observer.disconnect();
+      if (intervalEntry !== null) {
+        menuDrop(intervalEntry);
+        intervalEntry = null;
+      }
       if (nowEntry !== null) {
         menuDrop(nowEntry);
         nowEntry = null;
@@ -2471,7 +2519,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.5";
+    var VERSION = "1.10.6";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -3032,12 +3080,60 @@
     }
     observeRoot();
     syncTitle(document);
-    var titleTimer = setInterval(function () {
+    var titleTimer = null;
+    var titleEntry = null;
+    // The owner sets the tick in seconds; the bounds hold it between one second and a minute.
+    var TITLE_INTERVAL_KEY = "clankers-arena-title-interval-ms";
+
+    function titleTickMs() {
+      var ms = Number(GM_getValue(TITLE_INTERVAL_KEY, 1000));
+      if (!isFinite(ms) || ms < 1000) return 1000;
+      return Math.min(Math.round(ms), 60000);
+    }
+
+    function titleStep() {
       if (document.documentElement !== observedRoot) {
         observeRoot();
       }
       syncTitle(document);
-    }, 1000);
+    }
+
+    function restartTitleTimer() {
+      if (titleTimer !== null) clearInterval(titleTimer);
+      titleTimer = setInterval(titleStep, titleTickMs());
+    }
+
+    function titleIntervalLabel() {
+      return "Tab title — every " + Math.round(titleTickMs() / 1000) + " s";
+    }
+
+    function registerTitleInterval() {
+      if (titleEntry !== null) menuDrop(titleEntry);
+      titleEntry = menuAdd(titleIntervalLabel, setTitleTickByPrompt);
+    }
+
+    function setTitleTickByPrompt() {
+      if (typeof prompt !== "function") return;
+      var answer = prompt(
+        "Tab title tick in seconds (1 to 60)",
+        String(Math.round(titleTickMs() / 1000)),
+      );
+      if (answer === null) {
+        registerTitleInterval();
+        return;
+      }
+      var seconds = Number(String(answer).trim());
+      if (!isFinite(seconds) || seconds < 1) {
+        registerTitleInterval();
+        return;
+      }
+      GM_setValue(TITLE_INTERVAL_KEY, Math.min(Math.round(seconds), 60) * 1000);
+      restartTitleTimer();
+      registerTitleInterval();
+    }
+
+    restartTitleTimer();
+    registerTitleInterval();
     function onRoute() {
       lastRepo = null;
       lastPath = null;
@@ -3048,6 +3144,10 @@
     window.addEventListener("popstate", onRoute);
     return function () {
       clearInterval(titleTimer);
+      if (titleEntry !== null) {
+        menuDrop(titleEntry);
+        titleEntry = null;
+      }
       observer.disconnect();
       window.removeEventListener("popstate", onRoute);
       if (appliedTitle && document.title === appliedTitle) {
