@@ -3144,9 +3144,9 @@ class Store:
       if row is None:
         raise FileNotFoundError("Report not found")
       # An ack the owner has not opened yet holds the report: removing it would hide the
-      # answer's receipt before it was read. The unread star reads the same pair (owner note
-      # 6960520). The page stamps that open while the owner presses delete, so the hold never
-      # blocks the owner's own two clicks.
+      # answer's receipt before it was read. The unread star reads the same pair. The page
+      # stamps that open while the owner presses delete, so the hold never blocks the owner's
+      # own two clicks.
       acked = db.execute(
         "SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?",
         (report_id,),

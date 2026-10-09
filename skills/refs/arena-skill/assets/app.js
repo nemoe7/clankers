@@ -492,8 +492,7 @@ function showHistory(notes) {
     separator.className = 'receipt-sep';
     separator.textContent = ' · ';
     // A message that became a task says so, so a line that was read is never mistaken for a line
-    // that was dropped. The task ID rides in the title; the owner asked for the marker on note
-    // fe00a32d and named it `Task added`.
+    // that was dropped. The task ID rides in the title; the owner named the marker `Task added`.
     const receiptTask = document.createElement('span');
     receiptTask.className = 'receipt-task';
     receiptTask.textContent = ' · Task added';
@@ -600,12 +599,45 @@ $('#log-newest').addEventListener('click', () => {
   logPinned = true;
   updateLogJump();
 });
+function markRowMatches(node, query) {
+  // The search keeps a row for its match, and the match itself wears a mark, so the eye
+  // lands on the word at once. A rendered answer keeps its HTML, so the mark visits only
+  // the plain message text and the receipt's ID.
+  const receipt = node.children[2];
+  const text = node.children[0];
+  const targets = [];
+  if (text && text.className === 'raw-message') targets.push(text);
+  if (receipt && receipt.children[0]) targets.push(receipt.children[0]);
+  for (const target of targets) {
+    const plain = target.textContent;
+    const lower = plain.toLowerCase();
+    const parts = [];
+    let start = 0;
+    let pos = query ? lower.indexOf(query, start) : -1;
+    while (pos > -1) {
+      parts.push(plain.slice(start, pos));
+      const mark = document.createElement('mark');
+      mark.className = 'search-hit';
+      mark.textContent = plain.slice(pos, pos + query.length);
+      parts.push(mark);
+      start = pos + query.length;
+      pos = lower.indexOf(query, start);
+    }
+    if (!parts.length) {
+      if (target.children.length) target.replaceChildren(plain);
+      continue;
+    }
+    parts.push(plain.slice(start));
+    target.replaceChildren(...parts);
+  }
+}
 function applyLogSearch() {
   const query = logQuery.trim().toLowerCase();
   let shown = 0;
   for (const node of messageNodes.values()) {
     const visible = !query || node.textContent.toLowerCase().includes(query);
     node.hidden = !visible;
+    markRowMatches(node, query);
     if (visible) shown += 1;
   }
   const total = messageNodes.size;
@@ -701,8 +733,7 @@ async function refreshState() {
           ($('#report').dataset.reportId !== select.value ||
            $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
       // A panel already showing the report is the open, so an ack that lands in view stamps at
-      // once rather than waiting for a tab switch the owner has no reason to make (owner note
-      // 0b9fb71).
+      // once rather than waiting for a tab switch the owner has no reason to make.
       else if (!$('#reports-panel').hidden && ackUnread(selectedReport)) void markAckSeen(select.value);
     }
     // The pip tracks reports never opened; an edited report keeps its star alone; the separate

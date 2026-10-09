@@ -1604,8 +1604,7 @@ test('preview client', async (t) => {
 
   await t.test("The log search narrows the rows by substring and leaves the copy whole", async () => {
     // The log search narrows the rows by substring over each row as it stands, and leaves the copy
-    // alone: that is the restore path, and a narrowed copy would restore a partial log (owner note
-    // 0ccee47).
+    // alone: that is the restore path, and a narrowed copy would restore a partial log.
     logStamp = new Date().toISOString();
     state.notes = [
       { id: 'n1', text: 'alpha', at: logStamp, acknowledged_at: null },
@@ -1639,6 +1638,30 @@ test('preview client', async (t) => {
     assert.deepEqual(visibleRows(), ['n1', 'n2', 'n3'], 'clearing the box brings every row back');
     assert.equal([...storage.keys()].some(key => key.endsWith(':log-filter')), false,
       'a search is a look, not a setting, so nothing is remembered');
+  });
+
+  await t.test("The search lights the matched text in each row it keeps", async () => {
+    // The search lights the matched text in each row it keeps.
+    state.notes = [
+      { id: 'n1', text: 'Alpha beta alpha', at: logStamp, acknowledged_at: null },
+      { id: 'n2', text: 'gamma', at: logStamp, acknowledged_at: null }
+    ];
+    await refresh();
+    await tick();
+    get('#log-search').value = 'ALPHA';
+    get('#log-search').events.input();
+    const text = messageRow('n1').children[0];
+    const hits = node => node.children.filter(child =>
+      typeof child !== 'string' && child.className === 'search-hit');
+    assert.equal(hits(text).length, 2, 'every match wears a mark, whatever the case');
+    assert.equal(hits(text)[0].textContent, 'Alpha', 'the mark keeps the row\'s own casing');
+    assert.equal(text.textContent, 'Alpha beta alpha', 'the row text stays whole');
+    assert.equal(hits(messageRow('n2').children[0]).length, 0,
+      'a row without the word wears no mark');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
+    assert.equal(hits(text).length, 0, 'clearing the box takes the marks back');
+    assert.equal(text.textContent, 'Alpha beta alpha', 'the text stands as it stood');
   });
 
   await t.test("A search that matches nothing says so and counts what it is holding back", async () => {

@@ -2130,8 +2130,8 @@
       });
     }
 
-    // A save problem the console hides becomes a small card in the page corner (owner note
-    // 3c0d3a2). The checks run without a DOM, so the card is skipped there.
+    // A save problem the console hides becomes a small card in the page corner. The checks
+    // run without a DOM, so the card is skipped there.
     var STATE_PANEL_ID = "clankers-state-panel";
     var STATE_PANEL_MS = 6000;
 
