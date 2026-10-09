@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.12
+// @name         Arena.ai | NemoUtils | v1.10.13
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.12
+// @version      1.10.13
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2580,7 +2580,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.12";
+    var VERSION = "1.10.13";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2707,6 +2707,13 @@
     }
 
     function rowIsNewest(doc, row) {
+      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+      var newestMessage = messages.length ? messages[messages.length - 1] : null;
+      // A row in an older message never marks: an empty newest message used to read as
+      // no newest row, and a stale row took the title back.
+      if (newestMessage && typeof newestMessage.contains === "function" && !newestMessage.contains(row)) {
+        return false;
+      }
       var newest = newestRow(doc);
       return !newest || newest === row;
     }
@@ -2789,7 +2796,24 @@
       if (card && !rowIsNewest(doc, card)) {
         return null;
       }
+      // A spoken word after the card is newer still: the message keeps speaking,
+      // and its words outrank the card that opened it.
+      if (card && speechFollows(newest, card)) {
+        return null;
+      }
       return card;
+    }
+
+    function speechFollows(message, card) {
+      var words = typeof message.querySelectorAll === "function" ? message.querySelectorAll(SPEECH_SELECTOR) : [];
+      var i;
+      for (i = 0; i < words.length; i += 1) {
+        // DOCUMENT_POSITION_PRECEDING: the card sits before this word in the page.
+        if (typeof words[i].compareDocumentPosition === "function" && words[i].compareDocumentPosition(card) & 2) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function rowInMessage(doc, row) {

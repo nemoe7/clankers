@@ -1461,6 +1461,94 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's flip-flop: the watcher card keeps taking the title back from the
+  // message that started it while that message keeps speaking. One spoken word
+  // after the card outranks it.
+  function processDocSpeaking() {
+    var play = {
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    var name = {
+      textContent: "Start PR checks watcher",
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    var button = {
+      textContent: "Start PR checks watcher",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    var card = {
+      textContent: "Start PR checks watcher",
+      querySelector: function (selector) {
+        return selector === PLAY_SELECTOR ? play : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    button.parentElement = card;
+    // The spoken word sits after the card in the page, the way the agent's speech
+    // follows the tool row that started it.
+    var word = {
+      textContent: "Waiting",
+      compareDocumentPosition: function (other) {
+        return other === card ? 2 : 0;
+      },
+    };
+    var message = {
+      querySelectorAll: function (selector) {
+        if (selector === PLAY_SELECTOR) return [play];
+        if (selector === SPEECH_SELECTOR) return [word];
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
+          return [name];
+        }
+        return [];
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
+  // A labelled row in an older message never marks once a newer message exists,
+  // even when the newer message carries no label of its own.
+  function labeledBehindEmptyDoc() {
+    var busy = liveMessage("  running\n Bash  ", "$ npm test");
+    var older = {
+      querySelectorAll: function (selector) {
+        if (selector === LIVE_ICON_SELECTOR) return busy.querySelectorAll(LIVE_ICON_SELECTOR);
+        return [];
+      },
+      contains: function () {
+        return true;
+      },
+    };
+    var newer = {
+      querySelectorAll: function () {
+        return [];
+      },
+      contains: function () {
+        return false;
+      },
+    };
+    return pulseDoc([older, newer], null);
+  }
   function speechDoc(withStop) {
     var words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
     return {
@@ -2010,6 +2098,12 @@ function checkTabTitle(api) {
       "repo=clankers row=action row (Bash sleep 25)",
     ],
     [processRow(processDocLaterRow()), null],
+    // The owner's flip-flop: the watcher card loses the title once the message that
+    // started it keeps speaking; a spoken word after the card outranks it.
+    [processRow(processDocSpeaking()), null],
+    // A labelled row in an older message never marks once a newer message exists,
+    // even when the newer message carries no label of its own.
+    [strongRow(labeledBehindEmptyDoc()), null],
     // A live row streams under its shimmer label before a group label lands; the
     // mark follows it instead of freezing on the last labelled row.
     [(function () {
