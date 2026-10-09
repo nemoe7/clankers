@@ -553,6 +553,13 @@ function checkTranscriptTrim(api) {
   var goneAction = actionContainer();
   var goneRoot = messageRoot([rowBox(goneRows)], [goneAction], false);
   var goneRemoved = trimPlan(logDoc([goneRoot], true), "20");
+  // An answered question appends a fresh empty root behind the rows, and the keep
+  // budget must stay with those rows instead of clearing the page.
+  var questionRows = rows(30);
+  var questionAction = actionContainer();
+  var questionRoot = messageRoot([rowBox(questionRows)], [questionAction]);
+  var questionTail = messageRoot([rowBox([])], []);
+  var questionRemoved = trimPlan(logDoc([questionRoot, questionTail], true), "20");
   var detached = rows(4);
   detached[0].parentElement = null;
   var cases = [
@@ -626,6 +633,16 @@ function checkTranscriptTrim(api) {
     [goneRows[24].removed, false],
     [goneAction.removed, false],
     [goneRoot.parentElement !== null, true],
+    // The empty root an answered question appends takes no keep budget: the rows
+    // behind it keep their 20 newest, their action stays, and the page does not clear.
+    [questionRemoved, 10],
+    [cleared(questionRows[0]), true],
+    [cleared(questionRows[9]), true],
+    [cleared(questionRows[10]), false],
+    [questionRows[29].textContent, "row"],
+    [questionAction.removed, false],
+    [questionRoot.hiddenClass, false],
+    [questionTail.hiddenClass, true],
     [globalNodes[0].parentElement !== null, true],
     [globalNodes[1].parentElement !== null, true],
     [globalNodes[2].parentElement !== null, true],

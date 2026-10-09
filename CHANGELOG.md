@@ -73,6 +73,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Compact composer**: the coarse-pointer card trims its paddings and row gaps, so the composer footer sits shorter on a phone.
 - **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent.
 
+### Fixed
+
+#### userscripts
+
+- **Trim after a question**: the keep budget sits with the newest root that holds rows, so an answered question's empty root clears nothing. The rows behind it keep their newest count and their actions. Arena 1.10.10.
+
 ## 2026-10-08
 
 ### Added

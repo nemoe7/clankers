@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.9
+// @name         Arena.ai | NemoUtils | v1.10.10
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.9
+// @version      1.10.10
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1342,17 +1342,40 @@
       }
     }
 
-    // The newest root keeps its own newest rows; every older root empties in full
+    // The budget root is the newest root that still holds rows: an answered
+    // question appends an empty root behind the transcript, and the rows in
+    // front of it must keep their newest count instead of clearing the page.
+    function budgetRoot(roots) {
+      var i;
+      for (i = roots.length - 1; i >= 0; i -= 1) {
+        if (roots[i].isConnected === false) continue;
+        if (liveRowCount(roots[i])) return i;
+      }
+      return -1;
+    }
+
+    function liveRowCount(root) {
+      var rows = rowsOfRoot(root);
+      var count = 0;
+      var i;
+      for (i = 0; i < rows.length; i += 1) {
+        if (rowLive(rows[i])) count += 1;
+      }
+      return count;
+    }
+
+    // The budget root keeps its own newest rows; every other root empties in full
     // and takes the hidden class once empty, while the root node itself stays,
     // because that node is the part Arena needs intact.
     function trimPlan(doc, plan) {
       var roots = messageRoots(doc);
       var keep = planParts(plan).rows;
       var removed = 0;
+      var holder = budgetRoot(roots);
       var i;
       for (i = 0; i < roots.length; i += 1) {
         if (roots[i].isConnected === false) continue;
-        var newest = i === roots.length - 1;
+        var newest = i === holder;
         var rows = rowsOfRoot(roots[i]);
         var removedFromRoot = trimRows(rows, newest ? keep : 0);
         removed += removedFromRoot;
@@ -1365,8 +1388,9 @@
           if (rowLive(rows[j])) attached += 1;
         }
         if (removedFromRoot && !attached) removeActionSibling(roots[i]);
-        // Hidden cut rows still occupy the root, so the root itself never hides.
-        if (!newest && !attached && typeof roots[i].classList !== "undefined") {
+        // Hidden cut rows still occupy the root, so the root itself never hides;
+        // a page with no rows at all keeps every root the way it stands.
+        if (holder !== -1 && !newest && !attached && typeof roots[i].classList !== "undefined") {
           roots[i].classList.add("hidden");
         }
       }
@@ -2515,7 +2539,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.9";
+    var VERSION = "1.10.10";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
