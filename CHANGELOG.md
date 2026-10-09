@@ -23,6 +23,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### house
 
 - **Budget encoding**: the budget gate measures `o200k_base` tokens through the npm package `gpt-tokenizer` (owner notes 0cea35a and 9263e06). The ranks ship inside the package, so the measurement runs offline. The tiktoken dependency, its pip install and its CI cache all go away, and the README rows re-baseline.
+#### userscripts
+
+- **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added (owner notes 1f36855, 2d476f4 and 5befa18). Arena 1.10.1.
+
 
 ### Fixed
 

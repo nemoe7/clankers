@@ -472,6 +472,7 @@ function checkTranscriptTrim(api) {
     var root = {
       isConnected: connected !== false,
       removed: false,
+      hiddenClass: false,
       remove: function () {
         this.removed = true;
         this.parentElement = null;
@@ -479,6 +480,11 @@ function checkTranscriptTrim(api) {
       querySelectorAll: function (selector) {
         if (selector === BOX) return boxes;
         return selector === ACTION_SELECTOR ? actions : [];
+      },
+    };
+    root.classList = {
+      add: function (name) {
+        if (name === "hidden") root.hiddenClass = true;
       },
     };
     root.parentElement = { children: [root] };
@@ -556,21 +562,33 @@ function checkTranscriptTrim(api) {
     [messageRoots(logDoc([messageRoot([])], true)).length, 1],
     [messageRoots(logDoc([messageRoot([])], false)).length, 1],
     [messageRoots(logDoc([], true)).length, 0],
+    // A lone root is the newest: under its own keep count nothing leaves.
     [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "50"), 0],
+    // The newest root keeps exactly its K newest rows: the ten oldest leave.
+    [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "20"), 10],
     [rootRowsRemoved, 30],
-    [rootRows[0][24].removed, false],
+    // The older root empties in full and hides; the newest root keeps its 20 newest rows.
+    [rootRows[0][24].removed, true],
+    [rootNodes[0].hiddenClass, true],
     [rootRows[1][0].removed, true],
-    [rootRows[1][5].removed, true],
+    [rootRows[1][4].removed, true],
+    [rootRows[1][5].removed, false],
+    [rootNodes[1].hiddenClass, false],
     [rootActions[0].removed, true],
     [rootActions[1].removed, true],
+    // A lone root is the newest one: it keeps every row and never hides.
     [emptyTrim, 0],
-    [emptyAction.removed, true],
+    [emptyAction.removed, false],
+    [emptyRoot.hiddenClass, false],
     [emptyRoot.parentElement !== null, true],
-    [globalRemoved, 30],
-    [globalRows[0][24].removed, false],
+    // Two older roots empty and hide; the newest keeps all of its 25 rows.
+    [globalRemoved, 45],
+    [globalRows[0][24].removed, true],
+    [globalNodes[0].hiddenClass, true],
     [globalRows[1][4].removed, true],
-    [globalRows[1][5].removed, true],
+    [globalNodes[1].hiddenClass, true],
     [globalRows[2][0].removed, false],
+    [globalNodes[2].hiddenClass, false],
     [globalActions[0].removed, true],
     [globalActions[1].removed, true],
     [globalActions[2].removed, false],
@@ -584,11 +602,14 @@ function checkTranscriptTrim(api) {
     [globalNodes[0].parentElement !== null, true],
     [globalNodes[1].parentElement !== null, true],
     [globalNodes[2].parentElement !== null, true],
-    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), true],
+    // No stop control means no turn, and the trim aborts; it runs only while a turn
+    // is up. A question card aborts too; the pulsing icon no longer gates anything
+    // (owner notes 2d476f4 and 3c484de).
+    [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), false],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
-    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), false],
-    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), true],
+    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), true],
+    [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), false],
   ];
   var failed = 0;
   var i;

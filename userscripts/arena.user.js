@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.0
+// @version      1.10.1
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1253,7 +1253,8 @@
     });
   })();
 
-    // A trim waits for a quiet page and keeps the newest rows.
+    // A trim empties every older root and hides it, and keeps the newest rows of the
+    // newest root, once the page settles (owner notes 1f36855, 2d476f4, 5befa18).
   runFeature("transcript-trim", "Transcript — trim", function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
     var DEFAULT_ROWS = 50;
@@ -1335,46 +1336,42 @@
       }
     }
 
+    // The newest root keeps its own newest rows; every older root empties in full
+    // and takes the hidden class once empty, while the root node itself stays,
+    // because that node is the part Arena needs intact (owner note 1f36855).
     function trimPlan(doc, plan) {
       var roots = messageRoots(doc);
-      var rootRows = [];
-      var total = 0;
-      var excess;
+      var keep = planParts(plan).rows;
       var removed = 0;
       var i;
       for (i = 0; i < roots.length; i += 1) {
-        var live = roots[i].isConnected !== false;
-        var rows = live ? rowsOfRoot(roots[i]) : [];
-        var rootAttached = 0;
-        var j;
-        rootRows.push(rows);
-        for (j = 0; j < rows.length; j += 1) {
-          if (rows[j].parentElement) {
-            total += 1;
-            rootAttached += 1;
+        if (roots[i].isConnected === false) continue;
+        var newest = i === roots.length - 1;
+        var rows = rowsOfRoot(roots[i]);
+        var removedFromRoot = trimRows(rows, newest ? keep : 0);
+        removed += removedFromRoot;
+        if (removedFromRoot) removeActionSibling(roots[i]);
+        if (!newest) {
+          var attached = 0;
+          var j;
+          for (j = 0; j < rows.length; j += 1) {
+            if (rows[j].parentElement) attached += 1;
+          }
+          if (!attached && typeof roots[i].classList !== "undefined") {
+            roots[i].classList.add("hidden");
           }
         }
-        if (live && !rows.length) removeActionSibling(roots[i]);
-      }
-      excess = Math.max(0, total - planParts(plan).rows);
-      for (i = 0; i < roots.length && excess > 0; i += 1) {
-        var attached = 0;
-        var rootList = rootRows[i];
-        for (j = 0; j < rootList.length; j += 1) {
-          if (rootList[j].parentElement) attached += 1;
-        }
-        var removedFromRoot = trimRows(rootList, Math.max(1, attached - excess));
-        removed += removedFromRoot;
-        excess -= removedFromRoot;
-        if (removedFromRoot) removeActionSibling(roots[i]);
       }
       return removed;
     }
 
+    // The trim runs only while a turn is up, so a missing stop control aborts it and
+    // is checked first; a visible question card aborts too; the quiet row count rides
+    // the scheduler (owner notes 2d476f4, 5befa18 and 3c484de).
     function isSettled(doc) {
-      if (findStopGeneratingButton(doc)) return false;
+      if (!findStopGeneratingButton(doc)) return false;
       if (doc.querySelector(QUESTION_SELECTOR)) return false;
-      return !doc.querySelector(LIVE_ICON_SELECTOR);
+      return true;
     }
 
     function trimRows(rows, keep) {
@@ -1418,6 +1415,23 @@
     var observer = null;
     var labelTimer = null;
     var trimmedTotal = 0;
+    var lastRowCount = null;
+    var lastRowChangeAt = 0;
+
+    function attachedRowCount(doc) {
+      var roots = messageRoots(doc);
+      var total = 0;
+      var i;
+      for (i = 0; i < roots.length; i += 1) {
+        if (roots[i].isConnected === false) continue;
+        var rows = rowsOfRoot(roots[i]);
+        var j;
+        for (j = 0; j < rows.length; j += 1) {
+          if (rows[j].parentElement) total += 1;
+        }
+      }
+      return total;
+    }
 
     function keepPlan() {
       var stored = String(GM_getValue(KEEP_KEY, "") || "");
@@ -1476,6 +1490,20 @@
         timer = null;
         if (location.pathname.indexOf("/agent/") !== 0) return;
         if (!isSettled(document)) {
+          schedule();
+          return;
+        }
+        // Quiet is the row count holding still, not a quiet DOM: a new row at any
+        // point restarts the window (owner note 2d476f4).
+        var count = attachedRowCount(document);
+        var now = Date.now();
+        if (count !== lastRowCount) {
+          lastRowCount = count;
+          lastRowChangeAt = now;
+          schedule();
+          return;
+        }
+        if (now - lastRowChangeAt < SETTLE_MS) {
           schedule();
           return;
         }
