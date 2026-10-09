@@ -25,14 +25,20 @@ REQUIRED_FILES = (
   "secret-scan.yml",
   "workflow-security.yml",
   "pr-check.yml",
-  "release-gpt-plugins.yml",
-  "publish-arena-egress-proxy-image.yml",
-  "publish-arena-preview-proxy-image.yml",
 )
 
 # A pull request can run untrusted code, so these scopes stay out of its workflows.
 FORBIDDEN_PR_PERMISSIONS = ("contents", "actions", "packages", "id-token")
 READ_ONLY_VALUES = ("read", "none")
+
+# A job whose `if` names an event that is not a pull request never runs pull request code,
+# so that job alone may carry a forbidden scope inside a pull request workflow.
+NON_PULL_REQUEST_EVENT_RE = re.compile(
+  r"github\.event_name\s*(?:!=\s*'pull_request'"
+  r"|==\s*'(?:push|workflow_dispatch|schedule|release|repository_dispatch)')"
+)
+# A condition that admits the pull request event guards nothing, an `||` branch included.
+PULL_REQUEST_EVENT_RE = re.compile(r"github\.event_name\s*==\s*'pull_request'")
 
 SECRET_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 
@@ -55,6 +61,16 @@ def triggers_of(document: dict) -> dict:
 def jobs_of(document: dict) -> dict:
   jobs = document.get("jobs")
   return jobs if isinstance(jobs, dict) else {}
+
+
+def guarded_from_pull_request(job: dict) -> bool:
+  """Return True when the job's `if` names an event that is not a pull request."""
+  condition = job.get("if")
+  if not isinstance(condition, str):
+    return False
+  if PULL_REQUEST_EVENT_RE.search(condition):
+    return False
+  return bool(NON_PULL_REQUEST_EVENT_RE.search(condition))
 
 
 def job_text(job: object) -> str:
@@ -131,7 +147,7 @@ def audit_document(name: str, document: object) -> list[str]:
             f"{where}: the build context `{context}` must be a directory named "
             f"after the image `{image}`"
           )
-    if runs_on_pull_request:
+    if runs_on_pull_request and not guarded_from_pull_request(job):
       for scope, value in (job.get("permissions") or {}).items():
         if scope in FORBIDDEN_PR_PERMISSIONS and value not in READ_ONLY_VALUES:
           findings.append(

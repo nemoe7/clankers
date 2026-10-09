@@ -71,6 +71,15 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Task update cadence**: the verification clause orders a stored task update in the same tool block as the work that moves it.
 - **Read cadence**: the stderr reminder is the only read schedule, so the five fixed points leave the rule. The reminder names uploads beside notes and answers, and the reference drops the parallel-block and call-counter sentences.
 
+#### workflows
+
+- **Artifact workflow fold**: `release-gpt-plugins.yml` and both proxy image workflows move into `artifacts.yml` as three jobs, and the set holds eight files. The release job runs on the package group from `main`. Each image job runs on its own proxy directory or on its own dispatch input.
+
+#### maintenance
+
+- **Write-scope guard**: `check_workflows.py` allows a forbidden write scope on a job whose `if` names a non-pull-request event. The ban stays everywhere else, and a condition that admits the pull request event in one branch of an `or` guards nothing.
+- **Publisher fixture**: `check_publish_clankers_rules.py` counts one `contents: write` in `artifacts.yml` and keeps that scope out of the text before the release job.
+
 ### Fixed
 
 #### userscripts

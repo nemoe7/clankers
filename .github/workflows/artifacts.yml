@@ -9,6 +9,8 @@ on:
       - '!rules/refs/**'
       - 'maintenance/publish_clankers_rules.py'
       - 'maintenance/check_publish_clankers_rules.py'
+      - 'skills/arena-skill/arena-egress-proxy/**'
+      - 'skills/arena-skill/arena-preview-proxy/**'
       - '.github/workflows/artifacts.yml'
   pull_request:
     branches: ['**']
@@ -16,14 +18,24 @@ on:
       - 'gpt-plugins/**'
       - '.github/workflows/artifacts.yml'
   workflow_dispatch:
+    inputs:
+      egress_image:
+        description: Publish the arena-egress-proxy image
+        type: boolean
+        default: false
+      preview_image:
+        description: Publish the arena-preview-proxy image
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  # One trigger feeds two jobs with different path interests, so a small job decides which
+  # One trigger feeds several jobs with different path interests, so a small job decides which
   # side has work. It uses the PR base for pull requests, the previous push for pushes, and a
-  # fixed answer for manual runs: package from main, never publish the Gist.
+  # fixed answer for manual runs: package from main, never publish the Gist, and publish an
+  # image only when its own input asks.
   changes:
     name: Changes
     runs-on: ubuntu-latest
@@ -31,6 +43,8 @@ jobs:
     outputs:
       package: ${{ steps.detect.outputs.package }}
       rules: ${{ steps.detect.outputs.rules }}
+      egress: ${{ steps.detect.outputs.egress }}
+      preview: ${{ steps.detect.outputs.preview }}
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v7
@@ -44,13 +58,25 @@ jobs:
           EVENT_REF: ${{ github.ref }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
+          EGRESS_IMAGE: ${{ github.event.inputs.egress_image }}
+          PREVIEW_IMAGE: ${{ github.event.inputs.preview_image }}
         run: |
           set -eu
           package=false
           rules=false
+          egress=false
+          preview=false
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ "$EVENT_REF" = "refs/heads/main" ]; then
               package=true
+            fi
+            # An image publishes on its own input, so a dispatch that repackages the
+            # plugins never rebuilds a proxy image.
+            if [ "$EGRESS_IMAGE" = "true" ]; then
+              egress=true
+            fi
+            if [ "$PREVIEW_IMAGE" = "true" ]; then
+              preview=true
             fi
           else
             if [ "$EVENT_NAME" = "pull_request" ]; then
@@ -59,7 +85,8 @@ jobs:
               base="$PUSH_BEFORE"
             fi
             if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-              # A missing base runs both checks instead of skipping silently.
+              # A missing base runs both checks instead of skipping silently. An image
+              # publish stays out of it: it writes a registry tag the fallback cannot justify.
               package=true
               rules=true
             else
@@ -73,12 +100,20 @@ jobs:
                   rules/refs/*) ;;
                   rules/* | maintenance/publish_clankers_rules.py | maintenance/check_publish_clankers_rules.py | .github/workflows/artifacts.yml) rules=true ;;
                 esac
+                case "$file" in
+                  skills/arena-skill/arena-egress-proxy/*) egress=true ;;
+                  skills/arena-skill/arena-preview-proxy/*) preview=true ;;
+                esac
               done
             fi
           fi
-          echo "package=$package" >> "$GITHUB_OUTPUT"
-          echo "rules=$rules" >> "$GITHUB_OUTPUT"
-          printf 'package=%s rules=%s\n' "$package" "$rules"
+          {
+            echo "package=$package"
+            echo "rules=$rules"
+            echo "egress=$egress"
+            echo "preview=$preview"
+          } >> "$GITHUB_OUTPUT"
+          printf 'package=%s rules=%s egress=%s preview=%s\n' "$package" "$rules" "$egress" "$preview"
 
   validate-gpt-plugins:
     name: Validate GPT Plugins
@@ -319,3 +354,156 @@ jobs:
           GH_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ vars.GIST_ID }}
         run: python3 maintenance/publish_clankers_rules.py
+
+  release-gpt-plugins:
+    name: Release GPT Plugins
+    needs: changes
+    if: needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      # Two main pushes serialize, so one release write never races another.
+      group: Release-GPT-Plugins-${{ github.repository }}
+      cancel-in-progress: false
+    # The release writes a tag and an asset, so this job alone carries the scope. Its `if`
+    # names a non-pull-request event, so no pull request code ever runs with it.
+    permissions:
+      contents: write
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+        with:
+          # The release step uses GH_TOKEN, so the checkout keeps no credentials.
+          persist-credentials: false
+
+      - name: Set Up Python
+        uses: actions/setup-python@v7
+        with:
+          # Keep the archive validation on the interpreter the other workflows use.
+          python-version: "3.11"
+
+      - name: Install Validation Dependencies
+        run: python -m pip install jsonschema PyYAML markdown-it-py
+
+      - name: Read The Manifest Version
+        id: manifest
+        run: |
+          set -eu
+          version="$(python -c "import json; print(json.load(open('gpt-plugins/plugin.json'))['version'])")"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Package The Collection
+        run: zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills
+
+      - name: Verify The Archive
+        run: |
+          unzip -l gpt-plugins.zip
+          python maintenance/check_gpt_plugins.py --archive gpt-plugins.zip
+
+      - name: Publish The Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          set -eu
+          tag="gpt-plugins-v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" gpt-plugins.zip --clobber
+          else
+            gh release create "$tag" gpt-plugins.zip \
+              --title "GPT Plugins $VERSION" \
+              --target "$GITHUB_SHA" \
+              --notes "The GPT Plugins collection at version $VERSION, packaged from gpt-plugins/plugin.json."
+          fi
+
+  publish-arena-egress-proxy-image:
+    name: Publish Arena Egress Proxy Image
+    needs: changes
+    if: needs.changes.outputs.egress == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      # Two main pushes serialize, so one image write never races another.
+      group: Publish-Arena-Egress-Proxy-Image-${{ github.repository }}
+      cancel-in-progress: false
+    # A package write publishes the image; every other scope stays read-only. Its `if`
+    # names a non-pull-request event, so no pull request code ever runs with it.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+        with:
+          # The push uses the token from the login step, not a stored credential.
+          persist-credentials: false
+
+      - name: Set Up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set Up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log In To GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build And Push
+        uses: docker/build-push-action@v6
+        with:
+          context: skills/arena-skill/arena-egress-proxy
+          file: skills/arena-skill/arena-egress-proxy/Dockerfile
+          push: true
+          # An arm64 host pulls the right layer instead of emulating amd64.
+          platforms: linux/amd64,linux/arm64
+          # One mutable tag. The owner pulls latest and manages no versions.
+          tags: ghcr.io/${{ github.repository_owner }}/arena-egress-proxy:latest
+
+  publish-arena-preview-proxy-image:
+    name: Publish Arena Preview Proxy Image
+    needs: changes
+    if: needs.changes.outputs.preview == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      # Two main pushes serialize, so one image write never races another.
+      group: Publish-Arena-Preview-Proxy-Image-${{ github.repository }}
+      cancel-in-progress: false
+    # A package write publishes the image; every other scope stays read-only. Its `if`
+    # names a non-pull-request event, so no pull request code ever runs with it.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v7
+        with:
+          # The push uses the token from the login step, not a stored credential.
+          persist-credentials: false
+
+      - name: Set Up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set Up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log In To GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build And Push
+        uses: docker/build-push-action@v6
+        with:
+          context: skills/arena-skill/arena-preview-proxy
+          file: skills/arena-skill/arena-preview-proxy/Dockerfile
+          push: true
+          # An arm64 host pulls the right layer instead of emulating amd64.
+          platforms: linux/amd64,linux/arm64
+          # One mutable tag. The owner pulls latest and manages no versions.
+          tags: ghcr.io/${{ github.repository_owner }}/arena-preview-proxy:latest

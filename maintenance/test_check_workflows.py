@@ -42,9 +42,6 @@ def test_required_file_set_is_exact():
     "secret-scan.yml",
     "workflow-security.yml",
     "pr-check.yml",
-    "release-gpt-plugins.yml",
-    "publish-arena-egress-proxy-image.yml",
-    "publish-arena-preview-proxy-image.yml",
   )
 
 
@@ -302,3 +299,139 @@ def test_a_matching_publish_image_context_passes():
     "skills/arena-skill/arena-egress-proxy", "arena-egress-proxy"
   )
   assert findings(document) == []
+
+
+def pull_request_document(job: dict) -> dict:
+  document = copy.deepcopy(BASE)
+  document["on"]["pull_request"] = None
+  document["jobs"]["work"] = job
+  return document
+
+
+def write_scope_job(condition: str, scope: str = "contents") -> dict:
+  return {
+    "runs-on": "ubuntu-latest",
+    "if": condition,
+    "permissions": {scope: "write"},
+    "steps": [{"name": "Publish", "run": "publish"}],
+  }
+
+
+def test_write_scope_in_a_job_guarded_from_pull_requests_passes():
+  document = pull_request_document(
+    write_scope_job(
+      "needs.changes.outputs.package == 'true' && github.event_name != 'pull_request'"
+    )
+  )
+  assert findings(document) == []
+
+
+def test_write_scope_guarded_by_a_named_non_pull_request_event_passes():
+  for condition in (
+    "github.event_name == 'push'",
+    "github.event_name == 'workflow_dispatch'",
+    "${{ github.event_name == 'schedule' }}",
+  ):
+    document = pull_request_document(write_scope_job(condition, "packages"))
+    assert findings(document) == [], condition
+
+
+def test_write_scope_without_a_non_pull_request_event_still_fails():
+  for condition in (
+    "github.event_name == 'pull_request'",
+    "needs.changes.outputs.package == 'true'",
+    "github.ref == 'refs/heads/main'",
+    "github.event_name == 'push' || github.event_name == 'pull_request'",
+  ):
+    document = pull_request_document(write_scope_job(condition))
+    assert any(
+      "is not allowed in a pull request workflow" in finding
+      for finding in findings(document)
+    ), condition
+
+
+def test_guarded_from_pull_request_reads_the_condition():
+  assert check_workflows.guarded_from_pull_request(
+    {"if": "github.event_name == 'push'"}
+  )
+  assert not check_workflows.guarded_from_pull_request({})
+  assert not check_workflows.guarded_from_pull_request({"if": True})
+  # An `||` branch that admits the pull request event guards nothing.
+  assert not check_workflows.guarded_from_pull_request(
+    {"if": "github.event_name == 'push' || github.event_name == 'pull_request'"}
+  )
+
+
+def test_artifacts_push_paths_carry_both_proxy_directories():
+  triggers = check_workflows.triggers_of(load_workflow("artifacts.yml"))
+  push_paths = triggers["push"]["paths"]
+  pr_paths = triggers["pull_request"]["paths"]
+  for entry in (
+    "skills/arena-skill/arena-egress-proxy/**",
+    "skills/arena-skill/arena-preview-proxy/**",
+  ):
+    assert entry in push_paths
+    # An image publish never runs from a pull request.
+    assert entry not in pr_paths
+
+
+def test_artifacts_dispatch_inputs_name_both_images():
+  triggers = check_workflows.triggers_of(load_workflow("artifacts.yml"))
+  inputs = triggers["workflow_dispatch"]["inputs"]
+  assert set(inputs) == {"egress_image", "preview_image"}
+  for value in inputs.values():
+    assert value["type"] == "boolean" and value["default"] is False
+
+
+def test_changes_job_reports_the_image_groups():
+  job = load_workflow("artifacts.yml")["jobs"]["changes"]
+  assert set(job["outputs"]) == {"package", "rules", "egress", "preview"}
+  script = "\n".join(step.get("run", "") for step in job["steps"])
+  for marker in (
+    "skills/arena-skill/arena-egress-proxy/*",
+    "skills/arena-skill/arena-preview-proxy/*",
+    "egress=true",
+    "preview=true",
+  ):
+    assert marker in script, marker
+
+
+def test_artifacts_release_job_keeps_the_release_semantics():
+  job = load_workflow("artifacts.yml")["jobs"]["release-gpt-plugins"]
+  assert job["permissions"] == {"contents": "write"}
+  assert "needs.changes.outputs.package == 'true'" in job["if"]
+  assert "github.event_name != 'pull_request'" in job["if"]
+  assert job["concurrency"] == {
+    "group": "Release-GPT-Plugins-${{ github.repository }}",
+    "cancel-in-progress": False,
+  }
+  script = "\n".join(step.get("run", "") for step in job["steps"])
+  assert "check_gpt_plugins.py --archive gpt-plugins.zip" in script
+  assert "gh release create" in script and "--clobber" in script
+
+
+def test_artifacts_carries_one_image_job_per_proxy_directory():
+  jobs = load_workflow("artifacts.yml")["jobs"]
+  for name, directory, group in (
+    (
+      "publish-arena-egress-proxy-image",
+      "arena-egress-proxy",
+      "Publish-Arena-Egress-Proxy-Image-${{ github.repository }}",
+    ),
+    (
+      "publish-arena-preview-proxy-image",
+      "arena-preview-proxy",
+      "Publish-Arena-Preview-Proxy-Image-${{ github.repository }}",
+    ),
+  ):
+    job = jobs[name]
+    assert job["permissions"] == {"contents": "read", "packages": "write"}
+    assert "github.event_name != 'pull_request'" in job["if"]
+    assert job["concurrency"] == {"group": group, "cancel-in-progress": False}
+    step = next(
+      step
+      for step in job["steps"]
+      if str(step.get("uses", "")).startswith("docker/build-push-action@")
+    )
+    assert step["with"]["context"] == f"skills/arena-skill/{directory}"
+    assert step["with"]["tags"].endswith(f"/{directory}:latest")
