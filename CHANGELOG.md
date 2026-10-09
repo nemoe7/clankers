@@ -24,6 +24,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows (owner notes cb9c34a, 1bcd668 and 2cf8492). Arena 1.10.0.
 
+#### preview
+
+- **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent (owner note 89ceca8).
+
 ## 2026-10-08
 
 ### Added

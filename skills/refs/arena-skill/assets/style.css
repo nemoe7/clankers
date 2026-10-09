@@ -132,15 +132,17 @@ p.muted { margin-block: 4px; }
 /* The new-reply pill floats at the log's top, mirroring the jump bar at its foot: the placement
    says where the reply waits, and the two pills can never meet (owner notes f7bc6bc, afa75fa). */
 .log-edited {
-  position: absolute; left: 50%; top: 8px; transform: translateX(-50%);
+  /* The owner's screenshot showed 8px clipping the card border; the label reads as a
+     neutral white, not the accent (owner note 89ceca8). */
+  position: absolute; left: 50%; top: 20px; transform: translateX(-50%);
   z-index: 1;
   min-height: 0; padding: 4px 12px; font-size: 12px; border-radius: 4px;
   border-color: var(--tab-border); background: var(--panel);
-  background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--text);
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(8px);
   transition: color .15s, background-color .15s, border-color .15s;
 }
-.log-edited:hover { color: var(--text); border-color: var(--text); }
+.log-edited:hover { color: var(--muted); border-color: var(--muted); }
 .log-edited:focus-visible { box-shadow: 0 0 0 2px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 .log-newest {
   /* Compact arrow from the owner's Arena UI reference; the log still owns its scroll state. */

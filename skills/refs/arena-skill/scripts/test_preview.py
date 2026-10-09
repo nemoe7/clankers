@@ -449,8 +449,11 @@ def test_http_boundaries():
       assert "translateX(-50%)" in page
       # The new-reply pill floats the same way, at the log's top: the placement says the reply
       # waits above, and the two pills can never meet (owner notes f7bc6bc, afa75fa).
+      # It clears the card border below it and wears the plain text color, not the accent
+      # (owner note 89ceca8).
       assert re.search(r"\.log-edited\s*\{[^}]*position:\s*absolute", page)
-      assert re.search(r"\.log-edited\s*\{[^}]*top:\s*8px", page)
+      assert re.search(r"\.log-edited\s*\{[^}]*top:\s*20px", page)
+      assert re.search(r"\.log-edited\s*\{[^}]*color:\s*var\(--text\)", page)
       assert re.search(r"\.log-edited\s*\{[^}]*border-radius:\s*4px", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
       # The save button sits in the top bar after the theme button rather than in the log's own row, on
