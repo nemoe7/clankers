@@ -88,10 +88,11 @@ The prose linter runs the ste-lint rules over the covered scope: `docs/`, every 
 python3 maintenance/check.py --update
 ```
 
-`check.py` needs two third-party packages. `markdown-it-py` parses the README budget table, and `tiktoken` measures `cl100k_base` tokens. Everything else is the Python standard library.
+`check.py` needs `markdown-it-py` from pip to parse the README budget table, and the npm package `gpt-tokenizer` to measure `o200k_base` tokens. Everything else is the Python standard library.
 
 ```bash
-python3 -m pip install markdown-it-py tiktoken
+python3 -m pip install markdown-it-py
+npm ci
 ```
 
 `--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 maintenance/check_measurements.py`.
@@ -128,21 +129,6 @@ The checker checks `plugin.json` against the canonical schema at `https://agent-
 
 The four shipped `SKILL.md` files join the budget table in the root `README.md`. `plugin.json` does not, because it is metadata and not instruction text.
 
-## Offline token measurement
+## Token measurement
 
-`tiktoken` downloads `cl100k_base` on first use. If its host is unreachable, seed from a byte-identical mirror. Its hash check rejects bad copies.
-
-```bash
-BLOB=https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken
-export TIKTOKEN_CACHE_DIR="$PWD/.tiktoken-cache"
-mkdir -p "$TIKTOKEN_CACHE_DIR"
-gh api -H "Accept: application/vnd.github.raw" \
-  repos/niieani/gpt-tokenizer/contents/data/cl100k_base.tiktoken \
-  > "$TIKTOKEN_CACHE_DIR/$(echo -n "$BLOB" | sha1sum | head -c 40)"
-```
-
-Then run with the variable set, for example `TIKTOKEN_CACHE_DIR="$PWD/.tiktoken-cache" python3 maintenance/check.py`.
-
-Use raw media type: this 1,681,126-byte encoding exceeds the contents API’s 1 MB base64 limit. Without `gh` credentials, use the same path at `raw.githubusercontent.com`. Some sandboxes block raw hosts but allow `api.github.com`, hence the API command here.
-
-Restores delete ignored `.tiktoken-cache/`, so seed it again with venv recovery. Verified on 2026-09-21, `arena/01a0be68-clankers`: seeding made `maintenance/check.py` pass after a session without the gate.
+`check.py` measures `o200k_base` tokens through the npm package `gpt-tokenizer` (owner note 0cea35a). The package ships its BPE ranks, so the measurement runs offline once `npm ci` has installed the pinned dependencies. No encoding host and no cache seeding are involved.

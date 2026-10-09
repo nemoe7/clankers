@@ -12,6 +12,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Caveman experiments**: the squashed arena-skill copies under `caveman/` and `ultracave/` are gone (owner note 4e08dab). The vendored caveman skill under `.agents/skills/caveman/` stays (owner note cfc7f0a).
 
+### Changed
+
+#### house
+
+- **Budget encoding**: the budget gate measures `o200k_base` tokens through the npm package `gpt-tokenizer` (owner notes 0cea35a and 9263e06). The ranks ship inside the package, so the measurement runs offline. The tiktoken dependency, its pip install and its CI cache all go away, and the README rows re-baseline.
+
 ### Fixed
 
 #### userscripts

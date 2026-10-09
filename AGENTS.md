@@ -45,7 +45,7 @@ Read these first:
 ## Repository type
 
 - Treat this as a rules/skills/workflows repository with maintenance build tooling and tests.
-- `maintenance/check.py` needs `markdown-it-py` and `tiktoken`.
+- `maintenance/check.py` needs `markdown-it-py` and the npm package `gpt-tokenizer`.
 - It validates live skill metadata, baseline/live skill parity, workflow frontmatter, README measurements, internal links, both ChatGPT character limits, and skill licensing for adapted skills.
   - It also checks the markdownlint scope, refs/live rule parity, and the root `ARENA.md` copy.
 - `.github/workflows/ci.yml` runs `python maintenance/check.py --update` on PRs targeting any branch, except changes limited to its `paths-ignore` list, and after every push to `main`.
@@ -56,7 +56,7 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute.yml` pushes to the target repositories.
-4. Arena sandbox only: install the two dependencies into a venv, since system `pip` refuses under PEP 668, and seed the `tiktoken` cache by hand, since `openaipublic.blob.core.windows.net` and `raw.githubusercontent.com` are unreachable there while `api.github.com` answers. Fetch `niieani/gpt-tokenizer` `data/cl100k_base.tiktoken` with `gh api -H "Accept: application/vnd.github.raw" repos/niieani/gpt-tokenizer/git/blobs/<sha>` and save it as `$TIKTOKEN_CACHE_DIR/<first 40 hex of sha1 of the cl100k_base blob URL>`; use `~/.cache/tiktoken`, which snapshots exclude, and run `check.py` with `TIKTOKEN_CACHE_DIR` set. [maintenance/README.md](maintenance/README.md) has the general procedure. Steering now uses `skills/arena-skill` and its local preview inbox for messages and reports. The former ntfy and local-report-commit workflows are historical in the `arena-skill` skill's reference. No automatic fallback is authorized.
+4. Arena sandbox only: install the Python dependencies into a venv, since system `pip` refuses under PEP 668, and run `npm ci` once. Token measurement rides the npm package `gpt-tokenizer`, whose BPE ranks ship inside the package, so no cache seeding is needed even where `openaipublic.blob.core.windows.net` is unreachable. [maintenance/README.md](maintenance/README.md) has the general procedure. Steering now uses `skills/arena-skill` and its local preview inbox for messages and reports. The former ntfy and local-report-commit workflows are historical in the `arena-skill` skill's reference. No automatic fallback is authorized.
 
 ## Rules
 

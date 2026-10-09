@@ -35,21 +35,21 @@ EXPECTED_SKILL_FIELDS = {
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 EXPECTED_BUDGETS = {
-  "rules/AGENTS.md": "cl100k_base",
+  "rules/AGENTS.md": "o200k_base",
   "rules/ARENA.md": "UTF-8 file size",
   "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
   "rules/CHATGPT-MORE.txt": "Unicode chars",
-  "rules/CLINE.md": "cl100k_base",
-  "rules/KILO.md": "cl100k_base",
-  "rules/kilo/code.md": "cl100k_base",
-  "rules/kilo/debug.md": "cl100k_base",
-  "rules/kilo/plan.md": "cl100k_base",
-  "rules/COMMIT-SPEC.txt": "cl100k_base",
-  "system-prompts/NEMOGPT.md": "cl100k_base",
-  "skills/amending-violations/SKILL.md": "cl100k_base",
-  "skills/arena-skill/SKILL.md": "cl100k_base",
-  "skills/arena-skill/README.md": "cl100k_base",
-  "skills/arena-skill/references/REFERENCE.md": "cl100k_base",
+  "rules/CLINE.md": "o200k_base",
+  "rules/KILO.md": "o200k_base",
+  "rules/kilo/code.md": "o200k_base",
+  "rules/kilo/debug.md": "o200k_base",
+  "rules/kilo/plan.md": "o200k_base",
+  "rules/COMMIT-SPEC.txt": "o200k_base",
+  "system-prompts/NEMOGPT.md": "o200k_base",
+  "skills/amending-violations/SKILL.md": "o200k_base",
+  "skills/arena-skill/SKILL.md": "o200k_base",
+  "skills/arena-skill/README.md": "o200k_base",
+  "skills/arena-skill/references/REFERENCE.md": "o200k_base",
   # The table covers the arena suite: ARENA.md and every arena-skill file, one row per file.
   # The shipped assets and scripts keep byte budgets from `maintenance/minify.py`, so growth
   # fails this check until the table is updated on purpose. The `.agents/skills/` twins are
@@ -58,7 +58,7 @@ EXPECTED_BUDGETS = {
   "skills/arena-skill/assets/index.html": "UTF-8 file size",
   "skills/arena-skill/assets/style.css": "UTF-8 file size",
   "skills/arena-skill/proxy/Dockerfile": "UTF-8 file size",
-  "skills/arena-skill/proxy/INSTALL.md": "cl100k_base",
+  "skills/arena-skill/proxy/INSTALL.md": "o200k_base",
   "skills/arena-skill/proxy/docker-compose.yml": "UTF-8 file size",
   "skills/arena-skill/proxy/scripts/arena_proxy/__init__.py": "UTF-8 file size",
   "skills/arena-skill/proxy/scripts/arena_proxy/__main__.py": "UTF-8 file size",
@@ -70,7 +70,7 @@ EXPECTED_BUDGETS = {
   "skills/arena-skill/proxy/scripts/server.py": "UTF-8 file size",
   "skills/arena-skill/proxy/tailscale-serve.json": "UTF-8 file size",
   "skills/arena-skill/preview-proxy/Dockerfile": "UTF-8 file size",
-  "skills/arena-skill/preview-proxy/INSTALL.md": "cl100k_base",
+  "skills/arena-skill/preview-proxy/INSTALL.md": "o200k_base",
   "skills/arena-skill/preview-proxy/assets/icon.svg": "UTF-8 file size",
   "skills/arena-skill/preview-proxy/assets/register.js": "UTF-8 file size",
   "skills/arena-skill/preview-proxy/assets/service-worker.js": "UTF-8 file size",
@@ -80,13 +80,13 @@ EXPECTED_BUDGETS = {
   "skills/arena-skill/scripts/arena-preview": "UTF-8 file size",
   "skills/arena-skill/scripts/install.sh": "UTF-8 file size",
   "skills/arena-skill/scripts/preview.py": "UTF-8 file size",
-  "skills/squash/SKILL.md": "cl100k_base",
-  "skills/web-interface-guidelines/SKILL.md": "cl100k_base",
-  "workflows/init-docs.md": "cl100k_base",
-  "gpt-plugins/skills/gpt-quirks/SKILL.md": "cl100k_base",
-  "gpt-plugins/skills/gpt-handoff/SKILL.md": "cl100k_base",
-  "gpt-plugins/skills/gpt-planning/SKILL.md": "cl100k_base",
-  "gpt-plugins/skills/gpt-github/SKILL.md": "cl100k_base",
+  "skills/squash/SKILL.md": "o200k_base",
+  "skills/web-interface-guidelines/SKILL.md": "o200k_base",
+  "workflows/init-docs.md": "o200k_base",
+  "gpt-plugins/skills/gpt-quirks/SKILL.md": "o200k_base",
+  "gpt-plugins/skills/gpt-handoff/SKILL.md": "o200k_base",
+  "gpt-plugins/skills/gpt-planning/SKILL.md": "o200k_base",
+  "gpt-plugins/skills/gpt-github/SKILL.md": "o200k_base",
 }
 
 # Root `ARENA.md` is the copy `.github/workflows/distribute.yml` pushes to
@@ -148,7 +148,19 @@ KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 # and `More about you`, each capped at 1,500 characters.
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
 
-_token_encoder: Any = None
+# Token counts ride the npm package gpt-tokenizer, which ships its own ranks and
+# measures offline, so no cache seeding is needed (owner note 0cea35a).
+_NODE_CWD = Path(__file__).resolve().parent.parent
+_TOKEN_COUNT_SCRIPT = """
+const { encode } = require("gpt-tokenizer/encoding/o200k_base");
+const fs = require("fs");
+const counts = {};
+for (const file of JSON.parse(process.argv[1])) {
+  counts[file] = encode(fs.readFileSync(file, "utf8")).length;
+}
+process.stdout.write(JSON.stringify(counts));
+"""
+_token_counts: dict[str, int] = {}
 
 
 def parse_args() -> argparse.Namespace:
@@ -371,22 +383,31 @@ def read_budget_table() -> dict[str, tuple[str, str]]:
   return result
 
 
-def load_token_encoder() -> Any:
-  global _token_encoder
+def load_token_counts(paths: list[Path]) -> dict[str, int]:
+  missing = [path for path in paths if str(path) not in _token_counts]
 
-  if _token_encoder is not None:
-    return _token_encoder
+  if missing:
+    try:
+      result = subprocess.run(
+        [
+          "node",
+          "-e",
+          _TOKEN_COUNT_SCRIPT,
+          json.dumps([str(path) for path in missing]),
+        ],
+        cwd=_NODE_CWD,
+        capture_output=True,
+        text=True,
+        check=True,
+      )
+    except (OSError, subprocess.CalledProcessError) as exc:
+      raise RuntimeError(
+        "gpt-tokenizer is required for o200k_base measurements. Install it with: npm ci"
+      ) from exc
 
-  try:
-    import tiktoken
-  except ImportError as exc:
-    raise RuntimeError(
-      "tiktoken is required for cl100k_base measurements. "
-      "Install it with: python -m pip install tiktoken"
-    ) from exc
+    _token_counts.update(json.loads(result.stdout))
 
-  _token_encoder = tiktoken.get_encoding("cl100k_base")
-  return _token_encoder
+  return _token_counts
 
 
 def measure(path: Path, kind: str) -> int:
@@ -398,9 +419,8 @@ def measure(path: Path, kind: str) -> int:
   if kind == "UTF-8 file size":
     return len(text.encode("utf-8"))
 
-  if kind == "cl100k_base":
-    encoder = load_token_encoder()
-    return len(encoder.encode(text))
+  if kind == "o200k_base":
+    return load_token_counts([path])[str(path)]
 
   raise ValueError(f"unsupported measurement: {kind}")
 
@@ -412,7 +432,7 @@ def format_unit(kind: str) -> str:
   if kind == "UTF-8 file size":
     return "B"
 
-  if kind == "cl100k_base":
+  if kind == "o200k_base":
     return "tok"
 
   raise ValueError(f"unsupported measurement: {kind}")

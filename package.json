@@ -4,6 +4,7 @@
   "description": "Pinned tooling for the repository checks and the preview skill's minified build.",
   "devDependencies": {
     "clean-css": "5.3.3",
+    "gpt-tokenizer": "4.0.0",
     "html-minifier-terser": "7.2.0",
     "markdownlint-cli2": "0.23.3",
     "terser": "5.51.2"

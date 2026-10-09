@@ -34,18 +34,10 @@ jobs:
         with:
           pip-cache-key: ci
 
-      - name: Cache The Token Encoder
-        uses: actions/cache@v6
-        with:
-          # tiktoken fetches cl100k_base on first use and stores it here, so a cold run pays the
-          # download once instead of on every push. The blob is immutable, so the key holds no hash.
-          path: ${{ runner.temp }}/tiktoken
-          key: tiktoken-cl100k_base-${{ runner.os }}
-
       - name: Install Maintenance Dependencies
         run: |
           VERSION=$(sed -n 's/^required-version = "\(.*\)"$/\1/p' ruff.toml)
-          python -m pip install tiktoken markdown-it-py python-minifier==3.3.0 "pyyaml==6.0.3" "ruff==$VERSION"
+          python -m pip install markdown-it-py python-minifier==3.3.0 "pyyaml==6.0.3" "ruff==$VERSION"
 
       - name: Install Build Dependencies And Check Generated Copies
         run: |
@@ -53,8 +45,6 @@ jobs:
           python maintenance/minify.py
 
       - name: Update And Validate Repository
-        env:
-          TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/tiktoken
         run: python maintenance/check.py --update
 
       - name: Lint And Format-Check Python

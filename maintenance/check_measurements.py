@@ -34,6 +34,12 @@ with tempfile.TemporaryDirectory() as directory:
     raise AssertionError("A missing source was accepted")
   except RuntimeError:
     assert check.README.read_bytes() == before
+  # Token counts ride the npm gpt-tokenizer: a known text returns its known o200k_base
+  # count, whatever the budget table holds at the moment.
+  check.EXPECTED_BUDGETS = {"tok.md": "o200k_base"}
+  (check.ROOT / "tok.md").write_text("hello world", encoding="utf-8")
+  assert check.measure(check.ROOT / "tok.md", "o200k_base") == 2
+  assert check.format_unit("o200k_base") == "tok"
 print(
   "PASS: budget additions, removals, idempotence, surrounding text and missing-source safety"
 )
