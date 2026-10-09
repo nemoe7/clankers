@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SERVER = ROOT / "skills" / "arena-skill" / "arena-preview-proxy" / "server.js"
 MANIFEST = '<link rel="manifest" href="/pwa/manifest.webmanifest">'
 REGISTER = '<script src="/pwa/register.js" defer></script>'

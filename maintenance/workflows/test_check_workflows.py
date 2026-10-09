@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 
-import check_workflows
+import gate_workflows
 import yaml
 
 BASE = {
@@ -21,7 +21,7 @@ BASE = {
 
 
 def findings(document: dict, name: str = "example.yml") -> list[str]:
-  return check_workflows.audit_document(name, copy.deepcopy(document))
+  return gate_workflows.audit_document(name, copy.deepcopy(document))
 
 
 def test_base_document_passes():
@@ -29,11 +29,11 @@ def test_base_document_passes():
 
 
 def test_real_workflow_set_passes():
-  assert check_workflows.audit_paths() == []
+  assert gate_workflows.audit_paths() == []
 
 
 def test_required_file_set_is_exact():
-  assert check_workflows.REQUIRED_FILES == (
+  assert gate_workflows.REQUIRED_FILES == (
     "ci.yml",
     "artifacts.yml",
     "distribute.yml",
@@ -46,23 +46,23 @@ def test_required_file_set_is_exact():
 
 
 def test_missing_required_file_fails(tmp_path):
-  for name in check_workflows.REQUIRED_FILES[:-1]:
+  for name in gate_workflows.REQUIRED_FILES[:-1]:
     (tmp_path / name).write_text(yaml.safe_dump(BASE), encoding="utf-8")
-  result = check_workflows.audit_paths(tmp_path)
+  result = gate_workflows.audit_paths(tmp_path)
   assert any("required workflow file is missing" in finding for finding in result)
 
 
 def test_extra_workflow_file_fails(tmp_path):
-  for name in check_workflows.REQUIRED_FILES:
+  for name in gate_workflows.REQUIRED_FILES:
     (tmp_path / name).write_text(yaml.safe_dump(BASE), encoding="utf-8")
   (tmp_path / "extra.yml").write_text(yaml.safe_dump(BASE), encoding="utf-8")
-  result = check_workflows.audit_paths(tmp_path)
+  result = gate_workflows.audit_paths(tmp_path)
   assert any("unexpected workflow file" in finding for finding in result)
 
 
 def test_invalid_yaml_fails(tmp_path):
   (tmp_path / "ci.yml").write_text("name: [unclosed\n", encoding="utf-8")
-  result = check_workflows.audit_paths(tmp_path)
+  result = gate_workflows.audit_paths(tmp_path)
   assert any("invalid YAML" in finding for finding in result)
 
 
@@ -161,7 +161,7 @@ def test_pull_requests_write_stays_allowed_for_review_comments():
 def test_check_minify_job_without_pytest_fails():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
-    {"name": "Minify", "run": "python maintenance/check_minify.py"}
+    {"name": "Minify", "run": "python maintenance/minify/gate_minify.py"}
   ]
   assert any("must install pytest" in finding for finding in findings(document))
 
@@ -170,33 +170,33 @@ def test_check_minify_job_with_pytest_passes():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
     {"name": "Install", "run": "python -m pip install pytest==9.1.1"},
-    {"name": "Minify", "run": "python maintenance/check_minify.py"},
+    {"name": "Minify", "run": "python maintenance/minify/gate_minify.py"},
   ]
   assert findings(document) == []
 
 
 def test_trigger_lists_and_strings_parse():
-  assert check_workflows.triggers_of({"on": "push"}) == {"push": None}
-  assert check_workflows.triggers_of({"on": ["push", "workflow_dispatch"]}) == {
+  assert gate_workflows.triggers_of({"on": "push"}) == {"push": None}
+  assert gate_workflows.triggers_of({"on": ["push", "workflow_dispatch"]}) == {
     "push": None,
     "workflow_dispatch": None,
   }
-  assert check_workflows.triggers_of({True: {"push": None}}) == {"push": None}
+  assert gate_workflows.triggers_of({True: {"push": None}}) == {"push": None}
 
 
 def test_main_exit_codes(capsys):
-  assert check_workflows.main([]) == 0
+  assert gate_workflows.main([]) == 0
   assert "Workflow set passed" in capsys.readouterr().out
 
 
 def load_workflow(name: str) -> dict:
   return yaml.safe_load(
-    (check_workflows.WORKFLOW_DIR / name).read_text(encoding="utf-8")
+    (gate_workflows.WORKFLOW_DIR / name).read_text(encoding="utf-8")
   )
 
 
 def test_artifacts_triggers_keep_both_path_families():
-  triggers = check_workflows.triggers_of(load_workflow("artifacts.yml"))
+  triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
   pr_paths = triggers["pull_request"]["paths"]
   assert "gpt-plugins/**" in push_paths and "gpt-plugins/**" in pr_paths
@@ -242,7 +242,7 @@ def test_artifacts_job_concurrency_moves_to_job_level():
 
 def test_distribute_triggers_and_inputs():
   document = load_workflow("distribute.yml")
-  triggers = check_workflows.triggers_of(document)
+  triggers = gate_workflows.triggers_of(document)
   assert triggers["push"]["branches"] == ["main"]
   assert triggers["push"]["paths"] == [
     "rules/ARENA.md",
@@ -351,19 +351,19 @@ def test_write_scope_without_a_non_pull_request_event_still_fails():
 
 
 def test_guarded_from_pull_request_reads_the_condition():
-  assert check_workflows.guarded_from_pull_request(
+  assert gate_workflows.guarded_from_pull_request(
     {"if": "github.event_name == 'push'"}
   )
-  assert not check_workflows.guarded_from_pull_request({})
-  assert not check_workflows.guarded_from_pull_request({"if": True})
+  assert not gate_workflows.guarded_from_pull_request({})
+  assert not gate_workflows.guarded_from_pull_request({"if": True})
   # An `||` branch that admits the pull request event guards nothing.
-  assert not check_workflows.guarded_from_pull_request(
+  assert not gate_workflows.guarded_from_pull_request(
     {"if": "github.event_name == 'push' || github.event_name == 'pull_request'"}
   )
 
 
 def test_artifacts_push_paths_carry_both_proxy_directories():
-  triggers = check_workflows.triggers_of(load_workflow("artifacts.yml"))
+  triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]
   pr_paths = triggers["pull_request"]["paths"]
   for entry in (
@@ -376,7 +376,7 @@ def test_artifacts_push_paths_carry_both_proxy_directories():
 
 
 def test_artifacts_dispatch_inputs_name_both_images():
-  triggers = check_workflows.triggers_of(load_workflow("artifacts.yml"))
+  triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   inputs = triggers["workflow_dispatch"]["inputs"]
   assert set(inputs) == {"egress_image", "preview_image"}
   for value in inputs.values():
@@ -406,7 +406,7 @@ def test_artifacts_release_job_keeps_the_release_semantics():
     "cancel-in-progress": False,
   }
   script = "\n".join(step.get("run", "") for step in job["steps"])
-  assert "check_gpt_plugins.py --archive gpt-plugins.zip" in script
+  assert "gate_gpt_plugins.py --archive gpt-plugins.zip" in script
   assert "gh release create" in script and "--clobber" in script
 
 

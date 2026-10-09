@@ -504,7 +504,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The read gate blocks after ten calls while notes wait. The owner raised the number from three.
 - The gate exempts a command line only when every command on it is an inbox call or an inert prefix. A read beside work no longer exempts the work, so the work meets the gate. Quoted text is an argument, so a reply may span lines.
 - The blocked line names a bare `arena-preview ack <id>` call with its `--reply` and `--note` flags. Earlier the line named only the read.
-  A redirect that sends the read to `/dev/null` ends the exemption too. `preview.py inbox-line` answers the question and `maintenance/test_preview_gate.py` covers it.
+  A redirect that sends the read to `/dev/null` ends the exemption too. `preview.py inbox-line` answers the question and `maintenance/workflows/test_preview_gate.py` covers it.
 - `saved-state.ndjson` carries each report's markdown, and `import-state` rebuilds the report pages from it.
 - `/api/copy-state` returns the save-file text and its counts. The copy button copies that text in one fetch. The cached assembly stays as the fallback.
 - A report the owner unpublishes from the page writes one inbox note that names it. The CLI form stays silent.
@@ -574,12 +574,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
-- A new first-party skill pairs the `fetch_page` tool with an owner-run backend that holds a provider credential. The backend answers `/v1/ping`, `/v1/github`, and `/v1/logs`, checks a generated agent key, and removes the query string from its log lines. `maintenance/test_arena_proxy.py` covers auth, forwarding, the log tail, and key redaction.
+- A new first-party skill pairs the `fetch_page` tool with an owner-run backend that holds a provider credential. The backend answers `/v1/ping`, `/v1/github`, and `/v1/logs`, checks a generated agent key, and removes the query string from its log lines. `maintenance/workflows/test_arena_proxy.py` covers auth, forwarding, the log tail, and key redaction.
 - The backend becomes an `arena_proxy` package of five modules with a thin `server.py` launcher. `/v1/health` answers without a key. `/v1/fetch` returns text, base64, base85 or gzip, and stages large bytes for chunked reads.
   `/v1/llm` queues an OpenAI-compatible job and returns its result on a poll. Staged bytes and jobs expire after one hour. The backend accepts loopback HTTP for a local service.
 - `skills/arena-proxy/Dockerfile` builds a `python:3.12-alpine` image with no build step, runs as a non-root user, and keeps secrets in the environment.
 - The skill records Cloudflare Tunnel and Tailscale Funnel as the HTTPS options, with the agent key as the only gate. The shipped scripts stay readable, not minified, because the owner hosts and debugs them.
-- The fetch route refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes. Public HTTPS and the owner's loopback stay open. `maintenance/test_arena_proxy.py` covers the blocked and allowed shapes.
+- The fetch route refuses private and link-local addresses, the cloud metadata address, single-label names, and internal suffixes. Public HTTPS and the owner's loopback stay open. `maintenance/workflows/test_arena_proxy.py` covers the blocked and allowed shapes.
 - The skill, its Python package and its budget row become `arena-proxy`, and the environment prefix becomes `ARENA_PROXY_`.
 - `release-gpt-plugins.yml` publishes `gpt-plugins.zip` as a GitHub Release on the tag `gpt-plugins-v<version>` from `plugin.json`, and the workflow contract gains that file.
 - `.github/codeql/codeql-config.yml` excludes `py/full-ssrf`, whose reports describe the fetch design. The `allowed_url` guard and its tests carry the control. An inline `# codeql[py/full-ssrf]` comment came first, and the check ignored it.
@@ -624,8 +624,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - `codeql.yml` analyzes Python, JavaScript and the workflow YAML. `dependency-review.yml` fails a high or critical advisory. `secret-scan.yml` scans the pushed commits and the full history on a schedule.
 - `workflow-security.yml` runs actionlint, zizmor and the workflow set gate on every workflow change, with a weekly run.
-- `pr-check.yml` checks each commit and the pull request title against the Conventional Commit rules that `maintenance/check_pr.py` inlines from `rules/COMMIT-SPEC.txt`. It checks the body heading order and runs the vendored Simplified Technical English linter on it.
-- `maintenance/check_pr.py`, `maintenance/check_workflows.py` and their test modules hold the pull request contract and the workflow set contract. A pull request records its rules in `.github/pull_request_template.md`.
+- `pr-check.yml` checks each commit and the pull request title against the Conventional Commit rules that `maintenance/pr/gate_pr.py` inlines from `rules/COMMIT-SPEC.txt`. It checks the body heading order and runs the vendored Simplified Technical English linter on it.
+- `maintenance/pr/gate_pr.py`, `maintenance/workflows/gate_workflows.py` and their test modules hold the pull request contract and the workflow set contract. A pull request records its rules in `.github/pull_request_template.md`.
 
 #### preview
 
@@ -695,7 +695,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### workflows
 
-- The `preview-tests` job installs `pytest`, which `maintenance/check_minify.py` runs on the minified runtime. The workflow contract check now refuses a job that runs the script without the install.
+- The `preview-tests` job installs `pytest`, which `maintenance/minify/gate_minify.py` runs on the minified runtime. The workflow contract check now refuses a job that runs the script without the install.
 - `actionlint` reports shellcheck findings. The plugin validation step takes its base commit through the environment. Four scripts in `distribute.yml` carry a scoped disable directive.
   No command changes.
 
@@ -818,7 +818,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Comments in `maintenance/check_minify.py` use periods instead of semicolons. `userscripts/README.md` splits a long sentence. The full prose check passes.
+- Comments in `maintenance/minify/gate_minify.py` use periods instead of semicolons. `userscripts/README.md` splits a long sentence. The full prose check passes.
 
 ## 2026-09-30
 
@@ -870,7 +870,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Open Steering takes the newest matching row, so a stale card from an earlier turn no longer shadows the live preview. The version moves to `1.1.12`.
 - Open Steering ranks a running row above a `Start …` history card. The newest row wins inside a rank, so the click lands on the live preview. The version moves to `1.1.13`.
 - The title holds the last action emoji for five seconds after the live row leaves. A gap between calls no longer flashes the title. The version moves to `1.1.13`.
-- The bundles carry runtime code only. Outside a browser each feature publishes its helpers, and `maintenance/userscripts.checks.cjs` runs the feature checks. Arena moves to `1.1.15`, ChatGPT to `1.2.2`.
+- The bundles carry runtime code only. Outside a browser each feature publishes its helpers, and `maintenance/workflows/userscripts.checks.cjs` runs the feature checks. Arena moves to `1.1.15`, ChatGPT to `1.2.2`.
 - Open Steering never clicks a `Start …` transcript card, because a click on one opens nothing. With no running row it clicks nothing. The version moves to `1.1.16`.
 
 #### workflows
@@ -886,7 +886,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - The `validate.yml` skip list, `maintenance/README.md`, `maintenance/check.py` and the preview skill README name `.github/workflows/distribute.yml`, the owner's renamed file.
-- Both prose gates report zero violations. The passive and semicolon findings leave `maintenance/check.py`, `maintenance/check_gpt_plugins.py`, and `skills/squash/SKILL.md`. The CHANGELOG bullets cap at three sentences, and the preview skill README drops the synonym rotation.
+- Both prose gates report zero violations. The passive and semicolon findings leave `maintenance/check.py`, `maintenance/gpt_plugins/gate_gpt_plugins.py`, and `skills/squash/SKILL.md`. The CHANGELOG bullets cap at three sentences, and the preview skill README drops the synonym rotation.
 
 #### docs
 
@@ -1067,7 +1067,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### gpt-plugins
 
-- `.github/workflows/package-gpt-plugins.yml` runs on pull requests only. A PR that changes shipped plugin files must raise the `plugin.json` version above the base. Package and artifact upload stay on `main`, and `maintenance/check_gpt_plugins.py` gains `--base-manifest` and `--self-check`.
+- `.github/workflows/package-gpt-plugins.yml` runs on pull requests only. A PR that changes shipped plugin files must raise the `plugin.json` version above the base. Package and artifact upload stay on `main`, and `maintenance/gpt_plugins/gate_gpt_plugins.py` gains `--base-manifest` and `--self-check`.
 
 #### userscripts
 
@@ -1297,7 +1297,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - `check_preview.py` and `check_client.cjs` leave the distributed copies since nothing loads them at runtime. `check_minify.py` now runs the harness from the readable refs tree against the generated runtime. `minify.py` builds four files instead of six.
-- `maintenance/minify.py` sets `remove_literal_statements=True`, and its Python parity check drops bare string statements from both trees before comparing them. The only runtime consumer was argparse's `description=__doc__`, so the help text moves to a `CLI_DESCRIPTION` constant that survives the build in both distributed copies.
+- `maintenance/minify/minify.py` sets `remove_literal_statements=True`, and its Python parity check drops bare string statements from both trees before comparing them. The only runtime consumer was argparse's `description=__doc__`, so the help text moves to a `CLI_DESCRIPTION` constant that survives the build in both distributed copies.
 
 #### docs
 

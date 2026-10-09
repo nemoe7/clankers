@@ -16,7 +16,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 STE_LINT = ROOT / ".agents" / "skills" / "asd-ste100" / "scripts" / "ste-lint.py"
 
 ALLOWED_TYPES = (

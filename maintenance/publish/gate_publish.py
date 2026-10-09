@@ -10,9 +10,9 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
-import publish_clankers_rules as sync
+import publish as sync
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 EXPECTED = {
   "AGENTS.md",
   "ARENA.md",
@@ -116,8 +116,8 @@ for marker in (
   "contents: read",
   "GH_TOKEN: ${{ secrets.GIST_TOKEN }}",
   "GIST_ID: ${{ vars.GIST_ID }}",
-  "run: python3 maintenance/check_publish_clankers_rules.py",
-  "run: python3 maintenance/publish_clankers_rules.py",
+  "run: python3 maintenance/publish/gate_publish.py",
+  "run: python3 maintenance/publish/publish.py",
   "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'",
 ):
   assert marker in workflow, marker
@@ -130,7 +130,7 @@ publish_job = workflow.split("publish-clankers-rules:", 1)[1]
 for marker in (
   "GH_TOKEN: ${{ secrets.GIST_TOKEN }}",
   "GIST_ID: ${{ vars.GIST_ID }}",
-  "run: python3 maintenance/publish_clankers_rules.py",
+  "run: python3 maintenance/publish/publish.py",
 ):
   assert marker in publish_job, marker
 assert "secrets.GIST_TOKEN" not in workflow.split("publish-clankers-rules:", 1)[0], (

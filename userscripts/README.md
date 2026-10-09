@@ -141,8 +141,8 @@ From the repository root:
 ```bash
 node userscripts/arena.user.js
 node userscripts/chatgpt.user.js
-node --test maintenance/userscripts.checks.cjs
-node --test maintenance/userscripts.test.cjs
+node --test maintenance/workflows/userscripts.checks.cjs
+node --test maintenance/workflows/userscripts.test.cjs
 ```
 
-Each command prints `ok` when its checks pass. The bundles carry runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `maintenance/userscripts.checks.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.
+Each command prints `ok` when its checks pass. The bundles carry runtime code only: outside a browser each feature publishes its helpers through `exposeChecks`, and the feature checks run from `maintenance/workflows/userscripts.checks.cjs`. The integration check covers saved switches, reloads, disabled startup, storage errors, transcript growth, forced follow, live cleanup and navigation.

@@ -1,7 +1,7 @@
 const CleanCSS = require('clean-css');
 
 if (process.argv.length !== 3) {
-  console.error('Use: node maintenance/minify_css.cjs <source.css>');
+  console.error('Use: node maintenance/minify/minify_css.cjs <source.css>');
   process.exit(1);
 }
 

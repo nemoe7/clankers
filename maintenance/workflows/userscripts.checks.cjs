@@ -2,7 +2,7 @@
 // publishes its helpers through `exposeChecks`, and this file drives them, so the installed
 // scripts ship runtime code only.
 //
-// Run: node --test maintenance/userscripts.checks.cjs
+// Run: node --test maintenance/workflows/userscripts.checks.cjs
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -1078,7 +1078,7 @@ function checkTabTitle(api) {
       closest: function () { return null; },
     };
     var row = {
-      textContent: "Editing maintenance/check_pr.py",
+      textContent: "Editing maintenance/pr/gate_pr.py",
       parentElement: null,
       querySelector: function () { return null; },
       querySelectorAll: function (selector) {

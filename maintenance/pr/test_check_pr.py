@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import check_pr
+import gate_pr
 
 VALID_BODY = """## Summary
 
@@ -25,7 +25,7 @@ Add a gate that validates every pull request commit and the pull request body.
 
 
 def body_failures(text: str) -> list[str]:
-  return [str(failure) for failure in check_pr.validate_pr_body(text)]
+  return [str(failure) for failure in gate_pr.validate_pr_body(text)]
 
 
 def test_valid_body_passes():
@@ -69,14 +69,14 @@ def test_extra_section_fails():
 
 def test_a_bang_commit_needs_a_filled_breaking_section():
   banged = ["feat(preview)!: drop the gate"]
-  assert check_pr.validate_breaking_crosscheck(banged, VALID_BODY)
+  assert gate_pr.validate_breaking_crosscheck(banged, VALID_BODY)
   assert (
-    check_pr.validate_breaking_crosscheck(["feat(preview): drop the gate"], VALID_BODY)
+    gate_pr.validate_breaking_crosscheck(["feat(preview): drop the gate"], VALID_BODY)
     == []
   )
   filled = VALID_BODY + "## Breaking Changes\n\n- The gate goes.\n"
-  assert check_pr.validate_breaking_crosscheck(banged, filled) == []
-  assert check_pr.validate_breaking_crosscheck(banged, VALID_BODY)
+  assert gate_pr.validate_breaking_crosscheck(banged, filled) == []
+  assert gate_pr.validate_breaking_crosscheck(banged, VALID_BODY)
 
 
 def test_angle_brackets_pass_inside_a_fenced_block():
@@ -201,89 +201,89 @@ def test_h3_heading_fails():
 
 
 def test_valid_commit_passes():
-  assert check_pr.validate_commit("feat(preview): poll for notes") == []
+  assert gate_pr.validate_commit("feat(preview): poll for notes") == []
 
 
 def test_invalid_type_fails():
-  failures = check_pr.validate_commit("frobnicate(preview): poll for notes")
+  failures = gate_pr.validate_commit("frobnicate(preview): poll for notes")
   assert any("unknown type" in failure.message for failure in failures)
 
 
 def test_any_scope_passes():
-  assert check_pr.validate_commit("feat(nonsense): poll for notes") == []
-  assert check_pr.validate_commit("chore(changelog): note the release") == []
+  assert gate_pr.validate_commit("feat(nonsense): poll for notes") == []
+  assert gate_pr.validate_commit("chore(changelog): note the release") == []
 
 
 def test_invalid_case_fails():
-  failures = check_pr.validate_commit("feat(preview): Poll for notes")
+  failures = gate_pr.validate_commit("feat(preview): Poll for notes")
   assert any("lowercase" in failure.message for failure in failures)
 
 
 def test_trailing_period_fails():
-  failures = check_pr.validate_commit("feat(preview): poll for notes.")
+  failures = gate_pr.validate_commit("feat(preview): poll for notes.")
   assert any("period" in failure.message for failure in failures)
 
 
 def test_over_long_subject_fails():
   subject = "feat(preview): " + "a" * 70
-  failures = check_pr.validate_commit(subject)
+  failures = gate_pr.validate_commit(subject)
   assert any("limit is 72" in failure.message for failure in failures)
 
 
 def test_invalid_breaking_marker_fails():
-  failures = check_pr.validate_commit("feat!(preview): poll for notes")
+  failures = gate_pr.validate_commit("feat!(preview): poll for notes")
   assert any("subject must match" in failure.message for failure in failures)
 
 
 def test_valid_breaking_marker_passes():
-  assert check_pr.validate_commit("feat(preview)!: poll for notes") == []
+  assert gate_pr.validate_commit("feat(preview)!: poll for notes") == []
 
 
 def test_commit_body_fails():
-  failures = check_pr.validate_commit("feat(preview): poll for notes\n\nExtra detail.")
+  failures = gate_pr.validate_commit("feat(preview): poll for notes\n\nExtra detail.")
   assert any("no commit body" in failure.message for failure in failures)
 
 
 def test_malformed_subject_fails():
-  failures = check_pr.validate_commit("feat(preview) poll for notes")
+  failures = gate_pr.validate_commit("feat(preview) poll for notes")
   assert any("subject must match" in failure.message for failure in failures)
 
 
 def test_the_subject_carries_no_wording_rule():
-  assert check_pr.validate_commit("feat(preview): polling for notes") == []
-  assert check_pr.validate_commit("ci(workflows): add the security set") == []
-  assert not hasattr(check_pr, "IMPERATIVE_EXCEPTIONS")
+  assert gate_pr.validate_commit("feat(preview): polling for notes") == []
+  assert gate_pr.validate_commit("ci(workflows): add the security set") == []
+  assert not hasattr(gate_pr, "IMPERATIVE_EXCEPTIONS")
 
 
 def test_a_scope_binds_no_path_area():
-  assert check_pr.validate_commit("docs(preview): note the release") == []
-  assert not hasattr(check_pr, "SCOPE_AREAS")
+  assert gate_pr.validate_commit("docs(preview): note the release") == []
+  assert not hasattr(gate_pr, "SCOPE_AREAS")
 
 
 def test_the_gate_holds_no_scope_list():
-  assert not hasattr(check_pr, "ALLOWED_SCOPES")
+  assert not hasattr(gate_pr, "ALLOWED_SCOPES")
 
 
 def test_pr_title_uses_the_commit_rules():
-  assert check_pr.validate_subject("feat(ci): run the gate", "PR title") == []
-  failures = check_pr.validate_subject("feat(ci): Run the gate", "PR title")
+  assert gate_pr.validate_subject("feat(ci): run the gate", "PR title") == []
+  failures = gate_pr.validate_subject("feat(ci): Run the gate", "PR title")
   assert any("lowercase" in failure.message for failure in failures)
 
 
 def test_ste_lint_accepts_valid_text():
-  passed, output = check_pr.run_ste_lint("Start the server. Read the log.\n")
+  passed, output = gate_pr.run_ste_lint("Start the server. Read the log.\n")
   assert passed, output
 
 
 def test_ste_lint_rejects_invalid_text():
-  passed, output = check_pr.run_ste_lint("Start the server; read the log.\n")
+  passed, output = gate_pr.run_ste_lint("Start the server; read the log.\n")
   assert not passed
   assert "semicolon" in output
 
 
 def test_ste_lint_selftest_passes():
   result = subprocess.run(
-    [sys.executable, str(check_pr.STE_LINT), "--selftest"],
+    [sys.executable, str(gate_pr.STE_LINT), "--selftest"],
     capture_output=True,
     text=True,
     check=False,
@@ -291,23 +291,23 @@ def test_ste_lint_selftest_passes():
   assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_check_propagates_the_ste_failure(tmp_path: Path):
+def test_gate_propagates_the_ste_failure(tmp_path: Path):
   body = tmp_path / "body.md"
   body.write_text(
     VALID_BODY.replace("pull request body.", "pull request body. One line; two rules."),
     encoding="utf-8",
   )
-  failures = check_pr.check(None, None, str(body), True)
+  failures = gate_pr.check(None, None, str(body), True)
   assert any("STE lint failed" in failure.message for failure in failures)
-  without_ste = check_pr.check(None, None, str(body), False)
+  without_ste = gate_pr.check(None, None, str(body), False)
   assert not any("STE lint failed" in failure.message for failure in without_ste)
 
 
 def test_main_exit_codes(tmp_path: Path, capsys):
   good = tmp_path / "good.md"
   good.write_text(VALID_BODY, encoding="utf-8")
-  assert check_pr.main(["--body-file", str(good)]) == 0
+  assert gate_pr.main(["--body-file", str(good)]) == 0
   bad = tmp_path / "bad.md"
   bad.write_text("## Summary\n\nText.\n", encoding="utf-8")
-  assert check_pr.main(["--body-file", str(bad)]) == 1
+  assert gate_pr.main(["--body-file", str(bad)]) == 1
   assert "contract violation" in capsys.readouterr().out

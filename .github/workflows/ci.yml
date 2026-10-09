@@ -46,7 +46,7 @@ jobs:
       - name: Install Build Dependencies And Check Generated Copies
         run: |
           npm ci
-          python maintenance/minify.py
+          python maintenance/minify/minify.py
 
       - name: Update And Validate Repository
         run: python maintenance/check.py --update
@@ -58,7 +58,7 @@ jobs:
 
       - name: Check Budget Generator And Shipped Script Syntax
         run: |
-          python maintenance/check_measurements.py
+          python maintenance/measurements/gate_measurements.py
           node --check skills/arena-skill/assets/app.js
 
       # The AGENTS.md clause on Simplified Technical English: text you add or change in docs/ and the
@@ -66,14 +66,11 @@ jobs:
       - name: Lint The Covered Documentation
         run: python maintenance/check.py --ste
 
-      - name: Compile Maintenance Script
-        run: python -m compileall maintenance/check.py
-
       - name: Check The Rules Gist Publisher
-        run: python3 maintenance/check_publish_clankers_rules.py
+        run: python3 maintenance/publish/gate_publish.py
 
       - name: Check The Workflow Set
-        run: python maintenance/check_workflows.py
+        run: python maintenance/workflows/gate_workflows.py
 
       - name: Check Userscript Bundles
         run: |
@@ -106,10 +103,10 @@ jobs:
         run: python -m pytest -q -n auto
 
       - name: Test Commit Message Hook
-        run: python maintenance/test_commit_msg.py
+        run: python maintenance/pr/test_commit_msg.py
 
       - name: Run Node Userscript Tests
-        run: node --test maintenance/userscripts.checks.cjs maintenance/userscripts.test.cjs
+        run: node --test maintenance/workflows/userscripts.checks.cjs maintenance/workflows/userscripts.test.cjs
 
   preview-tests:
     name: Preview Tests
@@ -145,8 +142,8 @@ jobs:
             skills/refs/arena-skill \
             skills/arena-skill \
             .agents/skills/arena-skill \
-            maintenance/minify.py \
-            maintenance/check_minify.py \
+            maintenance/minify/minify.py \
+            maintenance/minify/gate_minify.py \
             github/workflows \
             pytest.ini \
             package.json \
@@ -175,5 +172,5 @@ jobs:
       - name: Run Preview Checks
         if: steps.preview.outputs.run == 'true'
         run: |
-          python maintenance/check_minify.py
+          python maintenance/minify/gate_minify.py
           node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-skill/scripts/client.test.cjs
