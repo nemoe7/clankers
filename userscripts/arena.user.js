@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.7
+// @name         Arena.ai | NemoUtils | v1.10.8
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.7
+// @version      1.10.8
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2519,7 +2519,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.7";
+    var VERSION = "1.10.8";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2544,9 +2544,8 @@
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
       ["wait", "\uD83D\uDCA4"],
-      // Chat covers the agent's own rows, like Agent chat, that carry no tool verb.
-      ["chat", AGENT_EMOJI],
     ];
+    var ACTION_FALLBACK = "\u2699\uFE0F";
     var EMOJI_HOLD_MS = 5000;
     var heldEmoji = null;
     var heldEmojiAt = 0;
@@ -2638,8 +2637,9 @@
       }
       // A live row streams under its shimmer label before a group label lands, so
       // the shimmer counts as a label too; without it the mark freezes on the last
-      // labelled row.
-      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR);
+      // labelled row. A pulsing label under done rows is news the same way, so the
+      // pulse counts too; without it a live edit under older done rows never matches.
+      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR);
       return groups.length ? rowFromLabel(groups[groups.length - 1]) : null;
     }
 
@@ -2650,8 +2650,11 @@
 
     function strongRow(doc) {
       var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
-      var row = rowFromLabel(labels.length ? labels[labels.length - 1] : null);
-      if (row && rowIsNewest(doc, row)) {
+      var label = labels.length ? labels[labels.length - 1] : null;
+      var row = rowFromLabel(label);
+      // Only a mapped label outranks the waiting line; an unmapped one falls to the gear
+      // pass after the hourglass has had its say.
+      if (row && knownLabel(collapsed(label)) && rowIsNewest(doc, row)) {
         return row;
       }
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
@@ -2660,7 +2663,7 @@
       for (i = messages.length - 1; i >= 0; i -= 1) {
         icons = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(LIVE_ICON_SELECTOR) : [];
         row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-        if (row && rowIsNewest(doc, row)) {
+        if (row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row)) {
           return row;
         }
       }
@@ -2681,7 +2684,26 @@
           ? lastMessage.querySelectorAll(GROUP_LABEL_SELECTOR)
           : [];
       row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
-      return row && knownLabel(liveLabel(row)) && stopSignal(doc) ? row : null;
+      if (row && stopSignal(doc) && (knownLabel(liveLabel(row)) || rowInMessage(doc, row))) {
+        return row;
+      }
+      // The gear pass: the newest labelled row inside a transcript message still marks when
+      // no word maps it, so rows like Agent chat earn the fallback instead of nothing.
+      var gearLabels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
+      if (!gearLabels.length) {
+        gearLabels = [];
+        var gearMessages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+        var j;
+        for (j = 0; j < gearMessages.length; j += 1) {
+          if (typeof gearMessages[j].querySelectorAll === "function") {
+            gearLabels = gearLabels.concat(
+              Array.prototype.slice.call(gearMessages[j].querySelectorAll(LIVE_LABEL_SELECTOR)),
+            );
+          }
+        }
+      }
+      row = rowFromLabel(gearLabels.length ? gearLabels[gearLabels.length - 1] : null);
+      return row && liveLabel(row) && rowIsNewest(doc, row) && rowInMessage(doc, row) ? row : null;
     }
 
     // A started process card: a play icon in the newest message. It runs
@@ -2705,6 +2727,17 @@
         return null;
       }
       return card;
+    }
+
+    function rowInMessage(doc, row) {
+      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+      var i;
+      for (i = 0; i < messages.length; i += 1) {
+        if (typeof messages[i].contains === "function" && messages[i].contains(row)) {
+          return true;
+        }
+      }
+      return false;
     }
 
     function knownLabel(text) {
@@ -2770,8 +2803,7 @@
           return ACTION_EMOJI[i][1];
         }
       }
-      // An unmatched label yields no mark, so the speech and waiting signals still surface.
-      return null;
+      return ACTION_FALLBACK;
     }
 
     function rowCommand(row) {

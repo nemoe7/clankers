@@ -1004,8 +1004,12 @@ function checkTabTitle(api) {
     return {
       row: row,
       label: label,
+      contains: function (candidate) {
+        return candidate === row;
+      },
       querySelectorAll: function (selector) {
-        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
+        if (selector === LIVE_ICON_SELECTOR) return [icon];
+        return selector === LIVE_LABEL_SELECTOR && shimmer ? [label] : [];
       },
     };
   }
@@ -1057,6 +1061,72 @@ function checkTabTitle(api) {
         return classMatch(selector, [label]);
       },
       querySelector: function () { return null; },
+    };
+  }
+  // The owner's live page: the newest row pulses its Editing span while a done row
+  // above it already carries its group label, so the pulse must outnewest the label.
+  function editingUnderDoneDoc() {
+    var doneLabel = {
+      tagName: "SPAN",
+      className: "shrink-0 text-text-secondary",
+      textContent: "Bash sleep 25",
+      parentElement: null,
+      closest: function () {
+        return null;
+      },
+    };
+    var doneRow = {
+      textContent: "Bash sleep 25",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function () {
+        return [];
+      },
+    };
+    doneLabel.parentElement = doneRow;
+    var pulse = {
+      tagName: "SPAN",
+      className: "shrink-0 text-text-tertiary animate-pulse",
+      textContent: "Editing",
+      parentElement: null,
+      closest: function () {
+        return null;
+      },
+    };
+    var editRow = {
+      textContent: "Editing userscripts/arena.user.js",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return classMatch(selector, [pulse]);
+      },
+    };
+    pulse.parentElement = editRow;
+    var message = {
+      contains: function (candidate) {
+        return candidate === doneRow || candidate === editRow;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === GROUP_LABEL_SELECTOR) return [doneLabel];
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
+          return [doneLabel, pulse];
+        }
+        return classMatch(selector, [pulse]);
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        if (selector === LIVE_ICON_SELECTOR) return [pulse];
+        return [];
+      },
     };
   }
   function actionDoc(element, message) {
@@ -1270,7 +1340,7 @@ function checkTabTitle(api) {
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === GROUP_LABEL_SELECTOR) return [name, exploredLabel];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR) {
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
           return [name, exploredLabel];
         }
         return [];
@@ -1347,7 +1417,7 @@ function checkTabTitle(api) {
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === GROUP_LABEL_SELECTOR) return [name, bashLabel];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR) {
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
           return [name, bashLabel];
         }
         return [];
@@ -1422,7 +1492,7 @@ function checkTabTitle(api) {
       querySelectorAll: function (selector) {
         if (selector === GROUP_LABEL_SELECTOR) return [oldLabel];
         if (selector === LIVE_LABEL_SELECTOR) return [shimmer];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR) {
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
           return [oldLabel, shimmer];
         }
         return [];
@@ -1634,6 +1704,8 @@ function checkTabTitle(api) {
     },
   };
   var strayDoc = pulseDoc([], strayIcon);
+  var agentChatDoc = pulseDoc([divMessage("Agent chat", true)], null);
+  var rocketsDoc = pulseDoc([divMessage("Deploying rockets", true)], null);
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
   setPriorTitle("ChatGPT");
   var userscriptText = fs.readFileSync(
@@ -1682,6 +1754,7 @@ function checkTabTitle(api) {
     [emojiForRow(liveRow(pulseLabelDoc("span", "Fetching"))), "\uD83D\uDD0D"],
     [actionEmoji("Fetching web page"), "\uD83D\uDD0D"],
     [emojiForRow(liveRow(pulseLabelDoc("svg"))), "\u270F\uFE0F"],
+    [emojiForRow(liveRow(editingUnderDoneDoc())), "\u270F\uFE0F"],
     [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
     [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
     [emojiForRow(pathMessage.row), "\uD83D\uDCA4"],
@@ -1710,10 +1783,12 @@ function checkTabTitle(api) {
     [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
     [actionEmoji("Re-thinking"), "\uD83D\uDCAD"],
     [actionEmoji("Waiting"), "\uD83D\uDCA4"],
-    // A label nobody mapped leaves the title mark to the other signals, not the gear.
-    [actionEmoji("Doing something"), null],
-    [actionEmoji("Agent chat"), "\uD83D\uDCAC"],
-    [emojiForRow(liveRow(pulseLabelDoc("span", "Agent chat"))), "\uD83D\uDCAC"],
+    // The owner keeps the gear: an unmatched label inside a message still marks the
+    // row, so Agent chat earns the fallback instead of dropping out of the title.
+    [actionEmoji("Doing something"), "\u2699\uFE0F"],
+    [actionEmoji("Agent chat"), "\u2699\uFE0F"],
+    [emojiForRow(liveRow(agentChatDoc)), "\u2699\uFE0F"],
+    [emojiForRow(liveRow(rocketsDoc)), "\u2699\uFE0F"],
     [actionEmoji(null), null],
     [desiredTitle(busyDoc), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
     [syncTitle(busyDoc), true],
@@ -1845,6 +1920,13 @@ function checkTabTitle(api) {
     ],
     [expireHold(), null],
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
+    [expireHold(), null],
+    // The gear row never blocks the line: an unmapped chat row sits in the transcript,
+    // and the waiting line still raises the hourglass.
+    [
+      desiredTitle(waitingDoc([divMessage("Agent chat", true)])),
+      TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI,
+    ],
     [expireHold(), null],
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
     // The security check beats every other mark, including a poll row and the hourglass.

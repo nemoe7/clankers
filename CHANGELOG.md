@@ -56,6 +56,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Trim scheduler**: one plain 5 s interval asks the settle and quiet gates, replacing the mutation-driven chain that fired on every streaming flicker. Arena 1.10.4.
 - **Steering misclick**: the open-steering scan skips the header port switcher, whose aria-label is Switch preview port. Arena 1.10.5.
 - **Agent chat mark**: Agent chat rows earn the speech balloon. Unmatched labels leave the mark to the speech and waiting signals instead of the gear. Arena 1.10.7.
+- **Gear fallback and live edit mark**: the gear fallback returns for unknown live labels, and every strongest-row path now gates on the word table, so unmapped rows no longer leak past the waiting hourglass. A pulsing label counts as the newest row, so a live Edit row under older done rows earns the pencil. Arena 1.10.8.
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
 
 #### preview
