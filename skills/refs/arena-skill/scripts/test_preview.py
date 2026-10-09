@@ -4025,6 +4025,9 @@ def test_poll_blocked_tasks():
         "CONTINUE: unblocked task open-task waits. Task list still up. Work it or"
         " mark it blocked before the next poll. Do not end the turn."
       )
+      # The same line rides stdout too, right before the JSON listing, so a turn
+      # that reads only stdout meets the warning instead of burying it.
+      assert printed[2] == printed[1]
       assert payload["tasks"][0]["blocked"] is False
       assert payload["pending"] == []
 

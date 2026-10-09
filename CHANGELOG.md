@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Relative timestamps**: the page stamps read as an age, minutes under an hour and whole hours from an hour up. The header clock keeps its absolute face.
 - **Search match highlight**: the log search wraps each matched word in a mark on the rows it keeps. Rendered replies keep their HTML, so the marks visit the plain text and the receipt's ID.
 - **Answered reports close to the agent**: an answered report refuses the agent's unpublish at once, ahead of the view wait. A revision publishes under a new id, and the tab stays the owner's to dismiss from the page.
+- **CONTINUE rides stdout**: an early poll exit over an unblocked task prints the warning to stdout too. The line lands right before the JSON listing, so a stdout-only turn meets it.
 
 
 ### Fixed

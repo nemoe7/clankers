@@ -1247,13 +1247,14 @@ def poll_inbox(store, sleeper=None):
         listing["tasks"] = open_tasks
         names = ", ".join(item["id"] for item in open_tasks)
         # The early return must not read as an empty wait: the turn continues that task, and the
-        # still-up list must be handled before the next poll.
-        print(
+        # still-up list must be handled before the next poll. The line rides stderr and
+        # stdout both, so a turn that reads only stdout still meets the warning.
+        continue_line = (
           f"CONTINUE: unblocked task {names} waits. Task list still up. Work it or"
-          " mark it blocked before the next poll. Do not end the turn.",
-          file=sys.stderr,
-          flush=True,
+          " mark it blocked before the next poll. Do not end the turn."
         )
+        print(continue_line, file=sys.stderr, flush=True)
+        print(continue_line, flush=True)
         print(cli_json(listing), flush=True)
         print_poll_hold(store)
         return 0
