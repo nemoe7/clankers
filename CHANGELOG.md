@@ -48,6 +48,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- **Send right always**: the coarse-pointer footer keeps Send at the right edge in both composer states. The button takes the bottom line instead of leading the footer.
+- **Attach stable layout**: staging a file moves nothing. The chips wrap inside the label span while the heading row never wraps, so plus and MD keep their seat.
+- **Compact composer**: the coarse-pointer card trims its paddings and row gaps, so the composer footer sits shorter on a phone.
 - **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent.
 
 ## 2026-10-08

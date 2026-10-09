@@ -841,14 +841,16 @@ def test_http_boundaries():
       assert "history-title" not in page
       assert '<section class="card log-card" aria-label="Message log">' in page
       assert page.index('id="connection"') < page.index('id="log-search"')
-      # A phone keeps the tabs alone and drops the composer hint, and the footer's Send button
-      # leads the row so it sits right under the composer at the right edge.
+      # A phone keeps the tabs alone and drops the composer hint. The footer's Send button sits
+      # at the right edge of the bottom line, with or without staged files, and the composer
+      # card steps its paddings and row gaps down.
       assert (
-        "@media (pointer:coarse){.topbar-row>.row.tight{display:none;}#send-hint{display:none;}}"
+        "@media (pointer:coarse){.topbar-row>.row.tight{display:none;}#send-hint{display:none;}"
+        "#send{margin-left:auto;}.card.compose{padding:6px 12px;}.compose .row{margin:4px 0;}}"
         in page
       )
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
-      assert "#send{order:-1;margin-left:auto;}}" in page
+      assert "#send{margin-left:auto;}}" in page
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
@@ -941,9 +943,15 @@ def test_http_boundaries():
         r"padding-left:0;list-style-position:inside",
         page,
       ), "message text lists sit flush"
-      # The send button carries one rule, the narrow-screen position fix, and no resize of its
-      # own.
-      assert re.findall(r"#send\{([^}]*)\}", page) == ["order:-1;margin-left:auto;"]
+      # The send button carries one rule twice, the narrow-screen and the touch position fix,
+      # and no resize of its own.
+      assert re.findall(r"#send\{([^}]*)\}", page) == [
+        "margin-left:auto;",
+        "margin-left:auto;",
+      ]
+      # Staging a file must not move the plus and MD buttons: the heading row never wraps, so
+      # the chips wrap inside the label span and the tight row keeps its right-hand seat.
+      assert ".composer-heading{flex-wrap:nowrap;" in page
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
         "#notes-panel,#reports-panel,#tasks-panel,#downloads-panel{overflow-y:auto"

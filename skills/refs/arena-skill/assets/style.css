@@ -81,7 +81,9 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .log-card > .row:first-child { margin-block: 0; row-gap: 2px; }
 .card.compose { flex: 0 0 auto; padding: 8px 18px; }
 .compose .row { margin: 6px 0; }
-.composer-heading { flex-wrap: wrap; gap: 8px; }
+/* The heading row never wraps: staging a file wraps the chips inside the label span, so the
+   plus and MD buttons keep their right-hand seat instead of dropping a line. */
+.composer-heading { flex-wrap: nowrap; gap: 8px; }
 .composer-label { display: inline-flex; align-items: center; gap: 7px; min-width: 0; flex-wrap: wrap; }
 .composer-label label { margin: 0; white-space: nowrap; }
 #staged-files { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: 100%; }
@@ -260,18 +262,23 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
      step down rather than a track giving way. */
   nav { gap: 6px; }
   nav button { padding: 7px 4px; font-size: 14px; }
-  /* The footer wraps and the lone Send button would drop left; it leads the footer instead, so it
-     sits right under the composer box at the right edge, ahead of the status line. */
-  #send { order: -1; margin-left: auto; }
+  /* The footer wraps and the lone Send button would drop left; the left margin pulls it back
+     to the right edge of the bottom line, under the status stack. */
+  #send { margin-left: auto; }
 }
 
 /* A phone's top bar keeps the tabs alone: the clock, the theme toggle and copy state are desk
    furniture, and the width they take crowds the four tracks. The composer
    hint goes too: a touch Return key needs no caption, and its separator rides the hint, so the
    key line stays whole beside it. */
+/* A touch composer keeps Send on the right edge in both states, with or without staged files,
+   and the card steps its paddings and row gaps down so the phone footer sits shorter. */
 @media (pointer: coarse) {
   .topbar-row > .row.tight { display: none; }
   #send-hint { display: none; }
+  #send { margin-left: auto; }
+  .card.compose { padding: 6px 12px; }
+  .compose .row { margin: 4px 0; }
 }
 
 #send-status { margin: 0; }
