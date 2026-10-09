@@ -92,6 +92,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Compact composer**: the coarse-pointer card trims its paddings and row gaps, so the composer footer sits shorter on a phone.
 - **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent.
 
+#### house
+
+- **Plugin validator dependency**: the plugin collection jobs install `markdown-it-py`, which `check_gpt_plugins.py` needs through `maintenance/check.py`. The self-check step died on the missing module before it ran.
+
 ## 2026-10-08
 
 ### Added
