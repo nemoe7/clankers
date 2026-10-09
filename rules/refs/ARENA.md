@@ -116,7 +116,7 @@
 - Work in several passes, not one sweep, re-checking after each.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
-- Before the final reply, MUST run task-list; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
+- MUST update the stored task details in the same tool block as the work that moves them, and MUST run task-list before the final reply; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Run every arena-preview poll as 1 Bash call with tool timeout 1800 s and no pipe. A shorter tool timeout is a failed wait, and NEVER a result.
 - If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
