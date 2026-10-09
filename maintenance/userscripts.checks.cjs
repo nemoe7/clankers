@@ -1814,6 +1814,45 @@ function checkTabTitle(api) {
     },
   };
   var strayDoc = pulseDoc([], strayIcon);
+  // The owner's captured card: an answered question wears the Summary header, and the
+  // chosen answer sits beside a check. The chosen row raises no mark.
+  function summaryDoc() {
+    var header = { textContent: "Summary" };
+    var answer = { textContent: "Yes, rendered fine" };
+    var answerRow = {
+      querySelector: function () {
+        return null;
+      },
+    };
+    answer.parentElement = answerRow;
+    var card = {
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [header, answer] : [];
+      },
+    };
+    header.parentElement = card;
+    answerRow.parentElement = card;
+    var message = {
+      querySelectorAll: function (selector) {
+        if (selector === GROUP_LABEL_SELECTOR) return [header, answer];
+        return [];
+      },
+      contains: function (candidate) {
+        return candidate === answerRow || candidate === card;
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
   var agentChatDoc = pulseDoc([divMessage("Agent chat", true)], null);
   var rocketsDoc = pulseDoc([divMessage("Deploying rockets", true)], null);
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
@@ -1901,6 +1940,9 @@ function checkTabTitle(api) {
     [actionEmoji("Agent chat"), "\u2699\uFE0F"],
     [emojiForRow(liveRow(agentChatDoc)), "\u2699\uFE0F"],
     [emojiForRow(liveRow(rocketsDoc)), "\u2699\uFE0F"],
+    // The answered question card wears the Summary header and raises no mark; every
+    // other unmatched row keeps the gear fallback.
+    [liveRow(summaryDoc()), null],
     [actionEmoji(null), null],
     [desiredTitle(busyDoc), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
     [syncTitle(busyDoc), true],
