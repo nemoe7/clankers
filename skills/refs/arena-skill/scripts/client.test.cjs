@@ -2645,3 +2645,13 @@ test('preview client', async (t) => {
     assert.equal(get('#skip-poll').dataset.state, '');
   });
 });
+
+test('the phone footer keeps Send beside a long status', () => {
+  // The stacked key and status lines must shrink inside the footer row, so a long
+  // staged-files line wraps within its own column and never pushes the Send note
+  // button onto a line of its own.
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const rule = /\.compose \.row > \.stack {[^}]*}/.exec(css);
+  assert.ok(rule, 'the footer stack has its own rule');
+  assert.match(rule[0], /flex: 1 1 0\b/, 'the status stack starts from zero width so Send stays on its line');
+});

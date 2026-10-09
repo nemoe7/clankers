@@ -97,6 +97,9 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 /* The log's toolbar keeps one line on every width: a wrap would drop the search box under the
    skip button and read as a row of its own. */
 .stack { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+/* The footer status stack starts from zero width, so a long staged-files line wraps inside
+   its own column and the Send note button stays on the same line. */
+.compose .row > .stack { flex: 1 1 0; }
 .stack h2, .stack p { margin: 0; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; min-width: 0; }
 label { display: block; font-size: 14px; font-weight: 650; margin-bottom: 8px; }
