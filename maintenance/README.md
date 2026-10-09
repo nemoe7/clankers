@@ -136,7 +136,7 @@ python3 maintenance/check.py --update
 `check.py` needs `markdown-it-py` from pip to parse the README budget table, and the npm package `gpt-tokenizer` to measure `o200k_base` tokens. Everything else is the Python standard library.
 
 ```bash
-python3 -m pip install markdown-it-py
+python3 -m pip install -r requirements.txt
 npm ci
 ```
 
@@ -152,7 +152,7 @@ A dispatch workflow writes the `.agents/skills/arena-skill/` copy in each target
 
 ```bash
 npm ci
-python3 -m pip install python-minifier==3.3.0
+python3 -m pip install -r requirements.txt
 python3 maintenance/minify/minify.py            # report drift, write nothing
 python3 maintenance/minify/minify.py --update   # write both distributed copies
 ```
@@ -172,7 +172,7 @@ It uses readable assets for exact page assertions, then shipped assets for page 
 Review every clause against refs. Structural checks do not prove semantic parity.
 
 ```bash
-python3 -m pip install jsonschema
+python3 -m pip install -r requirements.txt
 python3 maintenance/gpt_plugins/gate_gpt_plugins.py            # report drift, write nothing
 ```
 

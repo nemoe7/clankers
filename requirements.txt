@@ -1,0 +1,11 @@
+# Python dependencies for maintenance checks and tests
+# Install with: python3 -m pip install -r requirements.txt
+# npm deps remain in package.json (gpt-tokenizer, terser, etc.)
+
+markdown-it-py==4.2.0
+python-minifier==3.3.0
+jsonschema==4.26.0
+pyyaml==6.0.3
+ruff==0.16.6
+pytest==9.1.1
+pytest-xdist==3.6.1
