@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.6
+// @name         Arena.ai | NemoUtils | v1.10.7
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.6
+// @version      1.10.7
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2519,9 +2519,13 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.6";
+    var VERSION = "1.10.7";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
+    // One mark for the agent's words: a message that grows holds the title with the solid
+    // speech balloon, whatever the turn state. The outline
+    // bubble that stood for the streaming state is folded into it.
+    var AGENT_EMOJI = "\uD83D\uDCAC";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
     var PLAY_SELECTOR = "svg.lucide-play";
     var ACTION_EMOJI = [
@@ -2540,8 +2544,9 @@
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
       ["wait", "\uD83D\uDCA4"],
+      // Chat covers the agent's own rows, like Agent chat, that carry no tool verb.
+      ["chat", AGENT_EMOJI],
     ];
-    var ACTION_FALLBACK = "\u2699\uFE0F";
     var EMOJI_HOLD_MS = 5000;
     var heldEmoji = null;
     var heldEmojiAt = 0;
@@ -2556,10 +2561,6 @@
     var HOURGLASS_EMOJI = "\u23F3";
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
-    // One mark for the agent's words: a message that grows holds the title with the solid
-    // speech balloon, whatever the turn state. The outline
-    // bubble that stood for the streaming state is folded into it.
-    var AGENT_EMOJI = "\uD83D\uDCAC";
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
 
     function repoFromLink(link) {
@@ -2769,7 +2770,8 @@
           return ACTION_EMOJI[i][1];
         }
       }
-      return ACTION_FALLBACK;
+      // An unmatched label yields no mark, so the speech and waiting signals still surface.
+      return null;
     }
 
     function rowCommand(row) {

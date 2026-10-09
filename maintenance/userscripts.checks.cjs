@@ -1710,7 +1710,10 @@ function checkTabTitle(api) {
     [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
     [actionEmoji("Re-thinking"), "\uD83D\uDCAD"],
     [actionEmoji("Waiting"), "\uD83D\uDCA4"],
-    [actionEmoji("Doing something"), "\u2699\uFE0F"],
+    // A label nobody mapped leaves the title mark to the other signals, not the gear.
+    [actionEmoji("Doing something"), null],
+    [actionEmoji("Agent chat"), "\uD83D\uDCAC"],
+    [emojiForRow(liveRow(pulseLabelDoc("span", "Agent chat"))), "\uD83D\uDCAC"],
     [actionEmoji(null), null],
     [desiredTitle(busyDoc), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
     [syncTitle(busyDoc), true],
