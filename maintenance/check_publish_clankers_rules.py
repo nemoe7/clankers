@@ -121,7 +121,10 @@ for marker in (
   "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'",
 ):
   assert marker in workflow, marker
-assert "contents: write" not in workflow and "actions: write" not in workflow
+# The folded release job alone writes contents, and it stays after this publish job.
+assert workflow.count("contents: write") == 1, "only the release job writes contents"
+assert "actions: write" not in workflow
+assert "contents: write" not in workflow.split("release-gpt-plugins:", 1)[0]
 # The publish step lives in the publish job only, and no other job sees the Gist token.
 publish_job = workflow.split("publish-clankers-rules:", 1)[1]
 for marker in (

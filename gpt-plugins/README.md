@@ -36,4 +36,4 @@ flowchart TB
 
 `.github/workflows/artifacts.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch. Pushes to `main` write `gpt-plugins.zip` as a direct Actions artifact. On-demand runs package only from `main`.
 
-`.github/workflows/release-gpt-plugins.yml` publishes the same archive as a GitHub Release under the versioned tag `gpt-plugins-v<version>`, taken from `plugin.json`. A tag that exists keeps its release and gets the fresh asset, so the download URL stays stable. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow fails on a missing or invalid plugin file.
+The `release-gpt-plugins` job in `.github/workflows/artifacts.yml` publishes the same archive as a GitHub Release under the versioned tag `gpt-plugins-v<version>`, taken from `plugin.json`. A tag that exists keeps its release and gets the fresh asset, so the download URL stays stable. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow fails on a missing or invalid plugin file.
