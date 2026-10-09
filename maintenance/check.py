@@ -102,7 +102,6 @@ STE_DOCS = (
   "maintenance/README.md",
   "skills/README.md",
   "README.md",
-  "docs/archive/budget-exceptions.md",
   "workflows/README.md",
   ".agents/skills/README.md",
   "docs/archive/arena-quirks.md",

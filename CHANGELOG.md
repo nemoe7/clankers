@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Caveman experiments**: the squashed arena-skill copies under `caveman/` and `ultracave/` are gone. The vendored caveman skill under `.agents/skills/caveman/` stays.
 - **Session-local citations**: note, report, submission and task ID citations leave the docs, code comments and tests. Commit subjects and ack replies keep the provenance.
+- **Budget exceptions ledger**: `docs/archive/budget-exceptions.md` leaves the repository, with its `AGENTS.md` budget clause reference and its `STE_DOCS` entry in `maintenance/check.py`. Git history keeps the 128 dated deltas, and the README table keeps the current measurements.
 
 #### preview
 
