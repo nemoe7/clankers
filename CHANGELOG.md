@@ -44,6 +44,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Start-process gates**: the pre-push gates and the post-push checks watch run through `start_process`, and the wait scopes the next task.
 - **Image-named package dirs**: the two docker package directories carry their published image names. `skills/arena-skill/arena-egress-proxy` replaces `proxy`, and `skills/arena-skill/arena-preview-proxy` replaces `preview-proxy`. The publish workflows, the distribute filter and the workflow gate follow the rename.
 - **Re-read scope**: the main-move re-read names the read set: ARENA.md, every AGENTS.md, and the arena-skill skill with its reference. A changed file outside the set, preview.py included, no longer triggers the read.
+- **Gate call**: the pre-push gate line names the inline run as a skip. The start_process clause keeps its duty and gains the violation name.
 
 #### userscripts
 
