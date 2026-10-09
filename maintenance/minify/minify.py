@@ -52,7 +52,9 @@ JOBS = (
 def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
   """Return the minified text of one asset, or raise with the minifier's own error."""
   executable = (
-    ROOT / "maintenance/minify/minify_css.cjs" if binary == "clean-css" else BIN / binary
+    ROOT / "maintenance/minify/minify_css.cjs"
+    if binary == "clean-css"
+    else BIN / binary
   )
 
   if not executable.exists():

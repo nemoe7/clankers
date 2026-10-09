@@ -966,7 +966,7 @@ def cli_json(value):
 def format_pending_item(item):
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
-  header = f"{display_kind} {item.get('id','')}"
+  header = f"{display_kind} {item.get('id', '')}"
   if item.get("report_id"):
     header += f" report {item['report_id']}"
   if item.get("at"):
@@ -4402,7 +4402,9 @@ def main():
       return poll_inbox(store)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.
-      print(format_fetch_job(store.enqueue_fetch(args.url, args.allow_proxy, pending=True)))
+      print(
+        format_fetch_job(store.enqueue_fetch(args.url, args.allow_proxy, pending=True))
+      )
     elif args.command == "ack":
       sources = (args.reply, args.note, args.reply_file, args.note_file)
       if sum(source is not None for source in sources) != 1:
@@ -4502,7 +4504,9 @@ def main():
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
-      print(format_import_receipt(store.import_state(text, args.replace_tasks, args.force)))
+      print(
+        format_import_receipt(store.import_state(text, args.replace_tasks, args.force))
+      )
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
 

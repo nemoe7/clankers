@@ -351,9 +351,7 @@ def test_write_scope_without_a_non_pull_request_event_still_fails():
 
 
 def test_guarded_from_pull_request_reads_the_condition():
-  assert gate_workflows.guarded_from_pull_request(
-    {"if": "github.event_name == 'push'"}
-  )
+  assert gate_workflows.guarded_from_pull_request({"if": "github.event_name == 'push'"})
   assert not gate_workflows.guarded_from_pull_request({})
   assert not gate_workflows.guarded_from_pull_request({"if": True})
   # An `||` branch that admits the pull request event guards nothing.
