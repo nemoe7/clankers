@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Call tally wording**: The header tally shows `X calls` and switches to `Blocked` when the count reaches ten.
+- **Relative timestamps**: the page stamps read as an age, minutes under an hour and whole hours from an hour up. The header clock keeps its absolute face.
 
 
 ### Fixed

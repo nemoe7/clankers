@@ -35,7 +35,7 @@ Latest measurements as of 2026-10-09. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,755 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,657 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 2,745 `tok` |
-| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 47,459 `B` |
+| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 47,676 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 7,684 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,176 `B` |
 | `skills/arena-skill/proxy/Dockerfile` | `UTF-8 file size` | 619 `B` |

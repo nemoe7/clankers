@@ -370,6 +370,15 @@ function clock(value) {
   return `${parts.hour}:${parts.minute}`;
 }
 function time(value) {
+  // The stamps read as an age: minutes under an hour, whole hours from an hour up.
+  const minutes = Math.floor((Date.now() - stampDate(value).getTime()) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+}
+function clockTime(value) {
+  // The header clock keeps the absolute face the stamps once wore, with the owner's zone.
   const date = stampDate(value);
   const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
     month: 'short', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
@@ -1033,7 +1042,7 @@ document.addEventListener('keydown', event => {
 function showClock() {
   const now = new Date();
   const clock = $('#clock');
-  clock.textContent = `${time(now.toISOString())}:${String(now.getSeconds()).padStart(2, '0')}`;
+  clock.textContent = `${clockTime(now.toISOString())}:${String(now.getSeconds()).padStart(2, '0')}`;
   clock.title = now.toLocaleDateString(undefined, {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   });

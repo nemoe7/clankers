@@ -814,7 +814,7 @@ test('preview client', async (t) => {
     state = { notes: [{ id: 'one', text: '<img onerror=alert(1)>', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
     await refresh();
     assert.equal(get('#history').children[0].children[0].textContent, '<img onerror=alert(1)>');
-    assert.match(get('#history').children[0].children[2].textContent, /^one ·  · [A-Z][a-z]{2} /);
+    assert.match(get('#history').children[0].children[2].textContent, /^one ·  · (just now|\d+ (mins?|hours?) ago)$/);
   });
 
   await t.test("The line reads ID \u00b7 who \u00b7 state \u00b7 time, and the dot after the ID is the ASCII separator th", async () => {
@@ -877,8 +877,8 @@ test('preview client', async (t) => {
       /Awaiting|ACK-ed|Saved|Delivered|Sent|Seen|Said| id /);
     assert.equal(get('#last-check').textContent, 'No read or ack yet.');
     stamp = get('#history').children[0].children[2].textContent;
-    assert.match(stamp, /[A-Z][a-z]{2} \d{2}, \d{2}:\d{2}/);
-    assert.doesNotMatch(stamp, /\d{2}:\d{2}:\d{2}/);
+    assert.match(stamp, /(just now|\d+ (mins?|hours?) ago)$/);
+    assert.doesNotMatch(stamp, /\d{1,2}:\d{2}/);
     assert.doesNotMatch(stamp, /\b\d{4}\b/);
     assert.doesNotMatch(stamp, /[AP]M/);
   });
@@ -907,7 +907,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'said');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Said');
-    assert.match(get('#last-check').textContent, /^Last read\/ack: [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
+    assert.match(get('#last-check').textContent, /^Last read\/ack: (just now|\d+ (mins?|hours?) ago)$/);
     assert.equal(get('#history').children[0].children[0].innerHTML, '<p>&lt;img onerror=alert(1)&gt;</p>');
     state.notes[0].ack_kind = 'reply';
     state.notes[0].ack_text = '**done**';
@@ -1065,13 +1065,13 @@ test('preview client', async (t) => {
     state.turn_ended_at = null;
     state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
     await refresh();
-    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
+    assert.match(get('#connection-text').textContent, /^Bash (just now|\d+ (mins?|hours?) ago)$/);
     // The hook stamps every bash call's end, so a call that finished is not a running one,
     // whatever the agent does between calls.
     state.agent_call_ended_at = new Date(Date.now() - 700_000).toISOString().slice(0, 19);
     await refresh();
     await tick();
-    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
+    assert.match(get('#connection-text').textContent, /^Bash (just now|\d+ (mins?|hours?) ago)$/);
     assert.doesNotMatch(get('#connection-text').textContent, /long call/);
     // A stamp and an absent agent share the line: the call's end, then the gone mark.
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
@@ -1079,7 +1079,7 @@ test('preview client', async (t) => {
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
     assert.match(get('#connection-text').textContent,
-      /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · Agent 404$/);
+      /^Bash (just now|\d+ (mins?|hours?) ago) · Agent 404$/);
     state.agent_call_ended_at = null;
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
     await refresh();
@@ -1106,7 +1106,7 @@ test('preview client', async (t) => {
     state.polling_since = null;
     state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
     await refresh(); await tick();
-    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · 1 call$/);
+    assert.match(get('#connection-text').textContent, /^Bash (just now|\d+ (mins?|hours?) ago) · 1 call$/);
     state.agent_call_ended_at = null;
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
     await refresh(); await tick();
@@ -1360,9 +1360,9 @@ test('preview client', async (t) => {
     assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
     assert.match(agentAck.textContent, /Submission a123456/);
     assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
-    assert.match(agentAck.children[0].title, / · Read Sep 24, 10:00/,
+    assert.match(agentAck.children[0].title, / · Read \d+ hours ago/,
       'the read stamp waits in the title');
-    assert.match(agentAck.textContent, / · Sep 24, 10:00$/,
+    assert.match(agentAck.textContent, / · \d+ hours ago$/,
       'the line prints the latest stamp after the dot');
     assert.equal(part(agentAck, 'state-dot').dataset.state, 'seen');
     assert.equal(part(agentAck, 'state-dot').title, 'Awaiting ack',
@@ -1373,8 +1373,8 @@ test('preview client', async (t) => {
     state.reports[0].latest_answer_acknowledged_at = '2026-09-24T10:01:00';
     await refresh();
     assert.equal(part(agentAck, 'state-dot').dataset.state, 'said');
-    assert.match(part(agentAck, 'state-dot').title, /^Acked Sep /);
-    assert.match(agentAck.textContent, / · Sep 24, 10:01$/,
+    assert.match(part(agentAck, 'state-dot').title, /^Acked \d+ hours ago/);
+    assert.match(agentAck.textContent, / · \d+ hours ago$/,
       'the ack time is the latest stamp and ends the line');
     assert.equal(get('#report-agent-ack-footer').textContent, agentAck.textContent);
     state.reports[0].acknowledgements = [{ id: 'answer-one', ack_text: 'First', ack_html: '<p>First</p>', acknowledged_at: '2026-09-24T10:01:00', replies: [{text: 'Second', at: '2026-09-24T10:02:00'}] }];
@@ -1392,7 +1392,7 @@ test('preview client', async (t) => {
     assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
     assert.equal(part(agentAck, 'state-dot').title, 'Sent',
       'a previous receipt and an earlier read stamp do not cover a later answer');
-    assert.match(agentAck.textContent, / · Sep 24, 10:02$/,
+    assert.match(agentAck.textContent, / · \d+ hours ago$/,
       'a later answer brings its own stamp');
     state.reports = [];
     await refresh();
@@ -1834,7 +1834,7 @@ test('preview client', async (t) => {
     await tick();
     state.notes.push({ id: 'old', text: 'old note', at: '2024-06-15T12:00:00.000Z', acknowledged_at: null });
     await refresh();
-    assert.match(get('#history').children.at(-1).children[2].textContent, /[A-Z][a-z]{2} \d{2} \d{2}, \d{2}:\d{2}/);
+    assert.match(get('#history').children.at(-1).children[2].textContent, /(just now|\d+ (mins?|hours?) ago)/);
     state = { notes: [{ id: 'a66700e4-37f0-4182-b782-33c38a83728d', text: 'long id', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
     await refresh();
     longReceipt = get('#history').children.at(-1).children[2];
@@ -1842,7 +1842,7 @@ test('preview client', async (t) => {
     assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
     assert.equal(longReceipt.children[0].className, 'note-id');
     assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
-    assert.match(longReceipt.textContent, /^a66700e ·  · [A-Z][a-z]{2} /);
+    assert.match(longReceipt.textContent, /^a66700e ·  · (just now|\d+ (mins?|hours?) ago)$/);
     assert.equal(part(longReceipt, 'state-dot').dataset.state, 'sent');
   });
 
@@ -2420,14 +2420,14 @@ test('preview client', async (t) => {
     state.notes[0].ack_edited_at = '2026-09-22T00:03:00';
     await refresh();
     editedNode = get('#history').children[0];
-    assert.match(editedNode.children[2].textContent, / · Replied again Sep 22, /);
+    assert.match(editedNode.children[2].textContent, / · Replied again \d+ hours ago/);
     const grown = editedNode.children[1];
     assert.equal(grown.children.length, 2, 'the first answer stays and the re-ack adds a block');
     assert.equal(grown.children[0].tagName, 'p');
     assert.equal(grown.children[0].textContent, 'First answer');
     assert.equal(grown.children[1].className, 'reply-block');
     assert.equal(grown.children[1].innerHTML, '<p>Second answer</p>');
-    assert.match(grown.children[1].title, /^Replied again Sep 22, /);
+    assert.match(grown.children[1].title, /^Replied again \d+ hours ago/);
     assert.equal(get('#history').children[1].children[2].children[0].dataset.full, 'newer-note', 'edits keep log order');
     assert.equal(get('#notes-pip').hidden, false);
     assert.equal(get('#log-edited').hidden, false);
@@ -2561,11 +2561,11 @@ test('preview client', async (t) => {
     assert.equal(get('#agent-key').children[0], 'Key ', 'the label stays prose');
     assert.doesNotMatch(get('#agent-key').textContent, /example/,
       'the host leaves the line, so the footer fits a narrow width');
-    assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set \w{3} \d{2}, \d{2}:\d{2}$/,
+    assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set (just now|\d+ (mins?|hours?) ago)$/,
       'the tooltip keeps the host and the full stamp');
     state.agent_key = { key: 'K'.repeat(43), host: null, at: '2026-10-03T15:00:00+00:00' };
     await refresh();
-    assert.match(get('#agent-key').title, /^set \w{3} \d{2}, \d{2}:\d{2}$/,
+    assert.match(get('#agent-key').title, /^set (just now|\d+ (mins?|hours?) ago)$/,
       'a hostless record leaves the tooltip with the stamp alone');
     state.agent_key = null;
     await refresh();
