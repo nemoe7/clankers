@@ -2,7 +2,7 @@
 
 Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
-| Bundle | Feature switches |
+| Bundle | Features |
 | --- | --- |
 | [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Preview state download, Tab title |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
@@ -11,7 +11,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 1. Install Tampermonkey in the browser.
 2. Open its dashboard and create a new script.
-3. Paste one bundle's `.user.js` contents and save.
+3. Paste one bundle\'s `.user.js` contents and save.
 4. Repeat for the other domain if needed.
 
 To migrate, disable or remove the five old scripts before enabling the bundles. Reload open Arena and ChatGPT tabs to stop old timers and observers. Old installations do not become bundles automatically.
@@ -22,7 +22,7 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
-Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module's entries stay together, whatever order the features load in. The modules sit in one order:
+Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module\'s entries stay together. The modules sit in one order:
 
 1. Composer
 2. Proxy
@@ -32,13 +32,13 @@ Every Arena entry leads with its module, and a switch shows its saved setting in
 6. Page
 7. Userscript
 
-Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
+Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature\'s observers, timers and listeners.
 
 The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and they hold no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
 ## Console log
 
-Both bundles log under one tag, `[NemoUtils]`. The devtools console filter shows the page's story: feature switches on load and on toggle, the prompt fill write, and each state save. A log line never carries a loop, so a busy page stays quiet. No key or message text ever reaches the log.
+Both bundles log under one tag, `[NemoUtils]`. The devtools console filter shows the page\'s story: feature switches on load and on toggle, the prompt fill write, and each state save. A log line never carries a loop, so a busy page stays quiet. No key or message text ever reaches the log.
 
 ## Arena Prompt Fill
 
@@ -52,8 +52,6 @@ flowchart TB
   T --> W
 ```
 
-If the GitHub repo bar is not empty, the feature reads `owner/repo` from `span.truncate` and uses the name after `/`. The name leads the message, then `read ARENA.md AGENTS.md in full before your first edit, and follow both.` The full stop keeps the editor from linking `AGENTS.md` as a bare domain. The text updates when the repo name changes, and an unrelated draft stays.
-
 The message then carries a six-step checklist:
 
 1. Read the task and every file it touches, and trace the flow end to end.
@@ -61,7 +59,7 @@ The message then carries a six-step checklist:
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
 4. Write the failing check before new behavior, and reproduce a bug before the fix.
 5. Keep the behavior, interfaces, validation and security that stand.
-6. Run the project's own gate, and read the result before the report.
+6. Run the project\'s own gate, and read the result before the report.
 
 Six rules follow the checklist:
 
@@ -72,139 +70,50 @@ Six rules follow the checklist:
 - screenshots and corrections through the steering channel, with each image read directly
 - a closing report of the change, the checks and the open items
 
-A return to the composer after a session route is a new chat, so the fill writes the text again.
-
-The message names the rules files, and the fill appends `rules/ARENA.md` fetched once from the fixed raw URL of this repository: `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill waits for that fetch and writes the composer one time per page, the file under a `here is ARENA.md:` line after the initial message.
-
-A failed fetch writes the plain message. A second write would put a line break after the name, and the editor reads that break as the end of a domain.
-
-### Arena proxy settings and key rotation
-
-The prompt fill stays free of the proxy. The preview carries the proxy host and the key to the agent. Three `Proxy` entries sit with the fill: `Proxy — host` and `Proxy — master key` save the settings, and `Proxy — post key now` posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
-
-- The host is one HTTPS origin with no path. The script trims a trailing `/v1`.
-- With both settings saved, the script asks `/v1/key` for the live agent key. The composer holds the rules line only.
-- Every 15 minutes the script asks `/v1/rotate` with `min=900`, and each call lands at a random moment inside a 15-second band after the beat. When the backend reports a rotation, the script takes the new key and posts one note to the steering preview. The agent then picks the key up at its next inbox read.
-- The script saves the due time, so a reload resumes the countdown. The backend holds the minimum age. An early second tab learns the key's age and waits.
-- The note post uses `GM_xmlhttpRequest`, because the Arena page and the preview are different origins. The preview URL comes from the `App preview on port 8000` iframe the page carries.
-- The script posts the key and the host it holds to the preview, so the Downloads tab shows both. One quiet note carries the host and a new key to the agent. A saved key keeps a reload or a second tab from repeating the note.
-- Every minute the script asks `/v1/key` again, with the same scatter. A new key makes the script adopt it, post it to the preview and send one quiet note. A container restart therefore reaches the agent inside a minute, not at the next rotation.
-- `@connect arena.site` names the preview host, the only target of `GM_xmlhttpRequest`. The proxy calls use plain `fetch`, which the proxy's wildcard origin allows, so the owner's proxy host never enters the file.
-
-## Arena Open Steering
-
-After `/agent/`, the feature waits 1 second, then clicks the port 8000 row whose label mentions `steering` or `preview`, once per page. A running row wins over the `Start …` cards that earlier turns leave behind, and those cards are never clicked, because a click on one opens nothing. A row naming the repository outranks a renamed row, and the newest row breaks a tie. Matching ignores letter case.
-
-## Arena Hide Composer
-
-On paths with a segment after `/agent/`, a button with `aria-label="Stop generating"` causes the feature to hide `div.editor-content` with the `hidden` attribute, the `hidden` class and `display: none !important`. It restores the editor when that button is gone.
-
-The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its height if another script changes it.
-
-## Arena Transcript Auto-scroll
-
-On `/agent/*`, ON keeps the transcript at the bottom while the Stop generating button exists. This includes upward scrolling, new messages, resized tool output and session changes. Without that button the composer is visible and the transcript does not follow until the button returns.
-
-A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
-
-The feature uses the transcript message marker and its scrollable `role="log"` ancestor.
-
 ## Arena Transcript Trim
 
 This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. The row limit cannot fall below `20`.
 
-The trim also removes the sibling action container, `div.mt-3.flex.flex-col.gap-3`, from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree.
+The trim also removes the sibling action container from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree.
 
-The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`, so a plan above the transcript size reads as no change. A trim that removes rows also writes one console line, such as `[NemoUtils][trim] removed 12 rows (kept 50)`.
+The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`. A trim that removes rows also writes one console line.
 
 The command takes one row limit:
 
 - it converts a saved two-value plan to its row limit
 - an empty or too small answer keeps the old plan
 
-The trim waits for the page to settle. It touches nothing while a turn streams, a live icon pulses, or a question widget waits for an answer. It waits for a quiet window after the last change. A root the document dropped, and a root whose row nodes sit detached during a redraw, stay untouched.
-
-A row is a child of the outermost `div.flex.flex-col.gap-2` block. It can hold text, a tool call, a thinking line or a status line. Only attached rows count, and the oldest rows leave first.
-
-The page holds fewer nodes, so the tab uses less memory. The Arena client may keep its own copy until you remove the message there.
-
-## Arena Preview State Download
-
-The feature saves the preview state to one file, without a click. It asks the preview once a minute, and the request lands at a random moment inside a 15-second band after the beat. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
-
-The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. Press `State — choose the file` to pick one.
-
-A browser without the picker downloads a stamped file on a manual save press. With no file set, an automatic save writes nothing. The picker needs the press itself, and a save that waited on the network has none.
-
-The name leads with the repository and the branch, and a stamped save adds the stamp and the record counts, such as `clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
-
-The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. The feature reuses a remembered file only when its name carries the current scope, so a file from another repository or branch is never written. The same repository and branch keeps one file, and the picker asks once per repository and branch.
-
-A stamp older than the last write never overwrites the file. The script says so once, quietly, and keeps the older file. A state with no stamp writes nothing.
-
-The console shows the state lines in short form:
-
-| Line | Event |
-| --- | --- |
-| `note - older - abc1234 vs def5678` | a stamp comparison, each hash standing for one stamp |
-| `GET <status> <link>` then `WRITE <repo> state to <file>` | a write |
-| `NOOP <repo> <link>` | a quiet tick |
-| `updating note stamp from <hash> to <hash>` | a force save, before its write |
-| `history does not match` | a state whose history moved backward |
-| `no file selected; launching dialog` | a save with no file set |
-| `GET <status> <copy-state url>` | a refused copy read |
-| `no preview detected` | a page with no preview frame |
-
-A failed read or write shows its line in the page corner card as well, and the card stays until a dismiss. The card covers a refused copy read, a backward history, a file outside the scope, a failed write and a failed manager download. A browser with no picker shows it too, and the write failure carries the `Choose file` button in place of the plain no-file card.
-
-The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file.
-
-A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
-
-Two menu entries sit with the feature: `State — choose the file` and `State — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file.
-
-The import stays the owner's own command. The feature only writes the file.
-
-## Arena Tab Title
-
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon.
-
-| Mark | Source |
-| --- | --- |
-| 🖥️ | running, including `Bash` and `command`, so `using Bash` and `Ran commands` count |
-| 📖 | read: `Read` and `Explored` |
-| ✏️ | edit: `Edit`, `Editing`, `Editing files`, `Write` and `Writing` |
-| 🔍 | search and fetch |
-| 💭 | think |
-| 💤 | wait, and a row whose command runs the preview poll, because the agent waits on you |
-| 💬 | a message whose words grow, whatever the turn state |
-| ❓ | an `ask_user` question card |
-| 🛡️ | the security check, which outranks the question card |
-| ⏳ | the model at work with no named action and no streamed words |
-| ⚙️ | anything else |
-
-The poll row counts when its command names the script plus the `poll` word, bare, as a full path or as `preview.py`. A separate `polling` or `polls` word does not count.
-
-A waiting line carries a 16px spinner canvas beside rotating monospace text. The words rotate per run, so that case anchors on the canvas together with the text block beside it. An action row carries the same canvas as its own icon, so a bare canvas never counts as a waiting line.
-
-A finished row keeps its shimmer or its pulse in the page, so a row counts only while the stop-generating control is up. That control bounds the row, the words, the waiting line and the process card. When it leaves, the emoji clears at once and the repository name stays in the title.
-
-A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn. The first look on a page only sets the mark, so a load or a chat switch stays quiet. The emoji holds for five seconds after the live row leaves, so a gap between calls does not flash the title.
-
-A read or edit group shows no pulse and no shimmer, so while the turn runs the newest group label supplies the emoji. The label is the row's `text-text-secondary` span, and that span sits beside the toggle, not inside it.
-
-The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
-
 ## Arena Security Check Hold
 
-While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait.
-The held work is the prompt fill, the Open Steering click and the proxy key posts. Each tab reads its own page, so a background tab keeps its own work. The held work resumes when the check clears.
+While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait. The held work is the prompt fill, the Open Steering click and the proxy key posts. Each tab reads its own page. The held work resumes when the check clears.
 
 ## Arena Userscript Pause
 
 One entry, `Userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
 
-The script saves the pause, so a reload keeps it: a paused page starts with nothing running and still offers the resume. Each feature switch stays in the menu while paused, and the script saves a flip for the resume. The security check hold is independent of the pause.
+The script saves the pause, so a reload keeps it. Each feature switch stays in the menu while paused.
+
+## Arena Tab Title
+
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label.
+
+| Mark | Source |
+| --- | --- |
+| 🖥️ | running, including `Bash` and `command` |
+| 📖 | read: `Read` and `Explored` |
+| ✏️ | edit: `Edit`, `Editing`, `Editing files`, `Write` and `Writing` |
+| 🔍 | search and fetch |
+| 💭 | think |
+| 💤 | wait, and a row whose command runs the preview poll |
+| 💬 | a message whose words grow |
+| ❓ | an `ask_user` question card |
+| 🛡️ | the security check |
+| ⏳ | the model at work with no named action and no streamed words |
+| ⚙️ | anything else |
+
+A finished row keeps its shimmer or its pulse in the page, so a row counts only while the stop-generating control is up. That control bounds the row, the words, the waiting line and the process card.
+
+A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn.
 
 ## ChatGPT Hide Elements
 
