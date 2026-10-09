@@ -38,7 +38,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Validation Dependencies
-        run: python -m pip install jsonschema PyYAML
+        run: python -m pip install jsonschema PyYAML markdown-it-py
 
       - name: Read The Manifest Version
         id: manifest
