@@ -1556,6 +1556,20 @@ class Store:
     if not existed:
       self.path.chmod(0o600)
 
+  def notes_matching(self, token):
+    """The reread takes the short or the full ID, and a short ID that matches
+    several notes prints every match, newest first, so a saved note is never
+    out of reach after its ack.
+    """
+    with closing(self.connect()) as db:
+      return [
+        message_row(row)
+        for row in db.execute(
+          "SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC",
+          (token, f"{token}%"),
+        ).fetchall()
+      ]
+
   def connect(self):
     db = sqlite3.connect(self.path, timeout=5)
     db.row_factory = sqlite3.Row
@@ -3927,6 +3941,11 @@ def main():
   )
   commands.add_parser("init")
   commands.add_parser("read")
+  note_reread = commands.add_parser(
+    "note",
+    help="Reread a stored note by its short or full ID",
+  )
+  note_reread.add_argument("id", help="Seven or all characters of a note ID")
   commands.add_parser("key")
   inbox_line = commands.add_parser(
     "inbox-line",
@@ -4129,6 +4148,21 @@ def main():
       require_server(store)
       store.notice_expired_key()
       print_read(store)
+    elif args.command == "note":
+      # The read lists the pending notes; this one reaches the acked history, so
+      # a note stays open to the agent after its answer lands.
+      rows = store.notes_matching(args.id)
+      if not rows:
+        print(f"No note matches {args.id}.", file=sys.stderr)
+        return 1
+      for row in rows:
+        head = f"note {row['id']} at {row['at']}"
+        head += (
+          f" acked {row['acknowledged_at']}" if row["acknowledged_at"] else " unacked"
+        )
+        print(head)
+        print(row["text"])
+        print()
     elif args.command == "key":
       # The key note is quiet and it ages out of the pending list after an ack, so a later
       # session reads the recorded key here instead of waiting for a new note.

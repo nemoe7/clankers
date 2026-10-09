@@ -9,6 +9,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `init` | Create a missing state database without starting the server |
 | `serve --port 8000` | Start the shared preview with `start_process`. The gate warns when a serve names a port other than 8000 |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
+| `note <id>` | Reread a stored note by its seven or full characters; a short ID that matches several notes prints every match |
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after the quiet note is acknowledged |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list while an upcoming task is unblocked, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |

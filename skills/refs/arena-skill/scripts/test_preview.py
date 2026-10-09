@@ -5079,3 +5079,43 @@ def test_ack_stamps_the_read_line():
     with patch.object(preview, "now", return_value="2026-09-22T12:05:00"):
       store.acknowledge(["stamped-note"], "note", "Handled")
       assert store.state()["last_check"] == "2026-09-22T12:05:00"
+
+
+def test_note_reread_prints_every_match():
+  """The reread takes the short or the full ID, and a short ID that matches
+  several notes prints every match, so an acked note stays open to the agent.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / "arena-preview"
+    store = preview.Store(root, create=True)
+    store.note("beef001-1111111111111111111111111", "first stored note")
+    store.note(
+      "beef001-2222222222222222222222222",
+      "second stored note",
+      acknowledged_at="2026-09-22T12:00:00",
+      ack_kind="note",
+      ack_text="done",
+    )
+
+    def run(*argv):
+      return subprocess.run(
+        [sys.executable, preview.__file__, *argv],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root)},
+        check=False,
+      )
+
+    both = run("note", "beef001")
+    assert both.returncode == 0
+    assert "first stored note" in both.stdout
+    assert "second stored note" in both.stdout
+    assert "acked 2026-09-22T12:00:00" in both.stdout
+    assert "unacked" in both.stdout
+    one = run("note", "beef001-2222222222222222222222222")
+    assert one.returncode == 0
+    assert "second stored note" in one.stdout
+    assert "first stored note" not in one.stdout
+    gone = run("note", "ffff999")
+    assert gone.returncode == 1
+    assert "No note matches" in gone.stderr
