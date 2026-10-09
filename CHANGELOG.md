@@ -95,6 +95,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### house
 
 - **Plugin validator dependency**: the plugin collection jobs install `markdown-it-py`, which `check_gpt_plugins.py` needs through `maintenance/check.py`. The self-check step died on the missing module before it ran.
+- **Workflows README accuracy**: the budget note names `o200k_base`, the tokenizer `check.py` measures with. A dead anchor to a missing workflows section is gone.
 
 ## 2026-10-08
 
