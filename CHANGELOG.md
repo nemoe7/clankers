@@ -69,6 +69,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Paragraph cap**: the terseness clause carries a hard limit of 4 sentences per paragraph, in the refs wording and in the compressed live copies.
 - **Task update cadence**: the verification clause orders a stored task update in the same tool block as the work that moves it.
+- **Read cadence**: the stderr reminder is the only read schedule, so the five fixed points leave the rule. The reminder names uploads beside notes and answers, and the reference drops the parallel-block and call-counter sentences.
 
 ### Fixed
 
