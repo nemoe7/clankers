@@ -8,6 +8,8 @@ import json
 import re
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -922,12 +924,31 @@ def validate(errors: list[str]) -> tuple[int, int]:
   return len(skills), len(workflows)
 
 
+def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:
+  """Run one named check, print its verdict and span, and return what it reported.
+
+  The count is the check's own: every check appends to one shared list, so the line
+  names the check that added the problems instead of blaming the whole run.
+  """
+  started = time.perf_counter()
+  before = len(errors)
+  reported = check()
+  found = len(errors) - before
+  span = time.perf_counter() - started
+  if found:
+    print(f"FAIL {name}: {found} problem(s) in {span:.2f}s")
+  else:
+    print(f"ok {name} in {span:.2f}s")
+  return reported
+
+
 def main() -> int:
   args = parse_args()
+  started = time.perf_counter()
 
   if args.update:
     try:
-      changed = update_readme_measurements()
+      changed = run_check("README update", [], lambda: update_readme_measurements())
     except (RuntimeError, OSError) as exc:
       print(f"README update failed: {exc}")
       return 1
@@ -939,19 +960,22 @@ def main() -> int:
 
   errors: list[str] = []
   if args.ste:
-    check_ste(errors)
+    run_check("STE lint", errors, lambda: check_ste(errors))
     if errors:
       print(errors[0])
       return 1
-    print(f"STE lint passed: {len(STE_DOCS)} files.")
+    print(
+      f"STE lint passed in {time.perf_counter() - started:.2f}s: {len(STE_DOCS)} files."
+    )
     return 0
-  skills, workflows = validate(errors)
-  check_ste(errors)
-  check_prose(errors)
-  check_paragraph_caps(errors)
+  skills, workflows = run_check("repository", errors, lambda: validate(errors))
+  run_check("STE lint", errors, lambda: check_ste(errors))
+  run_check("prose lint", errors, lambda: check_prose(errors))
+  run_check("paragraph caps", errors, lambda: check_paragraph_caps(errors))
+  span = time.perf_counter() - started
 
   if errors:
-    print("Validation failed:")
+    print(f"Validation failed in {span:.2f}s:")
 
     for error in errors:
       print(f"- {error}")
@@ -959,10 +983,10 @@ def main() -> int:
     return 1
 
   print(
-    f"Validation passed: {skills} skills, {workflows} workflows, README "
-    "measurements, the markdownlint scope, refs/live parity, the prose lint, "
-    f"the {PARAGRAPH_SENTENCE_CAP}-sentence paragraph cap and the root ARENA.md "
-    "copy checked."
+    f"Validation passed in {span:.2f}s: {skills} skills, {workflows} workflows, "
+    "README measurements, the markdownlint scope, refs/live parity, the prose "
+    f"lint, the {PARAGRAPH_SENTENCE_CAP}-sentence paragraph cap and the root "
+    "ARENA.md copy checked."
   )
 
   return 0

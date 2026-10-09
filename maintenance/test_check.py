@@ -46,3 +46,26 @@ def test_paragraph_violations_names_line_and_count():
 
 def test_clean_text_reports_nothing():
   assert check.paragraph_violations("docs/x.md", f"{FOUR_SENTENCES}\n") == []
+
+
+def test_run_check_prints_one_line_for_a_clean_check(capsys):
+  errors: list[str] = []
+  assert check.run_check("sample", errors, lambda: "reported") == "reported"
+  line = capsys.readouterr().out.strip()
+  assert line.startswith("ok sample in ") and line.endswith("s")
+
+
+def test_run_check_names_the_check_that_found_problems(capsys):
+  errors: list[str] = []
+
+  def failing() -> None:
+    errors.extend(["one problem", "two problems"])
+
+  assert check.run_check("sample", errors, failing) is None
+  assert capsys.readouterr().out.startswith("FAIL sample: 2 problem(s) in ")
+
+
+def test_run_check_counts_only_the_problems_it_added(capsys):
+  errors = ["an earlier problem"]
+  check.run_check("sample", errors, lambda: errors.append("a new problem"))
+  assert capsys.readouterr().out.startswith("FAIL sample: 1 problem(s) in ")
