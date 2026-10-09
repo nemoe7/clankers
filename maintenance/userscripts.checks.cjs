@@ -163,6 +163,18 @@ function checkPromptFill(api) {
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
     [promptForSlug("clankers").indexOf("here is ARENA.md"), -1],
     [promptForSlug("clankers").indexOf("red first") > 0, true],
+    // The checklist leads the tail; the dropped model paragraph never returns.
+    [promptForSlug("clankers").indexOf("run this order:") > 0, true],
+    [promptForSlug("clankers").indexOf("run this order:")
+      < promptForSlug("clankers").indexOf("red first"), true],
+    [promptForSlug("clankers").indexOf("1. Read the task and every file it touches in full") > 0, true],
+    [promptForSlug("clankers").indexOf("6. Verify with the project's own gate") > 0, true],
+    [promptForSlug("clankers").indexOf("add nothing the task does not ask for") > 0, true],
+    [promptForSlug("clankers").indexOf("Keep the behavior, interfaces, validation and security") > 0, true],
+    [promptForSlug("clankers").indexOf("Never repeat a failed approach without a new reason.") > 0, true],
+    [promptForSlug("clankers").indexOf("invent no visual detail") > 0, true],
+    [promptForSlug("clankers").indexOf("name what stays unverified") > 0, true],
+    [promptForSlug("clankers").indexOf("Pareto"), -1],
     [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
     [promptForSlug("clankers", "# Rules\n").indexOf("here is ARENA.md:\n# Rules\n") > 0, true],
     [promptForSlug("clankers", "# Rules\n").indexOf("here is ARENA.md")

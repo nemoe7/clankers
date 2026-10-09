@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.15
+// @name         Arena.ai | NemoUtils | v1.10.16
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.15
+// @version      1.10.16
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -515,17 +515,26 @@
     }
 
     var TEMPLATE_TAIL =
-      "\n\nRead the task and every file it touches in full. Trace the real flow end to end before you plan." +
-      "\n\nReuse first, one line second, new code last. Add nothing the task does not ask for." +
+      "\n\nBefore you implement, answer or report, run this order:" +
+      "\n\n1. Read the task and every file it touches in full; trace the real flow end to end" +
+      " before you plan." +
+      "\n2. Name the requirements and the constraints; follow the conventions the code already uses." +
+      "\n3. Take the smallest change that holds: reuse first, one line second, new code last," +
+      " and add nothing the task does not ask for." +
+      "\n4. Write the failing check before new behavior; reproduce a bug before you touch it." +
+      "\n5. Keep the behavior, interfaces, validation and security that stand, unless the task" +
+      " changes them." +
+      "\n6. Verify with the project's own gate; read the result before you report it." +
       "\n\nNew behavior: red first. Write the failing check, make the smallest change that passes it," +
       " refactor without a behavior change, then recheck." +
       "\n\nFor a bug: reproduce it, change one variable at a time, fix the root cause where every" +
-      " caller routes through, cover the fix with a check, then recheck." +
+      " caller routes through, cover the fix with a check, then recheck. Never repeat a failed" +
+      " approach without a new reason." +
       "\n\nState every assumption the moment you make it. Ask one question when a wrong reading" +
       " changes the result." +
-      "\n\nNEVER claim a check you did not run. Print what you skipped." +
-      "\n\nExpect screenshots, notes and corrections through the steering channel. Take each one in" +
-      " the next reply." +
+      "\n\nNEVER claim a check you did not run. Print what you skipped, and name what stays unverified." +
+      "\n\nExpect screenshots, notes and corrections through the steering channel. Read an image" +
+      " itself, not only its text, and invent no visual detail. Take each one in the next reply." +
       "\n\nStop when verification holds, and finish with what changed, what you checked, and what" +
       " is open.";
 
@@ -2583,7 +2592,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.15";
+    var VERSION = "1.10.16";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
