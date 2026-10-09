@@ -9,7 +9,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 function loadChecks(file) {
-  const source = fs.readFileSync(path.join(__dirname, "../userscripts", file), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "../../userscripts", file), "utf8");
   // fetch resolves against the host realm at call time, so one case can drive it. The
   // session store lives in the VM realm too, so a case can plant a saved slug.
   const session = {
@@ -1921,7 +1921,7 @@ function checkTabTitle(api) {
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
   setPriorTitle("ChatGPT");
   var userscriptText = fs.readFileSync(
-    path.join(__dirname, "..", "userscripts", "arena.user.js"),
+    path.join(__dirname, "..", "..", "userscripts", "arena.user.js"),
     "utf8",
   );
   var cases = [

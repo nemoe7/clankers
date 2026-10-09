@@ -50,7 +50,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const offByDefault = new Set(bundle.offByDefault || []);
   const extraMenus = bundle.extraMenus || {};
   const source = fs.readFileSync(
-    path.join(__dirname, "../userscripts", `${domain}.user.js`), "utf8",
+    path.join(__dirname, "../../userscripts", `${domain}.user.js`), "utf8",
   );
   // A granted cross-origin call meets the dynamic preview host and the owner's proxy host.
   // A manager asks the owner once per host without a connect tag, so the tag is required.
@@ -379,7 +379,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   console.log(`ok ${domain}: switches, defaults, storage failure, live switches, and disabled startup`);
 }
 {
-  const source = fs.readFileSync(path.join(__dirname, '../userscripts/arena.user.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../../userscripts/arena.user.js'), 'utf8');
   const events = new Map();
   const frames = new Map();
   const observers = [];
@@ -499,7 +499,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   // The security check owns the page while it shows: the fill, the steering click and the
   // proxy posts wait for it, and the tab title keeps its shield.
   test("captcha hold", async () => {
-    const source = fs.readFileSync(path.join(__dirname, "../userscripts/arena.user.js"), "utf8");
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     let captchaVisible = true;
     let clicked = 0;
     const posts = [];
@@ -706,7 +706,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   // An agent chat message that lands with no turn open raises the solid speech balloon, while
   // a chat switch never reads as a message.
   test("agent message mark", async () => {
-    const source = fs.readFileSync(path.join(__dirname, "../userscripts/arena.user.js"), "utf8");
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };
     const words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
     const intervals = [];
