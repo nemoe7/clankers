@@ -2,14 +2,14 @@
 // publishes its helpers through `exposeChecks`, and this file drives them, so the installed
 // scripts ship runtime code only.
 //
-// Run: node --test maintenance/userscripts.checks.cjs
+// Run: node --test maintenance/workflows/userscripts.checks.cjs
 
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
 function loadChecks(file) {
-  const source = fs.readFileSync(path.join(__dirname, "../userscripts", file), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "../../userscripts", file), "utf8");
   // fetch resolves against the host realm at call time, so one case can drive it. The
   // session store lives in the VM realm too, so a case can plant a saved slug.
   const session = {
@@ -1078,7 +1078,7 @@ function checkTabTitle(api) {
       closest: function () { return null; },
     };
     var row = {
-      textContent: "Editing maintenance/check_pr.py",
+      textContent: "Editing maintenance/pr/gate_pr.py",
       parentElement: null,
       querySelector: function () { return null; },
       querySelectorAll: function (selector) {
@@ -1921,7 +1921,7 @@ function checkTabTitle(api) {
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
   setPriorTitle("ChatGPT");
   var userscriptText = fs.readFileSync(
-    path.join(__dirname, "..", "userscripts", "arena.user.js"),
+    path.join(__dirname, "..", "..", "userscripts", "arena.user.js"),
     "utf8",
   );
   var cases = [

@@ -54,7 +54,7 @@ EXPECTED_BUDGETS = {
   "skills/arena-skill/references/REFERENCE.md": "o200k_base",
   # The table covers the arena suite: ARENA.md and every arena-skill file, one row per file,
   # except the proxies. The shipped assets and scripts keep byte budgets from
-  # `maintenance/minify.py`, so growth fails this check until the table is updated on
+  # `maintenance/minify/minify.py`, so growth fails this check until the table is updated on
   # purpose. The `.agents/skills/` twins are byte-identical by construction, and this script
   # never reads that tree.
   "skills/arena-skill/assets/app.js": "UTF-8 file size",

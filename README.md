@@ -44,7 +44,7 @@ Latest measurements as of 2026-10-09. `maintenance/check.py --update` rebuilds t
 | `system-prompts/NEMOGPT.md` | `o200k_base` | 2,996 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,598 `tok` |
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,758 `tok` |
-| `skills/arena-skill/README.md` | `o200k_base` | 1,657 `tok` |
+| `skills/arena-skill/README.md` | `o200k_base` | 1,662 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 2,687 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 48,211 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 7,684 `B` |
@@ -60,7 +60,7 @@ Latest measurements as of 2026-10-09. `maintenance/check.py --update` rebuilds t
 | `gpt-plugins/skills/gpt-planning/SKILL.md` | `o200k_base` | 367 `tok` |
 | `gpt-plugins/skills/gpt-github/SKILL.md` | `o200k_base` | 434 `tok` |
 
-`rules/ARENA.md` and the shipped preview assets and scripts measure by UTF-8 file size, the two ChatGPT fields by Unicode characters, and every other file by `o200k_base` tokens. `maintenance/minify.py` builds the minified files from readable refs, and their recorded sizes are their budgets. Measurements cover complete files, including whitespace and markup.
+`rules/ARENA.md` and the shipped preview assets and scripts measure by UTF-8 file size, the two ChatGPT fields by Unicode characters, and every other file by `o200k_base` tokens. `maintenance/minify/minify.py` builds the minified files from readable refs, and their recorded sizes are their budgets. Measurements cover complete files, including whitespace and markup.
 
 ## Compression
 

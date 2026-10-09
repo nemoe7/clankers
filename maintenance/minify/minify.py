@@ -9,8 +9,8 @@ Install the pinned npm tools with `npm ci` and the build-only Python dependency 
 Python must retain its parsed tree and parse as Python 3.10 before any output is written.
 
 Usage:
-  python maintenance/minify.py            # build in memory, report drift, write nothing
-  python maintenance/minify.py --update   # write the minified copies
+  python maintenance/minify/minify.py            # build in memory, report drift, write nothing
+  python maintenance/minify/minify.py --update   # write the minified copies
 
 `check.py` gates each live file's size through the README table. This script reports drift,
 which the budget cannot see. Run it after any change to a refs asset or script.
@@ -27,7 +27,7 @@ import tempfile
 from importlib.metadata import version
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "skills/refs/arena-skill"
 TARGETS = (
   ROOT / "skills/arena-skill",
@@ -52,7 +52,9 @@ JOBS = (
 def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
   """Return the minified text of one asset, or raise with the minifier's own error."""
   executable = (
-    ROOT / "maintenance/minify_css.cjs" if binary == "clean-css" else BIN / binary
+    ROOT / "maintenance/minify/minify_css.cjs"
+    if binary == "clean-css"
+    else BIN / binary
   )
 
   if not executable.exists():
@@ -260,7 +262,7 @@ def main() -> int:
     for relative in drift:
       print(f"- {relative}")
     print(
-      "\nRun `python maintenance/minify.py --update` and refresh the README measurements."
+      "\nRun `python maintenance/minify/minify.py --update` and refresh the README measurements."
     )
     return 1
 

@@ -23,7 +23,7 @@ from pathlib import Path
 
 import check
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "gpt-plugins"
 MANIFEST = PLUGIN / "plugin.json"
 # The collection README documents the layout for a human reader, so the tree allows it

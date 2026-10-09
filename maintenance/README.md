@@ -140,7 +140,7 @@ python3 -m pip install markdown-it-py
 npm ci
 ```
 
-`--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 maintenance/check_measurements.py`.
+`--update` rebuilds the budget table from `EXPECTED_BUDGETS` before checking, including added and retired skills. Test it with `python3 maintenance/measurements/gate_measurements.py`.
 
 The checker is maintenance tooling.
 
@@ -153,15 +153,15 @@ A dispatch workflow writes the `.agents/skills/arena-skill/` copy in each target
 ```bash
 npm ci
 python3 -m pip install python-minifier==3.3.0
-python3 maintenance/minify.py            # report drift, write nothing
-python3 maintenance/minify.py --update   # write both distributed copies
+python3 maintenance/minify/minify.py            # report drift, write nothing
+python3 maintenance/minify/minify.py --update   # write both distributed copies
 ```
 
 `package.json` pins `terser` for JavaScript/CommonJS, `clean-css` for CSS, and `html-minifier-terser` for HTML. Build and CI pin `python-minifier==3.3.0`, not a server dependency. CI uses Python 3.11 for stable output. The script rejects unparseable JavaScript, unbalanced CSS braces, and HTML missing ids or visible words.
 
 Python must compile with the same parsed tree and Python 3.10 syntax. Names, annotations, assertions and shebangs remain. Ordinary comments and docstrings go, so a shipped script keeps no prose. Help text that a script prints lives in a string constant, not in a docstring.
 
-`check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 maintenance/check_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime.
+`check.py` rejects asset/script growth beyond recorded README budgets until an explicit table update. After each refs asset/script edit, run `minify.py`: budgets cannot detect stale copies. `python3 maintenance/minify/gate_minify.py` checks copy equality, drift, Python tree equality, syntax limits and generated runtime.
 
 It uses readable assets for exact page assertions, then shipped assets for page assembly. Ruff checks readable Python refs, not generated copies.
 
@@ -173,7 +173,7 @@ Review every clause against refs. Structural checks do not prove semantic parity
 
 ```bash
 python3 -m pip install jsonschema
-python3 maintenance/check_gpt_plugins.py            # report drift, write nothing
+python3 maintenance/gpt_plugins/gate_gpt_plugins.py            # report drift, write nothing
 ```
 
 The checker checks `plugin.json` against the canonical schema at `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`, which it downloads on every run. Pass `--schema <path>` to check against a local copy offline. It also checks the plugin name, shipped skill names, the Agent Skills frontmatter limits, and the collection tree. `gpt-plugins/README.md` documents the collection and never ships.

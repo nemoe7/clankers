@@ -90,12 +90,12 @@ The server does not enable CORS or arbitrary file serving.
 A running `poll` stamps a heartbeat once a second. The state payload carries `polling`, and the page turns its connection dot blue for the wait. The text line keeps its normal reading, so the dot is the only poll mark. The flag clears when the poll returns, and the freshness window expires it five seconds after a killed poll.
 
 Edit readable sources under `skills/refs/arena-skill/` first.
-Build both runtime copies with `python3 maintenance/minify.py --update`.
+Build both runtime copies with `python3 maintenance/minify/minify.py --update`.
 Measure budgets with `python3 maintenance/check.py --update` and check drift without `--update`.
 Run `python3 -m pytest` with `markdown-it-py` and `pytest`.
 Run `node --check skills/refs/arena-skill/assets/app.js` and
 `node --test skills/refs/arena-skill/scripts/client.test.cjs` when Node is available.
-Run `python3 maintenance/check_minify.py` to check generated parity and parsed behavior.
+Run `python3 maintenance/minify/gate_minify.py` to check generated parity and parsed behavior.
 Local checks cannot prove actual browser rendering or browser download behavior.
 
 `.github/workflows/distribute.yml` copies tracked skill files to target repositories.

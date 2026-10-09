@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = ROOT / "skills" / "arena-skill" / "scripts" / "install.sh"
 SPEC = ROOT / "rules" / "COMMIT-SPEC.txt"
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 
 REQUIRED_FILES = (
@@ -158,9 +158,9 @@ def audit_document(name: str, document: object) -> list[str]:
       for step in job.get("steps", []) or []
       if isinstance(step, dict)
     )
-    if "check_minify.py" in run_text and "pytest" not in run_text:
+    if "gate_minify.py" in run_text and "pytest" not in run_text:
       findings.append(
-        f"{where}: a job that runs check_minify.py must install pytest; the script runs pytest on the minified runtime"
+        f"{where}: a job that runs gate_minify.py must install pytest; the script runs pytest on the minified runtime"
       )
   return findings
 
