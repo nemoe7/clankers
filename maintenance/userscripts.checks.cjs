@@ -292,6 +292,9 @@ function checkOpenSteering(api) {
     var buttons = rows.map(function (row) {
       return {
         textContent: row[0] + " " + row[1],
+        getAttribute: function (name) {
+          return name === "aria-label" && row[2] ? row[2] : null;
+        },
         querySelectorAll: function (selector) {
           return selector === "span" ? [{ textContent: row[0] }, { textContent: row[1] }] : [];
         },
@@ -347,6 +350,9 @@ function checkOpenSteering(api) {
       "arena - preview :8000"],
     // A Start row is a transcript card; a click on one opens nothing, so it never counts.
     [steeringRowText([["Start clankers - Steering", ":8000"]], "clankers"), null],
+    [steeringRowText([["Arena preview", ":8000", "Switch preview port"]], null), null],
+    [steeringRowText([["Arena preview", ":8000", "Switch preview port"],
+      ["clankers - Steering", ":8000"]], "clankers"), "clankers - Steering :8000"],
     [steeringRowText([["Start clankers - Steering", ":8000"], ["daedalus - preview", ":8000"]],
       "clankers"), "daedalus - preview :8000"],
     // The running row wins over history cards, wherever they sit.
@@ -788,7 +794,7 @@ function checkTabTitle(api) {
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
-  var vtag = " | v" + api.VERSION;
+  var vtag = "";
   var VERSION = api.VERSION;
   var EMOJI_HOLD_MS = api.EMOJI_HOLD_MS;
   var MESSAGE_SELECTOR = api.MESSAGE_SELECTOR;
@@ -1630,14 +1636,14 @@ function checkTabTitle(api) {
   var strayDoc = pulseDoc([], strayIcon);
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
   setPriorTitle("ChatGPT");
+  var userscriptText = fs.readFileSync(
+    path.join(__dirname, "..", "userscripts", "arena.user.js"),
+    "utf8",
+  );
   var cases = [
     // The name carries the running version; the constant and the header agree.
-    [
-      VERSION,
-      /@version\s+(\S+)/.exec(
-        fs.readFileSync(path.join(__dirname, "..", "userscripts", "arena.user.js"), "utf8"),
-      )[1],
-    ],
+    [VERSION, /@version\s+(\S+)/.exec(userscriptText)[1]],
+    ["Arena.ai | NemoUtils | v" + VERSION, /@name\s+(.*)/.exec(userscriptText)[1].trim()],
     [repoFromLink(repoLink), "clankers"],
     [repoFromLink(labelOnly), "clankers"],
     [repoFromLink(emptyLink), null],

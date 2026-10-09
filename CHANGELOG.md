@@ -15,7 +15,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- **Version in the title**: the tab title carries the running userscript version, the way the owner reads it: Arena | repo | v1.10.x. Arena 1.10.4.
+- **Version in the title**: the userscript's own name carries the running version, shaped like Arena.ai | NemoUtils | v1.10.x. The tab title keeps the mark alone. Arena 1.10.5.
+- **Trim now**: a menu button runs the transcript cut at once, beside the 5 s tick. Arena 1.10.5.
 
 ### Removed
 
@@ -52,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Title follows the stream**: the shimmer label counts as the newest row while a row streams. The mark keeps moving instead of freezing on the last labelled row. Arena 1.10.4.
 - **Trim cut shape**: cut rows stay as hidden empty shells instead of removed nodes. The page reinstates removed rows, and the live counts skip the shells. Arena 1.10.4.
 - **Trim scheduler**: one plain 5 s interval asks the settle and quiet gates, replacing the mutation-driven chain that fired on every streaming flicker. Arena 1.10.4.
+- **Steering misclick**: the open-steering scan skips the header port switcher, whose aria-label is Switch preview port. Arena 1.10.5.
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
 
 #### preview

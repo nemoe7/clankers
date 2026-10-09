@@ -19,7 +19,7 @@ const bundles = {
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
     // The prompt fill owns the three proxy entries; the state download owns its two.
-    extraMenus: { "transcript-trim": 1, "prompt-fill": 3, "state-download": 2 },
+    extraMenus: { "transcript-trim": 2, "prompt-fill": 3, "state-download": 2 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
     countMenu: "Transcript — keep ",
@@ -198,6 +198,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     // The plan menu is the one that names rows; the switch menu reads ": ON/OFF".
     const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("keep"));
     assert.ok(findCount(), "Missing the transcript trim count menu");
+    const findNow = () =>
+      [...counted.menus.values()].find((item) => item.label === "Transcript — trim now");
+    assert.ok(findNow(), "Missing the trim now button");
+    findNow().callback();
     assert.ok(
       findCount().label.includes("50 rows"),
       "The count menu shows the default row limit",
@@ -216,6 +220,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Transcript — auto-scroll (ON)",
         "Transcript — trim (ON)",
         "Transcript — keep 50 rows",
+        "Transcript — trim now",
         "State — download (ON)",
         "State — choose the file",
         "State — force save",
@@ -725,19 +730,19 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
 
     sync();
-    assert.equal(page.title, "Arena | clankers | v1.10.4", `The first look sets the mark in silence: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers", `The first look sets the mark in silence: ${page.title}`);
     // A chat switch swaps the whole transcript, so its fresh words are not a new message.
     goto("/c/two");
     words.push({ textContent: "elsewhere" });
     sync();
-    assert.equal(page.title, "Arena | clankers | v1.10.4", `A chat switch stays quiet: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers", `A chat switch stays quiet: ${page.title}`);
     // On the new path a further word is a message again.
     words.push({ textContent: "here" });
     sync();
-    assert.equal(page.title, "Arena | clankers | v1.10.4 \uD83D\uDCAC", `A message on the new path raises the balloon: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `A message on the new path raises the balloon: ${page.title}`);
     // The hold bridges the pause between two bursts of words.
     sync();
-    assert.equal(page.title, "Arena | clankers | v1.10.4 \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
     console.log("ok agent message mark: silent first look, growth burns, a chat switch stays quiet");
   });
 }

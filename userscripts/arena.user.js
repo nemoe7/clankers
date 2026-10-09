@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils
+// @name         Arena.ai | NemoUtils | v1.10.5
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.4
+// @version      1.10.5
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1012,6 +1012,10 @@
     }
 
     function parseSteeringButton(button) {
+      // The port switcher in the header wears the same ":8000" text. Clicking it opens a dialog, not a steering channel.
+      if (/switch preview port/i.test(String(button.getAttribute && button.getAttribute("aria-label")))) {
+        return null;
+      }
       var spans = button.querySelectorAll("span");
       var port = null;
       var i;
@@ -1448,6 +1452,7 @@
     }
 
     var countEntry = null;
+    var nowEntry = null;
     var timer = null;
     var observer = null;
     var labelTimer = null;
@@ -1533,10 +1538,20 @@
     observer.observe(document.documentElement, { childList: true, subtree: true });
     timer = setInterval(tick, SETTLE_MS);
     registerCount();
+    // The owner's button: one press runs the cut at once, whatever the interval says.
+    nowEntry = menuAdd(function () {
+      return "Transcript — trim now";
+    }, function () {
+      trim();
+    });
     return function () {
       if (timer !== null) clearInterval(timer);
       if (labelTimer !== null) clearTimeout(labelTimer);
       observer.disconnect();
+      if (nowEntry !== null) {
+        menuDrop(nowEntry);
+        nowEntry = null;
+      }
       if (countEntry !== null) {
         menuDrop(countEntry);
         countEntry = null;
@@ -2456,7 +2471,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.4";
+    var VERSION = "1.10.5";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -2904,7 +2919,7 @@
         return null;
       }
       var emoji = heldEmojiFor(doc);
-      var base = TITLE_PREFIX + name + " | v" + VERSION;
+      var base = TITLE_PREFIX + name;
       return emoji ? base + " " + emoji : base;
     }
 
