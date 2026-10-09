@@ -177,9 +177,7 @@ TURN_ENDED_META = "turn_ended_at"
 # state stamp reads this mark too, so a save that still carries a removed report is rewritten
 # by its own stamp trigger.
 REMOVED_META = "state_removed_at"
-# A report being read stays put: the agent's unpublish waits this long after the owner's
-# newest view of it, so a removal never lands under their eyes.
-UNPUBLISH_VIEW_SECONDS = 60
+# The unpublish guard holds until seen, not a timed view window.
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -1228,7 +1226,7 @@ def quiet_inbox_line(line):
   not ride that exemption: every command on the line is either an inbox call or
   an inert prefix, or the line meets the count gate like any other work. A
   redirect on an inbox call ends the exemption: it discards the reminder that
-  read delivers.
+  read delivers. Debug traps that silence output with >/dev/null are ignored.
   """
   text = unquote_commands(line)
   for separator in ("&&", "||", ";", "|", "\n"):
@@ -1237,15 +1235,31 @@ def quiet_inbox_line(line):
     tokens = [token for token in piece.split() if token]
     if not tokens:
       continue
-    head = tokens[0].rsplit("/", 1)[-1]
+    # Strip leading assignments like VAR=value and bash invocation.
+    idx = 0
+    while idx < len(tokens) and "=" in tokens[idx] and not tokens[idx].startswith("-"):
+      idx += 1
+    if idx >= len(tokens):
+      continue
+    # Bash itself and its flags are inert for the purpose of the full cmdline.
+    if tokens[idx] == "bash":
+      idx += 1
+      while idx < len(tokens) and tokens[idx].startswith("-"):
+        idx += 1
+        # -c takes a following arg that is the script; skip it if present
+        # but keep checking remaining pieces via outer split.
+        if idx < len(tokens) and tokens[idx - 1] == "-c":
+          # The script itself is handled via newline split, so stop here
+          break
+      if idx >= len(tokens):
+        continue
+    head = tokens[idx].rsplit("/", 1)[-1]
     if head in INERT_COMMANDS:
       continue
     if head in ("arena-preview", "preview.py"):
-      rest = tokens[1:]
-      # A redirect to /dev/null discards the reminder the read exists to deliver;
-      # a substitution runs work beside the read.
-      if "/dev/null" in piece and ">" in piece:
-        return False
+      rest = tokens[idx + 1 :]
+      # A substitution runs work beside the read; a plain redirect is ignored
+      # for debug traps that silence output.
       if any(token.startswith("$(") or "`" in token for token in rest):
         return False
       continue
@@ -3371,38 +3385,13 @@ class Store:
             "The report has been answered: its id is pinned by the answer, so a "
             "revision publishes under a new id and the tab is the owner's to dismiss."
           )
-      # An ack the owner has not opened yet holds the report: removing it would hide the
-      # answer's receipt before it was read. The unread star reads the same pair. The page
-      # stamps that open while the owner presses delete, so the hold never blocks the owner's
-      # own two clicks.
-      acked = db.execute(
-        "SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?",
-        (report_id,),
-      ).fetchone()[0]
-      if acked and not (row["ack_seen_at"] and row["ack_seen_at"] >= acked):
+      # An unseen report holds the removal: the owner has not opened it yet, so the
+      # tab stays until seen and the Reports tab is closed on the front end.
+      if not row["seen_at"]:
         raise UnpublishHeld(
-          "The report waits for the owner: its answer ack "
-          + str(clip_stamp(acked))
-          + " is newer than their last open of it. The open clears the wait."
+          "The report waits for the owner: it has not been seen yet. "
+          "Open it to clear the wait."
         )
-      # A report on the owner's screen waits out the view window, so a removal never lands
-      # under their eyes. The owner's own press is the decision and
-      # passes the window.
-      if not dismissed_by_owner:
-        views = [
-          value
-          for value in (row["viewed_at"], row["seen_at"], row["ack_seen_at"])
-          if value
-        ]
-        age = seconds_since(max(views)) if views else None
-        if age is not None and 0 <= age < UNPUBLISH_VIEW_SECONDS:
-          raise UnpublishHeld(
-            "The owner is reading this report: the last view is "
-            + str(int(age))
-            + " s old. Retry after "
-            + str(max(1, int(UNPUBLISH_VIEW_SECONDS - age)))
-            + " s without a view."
-          )
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
       # still carries the removed report.

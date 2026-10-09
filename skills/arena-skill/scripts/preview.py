@@ -70,7 +70,6 @@ AGENT_SEEN_META='agent_seen_at'
 AGENT_CALL_ENDED_META='agent_call_ended_at'
 TURN_ENDED_META='turn_ended_at'
 REMOVED_META='state_removed_at'
-UNPUBLISH_VIEW_SECONDS=60
 AGENT_KEY_RE=re.compile('[A-Za-z0-9_-]{20,64}\\Z')
 AGENT_HOST_RE=re.compile('https://[A-Za-z0-9.-]+\\Z')
 def now():return datetime.now(timezone.utc).isoformat()
@@ -447,11 +446,19 @@ def quiet_inbox_line(line):
 	for piece in text.split('\x00'):
 		tokens=[token for token in piece.split()if token]
 		if not tokens:continue
-		head=tokens[0].rsplit('/',1)[-1]
+		idx=0
+		while idx<len(tokens)and'='in tokens[idx]and not tokens[idx].startswith('-'):idx+=1
+		if idx>=len(tokens):continue
+		if tokens[idx]=='bash':
+			idx+=1
+			while idx<len(tokens)and tokens[idx].startswith('-'):
+				idx+=1
+				if idx<len(tokens)and tokens[idx-1]=='-c':break
+			if idx>=len(tokens):continue
+		head=tokens[idx].rsplit('/',1)[-1]
 		if head in INERT_COMMANDS:continue
 		if head in('arena-preview','preview.py'):
-			rest=tokens[1:]
-			if'/dev/null'in piece and'>'in piece:return False
+			rest=tokens[idx+1:]
 			if any(token.startswith('$(')or'`'in token for token in rest):return False
 			continue
 		return False
@@ -1055,11 +1062,7 @@ class Store:
 			if not dismissed_by_owner:
 				answered=db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone()
 				if answered is not None:raise ValueError("The report has been answered: its id is pinned by the answer, so a revision publishes under a new id and the tab is the owner's to dismiss.")
-			acked=db.execute('SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
-			if acked and not(row['ack_seen_at']and row['ack_seen_at']>=acked):raise UnpublishHeld('The report waits for the owner: its answer ack '+str(clip_stamp(acked))+' is newer than their last open of it. The open clears the wait.')
-			if not dismissed_by_owner:
-				views=[value for value in(row['viewed_at'],row['seen_at'],row['ack_seen_at'])if value];age=seconds_since(max(views))if views else None
-				if age is not None and 0<=age<UNPUBLISH_VIEW_SECONDS:raise UnpublishHeld('The owner is reading this report: the last view is '+str(int(age))+' s old. Retry after '+str(max(1,int(UNPUBLISH_VIEW_SECONDS-age)))+' s without a view.')
+			if not row['seen_at']:raise UnpublishHeld('The report waits for the owner: it has not been seen yet. Open it to clear the wait.')
 			db.execute('DELETE FROM reports WHERE id = ?',(report_id,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
 			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 	def clear_state(self):

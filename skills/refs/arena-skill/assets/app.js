@@ -1455,6 +1455,7 @@ async function markReportRead(id) {
     return;
   }
   foldReportStamp(id, 'seen_at', stamped.seen_at || new Date().toISOString());
+  maybeClearPendingUnpublish();
 }
 // An agent ack holds a star and the tab dot until the owner opens the report. The open is the
 // gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
@@ -1472,10 +1473,8 @@ async function markAckSeen(id) {
   }
   foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at || new Date().toISOString());
 }
-// The owner's view is what holds an unpublish: while the Reports tab shows a report, the page
-// stamps the look, so a removal waits out the guard window on the server instead of landing
-// under the owner's eyes. One stamp per half minute keeps the window open
-// through a long read without writing on every poll, and no state field carries the stamp.
+// The owner's view stamps the look, so the server knows the report has been seen.
+// The front end holds an unpublished report until seen and the Reports tab is closed.
 const REPORT_VIEW_MS = 30 * 1000;
 const reportView = { id: null, at: 0 };
 async function markReportViewed(id) {
@@ -1525,7 +1524,10 @@ function showTab(tab) {
     // pip: it goes out on this visit rather than surviving until the next one.
     refreshState();
     loadReport();
-  } else clearReadTimer();
+  } else {
+    clearReadTimer();
+    maybeClearPendingUnpublish();
+  }
 }
 function followReference(type, id) {
   if (!ACK_REFERENCE_PANELS[type] || !lastState) return;
@@ -1861,6 +1863,28 @@ $('#refresh-report').addEventListener('click', () => { refreshState(); loadRepor
 // and the arm expires so a stray first click does not sit armed forever. The server keeps the
 // report's answers and its source file; only the tab row goes.
 let unpublishArmed = null;
+let pendingUnpublishId = null;
+function clearReportPanel(id) {
+  if ($('#report').dataset.reportId !== id && $('#report-select').value !== id) return;
+  $('#report').replaceChildren();
+  delete $('#report').dataset.reportId;
+  delete $('#report').dataset.updatedAt;
+  delete $('#report').dataset.revision;
+  save('report', '');
+  $('#report-status').textContent = `Report ${id} · Deleted · ${time(new Date().toISOString())}`;
+  pendingUnpublishId = null;
+  void refreshState();
+}
+function maybeClearPendingUnpublish() {
+  if (!pendingUnpublishId) return;
+  const panel = $('#reports-panel');
+  if (!panel.hidden) return;
+  const report = ((lastState && lastState.reports) || []).find(item => item.id === pendingUnpublishId);
+  // If report already gone from state, clear panel if it still shows it.
+  if (!report) { clearReportPanel(pendingUnpublishId); return; }
+  if (!report.seen_at) return;
+  clearReportPanel(pendingUnpublishId);
+}
 $('#unpublish-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
   if (!id) return;
@@ -1878,21 +1902,17 @@ $('#unpublish-report').addEventListener('click', async () => {
   unpublishArmed = null;
   button.disabled = true;
   try {
-    // The press is the owner's open: the receipt shows at the top of the panel they delete
-    // from, so the ack the server's hold reads is stamped before the removal lands.
     const report = ((lastState && lastState.reports) || []).find(item => item.id === id);
     if (report && ackUnread(report)) await markAckSeen(id);
     await request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {
       method: 'POST', headers: writeHeaders('application/json'), body: '{}'
     });
     button.dataset.state = '';
-    $('#report').replaceChildren();
-    delete $('#report').dataset.reportId;
-    delete $('#report').dataset.updatedAt;
-    delete $('#report').dataset.revision;
-    save('report', '');
-    $('#report-status').textContent = `Report ${id} · Deleted · ${time(new Date().toISOString())}`;
-    void refreshState();
+    pendingUnpublishId = id;
+    $('#report-status').textContent = `Report ${id} · Deleted · hides when seen and Reports tab closed · ${time(new Date().toISOString())}`;
+    maybeClearPendingUnpublish();
+    if (pendingUnpublishId) void refreshState();
+    else clearReportPanel(id);
   } catch (error) {
     $('#report-status').textContent = `Delete failed: ${error.message}`;
   } finally { button.disabled = false; }
