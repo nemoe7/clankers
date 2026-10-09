@@ -34,9 +34,39 @@ Both bundles log under one tag, `[NemoUtils]`. The devtools console filter shows
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
-If the GitHub repo bar is not empty, it reads `owner/repo` from `span.truncate` and uses the name after `/`. The name leads the message, then `read ARENA.md AGENTS.md in full before your first edit, and follow both.` The rest is the initial message. It asks for a full read of the task and the touched files, and for reuse before new code. It asks for a failing check before new behavior, and a root-cause fix for a bug. It asks for stated assumptions, no claim of an unrun check, the steering channel for corrections, and a closing report. The text updates when the repo name changes, and an unrelated draft stays. A return to the composer after a session route is a new chat, and the fill writes it again. The full stop keeps the editor from linking `AGENTS.md` as a bare domain.
+```mermaid
+flowchart TB
+  B[GitHub repo bar] --> N[repo name]
+  N --> T[fill text]
+  F[fetch rules/ARENA.md] --> W[write the composer once]
+  T --> W
+```
 
-The message names the rules files, and the fill appends `rules/ARENA.md` fetched once from the fixed raw URL of this repository: `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill waits for that fetch and writes the composer one time per page, the file under a `here is ARENA.md:` line after the initial message. A failed fetch writes the plain message. A second write would put a line break after the name. The editor reads that break as the end of a domain.
+If the GitHub repo bar is not empty, the feature reads `owner/repo` from `span.truncate` and uses the name after `/`. The name leads the message, then `read ARENA.md AGENTS.md in full before your first edit, and follow both.` The full stop keeps the editor from linking `AGENTS.md` as a bare domain. The text updates when the repo name changes, and an unrelated draft stays.
+
+The message then carries a six-step checklist:
+
+1. Read the task and every file it touches, and trace the flow end to end.
+2. Name the requirements and the constraints, and follow the conventions in the code.
+3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
+4. Write the failing check before new behavior, and reproduce a bug before the fix.
+5. Keep the behavior, interfaces, validation and security that stand.
+6. Run the project's own gate, and read the result before the report.
+
+Six rules follow the checklist:
+
+- red first for new behavior
+- a root-cause fix for a bug, with no repeated failed approach
+- stated assumptions
+- no claim of an unrun check
+- screenshots and corrections through the steering channel, with each image read directly
+- a closing report of the change, the checks and the open items
+
+A return to the composer after a session route is a new chat, so the fill writes the text again.
+
+The message names the rules files, and the fill appends `rules/ARENA.md` fetched once from the fixed raw URL of this repository: `https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md`. The fill waits for that fetch and writes the composer one time per page, the file under a `here is ARENA.md:` line after the initial message.
+
+A failed fetch writes the plain message. A second write would put a line break after the name, and the editor reads that break as the end of a domain.
 
 ### Arena proxy settings and key rotation
 
