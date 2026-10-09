@@ -2091,15 +2091,14 @@ function checkTabTitle(api) {
     [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
     [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
-    // Speech wins over its own rows: while the newest message grows, the balloon
-    // outranks the pulsing Bash row, and it keeps the title through the quiet gap
-    // right after the burst. The first look only sets the speech baseline, so the
-    // row mark still marks that one tick.
+    // Speech wins over its own rows, but the hold after it does not: an action row
+    // that appears during the quiet gap takes the title. The first look only sets
+    // the speech baseline, so the row mark still marks that one tick.
     [resetSpeech(), null],
     [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
     [addWord(speechOverBash, "title"), 3],
     [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
     [expireHold(), null],
     [resetSpeech(), null],
     // A message that lands with no turn open takes the very same mark and emoji: one

@@ -3059,22 +3059,29 @@
       // A finished row keeps its shimmer label or its pulsing icon in the page, so the row
       // is news only while the stop control is up.
       var live = stopSignal(doc);
-      // A growing message outranks its own rows. Speech arrives in bursts, so the
-      // balloon's own hold covers the quiet gap after the last burst, and the gap
-      // never hands the title to a row.
       var speaking = speechGrowth(doc);
-      var speechFresh =
-        speaking ||
-        (live && heldEmoji === AGENT_EMOJI && Date.now() - heldEmojiAt < EMOJI_HOLD_MS);
+      var speechHold =
+        live && heldEmoji === AGENT_EMOJI && Date.now() - heldEmojiAt < EMOJI_HOLD_MS;
       var needsTurn = false;
-      var row = live && !speechFresh ? strongRow(doc) : null;
-      var emoji = live ? emojiForRow(row) : null;
+      var row = null;
+      var emoji = null;
+      // A growing message outranks its own rows, but the hold after it does not:
+      // an action row that appears during the quiet gap takes the title.
+      if (speaking) {
+        titleReason = "agent message";
+        heldEmoji = AGENT_EMOJI;
+        heldEmojiAt = Date.now();
+        heldEmojiNeedsTurn = false;
+        return AGENT_EMOJI;
+      }
+      row = live ? strongRow(doc) : null;
+      emoji = live ? emojiForRow(row) : null;
       if (emoji) {
         titleReason = rowSource(row);
         titleRowSource = titleReason;
         needsTurn = true;
       }
-      if (!emoji && !speechFresh) {
+      if (!emoji) {
         row = processRow(doc);
         emoji = emojiForRow(row);
         if (emoji) {
@@ -3083,23 +3090,23 @@
           needsTurn = true;
         }
       }
-      if (!emoji && speechFresh) {
-        emoji = AGENT_EMOJI;
-        titleReason = "agent message";
-      }
-      if (!emoji && live && !speechFresh && waitingSignal(doc)) {
+      if (!emoji && live && waitingSignal(doc)) {
         emoji = HOURGLASS_EMOJI;
         titleReason = "waiting line";
         needsTurn = true;
       }
-      if (!emoji && live && !speechFresh) {
-        row = liveRow(doc);
-        emoji = emojiForRow(row);
+      if (!emoji) {
+        row = live ? liveRow(doc) : null;
+        emoji = live ? emojiForRow(row) : null;
         if (emoji) {
           titleReason = rowSource(row);
           titleRowSource = titleReason;
           needsTurn = true;
         }
+      }
+      if (!emoji && speechHold) {
+        emoji = AGENT_EMOJI;
+        titleReason = "agent message";
       }
       if (emoji) {
         heldEmoji = emoji;
@@ -3148,7 +3155,7 @@
       // by write time, so the line cites the snapshot.
       var rowText = titleRowSource;
       if (!rowText) {
-        var row = strongRow(doc) || liveRow(doc);
+        var row = strongRow(doc) || processRow(doc) || liveRow(doc);
         rowText = row ? rowSource(row) : "none";
       }
       return "repo=" + (repoForTitle(doc) || "none") + " row=" + rowText;

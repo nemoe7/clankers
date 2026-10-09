@@ -220,8 +220,8 @@ jobs:
           ), "no packaging step"
 
           publish_runs = " ".join(str(step.get("run", "")) for step in jobs["publish-clankers-rules"]["steps"])
-          assert "check_publish_clankers_rules.py" in publish_runs
-          assert "publish_clankers_rules.py" in publish_runs
+          assert "gate_publish.py" in publish_runs
+          assert "publish.py" in publish_runs
 
           print(f"{path}: PR validation, main package, rules publish, and version-bump assert are as required.")
           PY
