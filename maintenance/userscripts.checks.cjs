@@ -426,6 +426,7 @@ function checkTranscriptTrim(api) {
   var trimRows = api.trimRows;
   var trimMessage = api.trimMessage;
   var isSettled = api.isSettled;
+  var quietReady = api.quietReady;
   var ACTION_SELECTOR = api.ACTION_SELECTOR;
   var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
   var MIN_ROWS = api.MIN_ROWS;
@@ -611,6 +612,19 @@ function checkTranscriptTrim(api) {
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), true],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), false],
+    // Quiet means the whole page holding still, not the row count alone: the page
+    // streams into existing rows after the last row lands, so a fresh mutation
+    // keeps the trim waiting even while the count holds.
+    [quietReady({ rows: null, rowsAt: 0, mutationAt: 0 }, 10, 100000), false],
+    [quietReady({ rows: 10, rowsAt: 100000, mutationAt: 0 }, 10, 100500), false],
+    [(function () {
+      var state = { rows: 10, rowsAt: 0, mutationAt: 100900 };
+      return quietReady(state, 10, 101500);
+    })(), false],
+    [(function () {
+      var state = { rows: 10, rowsAt: 0, mutationAt: 0 };
+      return quietReady(state, 10, 101500);
+    })(), true],
   ];
   var failed = 0;
   var i;

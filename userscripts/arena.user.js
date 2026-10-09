@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.2
+// @version      1.10.3
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1265,7 +1265,7 @@
     var ACTION_SELECTOR = ":scope > div > div > div.mt-3.flex.flex-col.gap-3";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
     var QUESTION_SELECTOR = '[role="radiogroup"]';
-    var SETTLE_MS = 1200;
+    var SETTLE_MS = 5000;
 
     function normalizePlan(value) {
       var text = String(value == null ? "" : value).trim();
@@ -1367,11 +1367,25 @@
     }
 
     // The trim runs only while a turn is up, so a missing stop control aborts it and
-    // is checked first; a visible question card aborts too; the quiet row count rides
-    // the scheduler.
+    // is checked first; a visible question card aborts too; the quiet gate rides the
+    // scheduler.
     function isSettled(doc) {
       if (!findStopGeneratingButton(doc)) return false;
       if (doc.querySelector(QUESTION_SELECTOR)) return false;
+      return true;
+    }
+
+    // Quiet means the whole page holding still, not the row count alone: the page
+    // streams into existing rows after the last row lands, so a fresh mutation keeps
+    // the trim waiting even while the count holds.
+    function quietReady(state, count, now) {
+      if (count !== state.rows) {
+        state.rows = count;
+        state.rowsAt = now;
+        return false;
+      }
+      if (now - state.rowsAt < SETTLE_MS) return false;
+      if (now - state.mutationAt < SETTLE_MS) return false;
       return true;
     }
 
@@ -1402,6 +1416,7 @@
       trimPlan: trimPlan,
       trimRows: trimRows,
       isSettled: isSettled,
+      quietReady: quietReady,
       ACTION_SELECTOR: ACTION_SELECTOR,
       QUESTION_SELECTOR: QUESTION_SELECTOR,
       MIN_ROWS: MIN_ROWS,
@@ -1416,8 +1431,7 @@
     var observer = null;
     var labelTimer = null;
     var trimmedTotal = 0;
-    var lastRowCount = null;
-    var lastRowChangeAt = 0;
+    var settleState = { rows: null, rowsAt: 0, mutationAt: 0 };
 
     function attachedRowCount(doc) {
       var roots = messageRoots(doc);
@@ -1494,17 +1508,7 @@
           schedule();
           return;
         }
-        // Quiet is the row count holding still, not a quiet DOM: a new row at any
-        // point restarts the window.
-        var count = attachedRowCount(document);
-        var now = Date.now();
-        if (count !== lastRowCount) {
-          lastRowCount = count;
-          lastRowChangeAt = now;
-          schedule();
-          return;
-        }
-        if (now - lastRowChangeAt < SETTLE_MS) {
+        if (!quietReady(settleState, attachedRowCount(document), Date.now())) {
           schedule();
           return;
         }
@@ -1512,10 +1516,14 @@
       }, SETTLE_MS);
     }
 
-    observer = new MutationObserver(schedule);
+    observer = new MutationObserver(function () {
+      settleState.mutationAt = Date.now();
+      schedule();
+    });
     observer.observe(document.documentElement, { childList: true, subtree: true });
     registerCount();
-    if (location.pathname.indexOf("/agent/") === 0 && isSettled(document)) trim();
+    // A page that opens settled still earns its quiet window before the first cut.
+    if (location.pathname.indexOf("/agent/") === 0 && isSettled(document)) schedule();
     return function () {
       if (timer !== null) clearTimeout(timer);
       if (labelTimer !== null) clearTimeout(labelTimer);
