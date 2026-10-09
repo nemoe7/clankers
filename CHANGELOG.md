@@ -25,6 +25,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Budget encoding**: the budget gate measures `o200k_base` tokens through the npm package `gpt-tokenizer`. The ranks ship inside the package, so the measurement runs offline. The tiktoken dependency, its pip install and its CI cache all go away, and the README rows re-baseline.
 - **Session-local clause**: the ARENA.md Git clause bans every identifier minted for one session and orders the strip on sight.
+- **Start-process gates**: the pre-push gates and the post-push checks watch run through `start_process`, and the wait scopes the next task.
 #### userscripts
 
 - **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added. Arena 1.10.1.
