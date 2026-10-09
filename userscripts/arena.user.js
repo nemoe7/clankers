@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.3
+// @version      1.10.4
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1356,9 +1356,10 @@
         var attached = 0;
         var j;
         for (j = 0; j < rows.length; j += 1) {
-          if (rows[j].parentElement) attached += 1;
+          if (rowLive(rows[j])) attached += 1;
         }
         if (removedFromRoot && !attached) removeActionSibling(roots[i]);
+        // Hidden cut rows still occupy the root, so the root itself never hides.
         if (!newest && !attached && typeof roots[i].classList !== "undefined") {
           roots[i].classList.add("hidden");
         }
@@ -1389,18 +1390,39 @@
       return true;
     }
 
+    // A row counts while it is attached and not yet cut: a cut row stays in the
+    // page as a hidden empty shell, because the page reinstates removed nodes.
+    function rowLive(row) {
+      if (!row.parentElement) return false;
+      return !(
+        row.classList &&
+        typeof row.classList.contains === "function" &&
+        row.classList.contains("hidden")
+      );
+    }
+
+    // The cut hides the row and empties its text instead of removing the node: a
+    // hidden empty shell cannot be reinstated, and its inner text is what the row
+    // costs.
+    function clearRow(row) {
+      if (row.classList && typeof row.classList.add === "function") {
+        row.classList.add("hidden");
+      }
+      row.textContent = "";
+    }
+
     function trimRows(rows, keep) {
       var attached = 0;
       var excess = 0;
       var removed = 0;
       var i;
       for (i = 0; i < rows.length; i += 1) {
-        if (rows[i].parentElement) attached += 1;
+        if (rowLive(rows[i])) attached += 1;
       }
       excess = attached - keep;
       for (i = 0; i < rows.length && removed < excess; i += 1) {
-        if (!rows[i].parentElement) continue;
-        rows[i].remove();
+        if (!rowLive(rows[i])) continue;
+        clearRow(rows[i]);
         removed += 1;
       }
       return removed;
@@ -1427,7 +1449,6 @@
 
     var countEntry = null;
     var timer = null;
-    var scheduled = false;
     var observer = null;
     var labelTimer = null;
     var trimmedTotal = 0;
@@ -1442,7 +1463,7 @@
         var rows = rowsOfRoot(roots[i]);
         var j;
         for (j = 0; j < rows.length; j += 1) {
-          if (rows[j].parentElement) total += 1;
+          if (rowLive(rows[j])) total += 1;
         }
       }
       return total;
@@ -1497,35 +1518,23 @@
       return removed;
     }
 
-    function schedule() {
-      if (scheduled) return;
-      scheduled = true;
-      timer = setTimeout(function () {
-        scheduled = false;
-        timer = null;
-        if (location.pathname.indexOf("/agent/") !== 0) return;
-        if (!isSettled(document)) {
-          schedule();
-          return;
-        }
-        if (!quietReady(settleState, attachedRowCount(document), Date.now())) {
-          schedule();
-          return;
-        }
-        trim();
-      }, SETTLE_MS);
+    // Streaming mutates the page constantly, so a mutation-driven scheduler fired
+    // on every flicker; one plain interval asks the gates at a steady 5 s instead.
+    function tick() {
+      if (location.pathname.indexOf("/agent/") !== 0) return;
+      if (!isSettled(document)) return;
+      if (!quietReady(settleState, attachedRowCount(document), Date.now())) return;
+      trim();
     }
 
     observer = new MutationObserver(function () {
       settleState.mutationAt = Date.now();
-      schedule();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
+    timer = setInterval(tick, SETTLE_MS);
     registerCount();
-    // A page that opens settled still earns its quiet window before the first cut.
-    if (location.pathname.indexOf("/agent/") === 0 && isSettled(document)) schedule();
     return function () {
-      if (timer !== null) clearTimeout(timer);
+      if (timer !== null) clearInterval(timer);
       if (labelTimer !== null) clearTimeout(labelTimer);
       observer.disconnect();
       if (countEntry !== null) {
@@ -2446,6 +2455,8 @@
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
+    // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
+    var VERSION = "1.10.4";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -2561,7 +2572,10 @@
       if (!newest || typeof newest.querySelectorAll !== "function") {
         return null;
       }
-      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR);
+      // A live row streams under its shimmer label before a group label lands, so
+      // the shimmer counts as a label too; without it the mark freezes on the last
+      // labelled row.
+      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR);
       return groups.length ? rowFromLabel(groups[groups.length - 1]) : null;
     }
 
@@ -2890,7 +2904,8 @@
         return null;
       }
       var emoji = heldEmojiFor(doc);
-      return emoji ? TITLE_PREFIX + name + " " + emoji : TITLE_PREFIX + name;
+      var base = TITLE_PREFIX + name + " | v" + VERSION;
+      return emoji ? base + " " + emoji : base;
     }
 
     var appliedTitle = null;
@@ -2953,6 +2968,7 @@
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
       TITLE_PREFIX: TITLE_PREFIX,
+      VERSION: VERSION,
       EMOJI_HOLD_MS: EMOJI_HOLD_MS,
       POLL_RE: POLL_RE,
       MESSAGE_SELECTOR: MESSAGE_SELECTOR,

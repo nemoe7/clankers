@@ -436,16 +436,30 @@ function checkTranscriptTrim(api) {
     var list = [];
     var i;
     for (i = 0; i < count; i += 1) {
-      list.push({
+      var row = {
         parentElement: {},
         removed: false,
+        textContent: "row",
         remove: function () {
           this.removed = true;
           this.parentElement = null;
         },
-      });
+      };
+      row.classList = {
+        names: {},
+        add: function (name) {
+          this.names[name] = true;
+        },
+        contains: function (name) {
+          return Boolean(this.names[name]);
+        },
+      };
+      list.push(row);
     }
     return list;
+  }
+  function cleared(row) {
+    return row.classList.contains("hidden") && row.textContent === "";
   }
   function actionContainer() {
     return {
@@ -565,15 +579,19 @@ function checkTranscriptTrim(api) {
     [messageRoots(logDoc([], true)).length, 0],
     // A lone root is the newest: under its own keep count nothing leaves.
     [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "50"), 0],
-    // The newest root keeps exactly its K newest rows: the ten oldest leave.
+    // The newest root keeps exactly its K newest rows: the ten oldest hide and empty.
     [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "20"), 10],
     [rootRowsRemoved, 30],
-    // The older root empties in full and hides; the newest root keeps its 20 newest rows.
-    [rootRows[0][24].removed, true],
+    // Cut rows stay as hidden empty shells: the page reinstates removed nodes, so the
+    // trim hides and empties instead of deleting; the older root hides in full while
+    // the newest root keeps its 20 newest rows.
+    [cleared(rootRows[0][24]), true],
+    [rootRows[0][24].parentElement !== null, true],
     [rootNodes[0].hiddenClass, true],
-    [rootRows[1][0].removed, true],
-    [rootRows[1][4].removed, true],
-    [rootRows[1][5].removed, false],
+    [cleared(rootRows[1][0]), true],
+    [cleared(rootRows[1][4]), true],
+    [cleared(rootRows[1][5]), false],
+    [rootRows[1][5].textContent, "row"],
     [rootNodes[1].hiddenClass, false],
     [rootActions[0].removed, true],
     // The action container leaves only with a root that lost every row: the newest
@@ -586,11 +604,11 @@ function checkTranscriptTrim(api) {
     [emptyRoot.parentElement !== null, true],
     // Two older roots empty and hide; the newest keeps all of its 25 rows.
     [globalRemoved, 45],
-    [globalRows[0][24].removed, true],
+    [cleared(globalRows[0][24]), true],
     [globalNodes[0].hiddenClass, true],
-    [globalRows[1][4].removed, true],
+    [cleared(globalRows[1][4]), true],
     [globalNodes[1].hiddenClass, true],
-    [globalRows[2][0].removed, false],
+    [cleared(globalRows[2][0]), false],
     [globalNodes[2].hiddenClass, false],
     [globalActions[0].removed, true],
     [globalActions[1].removed, true],
@@ -770,6 +788,8 @@ function checkTabTitle(api) {
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
   var TITLE_PREFIX = api.TITLE_PREFIX;
+  var vtag = " | v" + api.VERSION;
+  var VERSION = api.VERSION;
   var EMOJI_HOLD_MS = api.EMOJI_HOLD_MS;
   var MESSAGE_SELECTOR = api.MESSAGE_SELECTOR;
   var LIVE_ICON_SELECTOR = api.LIVE_ICON_SELECTOR;
@@ -1244,6 +1264,9 @@ function checkTabTitle(api) {
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === GROUP_LABEL_SELECTOR) return [name, exploredLabel];
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR) {
+          return [name, exploredLabel];
+        }
         return [];
       },
     };
@@ -1318,6 +1341,9 @@ function checkTabTitle(api) {
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === GROUP_LABEL_SELECTOR) return [name, bashLabel];
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR) {
+          return [name, bashLabel];
+        }
         return [];
       },
     };
@@ -1353,6 +1379,62 @@ function checkTabTitle(api) {
         return [];
       },
     };
+  }
+  // The live row carries the shimmer label in place of a group label until it
+  // finishes; the newest-row gate must still recognise it as the newest row, or
+  // the mark freezes on the last labelled row.
+  function titleDocStreaming() {
+    var liveRow = {};
+    var liveButton = {
+      textContent: "Searching the docs",
+      parentElement: liveRow,
+      querySelector: function () {
+        return null;
+      },
+    };
+    var shimmer = {
+      textContent: "Searching the docs",
+      closest: function (selector) {
+        return selector === "button" ? liveButton : null;
+      },
+    };
+    var oldRow = {};
+    var oldButton = {
+      textContent: "Bash sleep 25",
+      parentElement: oldRow,
+      querySelector: function () {
+        return null;
+      },
+    };
+    var oldLabel = {
+      textContent: "Bash sleep 25",
+      closest: function (selector) {
+        return selector === "button" ? oldButton : null;
+      },
+    };
+    var message = {
+      querySelectorAll: function (selector) {
+        if (selector === GROUP_LABEL_SELECTOR) return [oldLabel];
+        if (selector === LIVE_LABEL_SELECTOR) return [shimmer];
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR) {
+          return [oldLabel, shimmer];
+        }
+        return [];
+      },
+    };
+    var doc = {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === LIVE_LABEL_SELECTOR) return [shimmer];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+    return { doc: doc, liveRow: liveRow };
   }
   function looseStopDoc() {
     return {
@@ -1506,7 +1588,7 @@ function checkTabTitle(api) {
   var emptyLink = link("", "");
   var setDoc = docWith(repoLink, "ChatGPT");
   var keepDoc = docWith(null, "ChatGPT");
-  var goneDoc = docWith(null, TITLE_PREFIX + "clankers");
+  var goneDoc = docWith(null, TITLE_PREFIX + "clankers" + vtag);
   var endedPage = endedDoc();
   var talking = speechDoc(true);
   var settledChat = speechDoc(false);
@@ -1549,20 +1631,27 @@ function checkTabTitle(api) {
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
   setPriorTitle("ChatGPT");
   var cases = [
+    // The name carries the running version; the constant and the header agree.
+    [
+      VERSION,
+      /@version\s+(\S+)/.exec(
+        fs.readFileSync(path.join(__dirname, "..", "userscripts", "arena.user.js"), "utf8"),
+      )[1],
+    ],
     [repoFromLink(repoLink), "clankers"],
     [repoFromLink(labelOnly), "clankers"],
     [repoFromLink(emptyLink), null],
     [repoFromLink(null), null],
-    [desiredTitle(setDoc), TITLE_PREFIX + "clankers"],
+    [desiredTitle(setDoc), TITLE_PREFIX + "clankers" + vtag],
     // The header can drop the link on a re-render; the name holds while the page stays put.
-    [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
+    [desiredTitle(keepDoc), TITLE_PREFIX + "clankers" + vtag],
     [syncTitle(setDoc), true],
-    [setDoc.title, TITLE_PREFIX + "clankers"],
+    [setDoc.title, TITLE_PREFIX + "clankers" + vtag],
     [syncTitle(setDoc), false],
     [syncTitle(keepDoc), true],
-    [keepDoc.title, TITLE_PREFIX + "clankers"],
+    [keepDoc.title, TITLE_PREFIX + "clankers" + vtag],
     [syncTitle(goneDoc), false],
-    [goneDoc.title, TITLE_PREFIX + "clankers"],
+    [goneDoc.title, TITLE_PREFIX + "clankers" + vtag],
     // Another page drops the memory, and the next good read puts it back.
     [forgetPath(), null],
     [desiredTitle(keepDoc), null],
@@ -1570,7 +1659,7 @@ function checkTabTitle(api) {
     [keepDoc.title, "ChatGPT"],
     [syncTitle(keepDoc), false],
     [rememberRepo(), "clankers"],
-    [desiredTitle(keepDoc), TITLE_PREFIX + "clankers"],
+    [desiredTitle(keepDoc), TITLE_PREFIX + "clankers" + vtag],
     [liveLabel(busyMessage.row), "running Bash"],
     [liveLabel(null), null],
     // A thinking row is not a button; the label still arrives, and a stray pulse does not.
@@ -1617,25 +1706,25 @@ function checkTabTitle(api) {
     [actionEmoji("Waiting"), "\uD83D\uDCA4"],
     [actionEmoji("Doing something"), "\u2699\uFE0F"],
     [actionEmoji(null), null],
-    [desiredTitle(busyDoc), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+    [desiredTitle(busyDoc), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
     [syncTitle(busyDoc), true],
-    [busyDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+    [busyDoc.title, TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
     [syncTitle(idleDoc), true],
-    [idleDoc.title, TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
+    [idleDoc.title, TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
     [expireHold(), null],
-    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
+    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
     [syncTitle(idleDoc), true],
-    [idleDoc.title, TITLE_PREFIX + "clankers"],
+    [idleDoc.title, TITLE_PREFIX + "clankers" + vtag],
     // The ask_user card holds the title with a question mark, and the security
     // check beats it, like every other mark.
     [questionSignal(questionDoc(questionCard())), true],
     [questionSignal(questionDoc(null)), false],
     [expireHold(), null],
-    [desiredTitle(questionDoc(questionCard())), TITLE_PREFIX + "clankers " + QUESTION_EMOJI],
+    [desiredTitle(questionDoc(questionCard())), TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
     [loggedTitleHead(questionDoc(questionCard())),
-      "[NemoUtils][title] question card -> " + TITLE_PREFIX + "clankers " + QUESTION_EMOJI],
+      "[NemoUtils][title] question card -> " + TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
     [expireHold(), null],
-    [desiredTitle(questionDoc(questionCard(), true)), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
+    [desiredTitle(questionDoc(questionCard(), true)), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
     // Drop the shield hold, so the next cases start from a quiet title.
     [expireHold(), null],
     [GROUP_LABEL_SELECTOR, "span.text-text-secondary"],
@@ -1649,32 +1738,32 @@ function checkTabTitle(api) {
     [stopSignal(groupDoc(false)), false],
     // A drifted label still opens the gate; the exact wording does not.
     [stopSignal(looseStopDoc()), true],
-    [desiredTitle(looseStopDoc()), TITLE_PREFIX + "clankers"],
+    [desiredTitle(looseStopDoc()), TITLE_PREFIX + "clankers" + vtag],
     // The owner's bug: the turn ends, the finished group persists, and only the emoji clears.
     [expireHold(), null],
-    [desiredTitle(endedPage), TITLE_PREFIX + "clankers"],
+    [desiredTitle(endedPage), TITLE_PREFIX + "clankers" + vtag],
     [syncTitle(endedPage), true],
-    [endedPage.title, TITLE_PREFIX + "clankers"],
+    [endedPage.title, TITLE_PREFIX + "clankers" + vtag],
     // The owner's newer bug: a finished row keeps its shimmer label or its
     // pulsing icon, and the stop control is the only thing that leaves. Without the control
     // no row holds the title, and a row's hold dies with the control instead of bridging it.
     [expireHold(), null],
-    [desiredTitle(lingeringRowDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDCAD"],
-    [desiredTitle(lingeringRowDoc(false)), TITLE_PREFIX + "clankers"],
+    [desiredTitle(lingeringRowDoc(true)), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCAD"],
+    [desiredTitle(lingeringRowDoc(false)), TITLE_PREFIX + "clankers" + vtag],
     [expireHold(), null],
-    [desiredTitle(lingeringPulseDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
-    [desiredTitle(lingeringPulseDoc(false)), TITLE_PREFIX + "clankers"],
+    [desiredTitle(lingeringPulseDoc(true)), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
+    [desiredTitle(lingeringPulseDoc(false)), TITLE_PREFIX + "clankers" + vtag],
     // The waiting line is a turn mark too: no control, no hourglass.
     [expireHold(), null],
-    [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers"],
+    [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers" + vtag],
     // The start-process card: a play icon and the process name, so the
     // card alone raises the bash emoji while the turn runs. A finished card keeps its play icon
     // in the page, so it marks no longer once the stop control leaves, and a newer message
     // takes the title.
     [expireHold(), null],
-    [desiredTitle(processDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
-    [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers"],
-    [desiredTitle(processDoc(true, true)), TITLE_PREFIX + "clankers"],
+    [desiredTitle(processDoc(true)), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
+    [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers" + vtag],
+    [desiredTitle(processDoc(true, true)), TITLE_PREFIX + "clankers" + vtag],
     [typeof processRow(processDoc(true)), "object"],
     [processRow(processDoc(false)), null],
     [processRow(processDoc(true, true)), null],
@@ -1688,27 +1777,27 @@ function checkTabTitle(api) {
     [addWord(talking, "again"), 3],
     [speechGrowth(talking), true],
     [speechGrowth(talking), false],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers"],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
     // The next burst raises the one mark, and the same message keeps that one emoji: no
     // second mark ever replaces it.
     [resetSpeech(), null],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers"],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
     [addWord(talking, "later"), 4],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     // The hold bridges the pause between two bursts of words.
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [addWord(talking, "again"), 5],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers"],
+    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
     // A message that lands with no turn open takes the very same mark and emoji: one
     // condition, one balloon.
     [resetSpeech(), null],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers" + vtag],
     [addWord(settledChat, "later"), 3],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers " + AGENT_EMOJI],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers"],
+    [desiredTitle(settledChat), TITLE_PREFIX + "clankers" + vtag],
     [
       polls("/home/user/clankers/.agents/skills/arena-skill/scripts/arena-preview poll"),
       true,
@@ -1728,27 +1817,27 @@ function checkTabTitle(api) {
     [waitingSignal(actionCanvasDoc()), false],
     [waitingSignal(setDoc), false],
     [expireHold(), null],
-    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
-    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers"],
+    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag],
     [expireHold(), null],
     // A named action outranks the line, so the poll row keeps its own emoji.
-    [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers \uD83D\uDCA4"],
+    [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
     // Streamed words outrank the line too: the first burst sets the mark, and the next one
     // raises the same balloon over the line.
     [expireHold(), null],
     [resetSpeech(), null],
     [desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }])),
-      TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+      TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
     [
       desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }, { textContent: "again" }])),
-      TITLE_PREFIX + "clankers " + AGENT_EMOJI,
+      TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI,
     ],
     [expireHold(), null],
-    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers " + HOURGLASS_EMOJI],
+    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
-    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
+    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
     // The security check beats every other mark, including a poll row and the hourglass.
     [CAPTCHA_SELECTOR, '.recaptcha-v2-container, iframe[title="reCAPTCHA"]'],
     [captchaSignal(captchaDoc()), true],
@@ -1761,20 +1850,20 @@ function checkTabTitle(api) {
     [captchaSignal(captchaDoc(null, null, true)), false],
     [captchaSignal(captchaDoc(null, "open", true)), false],
     [openDialog({ getAttribute: function () { return null; } }), true],
-    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
-    [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
-    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI],
+    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
+    [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
+    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
     // Every title change prints one line: the signal, then the emoji the title takes.
     [
       loggedTitleHead(captchaDoc()),
-      "[NemoUtils][title] security check -> " + TITLE_PREFIX + "clankers " + CAPTCHA_EMOJI,
+      "[NemoUtils][title] security check -> " + TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI,
     ],
     // The anchors behind the decision ride the same line, so a title shows its cause.
     [loggedTitleTail(captchaDoc()), "repo=clankers row=none"],
     // The label behind the row rides the line, so the cause is visible.
     [
       loggedTitleHead(waitingDoc([pollMessage])),
-      "[NemoUtils][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers \uD83D\uDCA4",
+      "[NemoUtils][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4",
     ],
     [
       loggedTitleTail(waitingDoc([pollMessage])),
@@ -1789,7 +1878,7 @@ function checkTabTitle(api) {
       loggedTitleHead(processDocExplored()),
       "[NemoUtils][title] action row (Explored 2 reads) -> " +
         TITLE_PREFIX +
-        "clankers \uD83D\uDCD6",
+        "clankers" + vtag + " \uD83D\uDCD6",
     ],
     [
       loggedTitleTail(processDocExplored()),
@@ -1799,17 +1888,23 @@ function checkTabTitle(api) {
       loggedTitleHead(processDocLaterRow()),
       "[NemoUtils][title] action row (Bash sleep 25) -> " +
         TITLE_PREFIX +
-        "clankers \uD83D\uDDA5\uFE0F",
+        "clankers" + vtag + " \uD83D\uDDA5\uFE0F",
     ],
     [
       loggedTitleTail(processDocLaterRow()),
       "repo=clankers row=action row (Bash sleep 25)",
     ],
     [processRow(processDocLaterRow()), null],
+    // A live row streams under its shimmer label before a group label lands; the
+    // mark follows it instead of freezing on the last labelled row.
+    [(function () {
+      var f = titleDocStreaming();
+      return strongRow(f.doc) === f.liveRow;
+    })(), true],
     [expireHold(), null],
     [
       loggedTitleHead(idleDoc),
-      "[NemoUtils][title] title -> " + TITLE_PREFIX + "clankers",
+      "[NemoUtils][title] title -> " + TITLE_PREFIX + "clankers" + vtag,
     ],
     [loggedTitleTail(idleDoc), "repo=clankers row=none"],
   ];

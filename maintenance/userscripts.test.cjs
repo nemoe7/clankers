@@ -26,7 +26,12 @@ const bundles = {
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
     // The prompt fill owns two timers: the paint and the key watch. Both ride the one switch.
-    featureIntervals: { "tab-title": 1, "prompt-fill": 2, "state-download": 1 },
+    featureIntervals: {
+      "tab-title": 1,
+      "prompt-fill": 2,
+      "state-download": 1,
+      "transcript-trim": 1,
+    },
   },
   chatgpt: {
     features: { "hide-elements": 1, "auto-think": 0 },
@@ -90,8 +95,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
       setInterval(callback, ms) {
         assert.ok(
-          [1000, 60000, 900000].includes(ms),
-          `An interval runs the paint, the key watch or the key rotation, not ${ms} ms`,
+          [1000, 5000, 60000, 900000].includes(ms),
+          `An interval runs the paint, the trim tick, the key watch or the key rotation, not ${ms} ms`,
         );
         active.intervals += 1;
       },
@@ -720,19 +725,19 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
 
     sync();
-    assert.equal(page.title, "Arena | clankers", `The first look sets the mark in silence: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers | v1.10.4", `The first look sets the mark in silence: ${page.title}`);
     // A chat switch swaps the whole transcript, so its fresh words are not a new message.
     goto("/c/two");
     words.push({ textContent: "elsewhere" });
     sync();
-    assert.equal(page.title, "Arena | clankers", `A chat switch stays quiet: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers | v1.10.4", `A chat switch stays quiet: ${page.title}`);
     // On the new path a further word is a message again.
     words.push({ textContent: "here" });
     sync();
-    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `A message on the new path raises the balloon: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers | v1.10.4 \uD83D\uDCAC", `A message on the new path raises the balloon: ${page.title}`);
     // The hold bridges the pause between two bursts of words.
     sync();
-    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
+    assert.equal(page.title, "Arena | clankers | v1.10.4 \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
     console.log("ok agent message mark: silent first look, growth burns, a chat switch stays quiet");
   });
 }

@@ -13,6 +13,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Checks-line drift notice**: a `gh pr checks` line hears the gate once a shell while origin/main leads the branch. Main moved, so no checks report until the branch rebases over it.
 - **Note reread**: `arena-preview note` prints a saved note again by its short or full ID. A short ID that matches several notes prints every match.
 
+#### userscripts
+
+- **Version in the title**: the tab title carries the running userscript version, the way the owner reads it: Arena | repo | v1.10.x. Arena 1.10.4.
+
 ### Removed
 
 #### house
@@ -45,6 +49,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Transcript trim actions**: the action container leaves only with a root the trim emptied. A root that keeps rows keeps its actions, so the newest rows stay. Arena 1.10.2.
 - **Trim settle gate**: quiet now means the whole page holding still, not the row count alone. A fresh mutation restarts the 5 s window, so a page still rendering holds the trim, and a page that opens settled waits too. Arena 1.10.3.
 - **Title newest row**: the title mark follows the newest row of the newest message. An older start-process card or shimmer label loses the mark once a newer row lands. Arena 1.10.2.
+- **Title follows the stream**: the shimmer label counts as the newest row while a row streams. The mark keeps moving instead of freezing on the last labelled row. Arena 1.10.4.
+- **Trim cut shape**: cut rows stay as hidden empty shells instead of removed nodes. The page reinstates removed rows, and the live counts skip the shells. Arena 1.10.4.
+- **Trim scheduler**: one plain 5 s interval asks the settle and quiet gates, replacing the mutation-driven chain that fired on every streaming flicker. Arena 1.10.4.
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
 
 #### preview
