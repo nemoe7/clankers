@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Trim cap**: each trim pass cuts at most a capped batch, so a large backlog drains in steps instead of one blocking burst. The cap sits on its own menu line and defaults to 200 rows per pass. Arena 1.10.12.
 - **Title flip-flop**: the start-process card loses the tab mark once newer content follows it. A spoken word after the card ends its news, and a newer message root does the same. Arena 1.10.13.
 - **Answered questions stay quiet**: the answered question card wears the Summary header and the tab raises no mark for the chosen answer row. Every other unmatched row keeps the gear fallback. Arena 1.10.14.
+- **Speech wins over its own rows**: a growing message outranks its own row marks. The balloon's hold covers the quiet gap after the last burst, ending the mid-speech title trade. Arena 1.10.15.
 
 ### Removed
 

@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.14
+// @name         Arena.ai | NemoUtils | v1.10.15
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.14
+// @version      1.10.15
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2583,7 +2583,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.14";
+    var VERSION = "1.10.15";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -3050,15 +3050,22 @@
       // A finished row keeps its shimmer label or its pulsing icon in the page, so the row
       // is news only while the stop control is up.
       var live = stopSignal(doc);
+      // A growing message outranks its own rows. Speech arrives in bursts, so the
+      // balloon's own hold covers the quiet gap after the last burst, and the gap
+      // never hands the title to a row.
+      var speaking = speechGrowth(doc);
+      var speechFresh =
+        speaking ||
+        (live && heldEmoji === AGENT_EMOJI && Date.now() - heldEmojiAt < EMOJI_HOLD_MS);
       var needsTurn = false;
-      var row = live ? strongRow(doc) : null;
+      var row = live && !speechFresh ? strongRow(doc) : null;
       var emoji = live ? emojiForRow(row) : null;
       if (emoji) {
         titleReason = rowSource(row);
         titleRowSource = titleReason;
         needsTurn = true;
       }
-      if (!emoji) {
+      if (!emoji && !speechFresh) {
         row = processRow(doc);
         emoji = emojiForRow(row);
         if (emoji) {
@@ -3067,16 +3074,16 @@
           needsTurn = true;
         }
       }
-      if (!emoji && speechGrowth(doc)) {
+      if (!emoji && speechFresh) {
         emoji = AGENT_EMOJI;
         titleReason = "agent message";
       }
-      if (!emoji && live && waitingSignal(doc)) {
+      if (!emoji && live && !speechFresh && waitingSignal(doc)) {
         emoji = HOURGLASS_EMOJI;
         titleReason = "waiting line";
         needsTurn = true;
       }
-      if (!emoji && live) {
+      if (!emoji && live && !speechFresh) {
         row = liveRow(doc);
         emoji = emojiForRow(row);
         if (emoji) {

@@ -800,6 +800,7 @@ function checkTabTitle(api) {
   var PLAY_SELECTOR = api.PLAY_SELECTOR;
   var speechGrowth = api.speechGrowth;
   var AGENT_EMOJI = api.AGENT_EMOJI;
+  var BASH_EMOJI = api.BASH_EMOJI;
   var waitingSignal = api.waitingSignal;
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
@@ -1853,6 +1854,56 @@ function checkTabTitle(api) {
       },
     };
   }
+  // A live Bash row with a pulsing icon stands beside words that keep growing.
+  // The growing message outranks its own row mark, and the mark waits out the
+  // quiet gap after the last burst.
+  function speechOverBashDoc() {
+    var words = [{ textContent: "Watching" }, { textContent: "the" }];
+    var label = { textContent: "Bash" };
+    var button = {
+      querySelector: function (selector) {
+        return selector === "p" ? label : null;
+      },
+    };
+    var row = {
+      querySelector: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    button.parentElement = row;
+    var icon = {
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    var message = {
+      querySelectorAll: function (selector) {
+        if (selector === SPEECH_SELECTOR) return words.slice();
+        if (selector === LIVE_ICON_SELECTOR) return [icon];
+        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
+          return [icon];
+        }
+        return [];
+      },
+      contains: function (candidate) {
+        return candidate === row || candidate === icon;
+      },
+    };
+    return {
+      title: "ChatGPT",
+      words: words,
+      querySelector: function (selector) {
+        return selector === REPO_LINK_SELECTOR ? repoLink : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === SPEECH_SELECTOR) return words.slice();
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
+  var speechOverBash = speechOverBashDoc();
   var agentChatDoc = pulseDoc([divMessage("Agent chat", true)], null);
   var rocketsDoc = pulseDoc([divMessage("Deploying rockets", true)], null);
   var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
@@ -2028,6 +2079,17 @@ function checkTabTitle(api) {
     [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
     [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
+    // Speech wins over its own rows: while the newest message grows, the balloon
+    // outranks the pulsing Bash row, and it keeps the title through the quiet gap
+    // right after the burst. The first look only sets the speech baseline, so the
+    // row mark still marks that one tick.
+    [resetSpeech(), null],
+    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [addWord(speechOverBash, "title"), 3],
+    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    [resetSpeech(), null],
     // A message that lands with no turn open takes the very same mark and emoji: one
     // condition, one balloon.
     [resetSpeech(), null],
