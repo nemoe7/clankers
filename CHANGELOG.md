@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-09
 
+### Removed
+
+#### house
+
+- **Caveman experiments**: the squashed arena-skill copies under `caveman/` and `ultracave/` are gone (owner note 4e08dab). The vendored caveman skill under `.agents/skills/caveman/` stays (owner note cfc7f0a).
+
 ### Fixed
 
 #### userscripts
