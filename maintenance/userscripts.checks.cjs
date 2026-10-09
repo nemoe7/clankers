@@ -1800,6 +1800,8 @@ function checkTabTitle(api) {
     [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
     [actionEmoji("Re-thinking"), "\uD83D\uDCAD"],
     [actionEmoji("Waiting"), "\uD83D\uDCA4"],
+    // The owner's pick for the process output row: the scroll reads as the log roll.
+    [actionEmoji("get_process_output"), "\uD83D\uDCDC"],
     // The owner keeps the gear: an unmatched label inside a message still marks the
     // row, so Agent chat earns the fallback instead of dropping out of the title.
     [actionEmoji("Doing something"), "\u2699\uFE0F"],

@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.10
+// @name         Arena.ai | NemoUtils | v1.10.11
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.10
+// @version      1.10.11
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2539,7 +2539,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.10";
+    var VERSION = "1.10.11";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2564,6 +2564,8 @@
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
       ["wait", "\uD83D\uDCA4"],
+      // The owner's pick for the process output row: the scroll reads as the log roll.
+      ["process_output", "\uD83D\uDCDC"],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
     var EMOJI_HOLD_MS = 5000;

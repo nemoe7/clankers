@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Version in the title**: the userscript's own name carries the running version, shaped like Arena.ai | NemoUtils | v1.10.x. The tab title keeps the mark alone. Arena 1.10.5.
 - **Trim now**: a menu button runs the transcript cut at once, beside the 5 s tick. Arena 1.10.5.
 - **Configurable ticks**: menu entries set the trim tick and the tab title tick in seconds, clamped from one second to one minute. Defaults stay 5 s and 1 s. Arena 1.10.6.
+- **Process output mark**: the get_process_output action row wears the scroll mark in the tab title instead of the gear fallback. Arena 1.10.11.
 
 ### Removed
 
