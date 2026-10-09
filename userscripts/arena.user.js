@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.13
+// @name         Arena.ai | NemoUtils | v1.10.14
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.13
+// @version      1.10.14
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2578,9 +2578,12 @@
     var LIVE_ICON_SELECTOR = ".animate-pulse";
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
+    // The answered question card wears the Summary header, and its chosen answer
+    // row raises no mark.
+    var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.13";
+    var VERSION = "1.10.14";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2742,6 +2745,26 @@
       return row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row) ? row : null;
     }
 
+    // A row inside the answered question card raises no mark; the Summary header
+    // is the card's mark in the page, so the tab stays clean of a fallback.
+    function summaryCard(row) {
+      var node = row;
+      var depth = 0;
+      while (node && depth < 4) {
+        var labels =
+          typeof node.querySelectorAll === "function" ? node.querySelectorAll(GROUP_LABEL_SELECTOR) : [];
+        var i;
+        for (i = 0; i < labels.length; i += 1) {
+          if (collapsed(labels[i]) === SUMMARY_LABEL) {
+            return true;
+          }
+        }
+        node = node.parentElement || null;
+        depth += 1;
+      }
+      return false;
+    }
+
     function liveRow(doc) {
       var row = strongRow(doc);
       if (row) {
@@ -2754,6 +2777,9 @@
           ? lastMessage.querySelectorAll(GROUP_LABEL_SELECTOR)
           : [];
       row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
+      if (row && summaryCard(row)) {
+        return null;
+      }
       if (row && stopSignal(doc) && (knownLabel(liveLabel(row)) || rowInMessage(doc, row))) {
         return row;
       }
