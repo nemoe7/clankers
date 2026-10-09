@@ -19,7 +19,10 @@ The installer uses only the Python standard library.
 | [rules/COMMIT-SPEC.txt](COMMIT-SPEC.txt) | Short commit-message reference |
 | [rules/refs/](refs/README.md) | Uncompressed rule originals and the AGENTS.md writing guidelines |
 
-Check active files in your installed agent version. Filenames alone do not enable loading. ARENA.md compresses the core for standalone deployment. CLINE.md requires the loader to read AGENTS.md too. If it stops, fix installation or explicitly restore the core. NEVER lose it silently.
+Check the active files in your installed agent version: filenames alone do not enable loading. If the core stops loading, fix the installation or restore the core explicitly. NEVER lose it silently.
+
+- ARENA.md compresses the core for standalone deployment.
+- CLINE.md requires the loader to read AGENTS.md too.
 
 ## Core rules
 
@@ -51,7 +54,24 @@ From the repository root, with Python 3:
 python3 rules/apply.py
 ```
 
-On Windows, run `python rules\apply.py` or `apply.bat` from the root. The script shows unified diffs, asks once, copies two files, and creates needed directories. `y` or `yes` applies, any other answer aborts. `--yes`/`-y` skips the prompt. `--dry-run` only shows diffs. Current destinations cause exit without a prompt.
+```mermaid
+flowchart TB
+  S[rules/AGENTS.md] --> A[apply.py: diff, confirm, copy]
+  C[rules/CLINE.md] --> A
+  A --> G[.agents/AGENTS.md]
+  A --> K[Documents/Cline/Rules/CLINE.md]
+```
+
+On Windows, run `python rules\apply.py` or `apply.bat` from the root. The script shows unified diffs, asks once, copies two files, and creates needed directories.
+
+| Answer or flag | Result |
+| --- | --- |
+| `y` or `yes` | applies the copies |
+| any other answer | aborts |
+| `--yes` or `-y` | skips the prompt |
+| `--dry-run` | shows the diffs only |
+
+Current destinations cause an exit without a prompt.
 
 | Source | Destination relative to the base directory |
 | --- | --- |

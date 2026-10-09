@@ -1,6 +1,8 @@
 # Arena quirks
 
-Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified. Restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.md) is the durable record.
+Observed Arena.ai platform behaviours, not repository defects. Linked rules are authoritative. Each entry records an observation, its consequence and the current rule. Dates are sandbox observation dates, and unknown days stay unspecified.
+
+Restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.md) is the durable record.
 
 ## GitHub token expiry mid-turn
 
@@ -8,7 +10,9 @@ Observed Arena.ai platform behaviours, not repository defects. Linked rules are 
 
 ## The question tool at token death
 
-2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial. Ask rather than assume.
+2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial.
+
+Ask rather than assume.
 
 2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. [rules/ARENA.md](../../rules/ARENA.md) now requires blocking through the question tool, which exposes the failure and leaves the turn, instead of a silent end.
 
@@ -22,19 +26,37 @@ No surface gives the agent a remaining-token counter, warning or injected messag
 
 ## Mid-turn sandbox restore
 
-A reset can return HEAD to the branch base and delete ignored directories. In two observed resets on 2026-09-24, tooling, virtual environments and hooks under the home directory disappeared, and the preview server stopped. The first reset deleted preview SQLite state. The second kept it. Pushed commits survived remotely, and tree-only work appeared as uncommitted differences against the base. Notes, receipts and tasks in lost state do not survive.
+A reset can return HEAD to the branch base and delete ignored directories. In two observed resets on 2026-09-24, tooling, virtual environments and hooks under the home directory disappeared, and the preview server stopped. The first reset deleted preview SQLite state. The second kept it.
 
-Recovery runs the steering installer first, then `git fetch -q origin <branch>` and `git reset --mixed FETCH_HEAD`, then the repository toolchain and a restarted preview. Rebuild tasks from commit history only if the state is missing. The installer rewrites the home-directory files a restore deletes, including the global ignore rule that keeps the state directory out of `git status`. A task backup protects against bad imports, not every restore. Missing tooling reads as a lint failure, so distinguish a broken gate from a real one. The Python harness writes `__pycache__` inside the live skill copy, so a `diff -r` parity check reports untracked differences.
+Pushed commits survived remotely, and tree-only work appeared as uncommitted differences against the base. Notes, receipts and tasks in lost state do not survive.
 
-An earlier reset kept tracked worktree changes, unignored repository files and pushed commits. It deleted paths ignored by `.gitignore` or `.git/info/exclude`, and reset `.git/info/exclude`. Files outside the workspace and home-directory tools disappeared. In another reset, Git ignored one file only through `core.excludesFile`, but the file survived. That reset lost the Git setting. The cause is unknown.
+Recovery runs the steering installer first, then `git fetch -q origin <branch>` and `git reset --mixed FETCH_HEAD`, then the repository toolchain and a restarted preview. Rebuild tasks from commit history only if the state is missing. The installer rewrites the home-directory files a restore deletes, including the global ignore rule that keeps the state directory out of `git status`. A task backup protects against bad imports, not every restore.
 
-2026-09-24: About one hour passed between the last check before the reset and the first check after it. Ten of 20 probe files survived: root and nested files in the untracked, hidden, globally ignored `arena-state/`, intent-to-add and staged groups. Both symlinks, both manifests, the preview SQLite inbox and its report also survived. The reset lost both files in each of five groups: repository-ignored `.tiktoken-cache/`, locally excluded, `.cache/`, `.git/info/` and outside the workspace. All surviving bytes matched the original hash. The Git index lost the staged and intent-to-add flags. The reset also lost the global ignore setting. The installer restored it. An earlier reset on the same day lost `arena-state/state.sqlite3`. The reason for this difference is unknown. Do not treat this one-hour result as a guarantee that ignored data survives. Push non-secret work that must persist. Keep private preview state out of Git.
+Missing tooling reads as a lint failure, so distinguish a broken gate from a real one. The Python harness writes `__pycache__` inside the live skill copy, so a `diff -r` parity check reports untracked differences.
+
+An earlier reset:
+
+- kept tracked worktree changes, unignored repository files and pushed commits
+- deleted the paths that `.gitignore` or `.git/info/exclude` ignored, and reset `.git/info/exclude`
+- lost the files outside the workspace and the home-directory tools
+
+In another reset, Git ignored one file only through `core.excludesFile`, but the file survived. That reset lost the Git setting. The cause is unknown.
+
+2026-09-24: About one hour passed between the last check before the reset and the first check after it. Ten of 20 probe files survived: root and nested files in the untracked, hidden, globally ignored `arena-state/`, intent-to-add and staged groups. Both symlinks, both manifests, the preview SQLite inbox and its report also survived. The reset lost both files in each of five groups: repository-ignored `.tiktoken-cache/`, locally excluded, `.cache/`, `.git/info/` and outside the workspace.
+
+All surviving bytes matched the original hash. The Git index lost the staged and intent-to-add flags. The reset also lost the global ignore setting. The installer restored it.
+
+An earlier reset on the same day lost `arena-state/state.sqlite3`. The reason for this difference is unknown. Do not treat this one-hour result as a guarantee that ignored data survives.
+
+Push non-secret work that must persist. Keep private preview state out of Git.
 
 Restore acknowledgement state with each note, or leave it unset. Never infer an answer: one import marked twenty-eight pasted notes acknowledged, and five had no answer. A log copy holding only id, text and at lacks receipt state and cannot count as complete.
 
 ## A refresh can reset the sandbox, not just the visible history
 
-2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox and visible-history resets are the same event at different levels, and harness reasoning survives while files disappear. One later recovery request repeated an earlier report, with HEAD, remote and state intact. Check whether a message describes a new event or repeats one before treating it as evidence or instruction. Keep the retraction beside the claim, and recover from durable sources. Commit and push early, before turn end.
+2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox and visible-history resets are the same event at different levels, and harness reasoning survives while files disappear. One later recovery request repeated an earlier report, with HEAD, remote and state intact. Check whether a message describes a new event or repeats one before treating it as evidence or instruction.
+
+Keep the retraction beside the claim, and recover from durable sources. Commit and push early, before turn end.
 
 `gh pr view` can return `mergeable=UNKNOWN mergeStateStatus=UNKNOWN` with the correct head after a MERGEABLE result. UNKNOWN means computation is pending. Query again rather than report a fault.
 
@@ -44,7 +66,9 @@ Restore acknowledgement state with each note, or leave it unset. Never infer an 
 
 [maintenance/README.md](../../maintenance/README.md) gives the verified seed command. The raw header is necessary, because the contents API stops base64 above 1 MB. Restores delete the ignored cache directory, so seed it again with venv recovery.
 
-2026-09-23: the block covers more hosts than the encoding blob. `agent-plugins.org` refused a TLS handshake from `curl` and `urllib` alike. The Actions artifact host `productionresultssa19.blob.core.windows.net` ended a signed download with EOF. `api.github.com`, PyPI and the npm registry answered. A checker that fetches a canonical schema takes a local-copy override for runs here. The runner verifies an artifact's contents. A session here reports that limit instead of claiming the bytes.
+2026-09-23: the block covers more hosts than the encoding blob. `agent-plugins.org` refused a TLS handshake from `curl` and `urllib` alike. The Actions artifact host `productionresultssa19.blob.core.windows.net` ended a signed download with EOF. `api.github.com`, PyPI and the npm registry answered.
+
+A checker that fetches a canonical schema takes a local-copy override for runs here. The runner verifies an artifact's contents. A session here reports that limit instead of claiming the bytes.
 
 ## `gh pr edit --body-file` fails
 
@@ -62,7 +86,9 @@ Restore acknowledgement state with each note, or leave it unset. Never infer an 
 
 `Store.note()` returns the stored record for an identical ID and text pair, and it rejects changed text under that ID. A duplicate with a fresh ID is a second note. Before answering an apparent repeat, check the recent log for identical text. Without detection, repeats cause duplicate answers and can revive an ended turn.
 
-One note reported replacement, with no mechanism established: a duplicate can replace a new message. Replacement loses the original for comparison and leaves no recovery path. Mismatched instructions, or answers that refer to absent text, are indirect signs. Ask the user. A replacement cannot be identified from plausible, unmarked instructions, so small commits and early pushes remain the safeguard.
+One note reported replacement, with no mechanism established: a duplicate can replace a new message. Replacement loses the original for comparison and leaves no recovery path. Mismatched instructions, or answers that refer to absent text, are indirect signs. Ask the user.
+
+A replacement cannot be identified from plausible, unmarked instructions, so small commits and early pushes remain the safeguard.
 
 ## `Something went wrong. Please try again.` arrives as a message
 
@@ -107,7 +133,9 @@ The sandbox lacks system fontconfig. One source-project test measures a column a
 
 ## Sandbox egress allowlist, GitHub session
 
-2026-10-03: A GitHub session reached seven hosts. The reachable set holds `github.com`, `api.github.com`, `codeload.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org` and `dns.google`. The IP literal `8.8.8.8` also answered. About 130 other hosts failed. The blocked set holds every `*.githubusercontent.com` host, `docs.github.com`, `ssh.github.com`, `ghcr.io`, `*.blob.core.windows.net`, `gitlab.com`, `api.anthropic.com`, `api.openai.com`, `arena.ai`, `cdn.jsdelivr.net` and `nodejs.org`.
+2026-10-03: A GitHub session reached seven hosts. The reachable set holds `github.com`, `api.github.com`, `codeload.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org` and `dns.google`. The IP literal `8.8.8.8` also answered. About 130 other hosts failed.
+
+The blocked set holds every `*.githubusercontent.com` host, `docs.github.com`, `ssh.github.com`, `ghcr.io`, `*.blob.core.windows.net`, `gitlab.com`, `api.anthropic.com`, `api.openai.com`, `arena.ai`, `cdn.jsdelivr.net` and `nodejs.org`.
 
 A blocked host resolves and accepts TCP. The TLS handshake then fails with `SSL_ERROR_SYSCALL`. Plain HTTP on `github.com` and `api.github.com` returns 301, and plain HTTP fails elsewhere. The filter reads the host name.
 
@@ -133,9 +161,13 @@ Rule: read alerts from the bot's review comments or from an owner export. Never 
 
 ## The preview as a browser fetch proxy
 
-2026-10-03: The preview skill queues `download-request <url>` jobs. The owner approves one URL, and the browser fetches it with no credentials and no referrer. A checkbox adds the third-party proxies AllOrigins and CodeTabs, and the file lands in the state `downloads/` directory. Each file is at most 102.4 MB. Each fetch times out after 600 seconds. Each URL needs its own approval while the preview stays open.
+2026-10-03: The preview skill queues `download-request <url>` jobs. The owner approves one URL, and the browser fetches it with no credentials and no referrer. A checkbox adds the third-party proxies AllOrigins and CodeTabs, and the file lands in the state `downloads/` directory. Each file is at most 102.4 MB.
 
-Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work. The fetch omits cookies, and the sandbox token cannot read the security endpoints.
+Each fetch times out after 600 seconds. Each URL needs its own approval while the preview stays open.
+
+Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work.
+
+The fetch omits cookies, and the sandbox token cannot read the security endpoints.
 
 Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a pull request comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.
 
@@ -145,7 +177,9 @@ Rule: request public URLs only, name the signature when the URL holds one, and e
 
 It runs headless Chrome. The user agent and `sec-ch-ua` headers name Chrome 153, the accept language is `en-US`, and the referer is `https://www.google.com/`. Query strings pass through unchanged, so a search query works.
 
-The tool carries no credentials. A test page showed no Authorization header. A URL with userinfo in the authority answered HTTP 400. GitHub ignores the legacy `access_token` query parameter. A search query proved that the tool sends the query string, and the parameter still answered 401 `Requires authentication`.
+The tool carries no credentials. A test page showed no Authorization header. A URL with userinfo in the authority answered HTTP 400. GitHub ignores the legacy `access_token` query parameter.
+
+A search query proved that the tool sends the query string, and the parameter still answered 401 `Requires authentication`.
 
 Binary responses fail. A signed run log URL answered HTTP 500 with a fresh signature, and a PNG answered the same.
 
@@ -161,7 +195,9 @@ Rule: read a long document with `chunkIndex`. Stop when `hasMore` is false.
 
 ## A preview page cannot hand the owner's PC a file
 
-2026-10-04: A preview page was tested for handing a file to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file. `navigator.clipboard.writeText` threw in the frame, while the preview's shared copy path, the API followed by a selection copy, put a text file on the clipboard.
+2026-10-04: A preview page was tested for handing a file to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file.
+
+`navigator.clipboard.writeText` threw in the frame, while the preview's shared copy path, the API followed by a selection copy, put a text file on the clipboard.
 
 Consequence: the sandbox-to-PC direction has no working file route from a preview page. The text of a small file still crosses, through the clipboard, and the owner pastes it on the PC.
 

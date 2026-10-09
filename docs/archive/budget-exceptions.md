@@ -1,8 +1,12 @@
 # Budget exceptions
 
-Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements. Strike or mark entries superseded when a later change funds them.
+Budget growth, with dates and numbers. [README.md](../../README.md#instruction-budgets) gives current measurements and the compression procedure. Add a paragraph for each over-budget change, holding the date, the budgeted file, the delta and the funding status. Git history carries the mechanics and the intermediate measurements.
 
-2026-10-08: Owner request. `rules/AGENTS.md` +25 `tok`, 1,535 to 1,560. `rules/ARENA.md` +79 `B`, 19,022 to 19,101, and the root copy follows. `rules/CHATGPT-CUSTOM.txt` +2 `chars`, 1,497 to 1,499, under the 1,500 cap. `rules/wenyan/CHATGPT-CUSTOM.txt` +51 `chars`, 1,335 to 1,386. The core rule files name the E501 120 lint limit and the settings that hold it.
+Strike or mark entries superseded when a later change funds them.
+
+2026-10-08: Owner request. `rules/AGENTS.md` +25 `tok`, 1,535 to 1,560. `rules/ARENA.md` +79 `B`, 19,022 to 19,101, and the root copy follows. `rules/CHATGPT-CUSTOM.txt` +2 `chars`, 1,497 to 1,499, under the 1,500 cap.
+
+`rules/wenyan/CHATGPT-CUSTOM.txt` +51 `chars`, 1,335 to 1,386. The core rule files name the E501 120 lint limit and the settings that hold it.
 
 2026-10-06: Owner request. `rules/ARENA.md` +160 `B`, 17,168 to 17,328, and the root copy follows. A rule names the shallow sandbox clone and its check.
 
@@ -46,7 +50,9 @@ Budget growth, with dates and numbers. [README.md](../../README.md#instruction-b
 
 2026-10-01: Approved amendment. `rules/ARENA.md` +75 `B`, 15,294 to 15,369. The root copy matches.
 
-2026-10-01: Approved amendment. `rules/ARENA.md` +41 `B`, 15,253 to 15,294. The root copy matches. `skills/arena-preview-steering/SKILL.md` +6 `B`, 6,070 to 6,076. Both distributed copies follow.
+2026-10-01: Approved amendment. `rules/ARENA.md` +41 `B`, 15,253 to 15,294. The root copy matches. `skills/arena-preview-steering/SKILL.md` +6 `B`, 6,070 to 6,076.
+
+Both distributed copies follow.
 
 2026-10-01: Accepted without funding. `skills/arena-preview-steering/scripts/install.sh` +16 `B`, 7,320 to 7,336. `rules/COMMIT-SPEC.txt` -4 `tok`, 95 to 91.
 
@@ -138,7 +144,9 @@ Budget growth, with dates and numbers. [README.md](../../README.md#instruction-b
 
 2026-09-20: `rules/ARENA.md` +7 `B`. Unfunded.
 
-2026-09-20: `rules/ARENA.md` +62 `B`. `arena-preview-steering` 6,089 `B` against the 11,472 `B` entry. `arena-preview-reporting` baseline 4,987 `B`. Together 396 `B` below the old entry. Unfunded.
+2026-09-20: `rules/ARENA.md` +62 `B`. `arena-preview-steering` 6,089 `B` against the 11,472 `B` entry. `arena-preview-reporting` baseline 4,987 `B`. Together 396 `B` below the old entry.
+
+Unfunded.
 
 2026-09-20: `skills/arena-preview-steering/SKILL.md` +1,578 `B`. Unfunded.
 

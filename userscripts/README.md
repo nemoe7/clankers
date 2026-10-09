@@ -20,7 +20,17 @@ Each bundle has its own version and raw GitHub update URL. A saved feature setti
 
 ## Feature switches
 
-Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. The modules sit in one order: Composer, Proxy, Steering, Transcript, State, Page, Userscript. One module's entries stay together, whatever order the features load in. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+Eight features default to On. Transcript trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+
+Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module's entries stay together, whatever order the features load in. The modules sit in one order:
+
+1. Composer
+2. Proxy
+3. Steering
+4. Transcript
+5. State
+6. Page
+7. Userscript
 
 Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature’s observers, timers and listeners.
 
@@ -93,15 +103,24 @@ The feature keeps a blank `div.shrink-0` at 24px on `/agent/*` and resets its he
 
 ## Arena Transcript Auto-scroll
 
-On `/agent/*`, ON keeps the transcript at the bottom while the Stop generating button exists. This includes upward scrolling, new messages, resized tool output and session changes. Without that button the composer is visible and the transcript does not follow until the button returns. A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
+On `/agent/*`, ON keeps the transcript at the bottom while the Stop generating button exists. This includes upward scrolling, new messages, resized tool output and session changes. Without that button the composer is visible and the transcript does not follow until the button returns.
+
+A toggle button sits in the action row next to Stop generating: pressed while follow is ON, unpressed when OFF. OFF disables follow. The saved menu setting and the button apply immediately.
 
 The feature uses the transcript message marker and its scrollable `role="log"` ancestor.
 
 ## Arena Transcript Trim
 
-This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. It also removes the sibling action container, `div.mt-3.flex.flex-col.gap-3`, from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree. The row limit cannot fall below `20`.
+This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. The row limit cannot fall below `20`.
 
-The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`, so a plan above the transcript size reads as no change. A trim that removes rows also writes one console line, such as `[NemoUtils][trim] removed 12 rows (kept 50)`. The command takes one row limit. It converts a saved two-value plan to its row limit. An empty or too small answer keeps the old plan.
+The trim also removes the sibling action container, `div.mt-3.flex.flex-col.gap-3`, from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree.
+
+The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`, so a plan above the transcript size reads as no change. A trim that removes rows also writes one console line, such as `[NemoUtils][trim] removed 12 rows (kept 50)`.
+
+The command takes one row limit:
+
+- it converts a saved two-value plan to its row limit
+- an empty or too small answer keeps the old plan
 
 The trim waits for the page to settle. It touches nothing while a turn streams, a live icon pulses, or a question widget waits for an answer. It waits for a quiet window after the last change. A root the document dropped, and a root whose row nodes sit detached during a redraw, stay untouched.
 
@@ -113,21 +132,68 @@ The page holds fewer nodes, so the tab uses less memory. The Arena client may ke
 
 The feature saves the preview state to one file, without a click. It asks the preview once a minute, and the request lands at a random moment inside a 15-second band after the beat. It writes nothing unless the state's newest stamp moved, so an idle preview costs one small request a minute.
 
-The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. A browser without the picker downloads a stamped file on a manual save press. With no file set, an automatic save writes nothing. The picker needs the press itself, and a save that waited on the network has none. Press `State — choose the file` to pick one.
+The first save asks for the file through the browser's own picker. After that the script fills the same file on every change, with no second question. Press `State — choose the file` to pick one.
+
+A browser without the picker downloads a stamped file on a manual save press. With no file set, an automatic save writes nothing. The picker needs the press itself, and a save that waited on the network has none.
 
 The name leads with the repository and the branch, and a stamped save adds the stamp and the record counts, such as `clankers-main-20261006T061233-n12-t4.ndjson`. The repository and the branch come from the GitHub bar, so two repositories never collide in one folder.
 
-The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. A remembered file is reused only when its name carries the current scope, so a file from another repository or branch is never written. The same repository and branch keeps one file, and the picker asks once per repository and branch.
+The feature keys the stamp memory and the chosen file by repository and branch. Two tabs of two sessions never share one file or one stamp chain. The feature reuses a remembered file only when its name carries the current scope, so a file from another repository or branch is never written. The same repository and branch keeps one file, and the picker asks once per repository and branch.
 
-A stamp older than the last write never overwrites the file. The script says so once, quietly, and keeps the older file. A state with no stamp writes nothing. The console shows the state lines in short form: a comparison reads `note - older - abc1234 vs def5678`, where each hash stands for one stamp. A write adds `GET <status> <link>` and `WRITE <repo> state to <file>`. A quiet tick adds `NOOP <repo> <link>`. A force save reads `updating note stamp from <hash> to <hash>` before its write. The lines that carried the full stamps are gone. A state whose history moved backward reads `history does not match`, and a save with no file set reads `no file selected; launching dialog`. A refused copy read reads `GET <status> <copy-state url>`, and a page with no preview frame reads `no preview detected`. A failed read or write shows its line in the page corner card as well, and the card stays until a dismiss. The card covers a refused copy read, a backward history, a file outside the scope, a failed write and a failed manager download. A browser with no picker shows it too. The write failure carries the `Choose file` button in place of the plain no-file card.
+A stamp older than the last write never overwrites the file. The script says so once, quietly, and keeps the older file. A state with no stamp writes nothing.
 
-The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file. A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
+The console shows the state lines in short form:
 
-Two menu entries sit with the feature: `State — choose the file` and `State — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file. The import stays the owner's own command. The feature only writes the file.
+| Line | Event |
+| --- | --- |
+| `note - older - abc1234 vs def5678` | a stamp comparison, each hash standing for one stamp |
+| `GET <status> <link>` then `WRITE <repo> state to <file>` | a write |
+| `NOOP <repo> <link>` | a quiet tick |
+| `updating note stamp from <hash> to <hash>` | a force save, before its write |
+| `history does not match` | a state whose history moved backward |
+| `no file selected; launching dialog` | a save with no file set |
+| `GET <status> <copy-state url>` | a refused copy read |
+| `no preview detected` | a page with no preview frame |
+
+A failed read or write shows its line in the page corner card as well, and the card stays until a dismiss. The card covers a refused copy read, a backward history, a file outside the scope, a failed write and a failed manager download. A browser with no picker shows it too, and the write failure carries the `Choose file` button in place of the plain no-file card.
+
+The script also remembers the newest note stamp and the newest task stamp of the state it wrote. A rollback leaves older records behind while one new record moves the state stamp forward. The script refuses that write and keeps the newer file.
+
+A lone note deletion moves one stamp back and leaves the state stamp still, so the script keeps the file and logs no refusal. A state that carries no pair keeps the single-stamp rule.
+
+Two menu entries sit with the feature: `State — choose the file` and `State — force save`. The force entry writes the state whatever its stamp says and moves the reference to the saved one. The chosen handle lives in IndexedDB, so a reload keeps the file.
+
+The import stays the owner's own command. The feature only writes the file.
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header. It sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon. The map is running 🖥️, read 📖, edit ✏️, search and fetch 🔍, think 💭, wait 💤, and ⚙️ for anything else. An ask_user question card holds the title with ❓, and the security check 🛡️ outranks it. A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn. A message whose words grow holds it with 💬, whatever the turn state. The first look on a page only sets the mark, so a load or a chat switch stays quiet. Reading covers `Read` and `Explored`, and editing covers `Edit`, `Editing`, `Editing files`, `Write` and `Writing`. `Bash` and `command` count as running, so `using Bash` and `Ran commands` show 🖥️. A row whose command runs the preview poll shows 💤, because the agent waits on you. The command counts when it names the script plus the `poll` word, bare, as a full path or as `preview.py`. A separate `polling` or `polls` word does not count. A waiting line carries a 16px spinner canvas beside rotating monospace text. It shows ⏳ while the model works with no named action and no streamed words. The words rotate per run, so that case anchors on the canvas together with the text block beside it. An action row carries the same canvas as its own icon, so a bare canvas never counts as a waiting line. A finished row keeps its shimmer or its pulse in the page, so a row counts only while the stop-generating control is up. The emoji holds for five seconds after the live row leaves, so a gap between calls does not flash the title. That control bounds the row, the words, the waiting line and the process card. When it leaves, the emoji clears at once and the repository name stays in the title. A read or edit group shows no pulse and no shimmer, so while the turn runs the newest group label supplies the emoji. The label is the row's `text-text-secondary` span. That span sits beside the toggle, not inside it. The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label, which a thinking row carries without a pulsing icon.
+
+| Mark | Source |
+| --- | --- |
+| 🖥️ | running, including `Bash` and `command`, so `using Bash` and `Ran commands` count |
+| 📖 | read: `Read` and `Explored` |
+| ✏️ | edit: `Edit`, `Editing`, `Editing files`, `Write` and `Writing` |
+| 🔍 | search and fetch |
+| 💭 | think |
+| 💤 | wait, and a row whose command runs the preview poll, because the agent waits on you |
+| 💬 | a message whose words grow, whatever the turn state |
+| ❓ | an `ask_user` question card |
+| 🛡️ | the security check, which outranks the question card |
+| ⏳ | the model at work with no named action and no streamed words |
+| ⚙️ | anything else |
+
+The poll row counts when its command names the script plus the `poll` word, bare, as a full path or as `preview.py`. A separate `polling` or `polls` word does not count.
+
+A waiting line carries a 16px spinner canvas beside rotating monospace text. The words rotate per run, so that case anchors on the canvas together with the text block beside it. An action row carries the same canvas as its own icon, so a bare canvas never counts as a waiting line.
+
+A finished row keeps its shimmer or its pulse in the page, so a row counts only while the stop-generating control is up. That control bounds the row, the words, the waiting line and the process card. When it leaves, the emoji clears at once and the repository name stays in the title.
+
+A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn. The first look on a page only sets the mark, so a load or a chat switch stays quiet. The emoji holds for five seconds after the live row leaves, so a gap between calls does not flash the title.
+
+A read or edit group shows no pulse and no shimmer, so while the turn runs the newest group label supplies the emoji. The label is the row's `text-text-secondary` span, and that span sits beside the toggle, not inside it.
+
+The feature holds the title against every Arena rewrite. It re-asserts the title each second and keeps the last repository name while the page stays put, so a header re-render never drops it. Switching the feature off restores the earlier title.
 
 ## Arena Security Check Hold
 
@@ -138,7 +204,7 @@ The held work is the prompt fill, the Open Steering click and the proxy key post
 
 One entry, `Userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
 
-The script saves the pause, so a reload keeps it: a paused page starts with nothing running and still offers the resume. Each feature switch stays in the menu while paused, and a flip is saved for the resume. The security check hold is independent of the pause.
+The script saves the pause, so a reload keeps it: a paused page starts with nothing running and still offers the resume. Each feature switch stays in the menu while paused, and the script saves a flip for the resume. The security check hold is independent of the pause.
 
 ## ChatGPT Hide Elements
 
