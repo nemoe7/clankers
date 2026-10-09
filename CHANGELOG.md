@@ -21,6 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Trim now**: a menu button runs the transcript cut at once, beside the 5 s tick. Arena 1.10.5.
 - **Configurable ticks**: menu entries set the trim tick and the tab title tick in seconds, clamped from one second to one minute. Defaults stay 5 s and 1 s. Arena 1.10.6.
 - **Process output mark**: the get_process_output action row wears the scroll mark in the tab title instead of the gear fallback. Arena 1.10.11.
+- **Trim cap**: each trim pass cuts at most a capped batch, so a large backlog drains in steps instead of one blocking burst. The cap sits on its own menu line and defaults to 200 rows per pass. Arena 1.10.12.
 
 ### Removed
 
@@ -42,6 +43,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Start-process gates**: the pre-push gates and the post-push checks watch run through `start_process`, and the wait scopes the next task.
 - **Image-named package dirs**: the two docker package directories carry their published image names. `skills/arena-skill/arena-egress-proxy` replaces `proxy`, and `skills/arena-skill/arena-preview-proxy` replaces `preview-proxy`. The publish workflows, the distribute filter and the workflow gate follow the rename.
 - **Re-read scope**: the main-move re-read names the read set: ARENA.md, every AGENTS.md, and the arena-skill skill with its reference. A changed file outside the set, preview.py included, no longer triggers the read.
+
 #### userscripts
 
 - **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added. Arena 1.10.1.

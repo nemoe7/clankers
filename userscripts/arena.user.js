@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.11
+// @name         Arena.ai | NemoUtils | v1.10.12
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.11
+// @version      1.10.12
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1272,6 +1272,8 @@
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
     var QUESTION_SELECTOR = '[role="radiogroup"]';
     var SETTLE_MS = 5000;
+    var CAP_KEY = "clankers-arena-trim-cap";
+    var DEFAULT_TRIM_CAP = 200;
 
     function normalizePlan(value) {
       var text = String(value == null ? "" : value).trim();
@@ -1441,6 +1443,13 @@
       row.textContent = "";
     }
 
+    // The owner sets the per-pass cap; anything under one row falls back to the default.
+    function capValue() {
+      if (typeof GM_getValue !== "function") return DEFAULT_TRIM_CAP;
+      var cap = Number(GM_getValue(CAP_KEY, DEFAULT_TRIM_CAP));
+      return isFinite(cap) && cap >= 1 ? Math.round(cap) : DEFAULT_TRIM_CAP;
+    }
+
     function trimRows(rows, keep) {
       var attached = 0;
       var excess = 0;
@@ -1450,6 +1459,10 @@
         if (rowLive(rows[i])) attached += 1;
       }
       excess = attached - keep;
+      // One pass cuts at most the cap, so a big backlog drains in steps instead of
+      // one blocking burst the page must reconcile at once.
+      var cap = capValue();
+      if (excess > cap) excess = cap;
       for (i = 0; i < rows.length && removed < excess; i += 1) {
         if (!rowLive(rows[i])) continue;
         clearRow(rows[i]);
@@ -1473,6 +1486,7 @@
       QUESTION_SELECTOR: QUESTION_SELECTOR,
       MIN_ROWS: MIN_ROWS,
       DEFAULT_ROWS: DEFAULT_ROWS,
+      DEFAULT_TRIM_CAP: DEFAULT_TRIM_CAP,
     })) {
       return;
     }
@@ -1480,6 +1494,7 @@
     var countEntry = null;
     var nowEntry = null;
     var intervalEntry = null;
+    var capEntry = null;
     var timer = null;
     var observer = null;
     var labelTimer = null;
@@ -1546,6 +1561,31 @@
     function registerInterval() {
       if (intervalEntry !== null) menuDrop(intervalEntry);
       intervalEntry = menuAdd(intervalLabel, setTickByPrompt);
+    }
+
+    function capLabel() {
+      return "Transcript \u2014 trim cap " + capValue() + " rows";
+    }
+
+    function registerCap() {
+      if (capEntry !== null) menuDrop(capEntry);
+      capEntry = menuAdd(capLabel, setCapByPrompt);
+    }
+
+    function setCapByPrompt() {
+      if (typeof prompt !== "function") return;
+      var answer = prompt("Rows cut per trim pass (1 to 1000)", String(capValue()));
+      if (answer === null) {
+        registerCap();
+        return;
+      }
+      var rows = Number(String(answer).trim());
+      if (!isFinite(rows) || rows < 1) {
+        registerCap();
+        return;
+      }
+      GM_setValue(CAP_KEY, Math.min(Math.round(rows), 1000));
+      registerCap();
     }
 
     function setTickByPrompt() {
@@ -1619,6 +1659,7 @@
       };
     }, null, false);
     registerCount();
+    registerCap();
     // The owner's button: one press runs the cut at once, whatever the switch reads.
     nowEntry = menuAdd(function () {
       return "Transcript — trim now";
@@ -2539,7 +2580,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.11";
+    var VERSION = "1.10.12";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid

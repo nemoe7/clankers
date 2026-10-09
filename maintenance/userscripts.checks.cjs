@@ -437,6 +437,7 @@ function checkTranscriptTrim(api) {
   var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
   var MIN_ROWS = api.MIN_ROWS;
   var DEFAULT_ROWS = api.DEFAULT_ROWS;
+  var DEFAULT_TRIM_CAP = api.DEFAULT_TRIM_CAP;
 
   function rows(count) {
     var list = [];
@@ -562,11 +563,15 @@ function checkTranscriptTrim(api) {
   var questionRemoved = trimPlan(logDoc([questionRoot, questionTail], true), "20");
   var detached = rows(4);
   detached[0].parentElement = null;
+  // One pass cuts at most the cap, so a large backlog drains in steps instead
+  // of one blocking burst the page must reconcile at once.
+  var cappedTrim = trimRows(rows(300), 50);
   var cases = [
     [trimRows(rows(5), 3), 2],
     [trimRows(rows(3), 3), 0],
     [trimRows(rows(2), 10), 0],
     [trimRows(detached, 2), 1],
+    [cappedTrim, DEFAULT_TRIM_CAP],
     [normalizePlan("50"), "50"],
     [normalizePlan(" 50 "), "50"],
     [normalizePlan("5,80"), "80"],
