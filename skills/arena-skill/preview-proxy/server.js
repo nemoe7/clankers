@@ -160,8 +160,7 @@ function escapeHtml(value) {
 function viewerPage(message) {
   // The viewer root is the main page of the installed app: it carries the manifest link and a
   // URL box, so the page installs and opens a preview without a hand-made query string. The
-  // root once answered a bare text line, so the page had no head and no manifest landed
-  // (owner notes 59ec9e1 and fd9315b).
+  // root once answered a bare text line, so the page had no head and no manifest landed.
   const reason = message ? `<p class="reason">${escapeHtml(message)}</p>` : '';
   return `<!doctype html>
 <html lang="en">
@@ -226,7 +225,7 @@ function manifestJson() {
     // Every launch starts on the home page: the start URL once carried the preview origin, so
     // opening the installed app reopened a sandbox whose address had died, and the owner had to
     // reinstall to escape it. The share sheet and the URL box pick a preview from there, and a
-    // fixed id keeps one installed app across those changes (owner note ec56b4d).
+    // fixed id keeps one installed app across those changes.
     id: '/',
     start_url: '/',
     scope: '/',
@@ -243,7 +242,7 @@ function manifestJson() {
       params: { title: 'title', text: 'text', url: 'url' }
     },
     // Chrome offers the install from an icon that resolves at 192px and 512px, so the two
-    // raster icons ship beside the scalable one (owner note 31023b2).
+    // raster icons ship beside the scalable one.
     icons: [
       { src: '/pwa/icon-192.png', sizes: '192x192', type: 'image/png' },
       { src: '/pwa/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -371,7 +370,7 @@ const server = http.createServer((req, res) => {
       const origin = verifyOriginToken(readCookie(req.headers.cookie, COOKIE_NAME));
       if (!origin) {
         // No target yet: the main page itself answers, so it installs and carries the
-        // manifest link (owner note fd9315b).
+        // manifest link.
         return sendHtml(res, 200, viewerPage(
           'Choose a preview: paste its URL, or open this page from a share or a link that'
           + ' carries one.'

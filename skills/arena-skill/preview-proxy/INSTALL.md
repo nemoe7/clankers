@@ -28,7 +28,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 - The proxy injects a manifest link and a worker registration into the preview HTML, so Android Chrome offers to install the page. The installed app reopens the same preview.
 - Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon.
  The package ships both beside the scalable icon, and the worker registers on the root scope.
-- The viewer root answers a page of its own when no preview is selected: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest (owner notes 59ec9e1 and fd9315b).
+- The viewer root answers a page of its own when no preview is selected: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest.
 - Only HTTPS roots on `sbx-*.arena.site` are accepted: no other host, no credentials, no port, no subpath. Write methods reach the selected preview only, and the browser's `Origin` is never forged.
 - A strict `Content-Security-Policy` on the preview page can suppress the manifest; the preview keeps working either way.
 

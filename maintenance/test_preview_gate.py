@@ -74,7 +74,7 @@ def hook_source() -> str:
 
 
 def test_the_hook_skips_the_platform_shells() -> None:
-  """A hosted process or a platform probe is not an agent call (owner note ef180f0)."""
+  """A hosted process or a platform probe is not an agent call."""
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     marker = root / "called"
@@ -200,7 +200,7 @@ def test_the_gate_names_a_backtick_the_shell_will_eat():
   """An ack whose inline text sits in double quotes draws a warning before the loss.
 
   The trap reads the command line before the shell expands it, so the backtick is still there
-  to see. The warning names the file form, and the ack still runs (owner note 6367253).
+  to see. The warning names the file form, and the ack still runs.
   """
   lossy = run(': "arena-preview ack abc" --reply "use `echo tick` now"')
   assert lossy.returncode == 0, lossy.stderr
@@ -216,7 +216,7 @@ def test_the_gate_names_a_port_that_is_not_the_default():
   """A serve on another port draws a warning before the call runs.
 
   The owner's page and the poll follow the port the skill names, so an off-default
-  serve hides both. The warning names the port and the default (owner note 61100d7).
+  serve hides both. The warning names the port and the default.
   """
   off = run("arena-preview serve --port 8123")
   assert off.returncode == 0, off.stderr
@@ -253,7 +253,7 @@ def test_the_inbox_line_classifier():
   assert not quiet("arena-preview ack abc &>/dev/null")
   assert not quiet('arena-preview ack abc --reply "$(rm -rf /tmp/x)"')
   # Single quotes never substitute in bash, so formatting and dollars ride an ack unchecked.
-  # Double quotes keep their substitution refused (owner report report-stderr-read-investigation).
+  # Double quotes keep their substitution refused.
   assert quiet("arena-preview ack abc --reply 'task `x` is queued'")
   assert quiet("arena-preview ack abc --reply 'the $(pwd) path'")
   assert not quiet('arena-preview ack abc --reply "task `x` is queued"')
@@ -350,7 +350,7 @@ def test_a_branch_behind_main_hears_the_replay_line():
 
 def test_a_checks_line_with_main_ahead_hears_the_moved_line():
   # An empty listing on a checks call means main moved, so the line names the
-  # cause instead of leaving the agent to guess (owner note b0ebdfa).
+  # cause instead of leaving the agent to guess.
   with tempfile.TemporaryDirectory() as directory:
     repo = git_repo(Path(directory))
     result = run("gh pr checks 7", cwd=str(repo))
@@ -425,7 +425,7 @@ def shallow_repo(root: Path, *, lone_tip: bool) -> Path:
 
 def test_a_lone_grafted_tip_keeps_the_drift_line_quiet():
   # One commit with no parents proves nothing about main, so the count stays
-  # unspoken (owner note 94e3313).
+  # unspoken.
   with tempfile.TemporaryDirectory() as directory:
     repo = shallow_repo(Path(directory), lone_tip=True)
     assert (repo / ".git" / "shallow").exists()

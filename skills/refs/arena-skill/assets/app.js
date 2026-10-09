@@ -35,7 +35,7 @@ let fetchSignature = '';
 let fetchBusy = false;
 const messageNodes = new Map();
 // Only the newest page of the log renders on load; scrolling up renders the next older page,
-// so a long session does not pay for every message at once (owner note 3f4b37b).
+// so a long session does not pay for every message at once.
 const HISTORY_PAGE = 20;
 let historyShown = HISTORY_PAGE;
 
@@ -62,7 +62,7 @@ $('#theme').addEventListener('click', () => {
 });
 
 // The accessible name and the hover text say the same thing, so a button that explains itself to a
-// screen reader also explains itself to a mouse; owner note bef51970.
+// screen reader also explains itself to a mouse.
 function label(button, text) {
   button.setAttribute('aria-label', text);
   button.title = text;
@@ -112,7 +112,7 @@ function agentInCall() {
   // A returned poll ended the turn, so the silence that follows is not a running call.
   if (turnEndedAt !== null) return false;
   // The hook stamps every bash call's end, so a call that finished is not a running one,
-  // whatever the agent does between calls (owner note bd93043).
+  // whatever the agent does between calls.
   if (callEndAt !== null && agentSeenAt !== null && agentSeenAt <= callEndAt) return false;
   const silent = agentSilentMs();
   return pollSince === null && silent !== null && silent > AGENT_QUIET_MS && silent <= AGENT_CALL_MS;
@@ -125,12 +125,12 @@ function agentIdle() {
   return silent !== null && silent > AGENT_CALL_MS;
 }
 function connectionText() {
-  // The header names what the agent is doing (owner note cc6edd4): the wait while a poll runs,
+  // The header names what the agent is doing: the wait while a poll runs,
   // else the stamp of the last bash call. An absent agent carries its own marker in place of
-  // the sentence that stood here (owner note c08732a).
+  // the sentence that stood here.
   const tail = agentIdle() ? ' · Agent 404' : '';
   // The tally ends every shape of the line: a poll, a finished call and the quiet line are all
-  // read while the count climbs (owner note 03471eb).
+  // read while the count climbs.
   if (pollSince !== null) {
     return `Polling… ${duration(Date.now() - pollSince)}${tail}${callTally}`;
   }
@@ -156,7 +156,7 @@ function paintConnection() {
   }
 }
 // The hide-composer control went with the log's other spare buttons: the composer stays open, so
-// nothing carries a closed state any more (owner note 0ccee47).
+// nothing carries a closed state any more.
 // A placeholder is a hint rather than a draft: past three lines it keeps two and an ellipsis.
 function clipPlaceholder(text) {
   const lines = String(text).split('\n');
@@ -166,7 +166,7 @@ const STATE_WORDS = { sent: 'Sent', seen: 'Seen', said: 'Said' };
 // The log's search narrows the rows by substring, over each row as it stands: the message text, a
 // rendered answer, and the receipt's own ID are all in there, so a note's ID finds its note. The
 // copy button stays whole-log, because it is the restore path and a narrowed copy would restore a
-// partial log as if it were all of it (owner note 0ccee47).
+// partial log as if it were all of it.
 let logQuery = '';
 
 function grow() {
@@ -363,7 +363,7 @@ function stampDate(value) {
 }
 function clock(value) {
   // The composer footer names the key's freshness in the room a narrow width leaves:
-  // the hour and minute alone (owner note 7019452).
+  // the hour and minute alone.
   const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
     hour: '2-digit', minute: '2-digit', hour12: false
   }).formatToParts(stampDate(value)).map(part => [part.type, part.value]));
@@ -660,7 +660,7 @@ async function refreshState() {
       connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
       paintConnection();
     }
-    // The ack writes the same stamp as a read does, so the label is true (owner note cc6edd4).
+    // The ack writes the same stamp as a read does, so the label is true.
     $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
     showHistory(logNotes);
     renderTasksIfChanged(state.tasks);
@@ -701,8 +701,7 @@ async function refreshState() {
     updateReportPip(state.reports);
     renderReportAcknowledgement();
     // The panel can show a report's end while its last scroll event was lost (a re-render moved the
-    // panel, or the event landed a pixel short), so the poll takes the same look the tab click does
-    // (owner note 217ad5d).
+    // panel, or the event landed a pixel short), so the poll takes the same look the tab click does.
     checkReportRead();
   } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
@@ -779,11 +778,10 @@ $('#form').addEventListener('submit', async event => {
   finally { send.disabled = picker.disabled = $('#attach-file').disabled = false; }
 });
 // A touch keyboard offers no Shift key, so there the Return key writes the newline and the Send
-// button sends. The hint names whichever the Return key does (owner notes da405c2, cbebaa3).
+// button sends. The hint names whichever the Return key does.
 const touchPointer = window.matchMedia?.('(pointer: coarse)');
 function paintSendHint() {
-  // The separator rides the hint, so a phone that drops the hint leaves the key line whole
-  // (owner note 2fc9b33).
+  // The separator rides the hint, so a phone that drops the hint leaves the key line whole.
   $('#send-hint').textContent = touchPointer?.matches
     ? 'Return: new line · Send sends · '
     : 'Enter sends · Shift+Enter: new line · ';
@@ -929,7 +927,7 @@ async function copyCode(button) {
 // after it. A draft already written is kept below a blank line rather than lost, and a first line
 // that is already a quote is retargeted, so quoting a second note replaces the prefix instead of
 // stacking two. One gesture serves every device, so a phone with no ctrl key quotes like a desk
-// does, and no copy path sits beside it (owner notes 4d4b659 and 4a69d4e). The quote lands in the
+// does, and no copy path sits beside it. The quote lands in the
 // composer's own tab, and the box is regrown after the value changes: measured while its panel is
 // hidden, the textarea collapses to its border and the quote shows cut off. The write mode comes
 // back for the same reason, since a preview would leave the quote off screen behind the rendered
@@ -1088,8 +1086,7 @@ function submissionState(report) {
   return submissionSeenAt(report) ? 'seen' : 'sent';
 }
 // An ack the owner has not opened yet: the answer carries an agent receipt, and the report has
-// not been opened since. The star and the tab dot carry it, and opening the report clears it
-// (owner note dae396b).
+// not been opened since. The star and the tab dot carry it, and opening the report clears it.
 function ackUnread(report) {
   return Boolean(report?.latest_answer_acknowledged_at &&
     (!report.ack_seen_at || report.ack_seen_at < report.latest_answer_acknowledged_at));
@@ -1217,8 +1214,7 @@ async function loadReport(force = false) {
       id,
     );
     // Opening the report is the gesture that clears an unread ack: the receipt sits at the top
-    // of the panel, so the mark goes out on this visit rather than on a later scroll (owner
-    // note dae396b).
+    // of the panel, so the mark goes out on this visit rather than on a later scroll.
     if (report && ackUnread(report)) void markAckSeen(id);
     checkReportRead();
   } catch (error) {
@@ -1244,12 +1240,12 @@ $('#report-form').addEventListener('submit', async event => {
     })).json();
     save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
     // An accepted answer is proof the owner read the report, so the read stamps with the send, and
-    // a report already stamped keeps its earlier stamp (owner note 217ad5d).
+    // a report already stamped keeps its earlier stamp.
     const answered = lastState?.reports.find(item => item.id === id);
     if (answered && !answered.seen_at) void markReportRead(id);
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
-    // The report ID keeps its chip after a send (note f1630e1): the plain text assignment
+    // The report ID keeps its chip after a send: the plain text assignment
     // dropped it, so the loaded line and the sent line disagreed.
     reportStatusLine(
       `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)}`,
@@ -1371,7 +1367,7 @@ function reportLabel(report, position) {
 function updateReportPip(reports) {
   const pip = $('#report-pip');
   // A report nobody opened, or one whose answer carries an ack the owner has not opened since,
-  // is unread (owner note dae396b).
+  // is unread.
   const unseen = reports.filter(report =>
     (!report.seen_at && !report.ever_seen) || ackUnread(report));
   pip.hidden = unseen.length === 0;
@@ -1421,8 +1417,7 @@ async function markReportRead(id) {
   foldReportStamp(id, 'seen_at', stamped.seen_at || new Date().toISOString());
 }
 // An agent ack holds a star and the tab dot until the owner opens the report. The open is the
-// gesture, not the read: the receipt sits at the top of the panel, so the visit clears it
-// (owner note dae396b).
+// gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
 async function markAckSeen(id) {
   let stamped;
   try {
@@ -1439,7 +1434,7 @@ async function markAckSeen(id) {
 }
 // The owner's view is what holds an unpublish: while the Reports tab shows a report, the page
 // stamps the look, so a removal waits out the guard window on the server instead of landing
-// under the owner's eyes (owner note 46ba603). One stamp per half minute keeps the window open
+// under the owner's eyes. One stamp per half minute keeps the window open
 // through a long read without writing on every poll, and no state field carries the stamp.
 const REPORT_VIEW_MS = 30 * 1000;
 const reportView = { id: null, at: 0 };
@@ -1663,7 +1658,7 @@ function approvalRow(item) {
 // The composer footer shows the key the userscript holds, so a stale key is visible at once.
 // Seven characters name the key without printing it in full into the log, and the hour names
 // its freshness. The host and the full stamp ride the tooltip, which keeps the line inside the
-// width a phone leaves (owner note 7019452).
+// width a phone leaves.
 function renderAgentKey(record) {
   const line = $('#agent-key');
   if (!record) {
@@ -1844,8 +1839,7 @@ $('#unpublish-report').addEventListener('click', async () => {
   button.disabled = true;
   try {
     // The press is the owner's open: the receipt shows at the top of the panel they delete
-    // from, so the ack the server's hold reads is stamped before the removal lands (owner
-    // note 6960520).
+    // from, so the ack the server's hold reads is stamped before the removal lands.
     const report = ((lastState && lastState.reports) || []).find(item => item.id === id);
     if (report && ackUnread(report)) await markAckSeen(id);
     await request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {

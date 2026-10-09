@@ -174,7 +174,7 @@
 - Reuse previous scopes, adding one only when none fits.
 - Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
-- NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist.
+- NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist. ALWAYS strip a session-local citation on sight.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
 - Publish longer reports through the `arena-skill` skill in the shared preview; do not create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.

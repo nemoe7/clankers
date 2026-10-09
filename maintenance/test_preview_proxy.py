@@ -2,7 +2,7 @@
 
 The proxy injects the manifest link into the preview HTML, and the viewer root carries the
 same link on its own page. The root once answered a plain-text line with an empty DOM, so no
-manifest ever landed and Chrome never offered the install (owner notes 59ec9e1 and fd9315b).
+manifest ever landed and Chrome never offered the install.
 This test starts the real server on a loopback port and reads what it answers.
 """
 
@@ -156,7 +156,7 @@ def test_the_installed_app_opens_the_proxy_home():
 
   The manifest's start URL carried the preview origin, so opening the app without a shared link
   reopened a sandbox whose address was dead. Every open lands on the home page, and the URL box
-  or the share sheet picks the preview from there (owner note ec56b4d).
+  or the share sheet picks the preview from there.
   """
   port = free_port()
   server = subprocess.Popen(

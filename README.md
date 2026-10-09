@@ -21,7 +21,7 @@ Latest measurements as of 2026-10-09. `maintenance/check.py` measures ARENA.md b
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `o200k_base` | 1,550 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,101 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 19,164 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,475 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 462 `tok` |
@@ -35,7 +35,7 @@ Latest measurements as of 2026-10-09. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,755 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,657 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 2,745 `tok` |
-| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 47,444 `B` |
+| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 47,459 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 7,684 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,176 `B` |
 | `skills/arena-skill/proxy/Dockerfile` | `UTF-8 file size` | 619 `B` |
@@ -51,15 +51,15 @@ Latest measurements as of 2026-10-09. `maintenance/check.py` measures ARENA.md b
 | `skills/arena-skill/proxy/scripts/server.py` | `UTF-8 file size` | 385 `B` |
 | `skills/arena-skill/proxy/tailscale-serve.json` | `UTF-8 file size` | 265 `B` |
 | `skills/arena-skill/preview-proxy/Dockerfile` | `UTF-8 file size` | 476 `B` |
-| `skills/arena-skill/preview-proxy/INSTALL.md` | `o200k_base` | 929 `tok` |
+| `skills/arena-skill/preview-proxy/INSTALL.md` | `o200k_base` | 915 `tok` |
 | `skills/arena-skill/preview-proxy/assets/icon.svg` | `UTF-8 file size` | 318 `B` |
-| `skills/arena-skill/preview-proxy/assets/register.js` | `UTF-8 file size` | 975 `B` |
+| `skills/arena-skill/preview-proxy/assets/register.js` | `UTF-8 file size` | 954 `B` |
 | `skills/arena-skill/preview-proxy/assets/service-worker.js` | `UTF-8 file size` | 380 `B` |
 | `skills/arena-skill/preview-proxy/docker-compose.yml` | `UTF-8 file size` | 1,531 `B` |
-| `skills/arena-skill/preview-proxy/server.js` | `UTF-8 file size` | 16,970 `B` |
+| `skills/arena-skill/preview-proxy/server.js` | `UTF-8 file size` | 16,868 `B` |
 | `skills/arena-skill/preview-proxy/tailscale-serve.json` | `UTF-8 file size` | 266 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
-| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 13,046 `B` |
+| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 13,714 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 105,920 `B` |
 | `skills/squash/SKILL.md` | `o200k_base` | 1,389 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |

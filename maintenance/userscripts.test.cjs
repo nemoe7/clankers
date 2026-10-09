@@ -132,9 +132,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(defaults.menus.size, menusFor(stored));
   if (domain === "arena") {
     // The owner's shape decision: one module's entries share a prefix, a switch names its state
-    // in parentheses, and no entry carries a role word (report answer 035a48c).
+    // in parentheses, and no entry carries a role word.
     // The modules sit in one order, and one module's entries stay together: Composer, Proxy,
-    // Steering, Transcript, State, Page, Userscript (owner note 7ac0309).
+    // Steering, Transcript, State, Page, Userscript.
     const expected = [
       "Composer — fill (ON)",
       "Composer — hide (ON)",
@@ -198,7 +198,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "The count menu shows the default row limit",
     );
     // The count line belongs to the Transcript group, so it sits with its two switches rather
-    // than at the bottom the manager appends it to (owner note 7ac0309).
+    // than at the bottom the manager appends it to.
     assert.deepEqual(
       [...counted.menus.values()].map((item) => item.label),
       [
@@ -591,7 +591,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     captchaVisible = false;
     goto("/agent");
     // The HTTP timers scatter each call inside its own band: a tick waits a random moment
-    // before the request, so no fixed beat forms (owner notes b70fc88 and 7a094e5).
+    // before the request, so no fixed beat forms.
     const httpCalls = () => posts.length + fetches.length;
     const callsBefore = httpCalls();
     intervals.filter((item) => item.ms === 60000).forEach((item) => item.fn());
@@ -642,7 +642,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 {
   const { test } = require("node:test");
   // An agent chat message that lands with no turn open raises the solid speech balloon, while
-  // a chat switch never reads as a message (owner note 02a0675).
+  // a chat switch never reads as a message.
   test("agent message mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };

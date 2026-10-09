@@ -121,7 +121,7 @@
 - Review the final commit list and diff before pushing.
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, prefer history's types; reuse history's scopes, adding none otherwise.
 - Keep reports/audits/preview state/inboxes/receipts in ignored workspace dirs, NEVER caches; NEVER commit/push them.
-- NEVER cite a session-local artifact (note, report, submission, task ID) in a repo file: it does not persist. Cite the durable record instead.
+- NEVER cite a session-local artifact (note, report, submission, task ID, or any other identifier minted for one session) in a repo file: it does not persist. ALWAYS strip a session-local citation on sight.
 - Longer reports use the `arena-skill` skill, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions, republish its stable ID; several may coexist. Verify delivery; clean Git status proves nothing. Short reports stay in chat, without artifacts/pipeline.
 - `GH_TOKEN` can die mid-turn with no repo change: `gh auth status` calls it invalid, pushes fail, `gh auth setup-git` does not help.
 - Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; do not end silently.

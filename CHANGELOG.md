@@ -10,22 +10,24 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- **Checks-line drift notice**: a `gh pr checks` line hears the gate once a shell while origin/main leads the branch. Main moved, so no checks report until the branch rebases over it (owner note b0ebdfa).
+- **Checks-line drift notice**: a `gh pr checks` line hears the gate once a shell while origin/main leads the branch. Main moved, so no checks report until the branch rebases over it.
 
 ### Removed
 
 #### house
 
-- **Caveman experiments**: the squashed arena-skill copies under `caveman/` and `ultracave/` are gone (owner note 4e08dab). The vendored caveman skill under `.agents/skills/caveman/` stays (owner note cfc7f0a).
+- **Caveman experiments**: the squashed arena-skill copies under `caveman/` and `ultracave/` are gone. The vendored caveman skill under `.agents/skills/caveman/` stays.
+- **Session-local citations**: note, report, submission and task ID citations leave the docs, code comments and tests. Commit subjects and ack replies keep the provenance.
 
 ### Changed
 
 #### house
 
-- **Budget encoding**: the budget gate measures `o200k_base` tokens through the npm package `gpt-tokenizer` (owner notes 0cea35a and 9263e06). The ranks ship inside the package, so the measurement runs offline. The tiktoken dependency, its pip install and its CI cache all go away, and the README rows re-baseline.
+- **Budget encoding**: the budget gate measures `o200k_base` tokens through the npm package `gpt-tokenizer`. The ranks ship inside the package, so the measurement runs offline. The tiktoken dependency, its pip install and its CI cache all go away, and the README rows re-baseline.
+- **Session-local clause**: the ARENA.md Git clause bans every identifier minted for one session and orders the strip on sight.
 #### userscripts
 
-- **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added (owner notes 1f36855, 2d476f4 and 5befa18). Arena 1.10.1.
+- **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added. Arena 1.10.1.
 
 #### preview
 
@@ -36,11 +38,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows (owner notes cb9c34a, 1bcd668 and 2cf8492). Arena 1.10.0.
+- **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
 
 #### preview
 
-- **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent (owner note 89ceca8).
+- **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent.
 
 ## 2026-10-08
 
@@ -48,8 +50,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
-- **Ack file form**: `ack` reads `--reply-file` and `--note-file`, so a text that carries a backtick rides a file rather than a shell argument. The shell runs a backtick inside double quotes as a command, so the ticks never reached the tool (owner notes 97ec0cd and 6367253). The gate warns on that exact shape before the ack runs, because the trap reads the command line before the shell expands it.
-- **Serve port warning**: the gate warns when a serve names a port other than the standard 8000, before the call runs. An off-default port hides the owner's page from the address the skill names (owner note 61100d7).
+- **Ack file form**: `ack` reads `--reply-file` and `--note-file`, so a text that carries a backtick rides a file rather than a shell argument. The shell runs a backtick inside double quotes as a command, so the ticks never reached the tool. The gate warns on that exact shape before the ack runs, because the trap reads the command line before the shell expands it.
+- **Serve port warning**: the gate warns when a serve names a port other than the standard 8000, before the call runs. An off-default port hides the owner's page from the address the skill names.
 - **Clear state command**: `arena-preview clear-state` empties every state table in one transaction and refreshes the save file to match. The agent key record survives, and a running server keeps its page token, so the page needs no reload.
 - **Poll timeout ban**: the gate refuses a poll wrapped in the shell `timeout` command, because it kills the wait mid-flight. Give the bash tool's timeout 1800 instead.
 
@@ -58,20 +60,20 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Caveman register**: the squash skill names a caveman register for "caveman squash" requests. Articles drop, fragments are fine, and every fact and verbatim span still holds.
 - **Caveman refs experiment**: the arena suite refs are caveman-squashed into a new `caveman/` directory outside the gates. The copies keep every heading, table, code block, number, path and URL. The measured saving is 2.6% of tokens.
 - **Ultracave refs experiment**: the arena suite refs are ultracave-squashed into a new `ultracave/` directory beside `caveman/`. The copies keep every heading, table, code block, number, path and URL. The measured saving is 4.9% of tokens, against 2.6% for the caveman copies.
-- **Proxy main page**: the preview proxy answers its root with an installable page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, and the rewrite decodes a compressed page before it injects the link. The root once answered a bare text line, so no head or manifest landed (owner notes 59ec9e1 and fd9315b).
+- **Proxy main page**: the preview proxy answers its root with an installable page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, and the rewrite decodes a compressed page before it injects the link. The root once answered a bare text line, so no head or manifest landed.
 - **Preview proxy package**: `skills/arena-skill/preview-proxy/` holds a Node image, a compose file with a Tailscale sidecar, a Serve route with Funnel off, and an install page. The workflow publishes `ghcr.io/nemoe7/arena-preview-proxy:latest`. The proxy page installs as a web app, takes a shared Arena link, and serves it in-page.
 
 #### userscripts
 
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.
 - **State error cards**: a state-module failure shows the page corner card as well as its console line, and the card stays until a dismiss. The write failure carries the Choose file button. Arena 1.9.6.
-- **Process card emoji**: a started process card carries a play icon and the process name, so it takes the bash emoji. The card runs past the turn, so no stop-generating control is needed (owner note 6dffc38). Arena 1.9.8.
-- **Card mark bounds**: the process card's 🖥️ mark reads the newest message alone, and only while the stop control is up. A finished card keeps its play icon in the page, so it marks nothing once a newer row arrives (owner note 20c9c43). Arena 1.9.9.
+- **Process card emoji**: a started process card carries a play icon and the process name, so it takes the bash emoji. The card runs past the turn, so no stop-generating control is needed. Arena 1.9.8.
+- **Card mark bounds**: the process card's 🖥️ mark reads the newest message alone, and only while the stop control is up. A finished card keeps its play icon in the page, so it marks nothing once a newer row arrives. Arena 1.9.9.
 
 #### preview
 
 - **Multiline form inputs**: an option label that wraps onto the next line joins into one option, indented or not. A blank line, a fence, a heading, a list marker, a text-field marker or an anchor ends the group.
-- **Ack unread mark**: a submission the agent acked stars its report in the report picker and lights the Reports tab pip. The mark clears on open, and an ack already in view clears at once (owner note 0b9fb71). The open stamp moves on every call, so a later ack holds a mark of its own.
+- **Ack unread mark**: a submission the agent acked stars its report in the report picker and lights the Reports tab pip. The mark clears on open, and an ack already in view clears at once. The open stamp moves on every call, so a later ack holds a mark of its own.
 
 ### Changed
 
@@ -85,9 +87,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
-- **Env ignore**: `.gitignore` gains `.env`, so the compose secret file for the proxy packages stays untracked (owner note 5444e42). No `.env` is tracked today.
-- **Ruff line limit**: the core `ruff.toml` turns on E501 with a 120-character limit. The limit rides the pycodestyle setting, so the formatter keeps its own width (owner note 61d53d5).
-- **Core E501 120**: the core rule files name the E501 120 limit. The refs baselines, the live mirrors, the wenyan field and the root `ARENA.md` copy hold the same wording (owner notes 0e49d47 and 88a0560).
+- **Env ignore**: `.gitignore` gains `.env`, so the compose secret file for the proxy packages stays untracked. No `.env` is tracked today.
+- **Ruff line limit**: the core `ruff.toml` turns on E501 with a 120-character limit. The limit rides the pycodestyle setting, so the formatter keeps its own width.
+- **Core E501 120**: the core rule files name the E501 120 limit. The refs baselines, the live mirrors, the wenyan field and the root `ARENA.md` copy hold the same wording.
 - **Vendored caveman**: the house copies `JuliusBrussee/caveman` at `7d76b13` (Apache-2.0) verbatim into `.agents/skills/caveman/`, skill, readme and licence included. It lives under `.agents/skills/` only, because it changes how an agent speaks rather than belonging to this repository, and takes no part in the parity gates.
 - **No seq on notes**: note and answer records drop their sequence number and order by the arrival stamp, so agents cite the ID. Reports keep their first-publish sequence.
 - **Report task text input**: a report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
@@ -101,21 +103,21 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- **Unpublish guard**: `unpublish` refuses while the owner has an unseen answer ack, and refuses the minute after the owner's last look at the report. A refusal answers `409` and names the wait it read. The owner's own press passes the view window (owner notes 6960520 and 46ba603).
+- **Unpublish guard**: `unpublish` refuses while the owner has an unseen answer ack, and refuses the minute after the owner's last look at the report. A refusal answers `409` and names the wait it read. The owner's own press passes the view window.
 - **Task reference row**: `references/REFERENCE.md` now states that `--msg-id` is optional. It also states that one task holds one job: several jobs mean several tasks, not one task with many details. The refs copy and both live twins stay in step.
-- **Log search**: the log's toolbar is a search box and the skip button. The hide-composer toggle, the refresh button and the All, Sent, Seen, Said select leave. A substring narrows the rows in their place, and the state copy still carries every message (owner note 0ccee47).
+- **Log search**: the log's toolbar is a search box and the skip button. The hide-composer toggle, the refresh button and the All, Sent, Seen, Said select leave. A substring narrows the rows in their place, and the state copy still carries every message.
 
 #### userscripts
 
 - **Menu order**: every entry registers through one ordered list, so each module's entries sit together: Composer, Proxy, Steering, Transcript, State, Page, Userscript. The transcript keep-rows line draws inside the Transcript group, and a toggle redraws its label in place. Arena 1.9.7.
-- **One words mark**: the outline bubble and the agent-message balloon fold into one. The newest `data-agent-word` message raises the same balloon once, in any turn state (owner note df73987). Arena 1.9.8.
+- **One words mark**: the outline bubble and the agent-message balloon fold into one. The newest `data-agent-word` message raises the same balloon once, in any turn state. Arena 1.9.8.
 
 #### skills
 
 - **CodeQL scope**: `.github/codeql/codeql-config.yml` also excludes `js/request-forgery`. Its report names the preview proxy's forwarding request, whose target passes the `sbx-*.arena.site` guard and a signed-origin cookie.
 - **Egress image rename**: The published image becomes `ghcr.io/nemoe7/arena-egress-proxy:latest`. The workflow, the install page, the compose file and the workflow check lists use the new name. The Python package and the environment prefix keep `arena_proxy` and `ARENA_PROXY_`.
 
-- **Skill text trim**: `SKILL.md` and `REFERENCE.md` drop 23 pieces of rationale and owner detail (owner note 8fa7612). The live pages shrink by 2,348 bytes and 534 `cl100k_base` tokens. Rules, routes and examples stay.
+- **Skill text trim**: `SKILL.md` and `REFERENCE.md` drop 23 pieces of rationale and owner detail. The live pages shrink by 2,348 bytes and 534 `cl100k_base` tokens. Rules, routes and examples stay.
 
 ### Removed
 
@@ -125,44 +127,44 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### skills
 
-- **Owner setup section**: The skill pages drop their `## Owner setup` section (owner note 1de7dcb). It named an install page that the distributed copies do not ship. The install pages stay in this repository beside the packages.
+- **Owner setup section**: The skill pages drop their `## Owner setup` section. It named an install page that the distributed copies do not ship. The install pages stay in this repository beside the packages.
 
 ### Fixed
 
 #### userscripts
 
-- **Tab title clear**: a finished row keeps its shimmer label or its pulsing icon in the page. Rows, words and the waiting line count only while the stop-generating control is up, and a held emoji dies with it (owner note 1114510). Arena 1.9.8.
+- **Tab title clear**: a finished row keeps its shimmer label or its pulsing icon in the page. Rows, words and the waiting line count only while the stop-generating control is up, and a held emoji dies with it. Arena 1.9.8.
 
 #### preview
 
-- **Phone bar fit**: the tab strip shrinks and scrolls, so the bar never outgrows the viewport (owner notes f6e1f33 and e9b026a). The four tabs stay on screen with no phone-only rule, and the header's collapse button leaves with its closed state (owner note ca3fc1a). The composer footer fits one line: shorter hints, and the key line keeps the hour while the host rides its tooltip (owner note 7019452).
-- **Touch newline**: a touch keyboard carries no Shift key. There the Return key writes the newline and the Send button sends, while a desk keyboard keeps Enter-to-send. The composer hint names whichever the Return key does (owner notes da405c2 and cbebaa3).
-- **Compact tabs**: the strip is a four-track grid, so every tab carries one width and no label sets a tab's shape (owner note df6e6bf). The narrow block steps the padding and the font down, and the strip needs no scroll of its own (owner note 8a47260). The unread pip sits at the tab's corner, so its dot adds no width (owner note ed43278).
-- **Pinned page**: the document itself never scrolls, so a touch drag moves the panel under it alone (owner note df1dacd). The log card's floor steps down to `min(500px, 60dvh)` for a short screen (owner note 6a9401b). The log header's wrapped lines sit 2px apart (owner note a16eb0c).
-- **Floating reply pill**: the New reply control left the log's header row for the log's own top. It mirrors the jump bar at the log's foot, so the placement says where the reply waits (owner notes f7bc6bc and afa75fa).
-- **Flush lists**: a list in message text sat on the browser's own step. The ack thread under a report now sits flush with the log's lists and the composer (owner notes 612f803 and 21bf675).
-- **Header tally**: the bash-call tally rode the quiet header line alone, so a running turn never showed it. The count now ends every shape of the line: the poll, the finished call and the gone mark (owner note 03471eb).
-- **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner had removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file (owner notes 88e64df and b5949c3).
-- **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:` (owner notes cc6edd4 and c08732a).
-- **Call tally**: the EXIT hook counts the agent's own calls. The platform's hosted shells and probes are named and skipped, so a background run adds nothing to the tally (owner note ef180f0). The call-end stamp skips them too.
-- **Read stamp**: the state poll rechecks the reports panel, so a report showing its end stamps even when the last scroll event went missing. Sending answers stamps the read too, because an answered report is a read one (owner note 217ad5d).
-- **Main drift notice**: A shallow fetch leaves `origin/main` as one grafted commit, so the count measured the graft rather than main (owner note 94e3313). The gate stays quiet then, and a tip with visible history keeps the replay line.
+- **Phone bar fit**: the tab strip shrinks and scrolls, so the bar never outgrows the viewport. The four tabs stay on screen with no phone-only rule, and the header's collapse button leaves with its closed state. The composer footer fits one line: shorter hints, and the key line keeps the hour while the host rides its tooltip.
+- **Touch newline**: a touch keyboard carries no Shift key. There the Return key writes the newline and the Send button sends, while a desk keyboard keeps Enter-to-send. The composer hint names whichever the Return key does.
+- **Compact tabs**: the strip is a four-track grid, so every tab carries one width and no label sets a tab's shape. The narrow block steps the padding and the font down, and the strip needs no scroll of its own. The unread pip sits at the tab's corner, so its dot adds no width.
+- **Pinned page**: the document itself never scrolls, so a touch drag moves the panel under it alone. The log card's floor steps down to `min(500px, 60dvh)` for a short screen. The log header's wrapped lines sit 2px apart.
+- **Floating reply pill**: the New reply control left the log's header row for the log's own top. It mirrors the jump bar at the log's foot, so the placement says where the reply waits.
+- **Flush lists**: a list in message text sat on the browser's own step. The ack thread under a report now sits flush with the log's lists and the composer.
+- **Header tally**: the bash-call tally rode the quiet header line alone, so a running turn never showed it. The count now ends every shape of the line: the poll, the finished call and the gone mark.
+- **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner had removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file.
+- **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:`.
+- **Call tally**: the EXIT hook counts the agent's own calls. The platform's hosted shells and probes are named and skipped, so a background run adds nothing to the tally. The call-end stamp skips them too.
+- **Read stamp**: the state poll rechecks the reports panel, so a report showing its end stamps even when the last scroll event went missing. Sending answers stamps the read too, because an answered report is a read one.
+- **Main drift notice**: A shallow fetch leaves `origin/main` as one grafted commit, so the count measured the graft rather than main. The gate stays quiet then, and a tip with visible history keeps the replay line.
 - **Download header name**: the `Content-Disposition` file name now passes through `header_filename`, which strips CR, LF and quote with `replace` calls. The CodeQL header-splitting query counts that call shape as a sanitizer.
-- **Task name guard**: a task write refuses a note ID and names the fix (owner note c6b0af0). An agent that copies the note ID it answers would put one ID on two things. The refusal tells it to give the task a proper name.
-- **ID quote**: one click on a note, report or task ID quotes it. The composer takes the `RE:` line on a phone as much as a desk. The copy path went (owner notes 4d4b659 and 4a69d4e).
-- **Log heading**: the log card carries no `Message log` heading. The tab above already names the panel, and the heading only spent height (owner note 9d3540d).
-- **Phone bar**: a phone keeps the tabs alone. The clock, the theme toggle and copy state hide behind a coarse-pointer rule (owner note 5284fbb).
-- **Phone footer**: on a narrow screen the Send button leads the composer's footer. It sits right under the box at the right edge, ahead of the status line (owner notes 8b7e49b and 2efcd29).
-- **Phone hint**: the composer hint hides on a phone, where the Return key needs no caption. The separator rides the hint, so the key line keeps its shape (owner note 2fc9b33).
+- **Task name guard**: a task write refuses a note ID and names the fix. An agent that copies the note ID it answers would put one ID on two things. The refusal tells it to give the task a proper name.
+- **ID quote**: one click on a note, report or task ID quotes it. The composer takes the `RE:` line on a phone as much as a desk. The copy path went.
+- **Log heading**: the log card carries no `Message log` heading. The tab above already names the panel, and the heading only spent height.
+- **Phone bar**: a phone keeps the tabs alone. The clock, the theme toggle and copy state hide behind a coarse-pointer rule.
+- **Phone footer**: on a narrow screen the Send button leads the composer's footer. It sits right under the box at the right edge, ahead of the status line.
+- **Phone hint**: the composer hint hides on a phone, where the Return key needs no caption. The separator rides the hint, so the key line keeps its shape.
 
 #### skills
 
-- **Preview app install**: the worker now registers on the viewer root, so the manifest's start URL sits inside its scope. The manifest also carries 192 and 512 PNG icons and a stable `id`. Chrome then offers the install (owner note 31023b2).
-- **Install start page**: the installed proxy app opens on the home page. Its start URL once carried the preview origin, so reopening the app landed on a dead sandbox address (owner note ec56b4d). The URL box and the share sheet pick the preview from there.
+- **Preview app install**: the worker now registers on the viewer root, so the manifest's start URL sits inside its scope. The manifest also carries 192 and 512 PNG icons and a stable `id`. Chrome then offers the install.
+- **Install start page**: the installed proxy app opens on the home page. Its start URL once carried the preview origin, so reopening the app landed on a dead sandbox address. The URL box and the share sheet pick the preview from there.
 
 #### house
 
-- **Distribution scope**: The distribute workflow keeps `preview-proxy/` home with `proxy/`, and the `.agents` mirror drops its copy (owner note 278a122). The docker files, the server code and the install page stay beside the published image. Only files a session loads at runtime ride to the target repositories.
+- **Distribution scope**: The distribute workflow keeps `preview-proxy/` home with `proxy/`, and the `.agents` mirror drops its copy. The docker files, the server code and the install page stay beside the published image. Only files a session loads at runtime ride to the target repositories.
 
 ## 2026-10-07
 
@@ -200,13 +202,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- **Merge audit**: The merged skill reference and the AGENTS.md pointer name the skill again after the rename (note 27019a6).
-- **Gate clause**: The read cadence clause names only the banned readers, `tail`, `head` and `grep`, and it drops `cd` (note bf26910).
-- **Skill name**: The merged skill is `arena-skill`, because `arena` collided with ARENA.md. The trees, the installer and the dispatch list carry the new name, and `arena` joins the retired names (note 946a387).
-- **Report ID after a send**: The report status line keeps its ID chip after an answer lands. The loaded line and the sent line now agree (note f1630e1).
-- **Poll wording**: The unblocked-task poll line now names the still-up task list. It says to continue the task or mark it blocked before the next poll. A turn cannot read it as permission to end (note 12c5a66).
+- **Merge audit**: The merged skill reference and the AGENTS.md pointer name the skill again after the rename.
+- **Gate clause**: The read cadence clause names only the banned readers, `tail`, `head` and `grep`, and it drops `cd`.
+- **Skill name**: The merged skill is `arena-skill`, because `arena` collided with ARENA.md. The trees, the installer and the dispatch list carry the new name, and `arena` joins the retired names.
+- **Report ID after a send**: The report status line keeps its ID chip after an answer lands. The loaded line and the sent line now agree.
+- **Poll wording**: The unblocked-task poll line now names the still-up task list. It says to continue the task or mark it blocked before the next poll. A turn cannot read it as permission to end.
 - **Gate hints**: A blocked call names the `tail`, `grep` or `head` commands it ran. A `cd` prefix stays fine, and the count gate still holds a `cd` line. The hook names the bare `arena-preview` form, the proxy route for code-scanning alerts, and the clearing ack for a blocked push.
-- **Missing stderr reminder**: A Bash call with no reminder line now reads as a possible sandbox reset. The session runs the reset steps before other work (note 9ba7cfb).
+- **Missing stderr reminder**: A Bash call with no reminder line now reads as a possible sandbox reset. The session runs the reset steps before other work.
 - **Task report links**: A blocked task now names the report it waits on with `--report`. The owner's answer clears the blocked mark, and the link rides the save file.
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
 
@@ -235,7 +237,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- **Save control**: The message toolbar drops its save-state button (owner note ffa0cbd). The userscript owns the file path, and the page keeps the copy route.
+- **Save control**: The message toolbar drops its save-state button. The userscript owns the file path, and the page keeps the copy route.
 
 ### Fixed
 

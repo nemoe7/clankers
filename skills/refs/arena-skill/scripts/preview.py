@@ -160,7 +160,7 @@ REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
 GATE_THRESHOLD = 10
 # The port the skill names. A serve on another one hides the owner's page from the
-# address they expect, so the gate names the difference (owner note 61100d7).
+# address they expect, so the gate names the difference.
 DEFAULT_PORT = 8000
 # The key the userscript holds. The page records it, so the Downloads tab can show it.
 AGENT_KEY_META = "agent_key"
@@ -175,10 +175,10 @@ AGENT_CALL_ENDED_META = "agent_call_ended_at"
 TURN_ENDED_META = "turn_ended_at"
 # A removal deletes rows, so the group stamps alone can only hold still or move back. The
 # state stamp reads this mark too, so a save that still carries a removed report is rewritten
-# by its own stamp trigger (owner notes 4753ae4 and 88e64df).
+# by its own stamp trigger.
 REMOVED_META = "state_removed_at"
 # A report being read stays put: the agent's unpublish waits this long after the owner's
-# newest view of it, so a removal never lands under their eyes (owner note 46ba603).
+# newest view of it, so a removal never lands under their eyes.
 UNPUBLISH_VIEW_SECONDS = 60
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
@@ -392,8 +392,7 @@ def message_row(row):
   """One note or answer row as a record, its replies parsed.
 
   The record carries no seq: the arrival stamp orders and identifies a note, and a
-  surfaced sequence number only invites citing it instead of the ID (owner note
-  2e3b490).
+  surfaced sequence number only invites citing it instead of the ID.
   """
   record = dict(row)
   record.pop("seq", None)
@@ -583,7 +582,7 @@ def field_html(question):
 TASK_STATUSES = ("upcoming", "finished")
 TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 # A note ID is seven hex characters, alone or followed by a hyphen and the rest, and the
-# shape check above accepts it as a task name without this (owner note c6b0af0).
+# shape check above accepts it as a task name without this.
 NOTE_ID = re.compile(r"^[0-9a-f]{7}(?:-[0-9a-f]+)?$")
 MAX_TASK_TITLE = 200
 MAX_TASK_DETAIL = 2000
@@ -1049,7 +1048,7 @@ def unquote_commands(line):
   return "".join(kept)
 
 
-# An inline ack text in double quotes, which is the shape the shell substitutes (owner note 6367253).
+# An inline ack text in double quotes, which is the shape the shell substitutes.
 INLINE_ACK_RE = re.compile(r"--(?:reply|note)\s+\"")
 
 
@@ -1080,7 +1079,7 @@ def serve_warning(line):
 
   The poll follows the port the state records, and the owner's page lives on the address
   the skill names, so an off-default serve hides both. The gate reads the line before the
-  call runs, so the port is named while the change is still cheap (owner note 61100d7).
+  call runs, so the port is named while the change is still cheap.
   """
   found = SERVE_PORT_RE.search(line or "")
   if not found or int(found.group(1)) == DEFAULT_PORT:
@@ -1125,9 +1124,9 @@ def quiet_inbox_line(line):
 
 
 # The commands an agent chains around an inbox call. Each one ends the quiet-line
-# exemption, so a blocked call names the ones it ran (owner note 2939ee1). A cd prefix
+# exemption, so a blocked call names the ones it ran. A cd prefix
 # is fine on the line, so the hint never names it; the count gate still holds a cd line
-# past the threshold (owner note bf26910).
+# past the threshold.
 GATE_NOISE = ("tail", "grep", "head")
 
 
@@ -1146,7 +1145,7 @@ def poll_timeout_line(line):
 
   The poll holds its own 1800-second span, so a `timeout` wrapper only kills the
   wait mid-flight and the turn loses its listing. The bash tool's own timeout
-  parameter ends the wait cleanly instead (owner note 9d0c3b2). The check reads
+  parameter ends the wait cleanly instead. The check reads
   command pieces, so a line that merely mentions both words, like a script that
   documents the ban, stays fine.
   """
@@ -1177,7 +1176,7 @@ def poll_inbox(store, sleeper=None):
   # One heartbeat a second, so the page can light its dot while the agent waits here.
   # The wait can run its full span, but the bash tool's own timeout can cut the call
   # first. Say so up front: a call that ends early with nothing to read was cut, and
-  # the retry needs the tool timeout at 1800 (owner note a7e39b3).
+  # the retry needs the tool timeout at 1800.
   print(
     "POLL: this wait runs up to 1800 s. Ends early with no new messages or"
     " unblocked tasks? The bash tool timeout cut it. Retry with the tool timeout 1800.",
@@ -1205,7 +1204,7 @@ def poll_inbox(store, sleeper=None):
         listing["tasks"] = open_tasks
         names = ", ".join(item["id"] for item in open_tasks)
         # The early return must not read as an empty wait: the turn continues that task, and the
-        # still-up list must be handled before the next poll (owner note 12c5a66).
+        # still-up list must be handled before the next poll.
         print(
           f"CONTINUE: unblocked task {names} waits. Task list still up. Work it or"
           " mark it blocked before the next poll. Do not end the turn.",
@@ -1291,7 +1290,7 @@ def check_task(task_id, title, details):
     )
   # A note ID passes the shape check, so it needs its own refusal: a task named after the note
   # it answers puts one ID on two things, and the agent that reaches for the note ID reads the
-  # fix here (owner note c6b0af0).
+  # fix here.
   if NOTE_ID.match(task_id or ""):
     raise ValueError(
       "That ID is a note ID. A task ID names the job: give the task a proper name,"
@@ -1644,8 +1643,8 @@ class Store:
 
     `import-state` restores a saved answer through here too, receipt and all, for the same
     reason a note keeps its own: the save file exists so a restore returns what the owner
-    sent, and an answer that comes back unread was read when the agent read it (report
-    submission c0fcfad9, note 120fe358). An ID already stored keeps its record.
+    sent, and an answer that comes back unread was read when the agent read it. An ID
+    already stored keeps its record.
     """
     identifier(submission_id)
     identifier(report_id)
@@ -1891,8 +1890,7 @@ class Store:
       if details is None:
         details = stored["details"] if stored else []
       if not details:
-        # A task with no detail is a title alone, and the queue works from its steps
-        # (owner note 8c13de5).
+        # A task with no detail is a title alone, and the queue works from its steps.
         raise ValueError("A task needs at least one detail")
       status = status or (stored["status"] if stored else "upcoming")
       if blocked is None:
@@ -1973,7 +1971,7 @@ class Store:
     """Clear the blocked mark on every task waiting on this report.
 
     A task blocked on a report waits for one thing, the owner's answer, so the answer
-    releases it (owner note 060bf7f). The task stays upcoming, and the next poll then
+    releases it. The task stays upcoming, and the next poll then
     returns it as work instead of as a wait.
     """
     db.execute(
@@ -2067,8 +2065,7 @@ class Store:
     answer that a restore drops is an answer the owner has to type again. Report lines carry
     each report's markdown, so a restore that rebuilds the database brings the report pages
     back instead of leaving the answers without their reports. An answer whose report is no
-    longer published stays out of the save, because a removed report leaves nothing behind
-    (owner notes 88e64df and b5949c3).
+    longer published stays out of the save, because a removed report leaves nothing behind.
     """
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
@@ -3076,8 +3073,7 @@ class Store:
           break
         else:
           raise ValueError(f"Unknown note: {record_id}; no receipts written")
-      # The header labels one stamp as the last read or ack, so an ack writes it too
-      # (owner note cc6edd4).
+      # The header labels one stamp as the last read or ack, so an ack writes it too.
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (stamp,))
       # An emptied inbox resets the tally now, not at the next hook poll.
       if not any(
@@ -3162,7 +3158,7 @@ class Store:
           + " is newer than their last open of it. The open clears the wait."
         )
       # A report on the owner's screen waits out the view window, so a removal never lands
-      # under their eyes (owner note 46ba603). The owner's own press is the decision and
+      # under their eyes. The owner's own press is the decision and
       # passes the window.
       if not dismissed_by_owner:
         views = [
@@ -3181,7 +3177,7 @@ class Store:
           )
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
-      # still carries the removed report (owner notes 4753ae4 and 88e64df).
+      # still carries the removed report.
       db.execute("INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMOVED_META, now()))
       if dismissed_by_owner:
         # A dismissal informs the agent without waking a poll: the agent looks, it is not
@@ -3266,7 +3262,7 @@ class Store:
     """Stamp the moment the owner's page shows a report, for the unpublish guard.
 
     The stamp moves on every look, because the guard reads how fresh the last one is rather
-    than when the report was first read (owner note 46ba603). The write skips the autosave:
+    than when the report was first read. The write skips the autosave:
     a view is not saved state, so it neither changes the save file nor the state stamp.
     """
     identifier(report_id)
@@ -3847,7 +3843,7 @@ def handler(store):
           return
         if report_view:
           # The page stamps a look while it shows a report, so the owner's unpublish guard
-          # reads a fresh view rather than a first read (owner note 46ba603).
+          # reads a fresh view rather than a first read.
           self.reply(
             200,
             json.dumps(
@@ -3974,7 +3970,7 @@ def main():
   ack.add_argument("--reply", help="Markdown answer shown in the message log")
   ack.add_argument("--note", help="Short plain answer shown in the message log")
   # A backtick inside double quotes runs as a command, so the shell eats the ticks before this
-  # tool sees the text. The file forms carry it as it stands (owner note 97ec0cd).
+  # tool sees the text. The file forms carry it as it stands.
   ack.add_argument(
     "--reply-file", type=Path, help="Read the Markdown answer from this file"
   )
@@ -4051,7 +4047,7 @@ def main():
       print(store.reminder(advance=True), flush=True)
       # The hook runs this after every bash call, so the stamp marks the call's end:
       # the page keeps the long call text only while a call started after the last
-      # recorded end (owner note bd93043).
+      # recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())
       return 0
     if not args.command:

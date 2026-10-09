@@ -53,7 +53,7 @@
 
   // The manager appends every command in the order it arrives, so the entries come from one
   // ordered list: each script registers an entry, and the whole list opens in module order. One
-  // module's entries then sit together whatever order the features load in (owner note 7ac0309).
+  // module's entries then sit together whatever order the features load in.
   var MENU_ORDER = [
     "Composer",
     "Proxy",
@@ -117,7 +117,7 @@
   }
 
   // One menu entry with one guard, so a manager without a menu gets nothing. The press writes
-  // its own line before the command runs, so one filter shows every menu press (note e60e311).
+  // its own line before the command runs, so one filter shows every menu press.
   function menuItem(list, label, run) {
     list.push(
       menuAdd(function () {
@@ -236,7 +236,7 @@
 
   // A repeating timer that touches HTTP scatters each call inside its own band, so the requests
   // never form a fixed beat; a DOM tick keeps its steady interval. A stop clears the beat and
-  // any call already waiting (owner notes b70fc88 and 7a094e5).
+  // any call already waiting.
   var HTTP_JITTER_MS = 15000;
 
   function jitteredTimer(run, everyMs, spreadMs) {
@@ -351,7 +351,7 @@
     return !node.hidden;
   }
 
-  // The ask_user card (note 6652cdd): one radiogroup with an aria-label, taken from the owner's
+  // The ask_user card: one radiogroup with an aria-label, taken from the owner's
   // captured outerHTML. It holds the title while the question waits for an answer.
   var QUESTION_SELECTOR = 'div[role="radiogroup"][aria-label]';
   var QUESTION_EMOJI = "\u2753";
@@ -1254,7 +1254,7 @@
   })();
 
     // A trim empties every older root and hides it, and keeps the newest rows of the
-    // newest root, once the page settles (owner notes 1f36855, 2d476f4, 5befa18).
+    // newest root, once the page settles.
   runFeature("transcript-trim", "Transcript — trim", function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
     var DEFAULT_ROWS = 50;
@@ -1338,7 +1338,7 @@
 
     // The newest root keeps its own newest rows; every older root empties in full
     // and takes the hidden class once empty, while the root node itself stays,
-    // because that node is the part Arena needs intact (owner note 1f36855).
+    // because that node is the part Arena needs intact.
     function trimPlan(doc, plan) {
       var roots = messageRoots(doc);
       var keep = planParts(plan).rows;
@@ -1367,7 +1367,7 @@
 
     // The trim runs only while a turn is up, so a missing stop control aborts it and
     // is checked first; a visible question card aborts too; the quiet row count rides
-    // the scheduler (owner notes 2d476f4, 5befa18 and 3c484de).
+    // the scheduler.
     function isSettled(doc) {
       if (!findStopGeneratingButton(doc)) return false;
       if (doc.querySelector(QUESTION_SELECTOR)) return false;
@@ -1494,7 +1494,7 @@
           return;
         }
         // Quiet is the row count holding still, not a quiet DOM: a new row at any
-        // point restarts the window (owner note 2d476f4).
+        // point restarts the window.
         var count = attachedRowCount(document);
         var now = Date.now();
         if (count !== lastRowCount) {
@@ -1724,7 +1724,7 @@
     return [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
   }
 
-  // The name leads with the repository, then the branch (owner note 495ae89): the bare pair,
+  // The name leads with the repository, then the branch: the bare pair,
   // and the stamp and the counts follow the branch part when the save is stamped.
   function stateFileName(repo, branch, stamp, counts) {
     var scope = stateScopeKey(repo, branch);
@@ -1823,7 +1823,7 @@
 
   // A remembered file belongs to the scope that chose it. The name carries the scope, so a handle
   // whose name lies outside the current scope is refused and the owner is asked again. Without
-  // this guard a reused handle wrote one repo's state into another repo's backup (note 1cfdedd).
+  // this guard a reused handle wrote one repo's state into another repo's backup.
   function handleMatchesScope(handle, repo, branch) {
     if (!handle || !handle.name) return false;
     var scope = stateScopeKey(repo, branch);
@@ -1839,10 +1839,10 @@
   }
 
   // With no file set, an automatic tick blocks: a stamped download lands instead of the owner's
-  // file and fills the downloads folder (owner note 78e582d). A save that waited on the network
-  // cannot open the picker either: the browser needs the press itself, and the wait spends it
-  // (owner note aeef54c: a SecurityError from a spent gesture). That route asks for the choose
-  // entry, which runs on the press. A manual press keeps the download where no picker exists.
+  // file and fills the downloads folder. A save that waited on the network
+  // cannot open the picker either: the browser needs the press itself, and the wait spends it.
+  // That route asks for the choose entry, which runs on the press. A manual press keeps the
+  // download where no picker exists.
   function stateAction(route, manual) {
     if (!manual) return route === "pick" || route === "download" ? "block" : route;
     return route === "pick" ? "hint" : route;
@@ -1868,7 +1868,7 @@
   }
 
   // A failed write and a failed manager download name the error that stopped them, so the
-  // console line and the page card read the same words (owner note dad0e1c).
+  // console line and the page card read the same words.
   function writeFailLine(err) {
     return (
       "write failed (" + ((err && err.name) || "unknown") +
@@ -1928,7 +1928,7 @@
 
   // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
   // the conversation header still opens with the repository name, and its first word is the
-  // repository (owner note 72882a0). Read that before falling back to the tab title.
+  // repository. Read that before falling back to the tab title.
   function headerRepo(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return "";
     var spans = doc.querySelectorAll('button[aria-haspopup="menu"] span.truncate');
@@ -2197,7 +2197,7 @@
     }
 
     // A failed read or write reaches the page as well as the console. The card carries the
-    // same line, and it stays until a dismiss (owner note dad0e1c). The checks run without a
+    // same line, and it stays until a dismiss. The checks run without a
     // DOM, where the card is skipped.
     function stateError(line, actionLabel, action) {
       logEvent("state", line);
@@ -2438,7 +2438,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
-    // takes (owner note 6dffc38).
+    // takes.
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
     var PLAY_SELECTOR = "svg.lucide-play";
     var ACTION_EMOJI = [
@@ -2452,7 +2452,7 @@
       ["writ", "\u270F\uFE0F"],
       ["search", "\uD83D\uDD0D"],
       // Fetch covers fetch, fetching and fetched: a web page read is a search, and the owner's
-      // Fetching row fell to the gear without it (note 619a133).
+      // Fetching row fell to the gear without it.
       ["fetch", "\uD83D\uDD0D"],
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
@@ -2463,7 +2463,7 @@
     var heldEmoji = null;
     var heldEmojiAt = 0;
     // Whether the held mark came from a row, the words or the waiting line: those marks end
-    // with the stop control, so the hold must not outlive it (owner note 1114510).
+    // with the stop control, so the hold must not outlive it.
     var heldEmojiNeedsTurn = false;
     var lastSpeechMark = null;
     var lastSpeechPath = null;
@@ -2474,7 +2474,7 @@
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
     // One mark for the agent's words: a message that grows holds the title with the solid
-    // speech balloon, whatever the turn state (owner notes 02a0675 and df73987). The outline
+    // speech balloon, whatever the turn state. The outline
     // bubble that stood for the streaming state is folded into it.
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
@@ -2579,10 +2579,10 @@
       return row && knownLabel(liveLabel(row)) && stopSignal(doc) ? row : null;
     }
 
-    // A started process card (owner note 6dffc38): a play icon in the newest message. It runs
+    // A started process card: a play icon in the newest message. It runs
     // with no stop control of its own, so the card alone is the news while the turn runs. A
     // finished card keeps its play icon in the page, so an older card never marks, and the
-    // turn's stop control bounds the card like every other row (owner note 20c9c43).
+    // turn's stop control bounds the card like every other row.
     function processRow(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function" || !stopSignal(doc)) {
         return null;
@@ -2687,7 +2687,7 @@
         return WAITING_EMOJI;
       }
       // The start-process card wears a play icon and the process name, so it reads as the
-      // bash call it starts (owner note 6dffc38).
+      // bash call it starts.
       if (typeof row.querySelector === "function" && row.querySelector(PLAY_SELECTOR)) {
         return BASH_EMOJI;
       }
@@ -2710,7 +2710,7 @@
     }
 
     // The agent's words grow: the newest data-agent-word message takes one more word. One
-    // predicate covers every turn state (owner note df73987), so a single message never
+    // predicate covers every turn state, so a single message never
     // raises a second mark. The first look only sets the mark, so a page load or a chat
     // switch stays quiet; the count rides the mark, so appended words count as growth.
     function speechGrowth(doc) {
@@ -2734,7 +2734,7 @@
     }
 
     // The waiting line is a spinner canvas beside the rotating monospace text. An action row
-    // carries the very same canvas as its own icon (note 37b3a4e), so the canvas alone proves
+    // carries the very same canvas as its own icon, so the canvas alone proves
     // nothing: the row must hold the text block too, beside the icon.
     function waitingText(row, canvas) {
       var kids = row && row.children ? row.children : [];
@@ -2791,7 +2791,7 @@
         return QUESTION_EMOJI;
       }
       // A finished row keeps its shimmer label or its pulsing icon in the page, so the row
-      // is news only while the stop control is up (owner note 1114510).
+      // is news only while the stop control is up.
       var live = stopSignal(doc);
       var needsTurn = false;
       var row = live ? strongRow(doc) : null;
@@ -2835,7 +2835,7 @@
         return emoji;
       }
       // The hold bridges the gaps inside a turn; a hold taken from a turn mark ends with the
-      // stop control, so a vanished button clears the title at once (owner note 1114510).
+      // stop control, so a vanished button clears the title at once.
       if (
         heldEmoji &&
         Date.now() - heldEmojiAt < EMOJI_HOLD_MS &&
@@ -2864,14 +2864,14 @@
     var priorTitle = null;
     var titleReason = null;
     // The row behind the reason, snapshotted with it: the anchor logs the same row the
-    // mark came from, not whatever the page re-derives at write time (owner note cb9c34a).
+    // mark came from, not whatever the page re-derives at write time.
     var titleRowSource = null;
     var lastRepo = null;
     var lastPath = null;
 
     function titleAnchors(doc) {
       // A row mark snapshots its row at selection; a re-derived row can be another one
-      // by write time, so the line cites the snapshot (owner notes cb9c34a, 1bcd668).
+      // by write time, so the line cites the snapshot.
       var rowText = titleRowSource;
       if (!rowText) {
         var row = strongRow(doc) || liveRow(doc);

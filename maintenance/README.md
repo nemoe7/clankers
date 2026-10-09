@@ -131,4 +131,4 @@ The four shipped `SKILL.md` files join the budget table in the root `README.md`.
 
 ## Token measurement
 
-`check.py` measures `o200k_base` tokens through the npm package `gpt-tokenizer` (owner note 0cea35a). The package ships its BPE ranks, so the measurement runs offline after `npm ci` installs the pinned dependencies. No encoding host and no cache seeding play a part.
+`check.py` measures `o200k_base` tokens through the npm package `gpt-tokenizer`. The package ships its BPE ranks, so the measurement runs offline after `npm ci` installs the pinned dependencies. No encoding host and no cache seeding play a part.

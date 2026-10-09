@@ -149,7 +149,7 @@ KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
 
 # Token counts ride the npm package gpt-tokenizer, which ships its own ranks and
-# measures offline, so no cache seeding is needed (owner note 0cea35a).
+# measures offline, so no cache seeding is needed.
 _NODE_CWD = Path(__file__).resolve().parent.parent
 _TOKEN_COUNT_SCRIPT = """
 const { encode } = require("gpt-tokenizer/encoding/o200k_base");

@@ -343,7 +343,7 @@ const context = {
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/view')) {
       // The view stamp is the reader's side of the unpublish guard: a report the panel shows
-      // must not vanish under the owner (owner note 46ba603).
+      // must not vanish under the owner.
       viewCalls.push(url);
       return response({ id: decodeURIComponent(url.split('/')[3]), viewed_at: new Date().toISOString() });
     }
@@ -353,7 +353,7 @@ const context = {
       ackSeenCalls.push(url);
       // The stamp is the reply's alone: the client folds it into the state it holds. Writing it
       // into the shared fixture as well let a late reply from one case light the marks of the
-      // next case, which made the suite flaky (owner note 217ad5d's investigation).
+      // next case, which made the suite flaky.
       return response({ id, ack_seen_at: stamp });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
@@ -374,7 +374,7 @@ const context = {
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 // The page's own poll timer is the test's refresh: the toolbar button it used to share that work
-// with is gone with the state select (owner note 0ccee47). The reload test loads a second client
+// with is gone with the state select. The reload test loads a second client
 // into the same document, and its timer is the live one, so the last refresh wins.
 const refresh = () => intervals.filter(callback => callback.name === 'refreshState').at(-1)();
 // Receipts are built from named parts, so a test reads the part it means instead of counting.
@@ -522,7 +522,7 @@ test('preview client', async (t) => {
     body = context.document.body;
     log = get('#history');
     // The bar's collapse control and the composer's hide button both went, so neither closed state
-    // survives and nothing is saved for either (owner notes ca3fc1a and 0ccee47).
+    // survives and nothing is saved for either.
     assert.equal(body.dataset.chrome, undefined, 'the closed state is gone');
     assert.equal(get('#chrome').events.click, undefined, 'no collapse handler');
     assert.equal(body.dataset.composer, undefined, 'the composer has no closed state');
@@ -752,8 +752,8 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(get('#copy-state').dataset.state, 'good', 'the server export needs no client cache');
     assert.ok(copied.at(-1).endsWith('\n'), 'the copy stays NDJSON with one trailing newline');
-    // The toolbar no longer carries a save control: the userscript owns the file path (owner
-    // note ffa0cbd). The page keeps the copy route alone.
+    // The toolbar no longer carries a save control: the userscript owns the file path.
+    // The page keeps the copy route alone.
     const pageHtml = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
     assert.ok(!pageHtml.includes('save-state'), 'the page carries no save control');
     assert.ok(
@@ -769,7 +769,7 @@ test('preview client', async (t) => {
     get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: true }));
     assert.equal(get('#form').submissions, 1);
     // A touch keyboard has no Shift key, so there the Return key writes the newline and the Send
-    // button sends; a mouse-and-keyboard device keeps Enter-to-send (owner notes da405c2, cbebaa3).
+    // button sends; a mouse-and-keyboard device keeps Enter-to-send.
     coarsePointer = true;
     pointerListeners.forEach(callback => callback({ matches: true }));
     const newline = event({ key: 'Enter', shiftKey: false, isComposing: false });
@@ -840,7 +840,7 @@ test('preview client', async (t) => {
   await t.test("A message the agent wrote used to say so through an origin tag; that key is gone from the", async () => {
     // A message the agent wrote used to say so through an origin tag; that key is gone from the
     // schema, and the rendered text wrapper is named for what it is rather than borrowing the
-    // report class; owner note d6fcfc2a.
+    // report class.
     assert.equal(get('#history').children[0].children[0].className, 'raw-message',
       'a message the server sent without rendered HTML keeps the raw class');
     state.notes.push({
@@ -956,7 +956,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("A receipt ID quotes on a plain click, with no copy path left on the ID", async () => {
-    // A receipt ID quotes on a plain click, with no copy path left on the ID (owner note 4a69d4e).
+    // A receipt ID quotes on a plain click, with no copy path left on the ID.
     idCode = get('#history').children[0].children[2].children[0];
     assert.equal(idCode.className, 'note-id');
     const draftBeforeQuote = get('#note').value;
@@ -1041,7 +1041,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#connection-text').textContent, '3 messages saved');
     // Between calls the line names the last call's stamp once the hook has written one, so the
-    // long-call wording has no line of its own (owner note cc6edd4).
+    // long-call wording has no line of its own.
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
     await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
@@ -1054,7 +1054,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
-    // No call stamp is known yet, so the gone mark stands alone (owner note c08732a).
+    // No call stamp is known yet, so the gone mark stands alone.
     assert.equal(get('#connection-text').textContent, 'Agent 404');
     // A fresh turn end keeps the plain line until the quiet window passes.
     state.turn_ended_at = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
@@ -1067,7 +1067,7 @@ test('preview client', async (t) => {
     await refresh();
     assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2}$/);
     // The hook stamps every bash call's end, so a call that finished is not a running one,
-    // whatever the agent does between calls (owner note bd93043).
+    // whatever the agent does between calls.
     state.agent_call_ended_at = new Date(Date.now() - 700_000).toISOString().slice(0, 19);
     await refresh();
     await tick();
@@ -1097,7 +1097,7 @@ test('preview client', async (t) => {
     await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · 1 call');
     // The tally rides every line the header shows, not just the quiet one: a poll and a finished
-    // call are the lines the owner watches while the count climbs (owner note 03471eb).
+    // call are the lines the owner watches while the count climbs.
     state.polling = true;
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
     await refresh(); await tick();
@@ -1251,7 +1251,7 @@ test('preview client', async (t) => {
     shipBox.checked = true;
     await get('#report-form').events.submit(event({}));
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Ship it' });
-    // The report ID stays on show after a send (note f1630e1): the status line carried the chip
+    // The report ID stays on show after a send: the status line carried the chip
     // on load and dropped it on the sent answer.
     assert.equal(part(get('#report-status'), 'note-id').textContent, 'r1',
       'a sent answer keeps the report ID on show');
@@ -1463,8 +1463,7 @@ test('preview client', async (t) => {
 
   await t.test("An ack that lands while the panel shows the report clears at once", async () => {
     // The open is the gesture, and a panel already showing the report is that open: an ack that
-    // lands in view must stamp without waiting for a tab switch the owner has no reason to make
-    // (owner note 0b9fb71).
+    // lands in view must stamp without waiting for a tab switch the owner has no reason to make.
     pip = get('#report-pip');
     ackSeenCalls.length = 0;
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: '2026-09-24T09:59:00',
@@ -1521,7 +1520,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("A report showing its end stays read when the last scroll event missed: the poll rechecks", async () => {
-    // Owner note 217ad5d: the dot and star outlived a reload because the end-scroll stamp can miss
+    // The dot and star outlived a reload because the end-scroll stamp can miss
     // its event, and nothing looked at the panel again. The state poll now rechecks it, so a report
     // showing its end stamps without another scroll.
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
@@ -1539,7 +1538,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("Sending answers reads the report, so the submission stamps the read too", async () => {
-    // Owner note 217ad5d: an answered report is a read report, whatever the panel position says.
+    // An answered report is a read report, whatever the panel position says.
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
     readStamps.length = 0;
     panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
@@ -1681,7 +1680,7 @@ test('preview client', async (t) => {
 
   await t.test("Only the newest twenty messages render, and scrolling up loads the older ones", async () => {
     // The log renders its newest page only, so a long session does not pay for every message
-    // at once; scrolling to the top renders the next older page (owner note 3f4b37b).
+    // at once; scrolling to the top renders the next older page.
     state = {
       notes: Array.from({ length: 25 }, (_, index) => ({
         id: `page-${index}`,
@@ -1849,7 +1848,7 @@ test('preview client', async (t) => {
 
   await t.test("A plain click quotes the seven characters on show; no copy gesture is left on an ID", async () => {
     // A plain click quotes the seven characters on show; no copy gesture is left on an ID. The
-    // shift-click that copied the whole UUID goes with the copy path (owner note 4a69d4e).
+    // shift-click that copied the whole UUID goes with the copy path.
     longId = longReceipt.children[0];
     assert.notEqual(longId.textContent, longId.dataset.full);
     get('#note').value = '';
@@ -1898,7 +1897,7 @@ test('preview client', async (t) => {
 
   await t.test("Meta is the same gesture on a Mac, and a plain click is the same quote", async () => {
     // Meta is the same gesture on a Mac, and a plain click is the same quote. Neither touches the
-    // clipboard any more (owner note 4a69d4e).
+    // clipboard any more.
     noteBox.value = '';
     copiedBefore = copied.length;
     documentEvents.click({ target: longId, metaKey: true });
@@ -1989,8 +1988,8 @@ test('preview client', async (t) => {
 
   await t.test("The delete press stamps the open first, so the server's hold clears", async () => {
     // The press is the owner's open: the receipt shows at the top of the panel they delete
-    // from, so the page stamps the ack the server's hold reads before the removal lands (owner
-    // note 6960520). The ack time sits past every stamp, so the tab's own open cannot clear it.
+    // from, so the page stamps the ack the server's hold reads before the removal lands.
+    // The ack time sits past every stamp, so the tab's own open cannot clear it.
     const keptReports = state.reports;
     const keptSelect = get('#report-select').value;
     ackSeenCalls.length = 0;
@@ -2561,7 +2560,7 @@ test('preview client', async (t) => {
       'KKKKKKK', 'only the key characters carry the code element');
     assert.equal(get('#agent-key').children[0], 'Key ', 'the label stays prose');
     assert.doesNotMatch(get('#agent-key').textContent, /example/,
-      'the host leaves the line, so the footer fits a narrow width (owner note 7019452)');
+      'the host leaves the line, so the footer fits a narrow width');
     assert.match(get('#agent-key').title, /^https:\/\/arena-proxy\.example\.ts\.net · set \w{3} \d{2}, \d{2}:\d{2}$/,
       'the tooltip keeps the host and the full stamp');
     state.agent_key = { key: 'K'.repeat(43), host: null, at: '2026-10-03T15:00:00+00:00' };

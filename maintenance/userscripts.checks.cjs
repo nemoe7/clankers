@@ -70,7 +70,7 @@ function checkLogging(api, menus) {
   } finally {
     console.log = original;
   }
-  // Every menu press writes its own line before the command runs (owner note e60e311).
+  // Every menu press writes its own line before the command runs.
   if (menuItem) {
     var ran = [];
     var list = [];
@@ -79,7 +79,7 @@ function checkLogging(api, menus) {
     });
     assert.equal(list.length, 1);
     // The registry reopens the list in module order, so the entry is found by its label rather
-    // than by sitting last in the array (owner note 7ac0309).
+    // than by sitting last in the array.
     var registered = menus.filter(function (item) {
       return item.label === "State — force save";
     }).pop();
@@ -603,8 +603,7 @@ function checkTranscriptTrim(api) {
     [globalNodes[1].parentElement !== null, true],
     [globalNodes[2].parentElement !== null, true],
     // No stop control means no turn, and the trim aborts; it runs only while a turn
-    // is up. A question card aborts too; the pulsing icon no longer gates anything
-    // (owner notes 2d476f4 and 3c484de).
+    // is up. A question card aborts too; the pulsing icon no longer gates anything.
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), false],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
@@ -1065,7 +1064,7 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's bug page (note 1114510): the finished row keeps its shimmer label after the
+  // The owner's bug page: the finished row keeps its shimmer label after the
   // turn, and the stop control is the only thing that leaves. The same page, one flag apart.
   function lingeringRowDoc(stopGenerating) {
     var message = divMessage("Thinking\u2026", true);
@@ -1121,9 +1120,9 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's captured start-process card (note 6dffc38): a button holding the play icon,
+  // The owner's captured start-process card: a button holding the play icon,
   // the process name and the success check beside it. It runs with no stop control. `behind`
-  // adds a newer plain message, so the card sits in the transcript's history (note 20c9c43).
+  // adds a newer plain message, so the card sits in the transcript's history.
   function processDoc(stopGenerating, behind) {
     var play = {
       closest: function (selector) {
@@ -1174,7 +1173,7 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's mixed page (notes cb9c34a and 1bcd668): a start-process card wins the
+  // The owner's mixed page: a start-process card wins the
   // mark while a finished Explored group label sits in the very same message.
   function processDocExplored() {
     var play = {
@@ -1277,7 +1276,7 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's two blocks (note 37b3a4e). Both rows carry the same 16px canvas; only the
+  // The owner's two blocks. Both rows carry the same 16px canvas; only the
   // waiting line adds the monospace text block beside it. A tree node answers the text
   // selector with its own descendants, the way a row answers a descendant selector.
   function pageTree(text, children) {
@@ -1538,7 +1537,7 @@ function checkTabTitle(api) {
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers"],
     [syncTitle(idleDoc), true],
     [idleDoc.title, TITLE_PREFIX + "clankers"],
-    // The ask_user card holds the title with a question mark (note 6652cdd), and the security
+    // The ask_user card holds the title with a question mark, and the security
     // check beats it, like every other mark.
     [questionSignal(questionDoc(questionCard())), true],
     [questionSignal(questionDoc(null)), false],
@@ -1567,7 +1566,7 @@ function checkTabTitle(api) {
     [desiredTitle(endedPage), TITLE_PREFIX + "clankers"],
     [syncTitle(endedPage), true],
     [endedPage.title, TITLE_PREFIX + "clankers"],
-    // The owner's newer bug (note 1114510): a finished row keeps its shimmer label or its
+    // The owner's newer bug: a finished row keeps its shimmer label or its
     // pulsing icon, and the stop control is the only thing that leaves. Without the control
     // no row holds the title, and a row's hold dies with the control instead of bridging it.
     [expireHold(), null],
@@ -1579,10 +1578,10 @@ function checkTabTitle(api) {
     // The waiting line is a turn mark too: no control, no hourglass.
     [expireHold(), null],
     [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers"],
-    // The start-process card (owner note 6dffc38): a play icon and the process name, so the
+    // The start-process card: a play icon and the process name, so the
     // card alone raises the bash emoji while the turn runs. A finished card keeps its play icon
     // in the page, so it marks no longer once the stop control leaves, and a newer message
-    // takes the title (owner note 20c9c43).
+    // takes the title.
     [expireHold(), null],
     [desiredTitle(processDoc(true)), TITLE_PREFIX + "clankers \uD83D\uDDA5\uFE0F"],
     [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers"],
@@ -1591,7 +1590,7 @@ function checkTabTitle(api) {
     [processRow(processDoc(false)), null],
     [processRow(processDoc(true, true)), null],
     [processRow(idleDoc), null],
-    // One mark for the agent's words (owner notes 02a0675 and df73987): growth of the newest
+    // One mark for the agent's words: growth of the newest
     // data-agent-word message raises the solid balloon, whatever the turn state. The first
     // look only sets the mark in silence, so a page load or a chat switch stays quiet.
     [expireHold(), null],
@@ -1635,7 +1634,7 @@ function checkTabTitle(api) {
     [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
     [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
     [waitingSignal(waitingDoc()), true],
-    // The owner's action row carries the very same canvas as its icon (note 37b3a4e), so
+    // The owner's action row carries the very same canvas as its icon, so
     // the canvas alone never reads as a waiting line and never outranks the Bash row.
     [waitingSignal(actionCanvasDoc()), false],
     [waitingSignal(setDoc), false],
@@ -1693,7 +1692,7 @@ function checkTabTitle(api) {
       "repo=clankers row=poll command (running Bash)",
     ],
     // The anchor cites the row that won the mark, not the row the page re-derives at
-    // write time: the reason and the row half name one row (owner notes cb9c34a, 1bcd668).
+    // write time: the reason and the row half name one row.
     [expireHold(), null],
     [
       loggedTitleHead(processDocExplored()),
@@ -2066,7 +2065,7 @@ function checkStateDownload(api, session) {
   var repo = "clankers";
   var branch = "main";
   // The name carries the repository, then the branch, then the server's stamp and the record
-  // counts, so two repos and their branches never collide in one folder (owner note 495ae89).
+  // counts, so two repos and their branches never collide in one folder.
   assert.equal(
     stateFileName(repo, branch, "2026-10-06T06:12:33.123456+00:00", counts),
     "clankers-main-20261006T061233-n12-t4.ndjson",
@@ -2293,7 +2292,7 @@ function checkStateDownload(api, session) {
   );
   // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
   // the conversation header still opens with the repository name, and its first word is the
-  // repository (owner note 72882a0). That read comes before the tab title.
+  // repository. That read comes before the tab title.
   var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
   var headerDoc = {
     querySelector: function () { return null; },
@@ -2314,8 +2313,8 @@ function checkStateDownload(api, session) {
   // A menu click grants no browser gesture, so the automatic path writes the stamped
   // download and the pick stays a manual action.
   // No file is set: an automatic tick blocks instead of dropping a stamped download on the
-  // owner (note 78e582d). A deferred save never opens the picker, because the browser needs the
-  // press itself and a save that waited on the network has spent it (note aeef54c): it asks for
+  // owner. A deferred save never opens the picker, because the browser needs the
+  // press itself and a save that waited on the network has spent it: it asks for
   // the choose entry instead. A manual press keeps the download where no picker exists.
   assert.equal(stateAction("pick", false), "block");
   assert.equal(stateAction("pick", true), "hint");
@@ -2323,7 +2322,7 @@ function checkStateDownload(api, session) {
   assert.equal(stateAction("download", true), "download");
   assert.equal(stateAction("write", true), "write");
   // The no-file card: a manual press always gets it, and an automatic tick gets it once
-  // per unconfigured period (owner note 3c0d3a2).
+  // per unconfigured period.
   assert.equal(panelNeeded(true, true), true);
   assert.equal(panelNeeded(true, false), true);
   assert.equal(panelNeeded(false, false), true);
@@ -2332,8 +2331,7 @@ function checkStateDownload(api, session) {
   // The owner's line shapes: the fetch on a write, the no-op on a quiet tick, and short
   // stamp hashes in place of the long stamps (answers 1fcb4bd and 9602cb5).
   assert.equal(writeLine("clankers", "clankers.ndjson"), "WRITE clankers state to clankers.ndjson");
-  // The failure lines name the error and the way on, and each heads the corner card too
-  // (owner note dad0e1c).
+  // The failure lines name the error and the way on, and each heads the corner card too.
   assert.equal(
     writeFailLine({ name: "NotAllowedError" }),
     "write failed (NotAllowedError); press the choose entry for the file again",
@@ -2348,7 +2346,7 @@ function checkStateDownload(api, session) {
   );
   assert.equal(managerFailLine(null), "manager download failed (unknown); using the link");
   // The card does not replace the console line: the same words reach both, and a card-less
-  // run (the checks) still logs (owner note dad0e1c).
+  // run (the checks) still logs.
   var errorLines = [];
   var restoreLog = console.log;
   console.log = function () {
@@ -2380,7 +2378,7 @@ function checkStateDownload(api, session) {
     "GET 500 http://localhost:8000/api/copy-state",
   );
   // Every comparison in the save path writes its own line, so one filter shows which test
-  // refused a write (owner note e60e311).
+  // refused a write.
   var compared = [];
   var originalLog = console.log;
   console.log = function () {
@@ -2464,8 +2462,7 @@ function checkStateDownload(api, session) {
   });
   assert.deepEqual(leftovers, [], compared.join("\n"));
   // A remembered file belongs to the scope that chose it: the name carries the scope, and a
-  // handle outside the current scope is refused so one repo never writes into another's file
-  // (owner note 1cfdedd).
+  // handle outside the current scope is refused so one repo never writes into another's file.
   assert.equal(handleMatchesScope({ name: "clankers-main.ndjson" }, "clankers", "main"), true);
   assert.equal(
     handleMatchesScope({ name: "clankers-main-20261006T061233-n12-t4.ndjson" }, "clankers", "main"),

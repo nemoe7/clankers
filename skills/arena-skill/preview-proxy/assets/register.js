@@ -6,7 +6,7 @@
 // only path in.
 // The worker must control the viewer root, because that root is the manifest's
 // start URL: a worker under /pwa/ leaves the start URL outside its scope, and
-// Chrome then refuses the install (owner note 31023b2). A registration left on
+// Chrome then refuses the install. A registration left on
 // the narrow scope is dropped first, so the wider one can take its place.
 if ('serviceWorker' in navigator) {
   const WORKER = '/pwa/service-worker.js';

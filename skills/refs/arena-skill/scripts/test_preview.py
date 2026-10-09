@@ -133,7 +133,7 @@ def test_reply_seen_persistence():
     store = preview.Store(root, create=True, save_path=backup)
     store.note("edited-note", "Question")
     # The answer rides in the save only while its report is published, which every real
-    # answer's report is (owner notes 88e64df and b5949c3).
+    # answer's report is.
     form = Path(directory) / "form.md"
     form.write_text("# Form\n\nNo fields here.\n", encoding="utf-8")
     store.publish("form", "Form", form)
@@ -434,8 +434,7 @@ def test_http_boundaries():
       )
       assert status == 200 and "__STYLE__" not in page and "__SCRIPT__" not in page
       assert 'data-theme="dark"' in page and 'role="tab"' in page
-      # The log's toolbar is a search box and the skip button, with the empty line beside them
-      # (owner note 0ccee47).
+      # The log's toolbar is a search box and the skip button, with the empty line beside them.
       assert 'id="log-search"' in page and 'id="log-empty"' in page
       assert 'id="log-filter"' not in page and 'id="refresh-notes"' not in page
       assert 'id="composer-toggle"' not in page and "data-composer" not in page
@@ -448,17 +447,16 @@ def test_http_boundaries():
       # The bar hugs its label rather than spanning the pane.
       assert "translateX(-50%)" in page
       # The new-reply pill floats the same way, at the log's top: the placement says the reply
-      # waits above, and the two pills can never meet (owner notes f7bc6bc, afa75fa).
-      # It clears the card border below it and wears the plain text color, not the accent
-      # (owner note 89ceca8).
+      # waits above, and the two pills can never meet.
+      # It clears the card border below it and wears the plain text color, not the accent.
       assert re.search(r"\.log-edited\s*\{[^}]*position:\s*absolute", page)
       assert re.search(r"\.log-edited\s*\{[^}]*top:\s*20px", page)
       assert re.search(r"\.log-edited\s*\{[^}]*color:\s*var\(--text\)", page)
       assert re.search(r"\.log-edited\s*\{[^}]*border-radius:\s*4px", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
-      # The save button sits in the top bar after the theme button rather than in the log's own row, on
-      # owner note 0f27a2b6. The log's own copy and the tasks' copy are gone, and one copy button
-      # carries the state to the clipboard.
+      # The save button sits in the top bar after the theme button rather than in the log's own
+      # row. The log's own copy and the tasks' copy are gone, and one copy button carries the
+      # state to the clipboard.
       assert (
         page.index('id="theme"')
         < page.index('id="copy-state"')
@@ -500,7 +498,7 @@ def test_http_boundaries():
       )
       assert 'id="log-newest"' in page and 'stroke="#fff"' in page
       # The search box says what it does without a visible label: the placeholder names the
-      # gesture and the aria-label carries it for the screen reader (owner note 0ccee47).
+      # gesture and the aria-label carries it for the screen reader.
       assert re.search(
         r'<input id="log-search" type="search" placeholder="Search messages"'
         r' aria-label="[^"]+">',
@@ -829,8 +827,7 @@ def test_http_boundaries():
       assert re.search(
         r"textarea::placeholder\{color:var\(--muted\);opacity:(?:0)?\.5", page
       )
-      # An ID carries one gesture now: a click quotes it, and no copy path is left to colour
-      # (owner note 4a69d4e).
+      # An ID carries one gesture now: a click quotes it, and no copy path is left to colour.
       assert "data-copied" not in page
       assert "#clock{font-size:inherit;font-variant-numeric:tabular-nums" in page
       assert re.search(
@@ -839,14 +836,13 @@ def test_http_boundaries():
       assert re.search(r'\.icon-button\[data-state="?bad"?\]\{color:#ef4444;', page)
       assert 'id="copy-log"' not in page, "the log lost its copy button"
       # The log card carries no heading: the tab above already names the panel, and the title
-      # only repeated it while spending a line of height (owner note 9d3540d). The status
+      # only repeated it while spending a line of height. The status
       # stack and the toolbar keep their places.
       assert "history-title" not in page
       assert '<section class="card log-card" aria-label="Message log">' in page
       assert page.index('id="connection"') < page.index('id="log-search"')
       # A phone keeps the tabs alone and drops the composer hint, and the footer's Send button
-      # leads the row so it sits right under the composer at the right edge (owner notes 5284fbb,
-      # 8b7e49b and 2fc9b33).
+      # leads the row so it sits right under the composer at the right edge.
       assert (
         "@media (pointer:coarse){.topbar-row>.row.tight{display:none;}#send-hint{display:none;}}"
         in page
@@ -876,7 +872,7 @@ def test_http_boundaries():
       assert 'id="report-agent-ack"' in page
       assert "report-count" not in page
       # The minified sheet splits or reorders merged selectors, so each pip matches its own block.
-      # The pip is a corner badge, so it adds no width to the tab it marks (owner note ed43278).
+      # The pip is a corner badge, so it adds no width to the tab it marks.
       assert re.search(
         r"#report-pip[^{}]*\{position:absolute;top:5px;right:5px;"
         r"display:inline-block;width:7px;height:7px;"
@@ -906,7 +902,7 @@ def test_http_boundaries():
         in page
       )
       # The log's search box draws its own box like the icon buttons beside it: the same 34px
-      # height, and no native search decoration to fight the row (owner note 0ccee47).
+      # height, and no native search decoration to fight the row.
       assert re.search(r"#log-search\{[^}]*height:34px;[^}]*min-height:0;", page)
       assert 'button,select,textarea,input[type="url"],input[type="search"]{' in page, (
         "the search box shares the form controls' border and radius"
@@ -917,26 +913,25 @@ def test_http_boundaries():
       )
       assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
       # The collapse button is gone, its closed state with it, and the strip can no longer push
-      # past the bar: it shrinks and scrolls at any width instead (owner notes ca3fc1a, e9b026a).
+      # past the bar: it shrinks and scrolls at any width instead.
       assert "#chrome" not in page and "data-chrome" not in page
       assert re.search(r"nav\{[^}]*min-width:0;", page), (
         "the tab strip shrinks rather than pushing the bar"
       )
       # The four tabs share one width: the grid gives every track 1fr, so no label sets a tab's
-      # shape (owner note df6e6bf). The narrow block steps the padding and the font down, and the
-      # tracks stay equal then (owner note 8a47260).
+      # shape. The narrow block steps the padding and the font down, and the
+      # tracks stay equal then.
       assert re.search(r"nav\{[^}]*grid-template-columns:repeat\(4,1fr\)", page)
       assert re.search(r"nav button\{[^}]*min-width:0;[^}]*padding:7px 9px;", page)
       assert re.search(r"nav button\{[^}]*white-space:nowrap", page)
       assert "nav button{padding:7px 4px;font-size:14px" in page
       # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
       # The hint is its own span, so the client swaps it with the pointer: a touch keyboard writes
-      # the newline and the Send button sends (owner notes da405c2, cbebaa3).
+      # the newline and the Send button sends.
       # The hint carries its own separator, so a phone that hides it leaves the key line whole.
       assert '<span id="send-hint">Enter sends · Shift+Enter:new line ·</span>' in page
       # A list in message text sits flush, matching the log's lists and the composer: the ack
-      # thread under a report was the last outlier, on the browser's own step (owner notes 612f803,
-      # 21bf675).
+      # thread under a report was the last outlier, on the browser's own step.
       assert (
         "#history li ul,#history li ol{margin:8px 0;padding-left:0;list-style-position:inside"
         in page
@@ -947,7 +942,7 @@ def test_http_boundaries():
         page,
       ), "message text lists sit flush"
       # The send button carries one rule, the narrow-screen position fix, and no resize of its
-      # own (owner notes 8b7e49b and 2efcd29).
+      # own.
       assert re.findall(r"#send\{([^}]*)\}", page) == ["order:-1;margin-left:auto;"]
       assert "resize:none" in page and "resize:vertical" not in page
       assert (
@@ -981,10 +976,10 @@ def test_http_boundaries():
       assert "resize:none;min-height:72px;overflow:hidden" in page
       # The document itself never scrolls: the panels own their scrolling. The log card's floor
       # steps down on a short viewport, so a small phone keeps the whole column on screen with the
-      # composer closed (owner notes df1dacd, 6a9401b).
+      # composer closed.
       assert "html,body{height:100%;overflow:hidden;overscroll-behavior:none" in page
       # The log header wraps into four short lines on a narrow width, and the 12px wrap gap read
-      # as dead space; the lines sit close now (owner note a16eb0c).
+      # as dead space; the lines sit close now.
       assert ".log-card>.row:first-child{margin-block:0;row-gap:2px" in page
       assert ".log-card{flex:1 1 auto;min-height:min(500px,60dvh)" in page
       assert "h1{letter-spacing:-.035em;margin:4px 0" in page
@@ -2197,8 +2192,7 @@ def test_autosave_export():
 
 def test_notes_carry_no_seq():
   # Note and answer records carry no seq: the arrival stamp orders and identifies a
-  # note, and a surfaced sequence number only invites citing it instead of the ID
-  # (owner note 2e3b490).
+  # note, and a surfaced sequence number only invites citing it instead of the ID.
   with tempfile.TemporaryDirectory() as seq_dir:
     store = preview.Store(seq_dir, create=True)
     store.note("seq-first", "First stamp", at="2026-10-08T05:00:00+00:00")
@@ -2227,7 +2221,7 @@ def test_notes_carry_no_seq():
 
 def test_task_needs_one_detail():
   # A task write must leave at least one detail, so a new task without one is refused
-  # and clearing the last detail is refused too (owner note 8c13de5).
+  # and clearing the last detail is refused too.
   with tempfile.TemporaryDirectory() as detail_dir:
     store = preview.Store(detail_dir, create=True)
     try:
@@ -2249,7 +2243,7 @@ def test_task_needs_one_detail():
 def test_task_refuses_a_note_id_as_its_name():
   # A task named after the note it answers puts one ID on two things: the board reads
   # "task c6b0af0" and the log reads "note c6b0af0". The write refuses a note ID and names the
-  # fix, so the agent gives the task a proper name instead (owner note c6b0af0).
+  # fix, so the agent gives the task a proper name instead.
   with tempfile.TemporaryDirectory() as note_id_dir:
     store = preview.Store(note_id_dir, create=True)
     for note_id in ("c6b0af0", "c6b0af0-462e549f387100613fcede90b"):
@@ -2562,8 +2556,7 @@ def test_task_list():
     echoed = preview.echo_task(tasks_store.write_task("long", "Long", [long_detail]))
     assert echoed["details"] == ["y" * 200 + "\u2026"]
     assert tasks_store.state()["tasks"]["upcoming"][-1]["details"] == [long_detail]
-    # Clearing the last detail is refused: a task always carries at least one step
-    # (owner note 8c13de5).
+    # Clearing the last detail is refused: a task always carries at least one step.
     try:
       tasks_store.write_task("long", details=[""])
       raise AssertionError("Clearing the last detail was accepted")
@@ -3298,8 +3291,7 @@ def test_bash_gate():
 
 def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
   # A cd prefix is fine on the writer's line, on the way to a read or a poll; the banned
-  # readers end the quiet-line exemption, so their call blocks instead of riding along
-  # (owner notes 37f8956 and bf26910).
+  # readers end the quiet-line exemption, so their call blocks instead of riding along.
   clean = "cd /home/user/clankers && arena-preview read"
   poll = "cd /home/user/clankers && arena-preview poll"
   assert preview.quiet_inbox_line(clean) is True
@@ -3312,8 +3304,8 @@ def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
 
 def test_gate_bans_timeout_on_poll():
   # The shell timeout command must not wrap a poll: it kills the wait mid-flight and
-  # the turn loses its listing, so the gate refuses the line even with an empty inbox
-  # (owner note 9d0c3b2). Other inbox calls and clean poll lines stay fine.
+  # the turn loses its listing, so the gate refuses the line even with an empty inbox.
+  # Other inbox calls and clean poll lines stay fine.
   assert preview.poll_timeout_line("timeout 300 arena-preview poll") is True
   assert preview.poll_timeout_line("timeout 1800 arena-preview poll --max 1") is True
   assert (
@@ -3349,7 +3341,7 @@ def test_gate_bans_timeout_on_poll():
 def test_gate_blocks_a_cd_line_past_the_threshold():
   # cd is fine on the line, but the count gate still holds it: with a pending note past
   # the threshold a plain cd line meets READ INBOX NOW, and the block names no command,
-  # because cd is never the noise (owner note bf26910).
+  # because cd is never the noise.
   with tempfile.TemporaryDirectory() as cd_dir:
     cd_store = preview.Store(cd_dir, create=True)
     cd_store.note("cd-note", "Pending work")
@@ -3376,8 +3368,7 @@ def test_gate_blocks_a_cd_line_past_the_threshold():
 
 def test_gate_hint_names_the_banned_tools_without_cd():
   # A blocked call that runs grep, head or tail hears which commands to drop; cd is fine
-  # on the line, so the hint never names it, and a clean line hears the plain block alone
-  # (owner note bf26910).
+  # on the line, so the hint never names it, and a clean line hears the plain block alone.
   with tempfile.TemporaryDirectory() as hint_dir:
     hint_store = preview.Store(hint_dir, create=True)
     hint_store.note("hint-note", "Pending work")
@@ -3750,7 +3741,7 @@ def test_report_ever_seen_migration():
 
 def test_reminder_stamps_the_call_end():
   # The hook runs --reminder after every bash call, so the stamp marks the call's end and
-  # the page clears the long call text once a call finished (owner note bd93043).
+  # the page clears the long call text once a call finished.
   with tempfile.TemporaryDirectory() as end_dir:
     store = preview.Store(end_dir, create=True)
     assert store.state()["agent_call_ended_at"] is None
@@ -3959,8 +3950,7 @@ def test_poll_blocked_tasks():
 
 def test_poll_retry_disclaimer():
   # The poll announces its own span up front: a call that ends early with nothing to
-  # read was cut by the bash tool timeout, and the retry needs the tool timeout 1800
-  # (owner note a7e39b3).
+  # read was cut by the bash tool timeout, and the retry needs the tool timeout 1800.
   with tempfile.TemporaryDirectory() as disclaimer_dir:
     store = preview.Store(disclaimer_dir, create=True)
     printed = []
@@ -4745,7 +4735,7 @@ def test_removed_report_leaves_nothing_in_the_save():
   """A removed report leaves nothing in the ndjson, its answer lines included.
 
   The report line already went with the report; the answer line stayed, so a save still
-  carried the id of a report the owner had unpublished (owner notes 88e64df and b5949c3).
+  carried the id of a report the owner had unpublished.
   The database keeps the answer as the agent's read history; the save does not.
   """
   with tempfile.TemporaryDirectory() as directory:
@@ -4768,7 +4758,7 @@ def test_removed_report_leaves_nothing_in_the_save():
 def test_unpublish_moves_the_state_stamp():
   """An unpublish moves the state stamp, so the save's own trigger rewrites the file.
 
-  The write trigger is the stamp comparison alone (owner notes 4753ae4 and 6451370), so a
+  The write trigger is the stamp comparison alone, so a
   removal that left the stamp still would leave a file that already carries the removed
   report untouched. The report rows are gone, so the removal has to carry the stamp.
   """
@@ -4788,7 +4778,7 @@ def test_unpublish_moves_the_state_stamp():
 def test_unpublish_waits_for_the_owner_to_see_the_ack():
   """An unseen answer ack holds the report until the owner opens it.
 
-  A removal that hides a fresh ack loses it for the owner (owner note 6960520), so the agent's
+  A removal that hides a fresh ack loses it for the owner, so the agent's
   call and the page's press both wait. The page stamps the open as the owner presses delete, so
   their own two clicks clear the hold on the way.
   """
@@ -4818,7 +4808,7 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
 def test_unpublish_waits_out_a_fresh_view():
   """The agent's unpublish waits out the view window, and the owner's press passes it.
 
-  A report on the owner's screen must not vanish under them (owner note 46ba603), so a fresh
+  A report on the owner's screen must not vanish under them, so a fresh
   view refuses the removal. The owner's own two-click delete is the decision and passes, and
   a stale view leaves nothing to wait for.
   """
@@ -4849,7 +4839,7 @@ def test_unpublish_route_holds_and_the_view_route_stamps():
 
   A held removal is a conflict with the owner's live state rather than bad input, so the API
   answers 409 and the page shows the reason. The view route is the reader's half of the view
-  window (owner notes 6960520 and 46ba603).
+  window.
   """
   global app
   with tempfile.TemporaryDirectory() as directory:
@@ -4886,7 +4876,7 @@ def test_ack_reads_a_file_when_the_text_carries_backticks():
   """An ack takes its text from a file, so the shell never quotes it.
 
   A backtick inside double quotes runs as a command, so the shell eats the ticks before the
-  tool sees them (owner note 97ec0cd). The file form carries the text as it stands, backticks
+  tool sees them. The file form carries the text as it stands, backticks
   and quotes included, and one source alone is required.
   """
   script = str(Path(preview.__file__))
@@ -4961,7 +4951,7 @@ def test_tick_warning_reads_the_quoting_shape():
   """The gate's classifier names a backtick the shell will substitute, and only then.
 
   The trap reads the command line before expansion, so the lossy shape is visible: an inline
-  ack text in double quotes with a backtick in it (owner note 6367253).
+  ack text in double quotes with a backtick in it.
   """
   lossy = preview.tick_warning('arena-preview ack abc --reply "see `read` now"')
   assert lossy and "backtick" in lossy and "--reply-file" in lossy
@@ -4984,7 +4974,7 @@ def test_serve_warning_reads_the_port():
   """The gate's classifier names a port other than the default, and only then.
 
   The poll and the owner's page follow the port the skill names, so an off-default
-  serve hides both (owner note 61100d7).
+  serve hides both.
   """
   off = preview.serve_warning("arena-preview serve --port 8123")
   assert off and "8123" in off and "8000" in off
@@ -5078,7 +5068,7 @@ def test_option_join_stops_at_a_block_start():
 
 
 def test_ack_stamps_the_read_line():
-  """An ack writes the header's last-read stamp, so its label stays true (owner note cc6edd4)."""
+  """An ack writes the header's last-read stamp, so its label stays true."""
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory) / "arena-preview"
     store = preview.Store(root, create=True)
