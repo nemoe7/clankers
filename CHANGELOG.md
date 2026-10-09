@@ -80,6 +80,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - `check_workflows.py` allows a forbidden write scope on a job whose `if` names a non-pull-request event. The ban stays everywhere else, and a condition that admits the pull request event in one branch of an `or` guards nothing.
 - `check_publish_clankers_rules.py` counts one `contents: write` in `artifacts.yml` and keeps that scope out of the text before the release job.
+- `maintenance/check.py` prints one line per named check with its verdict and its span, and both summary lines carry the whole run's span. Flags and exit codes stay.
 
 ### Fixed
 
