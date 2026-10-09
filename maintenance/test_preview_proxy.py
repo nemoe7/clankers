@@ -20,7 +20,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVER = ROOT / "skills" / "arena-skill" / "preview-proxy" / "server.js"
+SERVER = ROOT / "skills" / "arena-skill" / "arena-preview-proxy" / "server.js"
 MANIFEST = '<link rel="manifest" href="/pwa/manifest.webmanifest">'
 REGISTER = '<script src="/pwa/register.js" defer></script>'
 SECRET = "test-secret-that-is-at-least-thirty-two-characters"

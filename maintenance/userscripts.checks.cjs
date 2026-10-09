@@ -228,11 +228,11 @@ function checkPromptFill(api) {
     [keyNote("replaced", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
       "Arena proxy https://h.example key replaced at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-      + " skills/arena-skill/proxy holds the map. Never print it."],
+      + " skills/arena-skill/arena-egress-proxy holds the map. Never print it."],
     [keyNote("ready", KEY43, "2026-10-03T15:00:00+00:00", "https://h.example"),
       "Arena proxy https://h.example key ready at 2026-10-03T15:00:00+00:00. New key: " + KEY43 +
       ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-      + " skills/arena-skill/proxy holds the map. Never print it."],
+      + " skills/arena-skill/arena-egress-proxy holds the map. Never print it."],
     // The older two-line fill is rebuilt once, without the rules text.
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md.\nExpect screenshots to be sent via the steering channel.", "clankers", "clankers", "clankers"), false],

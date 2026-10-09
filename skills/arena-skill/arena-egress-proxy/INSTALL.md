@@ -4,7 +4,7 @@ This page carries the install detail that the agent does not need to use the end
 
 ## Container
 
-The repository holds the source. `scripts/` is the server, and the [`Dockerfile`](https://github.com/nemoe7/clankers/blob/main/skills/arena-skill/proxy/Dockerfile) copies it into a `python:3.12-alpine` image. The image runs as a non-root user and needs no build step.
+The repository holds the source. `scripts/` is the server, and the [`Dockerfile`](https://github.com/nemoe7/clankers/blob/main/skills/arena-skill/arena-egress-proxy/Dockerfile) copies it into a `python:3.12-alpine` image. The image runs as a non-root user and needs no build step.
 
 ```
 docker build -t arena-egress-proxy .
@@ -19,6 +19,7 @@ docker run --rm -p 8787:8787 \
 - Images are multi-arch, so an arm64 host pulls and builds natively.
 - The image holds no secrets. Pass them as environment variables, and mount a volume when staged bytes should outlive the container.
 - Every start makes a new agent key and prints `agent key (new on every start): ...`. The key is never read from the environment, so a restart rotates it.
+- A rotation prints the new key the same way: `agent key (rotated): ...`.
 - The server holds no state beyond the state directory, so `--rm` costs nothing but staged bytes.
 
 ## Compose and the funnel

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'skills/arena-skill/preview-proxy/**'
+      - 'skills/arena-skill/arena-preview-proxy/**'
       - '.github/workflows/publish-arena-preview-proxy-image.yml'
   workflow_dispatch:
 
@@ -48,8 +48,8 @@ jobs:
       - name: Build And Push
         uses: docker/build-push-action@v6
         with:
-          context: skills/arena-skill/preview-proxy
-          file: skills/arena-skill/preview-proxy/Dockerfile
+          context: skills/arena-skill/arena-preview-proxy
+          file: skills/arena-skill/arena-preview-proxy/Dockerfile
           push: true
           # An arm64 host pulls the right layer instead of emulating amd64.
           platforms: linux/amd64,linux/arm64

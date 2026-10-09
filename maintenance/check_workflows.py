@@ -112,6 +112,25 @@ def audit_document(name: str, document: object) -> list[str]:
           findings.append(
             f"{where}: `secrets.` must not appear in a step `{field}` string"
           )
+    # The build context of an image publish is the package's own directory, so the
+    # directory name and the image name stay one word.
+    for step in job.get("steps", []) or []:
+      if not isinstance(step, dict):
+        continue
+      if not str(step.get("uses", "")).startswith("docker/build-push-action@"):
+        continue
+      with_block = step.get("with") or {}
+      context = str(with_block.get("context", "")).rstrip("/")
+      directory = context.rsplit("/", 1)[-1]
+      tags = with_block.get("tags")
+      tag_list = tags.splitlines() if isinstance(tags, str) else list(tags or [])
+      for tag in tag_list:
+        image = str(tag).rsplit("/", 1)[-1].split(":", 1)[0]
+        if directory and image and directory != image:
+          findings.append(
+            f"{where}: the build context `{context}` must be a directory named "
+            f"after the image `{image}`"
+          )
     if runs_on_pull_request:
       for scope, value in (job.get("permissions") or {}).items():
         if scope in FORBIDDEN_PR_PERMISSIONS and value not in READ_ONLY_VALUES:

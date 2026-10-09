@@ -271,4 +271,34 @@ def test_distribute_keeps_the_owner_run_packages_home():
   # The owner pages and the docker packages stay in this repository. Only files
   # a session loads at runtime ride to the target repositories.
   assert "grep -vFx -e README.md -e INSTALL.md" in script
-  assert "grep -vE '^(proxy|preview-proxy)/'" in script
+  assert "grep -vE '^(arena-egress-proxy|arena-preview-proxy)/'" in script
+
+
+def build_push_document(context: str, image: str) -> dict:
+  document = copy.deepcopy(BASE)
+  document["jobs"]["work"]["steps"] = [
+    {
+      "name": "Build And Push",
+      "uses": "docker/build-push-action@v6",
+      "with": {
+        "context": context,
+        "tags": "ghcr.io/${{ github.repository_owner }}/" + image + ":latest",
+      },
+    }
+  ]
+  return document
+
+
+def test_a_publish_image_context_carries_the_image_name():
+  document = build_push_document("skills/arena-skill/proxy", "arena-egress-proxy")
+  result = findings(document)
+  assert any(
+    "arena-egress-proxy" in finding and "context" in finding for finding in result
+  ), "A build context that misses the image name must fail the gate"
+
+
+def test_a_matching_publish_image_context_passes():
+  document = build_push_document(
+    "skills/arena-skill/arena-egress-proxy", "arena-egress-proxy"
+  )
+  assert findings(document) == []

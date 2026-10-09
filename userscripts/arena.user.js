@@ -445,7 +445,7 @@
         ". New key: " +
         key +
         ". Use it as ?key= in every /v1 call. Routes: /v1/ping lists them;"
-        + " skills/arena-skill/proxy holds the map. Never print it."
+        + " skills/arena-skill/arena-egress-proxy holds the map. Never print it."
       );
     }
 
