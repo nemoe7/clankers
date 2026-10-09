@@ -20,11 +20,20 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 
 ## Edit a skill
 
-Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command and heading. Review each clause against its source. Increase the plugin version for every update. See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
+Skill sources live under `refs/skills/`. Compress shipped copies manually, preserving every rule, condition, exception, command and heading. Review each clause against its source. Increase the plugin version for every update.
+
+See [maintenance/README.md](../maintenance/README.md) for synchronization and validation.
 
 ## Package
 
-`.github/workflows/artifacts.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch. Pushes to `main` write `gpt-plugins.zip` as a direct Actions artifact. A second workflow,
-`.github/workflows/release-gpt-plugins.yml`, publishes the same archive as a GitHub Release
-under the versioned tag `gpt-plugins-v<version>`, taken from `plugin.json`. A tag that exists
-keeps its release and gets the fresh asset, so the download URL stays stable. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. On-demand runs package only from `main`. The workflow fails on a missing or invalid plugin file.
+```mermaid
+flowchart TB
+  P[pull request] --> V[artifacts.yml collection check]
+  V --> B[plugin.json version must rise]
+  M[push to main] --> Z[gpt-plugins.zip artifact]
+  Z --> R[release under a gpt-plugins-v tag]
+```
+
+`.github/workflows/artifacts.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch. Pushes to `main` write `gpt-plugins.zip` as a direct Actions artifact. On-demand runs package only from `main`.
+
+`.github/workflows/release-gpt-plugins.yml` publishes the same archive as a GitHub Release under the versioned tag `gpt-plugins-v<version>`, taken from `plugin.json`. A tag that exists keeps its release and gets the fresh asset, so the download URL stays stable. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow fails on a missing or invalid plugin file.

@@ -47,6 +47,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Image-named package dirs**: the two docker package directories carry their published image names. `skills/arena-skill/arena-egress-proxy` replaces `proxy`, and `skills/arena-skill/arena-preview-proxy` replaces `preview-proxy`. The publish workflows, the distribute filter and the workflow gate follow the rename.
 - **Re-read scope**: the main-move re-read names the read set: ARENA.md, every AGENTS.md, and the arena-skill skill with its reference. A changed file outside the set, preview.py included, no longer triggers the read.
 - **Gate call**: the pre-push gate line names the inline run as a skip. The start_process clause keeps its duty and gains the violation name.
+- **Paragraph cap gate**: `maintenance/check.py` fails on a covered prose paragraph over 4 sentences. Its STE list now covers `userscripts/README.md`. A test file covers the scanner.
+- **Readable docs**: the human-facing docs split their walls of text into short paragraphs, tables and lists. Each README that describes a flow carries a diagram. The changelog keeps one section per type and domain per date.
 
 #### userscripts
 
@@ -80,6 +82,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Agent chat mark**: Agent chat rows earn the speech balloon. Unmatched labels leave the mark to the speech and waiting signals instead of the gear. Arena 1.10.7.
 - **Gear fallback and live edit mark**: the gear fallback returns for unknown live labels, since every strongest-row path now gates on the word table. A pulsing label counts as the newest row, so a live Edit row under older done rows earns the pencil. Arena 1.10.8.
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
+- **Trim after a question**: the keep budget sits with the newest root that holds rows, so an answered question's empty root clears nothing. The rows behind it keep their newest count and their actions. Arena 1.10.10.
 
 #### preview
 
@@ -87,12 +90,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Attach stable layout**: staging a file moves nothing. The chips wrap inside the label span while the heading row never wraps, so plus and MD keep their seat.
 - **Compact composer**: the coarse-pointer card trims its paddings and row gaps, so the composer footer sits shorter on a phone.
 - **Reply pill placement**: the floating New reply pill sits at 20px, clear of the card border its screenshot showed clipping. Its label wears the plain text color instead of the accent.
-
-### Fixed
-
-#### userscripts
-
-- **Trim after a question**: the keep budget sits with the newest root that holds rows, so an answered question's empty root clears nothing. The rows behind it keep their newest count and their actions. Arena 1.10.10.
 
 ## 2026-10-08
 
@@ -166,7 +163,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **CodeQL scope**: `.github/codeql/codeql-config.yml` also excludes `js/request-forgery`. Its report names the preview proxy's forwarding request, whose target passes the `sbx-*.arena.site` guard and a signed-origin cookie.
 - **Egress image rename**: The published image becomes `ghcr.io/nemoe7/arena-egress-proxy:latest`. The workflow, the install page, the compose file and the workflow check lists use the new name. The Python package and the environment prefix keep `arena_proxy` and `ARENA_PROXY_`.
-
 - **Skill text trim**: `SKILL.md` and `REFERENCE.md` drop 23 pieces of rationale and owner detail. The live pages shrink by 2,348 bytes and 534 `cl100k_base` tokens. Rules, routes and examples stay.
 
 ### Removed
@@ -234,6 +230,25 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Tooling installs**: The Workspace rules now install dependencies and virtual environments with the background process tool, so an install runs while the turn continues. The arena installer never runs that way.
 - **Rule text re-squash**: The live files carry the squash and the refs trees keep the full wording. ARENA.md drops 49 bytes and the arena skill 318. The README measurements follow the smaller files.
 
+#### system-prompts
+
+- **NemoGPT answer rule**: The prompt now requires the answer in the reply itself. It restates what a tool result established, and it bans raw tool output or a pointer as the answer.
+- **NemoGPT prompt**: The prompt gains autonomy and persistence, a directive-or-inquiry split, harness trust markers, and a sharper permission ladder. Output bans now cover setup phrases and labeled closings. The Core rules and Task routing sections fold into the surviving ones.
+
+#### userscripts
+
+- **Menu modules**: Every Arena menu entry leads with its module, such as `Proxy — host` or `State — save now`. A switch names its state in parentheses, and no entry carries a role word. Arena 1.8.5.
+- **State file names**: The auto save names the file after the repository and the branch. A stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
+
+#### maintenance
+
+- **Reference parity**: `check_minify.py` no longer requires the shipped references to match the refs copies. The refs tree is the full wording, and the lives carry the squash.
+- **Skill rows**: The budget table lists the arena suite file by file. Each arena-skill file takes one row, Markdown in tokens and shipped files in bytes.
+
+#### house
+
+- **Suite definition**: The house glossary defines the arena suite as `ARENA.md` and arena-skill files.
+
 ### Added
 
 #### userscripts
@@ -261,27 +276,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Missing stderr reminder**: A Bash call with no reminder line now reads as a possible sandbox reset. The session runs the reset steps before other work.
 - **Task report links**: A blocked task now names the report it waits on with `--report`. The owner's answer clears the blocked mark, and the link rides the save file.
 - **Report form example**: The steering reference now shows a worked form with two groups: a radio group and a checkbox group. Each group carries its own anchored prompt and a custom answer.
-
-### Changed
-
-#### system-prompts
-
-- **NemoGPT answer rule**: The prompt now requires the answer in the reply itself. It restates what a tool result established, and it bans raw tool output or a pointer as the answer.
-- **NemoGPT prompt**: The prompt gains autonomy and persistence, a directive-or-inquiry split, harness trust markers, and a sharper permission ladder. Output bans now cover setup phrases and labeled closings. The Core rules and Task routing sections fold into the surviving ones.
-
-#### userscripts
-
-- **Menu modules**: Every Arena menu entry leads with its module, such as `Proxy — host` or `State — save now`. A switch names its state in parentheses, and no entry carries a role word. Arena 1.8.5.
-- **State file names**: The auto save names the file after the repository and the branch. A stamped save keeps the stamp and the counts after the branch part. Arena 1.8.1.
-
-#### maintenance
-
-- **Reference parity**: `check_minify.py` no longer requires the shipped references to match the refs copies. The refs tree is the full wording, and the lives carry the squash.
-- **Skill rows**: The budget table lists the arena suite file by file. Each arena-skill file takes one row, Markdown in tokens and shipped files in bytes.
-
-#### house
-
-- **Suite definition**: The house glossary defines the arena suite as `ARENA.md` and arena-skill files.
 
 ### Removed
 
@@ -417,15 +411,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Parked security node**: The page keeps the reCAPTCHA node after the widget closes, so the shield stuck. The mark now needs a rendered node, not a present one. Version 1.6.8.
 - **Closed security dialog**: Radix keeps the closed dialog in the page, so the shield stuck. The mark now needs an open dialog ancestor. Version 1.6.7.
 - **State picker call**: The picker ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window. Version 1.6.2.
+- **State log lines**: The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed picker and the stamped download each print a line. Version 1.6.1.
+- **Fill loop**: The prompt fill rewrote the composer on every DOM mutation when the editor changed the text, which made the page unresponsive. It writes once per repo per page now.
 
 #### skills
 
 - **Kilo path**: The `amending-violations` skill drops the directory path in the persistence item. The rule stays: re-inject the rules on long sessions and after compaction.
-
-#### userscripts
-
-- **State log lines**: The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed picker and the stamped download each print a line. Version 1.6.1.
-- **Fill loop**: The prompt fill rewrote the composer on every DOM mutation when the editor changed the text, which made the page unresponsive. It writes once per repo per page now.
 
 #### preview
 
@@ -433,7 +424,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Message table spacing**: A table inside a message takes tight rows, so a three-column table no longer eats the Messages tab.
 - **Dropped upload**: A note upload the network drops replays once under the same note ID, so a lost response does not lose the send.
   The staged chips now carry each file's size, and the failure line names the combined upload.
-
 
 ## 2026-10-04
 
@@ -444,8 +434,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **One GitHub route**: The proxy replaces `/v1/github` and `/v1/logs` with `/v1/gh`.
   The path parameter carries the real `api.github.com` path and its own query, and a run-log path answers the text tail.
 - **Push rule**: The push bullet measures the branch by tree, not commit count. A branch whose tree matches `origin/main` never pushes, even when it shows commits ahead.
-
-### Changed
 
 #### workflows
 
@@ -463,8 +451,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Downloads fallback**: A download tries direct access, then AllOrigins, then CodeTabs with no opt-in. The per-URL proxy toggle leaves the page.
 - **Key line in the composer**: The agent key and host leave the Downloads tab for the composer footer. The line prints the first seven key characters in monospace.
 
-### Changed
-
 #### house
 
 - **Prose gate**: `maintenance/check.py` runs `maintenance/lint_prose.py`. The gate covers the code comments under `maintenance` and `rules` and the covered documents. The changelog bullet cap stays at three sentences.
@@ -475,9 +461,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Added
 
 #### preview
+
 - **Report ID on show**: The Reports tab prints the loaded report's ID beside the status line.
   A click copies it, and a ctrl-click quotes it to the composer.
-
 - **Key expiry notice**: A recorded key older than the rotation window posts one quiet note.
   The note points at `arena-preview key` and names no key. A new post overwrites the record by itself.
 - **Quiet dismissal**: The report-dismissal note posts quiet. It informs a read without waking a poll.
@@ -527,9 +513,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 ### Fixed
 
 #### preview
+
 - **Quiet notes out of the log**: A quiet note stays in the cached state and the copy file.
   The log and its tally show the owner-facing messages only.
-
 - **Poll header**: A live poll heartbeat keeps the wait text in the header. Only an aged stamp with no poll reads as `No agent since <time>`.
 - **Report drafts**: An edit in a report form writes the answers at once, so a reload keeps the chosen options. A submit still replaces the record with the server's stamp.
 - **Report custom slot**: The field rule puts the custom slot inside its option group, in `REFERENCE.md` and `SKILL.md`.
@@ -721,9 +707,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   Version 1.1.32.
 - **Tab title turn end**: The group fallback lost the stop bound at 1.1.32. A finished group label then kept the title alive after the turn ended. The fallback now bounds by a loose stop word match on the button aria-label.
   The whole title reverts when no row, no held emoji and no stop control remain. Version 1.1.33.
-
-#### userscripts
-
 - **Poll detection**: The tab title matches a poll call as the script name followed by `poll`. A `polling` or `polls` word in another command no longer shows the waiting emoji. The Arena bundle moves to `1.1.30`.
 
 ## 2026-10-01

@@ -72,4 +72,12 @@ Skills stand alone, independent of the rule files in [rules/](../rules/).
 
 ## Maintenance
 
+```mermaid
+flowchart TB
+  R[skills/refs source] --> Q[squash]
+  Q --> L[skills live copy]
+  L --> I[installed .agents/skills copy]
+  L --> V[maintenance/check.py]
+```
+
 See [maintenance/README.md](../maintenance/README.md) for skill synchronization, validation, and generated-copy maintenance.

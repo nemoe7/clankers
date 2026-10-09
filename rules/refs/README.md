@@ -1,6 +1,11 @@
 # rules/refs baselines
 
-`rules/refs/` keeps full rule baselines from `main` history, oldest commit `7841d84` through `dcea8d3`. `MUST` and `NEVER` emphasize irreversible, dangerous, and honesty rules. Others read positively (`GUIDELINES.md` 4.7). Baselines follow `GUIDELINES.md`: a one-line-rule constitution, one rule per line under domain headings, and a `When in doubt` closer. The core and `ARENA.md` open with `Use`. Overlays omit that opener. `KILO.md` also omits the closer because the core settles its doubts.
+`rules/refs/` keeps full rule baselines from `main` history, oldest commit `7841d84` through `dcea8d3`. The baselines follow `GUIDELINES.md`:
+
+- a one-line-rule constitution, one rule per line under domain headings, and a `When in doubt` closer.
+- `MUST` and `NEVER` on the irreversible, the dangerous and the honesty rules, with every other rule positive (`GUIDELINES.md` 4.7).
+- a `Use` opener in the core and `ARENA.md`, which the overlays omit.
+- no closer in `KILO.md`, because the core settles its doubts.
 
 See [maintenance/README.md](../../maintenance/README.md) for the refs-first maintenance procedure.
 
