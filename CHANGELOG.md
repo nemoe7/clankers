@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-09
+
+### Fixed
+
+#### userscripts
+
+- **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows (owner notes cb9c34a, 1bcd668 and 2cf8492). Arena 1.10.0.
+
 ## 2026-10-08
 
 ### Added

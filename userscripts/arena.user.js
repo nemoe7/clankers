@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.9.9
+// @version      1.10.0
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2747,6 +2747,7 @@
     }
 
     function heldEmojiFor(doc) {
+      titleRowSource = null;
       if (captchaSignal(doc)) {
         titleReason = "security check";
         heldEmoji = CAPTCHA_EMOJI;
@@ -2769,6 +2770,7 @@
       var emoji = live ? emojiForRow(row) : null;
       if (emoji) {
         titleReason = rowSource(row);
+        titleRowSource = titleReason;
         needsTurn = true;
       }
       if (!emoji) {
@@ -2776,6 +2778,7 @@
         emoji = emojiForRow(row);
         if (emoji) {
           titleReason = rowSource(row);
+          titleRowSource = titleReason;
           needsTurn = true;
         }
       }
@@ -2793,6 +2796,7 @@
         emoji = emojiForRow(row);
         if (emoji) {
           titleReason = rowSource(row);
+          titleRowSource = titleReason;
           needsTurn = true;
         }
       }
@@ -2815,6 +2819,7 @@
       heldEmoji = null;
       heldEmojiNeedsTurn = false;
       titleReason = null;
+      titleRowSource = null;
       return null;
     }
 
@@ -2830,17 +2835,21 @@
     var appliedTitle = null;
     var priorTitle = null;
     var titleReason = null;
+    // The row behind the reason, snapshotted with it: the anchor logs the same row the
+    // mark came from, not whatever the page re-derives at write time (owner note cb9c34a).
+    var titleRowSource = null;
     var lastRepo = null;
     var lastPath = null;
 
     function titleAnchors(doc) {
-      var row = strongRow(doc) || liveRow(doc);
-      return (
-        "repo=" +
-        (repoForTitle(doc) || "none") +
-        " row=" +
-        (row ? rowSource(row) : "none")
-      );
+      // A row mark snapshots its row at selection; a re-derived row can be another one
+      // by write time, so the line cites the snapshot (owner notes cb9c34a, 1bcd668).
+      var rowText = titleRowSource;
+      if (!rowText) {
+        var row = strongRow(doc) || liveRow(doc);
+        rowText = row ? rowSource(row) : "none";
+      }
+      return "repo=" + (repoForTitle(doc) || "none") + " row=" + rowText;
     }
 
     function syncTitle(doc) {

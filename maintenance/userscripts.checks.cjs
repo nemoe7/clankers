@@ -1153,6 +1153,80 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's mixed page (notes cb9c34a and 1bcd668): a start-process card wins the
+  // mark while a finished Explored group label sits in the very same message.
+  function processDocExplored() {
+    var play = {
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    var name = { textContent: "Start PR checks" };
+    var button = {
+      textContent: "Start PR checks",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    var card = {
+      textContent: "Start PR checks",
+      querySelector: function (selector) {
+        return selector === PLAY_SELECTOR ? play : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    button.parentElement = card;
+    var exploredButton = {
+      textContent: "Explored 2 reads",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+    };
+    var exploredRow = {
+      querySelector: function (selector) {
+        return selector === "button" ? exploredButton : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === "button" ? [exploredButton] : [];
+      },
+    };
+    exploredButton.parentElement = exploredRow;
+    var exploredLabel = {
+      textContent: "Explored 2 reads",
+      closest: function (selector) {
+        return selector === "button" ? exploredButton : null;
+      },
+    };
+    var message = {
+      querySelectorAll: function (selector) {
+        if (selector === PLAY_SELECTOR) return [play];
+        if (selector === GROUP_LABEL_SELECTOR) return [name, exploredLabel];
+        return [];
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) {
+          return [message];
+        }
+        if (selector === "button[aria-label]") {
+          return [stopButton("Stop generating")];
+        }
+        return [];
+      },
+    };
+  }
   // A regular-chat message streams data-agent-word spans; the mock grows them on demand.
   function speechDoc(withStop) {
     var words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
@@ -1596,6 +1670,19 @@ function checkTabTitle(api) {
     [
       loggedTitleTail(waitingDoc([pollMessage])),
       "repo=clankers row=poll command (running Bash)",
+    ],
+    // The anchor cites the row that won the mark, not the row the page re-derives at
+    // write time: the reason and the row half name one row (owner notes cb9c34a, 1bcd668).
+    [expireHold(), null],
+    [
+      loggedTitleHead(processDocExplored()),
+      "[NemoUtils][title] action row (Start PR checks) -> " +
+        TITLE_PREFIX +
+        "clankers \uD83D\uDDA5\uFE0F",
+    ],
+    [
+      loggedTitleTail(processDocExplored()),
+      "repo=clankers row=action row (Start PR checks)",
     ],
     [expireHold(), null],
     [
