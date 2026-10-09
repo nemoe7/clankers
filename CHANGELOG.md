@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-09
 
+### Added
+
+#### preview
+
+- **Checks-line drift notice**: a `gh pr checks` line hears the gate once a shell while origin/main leads the branch. Main moved, so no checks report until the branch rebases over it (owner note b0ebdfa).
+
 ### Removed
 
 #### house

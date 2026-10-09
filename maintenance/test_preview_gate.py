@@ -348,6 +348,25 @@ def test_a_branch_behind_main_hears_the_replay_line():
     assert "Replay your commits over main" not in result.stderr
 
 
+def test_a_checks_line_with_main_ahead_hears_the_moved_line():
+  # An empty listing on a checks call means main moved, so the line names the
+  # cause instead of leaving the agent to guess (owner note b0ebdfa).
+  with tempfile.TemporaryDirectory() as directory:
+    repo = git_repo(Path(directory))
+    result = run("gh pr checks 7", cwd=str(repo))
+    assert "origin/main has moved" in result.stderr, result.stderr
+    assert "no checks will report" in result.stderr
+    # Once main is no longer ahead, the listing can fill, and the line stays away.
+    subprocess.run(
+      ["git", "update-ref", "refs/remotes/origin/main", "HEAD"],
+      cwd=repo,
+      capture_output=True,
+      check=True,
+    )
+    result = run("gh pr checks 7", cwd=str(repo))
+    assert "no checks will report" not in result.stderr
+
+
 def shallow_repo(root: Path, *, lone_tip: bool) -> Path:
   """Return one repository whose graft hides the remote tip's history.
 
