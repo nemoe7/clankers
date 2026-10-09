@@ -117,6 +117,7 @@ EXPECTED_LINTED = (
 # Prose covered by the ASD-STE100 linter. Add a path only when the linter reports 0 violations
 # for it. CI runs `check.py --ste` against this same list, so the local gate and CI agree.
 STE_DOCS = (
+  "userscripts/README.md",
   "maintenance/README.md",
   "skills/README.md",
   "README.md",
@@ -132,6 +133,12 @@ STE_DOCS = (
 STE_LINT = ".agents/skills/asd-ste100/scripts/ste-lint.py"
 # The prose lint covers the code comments and the documents outside the STE list.
 PROSE_LINT = "maintenance/lint_prose.py"
+
+# One paragraph carries at most this many sentences. A longer one splits.
+PARAGRAPH_SENTENCE_CAP = 4
+CODE_SPAN_RE = re.compile(r"`[^`]*`")
+SENTENCE_END_RE = re.compile(r"(?<=[.!?])(?:\s+|$)")
+LIST_OR_BLOCK_RE = re.compile(r"^(?:[-*+>|#]|\d+[.)] )")
 
 LINT_COUNT_CLAIMS = ((RULES / "README.md", r"(\d+) files in all"),)
 
@@ -204,6 +211,73 @@ def check_prose(errors: list[str]) -> None:
   if result.returncode:
     output = (result.stdout + result.stderr).strip()
     errors.append(f"Prose lint failed:\n{output}")
+
+
+def sentence_count(text: str) -> int:
+  """Count the sentences in one prose paragraph."""
+  cleaned = CODE_SPAN_RE.sub("code", text)
+  return len([part for part in SENTENCE_END_RE.split(cleaned) if part.strip()])
+
+
+def prose_paragraphs(text: str) -> list[tuple[int, str]]:
+  """Return each prose paragraph with the line number that opens it."""
+  blocks: list[tuple[int, str]] = []
+  lines: list[str] = []
+  start = 0
+  fenced = False
+
+  for number, line in enumerate(text.splitlines(), start=1):
+    if line.lstrip().startswith("```"):
+      fenced = not fenced
+      continue
+
+    if fenced:
+      continue
+
+    if not line.strip():
+      if lines:
+        blocks.append((start, " ".join(lines)))
+        lines = []
+      continue
+
+    if not lines:
+      start = number
+    lines.append(line.strip())
+
+  if lines:
+    blocks.append((start, " ".join(lines)))
+
+  prose = []
+  for number, block in blocks:
+    if LIST_OR_BLOCK_RE.match(block):
+      continue
+    prose.append((number, block))
+
+  return prose
+
+
+def paragraph_violations(name: str, text: str) -> list[str]:
+  """Name every prose paragraph that holds more sentences than the cap."""
+  violations = []
+
+  for number, block in prose_paragraphs(text):
+    count = sentence_count(block)
+    if count > PARAGRAPH_SENTENCE_CAP:
+      violations.append(
+        f"{name}:{number}: paragraph holds {count} sentences; the cap is "
+        f"{PARAGRAPH_SENTENCE_CAP}"
+      )
+
+  return violations
+
+
+def check_paragraph_caps(errors: list[str]) -> None:
+  """Fail on a covered prose paragraph over the sentence cap."""
+  for doc in STE_DOCS:
+    path = ROOT / doc
+    if not path.is_file():
+      continue
+    errors.extend(paragraph_violations(doc, path.read_text(encoding="utf-8")))
 
 
 def parse_frontmatter(
@@ -894,6 +968,7 @@ def main() -> int:
   skills, workflows = validate(errors)
   check_ste(errors)
   check_prose(errors)
+  check_paragraph_caps(errors)
 
   if errors:
     print("Validation failed:")
@@ -905,8 +980,9 @@ def main() -> int:
 
   print(
     f"Validation passed: {skills} skills, {workflows} workflows, README "
-    "measurements, the markdownlint scope, refs/live parity, the prose lint "
-    "and the root ARENA.md copy checked."
+    "measurements, the markdownlint scope, refs/live parity, the prose lint, "
+    f"the {PARAGRAPH_SENTENCE_CAP}-sentence paragraph cap and the root ARENA.md "
+    "copy checked."
   )
 
   return 0
