@@ -298,10 +298,16 @@ def test_report_unpublish():
     )
     store.publish("pick", "Pick one", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
-    store.unpublish("pick")
+    # An answered report refuses the agent's call at once: the answer pins the id.
+    try:
+      store.unpublish("pick")
+      raise AssertionError("An answered report accepted the agent's unpublish")
+    except ValueError as error:
+      assert "answered" in str(error)
+    assert store.state()["reports"], "the answered report stayed"
+    # The owner's dismissal prunes the tab row only.
+    store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
-    # The CLI form stays silent: the agent already knows what it removed.
-    assert store.state()["notes"] == [], "the CLI unpublish writes no note"
     try:
       store.report("pick")
       raise AssertionError("A deleted report still read back")
@@ -319,6 +325,12 @@ def test_report_unpublish():
       raise AssertionError("Republishing over sent answers was accepted")
     except ValueError:
       pass
+    # The CLI form stays silent on an open report: the agent already knows what it
+    # removed.
+    store.publish("plain", "Pick one", source)
+    store.unpublish("plain")
+    assert store.state()["reports"] == []
+    assert len(store.state()["notes"]) == 1, "the CLI unpublish writes no note"
 
 
 def test_http_boundaries():
@@ -1532,7 +1544,7 @@ def test_http_boundaries():
         line["id"] == "scoped-answer"
         for line in json.loads(request("GET", "/api/submissions")[2])
       ), "a live report's answers ride the copy endpoint"
-      store.unpublish("scoped")
+      store.unpublish("scoped", dismissed_by_owner=True)
       assert not any(
         line["id"] == "scoped-answer"
         for line in json.loads(request("GET", "/api/submissions")[2])
@@ -4832,7 +4844,7 @@ def test_removed_report_leaves_nothing_in_the_save():
     store.submission("answer-1", "pick", "REPORT pick: one")
     before = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     assert [line["id"] for line in before if line.get("report_id")] == ["answer-1"]
-    store.unpublish("pick")
+    store.unpublish("pick", dismissed_by_owner=True)
     lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     assert [line["id"] for line in lines if line.get("report_id")] == []
     assert all(line.get("id") != "pick" for line in lines)
@@ -4860,11 +4872,12 @@ def test_unpublish_moves_the_state_stamp():
 
 
 def test_unpublish_waits_for_the_owner_to_see_the_ack():
-  """An unseen answer ack holds the report until the owner opens it.
+  """An unseen answer ack holds the owner's dismissal until the open.
 
-  A removal that hides a fresh ack loses it for the owner, so the agent's
-  call and the page's press both wait. The page stamps the open as the owner presses delete, so
-  their own two clicks clear the hold on the way.
+  A removal that hides a fresh ack loses it for the owner, so the page's press
+  waits. The page stamps the open as the owner presses delete, so their own two
+  clicks clear the hold on the way. The agent's call lands on the answered word
+  first and never reaches the ack wait.
   """
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
@@ -4875,12 +4888,16 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
     store.publish("pick", "Pick one", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
     store.acknowledge(["answer-1"], "reply", "Read it")
-    for owner_press in (False, True):
-      try:
-        store.unpublish("pick", dismissed_by_owner=owner_press)
-        raise AssertionError("An unseen ack did not hold the report")
-      except preview.UnpublishHeld as error:
-        assert "ack" in str(error)
+    try:
+      store.unpublish("pick")
+      raise AssertionError("An answered report accepted the agent's unpublish")
+    except ValueError as error:
+      assert "answered" in str(error)
+    try:
+      store.unpublish("pick", dismissed_by_owner=True)
+      raise AssertionError("An unseen ack did not hold the report")
+    except preview.UnpublishHeld as error:
+      assert "ack" in str(error)
     assert store.state()["reports"], "the report stayed"
     # The open the page's press stamps is what clears the hold: the same press lands, because
     # the owner's own click passes the view window their open just moved.
@@ -4915,6 +4932,31 @@ def test_unpublish_waits_out_a_fresh_view():
     with patch.object(preview, "now", return_value="2020-01-01T00:00:00+00:00"):
       store.mark_report_viewed("later")
     store.unpublish("later")
+    assert store.state()["reports"] == []
+
+
+def test_unpublish_names_the_answer_before_the_view_wait():
+  """An answered report names its answer before any view wait.
+
+  The agent's call lands on the answered word at once, so no removal wait
+  starts for a tab that cannot leave. The owner's own dismissal still passes.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text(
+      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("pick", "Pick one", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.mark_report_viewed("pick")
+    try:
+      store.unpublish("pick")
+      raise AssertionError("A fresh view outranked the answered word")
+    except ValueError as error:
+      assert "answered" in str(error)
+    assert store.state()["reports"], "the report stayed"
+    store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
 
 
