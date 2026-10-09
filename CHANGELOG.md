@@ -67,6 +67,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### arena
 
 - **Paragraph cap**: the terseness clause carries a hard limit of 4 sentences per paragraph, in the refs wording and in the compressed live copies.
+- **Task update cadence**: the verification clause orders a stored task update in the same tool block as the work that moves it.
 
 ### Fixed
 
