@@ -3935,7 +3935,9 @@ def ensure_installed():
   if os.environ.get("ARENA_PREVIEW_NO_BOOTSTRAP") or shutil.which("arena-preview"):
     return
   for ancestor in Path(__file__).resolve().parents:
-    installer = ancestor / ".agents" / "skills" / "arena-skill" / "scripts" / "install.sh"
+    installer = (
+      ancestor / ".agents" / "skills" / "arena-skill" / "scripts" / "install.sh"
+    )
     if installer.is_file():
       try:
         subprocess.run(["bash", str(installer)], cwd=str(ancestor), check=False)

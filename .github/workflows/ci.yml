@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+# The suite spawns preview.py directly, so the self-install stays out of the tests.
+env:
+  ARENA_PREVIEW_NO_BOOTSTRAP: "1"
+
 concurrency:
   group: CI-${{ github.ref }}
   cancel-in-progress: true
