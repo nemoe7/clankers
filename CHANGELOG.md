@@ -56,7 +56,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Trim scheduler**: one plain 5 s interval asks the settle and quiet gates, replacing the mutation-driven chain that fired on every streaming flicker. Arena 1.10.4.
 - **Steering misclick**: the open-steering scan skips the header port switcher, whose aria-label is Switch preview port. Arena 1.10.5.
 - **Agent chat mark**: Agent chat rows earn the speech balloon. Unmatched labels leave the mark to the speech and waiting signals instead of the gear. Arena 1.10.7.
-- **Gear fallback and live edit mark**: the gear fallback returns for unknown live labels, and every strongest-row path now gates on the word table, so unmapped rows no longer leak past the waiting hourglass. A pulsing label counts as the newest row, so a live Edit row under older done rows earns the pencil. Arena 1.10.8.
+- **Gear fallback and live edit mark**: the gear fallback returns for unknown live labels, since every strongest-row path now gates on the word table. A pulsing label counts as the newest row, so a live Edit row under older done rows earns the pencil. Arena 1.10.8.
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
 
 #### preview
@@ -89,7 +89,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Trim log**: a transcript trim that removes rows now writes one console line, such as `removed 12 rows (kept 50)`, under the `trim` module. Arena 1.9.5.
 - **State error cards**: a state-module failure shows the page corner card as well as its console line, and the card stays until a dismiss. The write failure carries the Choose file button. Arena 1.9.6.
-- **Process card emoji**: a started process card carries a play icon and the process name, so it takes the bash emoji. The card runs past the turn, so no stop-generating control is needed. Arena 1.9.8.
+- **Process card emoji**: a started process card carries a play icon and the process name, so it takes the bash emoji. The card runs past the turn, so the mark needs no stop-generating control. Arena 1.9.8.
 - **Card mark bounds**: the process card's 🖥️ mark reads the newest message alone, and only while the stop control is up. A finished card keeps its play icon in the page, so it marks nothing once a newer row arrives. Arena 1.9.9.
 
 #### preview
@@ -109,7 +109,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
-- **Env ignore**: `.gitignore` gains `.env`, so the compose secret file for the proxy packages stays untracked. No `.env` is tracked today.
+- **Env ignore**: `.gitignore` gains `.env`, so the compose secret file for the proxy packages stays untracked. The repo tracks no `.env` today.
 - **Ruff line limit**: the core `ruff.toml` turns on E501 with a 120-character limit. The limit rides the pycodestyle setting, so the formatter keeps its own width.
 - **Core E501 120**: the core rule files name the E501 120 limit. The refs baselines, the live mirrors, the wenyan field and the root `ARENA.md` copy hold the same wording.
 - **Vendored caveman**: the house copies `JuliusBrussee/caveman` at `7d76b13` (Apache-2.0) verbatim into `.agents/skills/caveman/`, skill, readme and licence included. It lives under `.agents/skills/` only, because it changes how an agent speaks rather than belonging to this repository, and takes no part in the parity gates.
@@ -166,9 +166,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Floating reply pill**: the New reply control left the log's header row for the log's own top. It mirrors the jump bar at the log's foot, so the placement says where the reply waits.
 - **Flush lists**: a list in message text sat on the browser's own step. The ack thread under a report now sits flush with the log's lists and the composer.
 - **Header tally**: the bash-call tally rode the quiet header line alone, so a running turn never showed it. The count now ends every shape of the line: the poll, the finished call and the gone mark.
-- **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner had removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file.
+- **Removed report**: an unpublished report left its answer lines in the save, so the ndjson still carried an id the owner removed. The save now drops an answer whose report is gone. Unpublish stamps the state, so the save's own trigger rewrites the file.
 - **Header line**: the header names what the agent is doing: `Polling… 1m 02s` during a poll, else the last bash call's stamp. An absent agent adds ` · Agent 404`, and the line below reads `Last read/ack:`.
-- **Call tally**: the EXIT hook counts the agent's own calls. The platform's hosted shells and probes are named and skipped, so a background run adds nothing to the tally. The call-end stamp skips them too.
+- **Call tally**: the EXIT hook counts the agent's own calls. It names the platform's hosted shells and probes and skips them, so a background run adds nothing to the tally. The call-end stamp skips them too.
 - **Read stamp**: the state poll rechecks the reports panel, so a report showing its end stamps even when the last scroll event went missing. Sending answers stamps the read too, because an answered report is a read one.
 - **Main drift notice**: A shallow fetch leaves `origin/main` as one grafted commit, so the count measured the graft rather than main. The gate stays quiet then, and a tip with visible history keeps the replay line.
 - **Download header name**: the `Content-Disposition` file name now passes through `header_filename`, which strips CR, LF and quote with `replace` calls. The CodeQL header-splitting query counts that call shape as a sanitizer.
