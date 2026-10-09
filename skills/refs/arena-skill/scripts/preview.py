@@ -965,6 +965,118 @@ def cli_json(value):
   return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
+def format_pending_item(item):
+  kind = item.get("kind") or "note"
+  display_kind = "answer" if kind == "report" else kind
+  header = f"{display_kind} {item.get('id','')}"
+  if item.get("report_id"):
+    header += f" report {item['report_id']}"
+  if item.get("at"):
+    header += f" at {item['at']}"
+  text = item.get("text") or ""
+  return f"{header}\n{text}" if text else header
+
+
+def format_read(listing):
+  checked_at = listing.get("checked_at")
+  pending = listing.get("pending") or []
+  count = len(pending)
+  if checked_at:
+    first = f"Inbox {checked_at}: {count} pending"
+  else:
+    first = f"Inbox: {count} pending"
+  if count == 0:
+    return first
+  lines = [first, ""]
+  for idx, item in enumerate(pending):
+    lines.append(format_pending_item(item))
+    if idx != len(pending) - 1:
+      lines.append("")
+  return "\n".join(lines)
+
+
+def format_task_list(tasks):
+  total = len(tasks)
+  lines = [f"Tasks {total}"]
+  for task in tasks:
+    order = task.get("order")
+    status = task.get("status")
+    id_ = task.get("id")
+    blocked = task.get("blocked")
+    report_id = task.get("report_id")
+    blocked_mark = "*" if blocked else ""
+    line = f"{order}{blocked_mark}  {status} {id_}"
+    if report_id:
+      line += f" report {report_id}"
+    lines.append(line)
+  return "\n".join(lines)
+
+
+def format_task(record, before=None, after=None):
+  id_ = record.get("id")
+  order = record.get("order")
+  status = record.get("status")
+  report_id = record.get("report_id")
+  blocked = record.get("blocked")
+  title = record.get("title") or ""
+  details = record.get("details") or []
+  cut = [
+    detail[:ECHO_DETAIL] + ("\u2026" if len(detail) > ECHO_DETAIL else "")
+    for detail in details
+  ]
+  first = f"task {id_}, order {order}, status {status}"
+  if report_id:
+    first += f", report {report_id}"
+  if blocked:
+    first += ", blocked"
+  lines = [first, title] + [f"- {d}" for d in cut]
+  return "\n".join(lines)
+
+
+def format_key(record):
+  lines = []
+  if record.get("key"):
+    lines.append(f"key {record['key']}")
+  if record.get("host"):
+    lines.append(f"host {record['host']}")
+  if record.get("at"):
+    lines.append(f"at {record['at']}")
+  return "\n".join(lines) if lines else ""
+
+
+def format_fetch_job(job):
+  id_ = job.get("id")
+  url = job.get("url")
+  allow_proxy = job.get("allow_proxy")
+  approval = job.get("approval")
+  status = job.get("status")
+  parts = [f"Queued {id_} {url}"]
+  if allow_proxy is not None:
+    parts[0] += f" proxy={allow_proxy}"
+  if approval:
+    parts[0] += f" approval={approval}"
+  if status:
+    parts[0] += f" status={status}"
+  return "\n".join(parts)
+
+
+def format_import_receipt(receipt):
+  notes = receipt.get("notes", 0)
+  answers = receipt.get("answers", 0)
+  reports = receipt.get("reports", 0)
+  tasks = receipt.get("tasks", 0)
+  forced = receipt.get("forced")
+  base = f"Imported notes {notes}, answers {answers}, reports {reports}, tasks {tasks}"
+  if forced:
+    base += " (forced)"
+  return base
+
+
+def format_clear_state(counts):
+  parts = [f"{k} {v}" for k, v in counts.items()]
+  return "Cleared " + ", ".join(parts) if parts else "Cleared"
+
+
 def require_server(store):
   """Fail the poll while the preview server is down, so the agent restarts it.
 
@@ -994,7 +1106,7 @@ def print_read(store):
   until it is answered.
   """
   listing = store.read()
-  print(cli_json(listing), flush=True)
+  print(format_read(listing), flush=True)
   store.mark_seen([item["id"] for item in listing["pending"]])
   store.mark_reports_agent_seen([item.get("report_id") for item in listing["pending"]])
 
@@ -1231,7 +1343,7 @@ def poll_inbox(store, sleeper=None):
       listing = store.read(include_quiet=False)
       if listing["pending"]:
         full = store.read()
-        print(cli_json(full), flush=True)
+        print(format_read(full), flush=True)
         store.mark_seen([item["id"] for item in full["pending"]])
         store.mark_reports_agent_seen(
           [item.get("report_id") for item in full["pending"]]
@@ -1255,7 +1367,7 @@ def poll_inbox(store, sleeper=None):
         )
         print(continue_line, file=sys.stderr, flush=True)
         print(continue_line, flush=True)
-        print(cli_json(listing), flush=True)
+        print(format_task_list(listing.get("tasks", [])), flush=True)
         print_poll_hold(store)
         return 0
       # A message or an unblocked task outranks a skip: the turn reads that item first.
@@ -1269,7 +1381,7 @@ def poll_inbox(store, sleeper=None):
           file=sys.stderr,
           flush=True,
         )
-        print(cli_json(listing), flush=True)
+        print(format_read(listing), flush=True)
         print_poll_hold(store)
         return 0
       if index + 1 < POLL_MAX_LOOPS:
@@ -1279,7 +1391,7 @@ def poll_inbox(store, sleeper=None):
     store.clear_polling()
   # The wait ran its whole span with nothing to read: the turn ends here.
   store.mark_turn_ended()
-  print(cli_json(listing), flush=True)
+  print("Poll ended: 0 pending.", flush=True)
   print_poll_hold(store)
   return 1
 
@@ -4294,14 +4406,14 @@ def main():
       if not record:
         print("No agent key recorded.", file=sys.stderr)
         return 1
-      print(cli_json(record))
+      print(format_key(record))
     elif args.command == "poll":
       require_server(store)
       store.notice_expired_key()
       return poll_inbox(store)
     elif args.command == "download-request":
       # The agent path is pending; the browser form keeps its existing immediate queue path.
-      print(cli_json(store.enqueue_fetch(args.url, args.allow_proxy, pending=True)))
+      print(format_fetch_job(store.enqueue_fetch(args.url, args.allow_proxy, pending=True)))
     elif args.command == "ack":
       sources = (args.reply, args.note, args.reply_file, args.note_file)
       if sum(source is not None for source in sources) != 1:
@@ -4321,7 +4433,8 @@ def main():
           raise ValueError(f"Cannot read {source}: {error.strerror or error}") from None
       arrivals = {record_id: store.record_arrival(record_id) for record_id in args.ids}
       store.acknowledge(args.ids, kind, text)
-      print("Acknowledged: " + ", ".join(args.ids))
+      short = [i[:7] for i in args.ids]
+      print("Acknowledged " + " ".join(short))
       for record_id in args.ids:
         age = stamp_age_seconds(arrivals.get(record_id))
         if age is not None and age > HOLD_STALE_SECONDS:
@@ -4338,7 +4451,7 @@ def main():
       )
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
-      print(f"Published {args.id}, {count} fields. Select it in Reports.")
+      print(f"Published {args.id}, {count} fields.")
       if not count and "{#" in Path(args.source).read_text("utf-8"):
         # A `{#id}` marker on its own parses as prose; the owner then sees no answer form.
         print(
@@ -4391,22 +4504,18 @@ def main():
           args.blocked,
           args.report,
         )
-      before, after = store.neighbours(task_id)
-      echo = echo_task(record, before, after)
-      if args.msg_id:
-        echo["msg_id"] = args.msg_id
-      print(cli_json(echo))
+      print(format_task(record))
     elif args.command == "task-remove":
-      print(cli_json(echo_task(store.remove_task(args.task_id))))
+      print(format_task(store.remove_task(args.task_id)))
     elif args.command == "task-list":
-      print(cli_json(store.list_tasks()))
+      print(format_task_list(store.list_tasks()))
     elif args.command == "import-state":
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
-      print(cli_json(store.import_state(text, args.replace_tasks, args.force)))
+      print(format_import_receipt(store.import_state(text, args.replace_tasks, args.force)))
     elif args.command == "clear-state":
-      print(cli_json(store.clear_state()))
+      print(format_clear_state(store.clear_state()))
 
   except (
     OSError,
