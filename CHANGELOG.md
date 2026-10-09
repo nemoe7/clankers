@@ -27,6 +27,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added (owner notes 1f36855, 2d476f4 and 5befa18). Arena 1.10.1.
 
+#### preview
+
+- **Call tally wording**: The header tally shows `X calls` and switches to `Blocked` when the count reaches ten.
+
 
 ### Fixed
 

@@ -1085,28 +1085,32 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
-    // The header names the bash calls, singular and plural, and nothing else.
-    state.calls_since_message = 94;
+    // The header names the calls, singular and plural, and says Blocked once the count reaches
+    // ten.
+    state.calls_since_message = 9;
     await refresh(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 94 bash calls');
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 9 calls');
+    state.calls_since_message = 10;
+    await refresh(); await tick();
+    assert.equal(get('#connection-text').textContent, '3 messages saved · Blocked');
     state.calls_since_message = 1;
     await refresh(); await tick();
-    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 bash call');
+    assert.equal(get('#connection-text').textContent, '3 messages saved · 1 call');
     // The tally rides every line the header shows, not just the quiet one: a poll and a finished
     // call are the lines the owner watches while the count climbs (owner note 03471eb).
     state.polling = true;
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
     await refresh(); await tick();
-    assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s · 1 bash call$/);
+    assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s · 1 call$/);
     state.polling = false;
     state.polling_since = null;
     state.agent_call_ended_at = new Date().toISOString().slice(0, 19);
     await refresh(); await tick();
-    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · 1 bash call$/);
+    assert.match(get('#connection-text').textContent, /^Bash [A-Z][a-z]{2} \d{2}, \d{2}:\d{2} · 1 call$/);
     state.agent_call_ended_at = null;
     state.agent_seen_at = new Date(Date.now() - 2_000_000).toISOString().slice(0, 19);
     await refresh(); await tick();
-    assert.equal(get('#connection-text').textContent, 'Agent 404 · 1 bash call');
+    assert.equal(get('#connection-text').textContent, 'Agent 404 · 1 call');
     state.agent_seen_at = new Date().toISOString().slice(0, 19);
     state.calls_since_message = 0;
     await refresh(); await tick();
