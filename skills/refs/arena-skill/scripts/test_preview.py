@@ -307,7 +307,9 @@ def test_report_unpublish():
     assert store.state()["reports"], "the answered report stayed"
     # The owner's dismissal prunes the tab row only, after seen.
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+      )
     store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
     try:
@@ -330,10 +332,14 @@ def test_report_unpublish():
     # The CLI form stays silent on an open report: the agent already knows what it
     # removed. The new guard holds until seen.
     store.publish("plain", "Pick one", source)
-    store.mark_report_read = getattr(store, "mark_report_read", None) or (lambda x: store._mark_seen_for_test(x))
+    store.mark_report_read = getattr(store, "mark_report_read", None) or (
+      lambda x: store._mark_seen_for_test(x)
+    )
     # Mark as seen via seen_at
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain")
+      )
     store.unpublish("plain")
     assert store.state()["reports"] == []
     assert len(store.state()["notes"]) == 1, "the CLI unpublish writes no note"
@@ -1553,7 +1559,10 @@ def test_http_boundaries():
         for line in json.loads(request("GET", "/api/submissions")[2])
       ), "a live report's answers ride the copy endpoint"
       with store.connect() as db, db:
-          db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "scoped"))
+        db.execute(
+          "UPDATE reports SET seen_at = ? WHERE id = ?",
+          ("2026-01-01T00:00:00", "scoped"),
+        )
       store.unpublish("scoped", dismissed_by_owner=True)
       assert not any(
         line["id"] == "scoped-answer"
@@ -4089,7 +4098,11 @@ def test_skip_poll():
       assert store.skip_poll_requested() is False
       code, sleeps = run_poll()
       assert code == 1 and sleeps == [10, 10]
-      assert "skip_poll" not in printed[-1] or "pending" in printed[-1] or "Inbox" in printed[-1]
+      assert (
+        "skip_poll" not in printed[-1]
+        or "pending" in printed[-1]
+        or "Inbox" in printed[-1]
+      )
 
       # A press arms it. A read reports the stamp and leaves it armed for the poll.
       armed = store.request_skip_poll()
@@ -4109,7 +4122,9 @@ def test_skip_poll():
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
-      assert stamp in printed[-1] or "skip_poll" in printed[-1] or "Inbox" in printed[-1]
+      assert (
+        stamp in printed[-1] or "skip_poll" in printed[-1] or "Inbox" in printed[-1]
+      )
       assert store.skip_poll_requested() is False
       assert store.state()["skip_poll"] is None
 
@@ -4117,7 +4132,11 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 1 and sleeps == [10, 10]
-      assert "skip_poll" not in printed[-1] or "pending" in printed[-1] or "Inbox" in printed[-1]
+      assert (
+        "skip_poll" not in printed[-1]
+        or "pending" in printed[-1]
+        or "Inbox" in printed[-1]
+      )
 
       # A second press clears the flag: the agent keeps waiting, and the state says so.
       assert store.request_skip_poll()["skip_poll"]
@@ -4833,7 +4852,9 @@ def test_removed_report_leaves_nothing_in_the_save():
     before = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     assert [line["id"] for line in before if line.get("report_id")] == ["answer-1"]
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+      )
     store.unpublish("pick", dismissed_by_owner=True)
     lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     assert [line["id"] for line in lines if line.get("report_id")] == []
@@ -4857,7 +4878,9 @@ def test_unpublish_moves_the_state_stamp():
     store.publish("pick", "Pick one", source)
     before = store.newest_stamp()
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+      )
     store.unpublish("pick")
     after = store.newest_stamp()
     assert after and after > before, "the removal left the state stamp still"
@@ -4893,11 +4916,15 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
     assert store.state()["reports"], "the report stayed"
     # Mark as seen and unpublish
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain")
+      )
     store.unpublish("plain")
     # Owner dismissal of answered report still needs seen? For this test, mark answered report seen too
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+      )
     store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
 
@@ -4922,14 +4949,19 @@ def test_unpublish_waits_out_a_fresh_view():
       assert "seen" in str(error).lower()
     # Owner dismissal should also hold until seen in new logic
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+      )
     store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
     store.publish("later", "Pick one again", source)
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "later"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "later")
+      )
     store.unpublish("later")
     assert store.state()["reports"] == []
+
 
 def test_unpublish_names_the_answer_before_the_view_wait():
   """An answered report names its answer before any seen wait.
@@ -4945,7 +4977,9 @@ def test_unpublish_names_the_answer_before_the_view_wait():
     store.publish("pick", "Pick one", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
     with store.connect() as db, db:
-        db.execute("UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick"))
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
+      )
     try:
       store.unpublish("pick")
       raise AssertionError("Answered report did not refuse agent")
