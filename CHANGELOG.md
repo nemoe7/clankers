@@ -41,6 +41,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - **Transcript trim redesign**: the trim empties every older root, hides it, and keeps the newest rows of the newest root. The settle gate checks the stop control first, then the question card, then 1.2 s with no row added. Arena 1.10.1.
+- **Auto trim rename**: the transcript switch becomes Transcript — auto trim and gates the interval line alone. The keep-rows line and the trim-now button stay on the menu whatever it reads. Arena 1.10.9.
 
 #### preview
 

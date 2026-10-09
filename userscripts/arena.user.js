@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.8
+// @name         Arena.ai | NemoUtils | v1.10.9
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.8
+// @version      1.10.9
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1259,8 +1259,9 @@
   })();
 
     // A trim empties every older root and hides it, and keeps the newest rows of the
-    // newest root, once the page settles.
-  runFeature("transcript-trim", "Transcript — trim", function () {
+    // newest root, once the page settles. The switch gates the interval and the tick
+    // alone: the plan line and the trim-now press stay on the menu whatever it reads.
+  (function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
     var DEFAULT_ROWS = 50;
     var MIN_ROWS = 20;
@@ -1510,7 +1511,7 @@
     }
 
     function intervalLabel() {
-      return "Transcript — trim every " + Math.round(tickMs() / 1000) + " s";
+      return "Transcript — auto trim interval " + Math.round(tickMs() / 1000) + " s";
     }
 
     function restartTick() {
@@ -1525,7 +1526,7 @@
 
     function setTickByPrompt() {
       if (typeof prompt !== "function") return;
-      var answer = prompt("Trim tick in seconds (1 to 60)", String(Math.round(tickMs() / 1000)));
+      var answer = prompt("Auto trim interval in seconds (1 to 60)", String(Math.round(tickMs() / 1000)));
       if (answer === null) {
         registerInterval();
         return;
@@ -1575,37 +1576,32 @@
       trim();
     }
 
-    observer = new MutationObserver(function () {
-      settleState.mutationAt = Date.now();
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    timer = setInterval(tick, tickMs());
+    runFeature("transcript-trim", "Transcript — auto trim", function () {
+      registerInterval();
+      observer = new MutationObserver(function () {
+        settleState.mutationAt = Date.now();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      timer = setInterval(tick, tickMs());
+      return function () {
+        if (timer !== null) clearInterval(timer);
+        timer = null;
+        observer.disconnect();
+        observer = null;
+        if (intervalEntry !== null) {
+          menuDrop(intervalEntry);
+          intervalEntry = null;
+        }
+      };
+    }, null, false);
     registerCount();
-    // The owner's button: one press runs the cut at once, whatever the interval says.
+    // The owner's button: one press runs the cut at once, whatever the switch reads.
     nowEntry = menuAdd(function () {
       return "Transcript — trim now";
     }, function () {
       trim();
     });
-    registerInterval();
-    return function () {
-      if (timer !== null) clearInterval(timer);
-      if (labelTimer !== null) clearTimeout(labelTimer);
-      observer.disconnect();
-      if (intervalEntry !== null) {
-        menuDrop(intervalEntry);
-        intervalEntry = null;
-      }
-      if (nowEntry !== null) {
-        menuDrop(nowEntry);
-        nowEntry = null;
-      }
-      if (countEntry !== null) {
-        menuDrop(countEntry);
-        countEntry = null;
-      }
-    };
-  }, null, false);
+  })();
 
     // The composer hides while a turn runs, and its spacer height returns on show.
   runFeature("hide-composer", "Composer — hide", function () {
@@ -2519,7 +2515,7 @@
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.8";
+    var VERSION = "1.10.9";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid

@@ -11,15 +11,18 @@ const bundles = {
       "open-steering": "Steering — open",
       "hide-composer": "Composer — hide",
       "auto-scroll": "Transcript — auto-scroll",
-      "transcript-trim": "Transcript — trim",
+      "transcript-trim": "Transcript — auto trim",
       "tab-title": "Page — tab title",
       "state-download": "State — download",
     },
     // Every Arena entry leads with its module and carries no role word; a switch ends in (ON)/(OFF).
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
-    // The prompt fill owns the three proxy entries; the state download owns its two.
-    extraMenus: { "transcript-trim": 3, "prompt-fill": 3, "state-download": 2, "tab-title": 1 },
+    // The prompt fill owns the three proxy entries; the state download owns its two; the auto
+    // trim gates its interval line behind the switch alone.
+    extraMenus: { "transcript-trim": 1, "prompt-fill": 3, "state-download": 2, "tab-title": 1 },
+    // The keep-rows plan and the trim-now press stay on the menu whatever the switch says.
+    alwaysMenus: { "transcript-trim": 2 },
     // One entry stands outside the feature switches: the global pause.
     globalMenus: 1,
     countMenu: "Transcript — keep ",
@@ -59,6 +62,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const stored = new Map();
   let refuseWrite = false;
   let promptAnswer = null;
+  const alwaysMenus = bundle.alwaysMenus || {};
+  const alwaysTotal = keys.reduce((total, key) => total + (alwaysMenus[key] || 0), 0);
 
   function isOn(saved, key) {
     return offByDefault.has(key) ? saved.get(key) === true : saved.get(key) !== false;
@@ -69,6 +74,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const menusFor = (saved) =>
     (bundle.globalMenus || 0) +
     keys.length +
+    alwaysTotal +
     keys.reduce((total, key) => total + (isOn(saved, key) ? (extraMenus[key] || 0) : 0), 0);
 
   function load() {
@@ -148,7 +154,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Proxy — post key now",
       "Steering — open (ON)",
       "Transcript — auto-scroll (ON)",
-      "Transcript — trim (OFF)",
+      "Transcript — auto trim (OFF)",
+      "Transcript — keep 50 rows",
+      "Transcript — trim now",
       "State — download (ON)",
       "State — choose the file",
       "State — force save",
@@ -194,19 +202,21 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const toggle = menuFor(counted, "transcript-trim");
     assert.ok(toggle, "Missing the transcript trim toggle");
     assert.ok(reads(toggle.label, false), "Transcript trim ships OFF");
-    toggle.callback();
-    assert.equal(stored.get("transcript-trim"), true);
     // The plan menu is the one that names rows; the switch menu reads ": ON/OFF".
     const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("keep"));
-    assert.ok(findCount(), "Missing the transcript trim count menu");
     const findNow = () =>
       [...counted.menus.values()].find((item) => item.label === "Transcript — trim now");
-    assert.ok(findNow(), "Missing the trim now button");
+    // The manual entries answer the switch whatever it reads: a trim now runs with the auto
+    // trim still off.
+    assert.ok(findCount(), "The count menu stays while the auto trim is off");
+    assert.ok(findNow(), "The trim now button stays while the auto trim is off");
     findNow().callback();
     assert.ok(
       findCount().label.includes("50 rows"),
       "The count menu shows the default row limit",
     );
+    toggle.callback();
+    assert.equal(stored.get("transcript-trim"), true);
 
     // The count line belongs to the Transcript group, so it sits with its two switches rather
     // than at the bottom the manager appends it to.
@@ -220,10 +230,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Proxy — post key now",
         "Steering — open (ON)",
         "Transcript — auto-scroll (ON)",
-        "Transcript — trim (ON)",
+        "Transcript — auto trim (ON)",
         "Transcript — keep 50 rows",
         "Transcript — trim now",
-        "Transcript — trim every 5 s",
+        "Transcript — auto trim interval 5 s",
         "State — download (ON)",
         "State — choose the file",
         "State — force save",
@@ -234,8 +244,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "The keep-rows line sits in the Transcript group",
     );
     const findEvery = () =>
-      [...counted.menus.values()].find((item) => item.label.startsWith("Transcript — trim every"));
-    assert.ok(findEvery(), "Missing the trim interval menu");
+      [...counted.menus.values()].find((item) =>
+        item.label.startsWith("Transcript — auto trim interval"));
+    assert.ok(findEvery(), "The interval menu shows once the auto trim is on");
     assert.ok(findEvery().label.includes("5 s"), "The interval line shows the default tick");
     promptAnswer = "3";
     findEvery().callback();
@@ -280,6 +291,13 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     findCount().callback();
     assert.equal(stored.get(countKey), "100", "A bad plan keeps the old plan");
     promptAnswer = null;
+    // The switch gates the interval line alone, so the manual entries stay when it flips
+    // back to OFF.
+    toggle.callback();
+    assert.equal(stored.get("transcript-trim"), false);
+    assert.ok(!findEvery(), "The interval line leaves with the switch");
+    assert.ok(findCount(), "The count menu stays once the auto trim is off again");
+    assert.ok(findNow(), "The trim now button stays once the auto trim is off again");
   }
 
   stored.clear();
@@ -287,7 +305,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const allOff = load();
   assert.equal(allOff.active.observers, baseObservers);
   assert.equal(allOff.active.intervals, 0);
-  assert.equal(allOff.menus.size, keys.length + (bundle.globalMenus || 0));
+  assert.equal(allOff.menus.size, keys.length + (bundle.globalMenus || 0) + alwaysTotal);
   assert.ok(
     [...allOff.menus.values()]
       .filter((item) => switchLike(item.label))
@@ -319,7 +337,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       { observers: 0, intervals: 0 },
       "The pause stops every observer and timer where it stands",
     );
-    assert.equal(live.menus.size, keys.length + bundle.globalMenus, "Every feature switch stays usable while paused");
+    assert.equal(live.menus.size, keys.length + bundle.globalMenus + alwaysTotal, "Every feature switch stays usable while paused");
     assert.ok(reads(menuFor(live, "tab-title").label, true), "A paused feature keeps its own switch label");
     assert.ok(resumeMenu(), "The pause entry flips to resume");
     // A switch flipped while paused is stored, and the resume honors it.
