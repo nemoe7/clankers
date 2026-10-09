@@ -8,7 +8,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 
 - The published image is `ghcr.io/nemoe7/arena-preview-proxy:latest`, one mutable tag that follows the branch head. Images are multi-arch, so an arm64 host pulls natively.
 - Build locally with `docker build -t arena-preview-proxy .`, or let compose pull the published image.
-- The image holds no secrets. `PROXY_COOKIE_SECRET` is required, at least 32 characters; generate one with `openssl rand -hex 32`.
+- The image holds no secrets and keeps no memory: every open lands on the chooser.
 - `PORT` defaults to 8080, and the server binds `127.0.0.1` only: the Tailscale sidecar is the single way in.
 - `/healthz` answers `ok`, for the container health check.
 

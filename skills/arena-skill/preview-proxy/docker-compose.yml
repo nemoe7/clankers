@@ -1,5 +1,5 @@
 # Runs the published arena-preview-proxy image behind a Tailscale sidecar.
-# Set TS_AUTHKEY and PROXY_COOKIE_SECRET in the environment, or in a .env file.
+# Set TS_AUTHKEY in the environment, or in a .env file.
 # The sidecar applies tailscale-serve.json, so the tailnet reaches the proxy over
 # HTTPS at https://arena-preview.<tailnet>.ts.net; Funnel stays off.
 services:
@@ -9,10 +9,6 @@ services:
     restart: unless-stopped
     # The Tailscale sidecar owns the network namespace, so the proxy takes no ports.
     network_mode: service:tailscale
-    environment:
-      # Signs the selected-preview cookie; at least 32 characters. Generate one
-      # with `openssl rand -hex 32`.
-      PROXY_COOKIE_SECRET: ${PROXY_COOKIE_SECRET:?set PROXY_COOKIE_SECRET}
     depends_on:
       - tailscale
 

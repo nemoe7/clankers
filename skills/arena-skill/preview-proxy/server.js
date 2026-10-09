@@ -4,13 +4,9 @@ const fs = require('node:fs');
 const http = require('node:http');
 const https = require('node:https');
 const path = require('node:path');
-const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 
 const PORT = Number(process.env.PORT || 8080);
-const COOKIE_NAME = 'arena_preview_target';
-const COOKIE_MAX_AGE = 12 * 60 * 60;
-const COOKIE_SECRET = process.env.PROXY_COOKIE_SECRET || '';
 const HOP_BY_HOP_HEADERS = [
   'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
   'te', 'trailer', 'transfer-encoding', 'upgrade', 'proxy-connection'
@@ -51,52 +47,6 @@ function parseSelectedUrl(raw) {
     throw new Error('Only HTTPS preview roots on sbx-*.arena.site are accepted.');
   }
   return url;
-}
-
-function signOrigin(origin) {
-  const payload = Buffer.from(origin, 'utf8').toString('base64url');
-  const signature = crypto.createHmac('sha256', COOKIE_SECRET).update(payload).digest('base64url');
-  return `${payload}.${signature}`;
-}
-
-function verifyOriginToken(token) {
-  if (!token || typeof token !== 'string') return null;
-  const dot = token.lastIndexOf('.');
-  if (dot <= 0 || dot === token.length - 1) return null;
-  const payload = token.slice(0, dot);
-  const given = Buffer.from(token.slice(dot + 1));
-  const expected = Buffer.from(
-    crypto.createHmac('sha256', COOKIE_SECRET).update(payload).digest('base64url')
-  );
-  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return null;
-  try {
-    const url = new URL(`${Buffer.from(payload, 'base64url').toString('utf8')}/`);
-    return isAllowedPreview(url) ? url.origin : null;
-  } catch {
-    return null;
-  }
-}
-
-function readCookie(header, name) {
-  if (!header) return null;
-  for (const part of header.split(';')) {
-    const item = part.trim();
-    const eq = item.indexOf('=');
-    if (eq > 0 && item.slice(0, eq) === name) return item.slice(eq + 1);
-  }
-  return null;
-}
-
-function withoutProxyCookie(header) {
-  if (!header) return '';
-  return header.split(';')
-    .map(item => item.trim())
-    .filter(Boolean)
-    .filter(item => {
-      const eq = item.indexOf('=');
-      return item.slice(0, eq < 0 ? item.length : eq) !== COOKIE_NAME;
-    })
-    .join('; ');
 }
 
 function makeTarget(origin, pathname, search) {
@@ -357,26 +307,19 @@ const server = http.createServer((req, res) => {
   if (incoming.pathname.startsWith('/pwa/')) return servePwa(incoming, req, res);
 
   let target;
-  let targetCookie = null;
   try {
     if (incoming.searchParams.has('url')) {
       if (incoming.pathname !== '/') {
         return sendText(res, 400, 'Pass url only on the viewer root: /?url=<encoded-preview-url>');
       }
-      const selected = parseSelectedUrl(incoming.searchParams.get('url'));
-      target = selected;
-      targetCookie = `${COOKIE_NAME}=${signOrigin(selected.origin)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Lax`;
+      target = parseSelectedUrl(incoming.searchParams.get('url'));
     } else {
-      const origin = verifyOriginToken(readCookie(req.headers.cookie, COOKIE_NAME));
-      if (!origin) {
-        // No target yet: the main page itself answers, so it installs and carries the
-        // manifest link.
-        return sendHtml(res, 200, viewerPage(
-          'Choose a preview: paste its URL, or open this page from a share or a link that'
-          + ' carries one.'
-        ));
-      }
-      target = makeTarget(origin, incoming.pathname, incoming.search);
+      // The proxy keeps no memory: every open without a url lands on the chooser,
+      // so a stale address can never carry a launch to a dead site.
+      return sendHtml(res, 200, viewerPage(
+        'Choose a preview: paste its URL, or open this page from a share or a link that'
+        + ' carries one.'
+      ));
     }
   } catch (err) {
     if (incoming.pathname === '/') {
@@ -388,12 +331,9 @@ const server = http.createServer((req, res) => {
   const headers = { ...req.headers };
   for (const name of HOP_BY_HOP_HEADERS) delete headers[name];
   for (const name of FETCH_METADATA_HEADERS) delete headers[name];
-  const forwardedCookies = withoutProxyCookie(headers.cookie);
-  if (forwardedCookies) headers.cookie = forwardedCookies;
-  else delete headers.cookie;
   headers.host = target.host;
 
-  // The target origin comes from parseSelectedUrl or the signed cookie, and isAllowedPreview
+  // The target origin comes from parseSelectedUrl, and isAllowedPreview
   // pins both to HTTPS roots on sbx-*.arena.site with no credentials, port or path. CodeQL
   // cannot model that pattern allowlist, so .github/codeql/codeql-config.yml excludes
   // js/request-forgery for this forwarding request.
@@ -402,10 +342,7 @@ const server = http.createServer((req, res) => {
       const responseHeaders = { ...upstreamRes.headers };
       for (const name of HOP_BY_HOP_HEADERS) delete responseHeaders[name];
       if (responseHeaders['set-cookie']) {
-        const cookies = responseHeaders['set-cookie'].map(rewriteArenaCookie);
-        responseHeaders['set-cookie'] = targetCookie ? [targetCookie, ...cookies] : cookies;
-      } else if (targetCookie) {
-        responseHeaders['set-cookie'] = [targetCookie];
+        responseHeaders['set-cookie'] = responseHeaders['set-cookie'].map(rewriteArenaCookie);
       }
       const location = responseHeaders.location;
       if (location) {
@@ -446,11 +383,6 @@ server.requestTimeout = 10 * 60 * 1000;
 module.exports = { injectPwa, decodeBody, viewerPage };
 
 if (require.main === module) {
-  // A served proxy refuses a short signing secret; a require for the checks needs none.
-  if (COOKIE_SECRET.length < 32) {
-    console.error('PROXY_COOKIE_SECRET must be at least 32 characters.');
-    process.exit(1);
-  }
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`Arena preview proxy listening on 127.0.0.1:${PORT}`);
     console.log('Allowed target pattern: https://sbx-*.arena.site/');

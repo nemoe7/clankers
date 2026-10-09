@@ -26,6 +26,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Caveman experiments**: the squashed arena-skill copies under `caveman/` and `ultracave/` are gone. The vendored caveman skill under `.agents/skills/caveman/` stays.
 - **Session-local citations**: note, report, submission and task ID citations leave the docs, code comments and tests. Commit subjects and ack replies keep the provenance.
 
+#### preview
+
+- **Proxy target cookie**: the preview proxy keeps no memory of the chosen preview. The signed cookie, its secret, and the helper functions all leave, so every open without a url lands on the chooser. The proxied app keeps only the upstream session rewrite it needs.
+
 ### Changed
 
 #### house

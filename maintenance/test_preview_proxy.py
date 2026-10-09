@@ -68,7 +68,6 @@ def test_the_viewer_root_serves_an_installable_page():
     env={
       "PATH": "/usr/local/bin:/usr/bin:/bin",
       "PORT": str(port),
-      "PROXY_COOKIE_SECRET": SECRET,
     },
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
@@ -138,6 +137,51 @@ def test_injection_survives_a_page_without_a_head():
   assert result["broken"] is None, "a body that will not decode must stay untouched"
 
 
+def test_the_root_always_opens_the_chooser():
+  """The root serves the chooser every time. The proxy remembers nothing.
+
+  A signed target once let a later open skip straight to a stored preview, and a stale
+  address sent the owner to a dead site. Every open lands on the chooser now, whatever
+  the request carries.
+  """
+  port = free_port()
+  server = subprocess.Popen(
+    ["node", "server.js"],
+    cwd=str(SERVER.parent),
+    env={
+      "PATH": "/usr/local/bin:/usr/bin:/bin",
+      "PORT": str(port),
+    },
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+  )
+  try:
+    deadline = time.time() + 15
+    while time.time() < deadline:
+      try:
+        if get(port, "/healthz")[0] == 200:
+          break
+      except OSError:
+        time.sleep(0.1)
+    else:
+      raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
+
+    # A plain open lands on the chooser.
+    status, kind, body = get(port, "/")
+    assert status == 200 and "text/html" in kind, (status, kind)
+    assert 'name="url"' in body, "the root must open the chooser"
+    assert MANIFEST in body, "the chooser keeps the manifest link"
+    # Even a request that still carries the old target cookie lands on the chooser.
+    cookie = f"arena_preview_target={sign_origin('https://sbx-demo.arena.site')}"
+    status, kind, body = get(port, "/", cookie=cookie)
+    assert status == 200 and "text/html" in kind, (status, kind)
+    assert 'name="url"' in body, "a carried target must not skip the chooser"
+  finally:
+    server.terminate()
+    server.wait(timeout=10)
+
+
 def sign_origin(origin: str) -> str:
   """The cookie the proxy hands a viewer, signed the way the server signs it."""
   payload = base64.urlsafe_b64encode(origin.encode()).decode().rstrip("=")
@@ -165,7 +209,6 @@ def test_the_installed_app_opens_the_proxy_home():
     env={
       "PATH": "/usr/local/bin:/usr/bin:/bin",
       "PORT": str(port),
-      "PROXY_COOKIE_SECRET": SECRET,
     },
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
