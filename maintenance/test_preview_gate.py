@@ -445,3 +445,63 @@ def test_a_grafted_tip_with_visible_history_hears_the_replay_line():
       result.stderr
     )
     assert "Replay your commits over main" in result.stderr
+
+
+def test_a_missing_shim_runs_the_installer():
+  """A preview call with no arena-preview on PATH runs the installer first.
+
+  A restored sandbox loses the shim and the hooks, and the next preview call then had to
+  fail until the installer ran by hand. The call now starts the installer itself, so one
+  command carries the whole setup.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    scripts = root / ".agents" / "skills" / "arena-skill" / "scripts"
+    scripts.mkdir(parents=True)
+    import shutil as _shutil
+
+    _shutil.copy(
+      ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "preview.py",
+      scripts / "preview.py",
+    )
+    marker = root / "installed"
+    (scripts / "install.sh").write_text(
+      "#!/bin/bash\ntouch '" + str(marker) + "'\n", encoding="utf-8"
+    )
+    (scripts / "install.sh").chmod(0o755)
+    state = root / "state"
+    state.mkdir()
+    env = {
+      "PATH": "/usr/bin:/bin",
+      "HOME": str(root),
+      "ARENA_PREVIEW_STATE_DIR": str(state),
+    }
+    result = subprocess.run(
+      [sys.executable, str(scripts / "preview.py"), "init"],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=str(root),
+      env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert marker.exists(), "a missing shim must run the installer before the command"
+
+    # A shim already on PATH leaves the installer alone.
+    marker.unlink()
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    shim = bin_dir / "arena-preview"
+    shim.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    shim.chmod(0o755)
+    env["PATH"] = str(bin_dir) + os.pathsep + env["PATH"]
+    result = subprocess.run(
+      [sys.executable, str(scripts / "preview.py"), "init"],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=str(root),
+      env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert not marker.exists(), "a shim on PATH must skip the installer"

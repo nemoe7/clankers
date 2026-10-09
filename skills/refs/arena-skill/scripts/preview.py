@@ -3924,6 +3924,26 @@ def resolve_state_dir():
   return "arena-state"
 
 
+def ensure_installed():
+  """Run the installer once when the shim is off PATH, then go on.
+
+  A restored sandbox loses the shim and the hooks, and the next preview call then had to
+  wait for the installer by hand. The call starts the installer itself, so one command
+  carries the whole setup. A guarded run skips it, and a checkout without the live skill
+  has nothing to install.
+  """
+  if os.environ.get("ARENA_PREVIEW_NO_BOOTSTRAP") or shutil.which("arena-preview"):
+    return
+  for ancestor in Path(__file__).resolve().parents:
+    installer = ancestor / ".agents" / "skills" / "arena-skill" / "scripts" / "install.sh"
+    if installer.is_file():
+      try:
+        subprocess.run(["bash", str(installer)], cwd=str(ancestor), check=False)
+      except OSError:
+        pass
+      return
+
+
 def main():
   parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
   parser.add_argument(
@@ -4287,4 +4307,5 @@ def main():
 
 
 if __name__ == "__main__":
+  ensure_installed()
   raise SystemExit(main())

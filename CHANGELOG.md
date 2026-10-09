@@ -11,6 +11,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - **Checks-line drift notice**: a `gh pr checks` line hears the gate once a shell while origin/main leads the branch. Main moved, so no checks report until the branch rebases over it.
+- **Self-healing preview call**: a preview call with no `arena-preview` shim on PATH runs the skill installer first, so a restored sandbox heals in one command. `ARENA_PREVIEW_NO_BOOTSTRAP` skips the bootstrap.
 - **Note reread**: `arena-preview note` prints a saved note again by its short or full ID. A short ID that matches several notes prints every match.
 
 #### userscripts
