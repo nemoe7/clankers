@@ -27,7 +27,7 @@ flowchart TB
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-09. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file. Skill refs stay out.
+Latest measurements as of 2026-10-09. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file, except the proxies. Skill refs stay out.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -49,26 +49,6 @@ Latest measurements as of 2026-10-09. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 48,211 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 7,684 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,371 `B` |
-| `skills/arena-skill/arena-egress-proxy/Dockerfile` | `UTF-8 file size` | 619 `B` |
-| `skills/arena-skill/arena-egress-proxy/INSTALL.md` | `o200k_base` | 855 `tok` |
-| `skills/arena-skill/arena-egress-proxy/docker-compose.yml` | `UTF-8 file size` | 2,111 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/__init__.py` | `UTF-8 file size` | 396 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/__main__.py` | `UTF-8 file size` | 111 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/core.py` | `UTF-8 file size` | 16,768 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/github_api.py` | `UTF-8 file size` | 3,048 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/llm.py` | `UTF-8 file size` | 5,265 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/store.py` | `UTF-8 file size` | 1,957 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/arena_proxy/transfers.py` | `UTF-8 file size` | 4,050 `B` |
-| `skills/arena-skill/arena-egress-proxy/scripts/server.py` | `UTF-8 file size` | 385 `B` |
-| `skills/arena-skill/arena-egress-proxy/tailscale-serve.json` | `UTF-8 file size` | 265 `B` |
-| `skills/arena-skill/arena-preview-proxy/Dockerfile` | `UTF-8 file size` | 476 `B` |
-| `skills/arena-skill/arena-preview-proxy/INSTALL.md` | `o200k_base` | 900 `tok` |
-| `skills/arena-skill/arena-preview-proxy/assets/icon.svg` | `UTF-8 file size` | 318 `B` |
-| `skills/arena-skill/arena-preview-proxy/assets/register.js` | `UTF-8 file size` | 954 `B` |
-| `skills/arena-skill/arena-preview-proxy/assets/service-worker.js` | `UTF-8 file size` | 380 `B` |
-| `skills/arena-skill/arena-preview-proxy/docker-compose.yml` | `UTF-8 file size` | 1,298 `B` |
-| `skills/arena-skill/arena-preview-proxy/server.js` | `UTF-8 file size` | 14,298 `B` |
-| `skills/arena-skill/arena-preview-proxy/tailscale-serve.json` | `UTF-8 file size` | 266 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 13,714 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 109,691 `B` |
