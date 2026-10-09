@@ -575,7 +575,9 @@ function checkTranscriptTrim(api) {
     [rootRows[1][5].removed, false],
     [rootNodes[1].hiddenClass, false],
     [rootActions[0].removed, true],
-    [rootActions[1].removed, true],
+    // The action container leaves only with a root that lost every row: the newest
+    // root keeps its rows, so its actions, and the newest rows inside them, stay.
+    [rootActions[1].removed, false],
     // A lone root is the newest one: it keeps every row and never hides.
     [emptyTrim, 0],
     [emptyAction.removed, false],
@@ -1247,7 +1249,80 @@ function checkTabTitle(api) {
       },
     };
   }
-  // A regular-chat message streams data-agent-word spans; the mock grows them on demand.
+  // The owner's 1.10.1 bug: the turn ran on past the start-process card, and a
+  // later Bash row of the very same message owns the title instead of the card.
+  function processDocLaterRow() {
+    var play = {
+      closest: function (selector) {
+        return selector === "button" ? button : null;
+      },
+    };
+    var name = { textContent: "Start PR checks" };
+    var button = {
+      textContent: "Start PR checks",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    var card = {
+      textContent: "Start PR checks",
+      querySelector: function (selector) {
+        return selector === PLAY_SELECTOR ? play : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
+      },
+    };
+    button.parentElement = card;
+    var bashButton = {
+      textContent: "Bash sleep 25",
+      parentElement: null,
+      querySelector: function () {
+        return null;
+      },
+    };
+    var bashRow = {
+      querySelector: function (selector) {
+        return selector === "button" ? bashButton : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === "button" ? [bashButton] : [];
+      },
+    };
+    bashButton.parentElement = bashRow;
+    var bashLabel = {
+      textContent: "Bash sleep 25",
+      closest: function (selector) {
+        return selector === "button" ? bashButton : null;
+      },
+    };
+    var message = {
+      querySelectorAll: function (selector) {
+        if (selector === PLAY_SELECTOR) return [play];
+        if (selector === GROUP_LABEL_SELECTOR) return [name, bashLabel];
+        return [];
+      },
+    };
+    return {
+      title: "ChatGPT",
+      querySelector: function () {
+        return null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) {
+          return [message];
+        }
+        if (selector === "button[aria-label]") {
+          return [stopButton("Stop generating")];
+        }
+        return [];
+      },
+    };
+  }
   function speechDoc(withStop) {
     var words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
     return {
@@ -1694,16 +1769,29 @@ function checkTabTitle(api) {
     // The anchor cites the row that won the mark, not the row the page re-derives at
     // write time: the reason and the row half name one row.
     [expireHold(), null],
+    // The newest row owns the mark: a later Explored row, or a later Bash row,
+    // takes the title back from a start-process card in the same message.
     [
       loggedTitleHead(processDocExplored()),
-      "[NemoUtils][title] action row (Start PR checks) -> " +
+      "[NemoUtils][title] action row (Explored 2 reads) -> " +
+        TITLE_PREFIX +
+        "clankers \uD83D\uDCD6",
+    ],
+    [
+      loggedTitleTail(processDocExplored()),
+      "repo=clankers row=action row (Explored 2 reads)",
+    ],
+    [
+      loggedTitleHead(processDocLaterRow()),
+      "[NemoUtils][title] action row (Bash sleep 25) -> " +
         TITLE_PREFIX +
         "clankers \uD83D\uDDA5\uFE0F",
     ],
     [
-      loggedTitleTail(processDocExplored()),
-      "repo=clankers row=action row (Start PR checks)",
+      loggedTitleTail(processDocLaterRow()),
+      "repo=clankers row=action row (Bash sleep 25)",
     ],
+    [processRow(processDocLaterRow()), null],
     [expireHold(), null],
     [
       loggedTitleHead(idleDoc),

@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- **Transcript trim actions**: the action container leaves only with a root the trim emptied. A root that keeps rows keeps its actions, so the newest rows stay. Arena 1.10.2.
+- **Title newest row**: the title mark follows the newest row of the newest message. An older start-process card or shimmer label loses the mark once a newer row lands. Arena 1.10.2.
 - **Title log anchor**: the title line's anchor cites the row that won the mark. It once re-derived a row at write time, so the reason and the anchor could name two different rows. Arena 1.10.0.
 
 #### preview

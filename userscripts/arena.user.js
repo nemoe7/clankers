@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.1
+// @version      1.10.2
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1350,16 +1350,17 @@
         var rows = rowsOfRoot(roots[i]);
         var removedFromRoot = trimRows(rows, newest ? keep : 0);
         removed += removedFromRoot;
-        if (removedFromRoot) removeActionSibling(roots[i]);
-        if (!newest) {
-          var attached = 0;
-          var j;
-          for (j = 0; j < rows.length; j += 1) {
-            if (rows[j].parentElement) attached += 1;
-          }
-          if (!attached && typeof roots[i].classList !== "undefined") {
-            roots[i].classList.add("hidden");
-          }
+        // The action container carries the newest rows on the live page, so it
+        // leaves only with a root the trim emptied; a root that keeps rows keeps
+        // its actions, and the newest rows stay with them.
+        var attached = 0;
+        var j;
+        for (j = 0; j < rows.length; j += 1) {
+          if (rows[j].parentElement) attached += 1;
+        }
+        if (removedFromRoot && !attached) removeActionSibling(roots[i]);
+        if (!newest && !attached && typeof roots[i].classList !== "undefined") {
+          roots[i].classList.add("hidden");
         }
       }
       return removed;
@@ -2543,10 +2544,28 @@
       return false;
     }
 
+    // The newest row of the newest message owns the mark: a finished row keeps
+    // its shimmer label and its pulse in the page, so an older row that still
+    // glows is history once a newer row lands, and never holds the title.
+    function newestRow(doc) {
+      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+      var newest = messages.length ? messages[messages.length - 1] : null;
+      if (!newest || typeof newest.querySelectorAll !== "function") {
+        return null;
+      }
+      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR);
+      return groups.length ? rowFromLabel(groups[groups.length - 1]) : null;
+    }
+
+    function rowIsNewest(doc, row) {
+      var newest = newestRow(doc);
+      return !newest || newest === row;
+    }
+
     function strongRow(doc) {
       var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
       var row = rowFromLabel(labels.length ? labels[labels.length - 1] : null);
-      if (row) {
+      if (row && rowIsNewest(doc, row)) {
         return row;
       }
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
@@ -2555,13 +2574,13 @@
       for (i = messages.length - 1; i >= 0; i -= 1) {
         icons = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(LIVE_ICON_SELECTOR) : [];
         row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-        if (row) {
+        if (row && rowIsNewest(doc, row)) {
           return row;
         }
       }
       icons = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_ICON_SELECTOR) : [];
       row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-      return row && knownLabel(liveLabel(row)) ? row : null;
+      return row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row) ? row : null;
     }
 
     function liveRow(doc) {
@@ -2593,7 +2612,13 @@
         return null;
       }
       var icons = newest.querySelectorAll(PLAY_SELECTOR);
-      return icons.length ? rowFromIcon(icons[icons.length - 1]) : null;
+      var card = icons.length ? rowFromIcon(icons[icons.length - 1]) : null;
+      // The card is news only while it is the newest row of the message: a later
+      // row of any kind takes the title back from the start-process card.
+      if (card && !rowIsNewest(doc, card)) {
+        return null;
+      }
+      return card;
     }
 
     function knownLabel(text) {
