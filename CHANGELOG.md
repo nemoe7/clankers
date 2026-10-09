@@ -62,6 +62,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - **Answered reports close to the agent**: an answered report refuses the agent's unpublish at once, ahead of the view wait. A revision publishes under a new id, and the tab stays the owner's to dismiss from the page.
 - **CONTINUE rides stdout**: an early poll exit over an unblocked task prints the warning to stdout too. The line lands right before the JSON listing, so a stdout-only turn meets it.
 
+#### arena
+
+- **Paragraph cap**: the terseness clause carries a hard limit of 4 sentences per paragraph, in the refs wording and in the compressed live copies.
 
 ### Fixed
 
