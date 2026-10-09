@@ -2502,6 +2502,82 @@ def test_report_agent_seen_migration():
     assert migrated.state()["reports"][0]["agent_seen_at"] is None
 
 
+def test_poll_hold_on_stale_records(capsys):
+  # The hold reads the newest stamp every record kind carries, reads and acks
+  # included. Every record older than one full poll span names a possible
+  # session memory rollback, so the wait ends with the hold line.
+  with tempfile.TemporaryDirectory() as hold_dir:
+    hold = preview.Store(hold_dir, create=True)
+    hold.note(
+      "stale-note",
+      "ancient",
+      at="2026-01-01T00:00:00+00:00",
+      seen_at="2026-01-01T00:01:00+00:00",
+      acknowledged_at="2026-01-01T00:02:00+00:00",
+      ack_kind="reply",
+      ack_text="answered long ago",
+      ack_edited_at="2026-01-01T00:02:00+00:00",
+      replies=[
+        {
+          "kind": "reply",
+          "text": "answered long ago",
+          "at": "2026-01-01T00:02:00+00:00",
+        }
+      ],
+    )
+    with patch.object(preview, "now", return_value="2026-01-01T01:00:00+00:00"):
+      assert preview.poll_inbox(hold, sleeper=lambda seconds: None) == 1
+    error = capsys.readouterr().err
+    assert "HOLD" in error, error
+    assert "rolled back" in error, error
+    # A fresh read stamp counts too: the scan covers reads, so the hold stays quiet.
+    with hold.connect() as db, db:
+      db.execute("UPDATE notes SET seen_at = '2026-01-01T01:00:00+00:00'")
+    with patch.object(preview, "now", return_value="2026-01-01T01:00:00+00:00"):
+      assert preview.poll_inbox(hold, sleeper=lambda seconds: None) == 1
+    assert "HOLD" not in capsys.readouterr().err
+
+
+def test_ack_of_a_stale_message_prints_the_hold():
+  # An ack that answers a message older than one full poll span may chase a
+  # rolled-back memory, so the receipt carries the hold line; a fresh message
+  # acks quiet.
+  with tempfile.TemporaryDirectory() as ack_dir:
+    acked = preview.Store(ack_dir, create=True)
+    acked.note("stale-ack", "old message", at="2026-01-01T00:00:00+00:00")
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "ack",
+        "stale-ack",
+        "--reply",
+        "answering an old line",
+      ],
+      capture_output=True,
+      text=True,
+      check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir},
+    )
+    assert "HOLD" in result.stderr, result.stderr
+    acked.note("fresh-ack", "new message")
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "ack",
+        "fresh-ack",
+        "--reply",
+        "answering a new line",
+      ],
+      capture_output=True,
+      text=True,
+      check=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir},
+    )
+    assert "HOLD" not in result.stderr, result.stderr
+
+
 def test_task_list():
   with tempfile.TemporaryDirectory() as tasks_dir:
     tasks_store = preview.Store(tasks_dir, create=True)
