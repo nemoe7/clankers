@@ -1214,8 +1214,10 @@ def serve_warning(line):
   )
 
 
-def quiet_inbox_line(line):
-  """True when a command line that names an inbox call runs nothing else.
+def first_blocking_piece(line):
+  """Return the first command piece that ends the quiet-line exemption, or None.
+
+  A line that names an inbox call runs nothing else when this returns None.
 
   The gate exempts a line so a read reaches its read. Work beside the read must
   not ride that exemption: every command on the line is either an inbox call or
@@ -1256,10 +1258,15 @@ def quiet_inbox_line(line):
       # A substitution runs work beside the read; a plain redirect is ignored
       # for debug traps that silence output.
       if any(token.startswith("$(") or "`" in token for token in rest):
-        return False
+        return piece.strip()
       continue
-    return False
-  return True
+    return piece.strip()
+  return None
+
+
+def quiet_inbox_line(line):
+  """True when a command line that names an inbox call runs nothing else."""
+  return first_blocking_piece(line) is None
 
 
 # The commands an agent chains around an inbox call. Each one ends the quiet-line
@@ -4319,6 +4326,12 @@ def main():
         hint = gate_line_hint(args.line)
         if hint:
           print(hint, flush=True)
+        blocker = first_blocking_piece(args.line)
+        if blocker:
+          print(
+            f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",
+            flush=True,
+          )
         return 1
       # A push whose content equals origin/main leaves the pull request without a diff,
       # and GitHub then closes it. The checkpoint holds before any such push.

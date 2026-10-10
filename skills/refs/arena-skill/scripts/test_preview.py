@@ -3380,6 +3380,18 @@ def test_bash_gate():
     assert cleared_push.returncode == 0
 
 
+def test_first_blocking_piece_names_the_part_that_blocks():
+  """A blocked call names its first part that is not an inbox call or an inert prefix."""
+  assert (
+    preview.first_blocking_piece(
+      "arena-preview read && arena-preview ack a1 --note 'x'"
+    )
+    is None
+  )
+  assert preview.first_blocking_piece("arena-preview read | tail -1") == "tail -1"
+  assert preview.first_blocking_piece("arena-preview read && npm test") == "npm test"
+
+
 def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
   # A cd prefix is fine on the writer's line, on the way to a read or a poll; the banned
   # readers end the quiet-line exemption, so their call blocks instead of riding along.

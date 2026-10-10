@@ -439,7 +439,7 @@ def serve_warning(line):
 	found=SERVE_PORT_RE.search(line or'')
 	if not found or int(found.group(1))==DEFAULT_PORT:return None
 	return f"arena-preview gate: that serve names port {found.group(1)}, not the standard {DEFAULT_PORT}. The owner's page and the poll follow the standard port. Name another only when 8000 is taken, and say so."
-def quiet_inbox_line(line):
+def first_blocking_piece(line):
 	text=unquote_commands(line)
 	for separator in('&&','||',';','|','\n'):text=text.replace(separator,'\x00')
 	for piece in text.split('\x00'):
@@ -458,10 +458,11 @@ def quiet_inbox_line(line):
 		if head in INERT_COMMANDS:continue
 		if head in('arena-preview','preview.py'):
 			rest=tokens[idx+1:]
-			if any(token.startswith('$(')or'`'in token for token in rest):return False
+			if any(token.startswith('$(')or'`'in token for token in rest):return piece.strip()
 			continue
-		return False
-	return True
+		return piece.strip()
+	return None
+def quiet_inbox_line(line):return first_blocking_piece(line)is None
 GATE_NOISE='tail','grep','head'
 def gate_line_hint(line):
 	words={token for token in re.split('[^A-Za-z0-9_.-]+',line or'')};found=[name for name in GATE_NOISE if name in words]
@@ -1313,6 +1314,8 @@ def main():
 				if args.push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, push again.',flush=True)
 				print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note, one call per note: `arena-preview ack <id> --reply <markdown>` or `arena-preview ack <id> --note <text>`.',flush=True);hint=gate_line_hint(args.line)
 				if hint:print(hint,flush=True)
+				blocker=first_blocking_piece(args.line)
+				if blocker:print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",flush=True)
 				return 1
 			if args.push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
 			return 0
