@@ -102,18 +102,27 @@ def pr_failed_check(root='.'):
 	branch=workspace_branch(root);slug=repo_slug(root)
 	if not branch or not slug:return''
 	try:
-		head=subprocess.run(['gh','pr','list','--head',branch,'--json','headRefOid','--jq','.[0].headRefOid'],cwd=root,capture_output=True,text=True,check=False).stdout.strip()
+		listed=subprocess.run(['gh','pr','list','--head',branch,'--json','headRefOid','--jq','.[0].headRefOid'],cwd=root,capture_output=True,text=True,check=False)
+		if listed.returncode:return None
+		head=listed.stdout.strip()
 		if not head:return''
-		query='[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out") | .name] | join(", ")';return subprocess.run(['gh','api',f"repos/{slug}/commits/{head}/check-runs",'--jq',query],cwd=root,capture_output=True,text=True,check=False).stdout.strip()
-	except OSError:return''
+		query='[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out") | .name] | join(", ")';checks=subprocess.run(['gh','api',f"repos/{slug}/commits/{head}/check-runs",'--jq',query],cwd=root,capture_output=True,text=True,check=False)
+		if checks.returncode:return None
+		return checks.stdout.strip()
+	except OSError:return None
 def pr_check_worker(store,root,stop):
-	while not stop.is_set():payload=json.dumps({'failed':pr_failed_check(root),'ts':now()});store.set_meta(PR_CHECK_META,payload);stop.wait(PR_CHECK_INTERVAL)
+	while not stop.is_set():
+		failed=pr_failed_check(root)
+		if failed is not None:
+			try:store.set_meta(PR_CHECK_META,json.dumps({'failed':failed,'ts':now()}))
+			except Exception:pass
+		stop.wait(PR_CHECK_INTERVAL)
 def cached_pr_failure(db):
 	row=db.execute('SELECT value FROM meta WHERE key = ?',(PR_CHECK_META,)).fetchone()
 	if not row:return''
-	try:payload=json.loads(str(row[0]));stamp=datetime.fromisoformat(str(payload.get('ts','')))
+	try:payload=json.loads(str(row[0]));stamp=datetime.fromisoformat(str(payload.get('ts','')));age=(datetime.now(timezone.utc)-stamp).total_seconds()
 	except(ValueError,TypeError):return''
-	if(datetime.now(timezone.utc)-stamp).total_seconds()>PR_CHECK_TTL:return''
+	if age>PR_CHECK_TTL:return''
 	return str(payload.get('failed',''))
 SESSION_ID_TABLES=('notes','note'),('submissions','answer'),('reports','report'),('tasks','task')
 HEX7_RE=re.compile('[0-9a-f]{7}')

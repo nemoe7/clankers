@@ -395,6 +395,54 @@ def test_resolve_repo_root():
   assert (Path(root) / ".git").exists()
 
 
+def test_pr_failed_check_gh_error():
+  # A gh non-zero exit reads as None, a fault, not an empty all-clear, so the worker
+  # keeps the last good cache instead of caching no failure.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / ".git").mkdir()
+    (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", "utf-8")
+    fault = subprocess.CompletedProcess(["gh"], 1, stdout="", stderr="auth failed")
+    with (
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.subprocess.run", return_value=fault),
+    ):
+      assert preview.pr_failed_check(str(root)) is None
+
+
+def test_cached_pr_failure_naive_stamp():
+  # A naive timestamp must not crash the reminder; the bad cache reads as no failure.
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory), create=True)
+    naive = "2026-01-01T00:00:00"  # No offset: a naive stamp, so the aware diff raises.
+    store.set_meta(
+      preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": naive})
+    )
+    assert "Pull request checks failed" not in store.reminder()
+
+
+def test_pr_check_worker_survives_set_meta_fault():
+  # A set_meta fault must not end the worker; it waits and writes on the next cycle.
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory), create=True)
+    stop = threading.Event()
+    writes = []
+
+    def fake_set_meta(key, value):
+      writes.append(key)
+      if len(writes) == 1:
+        raise sqlite3.OperationalError("database is locked")
+      stop.set()
+
+    with (
+      patch.object(preview.Store, "set_meta", side_effect=fake_set_meta),
+      patch("preview.pr_failed_check", return_value=""),
+      patch("preview.PR_CHECK_INTERVAL", 0),
+    ):
+      preview.pr_check_worker(store, ".", stop)
+    assert len(writes) >= 2, "the worker retried after the write fault"
+
+
 def test_http_boundaries():
   global app
   with tempfile.TemporaryDirectory() as directory:
