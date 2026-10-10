@@ -5275,3 +5275,23 @@ def test_note_reread_prints_every_match():
     gone = run("note", "ffff999")
     assert gone.returncode == 1
     assert "No note matches" in gone.stderr
+
+
+def test_poll_breaks_on_finished_run(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    sleeps = []
+
+    def sleeper(seconds):
+      sleeps.append(seconds)
+      # A gate run that ends during the wait breaks it with the verdict.
+      if len(sleeps) == 1:
+        preview.run_command(
+          directory, "gate", ["--", sys.executable, "-c", "print('ok')"]
+        )
+
+    assert preview.poll_inbox(store, sleeper=sleeper) == 0
+    assert len(sleeps) == 1
+    out = capsys.readouterr().out
+    assert "Finished run gate: exit 0" in out and "Verdict: ok" in out
+    assert preview.run_notices(directory) == 0

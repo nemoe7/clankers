@@ -33,6 +33,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The message search marks a longer query that spans text an earlier query split. The mark has no horizontal padding, so the text does not shift.
 - The stderr reminder labels the pending count `Unacked:`, so the call count is not read as a note count.
 - `arena-preview run <name> -- <command>` prints the verdict and the time to stdout and stderr. The next gate call shows each finished run once, with its verdict.
+- `arena-preview poll` ends when a gate run finishes and prints its verdict, as well as on a new note or task.
 - An answered report no longer refuses the agent's unpublish. The owner's dismissal path is unchanged.
 
 #### maintenance
