@@ -1676,9 +1676,10 @@ def poll_inbox(store, sleeper=None):
         # The skip ends the turn here, so the header learns the turn is over.
         store.mark_turn_ended()
         # The skip is one-shot and never a message: the turn ends here, and no note repeats.
+        # This rides stdout with the rest of the poll's own output. On stderr it mixed into
+        # the gate's rotating hints, and an agent read it as a hint and polled again.
         print(
           "SKIP: owner pressed Skip poll. End the turn, no second poll.",
-          file=sys.stderr,
           flush=True,
         )
         print(format_read(listing), flush=True)

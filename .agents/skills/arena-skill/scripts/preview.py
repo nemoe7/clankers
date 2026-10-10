@@ -569,7 +569,7 @@ def poll_inbox(store,sleeper=None):
 			if run_notices(store.path.parent):print_poll_hold(store);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);print_poll_hold(store);return 0
-			if store.skip_poll_requested():store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',file=sys.stderr,flush=True);print(format_read(listing),flush=True);print_poll_hold(store);return 0
+			if store.skip_poll_requested():store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);print_poll_hold(store);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
 	store.mark_turn_ended();print('Poll ended: 0 pending.',flush=True);print_poll_hold(store);return 1

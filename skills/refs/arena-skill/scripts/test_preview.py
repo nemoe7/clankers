@@ -4250,9 +4250,13 @@ def test_skip_poll():
   with tempfile.TemporaryDirectory() as skip_dir:
     store = preview.Store(skip_dir, create=True)
     printed = []
+    streams = []
 
     def capture(value, **kwargs):
       printed.append(value)
+      # The stream matters here: on stderr the skip line mixed into the gate's
+      # rotating hints, and an agent read it as a hint and polled again.
+      streams.append("stderr" if kwargs.get("file") is sys.stderr else "stdout")
 
     def run_poll():
       sleeps = []
@@ -4288,8 +4292,10 @@ def test_skip_poll():
       assert store.skip_poll_requested() is True
       assert store.state()["notes"] == [], "the press never writes a note"
 
-      # The poll ends at once, prints the stamp it consumed, and names the skip on stderr.
+      # The poll ends at once, prints the stamp it consumed, and names the skip on
+      # stdout with the rest of the poll's own output.
       printed.clear()
+      streams.clear()
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
@@ -4297,6 +4303,7 @@ def test_skip_poll():
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
+      assert streams[1] == "stdout", "the skip line must not ride stderr with the hints"
       assert (
         stamp in printed[-1] or "skip_poll" in printed[-1] or "Inbox" in printed[-1]
       )
