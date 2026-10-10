@@ -13,6 +13,7 @@ import sys
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -5543,3 +5544,79 @@ def test_commit_trap_matches_a_kebab_id_on_its_full_form_only():
     tokens = preview.session_id_tokens(store)
     assert "an-example-report-id" in tokens
     assert "an-example" not in tokens
+
+
+def test_rename_repoints_a_note_and_its_uploads():
+  """A renamed note keeps its uploads: the schema declares no key, so the rename moves them."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("aaaaaaa-1111111111111111111111111", "a note")
+    store.save_upload(
+      "photo.png", "image/png", b"pixels", note_id="aaaaaaa-1111111111111111111111111"
+    )
+
+    kind = store.rename_entity(
+      "aaaaaaa-1111111111111111111111111", "bbbbbbb-2222222222222222222222222"
+    )
+
+    assert kind == "note"
+    with closing(store.connect()) as db:
+      assert (
+        db.execute(
+          "SELECT count(*) FROM notes WHERE id = 'bbbbbbb-2222222222222222222222222'"
+        ).fetchone()[0]
+        == 1
+      )
+      orphaned = db.execute(
+        "SELECT count(*) FROM uploads WHERE note_id = 'aaaaaaa-1111111111111111111111111'"
+      ).fetchone()[0]
+      moved = db.execute(
+        "SELECT count(*) FROM uploads WHERE note_id = 'bbbbbbb-2222222222222222222222222'"
+      ).fetchone()[0]
+    assert orphaned == 0 and moved == 1
+
+
+def test_rename_repoints_a_task_from_the_records_that_name_it():
+  """A renamed task keeps the note marker and the blocked report link."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("aaaaaaa-1111111111111111111111111", "a note")
+    store.write_task("old-name", "A title", ["One step"])
+    store.mark_task("aaaaaaa-1111111111111111111111111", "old-name")
+
+    kind = store.rename_entity("old-name", "new-name")
+
+    assert kind == "task"
+    with closing(store.connect()) as db:
+      assert (
+        db.execute("SELECT count(*) FROM notes WHERE task_id = 'new-name'").fetchone()[
+          0
+        ]
+        == 1
+      )
+      assert (
+        db.execute("SELECT count(*) FROM notes WHERE task_id = 'old-name'").fetchone()[
+          0
+        ]
+        == 0
+      )
+
+
+def test_rename_refuses_an_id_another_record_holds():
+  """One ID names one record, so a rename onto a taken ID fails and moves nothing."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.write_task("first-task", "A title", ["One step"])
+    store.write_task("second-task", "Another title", ["One step"])
+
+    try:
+      store.rename_entity("first-task", "second-task")
+      raise AssertionError("a rename onto a taken ID must fail")
+    except ValueError as error:
+      assert "second-task" in str(error)
+
+    with closing(store.connect()) as db:
+      assert (
+        db.execute("SELECT count(*) FROM tasks WHERE id = 'first-task'").fetchone()[0]
+        == 1
+      )

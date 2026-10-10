@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The run verdict and the CONTINUE line print to one stream, not both. Nine measured commands drop from 673 tokens to 479.
 - The DEBUG trap blocks a `git commit` whose staged lines cite a session-local ID.
 - The trap reads the staged diff against the state database, so a git SHA never matches. A full ID and its 7-character head both match, and the block names the file and line.
+- `arena-preview rename <old> <new>` moves a note, answer, report or task to a new ID and repoints every row that names it in one transaction. It clears a collision where a git SHA and a session ID genuinely share seven letters.
 
 #### maintenance
 

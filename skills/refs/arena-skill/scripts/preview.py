@@ -715,6 +715,17 @@ MAX_TASK_DETAILS = 40
 TASK_STEP_MAX = 120
 ECHO_DETAIL = 200
 TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked, report_id"
+# Each kind's own table and the columns elsewhere that carry its ID. The schema
+# declares no foreign keys and no connection sets PRAGMA foreign_keys, so nothing
+# cascades on its own: a rename repoints these rows by hand.
+RENAME_TARGETS = {
+  "note": ("notes", (("uploads", "note_id"),)),
+  "answer": ("submissions", ()),
+  "report": ("reports", (("submissions", "report_id"), ("tasks", "report_id"))),
+  "task": ("tasks", (("notes", "task_id"), ("submissions", "task_id"))),
+}
+RENAME_TABLES = ("notes", "submissions", "reports", "tasks")
+
 # The save file carries note, task and answer lines through one importer. Keys are named
 # here so the writer and reader cannot drift apart.
 #
@@ -2471,6 +2482,43 @@ class Store:
         f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID,"
         f" for example {identity}-{table[:-1]}"
       )
+
+  def rename_entity(self, prev_id, new_id):
+    """Move one record to a new ID and repoint every row that names the old one.
+
+    A git SHA can share its seven letters with a session ID, and the commit trap then
+    has no way to tell them apart. Renaming the session record clears the collision
+    without touching the SHA. One transaction covers the record and its dependents,
+    so a rename never lands half.
+    """
+    identifier(new_id)
+    exact = [item for item in self.id_matches(prev_id) if item[1]["id"] == prev_id]
+
+    if len(exact) != 1:
+      raise ValueError(f"No note, answer, report or task holds the ID {prev_id}")
+
+    kind = exact[0][0]
+    table, dependents = RENAME_TARGETS[kind]
+
+    if kind == "task":
+      check_task(new_id, None, None)
+
+    with self.transaction() as db:
+      for other in RENAME_TABLES:
+        if db.execute(f"SELECT 1 FROM {other} WHERE id = ?", (new_id,)).fetchone():
+          raise ValueError(f"{new_id} already names a row in {other}")
+
+      db.execute(f"UPDATE {table} SET id = ? WHERE id = ?", (new_id, prev_id))
+
+      if table == "tasks":
+        db.execute("UPDATE tasks SET updated_at = ? WHERE id = ?", (now(), new_id))
+
+      for other, column in dependents:
+        db.execute(
+          f"UPDATE {other} SET {column} = ? WHERE {column} = ?", (new_id, prev_id)
+        )
+
+    return kind
 
   def amend_task(self, prev_id, task_id):
     """Move a stored task to a new ID and keep the rest, so a typo costs no deletion."""
@@ -4446,6 +4494,12 @@ def main():
     help="Warn when a serve names a port other than the default",
   )
   serve_tick.add_argument("line", help="The command line, as the hook read it")
+  rename = commands.add_parser(
+    "rename",
+    help="Move a note, answer, report or task to a new ID",
+  )
+  rename.add_argument("old_id", help="The stored ID, or a prefix that names one record")
+  rename.add_argument("new_id", help="The ID to move the record to")
   commit_tick = commands.add_parser(
     "commit-tick",
     help="Block a commit whose staged lines cite a session-local ID",
@@ -4594,6 +4648,22 @@ def main():
       warning = serve_warning(args.line)
       if warning:
         print(warning, file=sys.stderr)
+      return 0
+    if args.command == "rename":
+      try:
+        old_id = Store(state_dir).resolve_id(args.old_id)
+      except FileNotFoundError:
+        print(f"No note, answer, report or task holds the ID {args.old_id}")
+        return 1
+      except ValueError as error:
+        print(error)
+        return 1
+      try:
+        kind = Store(state_dir).rename_entity(old_id, args.new_id)
+      except ValueError as error:
+        print(error)
+        return 1
+      print(f"ok {kind} {old_id} -> {args.new_id}")
       return 0
     if args.command == "commit-tick":
       try:
