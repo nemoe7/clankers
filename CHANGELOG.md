@@ -105,6 +105,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `arena-preview read` prints an `attachments:` line with each upload's own file name and its saved path, and marks a lost upload `(missing)`.
 - The live install script matches its refs source.
 - Unpublish holds until the owner sees the report. The gate ignores output sent to `/dev/null`.
+- The serve no longer crashes on start. The failed-check worker resolves the repository root before it reads the branch.
 
 #### maintenance
 

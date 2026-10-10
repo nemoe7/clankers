@@ -1415,6 +1415,10 @@ def handler(store):
 			except(ValueError,TypeError,UnicodeDecodeError)as error:self.problem(400,error)
 			except(OSError,sqlite3.Error,RuntimeError)as error:self.problem(503,error)
 	return Handler
+def resolve_repo_root():
+	for parent in Path(__file__).resolve().parents:
+		if(parent/'.git').exists():return str(parent)
+	return str(Path.cwd())
 def resolve_state_dir():
 	configured=os.environ.get('ARENA_PREVIEW_STATE_DIR')
 	if configured:return configured
@@ -1481,7 +1485,7 @@ def main():
 		if args.command=='serve':
 			require_renderer()
 			with ThreadingHTTPServer(('0.0.0.0',args.port),handler(store))as server:
-				store.set_meta('port',str(server.server_port));print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);stop=threading.Event();threading.Thread(target=pr_check_worker,args=(store,str(state_dir.parent),stop),daemon=True).start()
+				store.set_meta('port',str(server.server_port));print(f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",flush=True);stop=threading.Event();threading.Thread(target=pr_check_worker,args=(store,resolve_repo_root(),stop),daemon=True).start()
 				try:server.serve_forever()
 				finally:stop.set()
 		elif args.command=='read':require_server(store);store.notice_expired_key();print_read(store)

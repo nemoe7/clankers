@@ -4608,6 +4608,14 @@ def handler(store):
   return Handler
 
 
+def resolve_repo_root():
+  """The first ancestor of this file that holds .git, or the working directory."""
+  for parent in Path(__file__).resolve().parents:
+    if (parent / ".git").exists():
+      return str(parent)
+  return str(Path.cwd())
+
+
 def resolve_state_dir():
   """ARENA_PREVIEW_STATE_DIR wins; otherwise the repository arena-state."""
   configured = os.environ.get("ARENA_PREVIEW_STATE_DIR")
@@ -4977,7 +4985,7 @@ def main():
         stop = threading.Event()
         threading.Thread(
           target=pr_check_worker,
-          args=(store, str(state_dir.parent), stop),
+          args=(store, resolve_repo_root(), stop),
           daemon=True,
         ).start()
         try:

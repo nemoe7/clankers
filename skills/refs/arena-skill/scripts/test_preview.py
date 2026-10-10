@@ -387,6 +387,14 @@ def test_pr_failed_check_breaks_poll():
     assert not slept, "the poll breaks before it sleeps"
 
 
+def test_resolve_repo_root():
+  # The serve worker shells out to git and gh from the repository root, so the resolver
+  # returns the checkout that holds .git as a string, never a Path attribute.
+  root = preview.resolve_repo_root()
+  assert isinstance(root, str)
+  assert (Path(root) / ".git").exists()
+
+
 def test_http_boundaries():
   global app
   with tempfile.TemporaryDirectory() as directory:
