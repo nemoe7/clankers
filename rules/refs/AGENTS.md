@@ -22,7 +22,7 @@
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
-- Open every response on the substance, never on preamble or postamble.
+- Open every response on the substance, NEVER on preamble or postamble.
 - Cite code, diffs, file contents and tool output by path and line instead of repeating them.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
@@ -36,7 +36,7 @@
 - Ask every question with the question tool when the surface provides one; NEVER ask in plain text.
 - Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user NEVER replied, stated as a recommendation rather than as a neutral list.
   - Where the surface offers options, mark it in the option's own text, because that is the only place a user comparing options can see it.
-- If an assumption is unavoidable, make the most reasonable one and state it immediately; never use this rule to bypass material ambiguity.
+- If an assumption is unavoidable, make the most reasonable one and state it immediately; NEVER use this rule to bypass material ambiguity.
 
 ## Engineering
 
