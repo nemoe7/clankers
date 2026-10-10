@@ -18,7 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Python dependencies are pinned in `requirements.txt`, and the workflows install from it.
 - The AGENTS.md version clause requires a bump of each module's version after its edits.
-- The ARENA.md gate clause: a gate run goes through `arena-preview run <name> -- <command>` under `start_process`, and the next call shows the finished run.
+- The ARENA.md gate clause: a gate run MUST use `arena-preview run <name> -- <command>` under `start_process`, and NEVER uses `get_process_output` to wait. The verdict prints in the start_process log and on the next call.
 
 #### preview
 
