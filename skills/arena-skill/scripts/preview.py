@@ -399,7 +399,7 @@ def format_pending_item(item):
 	lines=[header];text=item.get('text')or''
 	if text:lines.append(text)
 	attachments=item.get('attachments')or[]
-	if attachments:names=', '.join(f"{record.get('name','')}"if record.get('present')else f"{record.get('name','')} (missing)"for record in attachments);lines.append(f"attachments: {names}")
+	if attachments:names=', '.join(f"{record.get('name','')}: {record.get('path','')}"if record.get('present')else f"{record.get('name','')}: {record.get('path','')} (missing)"for record in attachments);lines.append(f"attachments: {names}")
 	return'\n'.join(lines)
 def format_read(listing):
 	checked_at=listing.get('checked_at');pending=listing.get('pending')or[];count=len(pending)

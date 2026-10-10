@@ -93,7 +93,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- `arena-preview read` prints an `attachments:` line with each upload's own file name, and marks a lost upload `(missing)`.
+- `arena-preview read` prints an `attachments:` line with each upload's own file name and its saved path, and marks a lost upload `(missing)`.
 - The live install script matches its refs source.
 - Unpublish holds until the owner sees the report. The gate ignores output sent to `/dev/null`.
 

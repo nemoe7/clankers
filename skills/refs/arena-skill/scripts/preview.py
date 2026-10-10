@@ -1093,13 +1093,13 @@ def format_pending_item(item):
   text = item.get("text") or ""
   if text:
     lines.append(text)
-  # A note's own text never names its uploads, so the read carries each file name itself.
+  # A note's own text never names its uploads, so the read carries each file's name and saved path.
   attachments = item.get("attachments") or []
   if attachments:
     names = ", ".join(
-      f"{record.get('name', '')}"
+      f"{record.get('name', '')}: {record.get('path', '')}"
       if record.get("present")
-      else f"{record.get('name', '')} (missing)"
+      else f"{record.get('name', '')}: {record.get('path', '')} (missing)"
       for record in attachments
     )
     lines.append(f"attachments: {names}")

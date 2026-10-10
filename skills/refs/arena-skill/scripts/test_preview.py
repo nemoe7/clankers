@@ -1569,9 +1569,9 @@ def test_http_boundaries():
 
 
 def test_read_names_every_attachment():
-  # A note that carries its own text still names each attachment in the read, so the agent
-  # opens the right file without a second state call. A lost upload keeps its name and says
-  # the bytes are gone.
+  # A note that carries its own text still names each attachment and its saved path in the
+  # read, so the agent opens the right file without a second state call. A lost upload keeps
+  # its name and path and says the bytes are gone.
   with tempfile.TemporaryDirectory() as named_dir:
     named = preview.Store(named_dir, create=True)
     named.note_with_uploads(
@@ -1583,7 +1583,8 @@ def test_read_names_every_attachment():
       ],
     )
     listing = preview.format_read(named.read())
-    assert "attachments: ChatGPT.html, Greeting exchange.html" in listing
+    for record in named.uploads():
+      assert f"{record['name']}: {record['path']}" in listing
     assert "here conversation page" in listing
     # A note with no text and no attachment keeps the bare header.
     bare = preview.format_pending_item({"id": "bare", "text": ""})
@@ -1593,10 +1594,12 @@ def test_read_names_every_attachment():
       {
         "id": "lost",
         "text": "gone",
-        "attachments": [{"name": "saved.html", "present": False}],
+        "attachments": [
+          {"name": "saved.html", "path": "/state/uploads/saved.html", "present": False}
+        ],
       }
     )
-    assert lost == "lost\ngone\nattachments: saved.html (missing)"
+    assert lost == "lost\ngone\nattachments: saved.html: /state/uploads/saved.html (missing)"
 
 
 def test_note_owns_one_attachment():
