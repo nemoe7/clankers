@@ -298,13 +298,6 @@ def test_report_unpublish():
     )
     store.publish("pick", "Pick one", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
-    # An answered report refuses the agent's call at once: the answer pins the id.
-    try:
-      store.unpublish("pick")
-      raise AssertionError("An answered report accepted the agent's unpublish")
-    except ValueError as error:
-      assert "answered" in str(error)
-    assert store.state()["reports"], "the answered report stayed"
     # The owner's dismissal prunes the tab row only, after seen.
     with store.connect() as db, db:
       db.execute(
@@ -4890,7 +4883,6 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
   """An unseen report holds the removal until seen.
 
   The new guard holds until the report has been seen, not a timed view window.
-  An answered report still refuses the agent's call at once.
   """
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
@@ -4901,11 +4893,6 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
     store.publish("pick", "Pick one", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
     store.acknowledge(["answer-1"], "reply", "Read it")
-    try:
-      store.unpublish("pick")
-      raise AssertionError("An answered report accepted the agent's unpublish")
-    except ValueError as error:
-      assert "answered" in str(error)
     # Publish a plain report and test seen hold
     store.publish("plain", "Plain", source)
     try:
@@ -4960,33 +4947,6 @@ def test_unpublish_waits_out_a_fresh_view():
         "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "later")
       )
     store.unpublish("later")
-    assert store.state()["reports"] == []
-
-
-def test_unpublish_names_the_answer_before_the_view_wait():
-  """An answered report names its answer before any seen wait.
-
-  The agent's call lands on the answered word at once.
-  """
-  with tempfile.TemporaryDirectory() as directory:
-    store = preview.Store(directory, create=True)
-    source = Path(directory) / "pick.md"
-    source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
-    )
-    store.publish("pick", "Pick one", source)
-    store.submission("answer-1", "pick", "REPORT pick: one")
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
-      )
-    try:
-      store.unpublish("pick")
-      raise AssertionError("Answered report did not refuse agent")
-    except ValueError as error:
-      assert "answered" in str(error)
-    assert store.state()["reports"], "the report stayed"
-    store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
 
 

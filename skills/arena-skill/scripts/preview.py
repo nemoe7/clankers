@@ -1059,9 +1059,6 @@ class Store:
 		with self.transaction()as db:
 			row=db.execute('SELECT title, seen_at, ack_seen_at, viewed_at FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
-			if not dismissed_by_owner:
-				answered=db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone()
-				if answered is not None:raise ValueError("The report has been answered: its id is pinned by the answer, so a revision publishes under a new id and the tab is the owner's to dismiss.")
 			if not row['seen_at']:raise UnpublishHeld('The report waits for the owner: it has not been seen yet. Open it to clear the wait.')
 			db.execute('DELETE FROM reports WHERE id = ?',(report_id,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
 			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))

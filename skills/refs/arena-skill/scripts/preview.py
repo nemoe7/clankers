@@ -3373,18 +3373,6 @@ class Store:
       ).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
-      # An answered report never leaves through the agent's call, so the word lands at
-      # once, ahead of the view wait: the answer pins the id, a revision publishes under
-      # a new one, and the tab is the owner's to dismiss. The page's own press passes.
-      if not dismissed_by_owner:
-        answered = db.execute(
-          "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
-        ).fetchone()
-        if answered is not None:
-          raise ValueError(
-            "The report has been answered: its id is pinned by the answer, so a "
-            "revision publishes under a new id and the tab is the owner's to dismiss."
-          )
       # An unseen report holds the removal: the owner has not opened it yet, so the
       # tab stays until seen and the Reports tab is closed on the front end.
       if not row["seen_at"]:
