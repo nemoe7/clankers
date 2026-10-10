@@ -4458,7 +4458,7 @@ def main():
     help="Print the unacked-count reminder line and exit",
   )
   commands = parser.add_subparsers(dest="command", required=False)
-  serve = commands.add_parser("serve")
+  serve = commands.add_parser("serve", help="Serve the preview page; -p names the port")
   serve.add_argument(
     "-p",
     "--port",
@@ -4466,14 +4466,14 @@ def main():
     default=DEFAULT_PORT,
     help=f"Port to bind (default: {DEFAULT_PORT})",
   )
-  commands.add_parser("init")
-  commands.add_parser("read")
+  commands.add_parser("init", help="Create the state directory and its database")
+  commands.add_parser("read", help="Print every pending note, answer and upload")
   note_reread = commands.add_parser(
     "note",
     help="Reread a stored note by its short or full ID",
   )
   note_reread.add_argument("id", help="Seven or all characters of a note ID")
-  commands.add_parser("key")
+  commands.add_parser("key", help="Print the recorded agent key, host and use line")
   inbox_line = commands.add_parser(
     "inbox-line",
     help="Report whether a command line that names an inbox call runs nothing else",
@@ -4510,7 +4510,10 @@ def main():
   commit_tick.add_argument(
     "--repo", default=".", help="The repository to read the staged diff from"
   )
-  gate = commands.add_parser("gate")
+  gate = commands.add_parser(
+    "gate",
+    help="Read the inbox gate; -p blocks on any unacked note, -l names the blocked line",
+  )
   gate.add_argument(
     "-p",
     "--push",
@@ -4523,10 +4526,15 @@ def main():
     default="",
     help="The command line, as the hook read it; a blocked call then names the commands to drop",
   )
-  commands.add_parser("poll")
+  commands.add_parser(
+    "poll", help="Block until the owner answers or a gate run finishes"
+  )
   download = commands.add_parser(
     "download-request",
-    help="Request an HTTPS browser download, pending a preview Approve click",
+    help=(
+      "Request an HTTPS browser download, pending a preview Approve click;"
+      " -a allows the proxy fallback"
+    ),
   )
   download.add_argument("url", help="One HTTPS URL without embedded credentials")
   download.add_argument(
@@ -4535,7 +4543,10 @@ def main():
     action="store_true",
     help="Let the owner opt in to AllOrigins and CodeTabs fallback for this request",
   )
-  ack = commands.add_parser("ack")
+  ack = commands.add_parser(
+    "ack",
+    help="Answer a note; -r replies, -n notes, -R and -N read the answer from a file",
+  )
   ack.add_argument("ids", nargs="+")
   ack.add_argument("-r", "--reply", help="Markdown answer shown in the message log")
   ack.add_argument("-n", "--note", help="Short plain answer shown in the message log")
@@ -4547,13 +4558,23 @@ def main():
   ack.add_argument(
     "-N", "--note-file", type=Path, help="Read the plain answer from this file"
   )
-  publish = commands.add_parser("publish")
+  publish = commands.add_parser(
+    "publish", help="Publish a report; -i names the ID, -t the title"
+  )
   publish.add_argument("source", type=Path)
   publish.add_argument("-i", "--id", required=True)
   publish.add_argument("-t", "--title", required=True)
-  unpublish = commands.add_parser("unpublish")
+  unpublish = commands.add_parser(
+    "unpublish", help="Withdraw a published report by its ID"
+  )
   unpublish.add_argument("report_id")
-  task = commands.add_parser("task")
+  task = commands.add_parser(
+    "task",
+    help=(
+      "Write or update a task; -s status, -o order, -d details, -m note,"
+      " -r report, -b blocked, -u unblocked, -a amend"
+    ),
+  )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
   task.add_argument("title_arg", nargs="?", metavar="TASK-TITLE")
   task.add_argument("detail_arg", nargs="*", metavar="TASK-DETAIL")
@@ -4605,13 +4626,18 @@ def main():
     default=None,
     help="1-based place in its div, not the end",
   )
-  task_remove = commands.add_parser("task-remove")
+  task_remove = commands.add_parser("task-remove", help="Delete a task by its ID")
   task_remove.add_argument("task_id")
-  task_list = commands.add_parser("task-list")
+  task_list = commands.add_parser(
+    "task-list", help="List the tasks; -f includes the finished ones"
+  )
   task_list.add_argument(
     "-f", "--full", action="store_true", help="print every task, finished included"
   )
-  state_import = commands.add_parser("import-state")
+  state_import = commands.add_parser(
+    "import-state",
+    help="Import an NDJSON backup; -r replaces tasks, -f forces over newer messages",
+  )
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("-r", "--replace-tasks", action="store_true")
   state_import.add_argument(
