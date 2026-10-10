@@ -20,6 +20,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `SKILL.md` gains section 3.5, which keeps colors legible in a light or dark theme.
 - The Mermaid rules require the exact diagram declaration in every example, and the Ishikawa entry uses `ishikawa-beta`.
 
+#### userscripts
+
+- The preview frame sandbox gains `allow-popups`, `allow-popups-to-escape-sandbox` and `allow-downloads`, so preview links open a new tab and downloads run. The new Steering toggle ships on and re-applies the flags when Arena rebuilds the frame.
+
 ### Changed
 
 #### house

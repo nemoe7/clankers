@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.18
+// @name         Arena.ai | NemoUtils | v1.10.19
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.18
+// @version      1.10.19
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1108,6 +1108,67 @@
       observer.disconnect();
       window.removeEventListener("popstate", sync);
       clearClickTimer();
+    };
+  });
+
+  // The preview frame's sandbox omits allow-popups and allow-downloads, so its target=_blank
+  // links and its file downloads go nowhere. Add the three flags, and re-apply them when Arena
+  // rebuilds the frame or resets the attribute.
+  runFeature("preview-sandbox", "Steering — new tabs and downloads", function () {
+    var FRAME_TITLE = "App preview on port 8000";
+    var FRAME_FLAGS = [
+      "allow-popups",
+      "allow-popups-to-escape-sandbox",
+      "allow-downloads",
+    ];
+
+    function previewFrame(doc) {
+      var frames = doc.querySelectorAll("iframe[title]");
+      for (var i = 0; i < frames.length; i += 1) {
+        if ((frames[i].getAttribute("title") || "").indexOf(FRAME_TITLE) === 0) {
+          return frames[i];
+        }
+      }
+      return null;
+    }
+
+    function grantFlags(frame) {
+      var current = frame && frame.getAttribute("sandbox");
+      if (!current) return false;
+      var tokens = current.split(/\s+/).filter(Boolean);
+      var added = false;
+      for (var i = 0; i < FRAME_FLAGS.length; i += 1) {
+        if (tokens.indexOf(FRAME_FLAGS[i]) === -1) {
+          tokens.push(FRAME_FLAGS[i]);
+          added = true;
+        }
+      }
+      if (added) frame.setAttribute("sandbox", tokens.join(" "));
+      return added;
+    }
+
+    function sync() {
+      grantFlags(previewFrame(document));
+    }
+
+    if (exposeChecks("previewSandbox", {
+      previewFrame: previewFrame,
+      grantFlags: grantFlags,
+      FRAME_FLAGS: FRAME_FLAGS,
+    })) {
+      return;
+    }
+
+    var observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["sandbox"],
+    });
+    sync();
+    return function () {
+      observer.disconnect();
     };
   });
 
@@ -2600,7 +2661,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.18";
+    var VERSION = "1.10.19";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
