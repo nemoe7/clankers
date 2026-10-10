@@ -2629,6 +2629,35 @@ def test_ack_of_a_stale_message_prints_the_hold():
     assert "HOLD" not in result.stderr, result.stderr
 
 
+def test_bare_task_list_names_the_current_task():
+  # The bare list is the working queue: the upcoming tasks only, with the head of the
+  # queue named as current, the same head the page gives a div of its own. `--full`
+  # still prints every task, finished included, so the order stays readable.
+  with tempfile.TemporaryDirectory() as bare_dir:
+    bare = preview.Store(bare_dir, create=True)
+    bare.write_task("done-one", "Finished work", ["Step one"], status="finished")
+    bare.write_task("first", "First upcoming", ["Step one"])
+    bare.write_task("second", "Second upcoming", ["Step one"])
+    lines = preview.format_task_list(bare.list_tasks()).splitlines()
+    assert lines[0] == "Tasks 2 upcoming"
+    assert "current first" in lines[1]
+    assert "upcoming second" in lines[2]
+    assert "done-one" not in "\n".join(lines)
+    full = preview.format_task_list(bare.list_tasks(), full=True).splitlines()
+    assert full[0] == "Tasks 3"
+    assert "done-one" in "\n".join(full)
+    assert "current" not in "\n".join(full)
+    # A blocked head is still the head: the page names upcoming[0] whatever its block.
+    bare.write_task("first", blocked=True)
+    blocked = preview.format_task_list(bare.list_tasks()).splitlines()
+    assert "current first" in blocked[1] and "*" in blocked[1]
+    # An empty queue reads as empty rather than printing a lone header count of one.
+    empty = preview.Store(bare_dir + "-empty", create=True)
+    assert preview.format_task_list(empty.list_tasks()).splitlines() == [
+      "Tasks 0 upcoming"
+    ]
+
+
 def test_task_list():
   with tempfile.TemporaryDirectory() as tasks_dir:
     tasks_store = preview.Store(tasks_dir, create=True)

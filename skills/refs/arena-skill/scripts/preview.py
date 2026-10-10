@@ -1001,12 +1001,19 @@ def format_read(listing):
   return "\n".join(lines)
 
 
-def format_task_list(tasks):
-  total = len(tasks)
-  lines = [f"Tasks {total}"]
-  for task in tasks:
+def format_task_list(tasks, full=False):
+  """The working queue by default; `full` prints every task, finished included.
+
+  The head of the queue reads `current`, the same head the page gives a div of its own, so
+  what the agent is on next is visible without reading down a list.
+  """
+  shown = tasks if full else [t for t in tasks if t.get("status") == "upcoming"]
+  lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
+  for index, task in enumerate(shown):
     order = task.get("order")
     status = task.get("status")
+    if not full and index == 0:
+      status = "current"
     id_ = task.get("id")
     blocked = task.get("blocked")
     report_id = task.get("report_id")
@@ -4376,7 +4383,10 @@ def main():
   )
   task_remove = commands.add_parser("task-remove")
   task_remove.add_argument("task_id")
-  commands.add_parser("task-list")
+  task_list = commands.add_parser("task-list")
+  task_list.add_argument(
+    "--full", action="store_true", help="print every task, finished included"
+  )
   state_import = commands.add_parser("import-state")
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("--replace-tasks", action="store_true")
@@ -4616,7 +4626,7 @@ def main():
     elif args.command == "task-remove":
       print(format_task(store.remove_task(args.task_id)))
     elif args.command == "task-list":
-      print(format_task_list(store.list_tasks()))
+      print(format_task_list(store.list_tasks(), args.full))
     elif args.command == "import-state":
       text = (
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
