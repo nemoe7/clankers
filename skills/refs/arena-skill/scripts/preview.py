@@ -3150,14 +3150,17 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_MESSAGE, str(polls))
         )
     counts = [
-      f"{count} {kind}{'s' if count != 1 else ''}."
+      f"{count} {kind}{'s' if count != 1 else ''}"
       for count, kind in ((notes, "note"), (reports, "answer"), (uploads, "upload"))
       if count
     ]
+    # The label keeps the pending tally apart from the call count, so a reader never takes
+    # "8. 1 note" for eight notes.
+    unacked = [f"Unacked: {', '.join(counts)}."] if counts else []
     ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
     head = [f"Calls since user message: {polls}."] if polls and counts else []
     tail = reminder_tail(cursor, remaining)
-    return " ".join([*head, *counts, *ack, tail])
+    return " ".join([*head, *unacked, *ack, tail])
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
     """Return False when bash calls must block.

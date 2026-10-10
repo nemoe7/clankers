@@ -3552,7 +3552,7 @@ def test_dispatch_reminder():
           return candidate
       raise AssertionError(f"No rotating tail in {stripped!r}")
 
-    pending_prefix = "1 note. DO NOT IGNORE. ACK ASAP. "
+    pending_prefix = "Unacked: 1 note. DO NOT IGNORE. ACK ASAP. "
     assert preview.fill_reminder(preview.TASK_REMINDER, 0) is None
     assert preview.fill_reminder(preview.TASK_REMINDER, 1) == "1 task left."
     assert preview.fill_reminder(preview.TASK_REMINDER, 4) == "4 tasks left."
@@ -3621,7 +3621,7 @@ def test_dispatch_reminder():
     assert reminder_store.reminder() in tails(1)
     reminder_store.submission("form-answer", "form", "REPORT form: yes")
     form_line = reminder_store.reminder()
-    form_prefix = "1 answer. DO NOT IGNORE. ACK ASAP. "
+    form_prefix = "Unacked: 1 answer. DO NOT IGNORE. ACK ASAP. "
     assert form_line == form_prefix + reminder_tail(form_line, 1)
     reminder_store.acknowledge(["form-answer"], "note", "Received")
     for index in range(3):
@@ -3630,7 +3630,7 @@ def test_dispatch_reminder():
       upload = reminder_store.save_upload(name, "text/plain", name.encode())
       reminder_store.note(upload["id"], "Uploaded " + name)
     mixed_line = reminder_store.reminder()
-    mixed_prefix = "3 notes. 2 uploads. DO NOT IGNORE. ACK ASAP. "
+    mixed_prefix = "Unacked: 3 notes, 2 uploads. DO NOT IGNORE. ACK ASAP. "
     assert mixed_line == mixed_prefix + reminder_tail(mixed_line, 1)
     assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
 
@@ -3672,7 +3672,7 @@ def test_reminder_rotation():
     assert rotate_store.reminder(advance=True) == tail_at(2)
     assert rotate_store.reminder() == tail_at(3)
     rotate_store.note("rotate-note", "Pending")
-    pending = "1 note. DO NOT IGNORE. ACK ASAP. "
+    pending = "Unacked: 1 note. DO NOT IGNORE. ACK ASAP. "
     assert rotate_store.reminder() == f"{pending}{tail_at(4)}"
     offset = span + 5
     for cursor, polls in ((offset, 1), (offset + 1, 2)):
@@ -3714,7 +3714,7 @@ def test_reminder_rotation():
       f"Calls since user message: 1. {pending}{tail_at(offset + 6)}"
     )
     rotate_store.note("rotate-newer", "Another user message")
-    newer = "2 notes. DO NOT IGNORE. ACK ASAP. "
+    newer = "Unacked: 2 notes. DO NOT IGNORE. ACK ASAP. "
     # A second message on an unacked pile keeps the count anchored to the first unread one.
     assert rotate_store.reminder() == (
       f"Calls since user message: 1. {newer}{tail_at(offset + 7)}"
