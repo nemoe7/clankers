@@ -356,7 +356,6 @@ def upload_row(row,directory):path=directory/UPLOAD_DIR/row['file'];record=dict(
 def add_note_attachments(note,records):
 	if records:note['attachment_name']=records[0]['name'];note['attachment_path']=records[0]['path'];note['attachments']=records
 	return note
-def cli_json(value):return json.dumps(value,ensure_ascii=False,separators=(',',':'))
 def format_pending_item(item):
 	kind=item.get('kind')or'note';display_kind='answer'if kind=='report'else kind;header=f"{display_kind} {item.get('id','')}"
 	if item.get('report_id'):header+=f" report {item['report_id']}"
@@ -379,7 +378,7 @@ def format_task_list(tasks):
 		if report_id:line+=f" report {report_id}"
 		lines.append(line)
 	return'\n'.join(lines)
-def format_task(record,before=None,after=None):
+def format_task(record):
 	id_=record.get('id');order=record.get('order');status=record.get('status');report_id=record.get('report_id');blocked=record.get('blocked');title=record.get('title')or'';details=record.get('details')or[];cut=[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in details];first=f"task {id_}, order {order}, status {status}"
 	if report_id:first+=f", report {report_id}"
 	if blocked:first+=', blocked'
@@ -780,7 +779,6 @@ class Store:
 			for path in created:path.unlink(missing_ok=True)
 			raise
 		self.autosave();return result
-	def note_with_upload(self,note_id,text,name,content_type,data):return self.note_with_uploads(note_id,text,[(name,content_type,data)])
 	def fetch_jobs(self):
 		with closing(self.connect())as db:rows=db.execute('SELECT * FROM fetch_jobs ORDER BY seq DESC').fetchall()
 		return[fetch_row(row,self.path.parent)for row in rows]

@@ -958,11 +958,6 @@ def add_note_attachments(note, records):
   return note
 
 
-def cli_json(value):
-  """Return agent-facing JSON minified; the agent pays for every space it reads."""
-  return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-
 def format_pending_item(item):
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
@@ -1010,7 +1005,7 @@ def format_task_list(tasks):
   return "\n".join(lines)
 
 
-def format_task(record, before=None, after=None):
+def format_task(record):
   id_ = record.get("id")
   order = record.get("order")
   status = record.get("status")
@@ -2509,10 +2504,6 @@ class Store:
       raise
     self.autosave()
     return result
-
-  def note_with_upload(self, note_id, text, name, content_type, data):
-    """Keep the one-file call compatible with linked notes from the earlier preview."""
-    return self.note_with_uploads(note_id, text, [(name, content_type, data)])
 
   def fetch_jobs(self):
     """Queue status and saved file locations; a claim token never reaches the state poll."""

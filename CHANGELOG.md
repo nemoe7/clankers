@@ -22,6 +22,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - The CLI prints readable text instead of JSON, and drops dead metadata.
+- Unused helpers `cli_json` and `note_with_upload` are removed, and `format_task` drops two unused parameters.
 - An answered report no longer refuses the agent's unpublish. The owner's dismissal path is unchanged.
 
 #### maintenance
