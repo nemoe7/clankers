@@ -10,7 +10,7 @@
   - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
   - Mirror task-related source changes into installed copies in this repository without separate user authorization.
-  - The waiver never covers a clause change; every clause change MUST wait for the approved report.
+  - The waiver NEVER covers a clause change; every clause change MUST wait for the approved report.
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 ## Glossary
@@ -34,7 +34,7 @@ Read these first:
 
 - Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
 - NEVER claim a check you did not run.
-- Compression removes words, never rules.
+- Compression removes words, NEVER rules.
 - New clause: squash only that new line.
 - Amended clause: squash only the affected line.
 - Deleted clause: attempt one squash and keep whichever budget is lower.
@@ -74,7 +74,7 @@ Read these first:
 ## Reports and approval
 
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, never a Markdown `>` quote. Omit only unchanged context with `...`. Quote clauses in double quotes, never backticks, in proposals, acks, and reports. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Open the report with `Status: proposal. No line lands before approval.` and a `Citation:` line naming the GUIDELINES section, and follow each table with `Decision on the amended line:` and the approve, squash, reject and custom options. Code changes need no proposal; keep them lean.
+- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote. Omit only unchanged context with `...`. Quote clauses in double quotes, NEVER backticks, in proposals, acks, and reports. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Open the report with `Status: proposal. No line lands before approval.` and a `Citation:` line naming the GUIDELINES section, and follow each table with `Decision on the amended line:` and the approve, squash, reject and custom options. Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.
 A proposal is visible text before the question that asks for approval: put its table in chat, or publish a longer proposal through the `arena-skill` skill in ignored workspace files; the question tool carries the question, not unseen proposal text — blind approval approves nothing.
@@ -89,7 +89,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - A custom answer on a clause takes a fresh proposal of the new wording; the line lands only after that proposal is approved.
 - Report at the level the user approves from — the change and why, not a patch; a report is not a diff.
 - Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
-  - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are never pushed.
+  - Multiple reports may coexist; reports, inboxes and receipts stay uncommitted and are NEVER pushed.
 
 ## Budgets
 
@@ -98,7 +98,7 @@ A proposal is visible text before the question that asks for approval: put its t
 
 ## Skills
 
-- ChatGPT-related skills always go to gpt-plugins.
+- ChatGPT-related skills ALWAYS go to gpt-plugins.
 - ALWAYS bump a module's respective version numbers after edits.
 - Skills in `skills/` follow the [Agent Skills specification](https://agentskills.io/specification).
 - Every `SKILL.md` needs YAML frontmatter using only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`.
@@ -116,13 +116,13 @@ A proposal is visible text before the question that asks for approval: put its t
 
 - Automation prompts live in `automations/`: self-contained text pasted into an external scheduler, not rules an agent loads.
 - [automations/DAILIES.md](automations/DAILIES.md) is the daily monitoring prompt for a ChatGPT scheduled task, which runs unattended at most once a day and also on request.
-  - Web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt must not depend on them.
+  - Web search and the GitHub connector are its tools, with a terminal and local files only when the task itself decides it needs them; a prompt MUST not depend on them.
   - The connector can read and write in this repository; the prompts repeat no git rule.
   - The [gpt-github](gpt-plugins/skills/gpt-github/SKILL.md) skill manages ChatGPT's behavior when using GitHub.
   - Reports go to the chat response and nothing is persisted.
 - Prompts carry no budget row and no validator gate, both declined on request rather than deferred.
-  - The scheduler owns its own copy and edits the embedded datetime between runs; CI must not depend on their contents.
-- Amend one here, then re-paste it into the task: an edit in the repo never reaches a running automation.
+  - The scheduler owns its own copy and edits the embedded datetime between runs; CI MUST not depend on their contents.
+- Amend one here, then re-paste it into the task: an edit in the repo NEVER reaches a running automation.
 
 ## Style
 
@@ -141,7 +141,7 @@ A proposal is visible text before the question that asks for approval: put its t
 - One Conventional Commit subject per change: `<type>(scope): <subject>` — imperative, specific, lowercase after `:`, no period, at most 72 chars, no body.
 - Types: `feat fix refactor perf style docs test build chore`.
 - Merges MUST be rebase merges: rebase onto the target, then merge; no merge commit.
-- A commit call never shares a shell line with the gates that judge it.
+- A commit call NEVER shares a shell line with the gates that judge it.
 
 ## Boundaries
 

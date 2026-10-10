@@ -19,5 +19,5 @@ Comments only where complexity needs them.
 
 DOCS: no storyline/narrative unless asked.
 DOCS: Open on substance, no preamble, no postamble.
-DOCS: Cite code, diffs and output by path and line; never repeat.
+DOCS: Cite code, diffs and output by path and line; NEVER repeat.
 DOCS: After a tool call, continue with no result narration.

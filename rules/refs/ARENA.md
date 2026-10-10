@@ -30,7 +30,7 @@
 - Push only when the branch tree differs from `origin/main`; when the trees match, NEVER push, even when the branch shows commits ahead.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
-- In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, never by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
+- In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, NEVER by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - ALWAYS merge rebase.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
@@ -57,13 +57,13 @@
 - Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; NEVER write a wall of text, NEVER pad prose where a list or a table carries the facts faster, and keep every paragraph at 4 sentences or fewer.
 - Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
-- Open every response on the substance, never on preamble or postamble.
+- Open every response on the substance, NEVER on preamble or postamble.
 - Cite code, diffs, file contents and tool output by path and line instead of repeating them.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
 - Keep working while tasks remain. End the turn when the work is verified and stopped. NEVER name the remaining token budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
-- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) through `start_process`, never inline, and push only when they pass; an inline run counts as skipping the gate, whatever its speed. The background run frees the wait to scope the next task, but never the reading: read the passed or failed line of every gate you run, because a pipe that hides the verdict counts as skipping the gate. After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch` through `start_process`, and scope the next task while it runs. A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand. Stop on HTTP 401 or any other command/API error, and report it. Pending checks are not command errors. An empty or absent check list is unverified, never a conclusion. Failed checks remain unfinished work.
+- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) through `start_process`, NEVER inline, and push only when they pass; an inline run counts as skipping the gate, whatever its speed. The background run frees the wait to scope the next task, but NEVER the reading: read the passed or failed line of every gate you run, because a pipe that hides the verdict counts as skipping the gate. After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch` through `start_process`, and scope the next task while it runs. A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand. Stop on HTTP 401 or any other command/API error, and report it. Pending checks are not command errors. An empty or absent check list is unverified, NEVER a conclusion. Failed checks remain unfinished work.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
@@ -199,9 +199,9 @@
 
 - If Chromium is needed, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
-- Start a background test or PR-check run with `start_process`, on a stable tree, and never edit the files it covers while it runs.
+- Start a background test or PR-check run with `start_process`, on a stable tree, and NEVER edit the files it covers while it runs.
 - For a gate run, MUST use `arena-preview run <name> -- <command>` through `start_process`, and NEVER call `get_process_output` to wait for it. The verdict prints in the start_process log, on stdout and on stderr, when the run exits. The next bash or `arena-preview` call also prints it once as `Finished run <name>`. Until then, scope the next task. Read the verdict line before any push.
-- Read a background run's result before any push, and never report a check you have not read.
+- Never report a check you have not read.
 
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
 - Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist.

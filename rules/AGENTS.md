@@ -21,7 +21,7 @@
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
 - Comments, docs, responses: terse, unambiguous; no storyline or narrative unless asked.
 - Use [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another changelog format.
-- Open on the substance, never preamble or postamble.
+- Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
 - Step straight on after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
@@ -34,7 +34,7 @@
 - Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing.
 - Ask every question with the question tool; NEVER ask in plain text.
 - Questions with 3+ options or an open choice carry a recommended answer (yes/no or confirm: none) — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; neutral lists return your work to the user.
-- State any unavoidable assumption immediately; choose the most reasonable; never use this rule to bypass material ambiguity.
+- State any unavoidable assumption immediately; choose the most reasonable; NEVER use this rule to bypass material ambiguity.
 
 ## Engineering
 
