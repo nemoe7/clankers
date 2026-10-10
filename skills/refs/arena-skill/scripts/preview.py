@@ -966,8 +966,21 @@ def format_pending_item(item):
     header += f" report {item['report_id']}"
   if item.get("at"):
     header += f" at {item['at']}"
+  lines = [header]
   text = item.get("text") or ""
-  return f"{header}\n{text}" if text else header
+  if text:
+    lines.append(text)
+  # A note's own text never names its uploads, so the read carries each file name itself.
+  attachments = item.get("attachments") or []
+  if attachments:
+    names = ", ".join(
+      f"{record.get('name', '')}"
+      if record.get("present")
+      else f"{record.get('name', '')} (missing)"
+      for record in attachments
+    )
+    lines.append(f"attachments: {names}")
+  return "\n".join(lines)
 
 
 def format_read(listing):

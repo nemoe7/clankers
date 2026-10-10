@@ -1567,6 +1567,37 @@ def test_http_boundaries():
       worker.join()
 
 
+def test_read_names_every_attachment():
+  # A note that carries its own text still names each attachment in the read, so the agent
+  # opens the right file without a second state call. A lost upload keeps its name and says
+  # the bytes are gone.
+  with tempfile.TemporaryDirectory() as named_dir:
+    named = preview.Store(named_dir, create=True)
+    named.note_with_uploads(
+      "named-note",
+      "here conversation page",
+      [
+        ("ChatGPT.html", "text/html", b"<html></html>"),
+        ("Greeting exchange.html", "text/html", b"<html>two</html>"),
+      ],
+    )
+    listing = preview.format_read(named.read())
+    assert "attachments: ChatGPT.html, Greeting exchange.html" in listing
+    assert "here conversation page" in listing
+    # A note with no text and no attachment keeps the bare header.
+    bare = preview.format_pending_item({"id": "bare", "text": ""})
+    assert bare == "note bare"
+    # A missing upload keeps its name and reports the loss.
+    lost = preview.format_pending_item(
+      {
+        "id": "lost",
+        "text": "gone",
+        "attachments": [{"name": "saved.html", "present": False}],
+      }
+    )
+    assert lost == "note lost\ngone\nattachments: saved.html (missing)"
+
+
 def test_note_owns_one_attachment():
   # A composed note owns one attachment with the same ID. The original name reaches its receipt,
   # while the stored bytes use the full note ID and only one inbox note is created.

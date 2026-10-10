@@ -360,7 +360,11 @@ def format_pending_item(item):
 	kind=item.get('kind')or'note';display_kind='answer'if kind=='report'else kind;header=f"{display_kind} {item.get('id','')}"
 	if item.get('report_id'):header+=f" report {item['report_id']}"
 	if item.get('at'):header+=f" at {item['at']}"
-	text=item.get('text')or'';return f"{header}\n{text}"if text else header
+	lines=[header];text=item.get('text')or''
+	if text:lines.append(text)
+	attachments=item.get('attachments')or[]
+	if attachments:names=', '.join(f"{record.get('name','')}"if record.get('present')else f"{record.get('name','')} (missing)"for record in attachments);lines.append(f"attachments: {names}")
+	return'\n'.join(lines)
 def format_read(listing):
 	checked_at=listing.get('checked_at');pending=listing.get('pending')or[];count=len(pending)
 	if checked_at:first=f"Inbox {checked_at}: {count} pending"
