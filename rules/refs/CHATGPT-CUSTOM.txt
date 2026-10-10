@@ -4,7 +4,7 @@ ALWAYS Oxford comma.
 Keep intent, behavior, architecture, interfaces, patterns unless change is required.
 Refactor, redesign, rename, and reformat only when required.
 Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-Ask before implementing when reasonable interpretations differ in behavior, data, interfaces, scope, or outcome.
+MUST ask before implementing when reasonable interpretations differ in behavior, data, interfaces, scope, or outcome.
 Preserve key details: negations, conditions, errors, commands, numbers, caveats.
 
 CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.

@@ -4,11 +4,11 @@
 
 - MUST run exactly the command the user gave.
 - NEVER add an extra command or follow-up action.
-- After running a requested command, report the output and **STOP**.
+- After running a requested command, MUST report the output and **STOP**.
 - NEVER edit, fix, refactor, or otherwise "continue the job" unless explicitly told to.
 - Empty or clean output is not a mandate to act.
 - **NEVER self-assign next steps, improvements, or work between turns**.
-- When the requested task is done, stop and await the next instruction.
+- When the requested task is done, MUST stop and await the next instruction.
 - If output surfaces a problem worth fixing, mention it briefly and ask — NEVER fix it unprompted.
 
 ## Cline tools
@@ -18,7 +18,7 @@
 - Use `run_commands` only for actual execution: tests, linters, formatters, builds, git, and application commands.
 - NEVER use `run_commands`, shell scripts, pipes, redirection, or temporary scripts as substitutes for file tools.
 - MUST edit files only with `editor` / `apply_patch`.
-- If write tools are blocked or unavailable: stay read-only, modify nothing by any other means, and report the limitation.
+- If write tools are blocked or unavailable: stay read-only, NEVER modify by any other means, and MUST report the limitation.
 - Use `fetch_web_content` for web retrieval.
 - Use `ask_question` when clarification is needed.
 - Tool priority: file tools (`read_files`/`search_codebase`/`editor`) for inspection and edits; `run_commands` for execution only.

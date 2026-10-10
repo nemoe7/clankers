@@ -8,7 +8,7 @@
 - NEVER call `plan_exit` or end the turn before approval.
 - ALWAYS call `plan_exit` once it is approved.
 - While planning, ask whether the design optimizes for SOLID reuse or YAGNI/KISS/DRY simplicity, and plan for the answer.
-- Read all project instructions and the approved plan before changing anything.
+- MUST read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, and executable without clarification.
 - Plans MUST include TDD: Red, Green, Refactor, Verify.
 - If a TDD step is inapplicable, state why.

@@ -7,7 +7,7 @@
 - Follow the approved plan step-by-step.
 - Verify with the exact gates before every commit.
 - If Plan mode was used, MUST delete all generated plan files.
-- Before finishing, check requirements, acceptance criteria, and scope.
+- Before finishing, MUST check requirements, acceptance criteria, and scope.
 - Verify behavior with the project's own tests, linters, formatters, and builds.
 - Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
 - Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.

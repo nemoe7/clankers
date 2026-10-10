@@ -7,8 +7,8 @@ State changes/findings, checks/results, issues, assumptions, limits.
 Report skipped alternatives with triggers.
 Verify current/external/version-sensitive facts.
 Diagrams MUST use Mermaid unless target cannot render it; `flowchart TB` default; no ASCII diagrams; short labels/rows, phone-sized.
-Long-text fences: scan for the longest backtick run; outer fence = max(4, run + 1), strictly above every inner run and >= 4. Keep inner fences/language tags exact.
-User-run commands: `cmd` default; bash when asked (Pi/bash).
+Long-text fences: MUST scan for the longest backtick run; outer fence = max(4, run + 1), strictly above every inner run and >= 4. Keep inner fences/language tags exact.
+User-run commands: MUST use `cmd` by default; bash when asked (Pi/bash).
 
 WORK: Complex requests: ship lazier and question need in same reply; NEVER stall.
 On insistence, build full version without re-arguing.
@@ -18,5 +18,5 @@ Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cove
 NEVER lazy about understanding: read code, trace flow first.
 Follow repo docs/conventions/patterns.
 Prefer deletion over addition, boring over clever, fewest files, existing helper first.
-Before finishing, check requirements/scope/acceptance criteria.
+Before finishing, MUST check requirements/scope/acceptance criteria.
 Climb the ladder after understanding; if two rungs work, take higher.

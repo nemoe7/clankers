@@ -12,7 +12,7 @@
 - At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the `arena-skill` skill with its reference end-to-end before any other tool call; a partial read, such as head, tail or a grep excerpt, does not count; the gate and read cadence mechanics live in .agents/skills/arena-skill/references/REFERENCE.md.
 - After a rebase onto `main` or a `main` change to a read-set file, MUST reread every changed read-set file end-to-end before the next work step; the read set is ARENA.md, every AGENTS.md in the repository, and the `arena-skill` skill with its reference, and nothing else; a partial read (head, tail, grep excerpt) does not count.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
-- Before your first tool call that is not a read of a rule or skill file, write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
+- Before your first tool call that is not a read of a rule or skill file, MUST write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 - The user's explicit instructions override this file; confirm the override in one line.
 - Failure to comply with this file results in a negative rating.
@@ -26,10 +26,10 @@
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
-- Before rebasing, check whether `origin/main` absorbed the branch's commits; when it did, run `git reset --hard origin/main` and continue instead of replaying them.
+- Before rebasing, MUST check whether `origin/main` absorbed the branch's commits; when it did, MUST run `git reset --hard origin/main` and continue instead of replaying them.
 - Push only when the branch tree differs from `origin/main`; when the trees match, NEVER push, even when the branch shows commits ahead.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
-- After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
+- After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
 - In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, NEVER by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
 - NEVER merge the PR; no authorization or instruction overrides this.
 - ALWAYS merge rebase.
@@ -45,10 +45,10 @@
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read; once the inbox exists, missing or failed reads are errors, NEVER empty inboxes.
 - Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so acknowledge notes separately when the answers differ. NEVER blindly acknowledge all pending notes.
 - Refer to a note by its ID, NEVER by its sequence number or list position: the first seven characters in prose, task details, reports and notes. Extend the prefix when two notes share it.
-- A receipt means received, not implemented. Acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
+- A receipt means received, not implemented. MUST acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
 - Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
-- If the preview did not start, report it and block with one visibility question, asked through `ask_user`, before any work beyond setup; the preview cannot carry its own visibility question. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask; the process tool's live-preview banner is not owner confirmation and does not replace the question.
+- If the preview did not start, MUST report it and block with one visibility question, asked through `ask_user`, before any work beyond setup; the preview cannot carry its own visibility question. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask; the process tool's live-preview banner is not owner confirmation and does not replace the question.
 - NEVER silently restore ntfy.
 - After a sandbox reset, run `git fetch origin`, rerun the preview installer, and restart the preview with the same state directory. NEVER ask the visibility question again after the reset.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
@@ -72,18 +72,18 @@
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
 - Report every unrelated finding; fix only the ones that block the work.
-- When the user describes a problem, asks how something works, or thinks out loud, deliver the assessment: report the findings and stop; implement only after the user asks for the change.
+- When the user describes a problem, asks how something works, or thinks out loud, MUST deliver the assessment: MUST report the findings and stop; NEVER implement until the user asks for the change.
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
 - Ask before implementing rather than after, on deviating reasoning or material ambiguity.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
-- Ask questions as soon as they arise. Publish a fielded report in the Reports tab and read its answer at the next steering read. A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
+- MUST ask questions as soon as they arise. Publish a fielded report in the Reports tab and read its answer at the next steering read. A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
 - Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect.
 - Visibility question alone; after "Yes", all other questions by fielded report. The first successful start not yet confirmed in this session still needs a visibility question; a later restart in the same session does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with three or more options or an open choice carries a recommended answer, the one you would take on silence, marked among options where offered; a yes/no or confirm question carries none.
 - ALL reports MUST go through the preview skill.
-- When the task list is not empty and a task is blocked on user intervention or approval, publish a report form for that task, tell the user in one line, and continue with the other tasks instead of stalling.
-- A report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
+- When the task list is not empty and a task is blocked on user intervention or approval, MUST publish a report form for that task, tell the user in one line, and continue with the other tasks instead of stalling.
+- A report-only task's report MUST carry a text input for the owner's further instructions and MUST include an option for no further instruction.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; when a report form awaits answers and no unblocked work remains, run `poll`.
 - If an assumption is unavoidable, make the most reasonable one and state it immediately; NEVER use an assumption to bypass material ambiguity.
 
@@ -119,7 +119,7 @@
 - MUST update the stored task details in the same tool block as the work that moves them, and MUST run task-list before the final reply; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - Run every arena-preview poll as 1 Bash call with tool timeout 1800 s and no pipe. A shorter tool timeout is a failed wait, and NEVER a result.
-- If a user message arrives duplicated or garbled, or is later disowned, confirm the reading in one line before acting on it, and keep any edit it caused reversible until confirmed.
+- If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
 - Before editing, MUST grep every caller of the function you are about to touch.
@@ -139,10 +139,10 @@
 - ALWAYS criticize documentation and code, in chat responses and in report files.
 - NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
-- Before every push, read the open code scanning alerts and address each.
+- Before every push, MUST read the open code scanning alerts and address each.
 - For large function replacements, prefer a scripted splice.
 - Prefer the file read/write tools for file operations; shell is for what needs it, capped at 2 CPU workers.
-- Before finishing, run the repo's own validation entrypoints (test suite, config validators).
+- Before finishing, MUST run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 
 ## Style
@@ -172,7 +172,7 @@
 - Conventional Commits form: `<type>[optional scope]: <description>`, imperative, specific, and lowercase after the colon, with no period, at most 72 characters, and no body, with `!` before the colon to mark a breaking change.
 - Types: feat fix refactor perf style docs test build chore; prefer the types the project's history already uses.
 - Reuse previous scopes, adding one only when none fits.
-- Fold fixes into the squashed atomic timeline, and keep the PR title and body matching that timeline.
+- MUST fold fixes into the squashed atomic timeline, and MUST keep the PR title and body matching that timeline.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
 - NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist. ALWAYS strip a session-local citation on sight.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
@@ -183,7 +183,7 @@
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
-- Ask through `ask_user` immediately instead of ending the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
+- MUST ask through `ask_user` immediately; NEVER end the turn in silence: ask the owner to reconnect GitHub in Arena and reply in chat for a new turn with fresh credentials.
 - Prove the recovery with `git ls-remote origin <branch>` before pushing again.
 - `gh pr edit` may fail on older repos.
 - Update PR title/body via REST with JSON on stdin: `jq -n --rawfile body <workspace-file> --arg title <title> '{body: $body, title: $title}' | gh api repos/<owner>/<repo>/pulls/<n> -X PATCH --input -`
@@ -227,7 +227,7 @@
 - NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
-- End a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
+- MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 
 ## When in doubt
 
