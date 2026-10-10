@@ -33,6 +33,9 @@ fi
 if [ "$1" = "serve-tick" ]; then
   exec __PYTHON__ __PREVIEW__ serve-tick "$2"
 fi
+if [ "$1" = "egress-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ egress-tick "$2"
+fi
 if [ "$1" = "commit-tick" ]; then
   # Not a pure classifier: it reads the repository's staged diff and the session
   # database. Forwarding it would let the host repository's own staged content

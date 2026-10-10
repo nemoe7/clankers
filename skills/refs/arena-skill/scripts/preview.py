@@ -1356,6 +1356,55 @@ def serve_warning(line):
   )
 
 
+# The hosts this sandbox type reaches, read from docs/archive/arena-quirks.md, section
+# "Sandbox egress allowlist, GitHub session" (observed 2026-10-03). A fetch to any other
+# host resolves and accepts TCP, then fails the TLS handshake with SSL_ERROR_SYSCALL.
+# That reads as a transient fault, so a session retries it instead of reporting a limit.
+EGRESS_ALLOWLIST = frozenset(
+  (
+    "github.com",
+    "api.github.com",
+    "codeload.github.com",
+    "registry.npmjs.org",
+    "pypi.org",
+    "files.pythonhosted.org",
+    "dns.google",
+  )
+)
+
+# The commands that open a network connection to a URL named on the line. A URL inside
+# any other command is text, so it must not raise the warning.
+FETCH_COMMAND_RE = re.compile(
+  r"(?:^|[\s;&|(])(?:curl|wget|git\s+(?:clone|fetch|ls-remote|pull|push))\b"
+)
+URL_HOST_RE = re.compile(r"(?:https?|ftp)://([^/\s\"'@?]+)")
+
+
+def egress_warning(line):
+  """A warning when a line fetches a host the sandbox egress filter blocks.
+
+  The gate reads the line before it runs, so the block is named while the session
+  can still switch tools. `fetch_page` runs outside the sandbox and reaches hosts
+  this filter blocks, which makes it the route to suggest.
+  """
+  text = line or ""
+  if not FETCH_COMMAND_RE.search(text):
+    return None
+  hosts = []
+  for found in URL_HOST_RE.finditer(text):
+    host = found.group(1).split(":", 1)[0].lower()
+    if host and host not in EGRESS_ALLOWLIST and host not in hosts:
+      hosts.append(host)
+  if not hosts:
+    return None
+  names = ", ".join(hosts)
+  return (
+    f"arena-preview gate: {names} sits outside this sandbox's egress allowlist. The"
+    " TLS handshake fails with SSL_ERROR_SYSCALL, which reads as a transient fault"
+    " and never clears on a retry. Read it through the fetch_page tool instead."
+  )
+
+
 def first_blocking_piece(line):
   """Return the first command piece that ends the quiet-line exemption, or None.
 
@@ -4497,6 +4546,11 @@ def main():
     help="Warn when a serve names a port other than the default",
   )
   serve_tick.add_argument("line", help="The command line, as the hook read it")
+  egress_tick = commands.add_parser(
+    "egress-tick",
+    help="Warn when a line fetches a host the sandbox egress filter blocks",
+  )
+  egress_tick.add_argument("line", help="The command line, as the hook read it")
   rename = commands.add_parser(
     "rename",
     help="Move a note, answer, report or task to a new ID",
@@ -4675,6 +4729,11 @@ def main():
       return 0
     if args.command == "serve-tick":
       warning = serve_warning(args.line)
+      if warning:
+        print(warning, file=sys.stderr)
+      return 0
+    if args.command == "egress-tick":
+      warning = egress_warning(args.line)
       if warning:
         print(warning, file=sys.stderr)
       return 0

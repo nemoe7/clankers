@@ -251,6 +251,14 @@ _arena_preview_gate() {
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" serve-tick "\$BASH_COMMAND"
       ;;
   esac
+  # A fetch to a host outside the egress allowlist fails its TLS handshake, and the error
+  # reads as a transient fault. The warning lands before the call runs, and it names the
+  # tool that reaches the host instead.
+  case "\$BASH_COMMAND" in
+    *curl*|*wget*|*"git clone"*|*"git fetch"*|*"git ls-remote"*)
+      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" egress-tick "\$BASH_COMMAND"
+      ;;
+  esac
   # A commit that cites a session-local ID leaves a reader an ID nothing can resolve.
   # The scan reads the staged diff against the state database, so a git SHA that is not
   # a session ID never matches, while a full ID and its 7-character head both do.

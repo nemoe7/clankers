@@ -5636,3 +5636,37 @@ def test_key_output_names_fetch_page_over_bash():
   # No host means no route to name, so the line stays out.
   bare = preview.format_key({"key": "a-key"}).splitlines()
   assert bare == ["key a-key"]
+
+
+def test_egress_warning_names_a_blocked_host():
+  """A fetch to an off-allowlist host is named, with the tool that reaches it."""
+  warning = preview.egress_warning("curl -sS https://httpbin.org/get")
+  assert "httpbin.org" in warning
+  assert "fetch_page" in warning
+
+
+def test_egress_warning_stays_quiet_on_an_allowed_host():
+  """The allowlist holds the hosts this sandbox reaches, so they raise nothing."""
+  for line in (
+    "curl -sS https://api.github.com/repos/nemoe7/clankers",
+    "curl -o /tmp/f.tgz https://codeload.github.com/a/b/tar.gz/refs/heads/main",
+    "git fetch origin main",
+  ):
+    assert preview.egress_warning(line) is None, line
+
+
+def test_egress_warning_ignores_a_url_no_command_fetches():
+  """A URL inside any other command is text, so it must not raise the warning."""
+  for line in (
+    "grep -rn https://example.com docs/",
+    "echo see https://nodejs.org for details",
+  ):
+    assert preview.egress_warning(line) is None, line
+
+
+def test_egress_warning_covers_wget_and_git_clone():
+  """The trap reads the command, not one tool name."""
+  assert "raw.githubusercontent.com" in preview.egress_warning(
+    "wget https://raw.githubusercontent.com/a/b/c.md"
+  )
+  assert "gitlab.com" in preview.egress_warning("git clone https://gitlab.com/x/y.git")
