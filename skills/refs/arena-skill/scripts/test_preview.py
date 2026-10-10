@@ -1599,7 +1599,9 @@ def test_read_names_every_attachment():
         ],
       }
     )
-    assert lost == "lost\ngone\nattachments: saved.html: /state/uploads/saved.html (missing)"
+    assert (
+      lost == "lost\ngone\nattachments: saved.html: /state/uploads/saved.html (missing)"
+    )
 
 
 def test_note_owns_one_attachment():
