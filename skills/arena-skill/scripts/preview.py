@@ -615,6 +615,17 @@ class Store:
 			if'approval'not in columns:db.execute("ALTER TABLE fetch_jobs ADD COLUMN approval TEXT NOT NULL DEFAULT 'approved' CHECK (approval IN ('pending', 'approved', 'denied'))")
 			if'origin'not in columns:db.execute("ALTER TABLE fetch_jobs ADD COLUMN origin TEXT NOT NULL DEFAULT 'agent'")
 		if not existed:self.path.chmod(384)
+	def id_matches(self,token):
+		like=f"{token}%";found=[]
+		with closing(self.connect())as db:
+			for(table,label)in(('notes','note'),('submissions','answer'),('reports','report'),('tasks','task')):rows=db.execute(f"SELECT * FROM {table} WHERE id = ? OR id LIKE ?",(token,like)).fetchall();found.extend((label,dict(row))for row in rows)
+		return found
+	def resolve_id(self,token):
+		matches=self.id_matches(token);exact=[item for item in matches if item[1]['id']==token]
+		if len(exact)==1:return token
+		if len(matches)==1:return matches[0][1]['id']
+		if not matches:raise ValueError(f"No note, answer, report or task holds the ID {token}")
+		listed='; '.join(f"{kind} {record['id']} {(record.get('title')or record.get('text')or'')[:40]!r}"for(kind,record)in matches);raise ValueError(f"{token} matches {len(matches)} records: {listed}. Give the full ID of one")
 	def notes_matching(self,token):
 		with closing(self.connect())as db:return[message_row(row)for row in db.execute('SELECT * FROM notes WHERE id = ? OR id LIKE ? ORDER BY at DESC',(token,f"{token}%")).fetchall()]
 	def connect(self):db=sqlite3.connect(self.path,timeout=5);db.row_factory=sqlite3.Row;return db
@@ -1377,22 +1388,22 @@ def main():
 				source=args.reply_file if args.reply_file is not None else args.note_file;kind='reply'if args.reply_file is not None else'note'
 				try:text=source.read_text(encoding='utf-8')
 				except OSError as error:raise ValueError(f"Cannot read {source}: {error.strerror or error}")from None
-			arrivals={record_id:store.record_arrival(record_id)for record_id in args.ids};store.acknowledge(args.ids,kind,text);short=[i[:7]for i in args.ids];print('Acknowledged '+' '.join(short))
-			for record_id in args.ids:
+			ids=[store.resolve_id(token)for token in args.ids];arrivals={record_id:store.record_arrival(record_id)for record_id in ids};store.acknowledge(ids,kind,text);short=[i[:7]for i in ids];print('Acknowledged '+' '.join(short))
+			for record_id in ids:
 				age=stamp_age_seconds(arrivals.get(record_id))
 				if age is not None and age>HOLD_STALE_SECONDS:minutes=int(age//60);print(f"HOLD: this ack answered a message {minutes} min old. The message might be stale. Hold further work until the owner confirms.",file=sys.stderr,flush=True)
-			print('Note asks for work? Add the task: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in args.ids))
+			print('Note asks for work? Add the task: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in ids))
 		elif args.command=='publish':
 			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id}, {count} fields.")
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
-		elif args.command=='unpublish':store.unpublish(args.report_id);print(f"Unpublished {args.report_id}. Answers and source file remain.")
+		elif args.command=='unpublish':report_id=store.resolve_id(args.report_id);store.unpublish(report_id);print(f"Unpublished {report_id}. Answers and source file remain.")
 		elif args.command=='task':
 			task_id=args.id_arg
 			if not task_id:raise ValueError('A task needs an ID')
 			details=args.task_details
 			if details is None and args.detail_arg:details=args.detail_arg
 			if details is not None:details=task_steps(details);check_task_steps(details)
-			if args.amend:store.amend_task(args.amend,task_id)
+			if args.amend:store.amend_task(store.resolve_id(args.amend),task_id)
 			if args.report:
 				try:store.report(args.report)
 				except FileNotFoundError:raise ValueError(f"No report is stored under {args.report}")from None
@@ -1400,7 +1411,7 @@ def main():
 				with store.transaction()as shared:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report,shared=shared);store.mark_task(args.msg_id,task_id,shared=shared)
 			else:record=store.write_task(task_id,args.title_arg,details,args.status,args.order,args.blocked,args.report)
 			print(format_task(record))
-		elif args.command=='task-remove':print(format_task(store.remove_task(args.task_id)))
+		elif args.command=='task-remove':print(format_task(store.remove_task(store.resolve_id(args.task_id))))
 		elif args.command=='task-list':print(format_task_list(store.list_tasks(),args.full))
 		elif args.command=='import-state':text=args.source.read_text(encoding='utf-8')if args.source else sys.stdin.read();print(format_import_receipt(store.import_state(text,args.replace_tasks,args.force)))
 		elif args.command=='clear-state':print(format_clear_state(store.clear_state()))

@@ -1848,6 +1848,46 @@ class Store:
     if not existed:
       self.path.chmod(0o600)
 
+  def id_matches(self, token):
+    """Every record whose ID equals the token or starts with it, across all four kinds."""
+    like = f"{token}%"
+    found = []
+    with closing(self.connect()) as db:
+      for table, label in (
+        ("notes", "note"),
+        ("submissions", "answer"),
+        ("reports", "report"),
+        ("tasks", "task"),
+      ):
+        rows = db.execute(
+          f"SELECT * FROM {table} WHERE id = ? OR id LIKE ?", (token, like)
+        ).fetchall()
+        found.extend((label, dict(row)) for row in rows)
+    return found
+
+  def resolve_id(self, token):
+    """One full ID for a full ID or a prefix.
+
+    A prefix that names two records is a named conflict, and the error lists every match
+    with its kind and title, so the caller can see which full ID to give instead.
+    """
+    matches = self.id_matches(token)
+    exact = [item for item in matches if item[1]["id"] == token]
+    if len(exact) == 1:
+      return token
+    if len(matches) == 1:
+      return matches[0][1]["id"]
+    if not matches:
+      raise ValueError(f"No note, answer, report or task holds the ID {token}")
+    listed = "; ".join(
+      f"{kind} {record['id']}"
+      f" {(record.get('title') or record.get('text') or '')[:40]!r}"
+      for kind, record in matches
+    )
+    raise ValueError(
+      f"{token} matches {len(matches)} records: {listed}. Give the full ID of one"
+    )
+
   def notes_matching(self, token):
     """The reread takes the short or the full ID, and a short ID that matches
     several notes prints every match, newest first, so a saved note is never
@@ -4567,11 +4607,12 @@ def main():
           text = source.read_text(encoding="utf-8")
         except OSError as error:
           raise ValueError(f"Cannot read {source}: {error.strerror or error}") from None
-      arrivals = {record_id: store.record_arrival(record_id) for record_id in args.ids}
-      store.acknowledge(args.ids, kind, text)
-      short = [i[:7] for i in args.ids]
+      ids = [store.resolve_id(token) for token in args.ids]
+      arrivals = {record_id: store.record_arrival(record_id) for record_id in ids}
+      store.acknowledge(ids, kind, text)
+      short = [i[:7] for i in ids]
       print("Acknowledged " + " ".join(short))
-      for record_id in args.ids:
+      for record_id in ids:
         age = stamp_age_seconds(arrivals.get(record_id))
         if age is not None and age > HOLD_STALE_SECONDS:
           minutes = int(age // 60)
@@ -4583,7 +4624,7 @@ def main():
           )
       print(
         "Note asks for work? Add the task: "
-        + "; ".join(f'task <id> "<title>" --msg-id {i}' for i in args.ids)
+        + "; ".join(f'task <id> "<title>" --msg-id {i}' for i in ids)
       )
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
@@ -4596,8 +4637,9 @@ def main():
           file=sys.stderr,
         )
     elif args.command == "unpublish":
-      store.unpublish(args.report_id)
-      print(f"Unpublished {args.report_id}. Answers and source file remain.")
+      report_id = store.resolve_id(args.report_id)
+      store.unpublish(report_id)
+      print(f"Unpublished {report_id}. Answers and source file remain.")
     elif args.command == "task":
       task_id = args.id_arg
       if not task_id:
@@ -4609,7 +4651,7 @@ def main():
         details = task_steps(details)
         check_task_steps(details)
       if args.amend:
-        store.amend_task(args.amend, task_id)
+        store.amend_task(store.resolve_id(args.amend), task_id)
       if args.report:
         try:
           store.report(args.report)
@@ -4642,7 +4684,7 @@ def main():
         )
       print(format_task(record))
     elif args.command == "task-remove":
-      print(format_task(store.remove_task(args.task_id)))
+      print(format_task(store.remove_task(store.resolve_id(args.task_id))))
     elif args.command == "task-list":
       print(format_task_list(store.list_tasks(), args.full))
     elif args.command == "import-state":

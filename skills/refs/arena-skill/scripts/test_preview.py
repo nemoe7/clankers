@@ -2658,6 +2658,50 @@ def test_bare_task_list_names_the_current_task():
     ]
 
 
+def test_a_short_id_prefix_names_one_record():
+  # A 7-character prefix stands in for the full UUID. A prefix that names two records is
+  # a named conflict, and the error lists each match with its kind so the caller can see
+  # which full ID to give instead.
+  with tempfile.TemporaryDirectory() as short_dir:
+    short = preview.Store(short_dir, create=True)
+    short.note("abcd123-0289082512830518", "first note")
+    assert short.resolve_id("abcd123") == "abcd123-0289082512830518"
+    assert short.resolve_id("abcd123-0289082512830518") == "abcd123-0289082512830518"
+    short.note("abcd123-9999000011112222", "second note, same head")
+    try:
+      short.resolve_id("abcd123")
+      raise AssertionError("a two-record prefix must fail")
+    except ValueError as conflict:
+      message = str(conflict)
+    assert "matches 2 records" in message
+    assert "abcd123-0289082512830518" in message and "first note" in message
+    assert "abcd123-9999000011112222" in message and "second note" in message
+    try:
+      short.resolve_id("zzz9999")
+      raise AssertionError("an unknown prefix must fail")
+    except ValueError as missing:
+      assert "zzz9999" in str(missing)
+    # ack takes the prefix too, and its receipt still prints the short form.
+    script = str(Path(preview.__file__))
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": short_dir}
+    out = subprocess.run(
+      [sys.executable, script, "ack", "abcd123-0289082512830518", "-r", "answered"],
+      capture_output=True,
+      text=True,
+      check=True,
+      env=env,
+    ).stdout
+    assert "abcd123" in out
+    prefixed = subprocess.run(
+      [sys.executable, script, "ack", "abcd123-9999", "-r", "answered too"],
+      capture_output=True,
+      text=True,
+      check=True,
+      env=env,
+    ).stdout
+    assert "abcd123" in prefixed
+
+
 def test_short_flags_and_the_details_rename():
   # The task flags drop the redundant `--task-` head: `--details` is the name now, and
   # `--task-details` stays an alias so a stored call and the reference table still work.
