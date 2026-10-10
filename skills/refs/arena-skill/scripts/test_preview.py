@@ -5638,11 +5638,20 @@ def test_key_output_names_fetch_page_over_bash():
   assert bare == ["key a-key"]
 
 
+# The warning's exact text, so the assertions compare whole strings. A substring test
+# against a string that carries a URL reads to CodeQL as incomplete URL sanitization.
+EGRESS_WARNING = (
+  "arena-preview gate: {host} sits outside this sandbox's egress allowlist. The"
+  " TLS handshake fails with SSL_ERROR_SYSCALL, which reads as a transient fault"
+  " and never clears on a retry. Read it through the fetch_page tool instead."
+)
+
+
 def test_egress_warning_names_a_blocked_host():
   """A fetch to an off-allowlist host is named, with the tool that reaches it."""
-  warning = preview.egress_warning("curl -sS https://httpbin.org/get")
-  assert "httpbin.org" in warning
-  assert "fetch_page" in warning
+  assert preview.egress_warning("curl -sS https://httpbin.org/get") == (
+    EGRESS_WARNING.format(host="httpbin.org")
+  )
 
 
 def test_egress_warning_stays_quiet_on_an_allowed_host():
@@ -5666,7 +5675,9 @@ def test_egress_warning_ignores_a_url_no_command_fetches():
 
 def test_egress_warning_covers_wget_and_git_clone():
   """The trap reads the command, not one tool name."""
-  assert "raw.githubusercontent.com" in preview.egress_warning(
-    "wget https://raw.githubusercontent.com/a/b/c.md"
+  assert preview.egress_warning("wget https://raw.githubusercontent.com/a/b/c.md") == (
+    EGRESS_WARNING.format(host="raw.githubusercontent.com")
   )
-  assert "gitlab.com" in preview.egress_warning("git clone https://gitlab.com/x/y.git")
+  assert preview.egress_warning("git clone https://gitlab.com/x/y.git") == (
+    EGRESS_WARNING.format(host="gitlab.com")
+  )
