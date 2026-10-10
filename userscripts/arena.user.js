@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.17
+// @name         Arena.ai | NemoUtils | v1.10.18
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.17
+// @version      1.10.18
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -137,6 +137,9 @@
   var BAR_SELECTOR =
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
   var SLUG_KEY = "clankers-arena-agent-slug";
+  // The tab title carries the repository even before the bar renders, so the regex lives
+  // with the other page-wide constants: detectRepo runs at load, ahead of any later var.
+  var STATE_TITLE_RE = /^Arena \| (\S+)/;
 
   function arenaUrl(urlString) {
     var url;
@@ -172,46 +175,15 @@
     return repo;
   }
 
+  // The bar can render the repository as a bare chip without its owner, so a
+  // slash-less slug-like span in the bar still names the repository.
+  function slugFromBare(text) {
+    var trimmed = String(text || "").trim();
+    return /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(trimmed) ? trimmed : null;
+  }
+
   function readSlug(doc) {
-    var selectors = [
-      BAR_SELECTOR + " span.truncate",
-      'button[aria-haspopup="dialog"] span.truncate',
-      'button[aria-haspopup="menu"] span.truncate',
-      "span.truncate"
-    ];
-    var s;
-    var spans;
-    var i;
-    var slug;
-    for (s = 0; s < selectors.length; s += 1) {
-      try {
-        spans = doc.querySelectorAll(selectors[s]);
-      } catch (err) {
-        continue;
-      }
-      for (i = 0; i < spans.length; i += 1) {
-        slug = slugFromOwnerRepo(spans[i].textContent || "");
-        if (slug) {
-          return slug;
-        }
-      }
-    }
-    // Fallback to the old bar-then-spans path for test mocks and legacy UI.
-    var bar = doc.querySelector(BAR_SELECTOR);
-    if (bar) {
-      try {
-        spans = bar.querySelectorAll("span.truncate");
-        for (i = 0; i < spans.length; i += 1) {
-          slug = slugFromOwnerRepo(spans[i].textContent || "");
-          if (slug) {
-            return slug;
-          }
-        }
-      } catch (err) {
-        return null;
-      }
-    }
-    return null;
+    return detectRepo(doc) || null;
   }
 
   // The global pause stops every feature where it stands and honors the pause on the next
@@ -2084,11 +2056,35 @@
 
   var STATE_SLUG_KEY = "clankers-arena-agent-slug";
 
-  var STATE_TITLE_RE = /^Arena \| (\S+)/;
-
   function titleRepo(doc) {
     var match = STATE_TITLE_RE.exec(String((doc && doc.title) || ""));
     return match ? match[1] : "";
+  }
+
+  // The live bar names the repository; the tab title carries it when the bar is gone or not
+  // yet rendered. Both are reliable, so the greppier header read stays a last resort in
+  // stateRepo only. Returns "" when neither source is present.
+  function detectRepo(doc) {
+    var bar = doc.querySelector(BAR_SELECTOR);
+    var spans;
+    var i;
+    var repo;
+    var bare = null;
+    if (bar) {
+      try {
+        spans = bar.querySelectorAll("span.truncate");
+      } catch (err) {
+        spans = null;
+      }
+      for (i = 0; spans && i < spans.length; i += 1) {
+        var text = String(spans[i].textContent || "").trim();
+        repo = slugFromOwnerRepo(text);
+        if (repo) return repo;
+        bare = bare || slugFromBare(text);
+      }
+      if (bare) return bare;
+    }
+    return titleRepo(doc);
   }
 
   function savedSlug() {
@@ -2113,19 +2109,7 @@
   }
 
   function stateRepo(doc) {
-    var bar = doc.querySelector(BAR_SELECTOR);
-    if (!bar) return savedSlug() || headerRepo(doc) || titleRepo(doc);
-    var spans = bar.querySelectorAll("span.truncate");
-    var i;
-    for (i = 0; i < spans.length; i += 1) {
-      var text = String(spans[i].textContent || "").trim();
-      var slash = text.indexOf("/");
-      if (slash > 0 && slash < text.length - 1) {
-        var repo = text.slice(slash + 1);
-        if (repo.indexOf("/") === -1 && !/\s/.test(text)) return repo;
-      }
-    }
-    return savedSlug() || headerRepo(doc) || titleRepo(doc);
+    return detectRepo(doc) || savedSlug() || headerRepo(doc) || "";
   }
 
   function stateBranch(doc) {
@@ -2183,6 +2167,8 @@
       handleMatchesScope: handleMatchesScope,
       stateScope: stateScope,
       stateRepo: stateRepo,
+      readSlug: readSlug,
+      slugFromBare: slugFromBare,
       pagePicker: pagePicker,
       downloadRoute: downloadRoute,
       stateDownloadRoute: stateDownloadRoute,
@@ -2614,7 +2600,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.17";
+    var VERSION = "1.10.18";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid

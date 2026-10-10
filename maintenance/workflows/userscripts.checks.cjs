@@ -2574,6 +2574,8 @@ function checkStateDownload(api, session) {
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
   var stateScopeKey = api.stateScopeKey;
+  var readSlug = api.readSlug;
+  var slugFromBare = api.slugFromBare;
   var pagePicker = api.pagePicker;
   var writtenName = api.writtenName;
   var STATE_LINES = api.STATE_LINES;
@@ -2766,6 +2768,28 @@ function checkStateDownload(api, session) {
     stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
     "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
   );
+  // An ongoing session renders the repository as a bare chip without its owner, so a
+  // slash-less slug-like span in the bar still names the repository for the picker and
+  // the fill, instead of falling through to a header session token.
+  var bareBar = {
+    querySelectorAll: function (selector) {
+      if (selector === "span.truncate") return [{ textContent: "daedalus" }];
+      if (selector === "a") return [branchLink];
+      return [];
+    },
+  };
+  var bareDoc = {
+    querySelector: function () { return bareBar; },
+    querySelectorAll: function (selector) {
+      return selector.indexOf("span.truncate") !== -1 ? [{ textContent: "daedalus" }] : [];
+    },
+  };
+  assert.equal(slugFromBare("daedalus"), "daedalus");
+  assert.equal(slugFromBare("nemoe7/daedalus"), null);
+  assert.equal(slugFromBare("  "), null);
+  assert.equal(stateRepo(bareDoc), "daedalus");
+  assert.equal(readSlug(bareDoc), "daedalus");
+  assert.equal(stateScope(bareDoc).repo, "daedalus");
   // The header leaves the page while a dialog holds it, so the fill's saved slug names the
   // repository; the branch stays empty.
   session.value = "clankers";
@@ -2819,6 +2843,7 @@ function checkStateDownload(api, session) {
   // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
   // the conversation header still opens with the repository name, and its first word is the
   // repository. That read comes before the tab title.
+  // The tab title is the reliable read, so it comes before the greppier header read.
   var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
   var headerDoc = {
     querySelector: function () { return null; },
@@ -2827,14 +2852,22 @@ function checkStateDownload(api, session) {
     },
     title: "Arena | other",
   };
-  assert.equal(stateRepo(headerDoc), "clankers");
-  // A header span with no slug-like first word falls through to the tab title.
-  headerSpan.textContent = "";
   assert.equal(stateRepo(headerDoc), "other");
-  // The saved slug still wins over the header read.
+  // With no title at all, the header read names the repository.
+  var headerOnlyDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      return selector.indexOf("aria-haspopup") !== -1 ? [headerSpan] : [];
+    },
+  };
+  assert.equal(stateRepo(headerOnlyDoc), "clankers");
+  // A header span with no slug-like first word and no title yields nothing.
+  headerSpan.textContent = "";
+  assert.equal(stateRepo(headerOnlyDoc), "");
+  // The saved slug still wins over the header read when the title is gone.
   session.value = "saved";
   headerSpan.textContent = "clankers read ARENA.md";
-  assert.equal(stateRepo(headerDoc), "saved");
+  assert.equal(stateRepo(headerOnlyDoc), "saved");
   session.value = null;
   // A menu click grants no browser gesture, so the automatic path writes the stamped
   // download and the pick stays a manual action.
