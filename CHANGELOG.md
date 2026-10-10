@@ -24,6 +24,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The preview frame sandbox gains `allow-popups`, `allow-popups-to-escape-sandbox` and `allow-downloads`, so preview links open a new tab and downloads run. The new Steering toggle ships on and re-applies the flags when Arena rebuilds the frame.
 
+#### preview
+
+- The reminder names stale reports to unpublish at 10 or more published reports. A report is stale with no fields, or with fields you answered and acked.
+
 ### Changed
 
 #### house

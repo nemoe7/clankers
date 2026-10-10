@@ -159,6 +159,8 @@ REMINDERS = (
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
 GATE_THRESHOLD = 10
+# At this many published reports, the reminder names the stale ones to unpublish.
+STALE_REPORT_THRESHOLD = 10
 # The port the skill names. A serve on another one hides the owner's page from the
 # address they expect, so the gate names the difference.
 DEFAULT_PORT = 8000
@@ -3394,6 +3396,32 @@ class Store:
       host = None
     return {"key": key, "host": host, "at": clip_stamp(record.get("at"))}
 
+  def stale_report_ids(self, db):
+    """Published reports that are stale: no fields, or fields answered and acked."""
+    stale = []
+    rows = db.execute(
+      "SELECT id, markdown FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id"
+    )
+    for row in rows:
+      try:
+        fields = len(parse_fields(row["markdown"])[1])
+      except ValueError:
+        continue
+      if fields == 0:
+        stale.append(row["id"])
+        continue
+      pending = db.execute(
+        "SELECT count(*) FROM submissions"
+        " WHERE report_id = ? AND acknowledged_at IS NULL",
+        (row["id"],),
+      ).fetchone()[0]
+      answered = db.execute(
+        "SELECT count(*) FROM submissions WHERE report_id = ?", (row["id"],)
+      ).fetchone()[0]
+      if answered and not pending:
+        stale.append(row["id"])
+    return stale
+
   def reminder(self, advance=False):
     """Count pending kinds without marking any message seen; any count asks for an ack.
 
@@ -3421,6 +3449,10 @@ class Store:
       remaining = db.execute(
         "SELECT count(*) FROM tasks WHERE status <> 'finished'"
       ).fetchone()[0]
+      published = db.execute(
+        "SELECT count(*) FROM reports WHERE published_at IS NOT NULL"
+      ).fetchone()[0]
+      stale = self.stale_report_ids(db) if published >= STALE_REPORT_THRESHOLD else []
       cursor = meta_number(db, REMINDER_CURSOR)
       # A new user item resets the count. An idle poll clears it; reading does not.
       polls = (
@@ -3445,7 +3477,10 @@ class Store:
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
     head = [f"calls {polls}"] if polls and counts else []
     tail = reminder_tail(cursor, remaining)
-    return " | ".join([" ".join([*head, *unacked]).strip(), tail]).strip(" |")
+    parts = [" ".join([*head, *unacked]).strip(), tail]
+    if stale:
+      parts.append("Unpublish stale reports: " + ", ".join(stale))
+    return " | ".join(parts).strip(" |")
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
     """Return False when bash calls must block.

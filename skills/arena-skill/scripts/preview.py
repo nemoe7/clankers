@@ -62,6 +62,7 @@ REMINDERS='Refresh context: ARENA.md, SKILL.md, REFERENCE.md.','`task-list` at t
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 GATE_THRESHOLD=10
+STALE_REPORT_THRESHOLD=10
 DEFAULT_PORT=8000
 AGENT_KEY_META='agent_key'
 AGENT_KEY_EXPIRY_SECONDS=1200
@@ -1050,11 +1051,22 @@ class Store:
 		host=record.get('host')
 		if not isinstance(host,str)or not AGENT_HOST_RE.fullmatch(host):host=None
 		return{'key':key,'host':host,'at':clip_stamp(record.get('at'))}
+	def stale_report_ids(self,db):
+		stale=[];rows=db.execute('SELECT id, markdown FROM reports WHERE published_at IS NOT NULL ORDER BY seq, id')
+		for row in rows:
+			try:fields=len(parse_fields(row['markdown'])[1])
+			except ValueError:continue
+			if fields==0:stale.append(row['id']);continue
+			pending=db.execute('SELECT count(*) FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL',(row['id'],)).fetchone()[0];answered=db.execute('SELECT count(*) FROM submissions WHERE report_id = ?',(row['id'],)).fetchone()[0]
+			if answered and not pending:stale.append(row['id'])
+		return stale
 	def reminder(self,advance=False):
 		with closing(self.connect())as db,db:
-			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
+			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=[f"calls {polls}"]if polls and counts else[];tail=reminder_tail(cursor,remaining);return' | '.join([' '.join([*head,*unacked]).strip(),tail]).strip(' |')
+		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=[f"calls {polls}"]if polls and counts else[];tail=reminder_tail(cursor,remaining);parts=[' '.join([*head,*unacked]).strip(),tail]
+		if stale:parts.append('Unpublish stale reports: '+', '.join(stale))
+		return' | '.join(parts).strip(' |')
 	def gate(self,threshold=GATE_THRESHOLD,pending_only=False):
 		with closing(self.connect())as db,db:pending=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0];polls=meta_number(db,POLLS_SINCE_MESSAGE)
 		if pending_only:return not pending

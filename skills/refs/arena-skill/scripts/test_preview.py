@@ -339,6 +339,24 @@ def test_report_unpublish():
     assert len(store.state()["notes"]) == 1, "the CLI unpublish writes no note"
 
 
+def test_stale_report_reminder():
+  # Ten published reports cross the stale threshold. A field-less report is stale at
+  # once; a fresh form with an open question is not.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview.Store(root, create=True)
+    for index in range(9):
+      source = root / f"form{index}.md"
+      source.write_text(f"Pick one: {{#f{index}}}\n\n- ( ) a\n- ( ) b\n", "utf-8")
+      store.publish(f"form{index}", f"Form {index}", source)
+    plain = root / "plain.md"
+    plain.write_text("Information only, with no question to answer.\n", "utf-8")
+    store.publish("plain", "Plain", plain)
+    line = store.reminder()
+    assert "plain" in line, "the field-less report is named stale"
+    assert "form0" not in line, "a fresh form awaiting an answer is not stale"
+
+
 def test_http_boundaries():
   global app
   with tempfile.TemporaryDirectory() as directory:
