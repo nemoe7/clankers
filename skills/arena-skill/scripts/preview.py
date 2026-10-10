@@ -482,6 +482,11 @@ def run_notices(state_dir):
 		except(OSError,ValueError):continue
 		if record.get('announced'):continue
 		print(f"Finished run {record.get('name')}: exit {record.get('exit')} in {record.get('seconds')} s. Verdict: {record.get('verdict')}",flush=True);record['announced']=True;path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
+SHELL_WRAPPER=re.compile('^(?:\\S*/)?(?:ba|z|da)?sh\\s+(?:-\\w+\\s+)*-c\\s+')
+def shell_command_text(text):
+	stripped=SHELL_WRAPPER.sub('',text.strip(),count=1)
+	if len(stripped)>=2 and stripped[0]==stripped[-1]and stripped[0]in'\'"':stripped=stripped[1:-1]
+	return stripped
 def gate_line_hint(line):
 	words={token for token in re.split('[^A-Za-z0-9_.-]+',line or'')};found=[name for name in GATE_NOISE if name in words]
 	if not found:return None
@@ -1335,7 +1340,7 @@ def main():
 				print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note, one call per note: `arena-preview ack <id> --reply <markdown>` or `arena-preview ack <id> --note <text>`.',flush=True);hint=gate_line_hint(args.line)
 				if hint:print(hint,flush=True)
 				blocker=first_blocking_piece(args.line)
-				if blocker:print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",flush=True)
+				if blocker:blocker=shell_command_text(blocker);print(f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",flush=True)
 				return 1
 			if args.push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
 			return 0

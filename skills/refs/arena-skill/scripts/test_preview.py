@@ -3400,6 +3400,16 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     assert preview.run_command(directory, "empty", ["--"]) == 2
 
 
+def test_shell_command_text_drops_the_launcher():
+  """A block names the command itself, not the bash wrapper the agent shell started it with."""
+  assert (
+    preview.shell_command_text("/bin/bash -l -c git log --oneline -1")
+    == "git log --oneline -1"
+  )
+  assert preview.shell_command_text("bash -c 'npm test'") == "npm test"
+  assert preview.shell_command_text("npm test") == "npm test"
+
+
 def test_first_blocking_piece_names_the_part_that_blocks():
   """A blocked call names its first part that is not an inbox call or an inert prefix."""
   assert (

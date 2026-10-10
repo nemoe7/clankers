@@ -1352,6 +1352,17 @@ def run_notices(state_dir):
     )
 
 
+SHELL_WRAPPER = re.compile(r"^(?:\S*/)?(?:ba|z|da)?sh\s+(?:-\w+\s+)*-c\s+")
+
+
+def shell_command_text(text):
+  """Return the command a shell wrapper runs, so a block names the command, not its launcher."""
+  stripped = SHELL_WRAPPER.sub("", text.strip(), count=1)
+  if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "'\"":
+    stripped = stripped[1:-1]
+  return stripped
+
+
 def gate_line_hint(line):
   """Name the extra commands on a blocked call, so the next read keeps the exemption."""
   words = {token for token in re.split(r"[^A-Za-z0-9_.-]+", line or "")}
@@ -4418,6 +4429,7 @@ def main():
           print(hint, flush=True)
         blocker = first_blocking_piece(args.line)
         if blocker:
+          blocker = shell_command_text(blocker)
           print(
             f"Blocked by the part `{blocker}`. Run the inbox calls alone, or drop this part.",
             flush=True,
