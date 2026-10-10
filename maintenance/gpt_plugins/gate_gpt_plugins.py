@@ -33,7 +33,13 @@ README = PLUGIN / "README.md"
 REFS = PLUGIN / "refs" / "skills"
 SHIPPED = PLUGIN / "skills"
 PLUGIN_NAME = "gpt-plugins"
-EXPECTED_SKILLS = ("gpt-quirks", "gpt-handoff", "gpt-planning", "gpt-github")
+EXPECTED_SKILLS = (
+  "gpt-quirks",
+  "gpt-handoff",
+  "gpt-planning",
+  "gpt-github",
+  "gpt-display",
+)
 SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 
 
@@ -43,6 +49,11 @@ def shipped_paths() -> list[Path]:
 
   for name in EXPECTED_SKILLS:
     paths.append(SHIPPED / name / "SKILL.md")
+
+    # A skill may split detail into references/ so a reader loads only the file it needs.
+    for item in sorted((SHIPPED / name / "references").rglob("*")):
+      if item.is_file():
+        paths.append(item)
 
   return paths
 
@@ -160,10 +171,8 @@ def check_skill(root: Path, name: str, errors: list[str]) -> None:
   if len(text.splitlines()) > 500:
     errors.append(f"{label}: SKILL.md exceeds 500 lines")
 
-  stray = sorted(item.name for item in directory.iterdir() if item.name != "SKILL.md")
-
-  if stray:
-    errors.append(f"{label.parent}: unexpected extra entries: {stray}")
+  # A skill may carry a references/ folder. shipped_paths() and check_references()
+  # account for its files, so no entry list is enforced here.
 
 
 def check_collections(errors: list[str]) -> None:
@@ -202,6 +211,44 @@ def matching_structure(reference: str, live: str) -> bool:
   return re.findall(r"^#+ .+$", reference, re.MULTILINE) == re.findall(
     r"^#+ .+$", live, re.MULTILINE
   ) and len(live.encode()) <= len(reference.encode())
+
+
+def reference_files(root: Path, name: str) -> list[Path]:
+  """Return the skill's references files, relative to its directory."""
+  return sorted(
+    item.relative_to(root / name)
+    for item in (root / name / "references").rglob("*")
+    if item.is_file()
+  )
+
+
+def check_references(errors: list[str]) -> None:
+  """Require both trees to carry the same references files, byte for byte."""
+  for name in EXPECTED_SKILLS:
+    source = REFS / name / "references"
+    copy = SHIPPED / name / "references"
+
+    if not source.is_dir() and not copy.is_dir():
+      continue
+
+    if source.is_dir() != copy.is_dir():
+      present = source if source.is_dir() else copy
+      errors.append(f"{present.relative_to(ROOT)}: only one tree has references/")
+      continue
+
+    ref_files = reference_files(REFS, name)
+    copy_files = reference_files(SHIPPED, name)
+
+    if ref_files != copy_files:
+      errors.append(f"{name}: references files differ between the two trees")
+      continue
+
+    for item in ref_files:
+      left = (REFS / name / item).read_bytes()
+      right = (SHIPPED / name / item).read_bytes()
+
+      if left != right:
+        errors.append(f"{(SHIPPED / name / item).relative_to(ROOT)}: differs from refs")
 
 
 def check_tree(errors: list[str]) -> None:
@@ -356,6 +403,7 @@ def main() -> int:
 
   check_tree(errors)
   check_collections(errors)
+  check_references(errors)
   check_manifest(load_schema(arguments.schema, errors), errors)
 
   if arguments.base_manifest:

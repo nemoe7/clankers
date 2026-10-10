@@ -12,6 +12,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The version-bumps job checks a version bump for each changed userscript and for `gpt-plugins/plugin.json`.
 
+#### gpt-plugins
+
+- The collection gains a fifth skill, `gpt-display`. It covers the supported response representations, DIL components, charts, maps, citations, interactions and Mermaid diagrams.
+- The skill splits its detail into `references/`, one file per type. `references/mermaid/` holds the 27 diagram families and `references/components/maps.md` holds the map schemas. A reader loads one file instead of the whole gallery.
+- `SKILL.md` gains section 3.5, which keeps colors legible in a light or dark theme.
+- The Mermaid rules require the exact diagram declaration in every example, and the Ishikawa entry uses `ishikawa-beta`.
+
 ### Changed
 
 #### house
@@ -48,6 +55,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Gate scripts are renamed to `gate_*`, and sit in six domain directories.
 - Proxy files no longer count toward the tracked instruction budgets.
 - The proxy test fixture starts both stub servers with `poll_interval=0.01`, which removes 1 s of shutdown wait from each test.
+
+- The collection drops five diagram families ChatGPT renders badly: Requirement, Use case, ZenUML, Block and Agentflow.
+- The gate drops the stray-entries check. A skill may now carry a `references/` folder, and `check_references()` requires both trees to agree byte for byte.
 
 ### Removed
 
