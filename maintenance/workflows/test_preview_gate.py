@@ -33,6 +33,13 @@ fi
 if [ "$1" = "serve-tick" ]; then
   exec __PYTHON__ __PREVIEW__ serve-tick "$2"
 fi
+if [ "$1" = "commit-tick" ]; then
+  # Not a pure classifier: it reads the repository's staged diff and the session
+  # database. Forwarding it would let the host repository's own staged content
+  # decide these drift tests, so the stub answers "nothing to block" and the ID
+  # trap keeps its own tests in test_preview.py.
+  exit 0
+fi
 exit 1
 """
 

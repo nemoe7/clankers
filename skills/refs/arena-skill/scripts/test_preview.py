@@ -5434,3 +5434,112 @@ def test_poll_breaks_on_finished_run(capsys):
     out = capsys.readouterr().out
     assert "run gate done: exit 0" in out and out.rstrip().endswith("ok")
     assert preview.run_notices(directory) == 0
+
+
+def git_repo(directory):
+  """A throwaway repository with one commit, so a staged diff exists to scan."""
+
+  def git(*arguments):
+    subprocess.run(
+      ["git", *arguments],
+      cwd=directory,
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+
+  git("init", "--quiet")
+  git("config", "user.email", "trap@example.invalid")
+  git("config", "user.name", "Trap Test")
+  Path(directory, "seed.txt").write_text("seed\n", encoding="utf-8")
+  git("add", "seed.txt")
+  git("commit", "--quiet", "-m", "chore: seed the repository")
+  return git
+
+
+def test_commit_trap_names_a_staged_session_id():
+  """A staged line that cites a note ID blocks, and the report names file and line."""
+  with tempfile.TemporaryDirectory() as directory:
+    state = Path(directory, "state")
+    state.mkdir()
+    store = preview.Store(str(state), create=True)
+    note_id = "0000000-0000000000000000000000000"
+    store.note(note_id, "a note")
+    repo = Path(directory, "repo")
+    repo.mkdir()
+    git = git_repo(str(repo))
+    Path(repo, "doc.md").write_text(
+      f"# Title\n\nFixed in {note_id}.\n", encoding="utf-8"
+    )
+    git("add", "doc.md")
+
+    hits = preview.staged_session_id_hits(store, str(repo))
+
+    assert len(hits) == 2, hits
+    assert {hit[2] for hit in hits} == {note_id, "0000000"}
+    assert all(hit[0] == "doc.md" and hit[1] == 3 for hit in hits), hits
+    report = preview.commit_id_report(hits)
+    assert "COMMIT BLOCKED" in report
+    assert "doc.md:3" in report and note_id in report
+
+
+def test_commit_trap_ignores_a_git_sha():
+  """A SHA that is no session ID passes: the match list comes from the database."""
+  with tempfile.TemporaryDirectory() as directory:
+    state = Path(directory, "state")
+    state.mkdir()
+    store = preview.Store(str(state), create=True)
+    store.note("0000000-0000000000000000000000000", "a note")
+    repo = Path(directory, "repo")
+    repo.mkdir()
+    git = git_repo(str(repo))
+    head = subprocess.run(
+      ["git", "rev-parse", "HEAD"],
+      cwd=str(repo),
+      capture_output=True,
+      text=True,
+      check=True,
+    ).stdout.strip()
+    Path(repo, "doc.md").write_text(
+      f"Landed {head} and its short form {head[:7]}.\n", encoding="utf-8"
+    )
+    git("add", "doc.md")
+
+    assert preview.staged_session_id_hits(store, str(repo)) == []
+    assert preview.commit_id_report([]) is None
+
+
+def test_commit_trap_skips_a_removed_citation():
+  """Only added lines count, so stripping a citation in this commit passes."""
+  with tempfile.TemporaryDirectory() as directory:
+    state = Path(directory, "state")
+    state.mkdir()
+    store = preview.Store(str(state), create=True)
+    note_id = "0000000-0000000000000000000000000"
+    store.note(note_id, "a note")
+    repo = Path(directory, "repo")
+    repo.mkdir()
+    git = git_repo(str(repo))
+    Path(repo, "doc.md").write_text(f"Fixed in {note_id}.\n", encoding="utf-8")
+    git("add", "doc.md")
+    git("commit", "--quiet", "-m", "docs: cite the note")
+    Path(repo, "doc.md").write_text("Fixed.\n", encoding="utf-8")
+    git("add", "doc.md")
+
+    assert preview.staged_session_id_hits(store, str(repo)) == []
+
+
+def test_commit_trap_matches_a_kebab_id_on_its_full_form_only():
+  """A report ID matches whole; its head is a word fragment, so it stays out."""
+  with tempfile.TemporaryDirectory() as directory:
+    state = Path(directory, "state")
+    state.mkdir()
+    store = preview.Store(str(state), create=True)
+    tokens = preview.session_id_tokens(store)
+    assert "an-example-report-id" not in tokens
+    source = Path(directory, "report.md")
+    source.write_text("# Body\n", encoding="utf-8")
+    store.publish("an-example-report-id", "A title", source)
+    tokens = preview.session_id_tokens(store)
+    assert "an-example-report-id" in tokens
+    assert "an-example" not in tokens

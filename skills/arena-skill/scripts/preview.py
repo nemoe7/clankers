@@ -89,6 +89,40 @@ def main_identical(root='.'):
 			if git('rev-parse','--verify','--quiet',ref).returncode:return False
 		return git('diff','--quiet','origin/main','HEAD','--').returncode==0
 	except OSError:return False
+SESSION_ID_TABLES=('notes','note'),('submissions','answer'),('reports','report'),('tasks','task')
+HEX7_RE=re.compile('[0-9a-f]{7}')
+DIFF_FILE_RE=re.compile('^\\+\\+\\+ b/(.+)$')
+DIFF_HUNK_RE=re.compile('^@@ -\\S+ \\+(\\d+)')
+def session_id_tokens(store):
+	tokens={}
+	with closing(store.connect())as db:
+		for(table,label)in SESSION_ID_TABLES:
+			for row in db.execute(f"SELECT id FROM {table}").fetchall():
+				ident=row['id'];tokens.setdefault(ident,(label,ident));head=ident.split('-',1)[0]
+				if HEX7_RE.fullmatch(head):tokens.setdefault(head,(label,ident))
+	return tokens
+def staged_session_id_hits(store,root='.'):
+	tokens=session_id_tokens(store)
+	if not tokens:return[]
+	try:diff=subprocess.run(['git','diff','--cached','-U0','--no-color'],cwd=root,capture_output=True,text=True,check=False)
+	except OSError:return[]
+	if diff.returncode:return[]
+	patterns={token:re.compile(f"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])")for token in tokens};hits=[];path=None;number=0
+	for line in diff.stdout.splitlines():
+		named=DIFF_FILE_RE.match(line)
+		if named:path=named.group(1);continue
+		hunk=DIFF_HUNK_RE.match(line)
+		if hunk:number=int(hunk.group(1))-1;continue
+		if not line.startswith('+')or line.startswith('+++'):continue
+		number+=1
+		for(token,pattern)in patterns.items():
+			if pattern.search(line):kind,ident=tokens[token];hits.append((path,number,token,kind,ident))
+	return hits
+def commit_id_report(hits):
+	if not hits:return None
+	lines=['COMMIT BLOCKED: the staged change cites a session-local ID. That ID exists only in this session, so a reader of the repository cannot resolve it.']
+	for(path,number,token,kind,ident)in hits:named=ident if token==ident else f"{token} of {ident}";lines.append(f"  {path}:{number}: {kind} {named}")
+	lines.append('Strip the citation, then commit again.');return'\n'.join(lines)
 def new_id():hexed=uuid.uuid4().hex;return f"{hexed[:7]}-{hexed[7:]}"
 def seconds_since(value):
 	if not value:return None
@@ -1330,7 +1364,7 @@ def ensure_installed():
 			except OSError:pass
 			return
 def main():
-	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('-r','--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port to bind (default: {DEFAULT_PORT})");commands.add_parser('init');commands.add_parser('read');note_reread=commands.add_parser('note',help='Reread a stored note by its short or full ID');note_reread.add_argument('id',help='Seven or all characters of a note ID');commands.add_parser('key');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');run=commands.add_parser('run',help='Run a command, keep its output tail, and show the exit on the next gate call');run.add_argument('name',help='A short name for the run, for example gates');run.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');ack_tick=commands.add_parser('ack-tick',help='Warn when an inline ack text holds a backtick the shell will substitute');ack_tick.add_argument('line',help='The command line, as the hook read it');serve_tick=commands.add_parser('serve-tick',help='Warn when a serve names a port other than the default');serve_tick.add_argument('line',help='The command line, as the hook read it');gate=commands.add_parser('gate');gate.add_argument('-p','--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');gate.add_argument('-l','--line',default='',help='The command line, as the hook read it; a blocked call then names the commands to drop');commands.add_parser('poll');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('-r','--reply',help='Markdown answer shown in the message log');ack.add_argument('-n','--note',help='Short plain answer shown in the message log');ack.add_argument('-R','--reply-file',type=Path,help='Read the Markdown answer from this file');ack.add_argument('-N','--note-file',type=Path,help='Read the plain answer from this file');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details','--task-details',dest='task_details',action='append',help='One step per line, 120 characters or fewer, repeatable; an empty string clears the list');task.add_argument('-b','--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('-m','--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Report this task waits on; its answer clears the blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-o','--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');task_list=commands.add_parser('task-list');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');state_import=commands.add_parser('import-state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_import.add_argument('-f','--force',action='store_true',help='import even when the live state holds newer messages');commands.add_parser('clear-state',help='Empty every state table in place; the agent key record survives');args=parser.parse_args();state_dir=resolve_state_dir()
+	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('-r','--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port to bind (default: {DEFAULT_PORT})");commands.add_parser('init');commands.add_parser('read');note_reread=commands.add_parser('note',help='Reread a stored note by its short or full ID');note_reread.add_argument('id',help='Seven or all characters of a note ID');commands.add_parser('key');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');run=commands.add_parser('run',help='Run a command, keep its output tail, and show the exit on the next gate call');run.add_argument('name',help='A short name for the run, for example gates');run.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');ack_tick=commands.add_parser('ack-tick',help='Warn when an inline ack text holds a backtick the shell will substitute');ack_tick.add_argument('line',help='The command line, as the hook read it');serve_tick=commands.add_parser('serve-tick',help='Warn when a serve names a port other than the default');serve_tick.add_argument('line',help='The command line, as the hook read it');commit_tick=commands.add_parser('commit-tick',help='Block a commit whose staged lines cite a session-local ID');commit_tick.add_argument('--repo',default='.',help='The repository to read the staged diff from');gate=commands.add_parser('gate');gate.add_argument('-p','--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');gate.add_argument('-l','--line',default='',help='The command line, as the hook read it; a blocked call then names the commands to drop');commands.add_parser('poll');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack');ack.add_argument('ids',nargs='+');ack.add_argument('-r','--reply',help='Markdown answer shown in the message log');ack.add_argument('-n','--note',help='Short plain answer shown in the message log');ack.add_argument('-R','--reply-file',type=Path,help='Read the Markdown answer from this file');ack.add_argument('-N','--note-file',type=Path,help='Read the plain answer from this file');publish=commands.add_parser('publish');publish.add_argument('source',type=Path);publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);unpublish=commands.add_parser('unpublish');unpublish.add_argument('report_id');task=commands.add_parser('task');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details','--task-details',dest='task_details',action='append',help='One step per line, 120 characters or fewer, repeatable; an empty string clears the list');task.add_argument('-b','--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('-m','--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Report this task waits on; its answer clears the blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-o','--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove');task_remove.add_argument('task_id');task_list=commands.add_parser('task-list');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');state_import=commands.add_parser('import-state');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_import.add_argument('-f','--force',action='store_true',help='import even when the live state holds newer messages');commands.add_parser('clear-state',help='Empty every state table in place; the agent key record survives');args=parser.parse_args();state_dir=resolve_state_dir()
 	try:
 		if args.reminder:store=Store(state_dir,create=False);require_server(store);print(store.reminder(advance=True),flush=True);store.set_meta(AGENT_CALL_ENDED_META,now());return 0
 		if not args.command:parser.error('a command is required')
@@ -1343,6 +1377,12 @@ def main():
 		if args.command=='serve-tick':
 			warning=serve_warning(args.line)
 			if warning:print(warning,file=sys.stderr)
+			return 0
+		if args.command=='commit-tick':
+			try:store=Store(state_dir)
+			except FileNotFoundError:return 0
+			report=commit_id_report(staged_session_id_hits(store,args.repo))
+			if report:print(report,file=sys.stderr);return 1
 			return 0
 		if args.command=='gate':
 			run_notices(state_dir)

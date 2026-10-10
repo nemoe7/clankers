@@ -256,6 +256,117 @@ def main_identical(root="."):
     return False
 
 
+# The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
+SESSION_ID_TABLES = (
+  ("notes", "note"),
+  ("submissions", "answer"),
+  ("reports", "report"),
+  ("tasks", "task"),
+)
+HEX7_RE = re.compile(r"[0-9a-f]{7}")
+DIFF_FILE_RE = re.compile(r"^\+\+\+ b/(.+)$")
+DIFF_HUNK_RE = re.compile(r"^@@ -\S+ \+(\d+)")
+
+
+def session_id_tokens(store):
+  """Every literal the commit trap matches, mapped to the record it names.
+
+  The list comes from the state database and never from a pattern, so a git SHA
+  that is not a session ID cannot match. A dashed ID also matches on its
+  7-character head, the form prose and task details cite.
+  """
+  tokens = {}
+  with closing(store.connect()) as db:
+    for table, label in SESSION_ID_TABLES:
+      for row in db.execute(f"SELECT id FROM {table}").fetchall():
+        ident = row["id"]
+        tokens.setdefault(ident, (label, ident))
+        head = ident.split("-", 1)[0]
+        if HEX7_RE.fullmatch(head):
+          tokens.setdefault(head, (label, ident))
+  return tokens
+
+
+def staged_session_id_hits(store, root="."):
+  """Each staged line that cites a session-local ID.
+
+  Only added lines count, so a citation this commit removes does not block it.
+  A token matches on a word boundary, which keeps a 7-character window inside a
+  longer SHA out while a standalone short SHA still fires.
+  """
+  tokens = session_id_tokens(store)
+
+  if not tokens:
+    return []
+
+  try:
+    diff = subprocess.run(
+      ["git", "diff", "--cached", "-U0", "--no-color"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+  except OSError:
+    return []
+
+  if diff.returncode:
+    return []
+
+  patterns = {
+    token: re.compile(rf"(?<![0-9A-Za-z]){re.escape(token)}(?![0-9A-Za-z])")
+    for token in tokens
+  }
+  hits = []
+  path = None
+  number = 0
+
+  for line in diff.stdout.splitlines():
+    named = DIFF_FILE_RE.match(line)
+
+    if named:
+      path = named.group(1)
+      continue
+
+    hunk = DIFF_HUNK_RE.match(line)
+
+    if hunk:
+      number = int(hunk.group(1)) - 1
+      continue
+
+    if not line.startswith("+") or line.startswith("+++"):
+      continue
+
+    number += 1
+
+    for token, pattern in patterns.items():
+      if pattern.search(line):
+        kind, ident = tokens[token]
+        hits.append((path, number, token, kind, ident))
+
+  return hits
+
+
+def commit_id_report(hits):
+  """The block message for a commit whose staged lines cite session-local IDs."""
+  if not hits:
+    return None
+
+  lines = [
+    (
+      "COMMIT BLOCKED: the staged change cites a session-local ID. That ID exists"
+      " only in this session, so a reader of the repository cannot resolve it."
+    )
+  ]
+
+  for path, number, token, kind, ident in hits:
+    named = ident if token == ident else f"{token} of {ident}"
+    lines.append(f"  {path}:{number}: {kind} {named}")
+
+  lines.append("Strip the citation, then commit again.")
+  return "\n".join(lines)
+
+
 def new_id():
   """One identifier in the shape the log shows: seven characters, a hyphen, the rest."""
   hexed = uuid.uuid4().hex
@@ -4335,6 +4446,13 @@ def main():
     help="Warn when a serve names a port other than the default",
   )
   serve_tick.add_argument("line", help="The command line, as the hook read it")
+  commit_tick = commands.add_parser(
+    "commit-tick",
+    help="Block a commit whose staged lines cite a session-local ID",
+  )
+  commit_tick.add_argument(
+    "--repo", default=".", help="The repository to read the staged diff from"
+  )
   gate = commands.add_parser("gate")
   gate.add_argument(
     "-p",
@@ -4476,6 +4594,16 @@ def main():
       warning = serve_warning(args.line)
       if warning:
         print(warning, file=sys.stderr)
+      return 0
+    if args.command == "commit-tick":
+      try:
+        store = Store(state_dir)
+      except FileNotFoundError:
+        return 0
+      report = commit_id_report(staged_session_id_hits(store, args.repo))
+      if report:
+        print(report, file=sys.stderr)
+        return 1
       return 0
     if args.command == "gate":
       run_notices(state_dir)

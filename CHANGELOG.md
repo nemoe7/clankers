@@ -57,6 +57,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Every command that takes an ID also takes a 7-character prefix. A prefix that names two records fails as a named conflict and lists each match with its kind.
 - The CLI output is terse. A read prints a 7-character ID per note, with no blank line between notes. The reminder drops its two shouting sentences and keeps the rotating tip.
 - The run verdict and the CONTINUE line print to one stream, not both. Nine measured commands drop from 673 tokens to 479.
+- The DEBUG trap blocks a `git commit` whose staged lines cite a session-local ID.
+- The trap reads the staged diff against the state database, so a git SHA never matches. A full ID and its 7-character head both match, and the block names the file and line.
 
 #### maintenance
 
