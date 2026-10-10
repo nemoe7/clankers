@@ -106,6 +106,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The live install script matches its refs source.
 - Unpublish holds until the owner sees the report. The gate ignores output sent to `/dev/null`.
 - The serve no longer crashes on start. The failed-check worker resolves the repository root before it reads the branch.
+- The failed-check worker reads a `gh` fault as unknown, not as no failure. A bad cached timestamp no longer breaks the reminder, and a write fault no longer ends the worker.
 
 #### maintenance
 

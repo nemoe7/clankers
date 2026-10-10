@@ -284,14 +284,15 @@ def pr_failed_check(root="."):
   """The failed check names on the branch pull request, joined, or an empty string.
 
   The serve runs this off the request path, so the debug trap never shells out to gh. A
-  missing branch, a missing pull request, or a gh fault all read as no failure.
+  missing branch or pull request reads as an empty string. A gh fault reads as None, so
+  the worker keeps the last good cache instead of caching a false all-clear.
   """
   branch = workspace_branch(root)
   slug = repo_slug(root)
   if not branch or not slug:
     return ""
   try:
-    head = subprocess.run(
+    listed = subprocess.run(
       [
         "gh",
         "pr",
@@ -307,33 +308,44 @@ def pr_failed_check(root="."):
       capture_output=True,
       text=True,
       check=False,
-    ).stdout.strip()
+    )
+    if listed.returncode:
+      return None
+    head = listed.stdout.strip()
     if not head:
       return ""
     query = (
       '[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled"'
       ' or .conclusion=="timed_out") | .name] | join(", ")'
     )
-    return subprocess.run(
+    checks = subprocess.run(
       ["gh", "api", f"repos/{slug}/commits/{head}/check-runs", "--jq", query],
       cwd=root,
       capture_output=True,
       text=True,
       check=False,
-    ).stdout.strip()
+    )
+    if checks.returncode:
+      return None
+    return checks.stdout.strip()
   except OSError:
-    return ""
+    return None
 
 
 def pr_check_worker(store, root, stop):
   """Cache the branch pull request's failed checks until the server stops.
 
-  The loop writes one meta row, so the debug trap and the poll read a fresh answer from the
-  state file instead of running gh on the agent's every call.
+  The loop writes one meta row, so the trap and the poll read a fresh answer from the
+  state file instead of running gh on every call. A gh fault keeps the last good row,
+  and a caught set_meta fault does not end the worker.
   """
   while not stop.is_set():
-    payload = json.dumps({"failed": pr_failed_check(root), "ts": now()})
-    store.set_meta(PR_CHECK_META, payload)
+    failed = pr_failed_check(root)
+    if failed is not None:
+      try:
+        store.set_meta(PR_CHECK_META, json.dumps({"failed": failed, "ts": now()}))
+      except Exception:
+        pass
     stop.wait(PR_CHECK_INTERVAL)
 
 
@@ -345,9 +357,10 @@ def cached_pr_failure(db):
   try:
     payload = json.loads(str(row[0]))
     stamp = datetime.fromisoformat(str(payload.get("ts", "")))
+    age = (datetime.now(timezone.utc) - stamp).total_seconds()
   except (ValueError, TypeError):
     return ""
-  if (datetime.now(timezone.utc) - stamp).total_seconds() > PR_CHECK_TTL:
+  if age > PR_CHECK_TTL:
     return ""
   return str(payload.get("failed", ""))
 
