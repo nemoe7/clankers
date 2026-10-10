@@ -4,27 +4,39 @@ Observed Arena.ai platform behaviours, not repository defects. Linked rules are 
 
 Restores deleted the original steering notes, so [CHANGELOG.md](../../CHANGELOG.md) is the durable record.
 
-## GitHub token expiry mid-turn
+## GitHub session
+
+### GitHub token expiry mid-turn
 
 [rules/ARENA.md](../../rules/ARENA.md) carries the rule. `GH_TOKEN` can die without a repository change: `gh auth status` calls it invalid, pushes fail with `could not read Username`, and `gh auth setup-git` does not help. Recovery can occur mid-turn after a variable failure count, so "retry once, then end the turn" does not hold.
 
-## The question tool at token death
+### `gh pr edit --body-file` fails
 
-2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial.
+2026-09, day unrecorded: editing a PR body from a file failed, and `gh api -X PATCH` with the body in the request succeeded. These apparently equivalent commands behave differently here.
 
-Ask rather than assume.
+### `git am` does not carry work across sessions
 
-2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. [rules/ARENA.md](../../rules/ARENA.md) now requires blocking through the question tool, which exposes the failure and leaves the turn, instead of a silent end.
+2026-09, day unrecorded: patches did not transfer uncommitted work with `git am`. Pushed branches do cross sessions. Try a push before turn end. An uncommitted handoff is a last resort, not a plan.
 
-Context exhaustion is worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. Push after each commit.
+### GitHub API reach, GitHub session
 
-## The token budget is not readable
+2026-10-03: The sandbox token reads much of a repository, and it cannot read security data.
 
-No surface gives the agent a remaining-token counter, warning or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. Nothing exposes a remaining count or a refill.
+Readable sources hold workflow run, job and step metadata, check runs with annotations, artifact names and identifiers, pull request review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
 
-[rules/ARENA.md](../../rules/ARENA.md) ends turns after it verifies and stops the work, never for a stated budget limit.
+Refused with 403: `code-scanning/alerts`, `code-scanning/analyses`, `code-scanning/default-setup`, `secret-scanning/alerts` and `dependabot/alerts`. A fetch of `code-scanning/sarifs` answers 404.
 
-## Mid-turn sandbox restore
+Run logs and artifact bytes need `results-receiver.actions.githubusercontent.com` and `*.blob.core.windows.net`. The egress filter blocks both hosts. The log request returns a signed redirect, then the connection ends. `gh run view --log` fails, the job page HTML carries no log text, and the job log route answers 404.
+
+The token is a GitHub App installation token. A deliberately invalid Authorization header still answered as the owner, so the egress proxy replaces that header. A personal access token pasted into the sandbox has no effect.
+
+Consequence: an alert or log claim must rest on a readable source. The security bot's pull request review comments carry alert details. An owner export or a workflow comment can carry the rest.
+
+Rule: read alerts from the bot's review comments or from an owner export. Never claim a log read that the session cannot perform.
+
+## Sandbox lifetime
+
+### Mid-turn sandbox restore
 
 A reset can return HEAD to the branch base and delete ignored directories. In two observed resets on 2026-09-24, tooling, virtual environments and hooks under the home directory disappeared, and the preview server stopped. The first reset deleted preview SQLite state. The second kept it.
 
@@ -52,7 +64,7 @@ Push non-secret work that must persist. Keep private preview state out of Git.
 
 Restore acknowledgement state with each note, or leave it unset. Never infer an answer: one import marked twenty-eight pasted notes acknowledged, and five had no answer. A log copy holding only id, text and at lacks receipt state and cannot count as complete.
 
-## A refresh can reset the sandbox, not just the visible history
+### A refresh can reset the sandbox, not just the visible history
 
 2026-09-21: a refresh resets the working sandbox and loses all uncommitted data, including history. Filesystem, inbox and visible-history resets are the same event at different levels, and harness reasoning survives while files disappear. One later recovery request repeated an earlier report, with HEAD, remote and state intact. Check whether a message describes a new event or repeats one before treating it as evidence or instruction.
 
@@ -60,29 +72,35 @@ Keep the retraction beside the claim, and recover from durable sources. Commit a
 
 `gh pr view` can return `mergeable=UNKNOWN mergeStateStatus=UNKNOWN` with the correct head after a MERGEABLE result. UNKNOWN means computation is pending. Query again rather than report a fault.
 
-## The encoding host tiktoken needs is unreachable
+### Session memory can roll back
 
-2026-09-21: `maintenance/check.py` could not fetch its encoding from `openaipublic.blob.core.windows.net`, with `SSLZeroReturnError` unchanged on retry, while PyPI stayed reachable. The unseeded budget gate cannot run. The remaining gates still cover non-token measurements and parity.
+2026-10-04 to 2026-10-10: several instances. The conversation resets to an earlier point. Three things roll back together: the session memory, `arena-state/`, and the working tree.
 
-[maintenance/README.md](../../maintenance/README.md) gives the verified seed command. The raw header is necessary, because the contents API stops base64 above 1 MB. Restores delete the ignored cache directory, so seed it again with venv recovery.
+The agent resumes from the earlier point with no signal that anything was lost. Work done after that point is gone from all three at once. A note answered there reads as unanswered, and a commit made there is absent.
 
-2026-09-23: the block covers more hosts than the encoding blob. `agent-plugins.org` refused a TLS handshake from `curl` and `urllib` alike. The Actions artifact host `productionresultssa19.blob.core.windows.net` ended a signed download with EOF. `api.github.com`, PyPI and the npm registry answered.
+Recovery needs both durable copies. The userscript downloads `arena-state/` as ndjson, which restores the notes, receipts and tasks. Pushed commits restore the tree. Neither one alone is enough: the backup holds no code, and the remote holds no steering state.
 
-A checker that fetches a canonical schema takes a local-copy override for runs here. The runner verifies an artifact's contents. A session here reports that limit instead of claiming the bytes.
+Rule: push after each verified commit, and keep the ndjson backup current. After a suspected rollback, read the inbox before other work, and compare HEAD with the remote before any edit.
 
-## `gh pr edit --body-file` fails
+### The token budget is not readable
 
-2026-09, day unrecorded: editing a PR body from a file failed, and `gh api -X PATCH` with the body in the request succeeded. These apparently equivalent commands behave differently here.
+No surface gives the agent a remaining-token counter, warning or injected message. A claim about impending exhaustion infers it from conversation length, and one such claim ended a turn. Compaction does occur: a system block can replace earlier conversation with condensed memory. Nothing exposes a remaining count or a refill.
 
-## `git am` does not carry work across sessions
+[rules/ARENA.md](../../rules/ARENA.md) ends turns after it verifies and stops the work, never for a stated budget limit.
 
-2026-09, day unrecorded: patches did not transfer uncommitted work with `git am`. Pushed branches do cross sessions. Try a push before turn end. An uncommitted handoff is a last resort, not a plan.
+## Steering messages
 
-## Clipboard writes need a secure context
+### The question tool at token death
 
-2026-09-21: `navigator.clipboard.writeText` exists under the HTTPS preview proxy, not a plain HTTP port forward. The preview tries it, then a hidden textarea with `document.execCommand('copy')`, and it reports the successful path or both failures.
+2026-09-21: a dead token made four question blocks return `{"answers": [], "skipped": true}`, with no answer, error or reason. A skipped block neither ends the turn nor raises an error, and it gives no evidence that the user saw it. One later block returned `skipped: false` with two answers. The question shape differed, so that sample is one success against four skips, not a trial.
 
-## Arena duplicates messages, and a dupe can replace one
+Ask rather than assume.
+
+2026-09-22: an in-turn retry reported but did not clear the dead token, and the next turn restored it. [rules/ARENA.md](../../rules/ARENA.md) now requires blocking through the question tool, which exposes the failure and leaves the turn, instead of a silent end.
+
+Context exhaustion is worse: `This conversation is too long for this model. Please start a new chat.` prevented the documented exit and lost every unpushed commit. Push after each commit.
+
+### Arena duplicates messages, and a dupe can replace one
 
 `Store.note()` returns the stored record for an identical ID and text pair, and it rejects changed text under that ID. A duplicate with a fresh ID is a second note. Before answering an apparent repeat, check the recent log for identical text. Without detection, repeats cause duplicate answers and can revive an ended turn.
 
@@ -90,12 +108,69 @@ One note reported replacement, with no mechanism established: a duplicate can re
 
 A replacement cannot be identified from plausible, unmarked instructions, so small commits and early pushes remain the safeguard.
 
-## `Something went wrong. Please try again.` arrives as a message
+## Network reach
 
-2026-09-21: Arena returned `Something went wrong. Please try again.` instead of a turn. Pasting it sent three messages and continued the turn without interrupting the agent. Both facts are reports, not inferred mechanisms.
+### Sandbox egress allowlist, GitHub session
 
-Treat a message holding only that error as a nudge to resume standing work, not a new instruction or complaint. Say so in the receipt, so the user can correct that reading. Read and acknowledge the actual pending messages, and do not assume three deliveries became three notes or one. `skipped: true` alone does not establish a broken tool.
+2026-10-03: A GitHub session reached seven hosts. The reachable set holds `github.com`, `api.github.com`, `codeload.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org` and `dns.google`. The IP literal `8.8.8.8` also answered. About 130 other hosts failed.
 
+The blocked set holds every `*.githubusercontent.com` host, `docs.github.com`, `ssh.github.com`, `ghcr.io`, `*.blob.core.windows.net`, `gitlab.com`, `api.anthropic.com`, `api.openai.com`, `arena.ai`, `cdn.jsdelivr.net` and `nodejs.org`.
+
+A blocked host resolves and accepts TCP. The TLS handshake then fails with `SSL_ERROR_SYSCALL`. Plain HTTP on `github.com` and `api.github.com` returns 301, and plain HTTP fails elsewhere. The filter reads the host name.
+
+Consequence: package installs, Git operations and the GitHub API work. Every other fetch fails with a TLS error that looks like a transient fault, and a retry never helps. `codeload.github.com` serves repository archives, so a tarball download works without Git.
+
+Rule: treat the host list above as this session type's reach. Test a host before a plan depends on it, and report a blocked host as a limit, not as a failure.
+
+### `fetch_page` reaches beyond the sandbox egress filter
+
+2026-10-03: The `fetch_page` tool runs outside the sandbox. It fetched `httpbin.org`, `raw.githubusercontent.com`, `arena.site` and `api.github.com`. The sandbox egress filter blocks the first three.
+
+It runs headless Chrome. The user agent and `sec-ch-ua` headers name Chrome 153, the accept language is `en-US`, and the referer is `https://www.google.com/`. Query strings pass through unchanged, so a search query works.
+
+The tool carries no credentials. A test page showed no Authorization header. A URL with userinfo in the authority answered HTTP 400. GitHub ignores the legacy `access_token` query parameter.
+
+A search query proved that the tool sends the query string, and the parameter still answered 401 `Requires authentication`.
+
+Binary responses fail. A signed run log URL answered HTTP 500 with a fresh signature, and a PNG answered the same.
+
+Consequence: a public text page or raw file on a blocked host is readable. A token in a URL reaches the tool, but GitHub does not honor it. The tool can never read the log zip or the artifact bytes.
+
+Rule: use the tool for public text on a blocked host. NEVER place a credential in a URL for the tool. NEVER ask the owner for a token. Read security data through an owner export or a workflow comment.
+
+2026-10-04: A turn held 100 `fetch_page` calls, so 100 is a tested lower bound rather than a stated limit. `httpbin.org/range/8000` returned one chunk, and `/range/8001` returned two chunks of 8,000 characters and one character. The per-chunk limit is 8,000 characters. A 63-chunk read of `rfc-editor.org/rfc/rfc9110.txt` used `chunkIndex`, and chunk 0 carried `hasMore: true`.
+
+Consequence: a page longer than 8,000 characters takes more than one call, and the caller must ask for each next chunk.
+
+Rule: read a long document with `chunkIndex`. Stop when `hasMore` is false.
+
+### The preview as a browser fetch proxy
+
+2026-10-03: The preview skill queues `download-request <url>` jobs. The owner approves one URL, and the browser fetches it with no credentials and no referrer. A checkbox adds the third-party proxies AllOrigins and CodeTabs, and the file lands in the state `downloads/` directory. Each file is at most 102.4 MB.
+
+Each fetch times out after 600 seconds. Each URL needs its own approval while the preview stays open.
+
+Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work.
+
+The fetch omits cookies, and the sandbox token cannot read the security endpoints.
+
+Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a pull request comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.
+
+## The preview page in the owner's browser
+
+### Clipboard writes need a secure context
+
+2026-09-21: `navigator.clipboard.writeText` exists under the HTTPS preview proxy, not a plain HTTP port forward. The preview tries it, then a hidden textarea with `document.execCommand('copy')`, and it reports the successful path or both failures.
+
+### A preview page cannot hand the owner's PC a file
+
+2026-10-04: A preview page was tested for handing a file to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file.
+
+`navigator.clipboard.writeText` threw in the frame, while the preview's shared copy path, the API followed by a selection copy, put a text file on the clipboard.
+
+Consequence: the sandbox-to-PC direction has no working file route from a preview page. The text of a small file still crosses, through the clipboard, and the owner pastes it on the PC.
+
+Rule: hand a file to the PC as text through the clipboard. NEVER report a download as delivered, because the preview page cannot see the PC's disk.
 ## Chromium for E2E tests
 
 The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Use `@sparticuz/chromium` from reachable npm. Observation date unrecorded.
@@ -131,74 +206,3 @@ export VK_ICD_FILENAMES=/tmp/vk_swiftshader_icd.json
 
 The sandbox lacks system fontconfig. One source-project test measures a column against a missing font, so it fails locally with no code defect: `test_the_pool_column_fits_the_longest_pool_name`. A monospace TTF through `@font-face` made it pass, which proves an environment defect. The other 51 assertions pass without that font.
 
-## Sandbox egress allowlist, GitHub session
-
-2026-10-03: A GitHub session reached seven hosts. The reachable set holds `github.com`, `api.github.com`, `codeload.github.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org` and `dns.google`. The IP literal `8.8.8.8` also answered. About 130 other hosts failed.
-
-The blocked set holds every `*.githubusercontent.com` host, `docs.github.com`, `ssh.github.com`, `ghcr.io`, `*.blob.core.windows.net`, `gitlab.com`, `api.anthropic.com`, `api.openai.com`, `arena.ai`, `cdn.jsdelivr.net` and `nodejs.org`.
-
-A blocked host resolves and accepts TCP. The TLS handshake then fails with `SSL_ERROR_SYSCALL`. Plain HTTP on `github.com` and `api.github.com` returns 301, and plain HTTP fails elsewhere. The filter reads the host name.
-
-Consequence: package installs, Git operations and the GitHub API work. Every other fetch fails with a TLS error that looks like a transient fault, and a retry never helps. `codeload.github.com` serves repository archives, so a tarball download works without Git.
-
-Rule: treat the host list above as this session type's reach. Test a host before a plan depends on it, and report a blocked host as a limit, not as a failure.
-
-## GitHub API reach, GitHub session
-
-2026-10-03: The sandbox token reads much of a repository, and it cannot read security data.
-
-Readable sources hold workflow run, job and step metadata, check runs with annotations, artifact names and identifiers, pull request review comments, and GraphQL. The `code-scanning/codeql/databases` endpoint lists each database, its language and its commit.
-
-Refused with 403: `code-scanning/alerts`, `code-scanning/analyses`, `code-scanning/default-setup`, `secret-scanning/alerts` and `dependabot/alerts`. A fetch of `code-scanning/sarifs` answers 404.
-
-Run logs and artifact bytes need `results-receiver.actions.githubusercontent.com` and `*.blob.core.windows.net`. The egress filter blocks both hosts. The log request returns a signed redirect, then the connection ends. `gh run view --log` fails, the job page HTML carries no log text, and the job log route answers 404.
-
-The token is a GitHub App installation token. A deliberately invalid Authorization header still answered as the owner, so the egress proxy replaces that header. A personal access token pasted into the sandbox has no effect.
-
-Consequence: an alert or log claim must rest on a readable source. The security bot's pull request review comments carry alert details. An owner export or a workflow comment can carry the rest.
-
-Rule: read alerts from the bot's review comments or from an owner export. Never claim a log read that the session cannot perform.
-
-## The preview as a browser fetch proxy
-
-2026-10-03: The preview skill queues `download-request <url>` jobs. The owner approves one URL, and the browser fetches it with no credentials and no referrer. A checkbox adds the third-party proxies AllOrigins and CodeTabs, and the file lands in the state `downloads/` directory. Each file is at most 102.4 MB.
-
-Each fetch times out after 600 seconds. Each URL needs its own approval while the preview stays open.
-
-Consequence: the owner's browser reaches bytes that the sandbox cannot. Signed log and artifact URLs work, because the signature is the credential. The signatures expire, so the approval must follow the request. Authenticated GitHub pages do not work.
-
-The fetch omits cookies, and the sandbox token cannot read the security endpoints.
-
-Rule: request public URLs only, name the signature when the URL holds one, and expect one tap per URL. Use a workflow that prints security data into a pull request comment for an automatic, repeated read. Warn the owner before a proxy fallback sends a signed URL to a third party.
-
-## `fetch_page` reaches beyond the sandbox egress filter
-
-2026-10-03: The `fetch_page` tool runs outside the sandbox. It fetched `httpbin.org`, `raw.githubusercontent.com`, `arena.site` and `api.github.com`. The sandbox egress filter blocks the first three.
-
-It runs headless Chrome. The user agent and `sec-ch-ua` headers name Chrome 153, the accept language is `en-US`, and the referer is `https://www.google.com/`. Query strings pass through unchanged, so a search query works.
-
-The tool carries no credentials. A test page showed no Authorization header. A URL with userinfo in the authority answered HTTP 400. GitHub ignores the legacy `access_token` query parameter.
-
-A search query proved that the tool sends the query string, and the parameter still answered 401 `Requires authentication`.
-
-Binary responses fail. A signed run log URL answered HTTP 500 with a fresh signature, and a PNG answered the same.
-
-Consequence: a public text page or raw file on a blocked host is readable. A token in a URL reaches the tool, but GitHub does not honor it. The tool can never read the log zip or the artifact bytes.
-
-Rule: use the tool for public text on a blocked host. NEVER place a credential in a URL for the tool. NEVER ask the owner for a token. Read security data through an owner export or a workflow comment.
-
-2026-10-04: A turn held 100 `fetch_page` calls, so 100 is a tested lower bound rather than a stated limit. `httpbin.org/range/8000` returned one chunk, and `/range/8001` returned two chunks of 8,000 characters and one character. The per-chunk limit is 8,000 characters. A 63-chunk read of `rfc-editor.org/rfc/rfc9110.txt` used `chunkIndex`, and chunk 0 carried `hasMore: true`.
-
-Consequence: a page longer than 8,000 characters takes more than one call, and the caller must ask for each next chunk.
-
-Rule: read a long document with `chunkIndex`. Stop when `hasMore` is false.
-
-## A preview page cannot hand the owner's PC a file
-
-2026-10-04: A preview page was tested for handing a file to the owner's PC. The owner reported that no file landed. The browser refused `window.open` on the raw file, so the new-tab route failed. An attachment link and a Blob download both reported a save dialog, and the owner saw no saved file.
-
-`navigator.clipboard.writeText` threw in the frame, while the preview's shared copy path, the API followed by a selection copy, put a text file on the clipboard.
-
-Consequence: the sandbox-to-PC direction has no working file route from a preview page. The text of a small file still crosses, through the clipboard, and the owner pastes it on the PC.
-
-Rule: hand a file to the PC as text through the clipboard. NEVER report a download as delivered, because the preview page cannot see the PC's disk.
