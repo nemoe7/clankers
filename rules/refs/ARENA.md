@@ -200,7 +200,7 @@
 - If Chromium is needed, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Start a background test or PR-check run with `start_process`, on a stable tree, and never edit the files it covers while it runs.
-- While a background run goes, scope the next task; the turn stays free to read and ack the inbox.
+- After `start_process`, scope the next task, then call `get_process_output` with `wait_timeout` 1. If the process is not done, scope the next task again and repeat until it is done. If no task is left to scope, review the diff instead; the turn stays free to read and ack the inbox.
 - Read a background run's result before any push, and never report a check you have not read.
 
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
