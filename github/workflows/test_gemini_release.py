@@ -364,7 +364,7 @@ def test_release_pipeline():
   selected_models = []
 
   def tracked(context, evidence, model, on_success):
-    on_success("gemini-3.7-flash")
+    on_success("gemini-3.6-flash")
     return "draft"
 
   with patch.object(release, "measured", by_size):
@@ -372,13 +372,13 @@ def test_release_pipeline():
       release.release_body(
         [("id", "diff")],
         {},
-        ["gemini-3.8-flash", "gemini-3.7-flash"],
+        ["gemini-3.8-flash", "gemini-3.6-flash"],
         tracked,
         on_success=selected_models.append,
       )
       == "draft"
     )
-  assert selected_models == ["gemini-3.7-flash"]
+  assert selected_models == ["gemini-3.6-flash"]
   quota = json.dumps(
     {
       "error": {
@@ -419,7 +419,7 @@ def test_release_pipeline():
     ),
     patch.object(release, "summary") as status_log,
   ):
-    assert release.gemini_call("gemini-3.7-flash", "generateContent", {}) == {
+    assert release.gemini_call("gemini-3.8-flash", "generateContent", {}) == {
       "ok": True
     }
   # A successful call is silent; the ladder prints the one line that matters.
@@ -780,7 +780,7 @@ def test_release_pipeline():
       release.validated_body(
         invalid_body,
         {**full, "previous_release_notes": "style only"},
-        "gemini-3.7-flash",
+        "gemini-3.8-flash",
         repair,
       )
       == repaired_body
@@ -791,7 +791,7 @@ def test_release_pipeline():
   assert repair_context["draft"] == invalid_body
   assert "previous_release_notes" not in repair_context
   assert repair_evidence == []
-  assert repair_model == "gemini-3.7-flash"
+  assert repair_model == "gemini-3.8-flash"
   assert "retrying same model once" in retry_log.call_args.args[0]
   invalid_calls = []
 
@@ -802,7 +802,7 @@ def test_release_pipeline():
   with patch.object(release, "summary"):
     fails(
       lambda: release.validated_body(
-        invalid_body, full, "gemini-3.7-flash", repair_still_invalid
+        invalid_body, full, "gemini-3.8-flash", repair_still_invalid
       ),
       "does not match",
     )

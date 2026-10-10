@@ -46,6 +46,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Proxy files no longer count toward the tracked instruction budgets.
 - The proxy test fixture starts both stub servers with `poll_interval=0.01`, which removes 1 s of shutdown wait from each test.
 
+### Removed
+
+#### workflows
+
+- The Gemini release ladder drops the deprecated `gemini-3.7-flash`. The default list now runs gemini-3.8-flash down to gemini-3.1-flash-lite.
+
 ### Fixed
 
 #### userscripts
