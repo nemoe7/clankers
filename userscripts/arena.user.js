@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.19
+// @name         Arena.ai | NemoUtils | v1.10.20
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.19
+// @version      1.10.20
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -823,7 +823,9 @@
       selection.removeAllRanges();
       selection.addRange(range);
       var ok = document.execCommand("insertText", false, text);
-      if (!ok || String(el.innerText || "").trim() !== text) {
+      var matched = String(el.innerText || "").trim() === text;
+      logEvent("fill", "insertText ok=" + ok + " matched=" + matched + " class=" + el.className);
+      if (!ok || !matched) {
         while (el.firstChild) {
           el.removeChild(el.firstChild);
         }
@@ -840,6 +842,12 @@
             inputType: "insertText",
             data: text,
           }),
+        );
+        logEvent(
+          "fill",
+          "fallback wrote " + lines.length + " paragraphs, now=" +
+            JSON.stringify(String(el.innerText || "").trim().slice(0, 40)) +
+            " class=" + el.className,
         );
       }
     }
@@ -2661,7 +2669,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.19";
+    var VERSION = "1.10.20";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -3016,16 +3024,20 @@
 
     function emojiForRow(row) {
       if (!row) {
+        titleRowKind = "none";
         return null;
       }
       if (POLL_RE.test(rowCommand(row).toLowerCase())) {
+        titleRowKind = "poll";
         return WAITING_EMOJI;
       }
       // The start-process card wears a play icon and the process name, so it reads as the
       // bash call it starts.
       if (typeof row.querySelector === "function" && row.querySelector(PLAY_SELECTOR)) {
+        titleRowKind = "play";
         return BASH_EMOJI;
       }
+      titleRowKind = "action";
       return actionEmoji(liveLabel(row));
     }
 
@@ -3111,14 +3123,19 @@
 
     function heldEmojiFor(doc) {
       titleRowSource = null;
-      if (captchaSignal(doc)) {
+      titleRowKind = null;
+      var captcha = captchaSignal(doc);
+      titleTrace = "captcha=" + (captcha ? 1 : 0);
+      if (captcha) {
         titleReason = "security check";
         heldEmoji = CAPTCHA_EMOJI;
         heldEmojiAt = Date.now();
         heldEmojiNeedsTurn = false;
         return CAPTCHA_EMOJI;
       }
-      if (questionSignal(doc)) {
+      var question = questionSignal(doc);
+      titleTrace += " question=" + (question ? 1 : 0);
+      if (question) {
         titleReason = "question card";
         heldEmoji = QUESTION_EMOJI;
         heldEmojiAt = Date.now();
@@ -3129,6 +3146,7 @@
       // is news only while the stop control is up.
       var live = stopSignal(doc);
       var speaking = speechGrowth(doc);
+      titleTrace += " speech=" + (speaking ? 1 : 0) + " live=" + (live ? 1 : 0);
       var speechHold =
         live && heldEmoji === AGENT_EMOJI && Date.now() - heldEmojiAt < EMOJI_HOLD_MS;
       var needsTurn = false;
@@ -3216,6 +3234,10 @@
     // The row behind the reason, snapshotted with it: the anchor logs the same row the
     // mark came from, not whatever the page re-derives at write time.
     var titleRowSource = null;
+    // The emoji-choice trace: each hierarchy gate the last mark checked, and the kind the
+    // row picker matched, so the log shows why a mark won over the latest row.
+    var titleTrace = null;
+    var titleRowKind = null;
     var lastRepo = null;
     var lastPath = null;
 
@@ -3223,11 +3245,21 @@
       // A row mark snapshots its row at selection; a re-derived row can be another one
       // by write time, so the line cites the snapshot.
       var rowText = titleRowSource;
+      var kind = titleRowKind || "none";
       if (!rowText) {
         var row = strongRow(doc) || processRow(doc) || liveRow(doc);
         rowText = row ? rowSource(row) : "none";
+        if (row) {
+          emojiForRow(row);
+          kind = titleRowKind;
+        }
       }
-      return "repo=" + (repoForTitle(doc) || "none") + " row=" + rowText;
+      return (
+        "repo=" + (repoForTitle(doc) || "none") +
+        " row=" + rowText +
+        " kind=" + kind +
+        (titleTrace ? " " + titleTrace : "")
+      );
     }
 
     function syncTitle(doc) {
