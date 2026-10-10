@@ -173,20 +173,42 @@
   }
 
   function readSlug(doc) {
-    var bar = doc.querySelector(BAR_SELECTOR);
-    if (!bar) {
-      return null;
-    }
-    if (!String(bar.textContent || "").trim()) {
-      return null;
-    }
-    var spans = bar.querySelectorAll("span.truncate");
+    var selectors = [
+      BAR_SELECTOR + " span.truncate",
+      'button[aria-haspopup="dialog"] span.truncate',
+      'button[aria-haspopup="menu"] span.truncate',
+      "span.truncate"
+    ];
+    var s;
+    var spans;
     var i;
     var slug;
-    for (i = 0; i < spans.length; i += 1) {
-      slug = slugFromOwnerRepo(spans[i].textContent || "");
-      if (slug) {
-        return slug;
+    for (s = 0; s < selectors.length; s += 1) {
+      try {
+        spans = doc.querySelectorAll(selectors[s]);
+      } catch (err) {
+        continue;
+      }
+      for (i = 0; i < spans.length; i += 1) {
+        slug = slugFromOwnerRepo(spans[i].textContent || "");
+        if (slug) {
+          return slug;
+        }
+      }
+    }
+    // Fallback to the old bar-then-spans path for test mocks and legacy UI.
+    var bar = doc.querySelector(BAR_SELECTOR);
+    if (bar) {
+      try {
+        spans = bar.querySelectorAll("span.truncate");
+        for (i = 0; i < spans.length; i += 1) {
+          slug = slugFromOwnerRepo(spans[i].textContent || "");
+          if (slug) {
+            return slug;
+          }
+        }
+      } catch (err) {
+        return null;
       }
     }
     return null;
@@ -2082,7 +2104,7 @@
   // repository. Read that before falling back to the tab title.
   function headerRepo(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return "";
-    var spans = doc.querySelectorAll('button[aria-haspopup="menu"] span.truncate');
+    var spans = doc.querySelectorAll('button[aria-haspopup="dialog"] span.truncate, button[aria-haspopup="menu"] span.truncate');
     for (var i = 0; i < spans.length; i += 1) {
       var first = String(spans[i].textContent || "").trim().split(/\s+/)[0];
       if (/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(first)) return first;
