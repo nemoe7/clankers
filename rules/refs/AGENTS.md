@@ -13,7 +13,7 @@
 - **NEVER claim a check you did not run**; report what you skipped instead.
 - Preserve behavior, architecture, interfaces, intent, and conventions unless change is required.
 - Before planning or making an edit, MUST grep every caller of the function you are about to touch.
-- When in doubt, ask; assume nothing.
+- When in doubt, MUST ask; NEVER assume anything.
 
 ## General
 
@@ -31,7 +31,7 @@
 
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-- Report every unrelated finding; fix only the ones that block the work.
+- MUST report every unrelated finding; fix only the ones that block the work.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome; ask before implementing rather than after.
 - Ask every question with the question tool when the surface provides one; NEVER ask in plain text.
 - Every question with three or more options or an open choice carries a recommended answer; a yes/no or confirm question carries none: the one you would take if the user NEVER replied, stated as a recommendation rather than as a neutral list.
@@ -80,11 +80,11 @@
 - These rules apply to repositories owned by `nemoe7`; other repositories follow their own conventions.
 - 2-space indentation (overrides formatter defaults).
 - Markdown: markdownlint defaults + MD060; MD013 disabled.
-- For a Python project, use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
-- For a Python project, use the project's own `ruff.toml` when it has one.
+- For a Python project, MUST use Ruff with its default rule selection plus `E501` at 120 characters, and keep the formatter's 88-column width.
+- For a Python project, MUST use the project's own `ruff.toml` when it has one.
 - When the project has none, the conventions are `Ruff defaults`, `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, and `required-version = "0.16.6"`.
-- For a Python project with no `ruff.toml`, create one exactly as above before running the gates.
-- For a Python project, the gates before every commit are `ruff check` and `ruff format`, with no CLI rule overrides.
+- For a Python project with no `ruff.toml`, MUST create one exactly as above before running the gates.
+- For a Python project, MUST run the gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
 - NEVER add an unnecessary comment to code or config; add one only when the method is complex enough to warrant it.
 - Leave unrelated code untouched.
 - MUST maintain repository hygiene: keep scratch files, scripts, and output outside the repository or delete them once used, and leave them out of every commit.
@@ -108,8 +108,8 @@
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Code first, then at most three short lines: what was skipped and when to add it. No essays and no feature tours.
-- When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
-- A command the agent ran itself is reported as run, in the form it was run in.
+- When the agent hands a command to the user to run instead of running it, MUST print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
+- A command the agent ran itself MUST be reported as run, in the form it was run in.
 - Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it.
   - Fit a narrow viewport (phone, sidebar): `flowchart TB` (top-down), short labels, no unnecessarily wide rows.
 

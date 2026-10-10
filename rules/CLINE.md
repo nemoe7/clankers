@@ -4,11 +4,11 @@
 
 - MUST run exactly the command the user gave.
 - NEVER add an extra command or follow-up action.
-- After a requested command, report the output and **STOP**.
+- After a requested command, MUST report the output and **STOP**.
 - NEVER edit, fix, refactor, or "continue the job" unless explicitly told to.
 - Empty or clean output is not a mandate to act.
 - **NEVER self-assign next steps, improvements, or work between turns**.
-- When done, stop and await instruction.
+- When done, MUST stop and await instruction.
 - If output shows problems worth fixing, briefly report and ask — NEVER fix them unprompted.
 
 ## Cline tools
@@ -23,7 +23,7 @@
 - Use `ask_question` for clarification.
 - Tool priority: file tools for inspection and edits; `run_commands` for execution only.
 - NEVER call a tool merely to satisfy these rules.
-- If a required tool fails for a non-syntax reason, report the failure.
+- If a required tool fails for a non-syntax reason, MUST report the failure.
 - NEVER retry or work around it, except per Test Timeout.
 
 ## Test Timeout
@@ -37,4 +37,4 @@
 
 ## When in doubt
 
-- Run the requested command, report the output, and stop; await instruction.
+- MUST run the requested command, report the output, and stop; await instruction.

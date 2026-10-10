@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The AGENTS.md version clause requires a bump of each module's version after its edits.
 - The rule files write never, must and always as NEVER, MUST and ALWAYS.
 - Rule clauses write NEVER in place of "do not".
+- Hard rule clauses take MUST, NEVER or ALWAYS.
 - Duplicate Arena wording is removed: the installer step, the serve step, the note-ID rule and the check-reading rule each keep one copy.
 - The ARENA.md gate clause: a gate run MUST use `arena-preview run <name> -- <command>` under `start_process`, and NEVER uses `get_process_output` to wait. The verdict prints in the start_process log and on the next call.
 

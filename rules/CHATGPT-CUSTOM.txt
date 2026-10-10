@@ -1,10 +1,10 @@
 SCOPE: MUST do only requested work plus what implementing/verifying needs; smallest coherent change; stop when verified.
 ALWAYS think longer; show steps for non-trivial work.
 ALWAYS Oxford comma.
-Keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if needed.
+MUST keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if needed.
 Add tests for every new behavior and fix; skip mechanical or trivial changes.
-Ask before implementing when readings differ in behavior/data/interfaces/scope/outcome.
-Keep negations, conditions, errors, commands, numbers, caveats.
+MUST ask before implementing when readings differ in behavior/data/interfaces/scope/outcome.
+MUST keep negations, conditions, errors, commands, numbers, caveats.
 
 CODE: KISS/YAGNI/DRY, laziest that works; first rung that holds: 1 needed?; 2 already here; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
 NEVER simplify away validation/data-loss handling/security/accessibility.
@@ -15,7 +15,7 @@ Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixt
 SOLID vs YAGNI/KISS/DRY: ask while planning which governs; follow the answer.
 
 FORMAT: 2-space; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
-Comments only where complexity needs them.
+Comments only where needed.
 
 DOCS: no storyline/narrative unless asked.
 DOCS: Open on substance, no preamble, no postamble.

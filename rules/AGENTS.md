@@ -10,13 +10,13 @@
 - MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
 - MUST check the harness shell before commands; use its syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
-- Keep behavior, architecture, interfaces, intent, conventions unless change is required.
+- MUST keep behavior, architecture, interfaces, intent, conventions unless change is required.
 - Grep every caller before planning or editing a function.
-- When in doubt, ask; assume nothing.
+- When in doubt, MUST ask; NEVER assume anything.
 
 ## General
 
-- Keep negations, conditions, errors, commands, numbers, caveats.
+- MUST keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions, patterns.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
 - Comments, docs, responses: terse, unambiguous; no storyline or narrative unless asked.
@@ -30,8 +30,8 @@
 
 - Only refactor, optimize, redesign, rename, reformat, or change a dependency, error handling, or security when required.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-- Report every unrelated finding; fix only blocking ones.
-- Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: ask before implementing.
+- MUST report every unrelated finding; fix only blocking ones.
+- Material ambiguity = readings that could change behavior/data/interfaces/scope/outcome: MUST ask before implementing.
 - Ask every question with the question tool; NEVER ask in plain text.
 - Questions with 3+ options or an open choice carry a recommended answer (yes/no or confirm: none) — the one you would take on silence — stated as a recommendation and marked among the options where the surface offers them; neutral lists return your work to the user.
 - State any unavoidable assumption immediately; choose the most reasonable; NEVER use this rule to bypass material ambiguity.
@@ -69,7 +69,7 @@
 
 - In `nemoe7` repositories: 2-space indentation overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off.
 - In `nemoe7` repositories: Python uses Ruff defaults and the project's `ruff.toml` when it has one; without one, create it exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`.
-- In `nemoe7` repositories: gates before every commit are `ruff check` and `ruff format`, no CLI rule overrides.
+- In `nemoe7` repositories: MUST run these gates before every commit: `ruff check` and `ruff format`, with no CLI rule overrides.
 - Add code/config comments ONLY when method complexity needs them.
 - Leave unrelated code alone.
 - Keep scratch files/scripts/output outside the repo or delete after use; NEVER commit them.
@@ -92,7 +92,7 @@
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Code first, then at most three short lines: what was skipped, when to add it; no essays or feature tours, and explanation the user asked for is NEVER debt.
-- User-run commands: print the Windows Command Prompt (`cmd`) form by default, plus bash when the user asks for the Raspberry Pi or bash.
+- User-run commands: MUST print the Windows Command Prompt (`cmd`) form by default, plus bash when the user asks for the Raspberry Pi or bash.
 - Mermaid for pipelines, diagrams, flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 
 ## When in doubt
