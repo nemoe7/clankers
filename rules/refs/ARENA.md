@@ -50,7 +50,7 @@
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
 - If the preview did not start, report it and block with one visibility question, asked through `ask_user`, before any work beyond setup; the preview cannot carry its own visibility question. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask; the process tool's live-preview banner is not owner confirmation and does not replace the question.
 - NEVER silently restore ntfy.
-- After a sandbox reset, run `git fetch origin`, rerun the preview installer, and restart the preview with the same state directory. Do not ask the visibility question again after the reset.
+- After a sandbox reset, run `git fetch origin`, rerun the preview installer, and restart the preview with the same state directory. NEVER ask the visibility question again after the reset.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
@@ -176,7 +176,7 @@
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
 - NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist. ALWAYS strip a session-local citation on sight.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
-- Publish longer reports through the `arena-skill` skill in the shared preview; do not create local report commits for the native diff viewer.
+- Publish longer reports through the `arena-skill` skill in the shared preview; NEVER create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
 - Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
