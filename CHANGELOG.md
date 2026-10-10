@@ -27,6 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - The reminder names stale reports to unpublish at 10 or more published reports. A report is stale with no fields, or with fields you answered and acked.
+- The preview warns when the branch pull request shows a failed check. The serve caches the check status, so the reminder and the poll name it with no external call on every bash call.
 
 ### Changed
 

@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from contextlib import closing, contextmanager, nullcontext
@@ -256,6 +257,99 @@ def main_identical(root="."):
     return git("diff", "--quiet", "origin/main", "HEAD", "--").returncode == 0
   except OSError:
     return False
+
+
+PR_CHECK_INTERVAL = 60  # seconds between the serve-side check reads
+PR_CHECK_TTL = 180  # a cached check older than this reads as stale
+PR_CHECK_META = "pr_check"  # the meta key that holds the cached result
+
+
+def repo_slug(root="."):
+  """The owner/name of the origin remote, or an empty string when it will not parse."""
+  try:
+    url = subprocess.run(
+      ["git", "config", "--get", "remote.origin.url"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    ).stdout.strip()
+  except OSError:
+    return ""
+  match = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", url)
+  return match.group(1) if match else ""
+
+
+def pr_failed_check(root="."):
+  """The failed check names on the branch pull request, joined, or an empty string.
+
+  The serve runs this off the request path, so the debug trap never shells out to gh. A
+  missing branch, a missing pull request, or a gh fault all read as no failure.
+  """
+  branch = workspace_branch(root)
+  slug = repo_slug(root)
+  if not branch or not slug:
+    return ""
+  try:
+    head = subprocess.run(
+      [
+        "gh",
+        "pr",
+        "list",
+        "--head",
+        branch,
+        "--json",
+        "headRefOid",
+        "--jq",
+        ".[0].headRefOid",
+      ],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    ).stdout.strip()
+    if not head:
+      return ""
+    query = (
+      '[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled"'
+      ' or .conclusion=="timed_out") | .name] | join(", ")'
+    )
+    return subprocess.run(
+      ["gh", "api", f"repos/{slug}/commits/{head}/check-runs", "--jq", query],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    ).stdout.strip()
+  except OSError:
+    return ""
+
+
+def pr_check_worker(store, root, stop):
+  """Cache the branch pull request's failed checks until the server stops.
+
+  The loop writes one meta row, so the debug trap and the poll read a fresh answer from the
+  state file instead of running gh on the agent's every call.
+  """
+  while not stop.is_set():
+    payload = json.dumps({"failed": pr_failed_check(root), "ts": now()})
+    store.set_meta(PR_CHECK_META, payload)
+    stop.wait(PR_CHECK_INTERVAL)
+
+
+def cached_pr_failure(db):
+  """The cached failed check names while the cache is fresh, else an empty string."""
+  row = db.execute("SELECT value FROM meta WHERE key = ?", (PR_CHECK_META,)).fetchone()
+  if not row:
+    return ""
+  try:
+    payload = json.loads(str(row[0]))
+    stamp = datetime.fromisoformat(str(payload.get("ts", "")))
+  except (ValueError, TypeError):
+    return ""
+  if (datetime.now(timezone.utc) - stamp).total_seconds() > PR_CHECK_TTL:
+    return ""
+  return str(payload.get("failed", ""))
 
 
 # The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
@@ -1652,6 +1746,16 @@ def poll_inbox(store, sleeper=None):
         return 0
       # A finished gate run ends the wait with its verdict, so the turn reads the result now.
       if run_notices(store.path.parent):
+        print_poll_hold(store)
+        return 0
+      # A failed check on the branch pull request ends the wait, so the turn fixes it now.
+      with closing(store.connect()) as db:
+        failed = cached_pr_failure(db)
+      if failed:
+        print(
+          f"PR CHECKS FAILED: {failed}. Fix the failed check before the next push.",
+          flush=True,
+        )
         print_poll_hold(store)
         return 0
       open_tasks = [
@@ -3453,6 +3557,7 @@ class Store:
         "SELECT count(*) FROM reports WHERE published_at IS NOT NULL"
       ).fetchone()[0]
       stale = self.stale_report_ids(db) if published >= STALE_REPORT_THRESHOLD else []
+      failed = cached_pr_failure(db)
       cursor = meta_number(db, REMINDER_CURSOR)
       # A new user item resets the count. An idle poll clears it; reading does not.
       polls = (
@@ -3480,6 +3585,8 @@ class Store:
     parts = [" ".join([*head, *unacked]).strip(), tail]
     if stale:
       parts.append("Unpublish stale reports: " + ", ".join(stale))
+    if failed:
+      parts.append("Pull request checks failed: " + failed)
     return " | ".join(parts).strip(" |")
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
@@ -4867,7 +4974,16 @@ def main():
           f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",
           flush=True,
         )
-        server.serve_forever()
+        stop = threading.Event()
+        threading.Thread(
+          target=pr_check_worker,
+          args=(store, str(state_dir.parent), stop),
+          daemon=True,
+        ).start()
+        try:
+          server.serve_forever()
+        finally:
+          stop.set()
     elif args.command == "read":
       require_server(store)
       store.notice_expired_key()

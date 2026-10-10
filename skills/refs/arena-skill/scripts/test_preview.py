@@ -357,6 +357,36 @@ def test_stale_report_reminder():
     assert "form0" not in line, "a fresh form awaiting an answer is not stale"
 
 
+def test_pr_failed_check_reminder():
+  # A fresh cached failure names the failed check on the reminder; a stale cache reads as
+  # no failure, so the reminder stays quiet.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview.Store(root, create=True)
+    store.set_meta(
+      preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": preview.now()})
+    )
+    assert "Pull request checks failed: Quality" in store.reminder()
+    old = (
+      datetime.now(timezone.utc) - timedelta(seconds=preview.PR_CHECK_TTL + 1)
+    ).isoformat()
+    store.set_meta(preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": old}))
+    assert "Pull request checks failed" not in store.reminder()
+
+
+def test_pr_failed_check_breaks_poll():
+  # The poll breaks at once on a cached failure, so the turn fixes the check now.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview.Store(root, create=True)
+    store.set_meta(
+      preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": preview.now()})
+    )
+    slept = []
+    assert preview.poll_inbox(store, sleeper=slept.append) == 0
+    assert not slept, "the poll breaks before it sleeps"
+
+
 def test_http_boundaries():
   global app
   with tempfile.TemporaryDirectory() as directory:
