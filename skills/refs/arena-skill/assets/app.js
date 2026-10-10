@@ -509,9 +509,8 @@ function showHistory(notes) {
     );
     // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
     // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
-    // A second ack appends a block under the first answer instead of replacing it (the owner's
-    // order on the re-ack of 52d7cce); each block keeps its own kind and carries its stamp in
-    // its title.
+    // A second ack appends a block under the first answer instead of replacing it; each block
+    // keeps its own kind and carries its stamp in its title.
     const answer = node.children[1];
     if (item.ack_text) {
       answer.className = item.ack_kind === 'reply' ? 'answer reply message-text' : 'answer reply';

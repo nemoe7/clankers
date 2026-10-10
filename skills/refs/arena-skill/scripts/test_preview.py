@@ -37,7 +37,7 @@ def compact(text):
 
 
 def test_edited_ack_stamp():
-  """A second ack appends a reply block; the first answer stays (owner, re-ack of 52d7cce)."""
+  """A second ack appends a reply block; the first answer stays."""
   with tempfile.TemporaryDirectory() as edit_dir:
     edited = preview.Store(edit_dir, create=True)
     edited.note("edit-note", "Question")
