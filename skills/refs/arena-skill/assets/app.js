@@ -599,37 +599,68 @@ $('#log-newest').addEventListener('click', () => {
   logPinned = true;
   updateLogJump();
 });
+// Split one run of text at each match. Returns null when the run holds no match, so the caller
+// keeps the text node as it stands.
+function splitMatches(plain, query) {
+  const lower = plain.toLowerCase();
+  let pos = lower.indexOf(query);
+  if (pos < 0) return null;
+  const parts = [];
+  let start = 0;
+  while (pos > -1) {
+    parts.push(plain.slice(start, pos));
+    const mark = document.createElement('mark');
+    mark.className = 'search-hit';
+    mark.textContent = plain.slice(pos, pos + query.length);
+    parts.push(mark);
+    start = pos + query.length;
+    pos = lower.indexOf(query, start);
+  }
+  parts.push(plain.slice(start));
+  return parts;
+}
+// The search marks the text of a row at any depth: a rendered answer keeps its markup, so its
+// words sit in nested elements. Each mark from an earlier search is unwrapped first, so a
+// changed or cleared query leaves no stale mark behind. Returns true when the node's own
+// children changed.
+function markNode(node, query) {
+  const kids = Array.from(node.childNodes || node.children || []);
+  if (!kids.length) {
+    const parts = query && node.textContent ? splitMatches(node.textContent, query) : null;
+    if (!parts) return false;
+    node.replaceChildren(...parts);
+    return true;
+  }
+  let changed = false;
+  const out = [];
+  for (const child of kids) {
+    if (typeof child === 'string' || child.nodeType === 3) {
+      const plain = typeof child === 'string' ? child : child.nodeValue;
+      const parts = query ? splitMatches(plain, query) : null;
+      if (parts) {
+        out.push(...parts);
+        changed = true;
+      } else {
+        out.push(child);
+      }
+    } else if (child.className === 'search-hit') {
+      out.push(child.textContent);
+      changed = true;
+    } else {
+      markNode(child, query);
+      out.push(child);
+    }
+  }
+  if (changed) node.replaceChildren(...out);
+  return changed;
+}
 function markRowMatches(node, query) {
   // The search keeps a row for its match, and the match itself wears a mark, so the eye
-  // lands on the word at once. A rendered answer keeps its HTML, so the mark visits only
-  // the plain message text and the receipt's ID.
+  // lands on the word at once. The mark covers the message text, whether plain or rendered,
+  // and the receipt's ID.
   const receipt = node.children[2];
-  const text = node.children[0];
-  const targets = [];
-  if (text && text.className === 'raw-message') targets.push(text);
-  if (receipt && receipt.children[0]) targets.push(receipt.children[0]);
-  for (const target of targets) {
-    const plain = target.textContent;
-    const lower = plain.toLowerCase();
-    const parts = [];
-    let start = 0;
-    let pos = query ? lower.indexOf(query, start) : -1;
-    while (pos > -1) {
-      parts.push(plain.slice(start, pos));
-      const mark = document.createElement('mark');
-      mark.className = 'search-hit';
-      mark.textContent = plain.slice(pos, pos + query.length);
-      parts.push(mark);
-      start = pos + query.length;
-      pos = lower.indexOf(query, start);
-    }
-    if (!parts.length) {
-      if (target.children.length) target.replaceChildren(plain);
-      continue;
-    }
-    parts.push(plain.slice(start));
-    target.replaceChildren(...parts);
-  }
+  markNode(node.children[0], query);
+  if (receipt && receipt.children[0]) markNode(receipt.children[0], query);
 }
 function applyLogSearch() {
   const query = logQuery.trim().toLowerCase();

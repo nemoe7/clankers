@@ -1664,6 +1664,28 @@ test('preview client', async (t) => {
     assert.equal(text.textContent, 'Alpha beta alpha', 'the text stands as it stood');
   });
 
+  await t.test("The search lights matched text inside a rendered answer too", async () => {
+    // A rendered answer keeps its markup, so its words sit in nested elements.
+    state.notes = [{ id: 'n1', text: 'plain', at: logStamp, acknowledged_at: null }];
+    await refresh();
+    await tick();
+    const body = messageRow('n1').children[0];
+    const inner = new Element();
+    inner.children = ['beta alpha'];
+    body.children = ['Alpha ', inner];
+    get('#log-search').value = 'alpha';
+    get('#log-search').events.input();
+    const hits = node => node.children.filter(child =>
+      typeof child !== 'string' && child.className === 'search-hit');
+    assert.equal(hits(inner).length, 1, 'a match inside nested markup wears a mark');
+    assert.equal(hits(body).length, 1, 'a match in the top-level text wears a mark too');
+    assert.equal(inner.textContent, 'beta alpha', 'the nested text stays whole');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
+    assert.equal(hits(inner).length, 0, 'clearing the box takes the nested marks back');
+    assert.equal(inner.textContent, 'beta alpha', 'the nested text stands as it stood');
+  });
+
   await t.test("A search that matches nothing says so and counts what it is holding back", async () => {
     // A search that matches nothing says so and counts what it is holding back.
     state.notes = [{ id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null }];
