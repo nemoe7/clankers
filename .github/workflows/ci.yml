@@ -112,12 +112,14 @@ jobs:
             exit 0
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          files=$(git diff --name-only "$base" HEAD -- userscripts/arena.user.js userscripts/chatgpt.user.js gpt-plugins/plugin.json || true)
+          files=$(git diff --name-only "$base" HEAD -- userscripts/arena.user.js userscripts/chatgpt.user.js gpt-plugins/plugin.json gpt-plugins/skills || true)
           if [ -n "$files" ]; then
             printf '%s\n' "Affected files:" "$files"
-            echo "changed<<EOF" >> "$GITHUB_OUTPUT"
-            echo "$files" >> "$GITHUB_OUTPUT"
-            echo "EOF" >> "$GITHUB_OUTPUT"
+            {
+              echo "changed<<EOF"
+              printf '%s\n' "$files"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "No versioned modules changed."
             echo "changed=" >> "$GITHUB_OUTPUT"
@@ -152,8 +154,8 @@ jobs:
             exit 0
           fi
           echo "Version bump check for affected files:"
-          echo "$CHANGED"
-          echo "$CHANGED" | while IFS= read -r file; do
+          printf '%s\n' "$CHANGED"
+          printf '%s\n' "$CHANGED" | while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
               userscripts/arena.user.js|userscripts/chatgpt.user.js)
@@ -164,9 +166,12 @@ jobs:
                 }
                 python maintenance/userscripts/gate_userscripts.py --file "$file" --base-file "$RUNNER_TEMP/base-$(basename "$file")"
                 ;;
-              gpt-plugins/plugin.json)
-                echo "--- Checking $file (handled by artifacts workflow, but validating here) ---"
-                git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
+              gpt-plugins/*)
+                echo "--- Checking gpt-plugins/plugin.json for change in $file ---"
+                git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json" || {
+                  echo "gpt-plugins/plugin.json did not exist in base, skipping bump check."
+                  continue
+                }
                 python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json"
                 ;;
             esac
