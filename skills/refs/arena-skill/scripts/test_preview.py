@@ -2573,17 +2573,20 @@ def test_poll_hold_on_stale_records(capsys):
         }
       ],
     )
-    with patch.object(preview, "now", return_value="2026-01-01T01:00:00+00:00"):
-      assert preview.poll_inbox(hold, sleeper=lambda seconds: None) == 1
-    error = capsys.readouterr().err
-    assert "HOLD" in error, error
-    assert "rolled back" in error, error
-    # A fresh read stamp counts too: the scan covers reads, so the hold stays quiet.
-    with hold.connect() as db, db:
-      db.execute("UPDATE notes SET seen_at = '2026-01-01T01:00:00+00:00'")
-    with patch.object(preview, "now", return_value="2026-01-01T01:00:00+00:00"):
-      assert preview.poll_inbox(hold, sleeper=lambda seconds: None) == 1
-    assert "HOLD" not in capsys.readouterr().err
+    # The test asserts the full-span return and the hold line, not the 1800 turns
+    # that span costs. Two turns prove both, and the loop drops from 39 s to nothing.
+    with patch.object(preview, "POLL_MAX_LOOPS", 2):
+      with patch.object(preview, "now", return_value="2026-01-01T01:00:00+00:00"):
+        assert preview.poll_inbox(hold, sleeper=lambda seconds: None) == 1
+      error = capsys.readouterr().err
+      assert "HOLD" in error, error
+      assert "rolled back" in error, error
+      # A fresh read stamp counts too: the scan covers reads, so the hold stays quiet.
+      with hold.connect() as db, db:
+        db.execute("UPDATE notes SET seen_at = '2026-01-01T01:00:00+00:00'")
+      with patch.object(preview, "now", return_value="2026-01-01T01:00:00+00:00"):
+        assert preview.poll_inbox(hold, sleeper=lambda seconds: None) == 1
+      assert "HOLD" not in capsys.readouterr().err
 
 
 def test_ack_of_a_stale_message_prints_the_hold():

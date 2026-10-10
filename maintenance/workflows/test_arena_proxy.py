@@ -93,7 +93,11 @@ class StubServer(ThreadingHTTPServer):
 def backend(tmp_path, **overrides):
   """Run the stub upstream and the extension server, and stop both on exit."""
   stub = StubServer(("127.0.0.1", 0))
-  threading.Thread(target=stub.serve_forever, daemon=True).start()
+  # `shutdown()` waits one poll interval for the select loop to notice it. The default
+  # 0.5 s costs a second a test across these two servers, and no assertion needs it.
+  threading.Thread(
+    target=stub.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+  ).start()
   base = f"http://127.0.0.1:{stub.server_address[1]}"
   options = SimpleNamespace(
     host="127.0.0.1",
@@ -113,7 +117,9 @@ def backend(tmp_path, **overrides):
   for name, value in overrides.items():
     setattr(options, name, value)
   extension = core.build_server(options)
-  threading.Thread(target=extension.serve_forever, daemon=True).start()
+  threading.Thread(
+    target=extension.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+  ).start()
   try:
     yield SimpleNamespace(stub=stub, port=extension.server_address[1], stub_url=base)
   finally:

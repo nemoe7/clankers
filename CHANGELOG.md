@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Hard rule clauses take MUST, NEVER or ALWAYS.
 - Duplicate Arena wording is removed: the installer step, the serve step, the note-ID rule and the check-reading rule each keep one copy.
 - The ARENA.md gate clause: a gate run MUST use `arena-preview run <name> -- <command>` under `start_process`, and NEVER uses `get_process_output` to wait. The verdict prints in the start_process log and on the next call.
+- `pytest.ini` carries `addopts = -n auto`, and the CI test job drops its own `-n auto`. Every run now splits across the workers, and the full gate drops from 89.7 s to 21.0 s.
 
 #### preview
 
@@ -35,11 +36,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `arena-preview run <name> -- <command>` prints the verdict and the time to stdout and stderr. The next gate call shows each finished run once, with its verdict.
 - `arena-preview poll` ends when a gate run finishes and prints its verdict, as well as on a new note or task.
 - An answered report no longer refuses the agent's unpublish. The owner's dismissal path is unchanged.
+- The poll-hold test bounds its loop at two turns, so the suite no longer pays 39 s for 1800 idle turns.
 
 #### maintenance
 
 - Gate scripts are renamed to `gate_*`, and sit in six domain directories.
 - Proxy files no longer count toward the tracked instruction budgets.
+- The proxy test fixture starts both stub servers with `poll_interval=0.01`, which removes 1 s of shutdown wait from each test.
 
 ### Fixed
 
