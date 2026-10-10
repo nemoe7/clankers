@@ -4,7 +4,7 @@
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
 - ALWAYS use `submit_plan` to present your plan for approval.
 - ALWAYS include the explanation of the bug in the plan, including the fix.
-- DO NOT EDIT UNTIL THE PLAN IS APPROVED.
+- NEVER EDIT UNTIL THE PLAN IS APPROVED.
 - Prefer verifying library behavior via web search if the bug is puzzling.
 - ALWAYS consult the approved plan file.
 - ALWAYS update the plan file if the user requests something new that overrides previous plan files.

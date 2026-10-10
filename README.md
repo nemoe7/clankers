@@ -32,14 +32,14 @@ Latest measurements as of 2026-10-10. `maintenance/check.py --update` rebuilds t
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `o200k_base` | 1,550 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,495 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 19,494 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
-| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,475 `chars` |
+| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,474 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 462 `tok` |
 | `rules/KILO.md` | `o200k_base` | 87 `tok` |
 | `rules/kilo/code.md` | `o200k_base` | 222 `tok` |
-| `rules/kilo/debug.md` | `o200k_base` | 270 `tok` |
-| `rules/kilo/plan.md` | `o200k_base` | 247 `tok` |
+| `rules/kilo/debug.md` | `o200k_base` | 269 `tok` |
+| `rules/kilo/plan.md` | `o200k_base` | 246 `tok` |
 | `rules/COMMIT-SPEC.txt` | `o200k_base` | 93 `tok` |
 | `system-prompts/NEMOGPT.md` | `o200k_base` | 2,996 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,598 `tok` |

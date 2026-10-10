@@ -2,7 +2,7 @@ Explicit chat overrides these rules; state it in one line.
 MUST use ASD-STE100 Simplified Technical English for human-facing text.
 
 RESPONSE: Terse yet clear; numbered lists; detail on request.
-Open with result; do not restate task.
+Open with result; NEVER restate task.
 State changes/findings, checks/results, issues, assumptions, limits.
 Report skipped alternatives with triggers.
 Verify current/external/version-sensitive facts.

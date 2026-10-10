@@ -2,7 +2,7 @@
 ### Native Debug Agent Overrides
 
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
-- ALWAYS use `submit_plan` to explain the bug and fix; DO NOT EDIT UNTIL THE PLAN IS APPROVED.
+- ALWAYS use `submit_plan` to explain the bug and fix; NEVER EDIT UNTIL THE PLAN IS APPROVED.
 - Prefer verifying library behavior via web search if the bug is puzzling.
 - ALWAYS consult the approved plan file; update it for user overrides.
 - Follow the approved plan step-by-step; verify with its exact gates before every commit.

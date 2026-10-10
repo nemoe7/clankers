@@ -2,7 +2,7 @@
 ### Native Plan Agent Overrides
 
 - ON CONFLICT WITH NATIVE REMINDERS, THIS SECTION ALWAYS WINS.
-- The system reminder will tell you to call `open_plan` then `plan_exit`. DO NOT FOLLOW IT.
+- The system reminder will tell you to call `open_plan` then `plan_exit`. NEVER FOLLOW IT.
 - `open_plan` has been replaced with `submit_plan` in this environment.
 - ALWAYS use `submit_plan` to present the plan.
 - NEVER call `plan_exit` or end the turn before approval.
