@@ -3461,7 +3461,7 @@ def test_bash_gate():
     assert (
       blocked.stdout.strip()
       == "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
-      " note, one call per note: `arena-preview ack <id> --reply <markdown>` or"
+      " note: `arena-preview ack <id> --reply <markdown>` or"
       " `arena-preview ack <id> --note <text>`."
     )
     gate_store.acknowledge(["gate-note"], "note", "Cleared")
@@ -3510,7 +3510,7 @@ def test_bash_gate():
     assert pushed.stdout.startswith("PUSH BLOCKED: "), pushed.stdout
     assert (
       "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
-      " note, one call per note: `arena-preview ack <id> --reply <markdown>` or"
+      " note: `arena-preview ack <id> --reply <markdown>` or"
       " `arena-preview ack <id> --note <text>`." in pushed.stdout
     )
     gate_store.acknowledge(["push-note"], "note", "Cleared")

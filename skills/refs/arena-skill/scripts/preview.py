@@ -4790,7 +4790,7 @@ def main():
           )
         print(
           "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack"
-          " every note, one call per note: `arena-preview ack <id> --reply"
+          " every note: `arena-preview ack <id> --reply"
           " <markdown>` or `arena-preview ack <id> --note <text>`.",
           flush=True,
         )
