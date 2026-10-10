@@ -11,6 +11,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### maintenance
 
 - The version-bumps job checks a version bump for each changed userscript and for `gpt-plugins/plugin.json`.
+- `maintenance/check.py` gates the `system-prompts/` refs/live pair. A live section absent from refs fails, and a live section may compress but never carry more lines than its refs counterpart.
 
 #### gpt-plugins
 
