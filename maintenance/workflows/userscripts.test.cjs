@@ -5,10 +5,11 @@ const vm = require("node:vm");
 
 const bundles = {
   arena: {
-    features: { "prompt-fill": 1, "open-steering": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0 },
+    features: { "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0 },
     labels: {
       "prompt-fill": "Composer — fill",
       "open-steering": "Steering — open",
+      "preview-sandbox": "Steering — new tabs and downloads",
       "hide-composer": "Composer — hide",
       "auto-scroll": "Transcript — auto-scroll",
       "transcript-trim": "Transcript — auto trim",
@@ -154,6 +155,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Proxy — master key",
       "Proxy — post key now",
       "Steering — open (ON)",
+      "Steering — new tabs and downloads (ON)",
       "Transcript — auto-scroll (ON)",
       "Transcript — auto trim (OFF)",
       "Transcript — keep 50 rows",
@@ -231,6 +233,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Proxy — master key",
         "Proxy — post key now",
         "Steering — open (ON)",
+        "Steering — new tabs and downloads (ON)",
         "Transcript — auto-scroll (ON)",
         "Transcript — auto trim (ON)",
         "Transcript — keep 50 rows",
