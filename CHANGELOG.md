@@ -32,6 +32,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The ARENA.md gate clause: a gate run MUST use `arena-preview run <name> -- <command>` under `start_process`, and NEVER uses `get_process_output` to wait. The verdict prints in the start_process log and on the next call.
 - `pytest.ini` carries `addopts = -n auto`, and the CI test job drops its own `-n auto`. Every run now splits across the workers, and the full gate drops from 89.7 s to 21.0 s.
 
+#### system-prompts
+
+- NEMOGPT treats recall as stale. A factual claim ALWAYS carries a live document or the code read in this turn.
+- When NEMOGPT reaches no source, it says so and marks the claim unverified.
+- NEMOGPT ALWAYS batches independent tool calls in one block, where the rule said "when practical".
+- The closing hard-rule line now covers any factual question, not only a documentation, version or interface one.
+
 #### preview
 
 - The CLI prints readable text instead of JSON, and drops dead metadata.
