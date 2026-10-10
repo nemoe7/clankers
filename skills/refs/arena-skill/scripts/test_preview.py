@@ -2658,6 +2658,46 @@ def test_bare_task_list_names_the_current_task():
     ]
 
 
+def test_short_flags_and_the_details_rename():
+  # The task flags drop the redundant `--task-` head: `--details` is the name now, and
+  # `--task-details` stays an alias so a stored call and the reference table still work.
+  # Every flag also takes a short form, so a routine call costs fewer tokens to type.
+  script = str(Path(preview.__file__))
+  with tempfile.TemporaryDirectory() as flag_dir:
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": flag_dir}
+    preview.Store(flag_dir, create=True)
+
+    def cli(*args):
+      return subprocess.run(
+        [sys.executable, script, *args],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+      ).stdout
+
+    for flag in ("--details", "--task-details", "-d"):
+      out = cli("task", "flag-task", "Flags", flag, "one\ntwo")
+      assert "one" in out and "two" in out, flag
+    # The short forms reach the same places the long forms reach. A finished task refuses
+    # the blocked mark, so the block is proved while the task is still upcoming.
+    assert "blocked" in cli("task", "flag-task", "Flags", "-b")
+    assert "blocked" not in cli("task", "flag-task", "Flags", "-u")
+    out = cli("task", "flag-task", "Flags", "-s", "finished", "-o", "1")
+    assert "status finished" in out and "order 1" in out
+    assert cli("task-list", "-f").splitlines()[0] == "Tasks 1"
+    assert cli("task-list").splitlines()[0] == "Tasks 0 upcoming"
+    store = preview.Store(flag_dir)
+    store.note("1111111-2222-3333-4444-555555555555", "a note")
+    acked = cli("ack", "1111111-2222-3333-4444-555555555555", "-r", "answer")
+    assert "1111111" in acked
+    report = Path(flag_dir) / "report.md"
+    report.write_text("# Report\n\nBody text.\n", encoding="utf-8")
+    assert "short-report" in cli(
+      "publish", str(report), "-i", "short-report", "-t", "Short report"
+    )
+
+
 def test_task_list():
   with tempfile.TemporaryDirectory() as tasks_dir:
     tasks_store = preview.Store(tasks_dir, create=True)

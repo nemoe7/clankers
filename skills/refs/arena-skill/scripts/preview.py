@@ -1569,7 +1569,7 @@ def check_task_steps(details):
       raise ValueError(
         "A task detail is one step per line,"
         f" {TASK_STEP_MAX} characters or fewer; this line runs {len(step)}."
-        " Split it and repeat --task-details"
+        " Split it and repeat --details"
       )
 
 
@@ -4258,6 +4258,7 @@ def ensure_installed():
 def main():
   parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
   parser.add_argument(
+    "-r",
     "--reminder",
     action="store_true",
     help="Print the unacked-count reminder line and exit",
@@ -4265,6 +4266,7 @@ def main():
   commands = parser.add_subparsers(dest="command", required=False)
   serve = commands.add_parser("serve")
   serve.add_argument(
+    "-p",
     "--port",
     type=int,
     default=DEFAULT_PORT,
@@ -4303,11 +4305,13 @@ def main():
   serve_tick.add_argument("line", help="The command line, as the hook read it")
   gate = commands.add_parser("gate")
   gate.add_argument(
+    "-p",
     "--push",
     action="store_true",
     help="Block while any note or answer awaits an ack, whatever the call count",
   )
   gate.add_argument(
+    "-l",
     "--line",
     default="",
     help="The command line, as the hook read it; a blocked call then names the commands to drop",
@@ -4319,26 +4323,27 @@ def main():
   )
   download.add_argument("url", help="One HTTPS URL without embedded credentials")
   download.add_argument(
+    "-a",
     "--allow-proxy",
     action="store_true",
     help="Let the owner opt in to AllOrigins and CodeTabs fallback for this request",
   )
   ack = commands.add_parser("ack")
   ack.add_argument("ids", nargs="+")
-  ack.add_argument("--reply", help="Markdown answer shown in the message log")
-  ack.add_argument("--note", help="Short plain answer shown in the message log")
+  ack.add_argument("-r", "--reply", help="Markdown answer shown in the message log")
+  ack.add_argument("-n", "--note", help="Short plain answer shown in the message log")
   # A backtick inside double quotes runs as a command, so the shell eats the ticks before this
   # tool sees the text. The file forms carry it as it stands.
   ack.add_argument(
-    "--reply-file", type=Path, help="Read the Markdown answer from this file"
+    "-R", "--reply-file", type=Path, help="Read the Markdown answer from this file"
   )
   ack.add_argument(
-    "--note-file", type=Path, help="Read the plain answer from this file"
+    "-N", "--note-file", type=Path, help="Read the plain answer from this file"
   )
   publish = commands.add_parser("publish")
   publish.add_argument("source", type=Path)
-  publish.add_argument("--id", required=True)
-  publish.add_argument("--title", required=True)
+  publish.add_argument("-i", "--id", required=True)
+  publish.add_argument("-t", "--title", required=True)
   unpublish = commands.add_parser("unpublish")
   unpublish.add_argument("report_id")
   task = commands.add_parser("task")
@@ -4346,11 +4351,15 @@ def main():
   task.add_argument("title_arg", nargs="?", metavar="TASK-TITLE")
   task.add_argument("detail_arg", nargs="*", metavar="TASK-DETAIL")
   task.add_argument(
+    "-d",
+    "--details",
     "--task-details",
+    dest="task_details",
     action="append",
     help="One step per line, 120 characters or fewer, repeatable; an empty string clears the list",
   )
   task.add_argument(
+    "-b",
     "--blocked",
     dest="blocked",
     action="store_true",
@@ -4358,39 +4367,48 @@ def main():
     help="Mark the task blocked, so a poll may wait",
   )
   task.add_argument(
+    "-u",
     "--unblocked",
     dest="blocked",
     action="store_false",
     help="Clear the blocked mark",
   )
   task.add_argument(
+    "-m",
     "--msg-id",
     help="Message this task answers; marks that message as having a task",
   )
   task.add_argument(
+    "-r",
     "--report",
     metavar="REPORT-ID",
     help="Report this task waits on; its answer clears the blocked mark",
   )
   task.add_argument(
+    "-a",
     "--amend",
     metavar="PREV-ID",
     help="Rename the task stored under this ID to the one given",
   )
-  task.add_argument("--status", choices=TASK_STATUSES, default=None)
+  task.add_argument("-s", "--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
-    "--order", type=int, default=None, help="1-based place in its div, not the end"
+    "-o",
+    "--order",
+    type=int,
+    default=None,
+    help="1-based place in its div, not the end",
   )
   task_remove = commands.add_parser("task-remove")
   task_remove.add_argument("task_id")
   task_list = commands.add_parser("task-list")
   task_list.add_argument(
-    "--full", action="store_true", help="print every task, finished included"
+    "-f", "--full", action="store_true", help="print every task, finished included"
   )
   state_import = commands.add_parser("import-state")
   state_import.add_argument("source", nargs="?", type=Path)
-  state_import.add_argument("--replace-tasks", action="store_true")
+  state_import.add_argument("-r", "--replace-tasks", action="store_true")
   state_import.add_argument(
+    "-f",
     "--force",
     action="store_true",
     help="import even when the live state holds newer messages",

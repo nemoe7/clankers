@@ -38,6 +38,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - An answered report no longer refuses the agent's unpublish. The owner's dismissal path is unchanged.
 - The poll-hold test bounds its loop at two turns, so the suite no longer pays 39 s for 1800 idle turns.
 - `arena-preview task-list` prints the upcoming tasks only and names the head of the queue `current`. `--full` prints every task, finished included.
+- The task flags drop the redundant `--task-` head: `--details` is the name, and `--task-details` stays an alias. Every flag also takes a short form.
 
 #### maintenance
 
