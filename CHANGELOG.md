@@ -23,6 +23,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The preview frame sandbox gains `allow-popups`, `allow-popups-to-escape-sandbox` and `allow-downloads`, so preview links open a new tab and downloads run. The new Steering toggle ships on and re-applies the flags when Arena rebuilds the frame.
+- The tab title log names the row kind and the emoji-choice gates. The prompt fill log traces the composer write. The two lines diagnose a held question mark and a fill that does not land.
 
 #### preview
 

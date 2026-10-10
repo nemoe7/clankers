@@ -2177,7 +2177,7 @@ function checkTabTitle(api) {
       "[NemoUtils][title] security check -> " + TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI,
     ],
     // The anchors behind the decision ride the same line, so a title shows its cause.
-    [loggedTitleTail(captchaDoc()), "repo=clankers row=none"],
+    [loggedTitleTail(captchaDoc()), "repo=clankers row=none kind=none captcha=1"],
     // The label behind the row rides the line, so the cause is visible.
     [
       loggedTitleHead(waitingDoc([pollMessage])),
@@ -2185,7 +2185,7 @@ function checkTabTitle(api) {
     ],
     [
       loggedTitleTail(waitingDoc([pollMessage])),
-      "repo=clankers row=poll command (running Bash)",
+      "repo=clankers row=poll command (running Bash) kind=poll captcha=0 question=0 speech=0 live=1",
     ],
     // The anchor cites the row that won the mark, not the row the page re-derives at
     // write time: the reason and the row half name one row.
@@ -2200,7 +2200,7 @@ function checkTabTitle(api) {
     ],
     [
       loggedTitleTail(processDocExplored()),
-      "repo=clankers row=action row (Explored 2 reads)",
+      "repo=clankers row=action row (Explored 2 reads) kind=action captcha=0 question=0 speech=0 live=1",
     ],
     [
       loggedTitleHead(processDocLaterRow()),
@@ -2210,7 +2210,7 @@ function checkTabTitle(api) {
     ],
     [
       loggedTitleTail(processDocLaterRow()),
-      "repo=clankers row=action row (Bash sleep 25)",
+      "repo=clankers row=action row (Bash sleep 25) kind=action captcha=0 question=0 speech=0 live=1",
     ],
     [processRow(processDocLaterRow()), null],
     // The owner's flip-flop: the watcher card loses the title once the message that
@@ -2230,7 +2230,7 @@ function checkTabTitle(api) {
       loggedTitleHead(idleDoc),
       "[NemoUtils][title] title -> " + TITLE_PREFIX + "clankers" + vtag,
     ],
-    [loggedTitleTail(idleDoc), "repo=clankers row=none"],
+    [loggedTitleTail(idleDoc), "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.

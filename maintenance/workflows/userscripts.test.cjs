@@ -711,6 +711,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   test("agent message mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };
+    const logged = [];
     const words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
     const intervals = [];
     const timeouts = new Map();
@@ -730,7 +731,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       },
     };
     const context = {
-      console: { log() {} },
+      console: { log: (...args) => logged.push(args.join(" ")) },
       URL,
       location: { href: "https://arena.ai/c/one", pathname: "/c/one" },
       document: {
@@ -798,6 +799,13 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     // The hold bridges the pause between two bursts of words.
     sync();
     assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
+    // The title line names the row kind and the hierarchy trace that chose the mark.
+    const titleLines = logged.filter((line) => line.indexOf("[title]") !== -1);
+    assert.ok(titleLines.length > 0, "the title path logs a line");
+    assert.ok(
+      titleLines.some((line) => line.indexOf("kind=") !== -1 && line.indexOf("speech=1") !== -1),
+      `the title log carries the row kind and the trace: ${titleLines.join(" | ")}`,
+    );
     console.log("ok agent message mark: silent first look, growth burns, a chat switch stays quiet");
   });
 }
