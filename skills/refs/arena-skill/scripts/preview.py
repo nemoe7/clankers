@@ -1330,10 +1330,14 @@ def run_command(state_dir, name, argv):
 
 
 def run_notices(state_dir):
-  """Print each finished run once, on the first gate call after it ends."""
+  """Print each finished run once, on the first gate call after it ends.
+
+  Return how many runs it printed, so a poll can end when a gate run finishes.
+  """
+  printed = 0
   runs = Path(state_dir) / "runs"
   if not runs.is_dir():
-    return
+    return printed
   for path in sorted(runs.glob("*.json")):
     try:
       record = json.loads(path.read_text(encoding="utf-8"))
@@ -1350,6 +1354,8 @@ def run_notices(state_dir):
     path.write_text(
       json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
+    printed += 1
+  return printed
 
 
 SHELL_WRAPPER = re.compile(r"^(?:\S*/)?(?:ba|z|da)?sh\s+(?:-\w+\s+)*-c\s+")
@@ -1451,6 +1457,10 @@ def poll_inbox(store, sleeper=None):
         store.mark_reports_agent_seen(
           [item.get("report_id") for item in full["pending"]]
         )
+        print_poll_hold(store)
+        return 0
+      # A finished gate run ends the wait with its verdict, so the turn reads the result now.
+      if run_notices(store.path.parent):
         print_poll_hold(store)
         return 0
       open_tasks = [
