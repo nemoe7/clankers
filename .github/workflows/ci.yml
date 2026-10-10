@@ -59,7 +59,6 @@ jobs:
           python maintenance/measurements/gate_measurements.py
           node --check skills/arena-skill/assets/app.js
 
-      # The AGENTS.md clause on Simplified Technical English: text you add or change in docs/ and the
       # The covered list lives in maintenance/check.py (STE_DOCS), shared with the local gate.
       - name: Lint The Covered Documentation
         run: python maintenance/check.py --ste
