@@ -3380,6 +3380,26 @@ def test_bash_gate():
     assert cleared_push.returncode == 0
 
 
+def test_run_records_the_exit_and_announces_it_once(capsys):
+  """A run keeps its exit and output tail, and the next gate call announces it once."""
+  with tempfile.TemporaryDirectory() as directory:
+    code = preview.run_command(
+      directory,
+      "check",
+      ["--", sys.executable, "-c", "print('ok'); raise SystemExit(3)"],
+    )
+    assert code == 3
+    out = capsys.readouterr().out
+    assert "ok" in out and "arena-preview run check: exit 3" in out
+    preview.run_notices(directory)
+    notice = capsys.readouterr().out
+    assert "Finished run check: exit 3" in notice and "Verdict: ok" in notice
+    preview.run_notices(directory)
+    assert capsys.readouterr().out == ""
+    assert preview.run_command(directory, "bad name!", ["true"]) == 2
+    assert preview.run_command(directory, "empty", ["--"]) == 2
+
+
 def test_first_blocking_piece_names_the_part_that_blocks():
   """A blocked call names its first part that is not an inbox call or an inert prefix."""
   assert (

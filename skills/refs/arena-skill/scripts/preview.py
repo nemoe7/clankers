@@ -1276,6 +1276,82 @@ def quiet_inbox_line(line):
 GATE_NOISE = ("tail", "grep", "head")
 
 
+RUN_NAME = re.compile(r"[A-Za-z0-9._-]{1,64}")
+RUN_TAIL_LINES = 40
+
+
+def run_record_path(state_dir, name):
+  return Path(state_dir) / "runs" / f"{name}.json"
+
+
+def run_command(state_dir, name, argv):
+  """Run one command, keep its output tail, and record the exit for the next gate call."""
+  if not RUN_NAME.fullmatch(name or ""):
+    print(
+      "arena-preview run: the name takes 1 to 64 letters, digits, dot, dash or underscore.",
+      flush=True,
+    )
+    return 2
+  if argv[:1] == ["--"]:
+    argv = argv[1:]
+  if not argv:
+    print(
+      "arena-preview run: name a command after --, for example: run gates -- make check",
+      flush=True,
+    )
+    return 2
+  started = time.monotonic()
+  completed = subprocess.run(argv, capture_output=True, text=True, check=False)
+  seconds = round(time.monotonic() - started, 1)
+  output = (completed.stdout + completed.stderr).splitlines()
+  tail = output[-RUN_TAIL_LINES:]
+  verdict = tail[-1] if tail else "(no output)"
+  record = {
+    "name": name,
+    "argv": argv,
+    "exit": completed.returncode,
+    "seconds": seconds,
+    "finished_at": now(),
+    "verdict": verdict,
+    "tail": tail,
+    "announced": False,
+  }
+  path = run_record_path(state_dir, name)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  path.write_text(
+    json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+  )
+  for line in tail:
+    print(line, flush=True)
+  line = f"arena-preview run {name}: exit {completed.returncode} in {seconds} s. Verdict: {verdict}"
+  print(line, flush=True)
+  print(line, file=sys.stderr, flush=True)
+  return completed.returncode
+
+
+def run_notices(state_dir):
+  """Print each finished run once, on the first gate call after it ends."""
+  runs = Path(state_dir) / "runs"
+  if not runs.is_dir():
+    return
+  for path in sorted(runs.glob("*.json")):
+    try:
+      record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+      continue
+    if record.get("announced"):
+      continue
+    print(
+      f"Finished run {record.get('name')}: exit {record.get('exit')} in {record.get('seconds')} s."
+      f" Verdict: {record.get('verdict')}",
+      flush=True,
+    )
+    record["announced"] = True
+    path.write_text(
+      json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
+
+
 def gate_line_hint(line):
   """Name the extra commands on a blocked call, so the next read keeps the exemption."""
   words = {token for token in re.split(r"[^A-Za-z0-9_.-]+", line or "")}
@@ -4163,6 +4239,14 @@ def main():
     help="Report whether a command line that names an inbox call runs nothing else",
   )
   inbox_line.add_argument("line", help="The command line, as the hook read it")
+  run = commands.add_parser(
+    "run",
+    help="Run a command, keep its output tail, and show the exit on the next gate call",
+  )
+  run.add_argument("name", help="A short name for the run, for example gates")
+  run.add_argument(
+    "command_args", nargs=argparse.REMAINDER, help="The command, after --"
+  )
   ack_tick = commands.add_parser(
     "ack-tick",
     help="Warn when an inline ack text holds a backtick the shell will substitute",
@@ -4284,6 +4368,8 @@ def main():
       parser.error("a command is required")
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
+    if args.command == "run":
+      return run_command(state_dir, args.name, args.command_args)
     if args.command == "ack-tick":
       warning = tick_warning(args.line)
       if warning:
@@ -4295,6 +4381,7 @@ def main():
         print(warning, file=sys.stderr)
       return 0
     if args.command == "gate":
+      run_notices(state_dir)
       if poll_timeout_line(args.line):
         print(
           "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."

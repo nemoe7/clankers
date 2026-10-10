@@ -18,13 +18,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Python dependencies are pinned in `requirements.txt`, and the workflows install from it.
 - The AGENTS.md version clause requires a bump of each module's version after its edits.
-- The ARENA.md wait clause: after `start_process`, scope the next task, then read with `get_process_output` at a 1 s wait. Repeat until the process is done.
+- The ARENA.md gate clause: a gate run goes through `arena-preview run <name> -- <command>` under `start_process`, and the next call shows the finished run.
 
 #### preview
 
 - The CLI prints readable text instead of JSON, and drops dead metadata.
 - Unused helpers `cli_json` and `note_with_upload` are removed, and `format_task` drops two unused parameters.
 - A blocked call names the command part that blocked it.
+- `arena-preview run <name> -- <command>` prints the verdict and the time to stdout and stderr. The next gate call shows each finished run once, with its verdict.
 - An answered report no longer refuses the agent's unpublish. The owner's dismissal path is unchanged.
 
 #### maintenance
