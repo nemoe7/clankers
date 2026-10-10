@@ -2307,44 +2307,62 @@ function checkHideElements(api) {
     };
   }
 
-  var CLAIM_BUTTON_SELECTOR = api.CLAIM_BUTTON_SELECTOR;
+  var CLAIM_TEXT = api.CLAIM_TEXT;
   var CLAIM_DIV_SELECTOR = api.CLAIM_DIV_SELECTOR;
+  var FREE_OFFER_TEXT = api.FREE_OFFER_TEXT;
   var FREE_OFFER_DIV_SELECTOR = api.FREE_OFFER_DIV_SELECTOR;
-  var SURFACE_DIV_SELECTOR = api.SURFACE_DIV_SELECTOR;
-  var SURFACE_RADIO_SELECTOR = api.SURFACE_RADIO_SELECTOR;
-  var CODEX_LINK_SELECTOR = api.CODEX_LINK_SELECTOR;
-  var IMAGES_LINK_SELECTOR = api.IMAGES_LINK_SELECTOR;
-  var LIBRARY_LINK_SELECTOR = api.LIBRARY_LINK_SELECTOR;
+  var MODE_TOGGLE_SELECTOR = api.MODE_TOGGLE_SELECTOR;
+  var CODEX_ITEM_SELECTOR = api.CODEX_ITEM_SELECTOR;
+  var IMAGES_ITEM_SELECTOR = api.IMAGES_ITEM_SELECTOR;
+  var LIBRARY_ITEM_SELECTOR = api.LIBRARY_ITEM_SELECTOR;
   var FREE_BADGE_SELECTOR = api.FREE_BADGE_SELECTOR;
+  var FREE_BADGE_TEXT = api.FREE_BADGE_TEXT;
   var HEADER_DIV_SELECTOR = api.HEADER_DIV_SELECTOR;
+  var findButtonByText = api.findButtonByText;
   var findClaimDiv = api.findClaimDiv;
   var findFreeOfferDiv = api.findFreeOfferDiv;
-  var findSurfaceDiv = api.findSurfaceDiv;
-  var findCodexLink = api.findCodexLink;
-  var findImagesLink = api.findImagesLink;
-  var findLibraryLink = api.findLibraryLink;
+  var findModeToggle = api.findModeToggle;
   var findFreeBadge = api.findFreeBadge;
   var findHeaderDiv = api.findHeaderDiv;
   var hideElement = api.hideElement;
+  var hideAll = api.hideAll;
   var syncDocument = api.syncDocument;
+
+  // A renamed class leaves a finder matching nothing, and the page then shows the
+  // element with no error. The DOM contract is under test beside the behaviour.
+  var contract = [
+    [CLAIM_TEXT, "Claim offer"],
+    [CLAIM_DIV_SELECTOR, "div.col-span-full.mt-1.mb-3\\.5.px-2"],
+    [FREE_OFFER_TEXT, "Free offer"],
+    [FREE_OFFER_DIV_SELECTOR, "div.flex.items-center.gap-1.select-none"],
+    [CODEX_ITEM_SELECTOR, 'button[data-sidebar-destination="builtin:codex"]'],
+    [IMAGES_ITEM_SELECTOR, 'button[data-sidebar-destination="builtin:images"]'],
+    [LIBRARY_ITEM_SELECTOR, 'button[data-sidebar-destination="builtin:library"]'],
+    [FREE_BADGE_SELECTOR, "span.truncate.text-xs.text-secondary.select-none"],
+    [FREE_BADGE_TEXT, "Free"],
+    [MODE_TOGGLE_SELECTOR, "div.\\@container\\/home-mode-toggle"],
+  ];
 
   var claimDiv = fakeElement();
   var freeDiv = fakeElement();
-  var surfaceDiv = fakeElement();
-  var codexLink = fakeElement();
-  var imagesLink = fakeElement();
-  var libraryLink = fakeElement();
+  var modeToggle = fakeElement();
+  var codexItem = fakeElement();
+  var imagesItem = fakeElement();
+  var libraryRailItem = fakeElement();
+  var libraryListItem = fakeElement();
   var freeBadge = fakeElement();
   freeBadge.textContent = " Free ";
   var paidBadge = fakeElement();
   paidBadge.textContent = "Plus";
   var headerDiv = fakeElement();
   var claimButton = {
+    textContent: " Claim offer ",
     closest: function (selector) {
       return selector === CLAIM_DIV_SELECTOR ? claimDiv : null;
     },
   };
   var bareButton = {
+    textContent: "Claim offer",
     closest: function () {
       return null;
     },
@@ -2361,44 +2379,28 @@ function checkHideElements(api) {
       return freeDiv;
     },
   };
-  var radio = {
-    closest: function (selector) {
-      return selector === SURFACE_DIV_SELECTOR ? surfaceDiv : null;
+
+  function buttonDoc(buttons) {
+    return {
+      querySelectorAll: function (selector) {
+        return selector === "button" ? buttons : [];
+      },
+    };
+  }
+  var claimDoc = buttonDoc([otherButton, claimButton]);
+  var bareDoc = buttonDoc([bareButton]);
+  var freeDoc = buttonDoc([otherButton, freeButton]);
+  var emptyDoc = {
+    querySelector: function () {
+      return null;
+    },
+    querySelectorAll: function () {
+      return [];
     },
   };
-  var claimDoc = {
+  var modeToggleDoc = {
     querySelector: function (selector) {
-      return selector === CLAIM_BUTTON_SELECTOR ? claimButton : null;
-    },
-  };
-  var bareDoc = {
-    querySelector: function (selector) {
-      return selector === CLAIM_BUTTON_SELECTOR ? bareButton : null;
-    },
-  };
-  var surfaceDoc = {
-    querySelector: function (selector) {
-      return selector === SURFACE_RADIO_SELECTOR ? radio : null;
-    },
-  };
-  var codexDoc = {
-    querySelector: function (selector) {
-      return selector === CODEX_LINK_SELECTOR ? codexLink : null;
-    },
-  };
-  var headerDoc = {
-    querySelector: function (selector) {
-      return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
-    },
-  };
-  var imagesDoc = {
-    querySelector: function (selector) {
-      return selector === IMAGES_LINK_SELECTOR ? imagesLink : null;
-    },
-  };
-  var libraryDoc = {
-    querySelector: function (selector) {
-      return selector === LIBRARY_LINK_SELECTOR ? libraryLink : null;
+      return selector === MODE_TOGGLE_SELECTOR ? modeToggle : null;
     },
   };
   var badgeDoc = {
@@ -2411,55 +2413,49 @@ function checkHideElements(api) {
       return selector === FREE_BADGE_SELECTOR ? paidBadge : null;
     },
   };
-  var emptyDoc = {
-    querySelector: function () {
-      return null;
-    },
-    querySelectorAll: function () {
-      return [];
-    },
-  };
-  var freeDoc = {
-    querySelectorAll: function () {
-      return [otherButton, freeButton];
+  var headerDoc = {
+    querySelector: function (selector) {
+      return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
     },
   };
   // One document answers every selector, so the sync pass itself is under test:
-  // a finder left out of syncDocument leaves its element unhidden here.
+  // a target left out of syncDocument leaves its element unhidden here. The library
+  // answers twice, once for the collapsed rail and once for the open nav list.
   var fullDoc = {
     querySelector: function (selector) {
-      if (selector === CLAIM_BUTTON_SELECTOR) return claimButton;
-      if (selector === SURFACE_RADIO_SELECTOR) return radio;
-      if (selector === CODEX_LINK_SELECTOR) return codexLink;
-      if (selector === IMAGES_LINK_SELECTOR) return imagesLink;
-      if (selector === LIBRARY_LINK_SELECTOR) return libraryLink;
+      if (selector === MODE_TOGGLE_SELECTOR) return modeToggle;
       if (selector === FREE_BADGE_SELECTOR) return freeBadge;
       if (selector === HEADER_DIV_SELECTOR) return headerDiv;
       return null;
     },
     querySelectorAll: function (selector) {
-      return selector === "button" ? [freeButton] : [];
+      if (selector === "button") return [claimButton, freeButton];
+      if (selector === CODEX_ITEM_SELECTOR) return [codexItem];
+      if (selector === IMAGES_ITEM_SELECTOR) return [imagesItem];
+      if (selector === LIBRARY_ITEM_SELECTOR) return [libraryRailItem, libraryListItem];
+      return [];
     },
   };
+
+  hideAll(fullDoc, LIBRARY_ITEM_SELECTOR);
+  hideAll(emptyDoc, LIBRARY_ITEM_SELECTOR);
   var cases = [
+    [findButtonByText(claimDoc, CLAIM_TEXT), claimButton],
+    [findButtonByText(emptyDoc, CLAIM_TEXT), null],
     [findClaimDiv(claimDoc), claimDiv],
     [findClaimDiv(bareDoc), null],
     [findClaimDiv(emptyDoc), null],
     [findFreeOfferDiv(freeDoc), freeDiv],
     [findFreeOfferDiv(emptyDoc), null],
-    [findSurfaceDiv(surfaceDoc), surfaceDiv],
-    [findSurfaceDiv(emptyDoc), null],
-    [findCodexLink(codexDoc), codexLink],
-    [findCodexLink(emptyDoc), null],
-    [findImagesLink(imagesDoc), imagesLink],
-    [findImagesLink(emptyDoc), null],
-    [findLibraryLink(libraryDoc), libraryLink],
-    [findLibraryLink(emptyDoc), null],
+    [findModeToggle(modeToggleDoc), modeToggle],
+    [findModeToggle(emptyDoc), null],
     [findFreeBadge(badgeDoc), freeBadge],
     [findFreeBadge(paidBadgeDoc), null],
     [findFreeBadge(emptyDoc), null],
     [findHeaderDiv(headerDoc), headerDiv],
     [findHeaderDiv(emptyDoc), null],
+    [libraryRailItem.hasAttribute("hidden"), true],
+    [libraryListItem.hasAttribute("hidden"), true],
     [hideElement(claimDiv), true],
     [claimDiv.hasAttribute("hidden"), true],
     [hideElement(claimDiv), false],
@@ -2467,6 +2463,12 @@ function checkHideElements(api) {
   ];
   var failed = 0;
   var i;
+  for (i = 0; i < contract.length; i += 1) {
+    if (contract[i][0] !== contract[i][1]) {
+      console.error("contract fail", i, contract[i][0], contract[i][1]);
+      failed += 1;
+    }
+  }
   for (i = 0; i < cases.length; i += 1) {
     if (cases[i][0] !== cases[i][1]) {
       console.error("check fail", i, cases[i][0], cases[i][1]);
@@ -2477,10 +2479,11 @@ function checkHideElements(api) {
   var synced = [
     claimDiv,
     freeDiv,
-    surfaceDiv,
-    codexLink,
-    imagesLink,
-    libraryLink,
+    modeToggle,
+    codexItem,
+    imagesItem,
+    libraryRailItem,
+    libraryListItem,
     freeBadge,
     headerDiv,
   ];
@@ -2493,7 +2496,9 @@ function checkHideElements(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
-  console.log("ok hide elements " + (cases.length + synced.length));
+  console.log(
+    "ok hide elements " + (contract.length + cases.length + synced.length),
+  );
 }
 
 function checkAutoThink(api) {

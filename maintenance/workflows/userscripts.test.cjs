@@ -92,7 +92,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       document: {
         documentElement: {},
         querySelector() { return null; },
-        querySelectorAll(selector) { return selector.includes("__composer-pill") ? [pill] : []; },
+        querySelectorAll(selector) { return selector.includes('aria-pressed="false"') ? [pill] : []; },
       },
       window: { addEventListener() {}, removeEventListener() {} },
       sessionStorage: { getItem() { return null; } },

@@ -121,10 +121,10 @@ On any `chatgpt.com` path, the feature adds `hidden` to eight elements:
 
 - The div that holds the Claim offer button.
 - The div that holds the Free offer button.
-- The div that holds the Select chat surface toggle.
-- The Codex sidebar link.
-- The Images sidebar link.
-- The Library sidebar link.
+- The Chat and Work header toggle.
+- The Codex sidebar entry.
+- The Images sidebar entry.
+- The Library sidebar entries, in the collapsed rail and in the open nav list.
 - The Free badge.
 - The prompt textarea header banner.
 

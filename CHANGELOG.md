@@ -48,6 +48,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Prompt fill supports the dialog repo selector.
 - The test menu counts grow with the trim cap line.
 - The tab title gives the action row priority over the speech hold.
+- The ChatGPT selectors match the current DOM: the two offer wrappers, the sidebar entries, the Free badge and the Think pill. The Chat and Work header toggle replaces the removed chat surface toggle.
 
 #### preview
 

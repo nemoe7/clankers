@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT.com | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.4
+// @version      1.3.5
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @icon         https://chatgpt.com/favicon.ico
@@ -85,50 +85,41 @@
 
   runFeature("hide-elements", "Hide elements", function () {
 
-    var CLAIM_BUTTON_SELECTOR = 'button[aria-label="Claim offer"]';
-    var CLAIM_DIV_SELECTOR = "div.mx-3\\.5.mt-1.mb-2";
+    var CLAIM_TEXT = "Claim offer";
+    var CLAIM_DIV_SELECTOR = "div.col-span-full.mt-1.mb-3\\.5.px-2";
     var FREE_OFFER_TEXT = "Free offer";
-    var FREE_OFFER_DIV_SELECTOR = "div.translucent-surface";
-    var SURFACE_RADIO_SELECTOR = 'div[role="radiogroup"][aria-label="Select chat surface"]';
-    var SURFACE_DIV_SELECTOR = "div.start-1\\/2";
-    var CODEX_LINK_SELECTOR = 'a[data-sidebar-item][href="/codex"]';
-    var IMAGES_LINK_SELECTOR = 'a[data-sidebar-item][href="/images"]';
-    var LIBRARY_LINK_SELECTOR = 'a[data-sidebar-item][href^="/library"]';
-    var FREE_BADGE_SELECTOR = "span.text-caption-regular.text-token-text-tertiary";
+    var FREE_OFFER_DIV_SELECTOR = "div.flex.items-center.gap-1.select-none";
+    var MODE_TOGGLE_SELECTOR = "div.\\@container\\/home-mode-toggle";
+    var CODEX_ITEM_SELECTOR = 'button[data-sidebar-destination="builtin:codex"]';
+    var IMAGES_ITEM_SELECTOR = 'button[data-sidebar-destination="builtin:images"]';
+    var LIBRARY_ITEM_SELECTOR = 'button[data-sidebar-destination="builtin:library"]';
+    var FREE_BADGE_SELECTOR = "span.truncate.text-xs.text-secondary.select-none";
     var FREE_BADGE_TEXT = "Free";
     var HEADER_DIV_SELECTOR = "div[data-prompt-textarea-header]";
 
-    function findClaimDiv(doc) {
-      var button = doc.querySelector(CLAIM_BUTTON_SELECTOR);
-      return button ? button.closest(CLAIM_DIV_SELECTOR) : null;
-    }
-
-    function findFreeOfferDiv(doc) {
+    function findButtonByText(doc, text) {
       var buttons = doc.querySelectorAll("button");
       var i;
       for (i = 0; i < buttons.length; i += 1) {
-        if (String(buttons[i].textContent || "").trim() === FREE_OFFER_TEXT) {
-          return buttons[i].closest(FREE_OFFER_DIV_SELECTOR);
+        if (String(buttons[i].textContent || "").trim() === text) {
+          return buttons[i];
         }
       }
       return null;
     }
 
-    function findSurfaceDiv(doc) {
-      var radio = doc.querySelector(SURFACE_RADIO_SELECTOR);
-      return radio ? radio.closest(SURFACE_DIV_SELECTOR) : null;
+    function findClaimDiv(doc) {
+      var button = findButtonByText(doc, CLAIM_TEXT);
+      return button ? button.closest(CLAIM_DIV_SELECTOR) : null;
     }
 
-    function findCodexLink(doc) {
-      return doc.querySelector(CODEX_LINK_SELECTOR);
+    function findFreeOfferDiv(doc) {
+      var button = findButtonByText(doc, FREE_OFFER_TEXT);
+      return button ? button.closest(FREE_OFFER_DIV_SELECTOR) : null;
     }
 
-    function findImagesLink(doc) {
-      return doc.querySelector(IMAGES_LINK_SELECTOR);
-    }
-
-    function findLibraryLink(doc) {
-      return doc.querySelector(LIBRARY_LINK_SELECTOR);
+    function findModeToggle(doc) {
+      return doc.querySelector(MODE_TOGGLE_SELECTOR);
     }
 
     function findFreeBadge(doc) {
@@ -151,13 +142,23 @@
       return true;
     }
 
+    // One destination keeps two live nodes: the collapsed rail and the open nav
+    // list. Hiding one leaves the other visible in the other sidebar state.
+    function hideAll(doc, selector) {
+      var found = doc.querySelectorAll(selector);
+      var i;
+      for (i = 0; i < found.length; i += 1) {
+        hideElement(found[i]);
+      }
+    }
+
     function syncDocument(doc) {
       hideElement(findClaimDiv(doc));
       hideElement(findFreeOfferDiv(doc));
-      hideElement(findSurfaceDiv(doc));
-      hideElement(findCodexLink(doc));
-      hideElement(findImagesLink(doc));
-      hideElement(findLibraryLink(doc));
+      hideElement(findModeToggle(doc));
+      hideAll(doc, CODEX_ITEM_SELECTOR);
+      hideAll(doc, IMAGES_ITEM_SELECTOR);
+      hideAll(doc, LIBRARY_ITEM_SELECTOR);
       hideElement(findFreeBadge(doc));
       hideElement(findHeaderDiv(doc));
     }
@@ -167,25 +168,25 @@
     }
 
     if (exposeChecks("hideElements", {
-      CLAIM_BUTTON_SELECTOR: CLAIM_BUTTON_SELECTOR,
+      CLAIM_TEXT: CLAIM_TEXT,
       CLAIM_DIV_SELECTOR: CLAIM_DIV_SELECTOR,
+      FREE_OFFER_TEXT: FREE_OFFER_TEXT,
       FREE_OFFER_DIV_SELECTOR: FREE_OFFER_DIV_SELECTOR,
-      SURFACE_DIV_SELECTOR: SURFACE_DIV_SELECTOR,
-      SURFACE_RADIO_SELECTOR: SURFACE_RADIO_SELECTOR,
-      CODEX_LINK_SELECTOR: CODEX_LINK_SELECTOR,
-      IMAGES_LINK_SELECTOR: IMAGES_LINK_SELECTOR,
-      LIBRARY_LINK_SELECTOR: LIBRARY_LINK_SELECTOR,
+      MODE_TOGGLE_SELECTOR: MODE_TOGGLE_SELECTOR,
+      CODEX_ITEM_SELECTOR: CODEX_ITEM_SELECTOR,
+      IMAGES_ITEM_SELECTOR: IMAGES_ITEM_SELECTOR,
+      LIBRARY_ITEM_SELECTOR: LIBRARY_ITEM_SELECTOR,
       FREE_BADGE_SELECTOR: FREE_BADGE_SELECTOR,
+      FREE_BADGE_TEXT: FREE_BADGE_TEXT,
       HEADER_DIV_SELECTOR: HEADER_DIV_SELECTOR,
+      findButtonByText: findButtonByText,
       findClaimDiv: findClaimDiv,
       findFreeOfferDiv: findFreeOfferDiv,
-      findSurfaceDiv: findSurfaceDiv,
-      findCodexLink: findCodexLink,
-      findImagesLink: findImagesLink,
-      findLibraryLink: findLibraryLink,
+      findModeToggle: findModeToggle,
       findFreeBadge: findFreeBadge,
       findHeaderDiv: findHeaderDiv,
       hideElement: hideElement,
+      hideAll: hideAll,
       syncDocument: syncDocument,
     })) {
       return;
@@ -209,7 +210,7 @@
 
   runFeature("auto-think", "Auto Think", function () {
 
-    var THINK_PILL_SELECTOR = 'button.__composer-pill[aria-pressed="false"]';
+    var THINK_PILL_SELECTOR = 'button[aria-pressed="false"]';
     var THINK_LABEL = "Think";
     var PRESS_INTERVAL_MS = 1000;
 
