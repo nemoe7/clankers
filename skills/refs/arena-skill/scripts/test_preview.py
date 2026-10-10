@@ -1586,7 +1586,7 @@ def test_read_names_every_attachment():
     assert "here conversation page" in listing
     # A note with no text and no attachment keeps the bare header.
     bare = preview.format_pending_item({"id": "bare", "text": ""})
-    assert bare == "note bare"
+    assert bare == "bare"
     # A missing upload keeps its name and reports the loss.
     lost = preview.format_pending_item(
       {
@@ -1595,7 +1595,7 @@ def test_read_names_every_attachment():
         "attachments": [{"name": "saved.html", "present": False}],
       }
     )
-    assert lost == "note lost\ngone\nattachments: saved.html (missing)"
+    assert lost == "lost\ngone\nattachments: saved.html (missing)"
 
 
 def test_note_owns_one_attachment():
@@ -3537,10 +3537,10 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     )
     assert code == 3
     out = capsys.readouterr().out
-    assert "ok" in out and "arena-preview run check: exit 3" in out
+    assert "ok" in out and "run check: exit 3" in out
     preview.run_notices(directory)
     notice = capsys.readouterr().out
-    assert "Finished run check: exit 3" in notice and "Verdict: ok" in notice
+    assert "run check done: exit 3" in notice and notice.rstrip().endswith("ok")
     preview.run_notices(directory)
     assert capsys.readouterr().out == ""
     assert preview.run_command(directory, "bad name!", ["true"]) == 2
@@ -3709,7 +3709,7 @@ def test_dispatch_reminder():
           return candidate
       raise AssertionError(f"No rotating tail in {stripped!r}")
 
-    pending_prefix = "Unacked: 1 note. DO NOT IGNORE. ACK ASAP. "
+    pending_prefix = "unacked 1 note | "
     assert preview.fill_reminder(preview.TASK_REMINDER, 0) is None
     assert preview.fill_reminder(preview.TASK_REMINDER, 1) == "1 task left."
     assert preview.fill_reminder(preview.TASK_REMINDER, 4) == "4 tasks left."
@@ -3778,7 +3778,7 @@ def test_dispatch_reminder():
     assert reminder_store.reminder() in tails(1)
     reminder_store.submission("form-answer", "form", "REPORT form: yes")
     form_line = reminder_store.reminder()
-    form_prefix = "Unacked: 1 answer. DO NOT IGNORE. ACK ASAP. "
+    form_prefix = "unacked 1 answer | "
     assert form_line == form_prefix + reminder_tail(form_line, 1)
     reminder_store.acknowledge(["form-answer"], "note", "Received")
     for index in range(3):
@@ -3787,7 +3787,7 @@ def test_dispatch_reminder():
       upload = reminder_store.save_upload(name, "text/plain", name.encode())
       reminder_store.note(upload["id"], "Uploaded " + name)
     mixed_line = reminder_store.reminder()
-    mixed_prefix = "Unacked: 3 notes, 2 uploads. DO NOT IGNORE. ACK ASAP. "
+    mixed_prefix = "unacked 3 notes, 2 uploads | "
     assert mixed_line == mixed_prefix + reminder_tail(mixed_line, 1)
     assert all(row["seen_at"] is None for row in reminder_store.read()["pending"])
 
@@ -3829,7 +3829,7 @@ def test_reminder_rotation():
     assert rotate_store.reminder(advance=True) == tail_at(2)
     assert rotate_store.reminder() == tail_at(3)
     rotate_store.note("rotate-note", "Pending")
-    pending = "Unacked: 1 note. DO NOT IGNORE. ACK ASAP. "
+    pending = "unacked 1 note | "
     assert rotate_store.reminder() == f"{pending}{tail_at(4)}"
     offset = span + 5
     for cursor, polls in ((offset, 1), (offset + 1, 2)):
@@ -3841,9 +3841,7 @@ def test_reminder_rotation():
         env={**os.environ, "ARENA_PREVIEW_STATE_DIR": rotate_dir},
       )
       tail = tail_at(cursor)
-      assert (
-        result.stdout.strip() == f"Calls since user message: {polls}. {pending}{tail}"
-      )
+      assert result.stdout.strip() == f"calls {polls} {pending}{tail}"
       assert result.stderr == ""
     result = subprocess.run(
       [sys.executable, rotate_script, "task-list"],
@@ -3854,13 +3852,11 @@ def test_reminder_rotation():
     )
     assert "Tasks" in result.stdout
     tail = tail_at(offset + 2)
-    assert result.stderr.strip() == f"Calls since user message: 2. {pending}{tail}"
+    assert result.stderr.strip() == f"calls 2 {pending}{tail}"
     # A read does not erase the calls since the first unread message. Only a fresh backlog
     # resets the tally; a message landing on an unacked pile leaves it running.
     rotate_store.read()
-    assert rotate_store.reminder() == (
-      f"Calls since user message: 2. {pending}{tail_at(offset + 3)}"
-    )
+    assert rotate_store.reminder() == (f"calls 2 {pending}{tail_at(offset + 3)}")
     # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
     rotate_store.acknowledge(["rotate-note"], "note", "Done")
     assert rotate_store.meta_value(preview.POLLS_SINCE_MESSAGE) == "0"
@@ -3868,16 +3864,14 @@ def test_reminder_rotation():
     assert rotate_store.reminder(advance=True) == tail_at(offset + 5)
     rotate_store.note("rotate-later", "Pending again")
     assert rotate_store.reminder(advance=True) == (
-      f"Calls since user message: 1. {pending}{tail_at(offset + 6)}"
+      f"calls 1 {pending}{tail_at(offset + 6)}"
     )
     rotate_store.note("rotate-newer", "Another user message")
-    newer = "Unacked: 2 notes. DO NOT IGNORE. ACK ASAP. "
+    newer = "unacked 2 notes | "
     # A second message on an unacked pile keeps the count anchored to the first unread one.
-    assert rotate_store.reminder() == (
-      f"Calls since user message: 1. {newer}{tail_at(offset + 7)}"
-    )
+    assert rotate_store.reminder() == (f"calls 1 {newer}{tail_at(offset + 7)}")
     assert rotate_store.reminder(advance=True) == (
-      f"Calls since user message: 2. {newer}{tail_at(offset + 8)}"
+      f"calls 2 {newer}{tail_at(offset + 8)}"
     )
 
 
@@ -3916,7 +3910,7 @@ def test_ack_task_reminder():
       check=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir},
     )
-    assert "--msg-id ack-work" in result.stdout
+    assert "-m ack-work" in result.stdout
 
 
 def test_report_unread_markers():
@@ -4202,14 +4196,12 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
       # The early return names the task on stderr, so no session reads it as an empty wait.
-      assert printed[0].startswith("POLL: this wait runs up to 1800 s. Ends early")
+      assert printed[0].startswith("POLL: up to 1800 s.")
+      # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
-        "CONTINUE: unblocked task open-task waits. Task list still up. Work it or"
-        " mark it blocked before the next poll. Do not end the turn."
+        "CONTINUE: unblocked task open-task. Work it or block it; do not end the turn."
       )
-      # The same line rides stdout too, right before the listing, so a turn
-      # that reads only stdout meets the warning instead of burying it.
-      assert printed[2] == printed[1]
+      assert printed[2] != printed[1]
       assert "open-task" in printed[-1]
 
       store.write_task("open-task", blocked=True)
@@ -4248,8 +4240,8 @@ def test_poll_retry_disclaimer():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
       builtins.print = original
     assert code == 1
-    assert printed[0].startswith("POLL: this wait runs up to 1800 s. Ends early")
-    assert "Retry with the tool timeout 1800" in printed[0]
+    assert printed[0].startswith("POLL: up to 1800 s.")
+    assert "retry at 1800" in printed[0]
 
 
 def test_skip_poll():
@@ -4300,7 +4292,7 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0].startswith("POLL: this wait runs up to 1800 s. Ends early")
+      assert printed[0].startswith("POLL: up to 1800 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -4337,14 +4329,14 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert "skip-note" in printed[-1]
+      assert "skip-no" in printed[-1]
       assert store.skip_poll_requested() is True
       # Once the ack empties the queue, the next poll consumes the skip it held.
       store.acknowledge(["skip-note"], "reply", "done")
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0].startswith("POLL: this wait runs up to 1800 s. Ends early")
+      assert printed[0].startswith("POLL: up to 1800 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -4430,7 +4422,7 @@ def test_skip_poll_clears_on_owner_message():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
     assert code == 0 and sleeps == []
     assert not any(str(item).startswith("SKIP") for item in printed)
-    assert "skip-cleared-note" in printed[-1]
+    assert "skip-cl" in printed[-1]
     # A report answer clears it the same way.
     store.request_skip_poll()
     assert store.skip_poll_requested() is True
@@ -5199,7 +5191,7 @@ def test_ack_reads_a_file_when_the_text_carries_backticks():
       check=True,
       env=env,
     ).stdout
-    assert "Acknowledged" in out and "first-" in out
+    assert out.startswith("ok first-")
     note = preview.Store(ack_dir).state()["notes"][0]
     assert note["ack_kind"] == "reply"
     assert note["ack_text"] == text, "the stored text keeps every backtick and quote"
@@ -5440,5 +5432,5 @@ def test_poll_breaks_on_finished_run(capsys):
     assert preview.poll_inbox(store, sleeper=sleeper) == 0
     assert len(sleeps) == 1
     out = capsys.readouterr().out
-    assert "Finished run gate: exit 0" in out and "Verdict: ok" in out
+    assert "run gate done: exit 0" in out and out.rstrip().endswith("ok")
     assert preview.run_notices(directory) == 0

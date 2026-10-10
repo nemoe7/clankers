@@ -40,6 +40,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `arena-preview task-list` prints the upcoming tasks only and names the head of the queue `current`. `--full` prints every task, finished included.
 - The task flags drop the redundant `--task-` head: `--details` is the name, and `--task-details` stays an alias. Every flag also takes a short form.
 - Every command that takes an ID also takes a 7-character prefix. A prefix that names two records fails as a named conflict and lists each match with its kind.
+- The CLI output is terse. A read prints a 7-character ID per note, with no blank line between notes. The reminder drops its two shouting sentences and keeps the rotating tip.
+- The run verdict and the CONTINUE line print to one stream, not both. Nine measured commands drop from 673 tokens to 479.
 
 #### maintenance
 

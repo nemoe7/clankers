@@ -961,11 +961,12 @@ def add_note_attachments(note, records):
 def format_pending_item(item):
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
-  header = f"{display_kind} {item.get('id', '')}"
+  # A short ID names the record, and a short ID acks it, so the full UUID costs nothing here.
+  header = str(item.get("id", ""))[:7]
+  if display_kind != "note":
+    header += f" {display_kind}"
   if item.get("report_id"):
     header += f" report {item['report_id']}"
-  if item.get("at"):
-    header += f" at {item['at']}"
   lines = [header]
   text = item.get("text") or ""
   if text:
@@ -993,12 +994,8 @@ def format_read(listing):
     first = f"Inbox: {count} pending"
   if count == 0:
     return first
-  lines = [first, ""]
-  for idx, item in enumerate(pending):
-    lines.append(format_pending_item(item))
-    if idx != len(pending) - 1:
-      lines.append("")
-  return "\n".join(lines)
+  # No blank line between items: the short ID opens each one, so the split stays visible.
+  return "\n".join([first, *(format_pending_item(item) for item in pending)])
 
 
 def format_task_list(tasks, full=False):
@@ -1343,9 +1340,8 @@ def run_command(state_dir, name, argv):
   )
   for line in tail:
     print(line, flush=True)
-  line = f"arena-preview run {name}: exit {completed.returncode} in {seconds} s. Verdict: {verdict}"
-  print(line, flush=True)
-  print(line, file=sys.stderr, flush=True)
+  # One stream: the agent reads both, so a duplicate line only costs tokens.
+  print(f"run {name}: exit {completed.returncode} {seconds}s {verdict}", flush=True)
   return completed.returncode
 
 
@@ -1366,8 +1362,8 @@ def run_notices(state_dir):
     if record.get("announced"):
       continue
     print(
-      f"Finished run {record.get('name')}: exit {record.get('exit')} in {record.get('seconds')} s."
-      f" Verdict: {record.get('verdict')}",
+      f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s"
+      f" {record.get('verdict')}",
       flush=True,
     )
     record["announced"] = True
@@ -1461,8 +1457,7 @@ def poll_inbox(store, sleeper=None):
   # first. Say so up front: a call that ends early with nothing to read was cut, and
   # the retry needs the tool timeout at 1800.
   print(
-    "POLL: this wait runs up to 1800 s. Ends early with no new messages or"
-    " unblocked tasks? The bash tool timeout cut it. Retry with the tool timeout 1800.",
+    "POLL: up to 1800 s. Ends early and empty? The tool timeout cut it; retry at 1800.",
     file=sys.stderr,
     flush=True,
   )
@@ -1495,10 +1490,8 @@ def poll_inbox(store, sleeper=None):
         # still-up list must be handled before the next poll. The line rides stderr and
         # stdout both, so a turn that reads only stdout still meets the warning.
         continue_line = (
-          f"CONTINUE: unblocked task {names} waits. Task list still up. Work it or"
-          " mark it blocked before the next poll. Do not end the turn."
+          f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn."
         )
-        print(continue_line, file=sys.stderr, flush=True)
         print(continue_line, flush=True)
         print(format_task_list(listing.get("tasks", [])), flush=True)
         print_poll_hold(store)
@@ -3237,11 +3230,10 @@ class Store:
     ]
     # The label keeps the pending tally apart from the call count, so a reader never takes
     # "8. 1 note" for eight notes.
-    unacked = [f"Unacked: {', '.join(counts)}."] if counts else []
-    ack = ["DO NOT IGNORE. ACK ASAP."] if counts else []
-    head = [f"Calls since user message: {polls}."] if polls and counts else []
+    unacked = [f"unacked {', '.join(counts)}"] if counts else []
+    head = [f"calls {polls}"] if polls and counts else []
     tail = reminder_tail(cursor, remaining)
-    return " ".join([*head, *unacked, *ack, tail])
+    return " | ".join([" ".join([*head, *unacked]).strip(), tail]).strip(" |")
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
     """Return False when bash calls must block.
@@ -4611,7 +4603,7 @@ def main():
       arrivals = {record_id: store.record_arrival(record_id) for record_id in ids}
       store.acknowledge(ids, kind, text)
       short = [i[:7] for i in ids]
-      print("Acknowledged " + " ".join(short))
+      print("ok " + " ".join(short))
       for record_id in ids:
         age = stamp_age_seconds(arrivals.get(record_id))
         if age is not None and age > HOLD_STALE_SECONDS:
@@ -4622,10 +4614,7 @@ def main():
             file=sys.stderr,
             flush=True,
           )
-      print(
-        "Note asks for work? Add the task: "
-        + "; ".join(f'task <id> "<title>" --msg-id {i}' for i in ids)
-      )
+      print("need a task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in ids))
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}, {count} fields.")

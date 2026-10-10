@@ -357,9 +357,9 @@ def add_note_attachments(note,records):
 	if records:note['attachment_name']=records[0]['name'];note['attachment_path']=records[0]['path'];note['attachments']=records
 	return note
 def format_pending_item(item):
-	kind=item.get('kind')or'note';display_kind='answer'if kind=='report'else kind;header=f"{display_kind} {item.get('id','')}"
+	kind=item.get('kind')or'note';display_kind='answer'if kind=='report'else kind;header=str(item.get('id',''))[:7]
+	if display_kind!='note':header+=f" {display_kind}"
 	if item.get('report_id'):header+=f" report {item['report_id']}"
-	if item.get('at'):header+=f" at {item['at']}"
 	lines=[header];text=item.get('text')or''
 	if text:lines.append(text)
 	attachments=item.get('attachments')or[]
@@ -370,11 +370,7 @@ def format_read(listing):
 	if checked_at:first=f"Inbox {checked_at}: {count} pending"
 	else:first=f"Inbox: {count} pending"
 	if count==0:return first
-	lines=[first,'']
-	for(idx,item)in enumerate(pending):
-		lines.append(format_pending_item(item))
-		if idx!=len(pending)-1:lines.append('')
-	return'\n'.join(lines)
+	return'\n'.join([first,*(format_pending_item(item)for item in pending)])
 def format_task_list(tasks,full=False):
 	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"]
 	for(index,task)in enumerate(shown):
@@ -479,7 +475,7 @@ def run_command(state_dir,name,argv):
 	if not argv:print('arena-preview run: name a command after --, for example: run gates -- make check',flush=True);return 2
 	started=time.monotonic();completed=subprocess.run(argv,capture_output=True,text=True,check=False);seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=output[-RUN_TAIL_LINES:];verdict=tail[-1]if tail else'(no output)';record={'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};path=run_record_path(state_dir,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
 	for line in tail:print(line,flush=True)
-	line=f"arena-preview run {name}: exit {completed.returncode} in {seconds} s. Verdict: {verdict}";print(line,flush=True);print(line,file=sys.stderr,flush=True);return completed.returncode
+	print(f"run {name}: exit {completed.returncode} {seconds}s {verdict}",flush=True);return completed.returncode
 def run_notices(state_dir):
 	printed=0;runs=Path(state_dir)/'runs'
 	if not runs.is_dir():return printed
@@ -487,7 +483,7 @@ def run_notices(state_dir):
 		try:record=json.loads(path.read_text(encoding='utf-8'))
 		except(OSError,ValueError):continue
 		if record.get('announced'):continue
-		print(f"Finished run {record.get('name')}: exit {record.get('exit')} in {record.get('seconds')} s. Verdict: {record.get('verdict')}",flush=True);record['announced']=True;path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8');printed+=1
+		print(f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s {record.get('verdict')}",flush=True);record['announced']=True;path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8');printed+=1
 	return printed
 SHELL_WRAPPER=re.compile('^(?:\\S*/)?(?:ba|z|da)?sh\\s+(?:-\\w+\\s+)*-c\\s+')
 def shell_command_text(text):
@@ -517,14 +513,14 @@ def print_poll_hold(store):
 	if line is not None:print(line,file=sys.stderr,flush=True)
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};print('POLL: this wait runs up to 1800 s. Ends early with no new messages or unblocked tasks? The bash tool timeout cut it. Retry with the tool timeout 1800.',file=sys.stderr,flush=True);store.start_poll()
+	listing={'checked_at':None,'pending':[]};print('POLL: up to 1800 s. Ends early and empty? The tool timeout cut it; retry at 1800.',file=sys.stderr,flush=True);store.start_poll()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
 			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);print_poll_hold(store);return 0
 			if run_notices(store.path.parent):print_poll_hold(store);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names} waits. Task list still up. Work it or mark it blocked before the next poll. Do not end the turn.";print(continue_line,file=sys.stderr,flush=True);print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);print_poll_hold(store);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);print_poll_hold(store);return 0
 			if store.skip_poll_requested():store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',file=sys.stderr,flush=True);print(format_read(listing),flush=True);print_poll_hold(store);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
@@ -998,7 +994,7 @@ class Store:
 		with closing(self.connect())as db,db:
 			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"Unacked: {', '.join(counts)}."]if counts else[];ack=['DO NOT IGNORE. ACK ASAP.']if counts else[];head=[f"Calls since user message: {polls}."]if polls and counts else[];tail=reminder_tail(cursor,remaining);return' '.join([*head,*unacked,*ack,tail])
+		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=[f"calls {polls}"]if polls and counts else[];tail=reminder_tail(cursor,remaining);return' | '.join([' '.join([*head,*unacked]).strip(),tail]).strip(' |')
 	def gate(self,threshold=GATE_THRESHOLD,pending_only=False):
 		with closing(self.connect())as db,db:pending=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0];polls=meta_number(db,POLLS_SINCE_MESSAGE)
 		if pending_only:return not pending
@@ -1388,11 +1384,11 @@ def main():
 				source=args.reply_file if args.reply_file is not None else args.note_file;kind='reply'if args.reply_file is not None else'note'
 				try:text=source.read_text(encoding='utf-8')
 				except OSError as error:raise ValueError(f"Cannot read {source}: {error.strerror or error}")from None
-			ids=[store.resolve_id(token)for token in args.ids];arrivals={record_id:store.record_arrival(record_id)for record_id in ids};store.acknowledge(ids,kind,text);short=[i[:7]for i in ids];print('Acknowledged '+' '.join(short))
+			ids=[store.resolve_id(token)for token in args.ids];arrivals={record_id:store.record_arrival(record_id)for record_id in ids};store.acknowledge(ids,kind,text);short=[i[:7]for i in ids];print('ok '+' '.join(short))
 			for record_id in ids:
 				age=stamp_age_seconds(arrivals.get(record_id))
 				if age is not None and age>HOLD_STALE_SECONDS:minutes=int(age//60);print(f"HOLD: this ack answered a message {minutes} min old. The message might be stale. Hold further work until the owner confirms.",file=sys.stderr,flush=True)
-			print('Note asks for work? Add the task: '+'; '.join(f'task <id> "<title>" --msg-id {i}'for i in ids))
+			print('need a task? '+'; '.join(f'task <id> "<title>" -m {i}'for i in ids))
 		elif args.command=='publish':
 			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id}, {count} fields.")
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)
