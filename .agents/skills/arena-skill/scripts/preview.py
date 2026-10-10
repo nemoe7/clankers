@@ -424,7 +424,7 @@ def format_task(record):
 def format_key(record):
 	lines=[]
 	if record.get('key'):lines.append(f"key {record['key']}")
-	if record.get('host'):lines.append(f"host {record['host']}")
+	if record.get('host'):lines.append(f"host {record['host']}");lines.append(f"use fetch_page on {record['host']}/v1/<route>?key=<key>, never bash")
 	if record.get('at'):lines.append(f"at {record['at']}")
 	return'\n'.join(lines)if lines else''
 def format_fetch_job(job):

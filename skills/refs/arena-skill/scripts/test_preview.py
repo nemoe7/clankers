@@ -5620,3 +5620,19 @@ def test_rename_refuses_an_id_another_record_holds():
         db.execute("SELECT count(*) FROM tasks WHERE id = 'first-task'").fetchone()[0]
         == 1
       )
+
+
+def test_key_output_names_fetch_page_over_bash():
+  """The key line says which tool carries it, so a session does not retry through a shell."""
+  lines = preview.format_key(
+    {"key": "a-key", "host": "https://proxy.example", "at": "2026-10-10T09:00Z"}
+  ).splitlines()
+  assert lines[0] == "key a-key"
+  assert lines[1] == "host https://proxy.example"
+  assert "fetch_page" in lines[2] and "never bash" in lines[2]
+  assert "https://proxy.example/v1/" in lines[2]
+  assert lines[3] == "at 2026-10-10T09:00Z"
+
+  # No host means no route to name, so the line stays out.
+  bare = preview.format_key({"key": "a-key"}).splitlines()
+  assert bare == ["key a-key"]
