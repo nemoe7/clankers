@@ -4,6 +4,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-10
+
+### Added
+
+#### maintenance
+
+- The version-bumps job checks a version bump for each changed userscript and for `gpt-plugins/plugin.json`.
+
+### Changed
+
+#### house
+
+- Python dependencies are pinned in `requirements.txt`, and the workflows install from it.
+
+#### preview
+
+- The CLI prints readable text instead of JSON, and drops dead metadata.
+
+#### maintenance
+
+- Gate scripts are renamed to `gate_*`, and sit in six domain directories.
+- Proxy files no longer count toward the tracked instruction budgets.
+
+### Fixed
+
+#### userscripts
+
+- Prompt fill supports the dialog repo selector.
+- The test menu counts grow with the trim cap line.
+- The tab title gives the action row priority over the speech hold.
+
+#### preview
+
+- The live install script matches its refs source.
+- Unpublish holds until the owner sees the report. The gate ignores output sent to `/dev/null`.
+
+#### maintenance
+
+- The version-bumps job installs its dependencies and quotes its paths.
+- The version-bumps job handles gpt-plugins subdirectories and uses `printf` for safe output.
+
 ## 2026-10-09
 
 ### Added
