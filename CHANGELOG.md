@@ -18,7 +18,6 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Python dependencies are pinned in `requirements.txt`, and the workflows install from it.
 - The AGENTS.md version clause requires a bump of each module's version after its edits.
-- The ARENA.md wait clause: after `start_process`, scope the next task, then read with `get_process_output` at a 1 s wait. Repeat until the process is done.
 
 #### preview
 
