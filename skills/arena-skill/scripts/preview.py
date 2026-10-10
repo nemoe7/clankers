@@ -718,12 +718,12 @@ class Store:
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
 			return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':self.polling(),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if self.polling()else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META))}
 	def tasks(self):
-		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id").fetchall()
+		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id").fetchall()
 		records=[task_row(row)for row in rows]
 		if not records:return None
 		return{'finished':[item for item in records if item['status']=='finished'],'upcoming':[item for item in records if item['status']=='upcoming'],'updated_at':max(item['updated_at']for item in records)}
 	def list_tasks(self):
-		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id").fetchall()
+		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id").fetchall()
 		return[task_row(row)for row in rows]
 	@contextmanager
 	def transaction(self,db=None,autosave=True):

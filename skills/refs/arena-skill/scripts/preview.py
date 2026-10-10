@@ -2333,7 +2333,7 @@ class Store:
     """Both divs as records in order, or None while nothing is stored."""
     with closing(self.connect()) as db:
       rows = db.execute(
-        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id"
+        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id"
       ).fetchall()
     records = [task_row(row) for row in rows]
     if not records:
@@ -2348,7 +2348,7 @@ class Store:
     """Every task as stored, for an agent to read the list back."""
     with closing(self.connect()) as db:
       rows = db.execute(
-        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, position, id"
+        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id"
       ).fetchall()
     return [task_row(row) for row in rows]
 

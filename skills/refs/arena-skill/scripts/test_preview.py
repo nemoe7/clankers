@@ -2908,6 +2908,22 @@ def test_task_report_link_unblocks_on_answer():
     assert late["blocked"] is False
 
 
+def test_report_linked_task_sorts_ahead_in_its_status():
+  # A report-linked task sorts before unlinked tasks in its status, ahead of position.
+  with tempfile.TemporaryDirectory() as sort_dir:
+    sort_store = preview.Store(sort_dir, create=True)
+    source = Path(sort_dir) / "pick.md"
+    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+    sort_store.publish("pick", "Pick one", source)
+    sort_store.write_task("plain", "Plain", ["Step one"], order=1)
+    sort_store.write_task("linked", "Linked", ["Step one"], order=2, report_id="pick")
+    upcoming = [
+      item["id"] for item in sort_store.list_tasks() if item["status"] == "upcoming"
+    ]
+    assert upcoming == ["linked", "plain"], "the report link outranks position"
+    assert sort_store.tasks()["upcoming"][0]["id"] == "linked"
+
+
 def test_task_report_link_refuses_missing_report():
   # The CLI refuses a link to a report that is not stored, before the task is written.
   with tempfile.TemporaryDirectory() as cli_dir:
