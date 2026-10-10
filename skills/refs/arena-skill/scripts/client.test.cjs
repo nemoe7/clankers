@@ -1686,6 +1686,25 @@ test('preview client', async (t) => {
     assert.equal(inner.textContent, 'beta alpha', 'the nested text stands as it stood');
   });
 
+  await t.test("A longer search re-marks text that a shorter search marked", async () => {
+    // The shorter search leaves a mark on "a"; the longer search must still mark "alpha" whole.
+    state.notes = [{ id: 'n1', text: 'Alpha beta', at: logStamp, acknowledged_at: null }];
+    await refresh();
+    await tick();
+    const body = messageRow('n1').children[0];
+    const hits = () => body.children.filter(child =>
+      typeof child !== 'string' && child.className === 'search-hit');
+    get('#log-search').value = 'a';
+    get('#log-search').events.input();
+    get('#log-search').value = 'alpha';
+    get('#log-search').events.input();
+    assert.equal(hits().length, 1, 'the longer query marks its whole match');
+    assert.equal(hits()[0].textContent, 'Alpha', 'the mark covers the full match');
+    assert.equal(body.textContent, 'Alpha beta', 'the text stands as it stood');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
+  });
+
   await t.test("A search that matches nothing says so and counts what it is holding back", async () => {
     // A search that matches nothing says so and counts what it is holding back.
     state.notes = [{ id: 'n1', text: 'unread', at: logStamp, acknowledged_at: null }];

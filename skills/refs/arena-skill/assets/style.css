@@ -216,7 +216,7 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
   padding: 0 8px;
 }
 /* The search wraps each matched word in a mark, so the eye lands on it at once. */
-mark.search-hit { background: var(--accent); color: var(--bg); border-radius: 3px; padding: 0 2px; }
+mark.search-hit { background: var(--accent); color: var(--bg); border-radius: 3px; padding: 0; }
 #copy-report, #refresh-report, #unpublish-report { width: 44px; height: 44px; }
 #report-status { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
 a { color: #6ea3d6; text-underline-offset: 3px; }

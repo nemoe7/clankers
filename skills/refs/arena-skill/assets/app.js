@@ -631,24 +631,35 @@ function markNode(node, query) {
     node.replaceChildren(...parts);
     return true;
   }
+  // Text and earlier marks merge into one run, so a match can span pieces an earlier query split.
   let changed = false;
-  const out = [];
+  const runs = [];
   for (const child of kids) {
-    if (typeof child === 'string' || child.nodeType === 3) {
-      const plain = typeof child === 'string' ? child : child.nodeValue;
-      const parts = query ? splitMatches(plain, query) : null;
+    const isText = typeof child === 'string' || child.nodeType === 3;
+    const isMark = !isText && child.className === 'search-hit';
+    if (isText || isMark) {
+      if (isMark) changed = true;
+      const text = typeof child === 'string' ? child : (isMark ? child.textContent : child.nodeValue);
+      const last = runs.length ? runs[runs.length - 1] : null;
+      if (typeof last === 'string') runs[runs.length - 1] = last + text;
+      else runs.push(text);
+    } else {
+      runs.push(child);
+    }
+  }
+  const out = [];
+  for (const run of runs) {
+    if (typeof run === 'string') {
+      const parts = query ? splitMatches(run, query) : null;
       if (parts) {
         out.push(...parts);
         changed = true;
       } else {
-        out.push(child);
+        out.push(run);
       }
-    } else if (child.className === 'search-hit') {
-      out.push(child.textContent);
-      changed = true;
     } else {
-      markNode(child, query);
-      out.push(child);
+      markNode(run, query);
+      out.push(run);
     }
   }
   if (changed) node.replaceChildren(...out);
