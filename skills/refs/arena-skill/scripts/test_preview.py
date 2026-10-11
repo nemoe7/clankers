@@ -2427,9 +2427,9 @@ def test_task_needs_one_detail():
 
 
 def test_task_refuses_a_note_id_as_its_name():
-  # A task named after the note it answers puts one ID on two things: the board reads
-  # "task c6b0af0" and the log reads "note c6b0af0". The write refuses a note ID and names the
-  # fix, so the agent gives the task a proper name instead.
+  # A task named after the note it answers puts one ID on two things: the board and the
+  # log. The write refuses a note ID and names the fix, so the agent gives the task a
+  # proper name instead.
   with tempfile.TemporaryDirectory() as note_id_dir:
     store = preview.Store(note_id_dir, create=True)
     for note_id in ("c6b0af0", "c6b0af0-462e549f387100613fcede90b"):

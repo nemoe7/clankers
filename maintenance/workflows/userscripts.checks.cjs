@@ -1419,7 +1419,7 @@ function checkTabTitle(api) {
       "[NemoUtils][title] chat row -> " + TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     ["repo=" + chatLogLine.split(" repo=")[1],
       "repo=clankers row=chat row kind=chat captcha=0 question=0 live=1"],
-    [VERSION, "1.10.24"],
+    [VERSION, "1.10.25"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.
@@ -1455,7 +1455,7 @@ function checkTabTitle(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
-  // One line per change stays, and the plain unchanged line is gone (answer e8fc4f6): a second
+  // One line per change stays, and the plain unchanged line is gone: a second
   // sync with the title already in place writes nothing at all.
   var quiet = [];
   var louder = console.log;
@@ -2154,12 +2154,12 @@ function checkStateDownload(api, session) {
   assert.match(stampHash("2026-10-06T09:45:05+00:00"), /^[0-9a-f]{7}$/);
   assert.equal(stampHash(""), "none");
   assert.equal(stampHash("2026-10-06T09:45:05+00:00"), stampHash("2026-10-06T09:45:05+00:00"));
-  // The owner's line texts (answer 5ca4f63): the no-file hint names the dialog it launches, a
+  // The owner's line texts: the no-file hint names the dialog it launches, a
   // stale state reads as a history mismatch, and a closed picker reads as a plain no-file line.
   assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
   assert.equal(STATE_LINES.history, "history does not match");
   assert.equal(STATE_LINES.pickerClosed, "no file selected;");
-  // The refused copy reads as a GET too, and the missing frame reads plainly (answer 2f6b5a7).
+  // The refused copy reads as a GET too, and the missing frame reads plainly.
   assert.equal(STATE_LINES.noPreview, "no preview detected");
   assert.equal(
     copyLine(500, "http://localhost:8000"),
@@ -2211,7 +2211,7 @@ function checkStateDownload(api, session) {
     compared.join("\n"),
   );
   assert.ok(comparedLine("compare stamp: none, no stamp to compare"), compared.join("\n"));
-  // A quiet tick with the pair at rest shows both lines as `same` (answer 1fcb4bd).
+  // A quiet tick with the pair at rest shows both lines as `same`.
   assert.ok(
     comparedLine(
       "note - same - " + stampHash("2026-10-06T06:12:33") + " vs " + stampHash("2026-10-06T06:12:33"),
@@ -2224,7 +2224,7 @@ function checkStateDownload(api, session) {
     ),
     compared.join("\n"),
   );
-  // A forced save announces the update from the old stamp to the new one (answer 86ba0cc).
+  // A forced save announces the update from the old stamp to the new one.
   assert.ok(
     comparedLine(
       "updating note stamp from " + stampHash("2026-10-06T05:30:00") + " to " + stampHash("2026-10-06T05:00:00"),

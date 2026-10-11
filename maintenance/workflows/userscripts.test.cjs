@@ -326,7 +326,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.deepEqual([...allOff.menus.values()].map((item) => item.label), labelsBefore);
   assert.ok([...stored.values()].every((value) => value === false));
   // The global pause stops every feature where it stands, with no reload, and the resume
-  // brings back the features whose own switch is ON (form answer 74b99a5).
+  // brings back the features whose own switch is ON.
   if (domain === "arena") {
     // The storage-failure check above leaves the writes refused; the pause writes again.
     refuseWrite = false;
@@ -668,7 +668,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     popstates.forEach((fn) => fn());
     flush();
     await settle();
-    // The fill names the repo it filled (answer e8fc4f6), so one filter shows which page wrote
+    // The fill names the repo it filled, so one filter shows which page wrote
     // the composer.
     assert.ok(
       logged.includes("[NemoUtils][fill] filled composer for clankers"),

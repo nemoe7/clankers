@@ -2813,7 +2813,7 @@ class Store:
 
     A rollback leaves the older records of a group behind while a new record of another
     group moves the state stamp forward, so the auto save compares the note stamp and the
-    task stamp against the pair from its last write (answer a898024).
+    task stamp against the pair from its last write.
     """
     groups = (
       ("note", "notes", ("at", "acknowledged_at", "ack_edited_at", "seen_at")),

@@ -12,8 +12,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The gate refuses a bash line that runs `gh pr checks` or `gh run watch`, and the refusal names the `start_process` call that takes the run. The checks-empty notice leaves with it, because a refused line never lists checks. The reminder names the tool too.
 
+#### userscripts
+
+- The comments that cited a preview answer now keep the fact and drop the ID, because a session ID dies with its session. Version 1.10.25.
+
 #### house
 
+- The skill scripts, `ruff.toml`, and the changelog drop their session-local citations the same way: the fact stays and the ID goes.
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
 
@@ -819,7 +824,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Angle brackets inside a fenced code block pass the pull request body gate. Every other line keeps the ban, on the owner answer to the `pr-constraints` report.
 - A kept `Related` section no longer needs an empty `Breaking Changes` heading in front of it. Either of the last two headings may stay out on its own, and the kept ones follow the locked order.
 - A commit that carries the breaking marker now needs a `Breaking Changes` section that lists something. The reverse direction stays unchecked, on the owner answer to the `pr-constraints` report.
-- A `Breaking Changes` or `Related` section that holds exactly `None` fails the body gate and names the fix: omit the heading. The pull request template no longer pre-fills the two sections, on owner note `a892211`.
+- A `Breaking Changes` or `Related` section that holds exactly `None` fails the body gate and names the fix: omit the heading. The pull request template no longer pre-fills the two sections.
 
 #### workflows
 
@@ -829,7 +834,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- The debug gate's call tally now blocks at 20 bash calls since the owner's last message while the inbox stays pending. The count drops from 50 on owner note `9c5b08b`.
+- The debug gate's call tally now blocks at 20 bash calls since the owner's last message while the inbox stays pending. The count drops from 50.
 - The poll wait always runs its 900 second span. Only a new message or an unblocked task breaks it, and a task that appears mid-wait breaks it too, printing the task list. Owner notes `04ca4e0` and `359c909`.
 - The poll error names the script on PATH and the recorded port, so the agent restarts the server as written.
 - A rotating tail line covers a pull request whose checks never ran: rebase onto `main` first.
