@@ -1962,7 +1962,7 @@ function checkTabTitle(api) {
   // The owner's resting page: the canvas card sits last with no counter line, so the
   // hourglass must not mark.
   function restingDoc() {
-    var doc = canvasDoc([], [], null, true);
+    var doc = canvasDoc([], [{ querySelectorAll: function () { return []; } }], null, true);
     doc.__waiting = true;
     doc.__resting = true;
     return doc;
