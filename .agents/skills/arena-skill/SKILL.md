@@ -2,7 +2,7 @@
 name: arena-skill
 description: Steer an Arena.ai agent mid-turn through a local preview inbox, publish rendered Markdown reports, and reach data outside the sandbox through the owner's proxy backend. Use in Arena Agent Mode when the user wants steering or a report, or ARENA.md requires it, and when a source the sandbox cannot reach is needed. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
 license: MIT
-compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace and long-lived process tools; serve needs markdown-it-py; the proxy routes need the fetch_page tool, an owner-run Python 3.10+ backend and a public HTTPS URL for it.
+compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace and long-lived process tools; serve needs markdown-it-py.
 ---
 
 # Arena Skill
