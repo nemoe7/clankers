@@ -2699,6 +2699,7 @@
     // bubble that stood for the streaming state is folded into it.
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
+    var THINK_EMOJI = "\uD83D\uDCAD";
     var PLAY_SELECTOR = "svg.lucide-play";
     var ACTION_EMOJI = [
       ["running", BASH_EMOJI],
@@ -2837,6 +2838,24 @@
         kids.pop();
       }
       return kids.length ? kids[kids.length - 1] : null;
+    }
+
+    // The agent's own words: the balloon row carries the prose class, so the row marks the
+    // message without watching it grow. The thinking row carries not-prose.
+    function rowHasClass(row, name) {
+      var list = row && row.classList;
+      if (!list || typeof list.contains !== "function") {
+        return false;
+      }
+      return !!list.contains(name);
+    }
+
+    function messageRow(row) {
+      return rowHasClass(row, "prose");
+    }
+
+    function thinkRow(row) {
+      return rowHasClass(row, "not-prose");
     }
 
     function strongRow(doc) {
@@ -3045,8 +3064,15 @@
         titleRowKind = "play";
         return BASH_EMOJI;
       }
+      var label = liveLabel(row);
+      var emoji = actionEmoji(label);
+      // The thinking row carries not-prose: an unmapped label there still reads as the think step.
+      if ((!emoji || emoji === ACTION_FALLBACK) && thinkRow(row)) {
+        titleRowKind = "think";
+        return THINK_EMOJI;
+      }
       titleRowKind = "action";
-      return actionEmoji(liveLabel(row));
+      return emoji;
     }
 
     function currentPath() {
@@ -3130,8 +3156,9 @@
       var row = null;
       var emoji = null;
       // A growing message outranks its own rows, but the hold after it does not:
-      // an action row that appears during the quiet gap takes the title.
-      if (speaking) {
+      // an action row that appears during the quiet gap takes the title. The balloon row
+      // carries the prose class, so it takes the mark with no word-count watch.
+      if (speaking || (live && messageRow(newestRow(doc)))) {
         titleReason = "agent message";
         heldEmoji = AGENT_EMOJI;
         heldEmojiAt = Date.now();
@@ -3292,6 +3319,7 @@
       ROW_BOX_SELECTOR: ROW_BOX_SELECTOR,
       ROW_ICON_SELECTORS: ROW_ICON_SELECTORS,
       HOURGLASS_EMOJI: HOURGLASS_EMOJI,
+      THINK_EMOJI: THINK_EMOJI,
       CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
       CAPTCHA_EMOJI: CAPTCHA_EMOJI,
       captchaSignal: captchaSignal,

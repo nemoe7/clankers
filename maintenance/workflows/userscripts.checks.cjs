@@ -880,6 +880,7 @@ function checkTabTitle(api) {
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var ROW_BOX_SELECTOR = api.ROW_BOX_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
+  var THINK_EMOJI = api.THINK_EMOJI;
   var rowSource = api.rowSource;
   var openDialog = api.openDialog;
   var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
@@ -1177,10 +1178,17 @@ function checkTabTitle(api) {
   function rememberRepo() {
     return repoForTitle(setDoc);
   }
-  function divMessage(text, shimmer) {
+  function divMessage(text, shimmer, classes) {
     var label = { textContent: text };
     var row = {
       textContent: text,
+      // The owner's row classes ride the row div: the message balloon carries prose, the
+      // thinking row carries not-prose.
+      classList: {
+        contains: function (name) {
+          return (" " + String(classes || "") + " ").indexOf(" " + name + " ") >= 0;
+        },
+      },
       querySelector: function (selector) {
         return selector === "p" ? label : null;
       },
@@ -1847,6 +1855,13 @@ function checkTabTitle(api) {
     doc.__waiting = true;
     return doc;
   }
+  // The owner's balloon page: the agent's message row carries its row class, and the
+  // spinner card may sit behind it while the page waits.
+  function balloonDoc(classes, withCard) {
+    var doc = canvasDoc([], [divMessage("Hello there", false, classes)], null, true);
+    doc.__waiting = withCard !== false;
+    return doc;
+  }
   // The owner's action page: the canvas sits in the row itself, so the box's last child is
   // a labelled row, never the waiting card.
   function actionCanvasDoc(messages, words, withStop) {
@@ -2310,6 +2325,21 @@ function checkTabTitle(api) {
       desiredTitle(waitingDoc([divMessage("Agent chat", true)])),
       TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI,
     ],
+    [expireHold(), null],
+    // The balloon row carries the prose class: the agent's words take the mark at once,
+    // with no word-count watch, and the class outranks the hourglass behind it.
+    [expireHold(), null],
+    [waitingSignal(balloonDoc("prose", true)), true],
+    [desiredTitle(balloonDoc("prose", true)), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(balloonDoc("prose", false)), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    // The same shimmer row without the class stays unmapped, so the line keeps the mark.
+    [desiredTitle(balloonDoc(null, true)), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
+    [expireHold(), null],
+    // The thinking row carries not-prose: an unmapped label there reads as the think step.
+    [emojiForRow(divMessage("Analyzing the tree", true, "not-prose").row), THINK_EMOJI],
+    [desiredTitle(balloonDoc("not-prose", false)), TITLE_PREFIX + "clankers" + vtag + " " + THINK_EMOJI],
     [expireHold(), null],
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
     // The security check beats every other mark, including a poll row and the hourglass.
