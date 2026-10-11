@@ -7,6 +7,7 @@ it runs without touching the real profile or state.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -127,58 +128,68 @@ def test_the_hook_skips_the_platform_shells() -> None:
     assert marker.exists(), "an agent call still runs the reminder"
 
 
-def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str]:
+def run(
+  command: str, cwd: str | None = None, state: Path | None = None
+) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
-  with tempfile.TemporaryDirectory() as directory:
-    root = Path(directory)
-    stub = root / "stub.sh"
-    import sys
+  if state is None:
+    with tempfile.TemporaryDirectory() as directory:
+      return run_in(command, Path(directory), cwd)
+  return run_in(command, state, cwd)
 
-    preview_module = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "preview.py"
-    stub.write_text(
-      STUB.replace("__PYTHON__", sys.executable).replace(
-        "__PREVIEW__", str(preview_module)
-      ),
-      encoding="utf-8",
-    )
-    stub.chmod(0o755)
-    # The tested command line may call the real CLI for its answer. A stub on PATH
-    # keeps that answer free of an installation, so the test runs anywhere.
-    bin_dir = root / "bin"
-    bin_dir.mkdir()
-    cli = bin_dir / "arena-preview"
-    cli.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    cli.chmod(0o755)
-    # The gate body stays in a sourced file: its own pattern text must not reach the
-    # shell command line, because the guard reads that line.
-    gate_file = root / "gate.sh"
-    gate_file.write_text(gate_source() + "\n", encoding="utf-8")
-    script = (
-      "set -o functrace\n"
-      "STUB=" + str(stub) + "\n"
-      "REPO_ROOT=" + str(ROOT) + "\n"
-      "SKILL_REL=.agents/skills/arena-skill\n"
-      '. "'
-      + str(gate_file)
-      + '"\n'
-      + "trap '_arena_preview_gate : # arena-preview-gate' DEBUG\n"
-      + command
-      + "\n"
-    )
-    return subprocess.run(
-      ["bash", "--noprofile", "--norc", "-c", script],
-      capture_output=True,
-      text=True,
-      check=False,
-      cwd=cwd,
-      env={
-        **os.environ,
-        "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
-        # The tick writes its record under the temp state and starts no real wait.
-        "ARENA_PREVIEW_STATE_DIR": str(root),
-        "ARENA_PREVIEW_DETACH_DRY": "1",
-      },
-    )
+
+def run_in(
+  command: str, root: Path, cwd: str | None = None
+) -> subprocess.CompletedProcess[str]:
+  """Run one command against a state directory, with the gate sourced and trapped."""
+  stub = root / "stub.sh"
+  import sys
+
+  preview_module = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "preview.py"
+  stub.write_text(
+    STUB.replace("__PYTHON__", sys.executable).replace(
+      "__PREVIEW__", str(preview_module)
+    ),
+    encoding="utf-8",
+  )
+  stub.chmod(0o755)
+  # The tested command line may call the real CLI for its answer. A stub on PATH
+  # keeps that answer free of an installation, so the test runs anywhere.
+  bin_dir = root / "bin"
+  bin_dir.mkdir()
+  cli = bin_dir / "arena-preview"
+  cli.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+  cli.chmod(0o755)
+  # The gate body stays in a sourced file: its own pattern text must not reach the
+  # shell command line, because the guard reads that line.
+  gate_file = root / "gate.sh"
+  gate_file.write_text(gate_source() + "\n", encoding="utf-8")
+  script = (
+    "set -o functrace\n"
+    "STUB=" + str(stub) + "\n"
+    "REPO_ROOT=" + str(ROOT) + "\n"
+    "SKILL_REL=.agents/skills/arena-skill\n"
+    '. "'
+    + str(gate_file)
+    + '"\n'
+    + "trap '_arena_preview_gate : # arena-preview-gate' DEBUG\n"
+    + command
+    + "\n"
+  )
+  return subprocess.run(
+    ["bash", "--noprofile", "--norc", "-c", script],
+    capture_output=True,
+    text=True,
+    check=False,
+    cwd=cwd,
+    env={
+      **os.environ,
+      "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+      # The tick writes its record under the temp state and starts no real wait.
+      "ARENA_PREVIEW_STATE_DIR": str(root),
+      "ARENA_PREVIEW_DETACH_DRY": "1",
+    },
+  )
 
 
 REFERENCE = ROOT / "skills" / "refs" / "arena-skill" / "references" / "REFERENCE.md"
@@ -198,6 +209,24 @@ def test_the_reference_table_holds_every_gate_case() -> None:
     f"table rows without a case: {sorted(rows - labels)}; "
     f"cases without a row: {sorted(labels - rows)}"
   )
+
+
+def test_the_gate_reaches_the_tick_for_a_named_runner():
+  """A named runner line reaches the tick, and a build line in the same family stays out."""
+  with (
+    tempfile.TemporaryDirectory() as detach_dir,
+    tempfile.TemporaryDirectory() as clean_dir,
+  ):
+    detach = run("npm test", state=Path(detach_dir))
+    assert detach.returncode == 0, detach.stderr
+    assert "RUN DETACHED: `npm-tests`" in detach.stderr, detach.stderr
+    record = json.loads(
+      (Path(detach_dir) / "runs" / "npm-tests.json").read_text(encoding="utf-8")
+    )
+    assert record["detached"] is True and record["exit"] is None
+    clean = run("npm install", state=Path(clean_dir))
+    assert "RUN DETACHED" not in clean.stderr, clean.stderr
+    assert not (Path(clean_dir) / "runs").exists(), "a build line starts no run"
 
 
 def test_plain_chain_meets_the_count_gate():

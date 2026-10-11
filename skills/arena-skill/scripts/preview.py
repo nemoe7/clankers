@@ -583,11 +583,20 @@ def poll_timeout_line(line):
 PR_CHECK_COMMANDS=('pr','checks'),('run','watch')
 PR_CHECK_WRAPPERS='env','command','timeout','xargs','nice','nohup','stdbuf','sudo'
 PR_CHECK_NAMES=('pr','checks','pr-checks'),('run','watch','run-watch')
-LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest'}
+LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest','tox':'tox','nox':'nox'}
+LONG_RUN_WORDS=(('npm','test'),'npm-tests'),(('npm','run','test*'),'npm-tests'),(('yarn','test'),'yarn-tests'),(('pnpm','test'),'pnpm-tests'),(('make','test'),'make-tests'),(('npx','jest'),'npx-tests'),(('npx','vitest'),'npx-tests'),(('npx','mocha'),'npx-tests'),(('npx','ava'),'npx-tests'),(('go','test'),'go-tests'),(('cargo','test'),'cargo-tests'),(('dotnet','test'),'dotnet-tests'),(('mvn','test'),'mvn-tests'),(('mvnw','test'),'mvn-tests'),(('gradle','test'),'gradle-tests'),(('gradlew','test'),'gradle-tests')
 DETACHED_NOTICE='RUN DETACHED: `{name}` runs in the background, so the call ends clean; its verdict prints on a later call.'
 DETACHED_BLOCK='RUN BLOCKED: the background start failed, so the wait never left. Run `arena-preview route {name} -- <the same line>` instead.'
 DETACHED_STATUS_SECONDS=7200
 DETACH_DRY_RUN='ARENA_PREVIEW_DETACH_DRY'
+def long_run_words(tokens,index,head):
+	rest=[token for token in tokens[index+1:]if not token.startswith('-')]
+	for(words,name)in LONG_RUN_WORDS:
+		if head!=words[0]:continue
+		span=rest[:len(words)-1]
+		if len(span)!=len(words)-1:continue
+		if all(token.startswith(word[:-1])if word.endswith('*')else token==word for(token,word)in zip(span,words[1:])):return name
+	return None
 def long_run_name(line):
 	text=unquote_commands(line or'')
 	for separator in('&&','||',';','|','\n','$(','`'):text=text.replace(separator,'\x00')
@@ -603,6 +612,8 @@ def long_run_name(line):
 		head=tokens[index].lstrip('({"\'').rsplit('/',1)[-1]
 		if head in INERT_COMMANDS or head=='bash':continue
 		if head in LONG_RUN_HEADS:return LONG_RUN_HEADS[head]
+		runner=long_run_words(tokens,index,head)
+		if runner:return runner
 		if head.startswith('python')and tuple(tokens[index+1:index+3])==('-m','pytest'):return'pytest'
 		if head=='node'and tokens[index+1:index+2]==['--test']:return'node-tests'
 		if head!='gh':continue

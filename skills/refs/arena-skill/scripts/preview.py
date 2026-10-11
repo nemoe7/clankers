@@ -1724,7 +1724,29 @@ PR_CHECK_NAMES = (("pr", "checks", "pr-checks"), ("run", "watch", "run-watch"))
 # Long runs that hold a turn open the way a check wait does: a test suite can outrun the
 # call that started it, so the trap starts these detached too. The heads carry no
 # repository knowledge, so the same set serves every repo the installer touched.
-LONG_RUN_HEADS = {"pytest": "pytest", "py.test": "pytest"}
+LONG_RUN_HEADS = {"pytest": "pytest", "py.test": "pytest", "tox": "tox", "nox": "nox"}
+# A runner that names its command in the words after the head. Each rule holds the words
+# and the run name; a word that ends in `*` matches its prefix, so `npm run test:unit`
+# counts. Every rule names a test command on its own, while a build command (`npm
+# install`, `make build`, `go build`) stays legal.
+LONG_RUN_WORDS = (
+  (("npm", "test"), "npm-tests"),
+  (("npm", "run", "test*"), "npm-tests"),
+  (("yarn", "test"), "yarn-tests"),
+  (("pnpm", "test"), "pnpm-tests"),
+  (("make", "test"), "make-tests"),
+  (("npx", "jest"), "npx-tests"),
+  (("npx", "vitest"), "npx-tests"),
+  (("npx", "mocha"), "npx-tests"),
+  (("npx", "ava"), "npx-tests"),
+  (("go", "test"), "go-tests"),
+  (("cargo", "test"), "cargo-tests"),
+  (("dotnet", "test"), "dotnet-tests"),
+  (("mvn", "test"), "mvn-tests"),
+  (("mvnw", "test"), "mvn-tests"),
+  (("gradle", "test"), "gradle-tests"),
+  (("gradlew", "test"), "gradle-tests"),
+)
 DETACHED_NOTICE = (
   "RUN DETACHED: `{name}` runs in the background, so the call ends clean;"
   " its verdict prints on a later call."
@@ -1738,6 +1760,28 @@ DETACHED_BLOCK = (
 DETACHED_STATUS_SECONDS = 7200
 # Tests set this so a classifier probe writes the record without starting a real wait.
 DETACH_DRY_RUN = "ARENA_PREVIEW_DETACH_DRY"
+
+
+def long_run_words(tokens, index, head):
+  """The run name a word rule gives at this head position, or None.
+
+  The head arrives already stripped of its path and quoting, so a rule reads the words
+  after it. A flag between the head and the rule words is skipped, because `npm -s run
+  test` and `npx --yes jest` name the same runner as their plain forms.
+  """
+  rest = [token for token in tokens[index + 1 :] if not token.startswith("-")]
+  for words, name in LONG_RUN_WORDS:
+    if head != words[0]:
+      continue
+    span = rest[: len(words) - 1]
+    if len(span) != len(words) - 1:
+      continue
+    if all(
+      token.startswith(word[:-1]) if word.endswith("*") else token == word
+      for token, word in zip(span, words[1:])
+    ):
+      return name
+  return None
 
 
 def long_run_name(line):
@@ -1778,6 +1822,9 @@ def long_run_name(line):
       continue
     if head in LONG_RUN_HEADS:
       return LONG_RUN_HEADS[head]
+    runner = long_run_words(tokens, index, head)
+    if runner:
+      return runner
     if head.startswith("python") and tuple(tokens[index + 1 : index + 3]) == (
       "-m",
       "pytest",

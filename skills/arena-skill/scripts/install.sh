@@ -216,7 +216,7 @@ _arena_preview_gate() {
   # stops the line from running a second time here.
   # case: long-run
   case "\$BASH_COMMAND" in
-    *gh*"pr"[[:space:]]*"checks"*|*gh*"run"[[:space:]]*"watch"*|*pytest*|*"node --test"*)
+    *gh*"pr"[[:space:]]*"checks"*|*gh*"run"[[:space:]]*"watch"*|*pytest*|*"node --test"*|*"npm test"*|*"npm run test"*|*"yarn test"*|*"pnpm test"*|*"make test"*|*"npx jest"*|*"npx vitest"*|*"npx mocha"*|*"npx ava"*|*"go test"*|*"cargo test"*|*"dotnet test"*|*"mvn test"*|*"mvnw test"*|*"gradle test"*|*"gradlew test"*|*" tox"*|*"tox "*|tox|*" nox"*|*"nox "*|nox)
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" pr-check-tick "\$_arena_preview_line"
       case \$? in
         # Only a line that names a wait is stopped. A started wait ends the call clean,

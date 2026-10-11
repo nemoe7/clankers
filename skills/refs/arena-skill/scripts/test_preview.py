@@ -3925,6 +3925,55 @@ def test_a_long_run_line_detaches_the_wait():
   assert preview.long_run_name("python3 -m pytest -q") == "pytest"
   assert preview.long_run_name("node --test x.cjs") == "node-tests"
   # A tool that merely names a suite is not a suite.
+  # The common test runners join the suite heads, each under its own run name.
+  runners = {
+    "npm test": "npm-tests",
+    "npm run test": "npm-tests",
+    "npm run test:unit": "npm-tests",
+    "yarn test": "yarn-tests",
+    "pnpm test": "pnpm-tests",
+    "make test": "make-tests",
+    "npx jest": "npx-tests",
+    "npx vitest --run": "npx-tests",
+    "npx mocha tests/x.js": "npx-tests",
+    "npx ava": "npx-tests",
+    "go test ./...": "go-tests",
+    "cargo test --all": "cargo-tests",
+    "dotnet test": "dotnet-tests",
+    "mvn test": "mvn-tests",
+    "./mvnw test": "mvn-tests",
+    "gradle test": "gradle-tests",
+    "./gradlew test": "gradle-tests",
+    "tox -e py311": "tox",
+    "nox": "nox",
+    "timeout 600 npm test": "npm-tests",
+    "cd app && make test": "make-tests",
+  }
+  for line, name in runners.items():
+    assert preview.long_run_name(line) == name, line
+    assert preview.pr_check_line(line) is True, line
+  # A build command in the same family stays legal, as does a runner named as text.
+  builds = (
+    "npm install",
+    "npm run build",
+    "npm run lint",
+    "yarn install",
+    "pnpm install",
+    "make build",
+    "make test-install",
+    "npx tsc --noEmit",
+    "go build ./...",
+    "cargo build",
+    "gradle build",
+    "./gradlew build",
+    "dotnet build",
+    "mvn package",
+    "echo npm test",
+    'echo "make test"',
+    "grep -r 'go test' .",
+  )
+  for line in builds:
+    assert preview.pr_check_line(line) is False, line
   assert preview.pr_check_line("echo pytest") is False
   assert preview.pr_check_line("python -m pip install pytest") is False
   assert preview.pr_check_line("grep -r pytest .") is False
@@ -3956,6 +4005,12 @@ def test_a_long_run_line_detaches_the_wait():
     assert suite.returncode == 1 and "`pytest`" in suite.stderr, suite.stderr
     node = run_tick("node --test x.cjs")
     assert node.returncode == 1 and "`node-tests`" in node.stderr, node.stderr
+    npm = run_tick("npm test")
+    assert npm.returncode == 1 and "`npm-tests`" in npm.stderr, npm.stderr
+    make = run_tick("cd app && make test")
+    assert make.returncode == 1 and "`make-tests`" in make.stderr, make.stderr
+    go = run_tick("go test ./...")
+    assert go.returncode == 1 and "`go-tests`" in go.stderr, go.stderr
     recorded = json.loads(
       (Path(checks_dir) / "runs" / "pr-checks.json").read_text(encoding="utf-8")
     )

@@ -12,6 +12,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The gate refuses a bash line that runs `gh pr checks` or `gh run watch`, and the refusal names the `start_process` call that takes the run. The checks-empty notice leaves with it, because a refused line never lists checks. The reminder names the tool too.
 - The gate starts a detected long run detached instead of refusing the line, and a check wait and a test run both count. The call ends clean and the notice rides stderr. Each later call prints one status line with the elapsed seconds, and the finish replays once as `run <name> done: exit N`.
+- The detach scan names the common test runners beside `pytest`. The heads cover `npm`, `yarn` and `pnpm` test scripts, `make test`, `npx jest`, `go test`, `cargo test` and their kin. A build command such as `npm install` or `make build` stays a plain call.
 - `arena-preview run` becomes `arena-preview route`, the gate's helper, which starts the command detached and returns at once. The detected set carries no repository knowledge, so a check wait and a suite match in every repo the installer touched.
 - A line the harness wrapped in a login shell loses that wrapper before the detached replay. The child then starts in the working directory the harness set.
 - `arena-preview init` prints `state <path> created`, or `present` for a database that was already there, so a restore reads what the call did.
