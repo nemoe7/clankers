@@ -434,6 +434,43 @@ function checkAutoScrollToggle(api) {
   console.log("ok transcript auto-scroll " + cases.length);
 }
 
+// The owner's structural fixtures both check functions share: the bare 16px canvas card
+// that always sits last in a box while the page waits, and the action row that carries the
+// very same canvas as its own icon beside its label.
+var WAITING_CANVAS_SELECTOR = 'canvas[width="16"][height="16"]';
+
+function waitingCardNode() {
+  var canvas = { nodeName: "CANVAS" };
+  return {
+    children: [],
+    textContent: "",
+    classList: {
+      contains: function () { return false; },
+      add: function () {},
+    },
+    querySelectorAll: function (selector) { return selector === WAITING_CANVAS_SELECTOR ? [canvas] : []; },
+    querySelector: function (selector) { return selector === WAITING_CANVAS_SELECTOR ? canvas : null; },
+  };
+}
+function actionRowNode() {
+  var canvas = { nodeName: "CANVAS" };
+  var label = { textContent: "Running Bash" };
+  var button = { querySelector: function (selector) { return selector === "p" ? label : null; } };
+  return {
+    children: [canvas],
+    querySelector: function (selector) {
+      if (selector === "button") return button;
+      if (selector === "p") return label;
+      return null;
+    },
+    querySelectorAll: function (selector) {
+      if (selector === WAITING_CANVAS_SELECTOR) return [canvas];
+      if (selector === "button") return [button];
+      return [];
+    },
+  };
+}
+
 function checkTranscriptTrim(api) {
   var normalizePlan = api.normalizePlan;
   var planParts = api.planParts;
@@ -575,6 +612,18 @@ function checkTranscriptTrim(api) {
   var questionRemoved = trimPlan(logDoc([questionRoot, questionTail], true), "20");
   var detached = rows(4);
   detached[0].parentElement = null;
+  // The waiting card is not a row: it always sits last in the box, the keep count skips
+  // it, and the cut never clears it. A row that merely carries the same canvas still
+  // counts and still trims, because its label marks it as a row.
+  var cardRows = rows(25);
+  var waitingCard = waitingCardNode();
+  var cardRoot = messageRoot([rowBox(cardRows.concat([waitingCard]))], [actionContainer()]);
+  var cardRemoved = trimPlan(logDoc([cardRoot], true), "20");
+  var canvasRows = rows(25);
+  var canvasActionRow = actionRowNode();
+  canvasActionRow.parentElement = {};
+  var canvasBox = rowBox(canvasRows.concat([canvasActionRow]));
+  var canvasRemoved = trimPlan(logDoc([messageRoot([canvasBox], [actionContainer()])], true), "20");
   // One pass cuts at most the cap, so a large backlog drains in steps instead
   // of one blocking burst the page must reconcile at once.
   var cappedTrim = trimRows(rows(300), 50);
@@ -604,6 +653,19 @@ function checkTranscriptTrim(api) {
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
     [rowsOfRoot(messageRoot([rowBox(rows(2), true)])).length, 0],
+    // The waiting card stays out of the count and out of every cut: 25 rows plus the card
+    // keeps 20 rows and cuts 5, and the card itself stays whole.
+    [rowsOfRoot(messageRoot([rowBox(cardRows.concat([waitingCard]))])).length, 25],
+    [cardRemoved, 5],
+    [cleared(cardRows[0]), true],
+    [cleared(cardRows[24]), false],
+    [cleared(waitingCard), false],
+    // A labelled row that carries the same canvas is a row: it counts, and the oldest six
+    // fixture rows cut while the newest labelled canvas row stays.
+    [rowsOfRoot(messageRoot([canvasBox])).length, 26],
+    [canvasRemoved, 6],
+    [cleared(canvasRows[0]), true],
+    [canvasActionRow.textContent === "", false],
     [messageRoots(logDoc([messageRoot([])], true)).length, 1],
     [messageRoots(logDoc([messageRoot([])], false)).length, 1],
     [messageRoots(logDoc([], true)).length, 0],
@@ -802,28 +864,28 @@ function checkTabTitle(api) {
 
   var repoFromLink = api.repoFromLink;
   var repoForTitle = api.repoForTitle;
-  var desiredTitle = api.desiredTitle;
-  var syncTitle = api.syncTitle;
   var liveLabel = api.liveLabel;
-  var liveRow = api.liveRow;
-  var strongRow = api.strongRow;
-  var stopSignal = api.stopSignal;
-  var processRow = api.processRow;
+  var desiredTitle = function (doc) { return api.desiredTitle(structural(doc)); };
+  var syncTitle = function (doc) { return api.syncTitle(structural(doc)); };
+  var liveRow = function (doc) { return api.liveRow(structural(doc)); };
+  var strongRow = function (doc) { return api.strongRow(structural(doc)); };
+  var stopSignal = function (doc) { return api.stopSignal(structural(doc)); };
+  var processRow = function (doc) { return api.processRow(structural(doc)); };
   var PLAY_SELECTOR = api.PLAY_SELECTOR;
-  var speechGrowth = api.speechGrowth;
+  var speechGrowth = function (doc) { return api.speechGrowth(structural(doc)); };
   var AGENT_EMOJI = api.AGENT_EMOJI;
   var BASH_EMOJI = api.BASH_EMOJI;
-  var waitingSignal = api.waitingSignal;
+  var waitingSignal = function (doc) { return api.waitingSignal(structural(doc)); };
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
-  var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
+  var ROW_BOX_SELECTOR = api.ROW_BOX_SELECTOR;
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
   var rowSource = api.rowSource;
   var openDialog = api.openDialog;
   var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
   var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
-  var captchaSignal = api.captchaSignal;
-  var questionSignal = api.questionSignal;
+  var captchaSignal = function (doc) { return api.captchaSignal(structural(doc)); };
+  var questionSignal = function (doc) { return api.questionSignal(structural(doc)); };
   var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
   var QUESTION_EMOJI = api.QUESTION_EMOJI;
   var emojiForRow = api.emojiForRow;
@@ -838,6 +900,105 @@ function checkTabTitle(api) {
   var GROUP_LABEL_SELECTOR = api.GROUP_LABEL_SELECTOR;
   var REPO_LINK_SELECTOR = api.REPO_LINK_SELECTOR;
   var setPriorTitle = api.setPriorTitle;
+
+  // The owner's structural row model: the newest action or message is the newest box's
+  // last child, and the bare spinner card sits behind it while the page waits. The
+  // fixtures answer row-level selectors at message level, so the shim hands the row that
+  // answers before the message does, and puts a real box around both.
+  var SPINNER_CANVAS = 'canvas[width="16"][height="16"]';
+
+  function spinnerCard() {
+    var canvas = { nodeName: "CANVAS" };
+    return {
+      children: [],
+      querySelectorAll: function (selector) { return selector === SPINNER_CANVAS ? [canvas] : []; },
+      querySelector: function (selector) { return selector === SPINNER_CANVAS ? canvas : null; },
+    };
+  }
+  function rowNode(message) {
+    if (message && message.row) return message.row;
+    return message;
+  }
+  function rowQuery(node, message, selector) {
+    var found = node && typeof node.querySelector === "function" ? node.querySelector(selector) : null;
+    if (found) return found;
+    if (message && typeof message.querySelector === "function") {
+      found = message.querySelector(selector);
+      if (found) return found;
+    }
+    var list = message && typeof message.querySelectorAll === "function" ? message.querySelectorAll(selector) : [];
+    return list && list.length ? list[0] : null;
+  }
+  function rowQueryAll(node, message, selector) {
+    var list = node && typeof node.querySelectorAll === "function" ? node.querySelectorAll(selector) : [];
+    if (list && list.length) return list;
+    list = message && typeof message.querySelectorAll === "function" ? message.querySelectorAll(selector) : [];
+    return list || [];
+  }
+  function boxedShim(message, waiting) {
+    var node = rowNode(message);
+    var row = node === message ? null : node;
+    var box = { parentElement: message, children: [] };
+    if (!row) {
+      row = {
+        parentElement: box,
+        textContent: message ? message.textContent : undefined,
+        querySelector: function (selector) { return rowQuery(node, message, selector); },
+        querySelectorAll: function (selector) { return rowQueryAll(node, message, selector); },
+      };
+    } else if (!row.parentElement) {
+      row.parentElement = box;
+    }
+    box.children = waiting ? [row, spinnerCard()] : [row];
+    box.querySelector = function (selector) { return rowQuery(node, message, selector); };
+    box.querySelectorAll = function (selector) { return rowQueryAll(node, message, selector); };
+    return {
+      querySelectorAll: function (selector) {
+        return selector === ROW_BOX_SELECTOR ? [box] : rowQueryAll(node, message, selector);
+      },
+      querySelector: function (selector) {
+        if (selector === ROW_BOX_SELECTOR) return box;
+        return rowQuery(node, message, selector);
+      },
+      contains: function (candidate) {
+        return (
+          candidate === row ||
+          candidate === box ||
+          (typeof message.contains === "function" && !!message.contains(candidate))
+        );
+      },
+      textContent: message ? message.textContent : undefined,
+      __row: row,
+      __box: box,
+    };
+  }
+  // A doc enters the structural world once: its messages answer ROW_BOX_SELECTOR with a
+  // box whose children are the row and, when the page waits, the bare spinner card.
+  function structural(doc) {
+    if (!doc || doc.__structural) return doc;
+    doc.__structural = true;
+    var inner = doc.querySelectorAll.bind(doc);
+    var shims = [];
+    function shimFor(message, waiting) {
+      var i;
+      for (i = 0; i < shims.length; i += 1) {
+        if (shims[i].message === message) return shims[i].shim;
+      }
+      var shim = boxedShim(message, waiting);
+      shims.push({ message: message, shim: shim });
+      return shim;
+    }
+    doc.querySelectorAll = function (selector) {
+      var list = inner(selector);
+      if (selector !== MESSAGE_SELECTOR || !list || !list.length) return list;
+      var out = [];
+      for (var i = 0; i < list.length; i += 1) {
+        out.push(shimFor(list[i], doc.__waiting === true && i === list.length - 1));
+      }
+      return out;
+    };
+    return doc;
+  }
 
   function link(href, label) {
     return {
@@ -1024,7 +1185,8 @@ function checkTabTitle(api) {
         return selector === "p" ? label : null;
       },
       querySelectorAll: function (selector) {
-        return selector === LIVE_LABEL_SELECTOR && shimmer ? [label] : [];
+        if (selector === LIVE_LABEL_SELECTOR && shimmer) return [label];
+        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
       },
     };
     var icon = {
@@ -1298,6 +1460,7 @@ function checkTabTitle(api) {
     };
     button.parentElement = card;
     var message = {
+      row: card,
       querySelectorAll: function (selector) {
         return selector === PLAY_SELECTOR ? [play] : [];
       },
@@ -1372,6 +1535,7 @@ function checkTabTitle(api) {
       },
     };
     var message = {
+      row: exploredRow,
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === GROUP_LABEL_SELECTOR) return [name, exploredLabel];
@@ -1449,6 +1613,7 @@ function checkTabTitle(api) {
       },
     };
     var message = {
+      row: bashRow,
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === GROUP_LABEL_SELECTOR) return [name, bashLabel];
@@ -1518,6 +1683,7 @@ function checkTabTitle(api) {
       },
     };
     var message = {
+      row: card,
       querySelectorAll: function (selector) {
         if (selector === PLAY_SELECTOR) return [play];
         if (selector === SPEECH_SELECTOR) return [word];
@@ -1583,7 +1749,15 @@ function checkTabTitle(api) {
   // finishes; the newest-row gate must still recognise it as the newest row, or
   // the mark freezes on the last labelled row.
   function titleDocStreaming() {
-    var liveRow = {};
+    var liveRow = {
+      textContent: "Searching the docs",
+      querySelector: function (selector) {
+        return selector === "button" ? liveButton : null;
+      },
+      querySelectorAll: function (selector) {
+        return selector === LIVE_LABEL_SELECTOR ? [shimmer] : [];
+      },
+    };
     var liveButton = {
       textContent: "Searching the docs",
       parentElement: liveRow,
@@ -1612,6 +1786,7 @@ function checkTabTitle(api) {
       },
     };
     var message = {
+      row: liveRow,
       querySelectorAll: function (selector) {
         if (selector === GROUP_LABEL_SELECTOR) return [oldLabel];
         if (selector === LIVE_LABEL_SELECTOR) return [shimmer];
@@ -1646,31 +1821,6 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's two blocks. Both rows carry the same 16px canvas; only the
-  // waiting line adds the monospace text block beside it. A tree node answers the text
-  // selector with its own descendants, the way a row answers a descendant selector.
-  function pageTree(text, children) {
-    var node = {
-      text: text || "",
-      textContent: text || "",
-      children: children || [],
-      querySelectorAll: function (selector) {
-        var hits = [];
-        if (selector !== WAITING_TEXT_SELECTOR) return hits;
-        (function walk(item) {
-          var i;
-          for (i = 0; i < item.children.length; i += 1) {
-            if (item.children[i].text) hits.push(item.children[i]);
-            walk(item.children[i]);
-          }
-        })(node);
-        return hits;
-      },
-    };
-    var i;
-    for (i = 0; i < node.children.length; i += 1) node.children[i].parentElement = node;
-    return node;
-  }
   function canvasDoc(canvases, messages, words, withStop) {
     return {
       title: "ChatGPT",
@@ -1688,25 +1838,26 @@ function checkTabTitle(api) {
       },
     };
   }
-  // One row of the owner's blocks: the icon block with the canvas, and, on the waiting
-  // line alone, the text block that holds the rotating words.
-  function rowCanvas(withText) {
-    var canvas = pageTree("", []);
-    var icon = pageTree("", [pageTree("", [canvas])]);
-    var kids = [icon];
-    if (withText) kids.push(pageTree("", [pageTree("The cat sat on the", [])]));
-    return { canvas: canvas, row: pageTree("", kids) };
+  // The owner's waiting page: the newest box's last child is the bare canvas card. The
+  // optional messages sit in front of the trailing box, and the optional words keep the
+  // speech path alive.
+  function waitingDoc(messages, words, withStop) {
+    var list = (messages || []).concat([{ querySelectorAll: function () { return []; } }]);
+    var doc = canvasDoc([waitingCardNode()], list, words, withStop);
+    doc.__waiting = true;
+    return doc;
   }
-  // The owner's waiting line: a 16px spinner canvas beside rotating monospace status
-  // text. The words rotate, so the row carries the text and the canvas together.
-  function waitingDoc(messages, words) {
-    return canvasDoc([rowCanvas(true).canvas], messages, words);
+  // The owner's action page: the canvas sits in the row itself, so the box's last child is
+  // a labelled row, never the waiting card.
+  function actionCanvasDoc(messages, words, withStop) {
+    var row = actionRowNode();
+    var message = {
+      row: row,
+      querySelectorAll: function (selector) { return row.querySelectorAll(selector); },
+      contains: function (candidate) { return candidate === row; },
+    };
+    return canvasDoc([row.querySelectorAll(WAITING_SELECTOR)[0]], (messages || []).concat([message]), words, withStop);
   }
-  // The owner's action row: the same canvas alone, with no text block beside it.
-  function actionCanvasDoc(messages, words) {
-    return canvasDoc([rowCanvas(false).canvas], messages, words);
-  }
-  // The ask_user card from the owner's captured outerHTML: a radiogroup with an aria-label.
   function questionCard(label) {
     return {
       getAttribute: function (name) {
@@ -1805,6 +1956,7 @@ function checkTabTitle(api) {
   var shimmerDoc = {
     title: "ChatGPT",
     querySelectorAll: function (selector) {
+      if (selector === MESSAGE_SELECTOR) return [thinkingMessage];
       return selector === LIVE_LABEL_SELECTOR ? [thinkingMessage.label] : [];
     },
     querySelector: function () {
@@ -1889,6 +2041,7 @@ function checkTabTitle(api) {
       },
     };
     var message = {
+      row: row,
       querySelectorAll: function (selector) {
         if (selector === SPEECH_SELECTOR) return words.slice();
         if (selector === LIVE_ICON_SELECTOR) return [icon];
@@ -2034,7 +2187,9 @@ function checkTabTitle(api) {
     [liveRow(groupDoc(false)), null],
     [emojiForRow(liveRow(editRowDoc(true))), "\u270F\uFE0F"],
     [liveRow(editRowDoc(false)), null],
-    [strongRow(groupDoc(true)), null],
+    // The structural pick hands strongRow the newest row; its mapped label is strong,
+    // and the answered card alone stays guarded.
+    [typeof strongRow(groupDoc(true)), "object"],
     [stopSignal(groupDoc(true)), true],
     [stopSignal(groupDoc(false)), false],
     // A drifted label still opens the gate; the exact wording does not.
@@ -2056,7 +2211,7 @@ function checkTabTitle(api) {
     [desiredTitle(lingeringPulseDoc(false)), TITLE_PREFIX + "clankers" + vtag],
     // The waiting line is a turn mark too: no control, no hourglass.
     [expireHold(), null],
-    [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers" + vtag],
+    [desiredTitle(waitingDoc(null, null, false)), TITLE_PREFIX + "clankers" + vtag],
     // The start-process card: a play icon and the process name, so the
     // card alone raises the bash emoji while the turn runs. A finished card keeps its play icon
     // in the page, so it marks no longer once the stop control leaves, and a newer message
@@ -2121,19 +2276,20 @@ function checkTabTitle(api) {
     [polls('python - <<PY\np = Path("skills/arena-skill/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
     // The owner's waiting line: rotating words, one structural selector, one hourglass.
     [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
-    [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
+    [ROW_BOX_SELECTOR, "div.flex.flex-col.gap-2"],
     [waitingSignal(waitingDoc()), true],
-    // The owner's action row carries the very same canvas as its icon, so
-    // the canvas alone never reads as a waiting line and never outranks the Bash row.
+    // The owner's action row carries the very same canvas as its icon, so the canvas
+    // never reads as a waiting line: the row marks by its own label instead.
     [waitingSignal(actionCanvasDoc()), false],
     [waitingSignal(setDoc), false],
     [expireHold(), null],
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
-    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag],
+    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
     [expireHold(), null],
-    // A named action outranks the line, so the poll row keeps its own emoji.
-    [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
+    // The waiting card outranks a named action row: the checks run captcha, waiting,
+    // then the rows, so the poll row's own emoji waits the card out.
+    [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     // Streamed words outrank the line too: the first burst sets the mark, and the next one
     // raises the same balloon over the line.
     [expireHold(), null],
@@ -2181,11 +2337,11 @@ function checkTabTitle(api) {
     // The label behind the row rides the line, so the cause is visible.
     [
       loggedTitleHead(waitingDoc([pollMessage])),
-      "[NemoUtils][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4",
+      "[NemoUtils][title] waiting line -> " + TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI,
     ],
     [
       loggedTitleTail(waitingDoc([pollMessage])),
-      "repo=clankers row=poll command (running Bash) kind=poll captcha=0 question=0 speech=0 live=1",
+      "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1",
     ],
     // The anchor cites the row that won the mark, not the row the page re-derives at
     // write time: the reason and the row half name one row.
@@ -2242,7 +2398,7 @@ function checkTabTitle(api) {
     };
     try {
       doc.title = "ChatGPT";
-      api.syncTitle(doc);
+      syncTitle(doc);
     } finally {
       console.log = original;
     }

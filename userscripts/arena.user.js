@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.21
+// @name         Arena.ai | NemoUtils | v1.10.22
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.21
+// @version      1.10.22
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1340,6 +1340,7 @@
     var LOG_SELECTOR = '[role="log"]';
     var MESSAGE_SELECTOR = '[data-agent-transcript-message="true"]';
     var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
+    var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
     var ACTION_SELECTOR = ":scope > div > div > div.mt-3.flex.flex-col.gap-3";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
     var QUESTION_SELECTOR = '[role="radiogroup"]';
@@ -1397,13 +1398,33 @@
       return roots;
     }
 
+    // The spinner card is the bare canvas card that always sits last in a box while the
+    // page waits. It is not a row: the trim never counts it, never clears it, and the keep
+    // count stays the action rows the owner asked for.
+    function waitingCard(box) {
+      var kids = box && box.children ? box.children : [];
+      var last = kids.length ? kids[kids.length - 1] : null;
+      if (!last || typeof last.querySelectorAll !== "function") return null;
+      var canvases = last.querySelectorAll(WAITING_SELECTOR);
+      if (!canvases || !canvases.length) return null;
+      if (
+        typeof last.querySelector === "function" &&
+        (last.querySelector("button") || last.querySelector("pre") || last.querySelector("p"))
+      ) {
+        return null;
+      }
+      return last;
+    }
+
     function rowsOfRoot(root) {
       var boxes = root.querySelectorAll(ROW_BOX_SELECTOR);
       var rows = [];
       var i;
       for (i = 0; i < boxes.length; i += 1) {
         if (boxes[i].closest && boxes[i].closest(ROW_BOX_SELECTOR) !== boxes[i]) continue;
-        rows = rows.concat(Array.prototype.slice.call(boxes[i].children));
+        var kids = Array.prototype.slice.call(boxes[i].children);
+        if (waitingCard(boxes[i])) kids = kids.slice(0, -1);
+        rows = rows.concat(kids);
       }
       return rows;
     }
@@ -2661,6 +2682,7 @@
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
     var MESSAGE_SELECTOR = "[data-agent-transcript-message]";
+    var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
     var LIVE_ICON_SELECTOR = ".animate-pulse";
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
@@ -2669,7 +2691,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.21";
+    var VERSION = "1.10.22";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2708,7 +2730,6 @@
     var lastSpeechPath = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
     var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
-    var WAITING_TEXT_SELECTOR = 'span[class*="whitespace-pre"]';
     var HOURGLASS_EMOJI = "\u23F3";
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
     var SPEECH_SELECTOR = "[data-agent-word]";
@@ -2735,35 +2756,61 @@
       return node ? String(node.textContent || "").replace(/\s+/g, " ").trim() : "";
     }
 
-    function rowFromIcon(icon) {
-      if (!icon) {
-        return null;
-      }
-      var button = typeof icon.closest === "function" ? icon.closest("button") : null;
-      if (button) {
-        return button.parentElement ? button.parentElement : button;
-      }
-      var node = icon.parentElement || null;
-      var depth = 0;
-      while (node && depth < 4) {
-        if (collapsed(node)) {
-          return node;
+    // The newest box: the last box of the newest message that holds one. The row model
+    // puts the page's status there, and the newest action or message sits in it.
+    function newestBox(doc) {
+      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+      var boxes;
+      var i;
+      for (i = messages.length - 1; i >= 0; i -= 1) {
+        boxes = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(ROW_BOX_SELECTOR) : [];
+        if (boxes && boxes.length) {
+          return boxes[boxes.length - 1];
         }
-        node = node.parentElement || null;
-        depth += 1;
       }
       return null;
     }
 
-    function rowFromLabel(label) {
-      if (!label) {
+    function hasMatch(node, selector) {
+      if (!node) {
+        return false;
+      }
+      if (typeof node.querySelector === "function" && node.querySelector(selector)) {
+        return true;
+      }
+      var found = typeof node.querySelectorAll === "function" ? node.querySelectorAll(selector) : [];
+      return !!(found && found.length);
+    }
+
+    // The row-kind icons: every bash, thinking, read, get_process_output and write row
+    // carries one, so a node that holds one is a row, never the bare spinner card. They can
+    // sit in subchildren, so every look descends.
+    var ROW_ICON_SELECTORS = [
+      "svg.text-text-tertiary.size-4",
+      "svg.text-text-secondary.h-3.5.w-3.5",
+      "svg.text-text-tertiary.size-3",
+      "svg.text-text-tertiary.size-3.5",
+    ];
+
+    // The spinner card is the bare canvas card: one 16x16 canvas and no label row. An
+    // action row carries the same canvas as its own icon beside its name, so a labelled
+    // row never reads as the card.
+    function spinnerCard(box) {
+      var kids = box && box.children ? box.children : [];
+      var last = kids.length ? kids[kids.length - 1] : null;
+      var i;
+      if (!last || !hasMatch(last, WAITING_SELECTOR)) {
         return null;
       }
-      var button = typeof label.closest === "function" ? label.closest("button") : null;
-      if (button) {
-        return button.parentElement ? button.parentElement : button;
+      if (hasMatch(last, "button") || hasMatch(last, "pre") || hasMatch(last, PLAY_SELECTOR) || hasMatch(last, "p")) {
+        return null;
       }
-      return label.parentElement || label;
+      for (i = 0; i < ROW_ICON_SELECTORS.length; i += 1) {
+        if (hasMatch(last, ROW_ICON_SELECTORS[i])) {
+          return null;
+        }
+      }
+      return last;
     }
 
     function stopSignal(doc) {
@@ -2778,57 +2825,29 @@
       return false;
     }
 
-    // The newest row of the newest message owns the mark: a finished row keeps
-    // its shimmer label and its pulse in the page, so an older row that still
-    // glows is history once a newer row lands, and never holds the title.
+    // The newest row of the newest box: the spinner card is always last while it is up,
+    // so the newest action or message sits right before it.
     function newestRow(doc) {
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var newest = messages.length ? messages[messages.length - 1] : null;
-      if (!newest || typeof newest.querySelectorAll !== "function") {
+      var box = newestBox(doc);
+      var kids = box && box.children ? Array.prototype.slice.call(box.children) : [];
+      if (!kids.length) {
         return null;
       }
-      // A live row streams under its shimmer label before a group label lands, so
-      // the shimmer counts as a label too; without it the mark freezes on the last
-      // labelled row. A pulsing label under done rows is news the same way, so the
-      // pulse counts too; without it a live edit under older done rows never matches.
-      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR);
-      return groups.length ? rowFromLabel(groups[groups.length - 1]) : null;
-    }
-
-    function rowIsNewest(doc, row) {
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var newestMessage = messages.length ? messages[messages.length - 1] : null;
-      // A row in an older message never marks: an empty newest message used to read as
-      // no newest row, and a stale row took the title back.
-      if (newestMessage && typeof newestMessage.contains === "function" && !newestMessage.contains(row)) {
-        return false;
+      if (spinnerCard(box)) {
+        kids.pop();
       }
-      var newest = newestRow(doc);
-      return !newest || newest === row;
+      return kids.length ? kids[kids.length - 1] : null;
     }
 
     function strongRow(doc) {
-      var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
-      var label = labels.length ? labels[labels.length - 1] : null;
-      var row = rowFromLabel(label);
-      // Only a mapped label outranks the waiting line; an unmapped one falls to the gear
-      // pass after the hourglass has had its say.
-      if (row && knownLabel(collapsed(label)) && rowIsNewest(doc, row)) {
-        return row;
+      var row = newestRow(doc);
+      // The answered question card raises no mark, however its rows read.
+      if (!row || summaryCard(row)) {
+        return null;
       }
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var i;
-      var icons;
-      for (i = messages.length - 1; i >= 0; i -= 1) {
-        icons = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(LIVE_ICON_SELECTOR) : [];
-        row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-        if (row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row)) {
-          return row;
-        }
-      }
-      icons = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_ICON_SELECTOR) : [];
-      row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-      return row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row) ? row : null;
+      var label = liveLabel(row);
+      // Only a mapped label outranks the bare rows; an unmapped one falls to the gear pass.
+      return label && knownLabel(label) ? row : null;
     }
 
     // A row inside the answered question card raises no mark; the Summary header
@@ -2851,66 +2870,55 @@
       return false;
     }
 
-    function liveRow(doc) {
-      var row = strongRow(doc);
-      if (row) {
-        return row;
+    // Whether the row carries a live mark of its own: the shimmer label or the pulsing
+    // icon. Those marks outlive the turn, so their rows mark mapped or not.
+    function liveMarked(row) {
+      if (!row || typeof row.querySelectorAll !== "function") {
+        return false;
       }
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var lastMessage = messages.length ? messages[messages.length - 1] : null;
-      var groups =
-        lastMessage && typeof lastMessage.querySelectorAll === "function"
-          ? lastMessage.querySelectorAll(GROUP_LABEL_SELECTOR)
-          : [];
-      row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
-      if (row && summaryCard(row)) {
-        return null;
+      var marks = row.querySelectorAll(LIVE_LABEL_SELECTOR);
+      if (marks && marks.length) {
+        return true;
       }
-      if (row && stopSignal(doc) && (knownLabel(liveLabel(row)) || rowInMessage(doc, row))) {
-        return row;
-      }
-      // The gear pass: the newest labelled row inside a transcript message still marks when
-      // no word maps it, so rows like Agent chat earn the fallback instead of nothing.
-      var gearLabels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
-      if (!gearLabels.length) {
-        gearLabels = [];
-        var gearMessages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-        var j;
-        for (j = 0; j < gearMessages.length; j += 1) {
-          if (typeof gearMessages[j].querySelectorAll === "function") {
-            gearLabels = gearLabels.concat(
-              Array.prototype.slice.call(gearMessages[j].querySelectorAll(LIVE_LABEL_SELECTOR)),
-            );
-          }
-        }
-      }
-      row = rowFromLabel(gearLabels.length ? gearLabels[gearLabels.length - 1] : null);
-      return row && liveLabel(row) && rowIsNewest(doc, row) && rowInMessage(doc, row) ? row : null;
+      marks = row.querySelectorAll(LIVE_ICON_SELECTOR);
+      return !!(marks && marks.length);
     }
 
-    // A started process card: a play icon in the newest message. It runs
-    // with no stop control of its own, so the card alone is the news while the turn runs. A
-    // finished card keeps its play icon in the page, so an older card never marks, and the
-    // turn's stop control bounds the card like every other row.
+    function liveRow(doc) {
+      var row = newestRow(doc);
+      // The answered question card raises no mark, however its rows read.
+      if (!row || summaryCard(row)) {
+        return null;
+      }
+      // The gear pass: a row that carries its own live mark still marks when no word maps
+      // it, so rows like Agent chat earn the fallback instead of nothing.
+      if (liveMarked(row)) {
+        return row;
+      }
+      // A group-labelled row marks only while the turn runs: the label outlives the turn.
+      var label = liveLabel(row);
+      if (stopSignal(doc) && label && (knownLabel(label) || rowInMessage(doc, row))) {
+        return row;
+      }
+      return null;
+    }
+
+    // A started process card: the newest row of the newest box carries the play icon. It
+    // runs with no stop control of its own, so the card alone is the news while the turn
+    // runs, and the turn's stop control bounds it like every other row.
     function processRow(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function" || !stopSignal(doc)) {
         return null;
       }
-      var messages = doc.querySelectorAll(MESSAGE_SELECTOR);
-      var newest = messages.length ? messages[messages.length - 1] : null;
-      if (!newest || typeof newest.querySelectorAll !== "function") {
-        return null;
-      }
-      var icons = newest.querySelectorAll(PLAY_SELECTOR);
-      var card = icons.length ? rowFromIcon(icons[icons.length - 1]) : null;
-      // The card is news only while it is the newest row of the message: a later
-      // row of any kind takes the title back from the start-process card.
-      if (card && !rowIsNewest(doc, card)) {
+      var card = newestRow(doc);
+      if (!card || !hasMatch(card, PLAY_SELECTOR)) {
         return null;
       }
       // A spoken word after the card is newer still: the message keeps speaking,
       // and its words outrank the card that opened it.
-      if (card && speechFollows(newest, card)) {
+      var messages = doc.querySelectorAll(MESSAGE_SELECTOR);
+      var newest = messages.length ? messages[messages.length - 1] : null;
+      if (newest && speechFollows(newest, card)) {
         return null;
       }
       return card;
@@ -3080,45 +3088,14 @@
       return live;
     }
 
-    // The waiting line is a spinner canvas beside the rotating monospace text. An action row
-    // carries the very same canvas as its own icon, so the canvas alone proves
-    // nothing: the row must hold the text block too, beside the icon.
-    function waitingText(row, canvas) {
-      var kids = row && row.children ? row.children : [];
-      var i;
-      for (i = 0; i < kids.length; i += 1) {
-        if (
-          kids[i] === canvas ||
-          (typeof kids[i].contains === "function" && kids[i].contains(canvas))
-        ) {
-          continue;
-        }
-        if (typeof kids[i].querySelectorAll !== "function") continue;
-        var spans = kids[i].querySelectorAll(WAITING_TEXT_SELECTOR);
-        var j;
-        for (j = 0; j < spans.length; j += 1) {
-          if (collapsed(spans[j])) return true;
-        }
-      }
-      return false;
-    }
-
+    // The waiting card is the bare canvas card that sits last in the newest box. An action
+    // row carries the very same canvas as its own icon, so the canvas alone proves nothing:
+    // the card carries no label row of its own.
     function waitingSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
       }
-      var canvases = doc.querySelectorAll(WAITING_SELECTOR);
-      var i;
-      for (i = 0; i < canvases.length; i += 1) {
-        var node = canvases[i];
-        var depth = 0;
-        while (node && depth < 3) {
-          node = node.parentElement || null;
-          depth += 1;
-          if (node && waitingText(node, canvases[i])) return true;
-        }
-      }
-      return false;
+      return !!spinnerCard(newestBox(doc));
     }
 
     function heldEmojiFor(doc) {
@@ -3312,7 +3289,8 @@
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
       SPEECH_SELECTOR: SPEECH_SELECTOR,
       WAITING_SELECTOR: WAITING_SELECTOR,
-      WAITING_TEXT_SELECTOR: WAITING_TEXT_SELECTOR,
+      ROW_BOX_SELECTOR: ROW_BOX_SELECTOR,
+      ROW_ICON_SELECTORS: ROW_ICON_SELECTORS,
       HOURGLASS_EMOJI: HOURGLASS_EMOJI,
       CAPTCHA_SELECTOR: CAPTCHA_SELECTOR,
       CAPTCHA_EMOJI: CAPTCHA_EMOJI,
