@@ -597,6 +597,8 @@ def test_http_boundaries():
         < page.index('id="notes-panel"')
       )
       assert page.index('id="log-search"') < page.index('id="skip-poll"')
+      # The Skip poll button carries Lucide's skip-forward geometry, vendored inline.
+      assert 'd="M21 4v16"' in page and "M6.029 4.285" in page
       assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
       assert "Copy the log, answers and tasks to the clipboard as NDJSON" in page
       # Every icon button carries a title that repeats its accessible name.
@@ -630,7 +632,10 @@ def test_http_boundaries():
       assert re.search(
         r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page
       )
-      assert 'id="log-newest"' in page and 'stroke="#fff"' in page
+      # The jump bar carries Lucide's arrow-down geometry in currentColor, so it follows
+      # the theme rather than a hard white.
+      assert 'id="log-newest"' in page and 'stroke="currentColor"' in page
+      assert 'd="M12 5v14"' in page and 'd="m19 12-7 7-7-7"' in page
       # The search box says what it does without a visible label: the placeholder names the
       # gesture and the aria-label carries it for the screen reader.
       assert re.search(
@@ -980,11 +985,16 @@ def test_http_boundaries():
       # A phone keeps the tabs alone and drops the composer hint. The footer's Send button sits
       # at the right edge of the bottom line, with or without staged files, and the composer
       # card steps its paddings and row gaps down.
+      # The copy button keeps its seat beside Downloads on a touch top bar: the strip holds one
+      # line, the labels step down to make room, and only the clock and the theme toggle leave.
       assert (
-        "@media (pointer:coarse){.topbar-row>.row.tight{display:none;}#send-hint{display:none;}"
+        "@media (pointer:coarse){.topbar-row{flex-wrap:nowrap;}"
+        ".topbar-row>.row.tight{flex:0 0 auto;gap:4px;}#clock,#theme{display:none;}"
+        "nav button{padding:7px 3px;font-size:13px;}#send-hint{display:none;}"
         "#send{margin-left:auto;}.card.compose{padding:6px 12px;}.compose .row{margin:4px 0;}}"
         in page
       )
+      assert page.index('id="downloads-tab"') < page.index('id="copy-state"')
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
       assert "#send{margin-left:auto;}}" in page
       # The composer's outer rows give up the space they face.
