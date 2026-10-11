@@ -3762,6 +3762,40 @@ def test_gate_bans_timeout_on_poll():
     assert clean.returncode == 0, clean.stdout
 
 
+def test_gate_bans_pr_checks_on_a_line():
+  # A PR-check wait belongs to a background process: a bash line that runs it is
+  # refused, and the refusal names the tool that takes the run. A line that only
+  # prints the words stays fine.
+  assert preview.pr_check_line("gh pr checks 7") is True
+  assert preview.pr_check_line("gh pr checks 7 --watch") is True
+  assert preview.pr_check_line("cd repo && gh pr checks 7") is True
+  assert preview.pr_check_line("ARENA=1 gh run watch 12345") is True
+  assert preview.pr_check_line("arena-preview run ci -- gh pr checks 7") is False
+  assert preview.pr_check_line("echo gh pr checks 7") is False
+  assert preview.pr_check_line("gh pr view 7") is False
+  assert preview.pr_check_line("gh run list") is False
+  with tempfile.TemporaryDirectory() as checks_dir:
+    checks_script = str(Path(preview.__file__))
+
+    def run_tick(line):
+      return subprocess.run(
+        [sys.executable, checks_script, "pr-check-tick", line],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=checks_dir,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": checks_dir},
+      )
+
+    banned = run_tick("gh pr checks 7 --watch")
+    assert banned.returncode == 1, banned.stdout
+    assert banned.stdout.startswith("PR CHECKS BLOCKED: "), banned.stdout
+    assert "start_process" in banned.stdout
+    assert run_tick("gh run watch 7").returncode == 1
+    clean = run_tick("echo gh pr checks 7")
+    assert clean.returncode == 0, clean.stdout
+
+
 def test_gate_blocks_a_cd_line_past_the_threshold():
   # cd is fine on the line, but the count gate still holds it: with a pending note past
   # the threshold a plain cd line meets READ INBOX NOW, and the block names no command,
@@ -3949,7 +3983,10 @@ def test_reminder_rotation():
     assert "End the turn with `poll`." in preview.REMINDERS
     assert "Publish your reports." in preview.REMINDERS
     assert "Never end a turn with unblocked tasks." in preview.REMINDERS
-    assert "Read PR checks: `gh pr checks <PR> --watch`." in preview.REMINDERS
+    assert (
+      "Read PR checks with `start_process`: `gh pr checks <PR> --watch`."
+      in preview.REMINDERS
+    )
     assert "`task-list` at turn start. Update it as work changes." in preview.REMINDERS
     assert "Grep-verify each edit." in preview.REMINDERS
     assert "Rebase on `origin/main` before pushing." in preview.REMINDERS

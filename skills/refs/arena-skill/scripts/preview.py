@@ -154,7 +154,7 @@ REMINDERS = (
   "Rebase on `origin/main` before pushing.",
   "No PR checks run? Rebase onto main first.",
   "Check the PR's CI before ending a pushed turn.",
-  "Read PR checks: `gh pr checks <PR> --watch`.",
+  "Read PR checks with `start_process`: `gh pr checks <PR> --watch`.",
   "Run `arena-preview`, not the full path.",
 )
 REMINDER_CURSOR = "reminder_cursor"
@@ -1701,6 +1701,46 @@ def poll_timeout_line(line):
         and words[index + 1] == "poll"
       ):
         return True
+  return False
+
+
+# The command families that wait on a pull request's checks. A bash call holds the
+# turn open while it waits, so the gate refuses the line and names the background
+# tool that takes the run instead.
+PR_CHECK_COMMANDS = (("pr", "checks"), ("run", "watch"))
+PR_CHECK_BLOCK = (
+  "PR CHECKS BLOCKED: a bash line must not run `gh pr checks` or `gh run watch`."
+  " Start the run with the `start_process` tool: `gh pr checks <PR> --watch`."
+)
+
+
+def pr_check_line(line):
+  """True when a command piece runs a PR-check wait the gate refuses.
+
+  Only a command piece counts, so a line that merely prints the words, like
+  `echo gh pr checks 7`, stays fine. A leading variable assignment or a chained
+  command is stripped, so `cd repo && gh pr checks 7` is caught too.
+  """
+  text = unquote_commands(line or "")
+  for separator in ("&&", "||", ";", "|", "\n"):
+    text = text.replace(separator, "\x00")
+  for piece in text.split("\x00"):
+    tokens = [token for token in piece.split() if token]
+    index = 0
+    while (
+      index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith("-")
+    ):
+      index += 1
+    if index >= len(tokens):
+      continue
+    head = tokens[index].rsplit("/", 1)[-1]
+    if head in INERT_COMMANDS or head == "bash":
+      continue
+    if head != "gh":
+      continue
+    words = tuple(tokens[index + 1 : index + 3])
+    if words in PR_CHECK_COMMANDS:
+      return True
   return False
 
 
@@ -4715,6 +4755,11 @@ def main():
     help="Warn when a serve names a port other than the default",
   )
   serve_tick.add_argument("line", help="The command line, as the hook read it")
+  pr_check_tick = commands.add_parser(
+    "pr-check-tick",
+    help="Refuse a bash line that runs a PR-check wait the background tool must take",
+  )
+  pr_check_tick.add_argument("line", help="The command line, as the hook read it")
   egress_tick = commands.add_parser(
     "egress-tick",
     help="Warn when a line fetches a host the sandbox egress filter blocks",
@@ -4906,6 +4951,11 @@ def main():
       if warning:
         print(warning, file=sys.stderr)
       return 0
+    if args.command == "pr-check-tick":
+      if pr_check_line(args.line):
+        print(PR_CHECK_BLOCK, flush=True)
+        return 1
+      return 0
     if args.command == "rename":
       try:
         old_id = Store(state_dir).resolve_id(args.old_id)
@@ -4941,6 +4991,9 @@ def main():
           " 1800 instead, so a cut wait still returns its listing.",
           flush=True,
         )
+        return 1
+      if pr_check_line(args.line):
+        print(PR_CHECK_BLOCK, flush=True)
         return 1
       try:
         allowed = Store(state_dir).gate(pending_only=args.push)

@@ -36,6 +36,9 @@ fi
 if [ "$1" = "egress-tick" ]; then
   exec __PYTHON__ __PREVIEW__ egress-tick "$2"
 fi
+if [ "$1" = "pr-check-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ pr-check-tick "$2"
+fi
 if [ "$1" = "commit-tick" ]; then
   # Not a pure classifier: it reads the repository's staged diff and the session
   # database. Forwarding it would let the host repository's own staged content
@@ -301,7 +304,7 @@ def test_an_unreachable_read_hears_the_proxy_line():
   assert result.stderr.count("carries the routes") == 1
   logs = run("gh run view 7 --log")
   assert "carries the routes" in logs.stderr, logs.stderr
-  plain = run("gh pr checks 7")
+  plain = run("echo plain")
   assert "carries the routes" not in plain.stderr
 
 
@@ -360,23 +363,19 @@ def test_a_branch_behind_main_hears_the_replay_line():
     assert "Replay your commits over main" not in result.stderr
 
 
-def test_a_checks_line_with_main_ahead_hears_the_moved_line():
-  # An empty listing on a checks call means main moved, so the line names the
-  # cause instead of leaving the agent to guess.
-  with tempfile.TemporaryDirectory() as directory:
-    repo = git_repo(Path(directory))
-    result = run("gh pr checks 7", cwd=str(repo))
-    assert "origin/main has moved" in result.stderr, result.stderr
-    assert "no checks will report" in result.stderr
-    # Once main is no longer ahead, the listing can fill, and the line stays away.
-    subprocess.run(
-      ["git", "update-ref", "refs/remotes/origin/main", "HEAD"],
-      cwd=repo,
-      capture_output=True,
-      check=True,
-    )
-    result = run("gh pr checks 7", cwd=str(repo))
-    assert "no checks will report" not in result.stderr
+def test_a_checks_line_meets_the_background_redirect():
+  # A PR-check wait belongs to a background process, so the gate refuses the bash
+  # line and names the tool that starts the run. A line that only prints the words
+  # or reads the pull request stays fine.
+  result = run("gh pr checks 7")
+  assert result.returncode == 130, result.stderr
+  assert "PR CHECKS BLOCKED" in result.stdout, result.stdout
+  assert "start_process" in result.stdout, result.stdout
+  watch = run("gh run watch 7")
+  assert watch.returncode == 130, watch.stderr
+  assert "PR CHECKS BLOCKED" in watch.stdout, watch.stdout
+  printed = run("echo gh pr checks 7")
+  assert "PR CHECKS BLOCKED" not in printed.stdout, printed.stdout
 
 
 def shallow_repo(root: Path, *, lone_tip: bool) -> Path:
