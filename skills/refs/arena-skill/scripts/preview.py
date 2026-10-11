@@ -1189,11 +1189,17 @@ def add_note_attachments(note, records):
   return note
 
 
+def bare_id(token):
+  """The ID as one token: the ticks `read` prints are accepted back, and blanks go."""
+  return str(token or "").strip().strip("`").strip()
+
+
 def format_pending_item(item):
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
   # A short ID names the record, and a short ID acks it, so the full UUID costs nothing here.
-  header = str(item.get("id", ""))[:7]
+  # The ticks hold the head together across any renderer between this line and its reader.
+  header = "`" + str(item.get("id", ""))[:7] + "`"
   if display_kind != "note":
     header += f" {display_kind}"
   if item.get("report_id"):
@@ -2136,7 +2142,11 @@ class Store:
       self.path.chmod(0o600)
 
   def id_matches(self, token):
-    """Every record whose ID equals the token or starts with it, across all four kinds."""
+    """Every record whose ID equals the token or starts with it, across all four kinds.
+
+    The token arrives bare or wrapped in the ticks `read` prints, and both reach one record.
+    """
+    token = bare_id(token)
     like = f"{token}%"
     found = []
     with closing(self.connect()) as db:
@@ -2158,6 +2168,7 @@ class Store:
     A prefix that names two records is a named conflict, and the error lists every match
     with its kind and title, so the caller can see which full ID to give instead.
     """
+    token = bare_id(token)
     matches = self.id_matches(token)
     exact = [item for item in matches if item[1]["id"] == token]
     if len(exact) == 1:

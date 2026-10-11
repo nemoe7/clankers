@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-11
 
+### Added
+
+#### preview
+
+- `arena-preview read` prints each pending ID head inside backticks, and every ID lookup accepts the wrapped form, so a head copied from the log acks itself.
+
 ### Fixed
 
 #### userscripts
