@@ -5198,6 +5198,9 @@ def main():
       # the page keeps the long call text only while a call started after the last
       # recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())
+      # The hook runs this after every bash call, so the heartbeat rides the one path a
+      # call always takes; the gate's own copy prints under `2>/dev/null` in the hook.
+      run_notices(state_dir, show_running=True)
       return 0
     if not args.command:
       parser.error("a command is required")
@@ -5251,7 +5254,9 @@ def main():
         return 1
       return 0
     if args.command == "gate":
-      run_notices(state_dir, show_running=True)
+      # Finished runs announce here; the running heartbeat rides the reminder alone, so a
+      # call prints one status line, not one per gated command plus one at exit.
+      run_notices(state_dir)
       if poll_timeout_line(args.line):
         print(
           "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."

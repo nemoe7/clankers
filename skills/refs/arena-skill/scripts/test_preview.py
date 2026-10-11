@@ -3818,6 +3818,33 @@ def test_a_detached_run_prints_one_status_line_per_call(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_the_reminder_carries_the_running_status_line():
+  """The hook reminder runs after every call, so the heartbeat reaches the agent."""
+  with tempfile.TemporaryDirectory() as heartbeat_dir:
+    preview.Store(heartbeat_dir, create=True)
+    preview.write_detached_placeholder(
+      heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
+    )
+    result = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "--reminder"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "run pr-checks running" in result.stderr, result.stderr
+    # The gate path stays quiet for a live run: the reminder owns the one line per call.
+    gate = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "gate", "--line", "git status"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
+    )
+    assert "run pr-checks running" not in gate.stderr, gate.stderr
+
+
 def test_shell_command_text_drops_the_launcher():
   """A block names the command itself, not the bash wrapper the agent shell started it with."""
   assert (

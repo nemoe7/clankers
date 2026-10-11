@@ -15,6 +15,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The detach scan names the common test runners beside `pytest`. The heads cover `npm`, `yarn` and `pnpm` test scripts, `make test`, `npx jest`, `go test`, `cargo test` and their kin. A build command such as `npm install` or `make build` stays a plain call.
 - `arena-preview run` becomes `arena-preview route`, the gate's helper, which starts the command detached and returns at once. The detected set carries no repository knowledge, so a check wait and a suite match in every repo the installer touched.
 - A line the harness wrapped in a login shell loses that wrapper before the detached replay. The child then starts in the working directory the harness set.
+- The status line for a live run now rides the hook reminder, so every bash call prints one. The gate's own copy never reached the inert lines a CI wait is made of.
 - `arena-preview init` prints `state <path> created`, or `present` for a database that was already there, so a restore reads what the call did.
 - The refusal covers the wrapped shapes of the same wait: a flag before the family, a wrapper, a subshell and a substitution. `env`, `command`, `timeout` and `xargs` count as wrappers, and the hook case reads the family words at any spacing.
 - `echo_task`, `Store.neighbours` and `scrollHistory` leave the tree: no production caller held them, and their coverage moves to the printed task and the board.
