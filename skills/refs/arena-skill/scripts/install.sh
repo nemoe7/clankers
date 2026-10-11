@@ -206,7 +206,7 @@ _arena_preview_gate() {
   # while it waits, so the gate refuses the line and names the tool that starts the
   # run instead.
   case "\$BASH_COMMAND" in
-    *"gh pr checks"*|*"gh run watch"*)
+    *gh*"pr"[[:space:]]*"checks"*|*gh*"run"[[:space:]]*"watch"*)
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" pr-check-tick "\$_arena_preview_line"
       case \$? in
         1) exit 130 ;;

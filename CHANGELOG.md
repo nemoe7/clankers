@@ -11,6 +11,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - The gate refuses a bash line that runs `gh pr checks` or `gh run watch`, and the refusal names the `start_process` call that takes the run. The checks-empty notice leaves with it, because a refused line never lists checks. The reminder names the tool too.
+- The refusal covers the wrapped shapes of the same wait: a flag before the family, a wrapper, a subshell and a substitution. `env`, `command`, `timeout` and `xargs` count as wrappers, and the hook case reads the family words at any spacing.
+- `echo_task`, `Store.neighbours` and `scrollHistory` leave the tree: no production caller held them, and their coverage moves to the printed task and the board.
 
 #### userscripts
 
@@ -19,6 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### house
 
 - The skill scripts, `ruff.toml`, and the changelog drop their session-local citations the same way: the fact stays and the ID goes.
+- The REFERENCE.md command table gains `rename` and `run`, and SKILL.md states the `arena-preview key` rule once instead of twice.
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
 

@@ -2927,10 +2927,11 @@ def test_task_list():
         raise AssertionError(message)
       except ValueError:
         pass
-    # The echo cuts a long detail to save the agent tokens; the stored row keeps it whole.
+    # The printed task cuts a long detail to save the agent tokens; the stored row keeps
+    # it whole.
     long_detail = "y" * 400
-    echoed = preview.echo_task(tasks_store.write_task("long", "Long", [long_detail]))
-    assert echoed["details"] == ["y" * 200 + "\u2026"]
+    printed = preview.format_task(tasks_store.write_task("long", "Long", [long_detail]))
+    assert f"- {'y' * 200}\u2026" in printed
     assert tasks_store.state()["tasks"]["upcoming"][-1]["details"] == [long_detail]
     # Clearing the last detail is refused: a task always carries at least one step.
     try:
@@ -2938,11 +2939,8 @@ def test_task_list():
       raise AssertionError("Clearing the last detail was accepted")
     except ValueError:
       pass
-    assert (
-      preview.echo_task(
-        tasks_store.write_task("hostile", "<img onerror=alert(1)>", ["Step one"])
-      )["title"]
-      == "<img onerror=alert(1)>"
+    assert "<img onerror=alert(1)>" in preview.format_task(
+      tasks_store.write_task("hostile", "<img onerror=alert(1)>", ["Step one"])
     )
 
 
@@ -3109,9 +3107,6 @@ def test_task_amend():
     fixed = amend_store.write_task("docs-archive")
     assert fixed["title"] == "Move to docs/archive/"
     assert fixed["details"] == ["one", "two"] and fixed["order"] == 1
-    assert amend_store.neighbours("docs-archive") == (None, "minify")
-    assert amend_store.neighbours("minify") == ("docs-archive", None)
-    assert amend_store.neighbours("never-stored") == (None, None)
     amend_rejections = (
       (
         lambda: amend_store.amend_task("docs-archive", "minify"),
@@ -3132,9 +3127,6 @@ def test_task_amend():
         raise AssertionError(message)
       except ValueError:
         pass
-    echoed = preview.echo_task(fixed, None, "minify")
-    assert echoed["prev"] is None and echoed["next"] == "minify"
-    assert preview.echo_task(fixed)["next"] is None
     # A copied list restores into an empty inbox, from an array or from one record per line.
     backup = json.dumps(amend_store.list_tasks())
     (Path(amend_dir) / "restored").mkdir()
@@ -3774,6 +3766,22 @@ def test_gate_bans_pr_checks_on_a_line():
   assert preview.pr_check_line("echo gh pr checks 7") is False
   assert preview.pr_check_line("gh pr view 7") is False
   assert preview.pr_check_line("gh run list") is False
+  # A flag before the family, a wrapper in front, a substitution and a subshell all name
+  # the same wait, so each is refused too.
+  assert preview.pr_check_line("gh -R nemoe7/clankers pr checks 7") is True
+  assert preview.pr_check_line("gh --repo nemoe7/clankers pr checks 7") is True
+  assert preview.pr_check_line("gh -R nemoe7/clankers run watch 7") is True
+  assert preview.pr_check_line("env gh pr checks 7") is True
+  assert preview.pr_check_line("command gh pr checks 7") is True
+  assert preview.pr_check_line("timeout 60 gh pr checks 7") is True
+  assert preview.pr_check_line("xargs -n1 gh pr checks") is True
+  assert preview.pr_check_line("result=$(gh pr checks 7)") is True
+  assert preview.pr_check_line("(gh pr checks 7)") is True
+  # A family word inside quotes is text, never a command, so a quoted reply stays fine,
+  # and a quoted substitution keeps its own hole: the body reads as text.
+  assert preview.pr_check_line('echo "gh pr checks 7"') is False
+  assert preview.pr_check_line("echo 'gh pr checks 7'") is False
+  assert preview.pr_check_line("gh pr view 7 --json checks") is False
   with tempfile.TemporaryDirectory() as checks_dir:
     checks_script = str(Path(preview.__file__))
 

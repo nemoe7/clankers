@@ -886,25 +886,6 @@ def task_row(row):
   return shaped
 
 
-def echo_task(record, before=None, after=None):
-  """The confirmation an agent gets back: whole title, details cut, neighbours named."""
-  echo = {
-    "id": record["id"],
-    "title": record["title"],
-    "status": record["status"],
-    "order": record["order"],
-    "prev": before,
-    "next": after,
-    "details": [
-      detail[:ECHO_DETAIL] + ("\u2026" if len(detail) > ECHO_DETAIL else "")
-      for detail in record["details"]
-    ],
-  }
-  if record.get("report_id"):
-    echo["report_id"] = record["report_id"]
-  return echo
-
-
 def saved_note_line(record):
   """Return the keys a saved note line carries, and nothing else."""
   if not isinstance(record, dict):
@@ -1708,6 +1689,18 @@ def poll_timeout_line(line):
 # turn open while it waits, so the gate refuses the line and names the background
 # tool that takes the run instead.
 PR_CHECK_COMMANDS = (("pr", "checks"), ("run", "watch"))
+# A wrapper in front of the head token changes only that token, so the scan steps past
+# one and the flags, assignments or seconds that follow it.
+PR_CHECK_WRAPPERS = (
+  "env",
+  "command",
+  "timeout",
+  "xargs",
+  "nice",
+  "nohup",
+  "stdbuf",
+  "sudo",
+)
 PR_CHECK_BLOCK = (
   "PR CHECKS BLOCKED: a bash line must not run `gh pr checks` or `gh run watch`."
   " Start the run with the `start_process` tool: `gh pr checks <PR> --watch`."
@@ -1717,12 +1710,13 @@ PR_CHECK_BLOCK = (
 def pr_check_line(line):
   """True when a command piece runs a PR-check wait the gate refuses.
 
-  Only a command piece counts, so a line that merely prints the words, like
-  `echo gh pr checks 7`, stays fine. A leading variable assignment or a chained
-  command is stripped, so `cd repo && gh pr checks 7` is caught too.
+  A wrapper (`env gh pr checks 7`), a flag before the family (`gh -R repo pr checks 7`),
+  a substitution, and a chained piece all count, so the head moves past the wrapper and
+  the family words are read wherever they sit after it. A line that merely prints the
+  words, like `echo gh pr checks 7`, stays fine, and `bash` keeps its own gate.
   """
   text = unquote_commands(line or "")
-  for separator in ("&&", "||", ";", "|", "\n"):
+  for separator in ("&&", "||", ";", "|", "\n", "$(", "`"):
     text = text.replace(separator, "\x00")
   for piece in text.split("\x00"):
     tokens = [token for token in piece.split() if token]
@@ -1731,16 +1725,27 @@ def pr_check_line(line):
       index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith("-")
     ):
       index += 1
+    while index < len(tokens):
+      head = tokens[index].lstrip("({\"'").rsplit("/", 1)[-1]
+      if head not in PR_CHECK_WRAPPERS:
+        break
+      index += 1
+      while index < len(tokens) and (
+        tokens[index].startswith("-")
+        or "=" in tokens[index]
+        or tokens[index].rstrip("smhd").isdigit()
+      ):
+        index += 1
     if index >= len(tokens):
       continue
-    head = tokens[index].rsplit("/", 1)[-1]
+    head = tokens[index].lstrip("({\"'").rsplit("/", 1)[-1]
     if head in INERT_COMMANDS or head == "bash":
       continue
     if head != "gh":
       continue
-    words = tuple(tokens[index + 1 : index + 3])
-    if words in PR_CHECK_COMMANDS:
-      return True
+    for position, word in enumerate(tokens[index + 1 : -1]):
+      if (word, tokens[index + 2 + position]) in PR_CHECK_COMMANDS:
+        return True
   return False
 
 
@@ -2672,27 +2677,6 @@ class Store:
       db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
       self.renumber(db)
     return task_row(row)
-
-  def neighbours(self, task_id):
-    """The IDs either side of one task inside its own div, or None at the ends."""
-    with closing(self.connect()) as db:
-      row = db.execute(
-        "SELECT status, position FROM tasks WHERE id = ?", (task_id,)
-      ).fetchone()
-      if row is None:
-        return None, None
-      status, position = row
-      before = db.execute(
-        "SELECT id FROM tasks WHERE status = ? AND position < ?"
-        " ORDER BY position DESC, id DESC LIMIT 1",
-        (status, position),
-      ).fetchone()
-      after = db.execute(
-        "SELECT id FROM tasks WHERE status = ? AND position > ?"
-        " ORDER BY position, id LIMIT 1",
-        (status, position),
-      ).fetchone()
-    return (before[0] if before else None, after[0] if after else None)
 
   @staticmethod
   def refuse_shared_id(db, table, other, identity):

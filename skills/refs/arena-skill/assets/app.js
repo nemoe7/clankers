@@ -79,11 +79,6 @@ function setConnection(state, text) {
   dot.setAttribute('aria-label', connectionLabel(state));
   $('#connection-text').textContent = text;
 }
-function scrollHistory(force) {
-  const history = $('#history');
-  const near = history.scrollHeight - history.scrollTop - history.clientHeight < 80;
-  if (force || near) history.scrollTop = history.scrollHeight;
-}
 // The header times the agent's wait: the server stamps the wait start, and the text ticks once a
 // second, so a long wait stays visible while it runs. The stamp is second-precision UTC, and the
 // trailing Z is added back for the browser's parser.

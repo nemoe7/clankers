@@ -16,7 +16,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 1. Run `<skill>/scripts/install.sh` from the repository root, once per session.
 2. Start the preview as Setup step 3 describes.
 3. Read the inbox with `arena-preview read`, and answer with `arena-preview ack`.
-4. When a call needs the recorded agent key, run `arena-preview key`; it prints the key, the host and the stamp and needs no server.
+4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp and needs no server.
 5. When a read cannot leave the sandbox, use the proxy routes in [When the proxy is needed](#when-the-proxy-is-needed) through `fetch_page`.
 
 ## Setup
@@ -48,8 +48,6 @@ arena-preview ack <id> --reply 'a reply with `backticks`'
 ```
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
-
-When a call needs the recorded agent key, such as after a 401 or from an owner question, run arena-preview key; it prints the key, the host and the stamp and needs no server.
 
 Run `task-list` at turn start. Before implementation, record approved work with `task <kebab-title-id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it. For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block. The task marker does not replace `ack`. Mark a task `--status finished` only after verification. For a task that waits on a report, add `--report <report-id>`; the owner's answer clears its blocked mark, and until then the task sorts first in its group.
 

@@ -301,10 +301,6 @@ def task_row(row):
 	shaped={'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5],'blocked':bool(row[6])if len(row)>6 else False}
 	if len(row)>7 and row[7]:shaped['report_id']=row[7]
 	return shaped
-def echo_task(record,before=None,after=None):
-	echo={'id':record['id'],'title':record['title'],'status':record['status'],'order':record['order'],'prev':before,'next':after,'details':[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in record['details']]}
-	if record.get('report_id'):echo['report_id']=record['report_id']
-	return echo
 def saved_note_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved note is an object')
 	return{key:record.get(key)for key in NOTE_LINE_KEYS}
@@ -580,19 +576,25 @@ def poll_timeout_line(line):
 			if word in('arena-preview','preview.py')and index+1<len(words)and words[index+1]=='poll':return True
 	return False
 PR_CHECK_COMMANDS=('pr','checks'),('run','watch')
+PR_CHECK_WRAPPERS='env','command','timeout','xargs','nice','nohup','stdbuf','sudo'
 PR_CHECK_BLOCK='PR CHECKS BLOCKED: a bash line must not run `gh pr checks` or `gh run watch`. Start the run with the `start_process` tool: `gh pr checks <PR> --watch`.'
 def pr_check_line(line):
 	text=unquote_commands(line or'')
-	for separator in('&&','||',';','|','\n'):text=text.replace(separator,'\x00')
+	for separator in('&&','||',';','|','\n','$(','`'):text=text.replace(separator,'\x00')
 	for piece in text.split('\x00'):
 		tokens=[token for token in piece.split()if token];index=0
 		while index<len(tokens)and'='in tokens[index]and not tokens[index].startswith('-'):index+=1
+		while index<len(tokens):
+			head=tokens[index].lstrip('({"\'').rsplit('/',1)[-1]
+			if head not in PR_CHECK_WRAPPERS:break
+			index+=1
+			while index<len(tokens)and(tokens[index].startswith('-')or'='in tokens[index]or tokens[index].rstrip('smhd').isdigit()):index+=1
 		if index>=len(tokens):continue
-		head=tokens[index].rsplit('/',1)[-1]
+		head=tokens[index].lstrip('({"\'').rsplit('/',1)[-1]
 		if head in INERT_COMMANDS or head=='bash':continue
 		if head!='gh':continue
-		words=tuple(tokens[index+1:index+3])
-		if words in PR_CHECK_COMMANDS:return True
+		for(position,word)in enumerate(tokens[index+1:-1]):
+			if(word,tokens[index+2+position])in PR_CHECK_COMMANDS:return True
 	return False
 def poll_hold_line(store):
 	age=stamp_age_seconds(store.newest_record_stamp())
@@ -808,12 +810,6 @@ class Store:
 			if row is None:raise ValueError(f"No task is stored under {task_id}")
 			db.execute('DELETE FROM tasks WHERE id = ?',(task_id,));self.renumber(db)
 		return task_row(row)
-	def neighbours(self,task_id):
-		with closing(self.connect())as db:
-			row=db.execute('SELECT status, position FROM tasks WHERE id = ?',(task_id,)).fetchone()
-			if row is None:return None,None
-			status,position=row;before=db.execute('SELECT id FROM tasks WHERE status = ? AND position < ? ORDER BY position DESC, id DESC LIMIT 1',(status,position)).fetchone();after=db.execute('SELECT id FROM tasks WHERE status = ? AND position > ? ORDER BY position, id LIMIT 1',(status,position)).fetchone()
-		return before[0]if before else None,after[0]if after else None
 	@staticmethod
 	def refuse_shared_id(db,table,other,identity):
 		if db.execute(f"SELECT 1 FROM {other} WHERE id = ?",(identity,)).fetchone():raise ValueError(f"{identity} already names a {other[:-1]}; a {table[:-1]} needs another ID, for example {identity}-{table[:-1]}")

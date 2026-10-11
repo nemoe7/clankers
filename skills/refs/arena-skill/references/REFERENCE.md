@@ -12,6 +12,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `note <id>` | Reread a stored note by its seven or full characters; a short ID that matches several notes prints every match |
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after the quiet note is acknowledged |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list while an upcoming task is unblocked, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
+| `run <name> -- <command>` | Record one command's output tail and its exit under a name, so a gate run started with `start_process` reports its verdict on the next call; wait for it with `poll` |
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line; quote it the same way |
 | `ack <id> --reply-file <path>` | Read the rendered reply from a file, so no shell quoting touches a backtick; `--note-file` reads the plain line the same way. The gate warns when an inline ack text holds a backtick inside double quotes |
@@ -21,6 +22,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; `--replace-tasks` replaces only tasks; an import older than the live state is refused unless `--force` |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
 | `unpublish <id>` | Remove a report from the tab; its answers and source survive. It refuses while the owner has an unseen answer ack, or within the minute after the owner's last look. A held call answers `409` |
+| `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `clear-state` | Empty every state table in place; the agent key record survives, the save file is refreshed to match, and a running server keeps its page token |
 
 Use complete IDs in CLI calls; cite their first seven characters in prose. `read` does not acknowledge an item. Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers. A repeated `ack` on an ID appends one more reply block and keeps the earlier ones. The same on a submission ID appends reply blocks to its receipt. An unknown ID fails the whole receipt batch. Answer later submissions under their own IDs. If the preview is unavailable, use `ACK:` in chat for delivered notes.
