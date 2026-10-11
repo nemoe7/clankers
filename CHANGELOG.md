@@ -16,7 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides. Version 1.10.21.
+- The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides.
+- The waiting line is read by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark. Version 1.10.22.
 
 ## 2026-10-10
 
