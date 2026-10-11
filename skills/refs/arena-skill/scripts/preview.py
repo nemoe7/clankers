@@ -285,7 +285,8 @@ def pr_failed_check(root="."):
 
   The serve runs this off the request path, so the debug trap never shells out to gh. A
   missing branch or pull request reads as an empty string. A gh fault reads as None, so
-  the worker keeps the last good cache instead of caching a false all-clear.
+  the worker keeps the last good cache instead of caching a false all-clear. Each check
+  name counts at its latest run alone, so a superseded twin never reads as a failure.
   """
   branch = workspace_branch(root)
   slug = repo_slug(root)
@@ -315,8 +316,9 @@ def pr_failed_check(root="."):
     if not head:
       return ""
     query = (
-      '[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled"'
-      ' or .conclusion=="timed_out") | .name] | join(", ")'
+      '[.check_runs[] | select(.status=="completed")] | sort_by(.id) | group_by(.name)'
+      ' | map(last) | map(select(.conclusion=="failure" or .conclusion=="cancelled"'
+      ' or .conclusion=="timed_out") | .name) | join(", ")'
     )
     checks = subprocess.run(
       ["gh", "api", f"repos/{slug}/commits/{head}/check-runs", "--jq", query],
@@ -332,20 +334,43 @@ def pr_failed_check(root="."):
     return None
 
 
+def refresh_pr_check(store, root):
+  """Read the branch pull request now and cache the result.
+
+  A gh fault keeps the value as it stands, and a caught set_meta fault does not raise.
+  """
+  failed = pr_failed_check(root)
+  if failed is None:
+    return
+  try:
+    store.set_meta(PR_CHECK_META, json.dumps({"failed": failed, "ts": now()}))
+  except Exception:
+    pass
+
+
+def poll_pr_check(store, root):
+  """Clear the cached check and read it again at the poll start.
+
+  The clear runs first, so no verdict older than this poll can reach the wait. A gh
+  fault writes nothing, so the value stays cleared and the wait reads no failure,
+  while the worker keeps retrying gh until a read succeeds.
+  """
+  try:
+    store.set_meta(PR_CHECK_META, json.dumps({"failed": "", "ts": now()}))
+  except Exception:
+    pass
+  refresh_pr_check(store, root)
+
+
 def pr_check_worker(store, root, stop):
   """Cache the branch pull request's failed checks until the server stops.
 
   The loop writes one meta row, so the trap and the poll read a fresh answer from the
-  state file instead of running gh on every call. A gh fault keeps the last good row,
-  and a caught set_meta fault does not end the worker.
+  state file instead of running gh on every call. The poll clears and reads the row at
+  its start, so the wait never reads a value older than the wait itself.
   """
   while not stop.is_set():
-    failed = pr_failed_check(root)
-    if failed is not None:
-      try:
-        store.set_meta(PR_CHECK_META, json.dumps({"failed": failed, "ts": now()}))
-      except Exception:
-        pass
+    refresh_pr_check(store, root)
     stop.wait(PR_CHECK_INTERVAL)
 
 
@@ -1745,6 +1770,8 @@ def poll_inbox(store, sleeper=None):
     flush=True,
   )
   store.start_poll()
+  # Clear and re-read the check at the poll start, so the wait never reads a stale value.
+  poll_pr_check(store, store.path.parent)
   try:
     for index in range(POLL_MAX_LOOPS):
       listing = store.read(include_quiet=False)

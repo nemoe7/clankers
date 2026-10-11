@@ -106,17 +106,21 @@ def pr_failed_check(root='.'):
 		if listed.returncode:return None
 		head=listed.stdout.strip()
 		if not head:return''
-		query='[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out") | .name] | join(", ")';checks=subprocess.run(['gh','api',f"repos/{slug}/commits/{head}/check-runs",'--jq',query],cwd=root,capture_output=True,text=True,check=False)
+		query='[.check_runs[] | select(.status=="completed")] | sort_by(.id) | group_by(.name) | map(last) | map(select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out") | .name) | join(", ")';checks=subprocess.run(['gh','api',f"repos/{slug}/commits/{head}/check-runs",'--jq',query],cwd=root,capture_output=True,text=True,check=False)
 		if checks.returncode:return None
 		return checks.stdout.strip()
 	except OSError:return None
+def refresh_pr_check(store,root):
+	failed=pr_failed_check(root)
+	if failed is None:return
+	try:store.set_meta(PR_CHECK_META,json.dumps({'failed':failed,'ts':now()}))
+	except Exception:pass
+def poll_pr_check(store,root):
+	try:store.set_meta(PR_CHECK_META,json.dumps({'failed':'','ts':now()}))
+	except Exception:pass
+	refresh_pr_check(store,root)
 def pr_check_worker(store,root,stop):
-	while not stop.is_set():
-		failed=pr_failed_check(root)
-		if failed is not None:
-			try:store.set_meta(PR_CHECK_META,json.dumps({'failed':failed,'ts':now()}))
-			except Exception:pass
-		stop.wait(PR_CHECK_INTERVAL)
+	while not stop.is_set():refresh_pr_check(store,root);stop.wait(PR_CHECK_INTERVAL)
 def cached_pr_failure(db):
 	row=db.execute('SELECT value FROM meta WHERE key = ?',(PR_CHECK_META,)).fetchone()
 	if not row:return''
@@ -596,7 +600,7 @@ def print_poll_hold(store):
 	if line is not None:print(line,file=sys.stderr,flush=True)
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};print('POLL: up to 1800 s. Ends early and empty? The tool timeout cut it; retry at 1800.',file=sys.stderr,flush=True);store.start_poll()
+	listing={'checked_at':None,'pending':[]};print('POLL: up to 1800 s. Ends early and empty? The tool timeout cut it; retry at 1800.',file=sys.stderr,flush=True);store.start_poll();poll_pr_check(store,store.path.parent)
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)

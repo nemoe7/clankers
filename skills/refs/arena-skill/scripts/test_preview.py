@@ -375,16 +375,54 @@ def test_pr_failed_check_reminder():
 
 
 def test_pr_failed_check_breaks_poll():
-  # The poll breaks at once on a cached failure, so the turn fixes the check now.
+  # The poll clears the cached value and reads the check again, so a fresh failure
+  # breaks the wait at once and the turn fixes the check now.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview.Store(root, create=True)
+    slept = []
+    with patch("preview.pr_failed_check", return_value="Quality"):
+      assert preview.poll_inbox(store, sleeper=slept.append) == 0
+    assert not slept, "the poll breaks before it sleeps"
+
+
+def test_pr_failed_check_cached_value_cleared():
+  # A value cached before the poll cannot break it: the poll clears it first, so only
+  # a fresh read can flag a failure.
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     store = preview.Store(root, create=True)
     store.set_meta(
       preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": preview.now()})
     )
-    slept = []
-    assert preview.poll_inbox(store, sleeper=slept.append) == 0
-    assert not slept, "the poll breaks before it sleeps"
+    with patch("preview.pr_failed_check", return_value=""):
+      assert preview.poll_inbox(store, sleeper=lambda seconds: None) == 1
+    assert "Pull request checks failed" not in store.reminder()
+
+
+def test_pr_failed_check_query_dedupes_runs():
+  # The check query counts each name at its latest completed run, so a cancelled twin
+  # or a superseded run never reads as a failure.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / ".git").mkdir()
+    (root / ".git" / "HEAD").write_text("ref: refs/heads/arena/test\n", "utf-8")
+    seen = []
+
+    def fake_run(argv, **kwargs):
+      seen.append(argv)
+      out = "abc123\n" if "list" in argv else ""
+      return subprocess.CompletedProcess(argv, 0, stdout=out, stderr="")
+
+    with (
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.subprocess.run", side_effect=fake_run),
+    ):
+      assert preview.pr_failed_check(str(root)) == ""
+    query = seen[-1][seen[-1].index("--jq") + 1]
+    assert "group_by(.name)" in query
+    assert "sort_by(.id)" in query
+    assert 'status=="completed"' in query
 
 
 def test_resolve_repo_root():
