@@ -44,9 +44,12 @@ Both bundles log under one tag, `[NemoUtils]`. The devtools console filter shows
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
+The bar serves a session. On a new chat the composer's own repository chip names the repository, and the tab title answers when neither is rendered.
+
 ```mermaid
 flowchart TB
   B[GitHub repo bar] --> N[repo name]
+  C[composer repository chip] --> N
   N --> T[fill text]
   F[fetch rules/ARENA.md] --> W[write the composer once]
   T --> W

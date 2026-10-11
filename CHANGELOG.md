@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-11
+
+### Fixed
+
+#### userscripts
+
+- The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides. Version 1.10.21.
+
 ## 2026-10-10
 
 ### Added
