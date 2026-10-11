@@ -1690,9 +1690,10 @@ def test_read_names_every_attachment():
     for record in named.uploads():
       assert f"{record['name']}: {record['path']}" in listing
     assert "here conversation page" in listing
-    # A note with no text and no attachment keeps the bare header.
+    # A note with no text and no attachment keeps the header alone, and the header carries
+    # the ticks that keep the head exact for the copy back into an ack.
     bare = preview.format_pending_item({"id": "bare", "text": ""})
-    assert bare == "bare"
+    assert bare == "`bare`"
     # A missing upload keeps its name and reports the loss.
     lost = preview.format_pending_item(
       {
@@ -1704,7 +1705,8 @@ def test_read_names_every_attachment():
       }
     )
     assert (
-      lost == "lost\ngone\nattachments: saved.html: /state/uploads/saved.html (missing)"
+      lost
+      == "`lost`\ngone\nattachments: saved.html: /state/uploads/saved.html (missing)"
     )
 
 
@@ -2777,6 +2779,11 @@ def test_a_short_id_prefix_names_one_record():
     short.note("abcd123-0289082512830518", "first note")
     assert short.resolve_id("abcd123") == "abcd123-0289082512830518"
     assert short.resolve_id("abcd123-0289082512830518") == "abcd123-0289082512830518"
+    # The head reaches the agent inside ticks, so the copied form names the same record.
+    assert short.resolve_id("`abcd123`") == "abcd123-0289082512830518"
+    assert preview.format_pending_item(short.read()["pending"][0]).startswith(
+      "`abcd123`"
+    )
     short.note("abcd123-9999000011112222", "second note, same head")
     try:
       short.resolve_id("abcd123")
