@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.28
+// @name         Arena.ai | NemoUtils | v1.10.29
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.28
+// @version      1.10.29
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1340,7 +1340,6 @@
     var LOG_SELECTOR = '[role="log"]';
     var MESSAGE_SELECTOR = '[data-agent-transcript-message="true"]';
     var ROW_BOX_SELECTOR = "div.flex.flex-col.gap-2";
-    var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
     var ACTION_SELECTOR = ":scope > div > div > div.mt-3.flex.flex-col.gap-3";
     var LIVE_ICON_SELECTOR = "svg.animate-pulse";
     var QUESTION_SELECTOR = '[role="radiogroup"]';
@@ -1398,33 +1397,16 @@
       return roots;
     }
 
-    // The spinner card is the bare canvas card that always sits last in a box while the
-    // page waits. It is not a row: the trim never counts it, never clears it, and the keep
-    // count stays the action rows the owner asked for.
-    function waitingCard(box) {
-      var kids = box && box.children ? box.children : [];
-      var last = kids.length ? kids[kids.length - 1] : null;
-      if (!last || typeof last.querySelectorAll !== "function") return null;
-      var canvases = last.querySelectorAll(WAITING_SELECTOR);
-      if (!canvases || !canvases.length) return null;
-      if (
-        typeof last.querySelector === "function" &&
-        (last.querySelector("button") || last.querySelector("pre") || last.querySelector("p"))
-      ) {
-        return null;
-      }
-      return last;
-    }
-
+    // The waiting card is no box child: it is a sibling of the message roots, so the rows
+    // of a root are exactly the children of its boxes. The trim never counts the card,
+    // never clears it, and the keep count stays the action rows the owner asked for.
     function rowsOfRoot(root) {
       var boxes = root.querySelectorAll(ROW_BOX_SELECTOR);
       var rows = [];
       var i;
       for (i = 0; i < boxes.length; i += 1) {
         if (boxes[i].closest && boxes[i].closest(ROW_BOX_SELECTOR) !== boxes[i]) continue;
-        var kids = Array.prototype.slice.call(boxes[i].children);
-        if (waitingCard(boxes[i])) kids = kids.slice(0, -1);
-        rows = rows.concat(kids);
+        rows = rows.concat(Array.prototype.slice.call(boxes[i].children));
       }
       return rows;
     }
@@ -2694,7 +2676,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.28";
+    var VERSION = "1.10.29";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2798,7 +2780,7 @@
     }
 
     // The row-kind icons: every bash, thinking, read, get_process_output and write row
-    // carries one, so a node that holds one is a row, never the bare spinner card. They can
+    // carries one, so a node that holds one is a row, never the bare waiting card. They can
     // sit in subchildren, so every look descends.
     // A Tailwind name holds a dot, like size-3.5, so its class selector needs the CSS
     // escape: the browser refuses the raw dot with a SyntaxError.
@@ -2809,29 +2791,26 @@
       "svg.text-text-tertiary.size-3\\.5",
     ];
 
-    // The spinner card is the bare canvas card: one 16x16 canvas and no label row. Only the
-    // waiting card carries the counter line, a span, so the resting card never marks. An
-    // action row carries the same canvas as its own icon beside its name, so a labelled
-    // row never reads as the card.
-    function spinnerCard(box) {
-      var kids = box && box.children ? box.children : [];
-      var last = kids.length ? kids[kids.length - 1] : null;
+    // The waiting card is the bare canvas card: one 16x16 canvas plus the rotating line, and
+    // no label row of its own. An action row carries the same canvas as its own icon, so a
+    // labelled node never reads as the card.
+    function waitingCard(node) {
       var i;
-      if (!last || !hasMatch(last, WAITING_SELECTOR)) {
+      if (!node || !hasMatch(node, WAITING_SELECTOR)) {
         return null;
       }
-      if (!hasMatch(last, "span")) {
+      if (!hasMatch(node, "span")) {
         return null;
       }
-      if (hasMatch(last, "button") || hasMatch(last, "pre") || hasMatch(last, PLAY_SELECTOR) || hasMatch(last, "p")) {
+      if (hasMatch(node, "button") || hasMatch(node, "pre") || hasMatch(node, PLAY_SELECTOR) || hasMatch(node, "p")) {
         return null;
       }
       for (i = 0; i < ROW_ICON_SELECTORS.length; i += 1) {
-        if (hasMatch(last, ROW_ICON_SELECTORS[i])) {
+        if (hasMatch(node, ROW_ICON_SELECTORS[i])) {
           return null;
         }
       }
-      return last;
+      return node;
     }
 
     function stopSignal(doc) {
@@ -2846,23 +2825,16 @@
       return false;
     }
 
-    // The newest row of the newest box: the spinner card is always last while it is up,
-    // so the newest action or message sits right before it.
+    // The newest row of the newest box: the page's newest action or message is the box's
+    // last child. The waiting card is a sibling of the message roots, so it never sits in a
+    // box and the pick needs no pop.
     function newestRow(doc) {
       var box = newestBox(doc);
       var kids = box && box.children ? Array.prototype.slice.call(box.children) : [];
       if (!kids.length) {
         return null;
       }
-      if (spinnerCard(box)) {
-        kids.pop();
-      }
-      var row = kids.length ? kids[kids.length - 1] : null;
-      // A card-only box leaves no row: the pick returns nothing and the title keeps the
-      // waiting mark.
-      if (!row) {
-        return null;
-      }
+      var row = kids[kids.length - 1];
       // A user message row is no agent row: its text wrapper carries the prose class and
       // would earn the fallback gear, so the pick skips it.
       if (typeof row.closest === "function" && row.closest(USER_MESSAGE_SELECTOR)) {
@@ -3152,14 +3124,26 @@
       return live;
     }
 
-    // The waiting card is the bare canvas card that sits last in the newest box. An action
-    // row carries the very same canvas as its own icon, so the canvas alone proves nothing:
-    // the card carries no label row of its own.
+    // The waiting card is a sibling of the message roots: it sits after the last root, so the
+    // signal walks the roots' own sibling chain, never a box's last child. An action row
+    // carries the very same canvas as its own icon, so the canvas alone proves nothing: the
+    // card carries no label row of its own.
     function waitingSignal(doc) {
       if (!doc || typeof doc.querySelectorAll !== "function") {
         return false;
       }
-      return !!spinnerCard(newestBox(doc));
+      var roots = doc.querySelectorAll(MESSAGE_SELECTOR);
+      if (!roots || !roots.length) {
+        return false;
+      }
+      var node = roots[roots.length - 1].nextElementSibling;
+      while (node) {
+        if (waitingCard(node)) {
+          return true;
+        }
+        node = node.nextElementSibling;
+      }
+      return false;
     }
 
     function heldEmojiFor(doc) {
@@ -3188,7 +3172,7 @@
       var live = stopSignal(doc);
       var speaking = speechGrowth(doc);
       // The two structural gates of the row model: the balloon class on the newest row, and
-      // the bare spinner card that sits last in the newest box.
+      // the bare waiting card after the last message root.
       var balloonRow = live ? newestRow(doc) : null;
       var balloon = !!balloonRow && messageRow(balloonRow);
       var waiting = live && waitingSignal(doc);

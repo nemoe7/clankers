@@ -434,26 +434,13 @@ function checkAutoScrollToggle(api) {
   console.log("ok transcript auto-scroll " + cases.length);
 }
 
-// The owner's structural fixtures both check functions share: the bare 16px canvas card
-// that always sits last in a box while the page waits, and the action row that carries the
-// very same canvas as its own icon beside its label.
+// The action row fixture both check functions share: it carries the very canvas the
+// waiting card carries, beside its own label, so the canvas alone never proves the card.
 var WAITING_CANVAS_SELECTOR = 'canvas[width="16"][height="16"]';
 
-function waitingCardNode() {
-  var canvas = { nodeName: "CANVAS" };
-  return {
-    children: [],
-    textContent: "",
-    classList: {
-      contains: function () { return false; },
-      add: function () {},
-    },
-    querySelectorAll: function (selector) { return selector === WAITING_CANVAS_SELECTOR ? [canvas] : []; },
-    querySelector: function (selector) { return selector === WAITING_CANVAS_SELECTOR ? canvas : null; },
-  };
-}
 function actionRowNode() {
   var canvas = { nodeName: "CANVAS" };
+  var line = { nodeName: "SPAN", textContent: "Running Bash" };
   var label = { textContent: "Running Bash" };
   var button = { querySelector: function (selector) { return selector === "p" ? label : null; } };
   return {
@@ -461,11 +448,13 @@ function actionRowNode() {
     querySelector: function (selector) {
       if (selector === "button") return button;
       if (selector === "p") return label;
+      if (selector === "span") return line;
       return null;
     },
     querySelectorAll: function (selector) {
       if (selector === WAITING_CANVAS_SELECTOR) return [canvas];
       if (selector === "button") return [button];
+      if (selector === "span") return [line];
       return [];
     },
   };
@@ -612,13 +601,9 @@ function checkTranscriptTrim(api) {
   var questionRemoved = trimPlan(logDoc([questionRoot, questionTail], true), "20");
   var detached = rows(4);
   detached[0].parentElement = null;
-  // The waiting card is not a row: it always sits last in the box, the keep count skips
-  // it, and the cut never clears it. A row that merely carries the same canvas still
-  // counts and still trims, because its label marks it as a row.
-  var cardRows = rows(25);
-  var waitingCard = waitingCardNode();
-  var cardRoot = messageRoot([rowBox(cardRows.concat([waitingCard]))], [actionContainer()]);
-  var cardRemoved = trimPlan(logDoc([cardRoot], true), "20");
+  // The waiting card is not a row: it sits after the message roots, never in a box, so the
+  // trim never counts it and never clears it. A row that merely carries the same canvas
+  // still counts and still trims, because its label marks it as a row.
   var canvasRows = rows(25);
   var canvasActionRow = actionRowNode();
   canvasActionRow.parentElement = {};
@@ -653,13 +638,6 @@ function checkTranscriptTrim(api) {
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
     [rowsOfRoot(messageRoot([rowBox(rows(2), true)])).length, 0],
-    // The waiting card stays out of the count and out of every cut: 25 rows plus the card
-    // keeps 20 rows and cuts 5, and the card itself stays whole.
-    [rowsOfRoot(messageRoot([rowBox(cardRows.concat([waitingCard]))])).length, 25],
-    [cardRemoved, 5],
-    [cleared(cardRows[0]), true],
-    [cleared(cardRows[24]), false],
-    [cleared(waitingCard), false],
     // A labelled row that carries the same canvas is a row: it counts, and the oldest six
     // fixture rows cut while the newest labelled canvas row stays.
     [rowsOfRoot(messageRoot([canvasBox])).length, 26],
@@ -910,16 +888,19 @@ function checkTabTitle(api) {
   var setPriorTitle = api.setPriorTitle;
 
   // The owner's structural row model: the newest action or message is the newest box's
-  // last child, and the bare spinner card sits behind it while the page waits. The
-  // fixtures answer row-level selectors at message level, so the shim hands the row that
-  // answers before the message does, and puts a real box around both.
+  // last child, and the bare card rides after the last message root while the page waits.
+  // The fixtures answer row-level selectors at message level, so the shim hands the row
+  // that answers before the message does, and puts a real box around both.
   var SPINNER_CANVAS = 'canvas[width="16"][height="16"]';
 
+  // The waiting card: the owner's markup carries a 16x16 canvas beside the rotating
+  // message span (JetBrains Mono, min-w-[52ch]) inside the card root that reads
+  // bg-surface-primary rounded-xl border w-full.
   function spinnerCard() {
     var canvas = { nodeName: "CANVAS" };
-    // The waiting card carries the counter line, a span.
-    var line = { nodeName: "SPAN" };
+    var line = { nodeName: "SPAN", className: "relative h-[19px] min-w-[52ch] shrink-0" };
     return {
+      className: "relative overflow-hidden bg-surface-primary rounded-xl border w-full border-transparent",
       children: [],
       querySelectorAll: function (selector) {
         if (selector === SPINNER_CANVAS) return [canvas];
@@ -931,7 +912,7 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The resting card keeps the canvas in the page with no counter line, so no mark.
+  // The resting card keeps the canvas in the page with no rotating line, so no mark.
   function restingCard() {
     var canvas = { nodeName: "CANVAS" };
     return {
@@ -960,7 +941,7 @@ function checkTabTitle(api) {
     list = message && typeof message.querySelectorAll === "function" ? message.querySelectorAll(selector) : [];
     return list || [];
   }
-  function boxedShim(message, waiting, resting) {
+  function boxedShim(message, waiting, card) {
     var node = rowNode(message);
     var row = node === message ? null : node;
     var box = { parentElement: message, children: [] };
@@ -974,7 +955,7 @@ function checkTabTitle(api) {
     } else if (!row.parentElement) {
       row.parentElement = box;
     }
-    box.children = waiting ? [row, resting ? restingCard() : spinnerCard()] : [row];
+    box.children = [row];
     box.querySelector = function (selector) { return rowQuery(node, message, selector); };
     box.querySelectorAll = function (selector) { return rowQueryAll(node, message, selector); };
     return {
@@ -993,23 +974,28 @@ function checkTabTitle(api) {
         );
       },
       textContent: message ? message.textContent : undefined,
+      // The waiting card is the sibling that rides after the last message root.
+      nextElementSibling: waiting ? card : null,
       __row: row,
       __box: box,
     };
   }
-  // A doc enters the structural world once: its messages answer ROW_BOX_SELECTOR with a
-  // box whose children are the row and, when the page waits, the bare spinner card.
+  // A doc enters the structural world once: its messages answer ROW_BOX_SELECTOR with a box
+  // whose children are the rows, and the waiting card rides after the last message as its
+  // next sibling, the way the owner's page carries it.
   function structural(doc) {
     if (!doc || doc.__structural) return doc;
     doc.__structural = true;
     var inner = doc.querySelectorAll.bind(doc);
     var shims = [];
-    function shimFor(message, waiting, resting) {
+    // The card after the roots: the resting page swaps it for the bare canvas card.
+    var card = doc.__card || (doc.__resting ? restingCard() : spinnerCard());
+    function shimFor(message, waiting) {
       var i;
       for (i = 0; i < shims.length; i += 1) {
         if (shims[i].message === message) return shims[i].shim;
       }
-      var shim = boxedShim(message, waiting, resting);
+      var shim = boxedShim(message, waiting, waiting ? card : null);
       shims.push({ message: message, shim: shim });
       return shim;
     }
@@ -1018,7 +1004,7 @@ function checkTabTitle(api) {
       if (selector !== MESSAGE_SELECTOR || !list || !list.length) return list;
       var out = [];
       for (var i = 0; i < list.length; i += 1) {
-        out.push(shimFor(list[i], doc.__waiting === true && i === list.length - 1, doc.__resting === true));
+        out.push(shimFor(list[i], doc.__waiting === true && i === list.length - 1));
       }
       return out;
     };
@@ -1870,17 +1856,16 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's waiting page: the newest box's last child is the bare canvas card. The
-  // optional messages sit in front of the trailing box, and the optional words keep the
-  // speech path alive.
+  // The owner's waiting page: the bare canvas card rides after the last message root. The
+  // optional messages sit in front of it, and the optional words keep the speech path alive.
   function waitingDoc(messages, words, withStop) {
     var list = (messages || []).concat([{ querySelectorAll: function () { return []; } }]);
-    var doc = canvasDoc([waitingCardNode()], list, words, withStop);
+    var doc = canvasDoc([], list, words, withStop);
     doc.__waiting = true;
     return doc;
   }
-  // The owner's balloon page: the agent's message row carries its row class, and the
-  // spinner card may sit behind it while the page waits.
+  // The owner's balloon page: the agent's message row carries its row class, and the bare
+  // card may ride after the roots while the page waits.
   function balloonDoc(classes, withCard) {
     var doc = canvasDoc([], [divMessage("Hello there", false, classes)], null, true);
     doc.__waiting = withCard !== false;
@@ -1940,13 +1925,16 @@ function checkTabTitle(api) {
       querySelectorAll: function () { return []; },
     };
     var box = {
-      children: [row, spinnerCard()],
+      children: [row],
       closest: function (selector) { return selector === ROW_BOX_SELECTOR ? box : null; },
       querySelector: function () { return null; },
       querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [panel] : []; },
     };
     var message = {
       querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [box, panel] : []; },
+      // The waiting card is the message root's next sibling, the way the owner's page
+      // carries it.
+      nextElementSibling: spinnerCard(),
     };
     return {
       __structural: true,
@@ -1959,16 +1947,16 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's resting page: the canvas card sits last with no counter line, so the
-  // hourglass must not mark.
+  // The owner's resting page: the card after the roots holds the canvas alone, no rotating
+  // line, so the hourglass must not mark.
   function restingDoc() {
     var doc = canvasDoc([], [{ querySelectorAll: function () { return []; } }], null, true);
     doc.__waiting = true;
     doc.__resting = true;
     return doc;
   }
-  // The owner's action page: the canvas sits in the row itself, so the box's last child is
-  // a labelled row, never the waiting card.
+  // The owner's action page: the canvas sits in the row itself, and no card rides after the
+  // roots, so a labelled row never reads as the waiting card.
   function actionCanvasDoc(messages, words, withStop) {
     var row = actionRowNode();
     var message = {
@@ -1976,19 +1964,24 @@ function checkTabTitle(api) {
       querySelectorAll: function (selector) { return row.querySelectorAll(selector); },
       contains: function (candidate) { return candidate === row; },
     };
-    return canvasDoc([row.querySelectorAll(WAITING_SELECTOR)[0]], (messages || []).concat([message]), words, withStop);
+    var doc = canvasDoc([], (messages || []).concat([message]), words, withStop);
+    doc.__waiting = true;
+    // A labelled action row can ride after the roots: its canvas never reads as the card.
+    doc.__card = actionRowNode();
+    return doc;
   }
   // The second bash glyph wears the same class pair, so the row-icon list must hold the
   // class selector itself, never a glyph path.
   var GLYPH_SELECTOR = "svg.text-text-tertiary.size-4";
   // The owner's bash row: the prompt glyph wears the same classes as the terminal glyph,
-  // and the row carries its canvas and the counter span beside it. The glyph alone marks
-  // the node as a row, so the row never reads as the waiting card.
-  function glyphRowDoc() {
+  // and the row carries its canvas and the rotating line beside it. A row-shaped node like
+  // this can ride after the roots; the glyph marks it as a row, so it never reads as the
+  // waiting card.
+  function glyphRowNode() {
     var canvas = { nodeName: "CANVAS" };
     var line = { nodeName: "SPAN", textContent: "Running Bash" };
     var glyph = { nodeName: "svg" };
-    var row = {
+    return {
       children: [glyph, canvas, line],
       querySelector: function (selector) {
         return selector === GLYPH_SELECTOR ? glyph : null;
@@ -2000,24 +1993,43 @@ function checkTabTitle(api) {
         return [];
       },
     };
+  }
+  function glyphRowDoc() {
+    var row = glyphRowNode();
     var message = {
       row: row,
       querySelectorAll: function (selector) { return row.querySelectorAll(selector); },
       contains: function (candidate) { return candidate === row; },
     };
-    return canvasDoc([canvas], [message], null, true);
+    var doc = canvasDoc([], [message], null, true);
+    doc.__waiting = true;
+    doc.__card = glyphRowNode();
+    return doc;
   }
-  // The box can hold the card alone while a turn opens: no row in front of it, so the pick
-  // finds nothing and the title still reads the waiting mark.
+  // The box can hold no row while a turn opens: the pick finds nothing, and the bare card
+  // that rides after the root still raises the waiting mark.
   function cardOnlyDoc() {
-    var card = spinnerCard();
-    var box = { children: [card] };
+    var box = {
+      children: [],
+      closest: function (selector) { return selector === ROW_BOX_SELECTOR ? box : null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; },
+    };
     var message = {
       querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [box] : []; },
+      // The card is the message root's next sibling, the way the owner's page carries it.
+      nextElementSibling: spinnerCard(),
     };
-    var doc = canvasDoc([], [message], null, true);
-    doc.__structural = true;
-    return doc;
+    return {
+      __structural: true,
+      title: "ChatGPT",
+      querySelector: function (selector) { return selector === REPO_LINK_SELECTOR ? repoLink : null; },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
   }
   function questionCard(label) {
     return {
@@ -2455,7 +2467,7 @@ function checkTabTitle(api) {
     [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
     [expireHold(), null],
     // The bash row can carry a second prompt glyph with the same classes, beside the canvas
-    // and the counter span. The glyph marks the node as a row, so no hourglass lands.
+    // and the rotating line. The glyph marks the node as a row, so no hourglass lands.
     [waitingSignal(glyphRowDoc()), false],
     [desiredTitle(glyphRowDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
     [expireHold(), null],
@@ -2517,12 +2529,12 @@ function checkTabTitle(api) {
     [desiredTitle(balloonDoc("not-prose", false)), TITLE_PREFIX + "clankers" + vtag + " " + THINK_EMOJI],
     [expireHold(), null],
     // A row's own panel carries the same box classes as the message box, so the pick stays
-    // on the outermost box: the balloon behind the panel keeps the mark and the card behind
-    // the row is read.
+    // on the outermost box: the balloon behind the panel keeps the mark, and the card after
+    // the root is read.
     [waitingSignal(nestedPanelDoc()), true],
     [desiredTitle(nestedPanelDoc()), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
-    // The resting card holds the canvas alone: no counter line, no hourglass.
+    // The resting card holds the canvas alone: no rotating line, no hourglass.
     [waitingSignal(restingDoc()), false],
     [desiredTitle(restingDoc()), TITLE_PREFIX + "clankers" + vtag],
     [expireHold(), null],
