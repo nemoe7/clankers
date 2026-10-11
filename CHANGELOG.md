@@ -12,6 +12,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - `arena-preview read` prints each pending ID head inside backticks, and every ID lookup accepts the wrapped form, so a head copied from the log acks itself.
 
+### Changed
+
+#### preview
+
+- The branch check runs once per `arena-preview poll`, on its own thread, and a failed check breaks the poll. The serve caches no check, and the reminder drops its failed-check line.
+
 ### Fixed
 
 #### userscripts

@@ -357,38 +357,45 @@ def test_stale_report_reminder():
     assert "form0" not in line, "a fresh form awaiting an answer is not stale"
 
 
-def test_pr_failed_check_reminder():
-  # A fresh cached failure names the failed check on the reminder; a stale cache reads as
-  # no failure, so the reminder stays quiet.
-  with tempfile.TemporaryDirectory() as directory:
-    root = Path(directory)
-    store = preview.Store(root, create=True)
-    store.set_meta(
-      preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": preview.now()})
-    )
-    assert "Pull request checks failed: Quality" in store.reminder()
-    old = (
-      datetime.now(timezone.utc) - timedelta(seconds=preview.PR_CHECK_TTL + 1)
-    ).isoformat()
-    store.set_meta(preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": old}))
-    assert "Pull request checks failed" not in store.reminder()
-
-
 def test_pr_failed_check_breaks_poll():
-  # The poll breaks at once on a cached failure, so the turn fixes the check now.
+  # The poll starts the branch check in the background and ends the wait on a failure,
+  # so the turn fixes the check now.
   with tempfile.TemporaryDirectory() as directory:
-    root = Path(directory)
-    store = preview.Store(root, create=True)
-    store.set_meta(
-      preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": preview.now()})
-    )
-    slept = []
-    assert preview.poll_inbox(store, sleeper=slept.append) == 0
-    assert not slept, "the poll breaks before it sleeps"
+    store = preview.Store(Path(directory), create=True)
+    with (
+      patch("preview.pr_failed_check", return_value="Quality"),
+      patch("preview.POLL_MAX_LOOPS", 5),
+    ):
+      assert preview.poll_inbox(store) == 0
+
+
+def test_pr_failed_check_does_not_outrank_a_note(capsys):
+  # A note that lands while the check runs still breaks the poll: the loop reads the
+  # note first, so the turn answers the owner before it reads the failure.
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory), create=True)
+    note_landed = threading.Event()
+
+    def slow_check(root="."):
+      note_landed.wait(5)
+      return "Quality"
+
+    def arriving_sleeper(seconds):
+      store.note("late-note", "Arrived during the wait")
+      note_landed.set()
+
+    with (
+      patch("preview.pr_failed_check", side_effect=slow_check),
+      patch("preview.POLL_MAX_LOOPS", 5),
+    ):
+      assert preview.poll_inbox(store, sleeper=arriving_sleeper) == 0
+  printed = capsys.readouterr().out
+  assert "Arrived during the wait" in printed
+  assert "PR CHECKS FAILED" not in printed
 
 
 def test_resolve_repo_root():
-  # The serve worker shells out to git and gh from the repository root, so the resolver
+  # The poll worker shells out to git and gh from the repository root, so the resolver
   # returns the checkout that holds .git as a string, never a Path attribute.
   root = preview.resolve_repo_root()
   assert isinstance(root, str)
@@ -397,7 +404,7 @@ def test_resolve_repo_root():
 
 def test_pr_failed_check_gh_error():
   # A gh non-zero exit reads as None, a fault, not an empty all-clear, so the worker
-  # keeps the last good cache instead of caching no failure.
+  # retries instead of reporting a false all-clear.
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     (root / ".git").mkdir()
@@ -410,37 +417,17 @@ def test_pr_failed_check_gh_error():
       assert preview.pr_failed_check(str(root)) is None
 
 
-def test_cached_pr_failure_naive_stamp():
-  # A naive timestamp must not crash the reminder; the bad cache reads as no failure.
-  with tempfile.TemporaryDirectory() as directory:
-    store = preview.Store(Path(directory), create=True)
-    naive = "2026-01-01T00:00:00"  # No offset: a naive stamp, so the aware diff raises.
-    store.set_meta(
-      preview.PR_CHECK_META, json.dumps({"failed": "Quality", "ts": naive})
-    )
-    assert "Pull request checks failed" not in store.reminder()
-
-
-def test_pr_check_worker_survives_set_meta_fault():
-  # A set_meta fault must not end the worker; it waits and writes on the next cycle.
-  with tempfile.TemporaryDirectory() as directory:
-    store = preview.Store(Path(directory), create=True)
-    stop = threading.Event()
-    writes = []
-
-    def fake_set_meta(key, value):
-      writes.append(key)
-      if len(writes) == 1:
-        raise sqlite3.OperationalError("database is locked")
-      stop.set()
-
-    with (
-      patch.object(preview.Store, "set_meta", side_effect=fake_set_meta),
-      patch("preview.pr_failed_check", return_value=""),
-      patch("preview.PR_CHECK_INTERVAL", 0),
-    ):
-      preview.pr_check_worker(store, ".", stop)
-    assert len(writes) >= 2, "the worker retried after the write fault"
+def test_pr_check_once_reports_a_failure():
+  # One read per poll: the failed names land in the poll's list, and a gh fault, read
+  # as unknown, records nothing.
+  result = []
+  with patch("preview.pr_failed_check", return_value="Quality"):
+    preview.pr_check_once(result, ".")
+  assert result == ["Quality"]
+  result.clear()
+  with patch("preview.pr_failed_check", return_value=None):
+    preview.pr_check_once(result, ".")
+  assert result == []
 
 
 def test_http_boundaries():

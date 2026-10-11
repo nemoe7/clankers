@@ -259,11 +259,6 @@ def main_identical(root="."):
     return False
 
 
-PR_CHECK_INTERVAL = 60  # seconds between the serve-side check reads
-PR_CHECK_TTL = 180  # a cached check older than this reads as stale
-PR_CHECK_META = "pr_check"  # the meta key that holds the cached result
-
-
 def repo_slug(root="."):
   """The owner/name of the origin remote, or an empty string when it will not parse."""
   try:
@@ -283,9 +278,9 @@ def repo_slug(root="."):
 def pr_failed_check(root="."):
   """The failed check names on the branch pull request, joined, or an empty string.
 
-  The serve runs this off the request path, so the debug trap never shells out to gh. A
-  missing branch or pull request reads as an empty string. A gh fault reads as None, so
-  the worker keeps the last good cache instead of caching a false all-clear.
+  The poll runs this off its wait path, so a gh read never delays a note. A missing
+  branch or pull request reads as an empty string. A gh fault reads as None, so the
+  next poll reads again instead of reporting a false all-clear.
   """
   branch = workspace_branch(root)
   slug = repo_slug(root)
@@ -332,37 +327,16 @@ def pr_failed_check(root="."):
     return None
 
 
-def pr_check_worker(store, root, stop):
-  """Cache the branch pull request's failed checks until the server stops.
+def pr_check_once(result, root):
+  """Append the branch pull request's failed check names, when any check failed.
 
-  The loop writes one meta row, so the trap and the poll read a fresh answer from the
-  state file instead of running gh on every call. A gh fault keeps the last good row,
-  and a caught set_meta fault does not end the worker.
+  The poll runs one of these on a thread off its wait path, so the gh read never
+  delays a note and the poll breaks on a failure it sees. A gh fault reads as unknown
+  and records nothing.
   """
-  while not stop.is_set():
-    failed = pr_failed_check(root)
-    if failed is not None:
-      try:
-        store.set_meta(PR_CHECK_META, json.dumps({"failed": failed, "ts": now()}))
-      except Exception:
-        pass
-    stop.wait(PR_CHECK_INTERVAL)
-
-
-def cached_pr_failure(db):
-  """The cached failed check names while the cache is fresh, else an empty string."""
-  row = db.execute("SELECT value FROM meta WHERE key = ?", (PR_CHECK_META,)).fetchone()
-  if not row:
-    return ""
-  try:
-    payload = json.loads(str(row[0]))
-    stamp = datetime.fromisoformat(str(payload.get("ts", "")))
-    age = (datetime.now(timezone.utc) - stamp).total_seconds()
-  except (ValueError, TypeError):
-    return ""
-  if age > PR_CHECK_TTL:
-    return ""
-  return str(payload.get("failed", ""))
+  failed = pr_failed_check(root)
+  if failed:
+    result.append(failed)
 
 
 # The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
@@ -1739,8 +1713,8 @@ def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   listing = {"checked_at": None, "pending": []}
-  # The wait always runs its span; only a new message or an unblocked task breaks
-  # it, and the check sits inside the loop so a task arriving mid-wait breaks too.
+  # The wait always runs its span; only a new message, a new task or a failed branch
+  # check breaks it, and each sits inside the loop so a late arrival breaks a wait too.
   # One heartbeat a second, so the page can light its dot while the agent waits here.
   # The wait can run its full span, but the bash tool's own timeout can cut the call
   # first. Say so up front: a call that ends early with nothing to read was cut, and
@@ -1751,6 +1725,12 @@ def poll_inbox(store, sleeper=None):
     flush=True,
   )
   store.start_poll()
+  # One branch check per poll, on its own thread: the gh read never delays a note, and
+  # the loop reads its result instead of a cached row.
+  failures = []
+  threading.Thread(
+    target=pr_check_once, args=(failures, resolve_repo_root()), daemon=True
+  ).start()
   try:
     for index in range(POLL_MAX_LOOPS):
       listing = store.read(include_quiet=False)
@@ -1768,11 +1748,9 @@ def poll_inbox(store, sleeper=None):
         print_poll_hold(store)
         return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
-      with closing(store.connect()) as db:
-        failed = cached_pr_failure(db)
-      if failed:
+      if failures:
         print(
-          f"PR CHECKS FAILED: {failed}. Fix the failed check before the next push.",
+          f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",
           flush=True,
         )
         print_poll_hold(store)
@@ -3581,7 +3559,6 @@ class Store:
         "SELECT count(*) FROM reports WHERE published_at IS NOT NULL"
       ).fetchone()[0]
       stale = self.stale_report_ids(db) if published >= STALE_REPORT_THRESHOLD else []
-      failed = cached_pr_failure(db)
       cursor = meta_number(db, REMINDER_CURSOR)
       # A new user item resets the count. An idle poll clears it; reading does not.
       polls = (
@@ -3609,8 +3586,6 @@ class Store:
     parts = [" ".join([*head, *unacked]).strip(), tail]
     if stale:
       parts.append("Unpublish stale reports: " + ", ".join(stale))
-    if failed:
-      parts.append("Pull request checks failed: " + failed)
     return " | ".join(parts).strip(" |")
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
@@ -5006,16 +4981,7 @@ def main():
           f"Preview on 0.0.0.0:{server.server_port}; state: {store.path}",
           flush=True,
         )
-        stop = threading.Event()
-        threading.Thread(
-          target=pr_check_worker,
-          args=(store, resolve_repo_root(), stop),
-          daemon=True,
-        ).start()
-        try:
-          server.serve_forever()
-        finally:
-          stop.set()
+        server.serve_forever()
     elif args.command == "read":
       require_server(store)
       store.notice_expired_key()
