@@ -22,6 +22,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The copy button keeps its seat on a touch top bar, beside Downloads. The clock and the theme toggle leave, and the four tab labels step down to hold the strip on one line.
 - Every text glyph gives way to Lucide geometry. The set covers the theme toggle, attach, the MD preview eye, refresh and both copy buttons.
 - A copy result shows Lucide's check and cross marks in place of the old glyphs.
+- The Reports toolbar holds one line at phone widths: the select shrinks and the three icon buttons step down beside it.
 - `arena-preview init` prints `state <path> created`, or `present` for a database that was already there, so a restore reads what the call did.
 - The refusal covers the wrapped shapes of the same wait: a flag before the family, a wrapper, a subshell and a substitution. `env`, `command`, `timeout` and `xargs` count as wrappers, and the hook case reads the family words at any spacing.
 - `echo_task`, `Store.neighbours` and `scrollHistory` leave the tree: no production caller held them, and their coverage moves to the printed task and the board.

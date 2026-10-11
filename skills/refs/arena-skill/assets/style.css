@@ -276,6 +276,12 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
   /* The footer wraps and the lone Send button would drop left; the left margin pulls it back
      to the right edge of the bottom line, under the status stack. */
   #send { margin-left: auto; }
+  /* The Reports toolbar held its select and one button on the first line and dropped the other
+     two to a second. The wrap and the buttons step down, so the select and the three buttons
+     share one line the way the log's toolbar does. */
+  .report-toolbar { flex-wrap: nowrap; gap: 8px; }
+  .select-wrap { flex: 1 1 auto; min-width: 0; max-width: none; }
+  #copy-report, #refresh-report, #unpublish-report { width: 36px; height: 36px; }
 }
 
 /* The copy button keeps its seat beside Downloads on a touch top bar: the strip holds one line,

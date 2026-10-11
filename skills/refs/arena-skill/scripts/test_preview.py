@@ -996,7 +996,18 @@ def test_http_boundaries():
       )
       assert page.index('id="downloads-tab"') < page.index('id="copy-state"')
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
-      assert "#send{margin-left:auto;}}" in page
+      # The Reports toolbar holds one line at phone widths, like the log's own: the select
+      # shrinks and the three buttons step down to make room.
+      assert (
+        ".report-toolbar{flex-wrap:nowrap;gap:8px;}"
+        ".select-wrap{flex:1 1 auto;min-width:0;max-width:none;}"
+        "#copy-report,#refresh-report,#unpublish-report{width:36px;height:36px;}"
+        in page
+      )
+      assert (
+        "#copy-report,#refresh-report,#unpublish-report{width:36px;height:36px;}}"
+        in page
+      )
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
