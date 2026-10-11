@@ -59,7 +59,7 @@ def reminder_tail(cursor,remaining):
 		tail=fill_reminder(REMINDERS[(cursor+step)%len(REMINDERS)],remaining)
 		if tail:return tail
 	return REMINDERS[cursor%len(REMINDERS)]
-REMINDERS='Refresh context: ARENA.md, SKILL.md, REFERENCE.md.','`task-list` at turn start. Update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP in reports; keep other work moving.','Publish your reports.','Never end a turn with unblocked tasks.','Unpublish stale reports.','End the turn with `poll`.','Grep-verify each edit.',TASK_REMINDER,'Rebase on `origin/main` before pushing.','No PR checks run? Rebase onto main first.',"Check the PR's CI before ending a pushed turn.",'Read PR checks with `start_process`: `gh pr checks <PR> --watch`.','Run `arena-preview`, not the full path.'
+REMINDERS='Refresh: ARENA.md, SKILL.md, REFERENCE.md.','`task-list` at turn start. Update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP in reports.','Publish your reports.','Never end a turn with unblocked tasks.','Unpublish stale reports.','End the turn with `poll`.','Grep-verify each edit.',TASK_REMINDER,'Rebase `origin/main` before pushing; empty checks mean it moved.',"Check the PR's CI before ending a pushed turn; run it with `start_process`.",'Run `arena-preview`, not the full path.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
 GATE_THRESHOLD=10
@@ -605,7 +605,7 @@ def print_poll_hold(store):
 	if line is not None:print(line,file=sys.stderr,flush=True)
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};print('POLL: up to 1800 s. Ends early and empty? The tool timeout cut it; retry at 1800.',file=sys.stderr,flush=True);store.start_poll();failures=[];threading.Thread(target=pr_check_once,args=(failures,resolve_repo_root()),daemon=True).start()
+	listing={'checked_at':None,'pending':[]};print('POLL: 1800 s; a cut call retries with the tool timeout at 1800.',file=sys.stderr,flush=True);store.start_poll();failures=[];threading.Thread(target=pr_check_once,args=(failures,resolve_repo_root()),daemon=True).start()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
@@ -1523,7 +1523,7 @@ def main():
 			for record_id in ids:
 				age=stamp_age_seconds(arrivals.get(record_id))
 				if age is not None and age>HOLD_STALE_SECONDS:minutes=int(age//60);print(f"HOLD: this ack answered a message {minutes} min old. The message might be stale. Hold further work until the owner confirms.",file=sys.stderr,flush=True)
-			print('need a task? '+'; '.join(f'task <id> "<title>" -m {i}'for i in ids))
+			print('task? '+'; '.join(f'task <id> "<title>" -m {i}'for i in ids))
 		elif args.command=='publish':
 			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id}, {count} fields.")
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)

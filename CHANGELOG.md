@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The gate refuses a bash line that runs `gh pr checks` or `gh run watch`, and the refusal names the `start_process` call that takes the run. The checks-empty notice leaves with it, because a refused line never lists checks. The reminder names the tool too.
 - The refusal covers the wrapped shapes of the same wait: a flag before the family, a wrapper, a subshell and a substitution. `env`, `command`, `timeout` and `xargs` count as wrappers, and the hook case reads the family words at any spacing.
 - `echo_task`, `Store.neighbours` and `scrollHistory` leave the tree: no production caller held them, and their coverage moves to the printed task and the board.
+- The reminder set drops to 16 entries and 558 characters, the poll disclaimer fits one shorter line, and the ack hint loses a word. The merged entries keep both of their facts.
 
 #### userscripts
 

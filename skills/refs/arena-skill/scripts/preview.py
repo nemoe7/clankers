@@ -138,23 +138,21 @@ def reminder_tail(cursor, remaining):
 
 
 REMINDERS = (
-  "Refresh context: ARENA.md, SKILL.md, REFERENCE.md.",
+  "Refresh: ARENA.md, SKILL.md, REFERENCE.md.",
   "`task-list` at turn start. Update it as work changes.",
   "Take the smallest open task next.",
   "Always push.",
   "`ask_user` on GH_TOKEN failure.",
   "Keep docs terse but clear.",
-  "Ask questions ASAP in reports; keep other work moving.",
+  "Ask questions ASAP in reports.",
   "Publish your reports.",
   "Never end a turn with unblocked tasks.",
   "Unpublish stale reports.",
   "End the turn with `poll`.",
   "Grep-verify each edit.",
   TASK_REMINDER,
-  "Rebase on `origin/main` before pushing.",
-  "No PR checks run? Rebase onto main first.",
-  "Check the PR's CI before ending a pushed turn.",
-  "Read PR checks with `start_process`: `gh pr checks <PR> --watch`.",
+  "Rebase `origin/main` before pushing; empty checks mean it moved.",
+  "Check the PR's CI before ending a pushed turn; run it with `start_process`.",
   "Run `arena-preview`, not the full path.",
 )
 REMINDER_CURSOR = "reminder_cursor"
@@ -1784,7 +1782,7 @@ def poll_inbox(store, sleeper=None):
   # first. Say so up front: a call that ends early with nothing to read was cut, and
   # the retry needs the tool timeout at 1800.
   print(
-    "POLL: up to 1800 s. Ends early and empty? The tool timeout cut it; retry at 1800.",
+    "POLL: 1800 s; a cut call retries with the tool timeout at 1800.",
     file=sys.stderr,
     flush=True,
   )
@@ -5106,7 +5104,7 @@ def main():
             file=sys.stderr,
             flush=True,
           )
-      print("need a task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in ids))
+      print("task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in ids))
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}, {count} fields.")

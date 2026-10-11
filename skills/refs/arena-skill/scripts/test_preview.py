@@ -3984,22 +3984,23 @@ def test_reminder_rotation():
   with tempfile.TemporaryDirectory() as rotate_dir:
     rotate_store = preview.Store(rotate_dir, create=True)
     rotate_script = str(Path(preview.__file__))
-    assert "Refresh context: ARENA.md, SKILL.md, REFERENCE.md." in preview.REMINDERS
-    assert "Ask questions ASAP in reports; keep other work moving." in preview.REMINDERS
+    assert "Refresh: ARENA.md, SKILL.md, REFERENCE.md." in preview.REMINDERS
+    assert "Ask questions ASAP in reports." in preview.REMINDERS
     assert "`ask_user` on GH_TOKEN failure." in preview.REMINDERS
     assert "Unpublish stale reports." in preview.REMINDERS
     assert "End the turn with `poll`." in preview.REMINDERS
     assert "Publish your reports." in preview.REMINDERS
     assert "Never end a turn with unblocked tasks." in preview.REMINDERS
     assert (
-      "Read PR checks with `start_process`: `gh pr checks <PR> --watch`."
+      "Check the PR's CI before ending a pushed turn; run it with `start_process`."
       in preview.REMINDERS
     )
     assert "`task-list` at turn start. Update it as work changes." in preview.REMINDERS
     assert "Grep-verify each edit." in preview.REMINDERS
-    assert "Rebase on `origin/main` before pushing." in preview.REMINDERS
-    assert "Check the PR's CI before ending a pushed turn." in preview.REMINDERS
-    assert "No PR checks run? Rebase onto main first." in preview.REMINDERS
+    assert (
+      "Rebase `origin/main` before pushing; empty checks mean it moved."
+      in preview.REMINDERS
+    )
     assert preview.TASK_REMINDER in preview.REMINDERS
     # One open task keeps every entry visible for the rotation checks.
     rotate_store.write_task("rotate-task", "Open work", ["Step one"])
@@ -4385,7 +4386,7 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
       # The early return names the task on stderr, so no session reads it as an empty wait.
-      assert printed[0].startswith("POLL: up to 1800 s.")
+      assert printed[0].startswith("POLL: 1800 s")
       # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
         "CONTINUE: unblocked task open-task. Work it or block it; do not end the turn."
@@ -4429,8 +4430,8 @@ def test_poll_retry_disclaimer():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
       builtins.print = original
     assert code == 1
-    assert printed[0].startswith("POLL: up to 1800 s.")
-    assert "retry at 1800" in printed[0]
+    assert printed[0].startswith("POLL: 1800 s")
+    assert "retries with the tool timeout at 1800" in printed[0]
 
 
 def test_skip_poll():
@@ -4487,7 +4488,7 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0].startswith("POLL: up to 1800 s.")
+      assert printed[0].startswith("POLL: 1800 s")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -4532,7 +4533,7 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0].startswith("POLL: up to 1800 s.")
+      assert printed[0].startswith("POLL: 1800 s")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
