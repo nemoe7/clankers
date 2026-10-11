@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.20
+// @name         Arena.ai | NemoUtils | v1.10.21
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.20
+// @version      1.10.21
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -187,7 +187,7 @@
   }
 
   // The global pause stops every feature where it stands and honors the pause on the next
-  // load; the resume brings back the features whose own switch is ON (form answer 74b99a5).
+  // load; the resume brings back the features whose own switch is ON.
   var PAUSE_KEY = "clankers-arena-userscript-paused";
   var PAUSE_LABEL = "Userscript";
   var pauseUnits = [];
@@ -1985,10 +1985,10 @@
     }
     var name = stateFileName(repo, branch, stamp, counts);
     var memory = stateRemembered(remembered);
-    // The owner's comparison lines (answers 1fcb4bd and 9602cb5): one short line per stamp pair,
+    // The owner's comparison lines: one short line per stamp pair,
     // note then task, with hashes in place of the long stamps. The pair compares first, so a
     // quiet tick shows its two lines before the no-op. A backward stamp still refuses the plain
-    // write and the newer local file stays (answer a898024). A forced save keeps no refusal, so
+    // write and the newer local file stays. A forced save keeps no refusal, so
     // it announces the update instead: the menu entry takes the state as it stands.
     var held = [];
     var keys = ["note", "task"];
@@ -2062,13 +2062,13 @@
     return route === "pick" ? "hint" : route;
   }
 
-  // The owner's line shapes (answers 1fcb4bd and 9602cb5): the fetch on a write, the no-op on a
+  // The owner's line shapes: the fetch on a write, the no-op on a
   // quiet tick, and short stamp hashes in place of the long stamps.
   function getLine(status, base) {
     return "GET " + status + " " + base;
   }
 
-  // The refused read names its own route, so the copy-state failure reads as a GET (answer 2f6b5a7).
+  // The refused read names its own route, so the copy-state failure reads as a GET.
   function copyLine(status, base) {
     return getLine(status, base + "/api/copy-state");
   }
@@ -2106,7 +2106,7 @@
     return ("0000000" + (hash >>> 0).toString(16)).slice(-7);
   }
 
-  // The owner's line texts for the save path (answer 5ca4f63): the no-file hint names the dialog
+  // The owner's line texts for the save path: the no-file hint names the dialog
   // it launches, a stale state reads as a history mismatch, and a closed picker reads as a plain
   // no-file line.
   var STATE_LINES = {
@@ -2556,7 +2556,7 @@
             return;
           }
           if (action === "block") {
-            // The card is the alert (answer 5ca4f63), so the blocked tick needs no line.
+            // The card is the alert, so the blocked tick needs no line.
             hintStateFile(manual);
             return;
           }
@@ -2669,7 +2669,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.20";
+    var VERSION = "1.10.21";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -3265,7 +3265,7 @@
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
       if (desired) {
-        // Only a change writes a line (answer e8fc4f6); a title already in place stays quiet.
+        // Only a change writes a line; a title already in place stays quiet.
         if (doc.title === desired) return false;
         logEvent(
           "title",
