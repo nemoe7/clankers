@@ -1029,6 +1029,13 @@ function checkTabTitle(api) {
     span.textContent = "Fetching https://example.test/page";
     return node("div", "flex items-center gap-1.5", [icon, span]);
   }
+  // The process-output row: a size-3 icon beside a plain secondary span, no button.
+  function processOutputRow() {
+    var icon = node("svg", "text-text-tertiary size-3 shrink-0", []);
+    var label = node("span", "text-text-secondary", []);
+    label.textContent = "get_process_output";
+    return node("div", "body-sm flex items-center gap-1.5", [icon, label]);
+  }
   function loneSearchRow(label) {
     var span = node("span", "body-sm text-text-tertiary min-w-0 truncate leading-4", []);
     span.textContent = label;
@@ -1208,6 +1215,7 @@ function checkTabTitle(api) {
   var fetchDonePage = page([agentRoot([fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")])]);
   var fetchFailedPage = page([agentRoot([fetchRow("text-text-tertiary size-4 shrink-0", "Fetch failed", null)])]);
   var searchLonePage = page([agentRoot([loneSearchRow('Searched for "node test runner"')])]);
+  var processOutputPage = page([agentRoot([processOutputRow()])]);
   var outputPage = page([agentRoot([commandRow("get_process_output")])]);
   var gearPage = page([agentRoot([commandRow("Agent chat")])]);
   var pollPage = page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])]);
@@ -1279,6 +1287,8 @@ function checkTabTitle(api) {
     [desiredTitle(fetchFailedPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
     [expireHold(), null],
     [desiredTitle(searchLonePage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(processOutputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
     [expireHold(), null],
     [desiredTitle(outputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
     [expireHold(), null],
@@ -1386,6 +1396,7 @@ function checkTabTitle(api) {
     [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "https://example.test/page", "https://example.test/page")), null],
     [liveLabel(batchFetchRow()), "Searching the web"],
     [liveLabel(batchFetchDoneRow()), "Searched the web"],
+    [liveLabel(processOutputRow()), "get_process_output"],
     [liveLabel(null), null],
     [polls("arena-preview poll --max 1"), true],
     [polls("python preview.py poll"), true],
