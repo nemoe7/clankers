@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.26
+// @name         Arena.ai | NemoUtils | v1.10.27
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.26
+// @version      1.10.27
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2694,7 +2694,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.26";
+    var VERSION = "1.10.27";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2809,7 +2809,8 @@
       "svg.text-text-tertiary.size-3\\.5",
     ];
 
-    // The spinner card is the bare canvas card: one 16x16 canvas and no label row. An
+    // The spinner card is the bare canvas card: one 16x16 canvas and no label row. Only the
+    // waiting card carries the counter line, a span, so the resting card never marks. An
     // action row carries the same canvas as its own icon beside its name, so a labelled
     // row never reads as the card.
     function spinnerCard(box) {
@@ -2817,6 +2818,9 @@
       var last = kids.length ? kids[kids.length - 1] : null;
       var i;
       if (!last || !hasMatch(last, WAITING_SELECTOR)) {
+        return null;
+      }
+      if (!hasMatch(last, "span")) {
         return null;
       }
       if (hasMatch(last, "button") || hasMatch(last, "pre") || hasMatch(last, PLAY_SELECTOR) || hasMatch(last, "p")) {

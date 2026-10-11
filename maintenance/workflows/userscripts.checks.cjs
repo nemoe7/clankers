@@ -917,6 +917,23 @@ function checkTabTitle(api) {
 
   function spinnerCard() {
     var canvas = { nodeName: "CANVAS" };
+    // The waiting card carries the counter line, a span.
+    var line = { nodeName: "SPAN" };
+    return {
+      children: [],
+      querySelectorAll: function (selector) {
+        if (selector === SPINNER_CANVAS) return [canvas];
+        return selector === "span" ? [line] : [];
+      },
+      querySelector: function (selector) {
+        if (selector === SPINNER_CANVAS) return canvas;
+        return selector === "span" ? line : null;
+      },
+    };
+  }
+  // The resting card keeps the canvas in the page with no counter line, so no mark.
+  function restingCard() {
+    var canvas = { nodeName: "CANVAS" };
     return {
       children: [],
       querySelectorAll: function (selector) { return selector === SPINNER_CANVAS ? [canvas] : []; },
@@ -943,7 +960,7 @@ function checkTabTitle(api) {
     list = message && typeof message.querySelectorAll === "function" ? message.querySelectorAll(selector) : [];
     return list || [];
   }
-  function boxedShim(message, waiting) {
+  function boxedShim(message, waiting, resting) {
     var node = rowNode(message);
     var row = node === message ? null : node;
     var box = { parentElement: message, children: [] };
@@ -957,7 +974,7 @@ function checkTabTitle(api) {
     } else if (!row.parentElement) {
       row.parentElement = box;
     }
-    box.children = waiting ? [row, spinnerCard()] : [row];
+    box.children = waiting ? [row, resting ? restingCard() : spinnerCard()] : [row];
     box.querySelector = function (selector) { return rowQuery(node, message, selector); };
     box.querySelectorAll = function (selector) { return rowQueryAll(node, message, selector); };
     return {
@@ -987,12 +1004,12 @@ function checkTabTitle(api) {
     doc.__structural = true;
     var inner = doc.querySelectorAll.bind(doc);
     var shims = [];
-    function shimFor(message, waiting) {
+    function shimFor(message, waiting, resting) {
       var i;
       for (i = 0; i < shims.length; i += 1) {
         if (shims[i].message === message) return shims[i].shim;
       }
-      var shim = boxedShim(message, waiting);
+      var shim = boxedShim(message, waiting, resting);
       shims.push({ message: message, shim: shim });
       return shim;
     }
@@ -1001,7 +1018,7 @@ function checkTabTitle(api) {
       if (selector !== MESSAGE_SELECTOR || !list || !list.length) return list;
       var out = [];
       for (var i = 0; i < list.length; i += 1) {
-        out.push(shimFor(list[i], doc.__waiting === true && i === list.length - 1));
+        out.push(shimFor(list[i], doc.__waiting === true && i === list.length - 1, doc.__resting === true));
       }
       return out;
     };
@@ -1942,6 +1959,14 @@ function checkTabTitle(api) {
       },
     };
   }
+  // The owner's resting page: the canvas card sits last with no counter line, so the
+  // hourglass must not mark.
+  function restingDoc() {
+    var doc = canvasDoc([], [], null, true);
+    doc.__waiting = true;
+    doc.__resting = true;
+    return doc;
+  }
   // The owner's action page: the canvas sits in the row itself, so the box's last child is
   // a labelled row, never the waiting card.
   function actionCanvasDoc(messages, words, withStop) {
@@ -2447,6 +2472,10 @@ function checkTabTitle(api) {
     // the row is read.
     [waitingSignal(nestedPanelDoc()), true],
     [desiredTitle(nestedPanelDoc()), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    // The resting card holds the canvas alone: no counter line, no hourglass.
+    [waitingSignal(restingDoc()), false],
+    [desiredTitle(restingDoc()), TITLE_PREFIX + "clankers" + vtag],
     [expireHold(), null],
     // The user message holds the same box classes, and its text wrapper carries prose. The
     // layout element keeps the row out of the pick, so no mark lands on the user's words.
