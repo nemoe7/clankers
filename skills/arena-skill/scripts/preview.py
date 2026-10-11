@@ -621,8 +621,18 @@ def write_detached_placeholder(state_dir,name,argv):path=run_record_path(state_d
 PR_CHECK_OTHER=0
 PR_CHECK_RUNS=1
 PR_CHECK_REFUSED=2
+SHELL_BASENAMES='bash','sh','dash','ksh','zsh'
+def agent_line(line):
+	words=(line or'').split(' ');head=words[0].rsplit('/',1)[-1]if words else''
+	if head not in SHELL_BASENAMES or len(words)<2:return line or''
+	first=words[1]
+	if not first.startswith('-')or'l'not in first:return line or''
+	if'c'in first:rest=words[2:]
+	elif words[2:3]==['-c']:rest=words[3:]
+	else:return line or''
+	return' '.join(rest).strip()or(line or'')
 def pr_check_wait(state_dir,line):
-	name=long_run_name(line)
+	line=agent_line(line);name=long_run_name(line)
 	if not name:return PR_CHECK_OTHER
 	if not detach_run(state_dir,name,['bash','-c',line]):print(DETACHED_BLOCK.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	print(DETACHED_NOTICE.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_RUNS

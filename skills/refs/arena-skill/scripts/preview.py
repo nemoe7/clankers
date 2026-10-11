@@ -1840,6 +1840,32 @@ PR_CHECK_RUNS = 1
 PR_CHECK_REFUSED = 2
 
 
+# The harness runs an agent line as `bash -l -c <the line>`, so the recorded command
+# line carries that wrapper. A replay of the wrapper reads its own `-c` argument as the
+# command and the child then loses the working directory the harness set, so the wrapper
+# leaves before the line runs anywhere else. Only a login shell is stripped: a `bash -c`
+# the agent wrote itself stays part of the line.
+SHELL_BASENAMES = ("bash", "sh", "dash", "ksh", "zsh")
+
+
+def agent_line(line):
+  """The agent's own line, without the login-shell wrapper the harness puts in front."""
+  words = (line or "").split(" ")
+  head = words[0].rsplit("/", 1)[-1] if words else ""
+  if head not in SHELL_BASENAMES or len(words) < 2:
+    return line or ""
+  first = words[1]
+  if not first.startswith("-") or "l" not in first:
+    return line or ""
+  if "c" in first:
+    rest = words[2:]
+  elif words[2:3] == ["-c"]:
+    rest = words[3:]
+  else:
+    return line or ""
+  return " ".join(rest).strip() or (line or "")
+
+
 def pr_check_wait(state_dir, line):
   """Detach the wait one line names, and say how the call must end.
 
@@ -1848,6 +1874,7 @@ def pr_check_wait(state_dir, line):
   `PR_CHECK_REFUSED`, so the hook keeps the refusal. Any other line returns
   `PR_CHECK_OTHER` and runs untouched. Each message rides stderr.
   """
+  line = agent_line(line)
   name = long_run_name(line)
   if not name:
     return PR_CHECK_OTHER

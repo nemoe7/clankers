@@ -2464,6 +2464,31 @@ def test_task_refuses_a_note_id_as_its_name():
     assert "proper name" in cli.stdout + cli.stderr
 
 
+def test_agent_line_drops_the_harness_wrapper():
+  """A detached replay runs the agent's line, so the harness's working directory holds."""
+  wrapped = "/bin/bash -l -c cd /home/user/repo && .venv/bin/python -m pytest -q"
+  assert (
+    preview.agent_line(wrapped) == "cd /home/user/repo && .venv/bin/python -m pytest -q"
+  )
+  assert preview.agent_line("bash -lc pytest -q") == "pytest -q"
+  # A line the agent writes itself keeps its own shell.
+  assert preview.agent_line("bash -c pytest -q") == "bash -c pytest -q"
+  assert preview.agent_line("pytest -q") == "pytest -q"
+  assert preview.agent_line("") == ""
+  # The tick records the stripped line, so the child starts in the right directory.
+  with tempfile.TemporaryDirectory() as wrapper_dir:
+    with patch.dict(os.environ, {"ARENA_PREVIEW_DETACH_DRY": "1"}):
+      assert preview.pr_check_wait(wrapper_dir, wrapped) == preview.PR_CHECK_RUNS
+    record = json.loads(
+      (Path(wrapper_dir) / "runs" / "pytest.json").read_text(encoding="utf-8")
+    )
+    assert record["argv"] == [
+      "bash",
+      "-c",
+      "cd /home/user/repo && .venv/bin/python -m pytest -q",
+    ]
+
+
 def test_init_reports_the_state_path():
   """The command names the database it used and whether the call made it."""
   with tempfile.TemporaryDirectory() as init_dir:
