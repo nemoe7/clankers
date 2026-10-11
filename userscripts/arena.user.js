@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.22
+// @name         Arena.ai | NemoUtils | v1.10.23
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.22
+// @version      1.10.23
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2691,7 +2691,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.22";
+    var VERSION = "1.10.23";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2786,11 +2786,13 @@
     // The row-kind icons: every bash, thinking, read, get_process_output and write row
     // carries one, so a node that holds one is a row, never the bare spinner card. They can
     // sit in subchildren, so every look descends.
+    // A Tailwind name holds a dot, like size-3.5, so its class selector needs the CSS
+    // escape: the browser refuses the raw dot with a SyntaxError.
     var ROW_ICON_SELECTORS = [
       "svg.text-text-tertiary.size-4",
-      "svg.text-text-secondary.h-3.5.w-3.5",
+      "svg.text-text-secondary.h-3\\.5.w-3\\.5",
       "svg.text-text-tertiary.size-3",
-      "svg.text-text-tertiary.size-3.5",
+      "svg.text-text-tertiary.size-3\\.5",
     ];
 
     // The spinner card is the bare canvas card: one 16x16 canvas and no label row. An

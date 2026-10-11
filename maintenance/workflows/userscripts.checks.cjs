@@ -879,6 +879,12 @@ function checkTabTitle(api) {
   var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var ROW_BOX_SELECTOR = api.ROW_BOX_SELECTOR;
+  var ROW_ICON_SELECTORS = api.ROW_ICON_SELECTORS;
+  // A Tailwind name holds a dot, like h-3.5, so its class selector needs the CSS escape:
+  // a raw dot before the digit threw a SyntaxError from the browser and killed the title.
+  function escapedClassDots(selector) {
+    return !/(?<!\\)\.[0-9]/.test(String(selector));
+  }
   var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
   var THINK_EMOJI = api.THINK_EMOJI;
   var rowSource = api.rowSource;
@@ -2292,6 +2298,12 @@ function checkTabTitle(api) {
     // The owner's waiting line: rotating words, one structural selector, one hourglass.
     [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
     [ROW_BOX_SELECTOR, "div.flex.flex-col.gap-2"],
+    // Every row-icon selector must survive the browser's own parse: the escaped dot rides
+    // the two Tailwind names that hold one.
+    [ROW_ICON_SELECTORS.every(escapedClassDots), true],
+    [escapedClassDots("svg.text-text-secondary.h-3.5.w-3.5"), false],
+    [ROW_ICON_SELECTORS[1], "svg.text-text-secondary.h-3\\.5.w-3\\.5"],
+    [ROW_ICON_SELECTORS[3], "svg.text-text-tertiary.size-3\\.5"],
     [waitingSignal(waitingDoc()), true],
     // The owner's action row carries the very same canvas as its icon, so the canvas
     // never reads as a waiting line: the row marks by its own label instead.
