@@ -32,7 +32,7 @@ Latest measurements as of 2026-10-11. `maintenance/check.py --update` rebuilds t
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `o200k_base` | 1,561 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,729 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 19,822 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,496 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 466 `tok` |
@@ -51,7 +51,7 @@ Latest measurements as of 2026-10-11. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,367 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,435 `B` |
-| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 130,579 `B` |
+| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 130,565 `B` |
 | `skills/squash/SKILL.md` | `o200k_base` | 1,389 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |
 | `workflows/init-docs.md` | `o200k_base` | 4,536 `tok` |

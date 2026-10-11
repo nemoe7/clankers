@@ -138,7 +138,7 @@ def reminder_tail(cursor, remaining):
 
 
 REMINDERS = (
-  "Refresh: ARENA.md, SKILL.md, REFERENCE.md.",
+  "Refresh: ARENA.md, SKILL.md.",
   "`task-list` at turn start. Update it as work changes.",
   "Take the smallest open task next.",
   "Always push.",

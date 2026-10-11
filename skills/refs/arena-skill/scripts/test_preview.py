@@ -4199,7 +4199,8 @@ def test_reminder_rotation():
   with tempfile.TemporaryDirectory() as rotate_dir:
     rotate_store = preview.Store(rotate_dir, create=True)
     rotate_script = str(Path(preview.__file__))
-    assert "Refresh: ARENA.md, SKILL.md, REFERENCE.md." in preview.REMINDERS
+    # The reference left the required reads, so the reminder names the two governing files.
+    assert "Refresh: ARENA.md, SKILL.md." in preview.REMINDERS
     assert "Ask questions ASAP in reports." in preview.REMINDERS
     assert "`ask_user` on GH_TOKEN failure." in preview.REMINDERS
     assert "Unpublish stale reports." in preview.REMINDERS
