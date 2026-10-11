@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.22
+// @name         Arena.ai | NemoUtils | v1.10.23
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.22
+// @version      1.10.23
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2693,13 +2693,13 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.22";
+    var VERSION = "1.10.23";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
-    // One mark for the agent's words: a message that grows holds the title with the solid
-    // speech balloon, whatever the turn state. The outline
-    // bubble that stood for the streaming state is folded into it.
+    // The chat row wears the speech balloon, and the reasoning row wears the thinking mark;
+    // the row kind decides both, with no growth read of the words.
     var AGENT_EMOJI = "\uD83D\uDCAC";
+    var REASONING_EMOJI = "\uD83D\uDCAD";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
     var PLAY_SELECTOR = "svg.lucide-play";
     var ACTION_EMOJI = [
@@ -2728,14 +2728,11 @@
     // Whether the held mark came from a row, the words or the waiting line: those marks end
     // with the stop control, so the hold must not outlive it.
     var heldEmojiNeedsTurn = false;
-    var lastSpeechMark = null;
-    var lastSpeechPath = null;
     var WAITING_EMOJI = "\uD83D\uDCA4";
     var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
     var WAITING_TEXT_SELECTOR = 'span[class*="whitespace-pre"]';
     var HOURGLASS_EMOJI = "\u23F3";
     var CAPTCHA_EMOJI = "\uD83D\uDEE1\uFE0F";
-    var SPEECH_SELECTOR = "[data-agent-word]";
     var POLL_RE = /\b(?:arena-)?preview(?:\.py)?\s+poll\b/;
 
     function repoFromLink(link) {
@@ -2759,35 +2756,95 @@
       return node ? String(node.textContent || "").replace(/\s+/g, " ").trim() : "";
     }
 
-    function rowFromIcon(icon) {
-      if (!icon) {
-        return null;
+    // The row reads all start at the last message root: the root chain tells the user's
+    // turn from the agent's, and the root's own container holds the rows.
+    function classNameOf(node) {
+      if (!node) {
+        return "";
       }
-      var button = typeof icon.closest === "function" ? icon.closest("button") : null;
-      if (button) {
-        return button.parentElement ? button.parentElement : button;
+      var value = node.className;
+      // SVG nodes carry an SVGAnimatedString; the class reads off its base value.
+      if (value && typeof value === "object") {
+        value = value.baseVal;
       }
-      var node = icon.parentElement || null;
-      var depth = 0;
-      while (node && depth < 4) {
-        if (collapsed(node)) {
-          return node;
-        }
-        node = node.parentElement || null;
-        depth += 1;
-      }
-      return null;
+      return String(value || "");
     }
 
-    function rowFromLabel(label) {
-      if (!label) {
+    function classOf(node, name) {
+      return (" " + classNameOf(node) + " ").indexOf(" " + name + " ") !== -1;
+    }
+
+    function childChain(node, steps) {
+      var current = node;
+      var i;
+      for (i = 0; i < steps; i += 1) {
+        if (!current) {
+          return null;
+        }
+        current = current.firstElementChild || null;
+      }
+      return current;
+    }
+
+    function lastRoot(doc) {
+      var roots =
+        typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
+      return roots.length ? roots[roots.length - 1] : null;
+    }
+
+    // A user message root: `#chat-message-<uuid> > div > div > div` is the raised card,
+    // and `div > div > div` under it ends on the `prose` body. The agent root is the
+    // negation of that fact: its chain holds no `div.prose` at that depth.
+    function userRoot(root) {
+      var card = childChain(root, 3);
+      if (!card || !classOf(card, "relative") || !classOf(card, "overflow-hidden")) {
+        return false;
+      }
+      var body = childChain(card, 3);
+      return !!(body && classOf(body, "prose"));
+    }
+
+    // The rows sit in `message_root > div > div > div.flex.flex-col.gap-2`.
+    function rowContainer(root) {
+      var node = childChain(root, 3);
+      if (!node || !classOf(node, "flex") || !classOf(node, "flex-col") || !classOf(node, "gap-2")) {
         return null;
       }
-      var button = typeof label.closest === "function" ? label.closest("button") : null;
-      if (button) {
-        return button.parentElement ? button.parentElement : button;
+      return node;
+    }
+
+    // The newest row is the second-to-last `div` of that container: `:nth-last-of-type(2)`
+    // counts div siblings only, so a non-div sibling cannot shift it.
+    function newestRow(root) {
+      var container = rowContainer(root);
+      var kids = container && container.children ? container.children : [];
+      var divs = [];
+      var i;
+      for (i = 0; i < kids.length; i += 1) {
+        var tag = kids[i] && kids[i].tagName ? String(kids[i].tagName).toUpperCase() : "DIV";
+        if (tag === "DIV") {
+          divs.push(kids[i]);
+        }
       }
-      return label.parentElement || label;
+      if (divs.length >= 2) {
+        return divs[divs.length - 2];
+      }
+      return divs.length ? divs[divs.length - 1] : null;
+    }
+
+    // The row kind: `prose` is an agent chat message, `not-prose` is a reasoning block,
+    // and a row with no class is an action row.
+    function rowKind(row) {
+      if (!row) {
+        return "none";
+      }
+      if (classOf(row, "prose")) {
+        return "chat";
+      }
+      if (classOf(row, "not-prose")) {
+        return "reasoning";
+      }
+      return "action";
     }
 
     function stopSignal(doc) {
@@ -2800,59 +2857,6 @@
         }
       }
       return false;
-    }
-
-    // The newest row of the newest message owns the mark: a finished row keeps
-    // its shimmer label and its pulse in the page, so an older row that still
-    // glows is history once a newer row lands, and never holds the title.
-    function newestRow(doc) {
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var newest = messages.length ? messages[messages.length - 1] : null;
-      if (!newest || typeof newest.querySelectorAll !== "function") {
-        return null;
-      }
-      // A live row streams under its shimmer label before a group label lands, so
-      // the shimmer counts as a label too; without it the mark freezes on the last
-      // labelled row. A pulsing label under done rows is news the same way, so the
-      // pulse counts too; without it a live edit under older done rows never matches.
-      var groups = newest.querySelectorAll(GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR);
-      return groups.length ? rowFromLabel(groups[groups.length - 1]) : null;
-    }
-
-    function rowIsNewest(doc, row) {
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var newestMessage = messages.length ? messages[messages.length - 1] : null;
-      // A row in an older message never marks: an empty newest message used to read as
-      // no newest row, and a stale row took the title back.
-      if (newestMessage && typeof newestMessage.contains === "function" && !newestMessage.contains(row)) {
-        return false;
-      }
-      var newest = newestRow(doc);
-      return !newest || newest === row;
-    }
-
-    function strongRow(doc) {
-      var labels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
-      var label = labels.length ? labels[labels.length - 1] : null;
-      var row = rowFromLabel(label);
-      // Only a mapped label outranks the waiting line; an unmapped one falls to the gear
-      // pass after the hourglass has had its say.
-      if (row && knownLabel(collapsed(label)) && rowIsNewest(doc, row)) {
-        return row;
-      }
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var i;
-      var icons;
-      for (i = messages.length - 1; i >= 0; i -= 1) {
-        icons = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(LIVE_ICON_SELECTOR) : [];
-        row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-        if (row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row)) {
-          return row;
-        }
-      }
-      icons = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_ICON_SELECTOR) : [];
-      row = rowFromIcon(icons.length ? icons[icons.length - 1] : null);
-      return row && knownLabel(liveLabel(row)) && rowIsNewest(doc, row) ? row : null;
     }
 
     // A row inside the answered question card raises no mark; the Summary header
@@ -2871,105 +2875,6 @@
         }
         node = node.parentElement || null;
         depth += 1;
-      }
-      return false;
-    }
-
-    function liveRow(doc) {
-      var row = strongRow(doc);
-      if (row) {
-        return row;
-      }
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var lastMessage = messages.length ? messages[messages.length - 1] : null;
-      var groups =
-        lastMessage && typeof lastMessage.querySelectorAll === "function"
-          ? lastMessage.querySelectorAll(GROUP_LABEL_SELECTOR)
-          : [];
-      row = rowFromLabel(groups.length ? groups[groups.length - 1] : null);
-      if (row && summaryCard(row)) {
-        return null;
-      }
-      if (row && stopSignal(doc) && (knownLabel(liveLabel(row)) || rowInMessage(doc, row))) {
-        return row;
-      }
-      // The gear pass: the newest labelled row inside a transcript message still marks when
-      // no word maps it, so rows like Agent chat earn the fallback instead of nothing.
-      var gearLabels = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(LIVE_LABEL_SELECTOR) : [];
-      if (!gearLabels.length) {
-        gearLabels = [];
-        var gearMessages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-        var j;
-        for (j = 0; j < gearMessages.length; j += 1) {
-          if (typeof gearMessages[j].querySelectorAll === "function") {
-            gearLabels = gearLabels.concat(
-              Array.prototype.slice.call(gearMessages[j].querySelectorAll(LIVE_LABEL_SELECTOR)),
-            );
-          }
-        }
-      }
-      row = rowFromLabel(gearLabels.length ? gearLabels[gearLabels.length - 1] : null);
-      return row && liveLabel(row) && rowIsNewest(doc, row) && rowInMessage(doc, row) ? row : null;
-    }
-
-    // A started process card: a play icon in the newest message. It runs
-    // with no stop control of its own, so the card alone is the news while the turn runs. A
-    // finished card keeps its play icon in the page, so an older card never marks, and the
-    // turn's stop control bounds the card like every other row.
-    function processRow(doc) {
-      if (!doc || typeof doc.querySelectorAll !== "function" || !stopSignal(doc)) {
-        return null;
-      }
-      var messages = doc.querySelectorAll(MESSAGE_SELECTOR);
-      var newest = messages.length ? messages[messages.length - 1] : null;
-      if (!newest || typeof newest.querySelectorAll !== "function") {
-        return null;
-      }
-      var icons = newest.querySelectorAll(PLAY_SELECTOR);
-      var card = icons.length ? rowFromIcon(icons[icons.length - 1]) : null;
-      // The card is news only while it is the newest row of the message: a later
-      // row of any kind takes the title back from the start-process card.
-      if (card && !rowIsNewest(doc, card)) {
-        return null;
-      }
-      // A spoken word after the card is newer still: the message keeps speaking,
-      // and its words outrank the card that opened it.
-      if (card && speechFollows(newest, card)) {
-        return null;
-      }
-      return card;
-    }
-
-    function speechFollows(message, card) {
-      var words = typeof message.querySelectorAll === "function" ? message.querySelectorAll(SPEECH_SELECTOR) : [];
-      var i;
-      for (i = 0; i < words.length; i += 1) {
-        // DOCUMENT_POSITION_PRECEDING: the card sits before this word in the page.
-        if (typeof words[i].compareDocumentPosition === "function" && words[i].compareDocumentPosition(card) & 2) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    function rowInMessage(doc, row) {
-      var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      var i;
-      for (i = 0; i < messages.length; i += 1) {
-        if (typeof messages[i].contains === "function" && messages[i].contains(row)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    function knownLabel(text) {
-      var lower = String(text || "").toLowerCase();
-      var i;
-      for (i = 0; i < ACTION_EMOJI.length; i += 1) {
-        if (lower.indexOf(ACTION_EMOJI[i][0]) !== -1) {
-          return true;
-        }
       }
       return false;
     }
@@ -3038,6 +2943,13 @@
     }
 
     function rowSource(row) {
+      var kind = rowKind(row);
+      if (kind === "chat") {
+        return "chat row";
+      }
+      if (kind === "reasoning") {
+        return "reasoning row";
+      }
       var label = liveLabel(row);
       var text = String(label || "").replace(/\s+/g, " ").trim().slice(0, 40);
       if (POLL_RE.test(rowCommand(row).toLowerCase())) {
@@ -3050,6 +2962,17 @@
       if (!row) {
         titleRowKind = "none";
         return null;
+      }
+      var kind = rowKind(row);
+      // The row kind carries the mark: the chat body takes the balloon and the reasoning
+      // block takes the thinking mark, with no label read of their own.
+      if (kind === "chat") {
+        titleRowKind = "chat";
+        return AGENT_EMOJI;
+      }
+      if (kind === "reasoning") {
+        titleRowKind = "reasoning";
+        return REASONING_EMOJI;
       }
       if (POLL_RE.test(rowCommand(row).toLowerCase())) {
         titleRowKind = "poll";
@@ -3078,30 +3001,6 @@
         return name;
       }
       return lastRepo && path === lastPath ? lastRepo : null;
-    }
-
-    // The agent's words grow: the newest data-agent-word message takes one more word. One
-    // predicate covers every turn state, so a single message never
-    // raises a second mark. The first look only sets the mark, so a page load or a chat
-    // switch stays quiet; the count rides the mark, so appended words count as growth.
-    function speechGrowth(doc) {
-      if (!doc || typeof doc.querySelectorAll !== "function") {
-        return false;
-      }
-      var words = doc.querySelectorAll(SPEECH_SELECTOR);
-      if (!words.length) {
-        lastSpeechMark = null;
-        lastSpeechPath = null;
-        return false;
-      }
-      var last = words[words.length - 1];
-      var mark = words.length + ":" + String(last.textContent || "");
-      var path = currentPath();
-      // A chat switch swaps the whole transcript; its own path is not a message.
-      var live = lastSpeechMark !== null && mark !== lastSpeechMark && path === lastSpeechPath;
-      lastSpeechMark = mark;
-      lastSpeechPath = path;
-      return live;
     }
 
     // The waiting line is a spinner canvas beside the rotating monospace text. An action row
@@ -3166,34 +3065,21 @@
         heldEmojiNeedsTurn = false;
         return QUESTION_EMOJI;
       }
-      // A finished row keeps its shimmer label or its pulsing icon in the page, so the row
-      // is news only while the stop control is up.
+      // Every row mark lives inside the turn: the read starts at the last message root, and
+      // the page keeps a finished turn's rows, so the stop control bounds the read.
       var live = stopSignal(doc);
-      var speaking = speechGrowth(doc);
-      titleTrace += " speech=" + (speaking ? 1 : 0) + " live=" + (live ? 1 : 0);
-      var speechHold =
-        live && heldEmoji === AGENT_EMOJI && Date.now() - heldEmojiAt < EMOJI_HOLD_MS;
+      titleTrace += " live=" + (live ? 1 : 0);
       var needsTurn = false;
       var row = null;
       var emoji = null;
-      // A growing message outranks its own rows, but the hold after it does not:
-      // an action row that appears during the quiet gap takes the title.
-      if (speaking) {
-        titleReason = "agent message";
-        heldEmoji = AGENT_EMOJI;
-        heldEmojiAt = Date.now();
-        heldEmojiNeedsTurn = false;
-        return AGENT_EMOJI;
-      }
-      row = live ? strongRow(doc) : null;
-      emoji = live ? emojiForRow(row) : null;
-      if (emoji) {
-        titleReason = rowSource(row);
-        titleRowSource = titleReason;
-        needsTurn = true;
-      }
-      if (!emoji) {
-        row = processRow(doc);
+      var root = live ? lastRoot(doc) : null;
+      // The user's message carries no mark: the agent root appears when the turn starts.
+      if (root && !userRoot(root)) {
+        row = newestRow(root);
+        // The answered question card raises no mark of its own.
+        if (row && summaryCard(row)) {
+          row = null;
+        }
         emoji = emojiForRow(row);
         if (emoji) {
           titleReason = rowSource(row);
@@ -3205,19 +3091,6 @@
         emoji = HOURGLASS_EMOJI;
         titleReason = "waiting line";
         needsTurn = true;
-      }
-      if (!emoji) {
-        row = live ? liveRow(doc) : null;
-        emoji = live ? emojiForRow(row) : null;
-        if (emoji) {
-          titleReason = rowSource(row);
-          titleRowSource = titleReason;
-          needsTurn = true;
-        }
-      }
-      if (!emoji && speechHold) {
-        emoji = AGENT_EMOJI;
-        titleReason = "agent message";
       }
       if (emoji) {
         heldEmoji = emoji;
@@ -3264,6 +3137,20 @@
     var titleRowKind = null;
     var lastRepo = null;
     var lastPath = null;
+    var TITLE_LOG_MS = 1000;
+    var lastTitleLine = "";
+    var lastTitleLineAt = 0;
+
+    function titleLog(reason, anchors) {
+      // One line per reason, once a second: the trace is a diagnostic, not a ticker.
+      var now = Date.now();
+      if (reason === lastTitleLine && now - lastTitleLineAt < TITLE_LOG_MS) {
+        return;
+      }
+      lastTitleLine = reason;
+      lastTitleLineAt = now;
+      logEvent("title", reason, anchors);
+    }
 
     function titleAnchors(doc) {
       // A row mark snapshots its row at selection; a re-derived row can be another one
@@ -3271,7 +3158,8 @@
       var rowText = titleRowSource;
       var kind = titleRowKind || "none";
       if (!rowText) {
-        var row = strongRow(doc) || processRow(doc) || liveRow(doc);
+        var root = lastRoot(doc);
+        var row = root && !userRoot(root) ? newestRow(root) : null;
         rowText = row ? rowSource(row) : "none";
         if (row) {
           emojiForRow(row);
@@ -3291,11 +3179,7 @@
       if (desired) {
         // Only a change writes a line (answer e8fc4f6); a title already in place stays quiet.
         if (doc.title === desired) return false;
-        logEvent(
-          "title",
-          (titleReason || "title") + " -> " + desired,
-          titleAnchors(doc),
-        );
+        titleLog((titleReason || "title") + " -> " + desired, titleAnchors(doc));
         appliedTitle = desired;
         doc.title = desired;
         return true;
@@ -3314,14 +3198,19 @@
       desiredTitle: desiredTitle,
       syncTitle: syncTitle,
       liveLabel: liveLabel,
-      liveRow: liveRow,
-      strongRow: strongRow,
-      processRow: processRow,
       stopSignal: stopSignal,
+      classOf: classOf,
+      childChain: childChain,
+      lastRoot: lastRoot,
+      userRoot: userRoot,
+      rowContainer: rowContainer,
+      newestRow: newestRow,
+      rowKind: rowKind,
+      summaryCard: summaryCard,
       BASH_EMOJI: BASH_EMOJI,
       PLAY_SELECTOR: PLAY_SELECTOR,
-      speechGrowth: speechGrowth,
       AGENT_EMOJI: AGENT_EMOJI,
+      REASONING_EMOJI: REASONING_EMOJI,
       waitingSignal: waitingSignal,
       emojiForRow: emojiForRow,
       actionEmoji: actionEmoji,
@@ -3334,7 +3223,6 @@
       LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
       GROUP_LABEL_SELECTOR: GROUP_LABEL_SELECTOR,
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
-      SPEECH_SELECTOR: SPEECH_SELECTOR,
       WAITING_SELECTOR: WAITING_SELECTOR,
       WAITING_TEXT_SELECTOR: WAITING_TEXT_SELECTOR,
       HOURGLASS_EMOJI: HOURGLASS_EMOJI,
@@ -3347,10 +3235,6 @@
       openDialog: openDialog,
       rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
-      resetSpeech: function () {
-        lastSpeechMark = null;
-        lastSpeechPath = null;
-      },
       forgetPath: function () { lastPath = "/elsewhere"; },
       setPriorTitle: function (value) { priorTitle = value; },
     })) {
@@ -3432,8 +3316,6 @@
     function onRoute() {
       lastRepo = null;
       lastPath = null;
-      lastSpeechMark = null;
-      lastSpeechPath = null;
       syncTitle(document);
     }
     window.addEventListener("popstate", onRoute);

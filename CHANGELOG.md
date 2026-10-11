@@ -28,6 +28,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides.
 - The waiting line is read by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark. Version 1.10.22.
+- The tab title read a chat body that kept growing to raise the balloon, so a re-render could pass for new words. The read now starts at the last message root and takes its newest row.
+- The newest row's kind picks the mark: a `prose` body raises 💬, a `not-prose` reasoning block raises 💭, and a user root raises none. An action row keeps its label emoji, and every mark ends with the stop control. Version 1.10.23.
 
 ## 2026-10-10
 

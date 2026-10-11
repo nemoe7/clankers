@@ -706,13 +706,12 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 }
 {
   const { test } = require("node:test");
-  // An agent chat message that lands with no turn open raises the solid speech balloon, while
-  // a chat switch never reads as a message.
-  test("agent message mark", async () => {
+  // The tab title reads the last message root: the newest row's kind carries the mark, a user
+  // root carries none, and every row mark ends with the stop control.
+  test("tab title row mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };
     const logged = [];
-    const words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
     const intervals = [];
     const timeouts = new Map();
     let nextTimeout = 0;
@@ -730,6 +729,103 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         return null;
       },
     };
+    function classOf(node, name) {
+      return (" " + (node.className || "") + " ").indexOf(" " + name + " ") !== -1;
+    }
+    // The selectors the tab-title read uses, answered the way a real tree answers them.
+    function matches(node, selector) {
+      if (!node || !node.attrs) return false;
+      if (selector === "[data-agent-transcript-message]") return node.attrs["data-agent-transcript-message"] !== undefined;
+      if (selector === "svg.lucide-play") return node.tagName === "SVG" && classOf(node, "lucide-play");
+      if (selector === 'p[style*="text-shimmer"]') return String(node.attrs.style || "").indexOf("text-shimmer") !== -1;
+      if (selector === ".animate-pulse") return classOf(node, "animate-pulse");
+      if (selector === "span.text-text-secondary") return node.tagName === "SPAN" && classOf(node, "text-text-secondary");
+      if (selector === "button") return node.tagName === "BUTTON";
+      if (selector === "p") return node.tagName === "P";
+      if (selector === "pre") return node.tagName === "PRE";
+      if (selector === "button[aria-label]") return node.tagName === "BUTTON" && node.attrs["aria-label"] !== undefined;
+      return false;
+    }
+    function findAll(root, selector) {
+      const hits = [];
+      (function walk(item) {
+        (item.children || []).forEach((kid) => {
+          if (matches(kid, selector)) hits.push(kid);
+          walk(kid);
+        });
+      })(root);
+      return hits;
+    }
+    function node(tag, className, kids) {
+      const el = {
+        tagName: String(tag).toUpperCase(),
+        className: className || "",
+        children: kids || [],
+        parentElement: null,
+        textContent: "",
+        attrs: {},
+      };
+      el.getAttribute = (name) => (Object.prototype.hasOwnProperty.call(el.attrs, name) ? el.attrs[name] : null);
+      el.querySelectorAll = (selector) => findAll(el, selector);
+      el.querySelector = (selector) => {
+        const hits = findAll(el, selector);
+        return hits.length ? hits[0] : null;
+      };
+      Object.defineProperty(el, "firstElementChild", {
+        get: () => (el.children.length ? el.children[0] : null),
+      });
+      el.children.forEach((kid) => { kid.parentElement = el; });
+      return el;
+    }
+    // Both shapes follow the session dump: the agent root ends in the row container, and the
+    // user root ends in the raised card with the `prose` body three levels down.
+    function agentRoot(rowList) {
+      const container = node("div", "flex flex-col gap-2", rowList);
+      const root = node("div", "", [
+        node("div", "relative overflow-hidden bg-surface-primary rounded-xl border w-full border-transparent", [
+          node("div", "px-3 pb-3", [container]),
+        ]),
+      ]);
+      root.attrs["data-agent-transcript-message"] = "true";
+      root.attrs["data-chat-message-id"] = "chat-agent";
+      return root;
+    }
+    function userRootNode() {
+      const body = node("div", "prose prose-pre:bg-transparent text-wrap break-words", []);
+      const card = node(
+        "div",
+        "relative overflow-hidden bg-surface-raised rounded-lg w-fit max-w-[min(70%,768px)] border-transparent ms-0",
+        [node("div", "px-3 text-text-primary body-base py-2", [node("div", "flex flex-col gap-2", [body])])],
+      );
+      const root = node("div", "", [
+        node("div", "", [node("div", "group flex min-w-0 flex-col items-end gap-1", [card])]),
+      ]);
+      root.attrs["data-agent-transcript-message"] = "true";
+      root.attrs["data-chat-message-id"] = "chat-user";
+      return root;
+    }
+    function chatRow() {
+      return node("div", "prose", []);
+    }
+    function labelRow(label, command) {
+      const span = node("span", "text-text-secondary body-sm", []);
+      span.textContent = label;
+      const pre = node("pre", "", []);
+      pre.textContent = command || "";
+      const button = node("button", "flex w-full", [span, pre]);
+      button.attrs["aria-label"] = "Collapse";
+      return node("div", "", [button]);
+    }
+    const stopButton = {
+      getAttribute: (name) => (name === "aria-label" ? "Stop generating" : null),
+      // The editor-content read walks every labelled button, so the mock answers closest.
+      closest: () => null,
+      parentElement: null,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    let roots = [agentRoot([chatRow()])];
+    let stop = true;
     const context = {
       console: { log: (...args) => logged.push(args.join(" ")) },
       URL,
@@ -745,8 +841,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
           return null;
         },
         querySelectorAll(selector) {
-          // No stop control stands on this page: the turn is over.
-          if (selector === "[data-agent-word]") return words.slice();
+          if (selector === "[data-agent-transcript-message]") return roots.slice();
+          if (selector === "button[aria-label]") return stop ? [stopButton] : [];
           return [];
         },
         get title() { return page.title; },
@@ -786,26 +882,33 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
 
     sync();
-    assert.equal(page.title, "Arena | clankers", `The first look sets the mark in silence: ${page.title}`);
-    // A chat switch swaps the whole transcript, so its fresh words are not a new message.
+    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The chat row raises the balloon: ${page.title}`);
+    // The agent root appears when a turn starts; a user root carries no mark, and the hold
+    // dies with the stop control.
     goto("/c/two");
-    words.push({ textContent: "elsewhere" });
+    roots = [userRootNode()];
+    stop = false;
     sync();
-    assert.equal(page.title, "Arena | clankers", `A chat switch stays quiet: ${page.title}`);
-    // On the new path a further word is a message again.
-    words.push({ textContent: "here" });
+    assert.equal(page.title, "Arena | clankers", `The user root stays quiet: ${page.title}`);
+    // A finished turn keeps its rows in the page, so a row mark needs the stop control.
+    roots = [agentRoot([labelRow("Bash sleep 25", "$ npm test")])];
     sync();
-    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `A message on the new path raises the balloon: ${page.title}`);
-    // The hold bridges the pause between two bursts of words.
+    assert.equal(page.title, "Arena | clankers", `A finished turn drops the row mark: ${page.title}`);
+    // The same page with the turn open raises the bash mark.
+    stop = true;
     sync();
-    assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The hold bridges the pause: ${page.title}`);
-    // The title line names the row kind and the hierarchy trace that chose the mark.
+    assert.equal(page.title, "Arena | clankers \uD83D\uDDA5\uFE0F", `The bash row raises its mark: ${page.title}`);
+    // The title line names the row kind and the anchors, and the speech read is gone.
     const titleLines = logged.filter((line) => line.indexOf("[title]") !== -1);
     assert.ok(titleLines.length > 0, "the title path logs a line");
     assert.ok(
-      titleLines.some((line) => line.indexOf("kind=") !== -1 && line.indexOf("speech=1") !== -1),
-      `the title log carries the row kind and the trace: ${titleLines.join(" | ")}`,
+      titleLines.some((line) => line.indexOf("kind=action") !== -1),
+      `the title log carries the row kind: ${titleLines.join(" | ")}`,
     );
-    console.log("ok agent message mark: silent first look, growth burns, a chat switch stays quiet");
+    assert.ok(
+      titleLines.some((line) => line.indexOf("speech=") === -1),
+      `the speech read is gone from the trace: ${titleLines.join(" | ")}`,
+    );
+    console.log("ok tab title row mark: last root, row kind, turn bound");
   });
 }

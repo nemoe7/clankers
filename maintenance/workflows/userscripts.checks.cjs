@@ -805,29 +805,22 @@ function checkTabTitle(api) {
   var desiredTitle = api.desiredTitle;
   var syncTitle = api.syncTitle;
   var liveLabel = api.liveLabel;
-  var liveRow = api.liveRow;
-  var strongRow = api.strongRow;
   var stopSignal = api.stopSignal;
-  var processRow = api.processRow;
-  var PLAY_SELECTOR = api.PLAY_SELECTOR;
-  var speechGrowth = api.speechGrowth;
-  var AGENT_EMOJI = api.AGENT_EMOJI;
+  var childChain = api.childChain;
+  var lastRoot = api.lastRoot;
+  var userRoot = api.userRoot;
+  var rowContainer = api.rowContainer;
+  var newestRow = api.newestRow;
+  var rowKind = api.rowKind;
+  var summaryCard = api.summaryCard;
   var BASH_EMOJI = api.BASH_EMOJI;
+  var PLAY_SELECTOR = api.PLAY_SELECTOR;
+  var AGENT_EMOJI = api.AGENT_EMOJI;
+  var REASONING_EMOJI = api.REASONING_EMOJI;
   var waitingSignal = api.waitingSignal;
-  var SPEECH_SELECTOR = api.SPEECH_SELECTOR;
-  var WAITING_SELECTOR = api.WAITING_SELECTOR;
-  var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
-  var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
-  var rowSource = api.rowSource;
-  var openDialog = api.openDialog;
-  var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
-  var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
-  var captchaSignal = api.captchaSignal;
-  var questionSignal = api.questionSignal;
-  var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
-  var QUESTION_EMOJI = api.QUESTION_EMOJI;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
+  var rowSource = api.rowSource;
   var TITLE_PREFIX = api.TITLE_PREFIX;
   var vtag = "";
   var VERSION = api.VERSION;
@@ -837,6 +830,16 @@ function checkTabTitle(api) {
   var LIVE_LABEL_SELECTOR = api.LIVE_LABEL_SELECTOR;
   var GROUP_LABEL_SELECTOR = api.GROUP_LABEL_SELECTOR;
   var REPO_LINK_SELECTOR = api.REPO_LINK_SELECTOR;
+  var WAITING_SELECTOR = api.WAITING_SELECTOR;
+  var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
+  var HOURGLASS_EMOJI = api.HOURGLASS_EMOJI;
+  var CAPTCHA_SELECTOR = api.CAPTCHA_SELECTOR;
+  var CAPTCHA_EMOJI = api.CAPTCHA_EMOJI;
+  var captchaSignal = api.captchaSignal;
+  var QUESTION_SELECTOR = api.QUESTION_SELECTOR;
+  var QUESTION_EMOJI = api.QUESTION_EMOJI;
+  var questionSignal = api.questionSignal;
+  var openDialog = api.openDialog;
   var setPriorTitle = api.setPriorTitle;
 
   function link(href, label) {
@@ -854,7 +857,6 @@ function checkTabTitle(api) {
       querySelector: function (selector) {
         return selector === REPO_LINK_SELECTOR ? element : null;
       },
-      // The repo-memory docs stand for a page mid-turn: the stop control holds the title up.
       querySelectorAll: function (selector) {
         return selector === "button[aria-label]" ? [stopButton("Stop generating")] : [];
       },
@@ -867,790 +869,185 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The owner's edit row: the label span sits beside the toggle, and the row holds no p.
-  function editRowDoc(stopGenerating) {
-    var expand = {
-      textContent: "",
-      querySelector: function () {
-        return null;
-      },
-    };
-    var span = {
-      textContent: "Edit",
-      parentElement: null,
-      closest: function () {
-        return null;
-      },
-    };
-    var row = {
-      querySelector: function (selector) {
-        return selector === "button" ? expand : null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === "button") {
-          return [expand];
-        }
-        return selector === GROUP_LABEL_SELECTOR ? [span] : [];
-      },
-    };
-    span.parentElement = row;
-    var message = {
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [span] : [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) {
-          return [message];
-        }
-        if (selector === GROUP_LABEL_SELECTOR) {
-          return [span];
-        }
-        if (selector === "button[aria-label]") {
-          return stopGenerating
-            ? [
-                {
-                  getAttribute: function () {
-                    return "Stop generating";
-                  },
-                },
-              ]
-            : [];
-        }
-        return [];
-      },
-    };
-  }
-
-  // A read or edit group has no shimmer label and no pulsing icon; only the turn bounds it.
-  function groupDoc(stopGenerating) {
-    var button = {
-      textContent: "Explored 2 reads",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-    };
-    var row = {
-      querySelector: function (selector) {
-        return selector === "button" ? button : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === "button" ? [button] : [];
-      },
-    };
-    button.parentElement = row;
-    var label = {
-      textContent: "Explored 2 reads",
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    // The finished group label and its message persist after the turn ends; only the
-    // stop control leaves, and that is what the fallback now bounds itself by.
-    var message = {
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [label] : [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) {
-          return [message];
-        }
-        if (selector === GROUP_LABEL_SELECTOR) {
-          return [label];
-        }
-        if (selector === "button[aria-label]") {
-          return stopGenerating
-            ? [
-                {
-                  getAttribute: function () {
-                    return "Stop generating";
-                  },
-                },
-              ]
-            : [];
-        }
-        return [];
-      },
-    };
-  }
-  function liveMessage(text, command) {
-    var label = { textContent: text };
-    var button = {
-      querySelector: function (selector) {
-        return selector === "p" ? label : null;
-      },
-    };
-    var panel = { textContent: command || "" };
-    var row = {
-      querySelector: function (selector) {
-        if (selector === "button") return button;
-        if (selector === "pre") return command === null ? null : panel;
-        return null;
-      },
-    };
-    button.parentElement = row;
-    var icon = {
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    return {
-      row: row,
-      querySelectorAll: function (selector) {
-        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
-      },
-    };
-  }
-  function rememberRepo() {
-    return repoForTitle(setDoc);
-  }
-  function divMessage(text, shimmer) {
-    var label = { textContent: text };
-    var row = {
-      textContent: text,
-      querySelector: function (selector) {
-        return selector === "p" ? label : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === LIVE_LABEL_SELECTOR && shimmer ? [label] : [];
-      },
-    };
-    var icon = {
-      parentElement: row,
-      closest: function () {
-        return null;
-      },
-    };
-    if (shimmer) {
-      label.parentElement = row;
+  // The root-bounded model reads a real tree, so the checks build one: every node answers
+  // the selectors the feature uses, and the chain walks land on real children.
+  function matches(node, selector) {
+    if (!node || !node.attrs) {
+      return false;
     }
-    return {
-      row: row,
-      label: label,
-      contains: function (candidate) {
-        return candidate === row;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === LIVE_ICON_SELECTOR) return [icon];
-        return selector === LIVE_LABEL_SELECTOR && shimmer ? [label] : [];
-      },
-    };
+    if (selector === MESSAGE_SELECTOR) {
+      return node.attrs["data-agent-transcript-message"] !== undefined;
+    }
+    if (selector === PLAY_SELECTOR) {
+      return node.tagName === "SVG" && api.classOf(node, "lucide-play");
+    }
+    if (selector === LIVE_LABEL_SELECTOR) {
+      return String(node.attrs.style || "").indexOf("text-shimmer") !== -1;
+    }
+    if (selector === LIVE_ICON_SELECTOR) {
+      return api.classOf(node, "animate-pulse");
+    }
+    if (selector === GROUP_LABEL_SELECTOR) {
+      return node.tagName === "SPAN" && api.classOf(node, "text-text-secondary");
+    }
+    if (selector === "button") return node.tagName === "BUTTON";
+    if (selector === "p") return node.tagName === "P";
+    if (selector === "pre") return node.tagName === "PRE";
+    if (selector === "button[aria-label]") {
+      return node.tagName === "BUTTON" && node.attrs["aria-label"] !== undefined;
+    }
+    return false;
   }
-  function pulseDoc(messages, stray) {
-    return {
-      title: "ChatGPT",
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return messages;
-        return selector === LIVE_ICON_SELECTOR ? (stray ? [stray] : []) : [];
-      },
-      querySelector: function () {
-        return null;
-      },
-    };
+  function findAll(root, selector) {
+    var hits = [];
+    (function walk(item) {
+      var kids = item.children || [];
+      var i;
+      for (i = 0; i < kids.length; i += 1) {
+        if (matches(kids[i], selector)) hits.push(kids[i]);
+        walk(kids[i]);
+      }
+    })(root);
+    return hits;
   }
-  function classMatch(selector, nodes) {
-    var match = /^([a-z]*)\.([a-zA-Z-]+)$/.exec(selector);
-    if (!match) return [];
-    return nodes.filter(function (node) {
-      var has = (" " + node.className + " ").indexOf(" " + match[2] + " ") >= 0;
-      return has && (!match[1] || node.tagName === match[1]);
+  function node(tag, className, kids) {
+    var el = {
+      tagName: String(tag).toUpperCase(),
+      className: className || "",
+      children: kids || [],
+      parentElement: null,
+      textContent: "",
+      attrs: {},
+    };
+    el.getAttribute = function (name) {
+      return Object.prototype.hasOwnProperty.call(el.attrs, name) ? el.attrs[name] : null;
+    };
+    el.querySelector = function (selector) {
+      var hits = findAll(el, selector);
+      return hits.length ? hits[0] : null;
+    };
+    el.querySelectorAll = function (selector) {
+      return findAll(el, selector);
+    };
+    el.contains = function (candidate) {
+      if (candidate === el) return true;
+      var i;
+      for (i = 0; i < el.children.length; i += 1) {
+        if (el.children[i].contains && el.children[i].contains(candidate)) return true;
+      }
+      return false;
+    };
+    el.closest = function (selector) {
+      var current = el;
+      while (current) {
+        if (matches(current, selector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    };
+    Object.defineProperty(el, "firstElementChild", {
+      get: function () {
+        return el.children.length ? el.children[0] : null;
+      },
     });
+    var i;
+    for (i = 0; i < el.children.length; i += 1) el.children[i].parentElement = el;
+    return el;
   }
-  // A collapsed edit row pulses its label span, not an svg, so the mock matches by class.
-  function pulseLabelDoc(tagName, text) {
-    var label = {
-      tagName: tagName,
-      className: "shrink-0 text-text-tertiary animate-pulse",
-      textContent: text || "Editing",
-      parentElement: null,
-      closest: function () { return null; },
-    };
-    var row = {
-      textContent: "Editing maintenance/pr/gate_pr.py",
-      parentElement: null,
-      querySelector: function () { return null; },
-      querySelectorAll: function (selector) {
-        return selector === LIVE_ICON_SELECTOR ? [label] : [];
-      },
-    };
-    label.parentElement = row;
-    var message = {
-      querySelectorAll: function (selector) { return classMatch(selector, [label]); },
-    };
-    return {
-      title: "ChatGPT",
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
-        return classMatch(selector, [label]);
-      },
-      querySelector: function () { return null; },
-    };
+  var ROW_CONTAINER_CLASS = "flex flex-col gap-2";
+  // The session dump's agent root: the bubble card, then `px-3 pb-3`, then the row
+  // container. Every root carries the transcript attributes.
+  function agentRoot(rows) {
+    var container = node("div", ROW_CONTAINER_CLASS, rows);
+    var root = node("div", "", [
+      node("div", "relative overflow-hidden bg-surface-primary rounded-xl border w-full border-transparent", [
+        node("div", "px-3 pb-3", [container]),
+      ]),
+    ]);
+    root.attrs["data-agent-transcript-message"] = "true";
+    root.attrs["data-chat-message-id"] = "chat-agent";
+    return root;
   }
-  // The owner's live page: the newest row pulses its Editing span while a done row
-  // above it already carries its group label, so the pulse must outnewest the label.
-  function editingUnderDoneDoc() {
-    var doneLabel = {
-      tagName: "SPAN",
-      className: "shrink-0 text-text-secondary",
-      textContent: "Bash sleep 25",
-      parentElement: null,
-      closest: function () {
-        return null;
-      },
-    };
-    var doneRow = {
-      textContent: "Bash sleep 25",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function () {
-        return [];
-      },
-    };
-    doneLabel.parentElement = doneRow;
-    var pulse = {
-      tagName: "SPAN",
-      className: "shrink-0 text-text-tertiary animate-pulse",
-      textContent: "Editing",
-      parentElement: null,
-      closest: function () {
-        return null;
-      },
-    };
-    var editRow = {
-      textContent: "Editing userscripts/arena.user.js",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        return classMatch(selector, [pulse]);
-      },
-    };
-    pulse.parentElement = editRow;
-    var message = {
-      contains: function (candidate) {
-        return candidate === doneRow || candidate === editRow;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === GROUP_LABEL_SELECTOR) return [doneLabel];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
-          return [doneLabel, pulse];
-        }
-        return classMatch(selector, [pulse]);
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        if (selector === LIVE_ICON_SELECTOR) return [pulse];
-        return [];
-      },
-    };
+  // The session dump's user root: the layout div, the body row, the raised card, then
+  // `px-3`, the container and the `prose` body. The agent root is the negation of this fact.
+  function userRootNode() {
+    var body = node("div", "prose prose-pre:bg-transparent text-wrap break-words", []);
+    var card = node("div", "relative overflow-hidden bg-surface-raised rounded-lg w-fit max-w-[min(70%,768px)] border-transparent ms-0", [
+      node("div", "px-3 text-text-primary body-base py-2", [
+        node("div", ROW_CONTAINER_CLASS, [body]),
+      ]),
+    ]);
+    var root = node("div", "", [
+      node("div", "", [node("div", "group flex min-w-0 flex-col items-end gap-1", [card])]),
+    ]);
+    root.attrs["data-agent-transcript-message"] = "true";
+    root.attrs["data-chat-message-id"] = "chat-user";
+    return root;
   }
-  function actionDoc(element, message) {
+  function actionRow(label) {
+    var span = node("span", "text-text-secondary body-sm", []);
+    span.textContent = label;
+    var button = node("button", "flex w-full", [span]);
+    button.attrs["aria-label"] = "Collapse";
+    return node("div", "", [button]);
+  }
+  function commandRow(label, command) {
+    var row = actionRow(label);
+    if (command) {
+      var pre = node("pre", "", []);
+      pre.textContent = command;
+      row.children[0].children.push(pre);
+    }
+    return row;
+  }
+  function chatRow() {
+    var row = node("div", "prose", []);
+    row.textContent = "A chat answer";
+    return row;
+  }
+  function reasoningRow() {
+    var row = node("div", "not-prose", []);
+    row.textContent = "Thinking it over";
+    return row;
+  }
+  function playRow() {
+    var play = node("svg", "lucide-play size-4", []);
+    var name = node("span", "text-text-secondary", []);
+    name.textContent = "Start PR checks";
+    var button = node("button", "flex w-full", [play, name]);
+    return node("div", "", [button]);
+  }
+  function summaryRow() {
+    var label = node("span", "text-text-secondary", []);
+    label.textContent = "Summary";
+    var button = node("button", "", [label]);
+    return node("div", "", [button]);
+  }
+  function page(roots, options) {
+    options = options || {};
     return {
-      title: "ChatGPT",
-      querySelectorAll: function (selector) {
-        // busyDoc and idleDoc stand for pages mid-turn, so the stop control is present.
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return selector === MESSAGE_SELECTOR && message ? [message] : [];
-      },
+      title: options.title || "ChatGPT",
       querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? element : null;
-      },
-    };
-  }
-  // The owner's bug page: the turn ended, so the stop control is gone, while the repo
-  // link and the finished group label in the newest message both persist.
-  function endedDoc() {
-    var label = {
-      textContent: "Ran commands",
-      parentElement: null,
-      closest: function () {
-        return null;
-      },
-    };
-    var row = {
-      querySelector: function () {
-        return null;
+        if (selector !== REPO_LINK_SELECTOR) return null;
+        return options.repo === undefined ? repoLink : options.repo;
       },
       querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [label] : [];
-      },
-    };
-    label.parentElement = row;
-    var message = {
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [label] : [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === MESSAGE_SELECTOR ? [message] : [];
-      },
-    };
-  }
-  // The owner's bug page: the finished row keeps its shimmer label after the
-  // turn, and the stop control is the only thing that leaves. The same page, one flag apart.
-  function lingeringRowDoc(stopGenerating) {
-    var message = divMessage("Thinking\u2026", true);
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === MESSAGE_SELECTOR) return roots || [];
         if (selector === "button[aria-label]") {
-          return stopGenerating ? [stopButton("Stop generating")] : [];
+          return options.stop === false ? [] : [stopButton(options.stopLabel || "Stop generating")];
         }
+        if (selector === WAITING_SELECTOR) return options.canvas ? [options.canvas] : [];
+        if (selector === CAPTCHA_SELECTOR) return options.captcha ? [options.captcha] : [];
+        if (selector === QUESTION_SELECTOR) return options.question ? [options.question] : [];
         return [];
       },
     };
   }
-  // The same end for a row whose only live mark is the pulsing icon.
-  function lingeringPulseDoc(stopGenerating) {
-    var icon = {
-      textContent: "Running bash",
-      parentElement: null,
-      closest: function () {
-        return null;
-      },
-    };
-    var row = {
-      textContent: "Running bash",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
-      },
-    };
-    icon.parentElement = row;
-    var message = {
-      querySelectorAll: function (selector) {
-        return selector === LIVE_ICON_SELECTOR ? [icon] : [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
-        if (selector === "button[aria-label]") {
-          return stopGenerating ? [stopButton("Stop generating")] : [];
-        }
-        return [];
-      },
-    };
-  }
-  // The owner's captured start-process card: a button holding the play icon,
-  // the process name and the success check beside it. It runs with no stop control. `behind`
-  // adds a newer plain message, so the card sits in the transcript's history.
-  function processDoc(stopGenerating, behind) {
-    var play = {
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    var name = { textContent: "Start PR checks" };
-    var button = {
-      textContent: "Start PR checks",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    var card = {
-      textContent: "Start PR checks",
-      querySelector: function (selector) {
-        return selector === PLAY_SELECTOR ? play : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    button.parentElement = card;
-    var message = {
-      querySelectorAll: function (selector) {
-        return selector === PLAY_SELECTOR ? [play] : [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) {
-          return behind
-            ? [message, { querySelectorAll: function () { return []; } }]
-            : [message];
-        }
-        if (selector === "button[aria-label]") {
-          return stopGenerating ? [stopButton("Stop generating")] : [];
-        }
-        return [];
-      },
-    };
-  }
-  // The owner's mixed page: a start-process card wins the
-  // mark while a finished Explored group label sits in the very same message.
-  function processDocExplored() {
-    var play = {
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    var name = { textContent: "Start PR checks" };
-    var button = {
-      textContent: "Start PR checks",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    var card = {
-      textContent: "Start PR checks",
-      querySelector: function (selector) {
-        return selector === PLAY_SELECTOR ? play : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    button.parentElement = card;
-    var exploredButton = {
-      textContent: "Explored 2 reads",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-    };
-    var exploredRow = {
-      querySelector: function (selector) {
-        return selector === "button" ? exploredButton : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === "button" ? [exploredButton] : [];
-      },
-    };
-    exploredButton.parentElement = exploredRow;
-    var exploredLabel = {
-      textContent: "Explored 2 reads",
-      closest: function (selector) {
-        return selector === "button" ? exploredButton : null;
-      },
-    };
-    var message = {
-      querySelectorAll: function (selector) {
-        if (selector === PLAY_SELECTOR) return [play];
-        if (selector === GROUP_LABEL_SELECTOR) return [name, exploredLabel];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
-          return [name, exploredLabel];
-        }
-        return [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) {
-          return [message];
-        }
-        if (selector === "button[aria-label]") {
-          return [stopButton("Stop generating")];
-        }
-        return [];
-      },
-    };
-  }
-  // The owner's 1.10.1 bug: the turn ran on past the start-process card, and a
-  // later Bash row of the very same message owns the title instead of the card.
-  function processDocLaterRow() {
-    var play = {
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    var name = { textContent: "Start PR checks" };
-    var button = {
-      textContent: "Start PR checks",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    var card = {
-      textContent: "Start PR checks",
-      querySelector: function (selector) {
-        return selector === PLAY_SELECTOR ? play : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    button.parentElement = card;
-    var bashButton = {
-      textContent: "Bash sleep 25",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-    };
-    var bashRow = {
-      querySelector: function (selector) {
-        return selector === "button" ? bashButton : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === "button" ? [bashButton] : [];
-      },
-    };
-    bashButton.parentElement = bashRow;
-    var bashLabel = {
-      textContent: "Bash sleep 25",
-      closest: function (selector) {
-        return selector === "button" ? bashButton : null;
-      },
-    };
-    var message = {
-      querySelectorAll: function (selector) {
-        if (selector === PLAY_SELECTOR) return [play];
-        if (selector === GROUP_LABEL_SELECTOR) return [name, bashLabel];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
-          return [name, bashLabel];
-        }
-        return [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) {
-          return [message];
-        }
-        if (selector === "button[aria-label]") {
-          return [stopButton("Stop generating")];
-        }
-        return [];
-      },
-    };
-  }
-  // The owner's flip-flop: the watcher card keeps taking the title back from the
-  // message that started it while that message keeps speaking. One spoken word
-  // after the card outranks it.
-  function processDocSpeaking() {
-    var play = {
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    var name = {
-      textContent: "Start PR checks watcher",
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    var button = {
-      textContent: "Start PR checks watcher",
-      parentElement: null,
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    var card = {
-      textContent: "Start PR checks watcher",
-      querySelector: function (selector) {
-        return selector === PLAY_SELECTOR ? play : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [name] : [];
-      },
-    };
-    button.parentElement = card;
-    // The spoken word sits after the card in the page, the way the agent's speech
-    // follows the tool row that started it.
-    var word = {
-      textContent: "Waiting",
-      compareDocumentPosition: function (other) {
-        return other === card ? 2 : 0;
-      },
-    };
-    var message = {
-      querySelectorAll: function (selector) {
-        if (selector === PLAY_SELECTOR) return [play];
-        if (selector === SPEECH_SELECTOR) return [word];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
-          return [name];
-        }
-        return [];
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return [];
-      },
-    };
-  }
-  // A labelled row in an older message never marks once a newer message exists,
-  // even when the newer message carries no label of its own.
-  function labeledBehindEmptyDoc() {
-    var busy = liveMessage("  running\n Bash  ", "$ npm test");
-    var older = {
-      querySelectorAll: function (selector) {
-        if (selector === LIVE_ICON_SELECTOR) return busy.querySelectorAll(LIVE_ICON_SELECTOR);
-        return [];
-      },
-      contains: function () {
-        return true;
-      },
-    };
-    var newer = {
-      querySelectorAll: function () {
-        return [];
-      },
-      contains: function () {
-        return false;
-      },
-    };
-    return pulseDoc([older, newer], null);
-  }
-  function speechDoc(withStop) {
-    var words = [{ textContent: "Sandbox" }, { textContent: "resumed" }];
-    return {
-      title: "ChatGPT",
-      words: words,
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === SPEECH_SELECTOR) return words.slice();
-        if (selector === "button[aria-label]") {
-          return withStop ? [stopButton("Stop generating")] : [];
-        }
-        return [];
-      },
-    };
-  }
-  // The live row carries the shimmer label in place of a group label until it
-  // finishes; the newest-row gate must still recognise it as the newest row, or
-  // the mark freezes on the last labelled row.
-  function titleDocStreaming() {
-    var liveRow = {};
-    var liveButton = {
-      textContent: "Searching the docs",
-      parentElement: liveRow,
-      querySelector: function () {
-        return null;
-      },
-    };
-    var shimmer = {
-      textContent: "Searching the docs",
-      closest: function (selector) {
-        return selector === "button" ? liveButton : null;
-      },
-    };
-    var oldRow = {};
-    var oldButton = {
-      textContent: "Bash sleep 25",
-      parentElement: oldRow,
-      querySelector: function () {
-        return null;
-      },
-    };
-    var oldLabel = {
-      textContent: "Bash sleep 25",
-      closest: function (selector) {
-        return selector === "button" ? oldButton : null;
-      },
-    };
-    var message = {
-      querySelectorAll: function (selector) {
-        if (selector === GROUP_LABEL_SELECTOR) return [oldLabel];
-        if (selector === LIVE_LABEL_SELECTOR) return [shimmer];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
-          return [oldLabel, shimmer];
-        }
-        return [];
-      },
-    };
-    var doc = {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
-        if (selector === LIVE_LABEL_SELECTOR) return [shimmer];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return [];
-      },
-    };
-    return { doc: doc, liveRow: liveRow };
-  }
-  function looseStopDoc() {
-    return {
-      title: "ChatGPT",
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        return selector === "button[aria-label]" ? [stopButton("Stop response")] : [];
-      },
-    };
-  }
-  // The owner's two blocks. Both rows carry the same 16px canvas; only the
-  // waiting line adds the monospace text block beside it. A tree node answers the text
-  // selector with its own descendants, the way a row answers a descendant selector.
+  // The waiting line is a spinner canvas beside the rotating monospace text. An action row
+  // carries the very same canvas as its own icon, so the canvas alone proves nothing: the
+  // row must hold the text block too, beside the icon.
   function pageTree(text, children) {
-    var node = {
+    var el = {
       text: text || "",
       textContent: text || "",
       children: children || [],
@@ -1663,38 +1060,18 @@ function checkTabTitle(api) {
             if (item.children[i].text || item.children[i].span) hits.push(item.children[i]);
             walk(item.children[i]);
           }
-        })(node);
+        })(el);
         return hits;
       },
     };
     var i;
-    for (i = 0; i < node.children.length; i += 1) node.children[i].parentElement = node;
-    return node;
+    for (i = 0; i < el.children.length; i += 1) el.children[i].parentElement = el;
+    return el;
   }
-  function canvasDoc(canvases, messages, words, withStop) {
-    return {
-      title: "ChatGPT",
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === WAITING_SELECTOR) return canvases;
-        if (selector === MESSAGE_SELECTOR) return messages || [];
-        if (selector === SPEECH_SELECTOR) return words || [];
-        if (selector === "button[aria-label]") {
-          return withStop === false ? [] : [stopButton("Stop generating")];
-        }
-        return [];
-      },
-    };
-  }
-  // One row of the owner's blocks: the icon block with the canvas, and, on the waiting
-  // line alone, the text block that holds the rotating words.
   function rowCanvas(withText, blank) {
     var canvas = pageTree("", []);
     var icon = pageTree("", [pageTree("", [canvas])]);
     var kids = [icon];
-    // The rotating frame can stand empty between two words: the span is there, its text is not.
     if (withText) {
       var span = pageTree(blank ? "" : "The cat sat on the", []);
       if (blank) span.span = true;
@@ -1702,20 +1079,16 @@ function checkTabTitle(api) {
     }
     return { canvas: canvas, row: pageTree("", kids) };
   }
-  // The owner's waiting line: a 16px spinner canvas beside rotating monospace status
-  // text. The words rotate, so the row carries the text and the canvas together.
-  function waitingDoc(messages, words) {
-    return canvasDoc([rowCanvas(true).canvas], messages, words);
+  function waitingDoc() {
+    // The row carries no mark of its own, so the waiting line is the only news.
+    return page([agentRoot([summaryRow()])], { canvas: rowCanvas(true).canvas });
   }
-  // The owner's action row: the same canvas alone, with no text block beside it.
-  function actionCanvasDoc(messages, words) {
-    return canvasDoc([rowCanvas(false).canvas], messages, words);
-  }
-  // A waiting line between two rotations: the span stands empty, and it still marks.
   function blankWaitingDoc() {
-    return canvasDoc([rowCanvas(true, true).canvas]);
+    return page([agentRoot([summaryRow()])], { canvas: rowCanvas(true, true).canvas });
   }
-  // The ask_user card from the owner's captured outerHTML: a radiogroup with an aria-label.
+  function actionCanvasDoc() {
+    return page([agentRoot([actionRow("Bash sleep 25")])], { canvas: rowCanvas(false).canvas });
+  }
   function questionCard(label) {
     return {
       getAttribute: function (name) {
@@ -1724,33 +1097,14 @@ function checkTabTitle(api) {
     };
   }
   function questionDoc(card, withCaptcha) {
+    var options = { question: card || null };
+    if (withCaptcha) options.captcha = captchaFrame();
+    return page([agentRoot([chatRow()])], options);
+  }
+  function captchaFrame(state, parked) {
     var frame = {
       title: "reCAPTCHA",
       getAttribute: function () {
-        return null;
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === QUESTION_SELECTOR) return card ? [card] : [];
-        if (selector === CAPTCHA_SELECTOR) return withCaptcha ? [frame] : [];
-        if (selector === MESSAGE_SELECTOR) return [];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return [];
-      },
-    };
-  }
-
-  // The owner's security dialog: Arena shows it over the page and it holds until the
-  // check passes, so it outranks the poll row, the bubble and the waiting line.
-  function captchaDoc(messages, state, parked) {
-    var frame = {
-      title: "reCAPTCHA",
-      getAttribute: function (name) {
         return null;
       },
     };
@@ -1770,477 +1124,215 @@ function checkTabTitle(api) {
       var middle = { parentElement: dialog, getAttribute: function () { return null; } };
       frame.parentElement = middle;
     }
-    return {
-      title: "ChatGPT",
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === CAPTCHA_SELECTOR) return [frame];
-        if (selector === MESSAGE_SELECTOR) return messages || [];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return [];
-      },
-    };
+    return frame;
   }
-  function resetSpeech() {
-    api.resetSpeech();
-    return null;
+  function captchaDoc(state, parked) {
+    return page([agentRoot([chatRow()])], { captcha: captchaFrame(state, parked) });
   }
-  function addWord(doc, text) {
-    doc.words.push({ textContent: text });
-    return doc.words.length;
+  function looseStopDoc() {
+    return page([agentRoot([chatRow()])], { stopLabel: "Stop response" });
   }
+
   var repoLink = link("https://github.com/nemoe7/clankers", "Open nemoe7/clankers on GitHub");
   var labelOnly = link(null, "Open nemoe7/clankers on GitHub");
   var emptyLink = link("", "");
   var setDoc = docWith(repoLink, "ChatGPT");
   var keepDoc = docWith(null, "ChatGPT");
   var goneDoc = docWith(null, TITLE_PREFIX + "clankers" + vtag);
-  var endedPage = endedDoc();
-  var talking = speechDoc(true);
-  var settledChat = speechDoc(false);
-  var busyMessage = liveMessage("  running\n Bash  ", "$ npm test");
-  var pollMessage = liveMessage("running Bash", "$ arena-preview poll");
-  var pathMessage = liveMessage("running Bash", "$ /home/user/clankers/.agents/skills/arena-skill/scripts/arena-preview poll");
-  var pyMessage = liveMessage("running Bash", "$ python skills/refs/arena-skill/scripts/preview.py poll");
-  var chainMessage = liveMessage("running Bash", "$ git fetch origin && arena-preview poll");
-  var readMessage = liveMessage("running Bash", "Read the inbox");
-  readMessage.row.textContent = "stderr End the turn with `poll`.";
-  var busyDoc = actionDoc(repoLink, busyMessage);
-  var idleDoc = actionDoc(repoLink, null);
-  var thinkingMessage = divMessage("Thinking\u2026", true);
-  var thinkingDoc = pulseDoc([thinkingMessage], null);
-  var shimmerDoc = {
-    title: "ChatGPT",
-    querySelectorAll: function (selector) {
-      return selector === LIVE_LABEL_SELECTOR ? [thinkingMessage.label] : [];
-    },
-    querySelector: function () {
-      return null;
-    },
-  };
-  var strayRow = {
-    textContent: "Loading the sidebar",
-    querySelector: function (selector) {
-      return selector === "p" ? { textContent: "Loading the sidebar" } : null;
-    },
-    querySelectorAll: function () {
-      return [];
-    },
-  };
-  var strayIcon = {
-    parentElement: strayRow,
-    closest: function () {
-      return null;
-    },
-  };
-  var strayDoc = pulseDoc([], strayIcon);
-  // The owner's captured card: an answered question wears the Summary header, and the
-  // chosen answer sits beside a check. The chosen row raises no mark.
-  function summaryDoc() {
-    var header = { textContent: "Summary" };
-    var answer = { textContent: "Yes, rendered fine" };
-    var answerRow = {
-      querySelector: function () {
-        return null;
-      },
-    };
-    answer.parentElement = answerRow;
-    var card = {
-      querySelectorAll: function (selector) {
-        return selector === GROUP_LABEL_SELECTOR ? [header, answer] : [];
-      },
-    };
-    header.parentElement = card;
-    answerRow.parentElement = card;
-    var message = {
-      querySelectorAll: function (selector) {
-        if (selector === GROUP_LABEL_SELECTOR) return [header, answer];
-        return [];
-      },
-      contains: function (candidate) {
-        return candidate === answerRow || candidate === card;
-      },
-    };
-    return {
-      title: "ChatGPT",
-      querySelector: function () {
-        return null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === MESSAGE_SELECTOR) return [message];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return [];
-      },
-    };
-  }
-  // A live Bash row with a pulsing icon stands beside words that keep growing.
-  // The growing message outranks its own row mark, and the mark waits out the
-  // quiet gap after the last burst.
-  function speechOverBashDoc() {
-    var words = [{ textContent: "Watching" }, { textContent: "the" }];
-    var label = { textContent: "Bash" };
-    var button = {
-      querySelector: function (selector) {
-        return selector === "p" ? label : null;
-      },
-    };
-    var row = {
-      querySelector: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    button.parentElement = row;
-    var icon = {
-      closest: function (selector) {
-        return selector === "button" ? button : null;
-      },
-    };
-    var message = {
-      querySelectorAll: function (selector) {
-        if (selector === SPEECH_SELECTOR) return words.slice();
-        if (selector === LIVE_ICON_SELECTOR) return [icon];
-        if (selector === GROUP_LABEL_SELECTOR + ", " + LIVE_LABEL_SELECTOR + ", " + LIVE_ICON_SELECTOR) {
-          return [icon];
-        }
-        return [];
-      },
-      contains: function (candidate) {
-        return candidate === row || candidate === icon;
-      },
-    };
-    return {
-      title: "ChatGPT",
-      words: words,
-      querySelector: function (selector) {
-        return selector === REPO_LINK_SELECTOR ? repoLink : null;
-      },
-      querySelectorAll: function (selector) {
-        if (selector === SPEECH_SELECTOR) return words.slice();
-        if (selector === MESSAGE_SELECTOR) return [message];
-        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
-        return [];
-      },
-    };
-  }
-  var speechOverBash = speechOverBashDoc();
-  var agentChatDoc = pulseDoc([divMessage("Agent chat", true)], null);
-  var rocketsDoc = pulseDoc([divMessage("Deploying rockets", true)], null);
-  var olderPulseDoc = pulseDoc([busyMessage, divMessage("Nothing running")], null);
-  setPriorTitle("ChatGPT");
-  var userscriptText = fs.readFileSync(
-    path.join(__dirname, "..", "..", "userscripts", "arena.user.js"),
-    "utf8",
-  );
+  // One message per fixture: the same mark read twice would resurface as the hold.
+  var chatPage = page([agentRoot([chatRow()])]);
+  var reasoningPage = page([agentRoot([reasoningRow()])]);
+  var bashPage = page([agentRoot([commandRow("Bash sleep 25", "$ npm test")])]);
+  var editPage = page([agentRoot([commandRow("Edit main.py")])]);
+  var readPage = page([agentRoot([commandRow("Read main.py")])]);
+  var searchPage = page([agentRoot([commandRow("Searching the web")])]);
+  var fetchPage = page([agentRoot([commandRow("Fetching web page")])]);
+  var outputPage = page([agentRoot([commandRow("get_process_output")])]);
+  var gearPage = page([agentRoot([commandRow("Agent chat")])]);
+  var pollPage = page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])]);
+  var playPage = page([agentRoot([playRow()])]);
+  var summaryPage = page([agentRoot([summaryRow()])]);
+  var userPage = page([userRootNode()]);
+  var endedPage = page([agentRoot([chatRow()])], { stop: false });
+  var quietPage = page([]);
+  // `:nth-last-of-type(2)`: the trailing div is never the row.
+  var trailingPage = page([agentRoot([commandRow("Bash sleep 25", "$ npm test"), chatRow()])]);
+  var thirdPage = page([agentRoot([commandRow("Bash sleep 25", "$ npm test"), chatRow(), reasoningRow()])]);
+  var olderRootPage = page([agentRoot([chatRow()]), agentRoot([commandRow("Bash sleep 25", "$ npm test")])]);
+  var bashLogLine = loggedTitleLine(bashPage);
+  var chatLogLine = loggedTitleLine(chatPage);
+  var syncChatPage = page([agentRoot([chatRow()])]);
+  var directChat = chatRow();
+  var directReasoning = reasoningRow();
+  var directAction = commandRow("Bash sleep 25");
+  var directPoll = commandRow("running Bash", "$ arena-preview poll");
+  var twoRows = [commandRow("Bash sleep 25"), chatRow()];
+  var twoRowRoot = agentRoot(twoRows);
+  var agentShape = agentRoot([]);
+  var userShape = userRootNode();
+
   var cases = [
-    // The name carries the running version; the constant and the header agree.
-    [VERSION, /@version\s+(\S+)/.exec(userscriptText)[1]],
-    ["Arena.ai | NemoUtils | v" + VERSION, /@name\s+(.*)/.exec(userscriptText)[1].trim()],
+    // The repo name still reads off the GitHub link, and the memory answers while the
+    // path holds.
     [repoFromLink(repoLink), "clankers"],
     [repoFromLink(labelOnly), "clankers"],
     [repoFromLink(emptyLink), null],
     [repoFromLink(null), null],
-    [desiredTitle(setDoc), TITLE_PREFIX + "clankers" + vtag],
-    // The header can drop the link on a re-render; the name holds while the page stays put.
-    [desiredTitle(keepDoc), TITLE_PREFIX + "clankers" + vtag],
-    [syncTitle(setDoc), true],
-    [setDoc.title, TITLE_PREFIX + "clankers" + vtag],
-    [syncTitle(setDoc), false],
-    [syncTitle(keepDoc), true],
-    [keepDoc.title, TITLE_PREFIX + "clankers" + vtag],
-    [syncTitle(goneDoc), false],
-    [goneDoc.title, TITLE_PREFIX + "clankers" + vtag],
-    // Another page drops the memory, and the next good read puts it back.
+    [repoForTitle(docWith(repoLink, "ChatGPT")), "clankers"],
     [forgetPath(), null],
-    [desiredTitle(keepDoc), null],
-    [syncTitle(keepDoc), true],
-    [keepDoc.title, "ChatGPT"],
-    [syncTitle(keepDoc), false],
-    [rememberRepo(), "clankers"],
-    [desiredTitle(keepDoc), TITLE_PREFIX + "clankers" + vtag],
-    [liveLabel(busyMessage.row), "running Bash"],
-    [liveLabel(null), null],
-    // A thinking row is not a button; the label still arrives, and a stray pulse does not.
-    [liveLabel(thinkingMessage.row), "Thinking\u2026"],
-    [emojiForRow(liveRow(thinkingDoc)), "\uD83D\uDCAD"],
-    // A thinking row shows the shimmer label and no pulsing icon.
-    [emojiForRow(liveRow(shimmerDoc)), "\uD83D\uDCAD"],
-    [liveRow(strayDoc), null],
-    [emojiForRow(liveRow(olderPulseDoc)), "\uD83D\uDDA5\uFE0F"],
-    [emojiForRow(liveRow(pulseLabelDoc("span"))), "\u270F\uFE0F"],
-    // The owner's bug: the Writing row fell to the gear emoji through the unmatched label.
-    [emojiForRow(liveRow(pulseLabelDoc("span", "Writing"))), "\u270F\uFE0F"],
-    // The next owner's bug: a Fetching row (a web page read) fell to the gear emoji.
-    [emojiForRow(liveRow(pulseLabelDoc("span", "Fetching"))), "\uD83D\uDD0D"],
-    [actionEmoji("Fetching web page"), "\uD83D\uDD0D"],
-    [emojiForRow(liveRow(pulseLabelDoc("svg"))), "\u270F\uFE0F"],
-    [emojiForRow(liveRow(editingUnderDoneDoc())), "\u270F\uFE0F"],
-    [emojiForRow(busyMessage.row), "\uD83D\uDDA5\uFE0F"],
-    [emojiForRow(pollMessage.row), "\uD83D\uDCA4"],
-    [emojiForRow(pathMessage.row), "\uD83D\uDCA4"],
-    [emojiForRow(pyMessage.row), "\uD83D\uDCA4"],
-    [emojiForRow(chainMessage.row), "\uD83D\uDCA4"],
-    [emojiForRow(readMessage.row), "\uD83D\uDDA5\uFE0F"],
-    [emojiForRow(null), null],
-    [actionEmoji("running Bash"), "\uD83D\uDDA5\uFE0F"],
-    [actionEmoji("using Bash"), "\uD83D\uDDA5\uFE0F"],
-    [actionEmoji("used Bash"), "\uD83D\uDDA5\uFE0F"],
-    [actionEmoji("Running commands"), "\uD83D\uDDA5\uFE0F"],
-    [actionEmoji("Ran commands"), "\uD83D\uDDA5\uFE0F"],
-    [actionEmoji("Reading files"), "\uD83D\uDCD6"],
-    [actionEmoji("Editing"), "\u270F\uFE0F"],
-    // The owner's editing group: Edit, Editing, Editing files, Write.
-    [actionEmoji("Edit"), "\u270F\uFE0F"],
-    [actionEmoji("Editing files"), "\u270F\uFE0F"],
-    [actionEmoji("Write"), "\u270F\uFE0F"],
-    [actionEmoji("Writing"), "\u270F\uFE0F"],
-    // The owner's reading group: Explored, Read.
-    [actionEmoji("Explored"), "\uD83D\uDCD6"],
-    [actionEmoji("Exploring"), "\uD83D\uDCD6"],
-    [actionEmoji("Read"), "\uD83D\uDCD6"],
-    [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
-    [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
-    [actionEmoji("Thinking about the next step"), "\uD83D\uDCAD"],
-    [actionEmoji("Re-thinking"), "\uD83D\uDCAD"],
-    [actionEmoji("Waiting"), "\uD83D\uDCA4"],
-    // The owner's pick for the process output row: the scroll reads as the log roll.
-    [actionEmoji("get_process_output"), "\uD83D\uDCDC"],
-    // The owner keeps the gear: an unmatched label inside a message still marks the
-    // row, so Agent chat earns the fallback instead of dropping out of the title.
-    [actionEmoji("Doing something"), "\u2699\uFE0F"],
-    [actionEmoji("Agent chat"), "\u2699\uFE0F"],
-    [emojiForRow(liveRow(agentChatDoc)), "\u2699\uFE0F"],
-    [emojiForRow(liveRow(rocketsDoc)), "\u2699\uFE0F"],
-    // The answered question card wears the Summary header and raises no mark; every
-    // other unmatched row keeps the gear fallback.
-    [liveRow(summaryDoc()), null],
-    [actionEmoji(null), null],
-    [desiredTitle(busyDoc), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
-    [syncTitle(busyDoc), true],
-    [busyDoc.title, TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
-    [syncTitle(idleDoc), true],
-    [idleDoc.title, TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
+    [repoForTitle(docWith(null, "ChatGPT")), null],
+    [repoForTitle(docWith(repoLink, "ChatGPT")), "clankers"],
+    [repoForTitle(docWith(null, "ChatGPT")), "clankers"],
+    // The root reads: the agent root is the negation of the user-root chain, and the row
+    // container and the newest row come off the last root alone.
+    [userRoot(userShape), true],
+    [userRoot(agentShape), false],
+    [lastRoot(page([agentShape])), agentShape],
+    [lastRoot(quietPage), null],
+    [rowContainer(userShape), null],
+    [rowContainer(agentShape) === childChain(agentShape, 3), true],
+    [newestRow(twoRowRoot) === twoRows[0], true],
+    [rowKind(directChat), "chat"],
+    [rowKind(directReasoning), "reasoning"],
+    [rowKind(directAction), "action"],
+    [rowKind(null), "none"],
+    // The row kind carries the mark: the chat body takes the balloon, the reasoning block
+    // takes the thinking mark, and the action rows keep their label words.
     [expireHold(), null],
-    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
-    [syncTitle(idleDoc), true],
-    [idleDoc.title, TITLE_PREFIX + "clankers" + vtag],
-    // The ask_user card holds the title with a question mark, and the security
-    // check beats it, like every other mark.
-    [questionSignal(questionDoc(questionCard())), true],
-    [questionSignal(questionDoc(null)), false],
+    [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
-    [desiredTitle(questionDoc(questionCard())), TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
-    [loggedTitleHead(questionDoc(questionCard())),
-      "[NemoUtils][title] question card -> " + TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
+    [desiredTitle(reasoningPage), TITLE_PREFIX + "clankers" + vtag + " " + REASONING_EMOJI],
     [expireHold(), null],
-    [desiredTitle(questionDoc(questionCard(), true)), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
-    // Drop the shield hold, so the next cases start from a quiet title.
+    [desiredTitle(bashPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
     [expireHold(), null],
-    [GROUP_LABEL_SELECTOR, "span.text-text-secondary"],
-    [emojiForRow(liveRow(groupDoc(true))), "\uD83D\uDCD6"],
-    // The turn-end bound: the same label persists, but the stop control is gone.
-    [liveRow(groupDoc(false)), null],
-    [emojiForRow(liveRow(editRowDoc(true))), "\u270F\uFE0F"],
-    [liveRow(editRowDoc(false)), null],
-    [strongRow(groupDoc(true)), null],
-    [stopSignal(groupDoc(true)), true],
-    [stopSignal(groupDoc(false)), false],
-    // A drifted label still opens the gate; the exact wording does not.
-    [stopSignal(looseStopDoc()), true],
-    [desiredTitle(looseStopDoc()), TITLE_PREFIX + "clankers" + vtag],
-    // The owner's bug: the turn ends, the finished group persists, and only the emoji clears.
+    [desiredTitle(editPage), TITLE_PREFIX + "clankers" + vtag + " \u270F\uFE0F"],
     [expireHold(), null],
+    [desiredTitle(readPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCD6"],
+    [expireHold(), null],
+    [desiredTitle(searchPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(fetchPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(outputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
+    [expireHold(), null],
+    [desiredTitle(gearPage), TITLE_PREFIX + "clankers" + vtag + " \u2699\uFE0F"],
+    [expireHold(), null],
+    [desiredTitle(pollPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
+    [expireHold(), null],
+    [desiredTitle(playPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    // The trailing div is never the row: with two rows the first one marks, and the
+    // third row lands only when it takes the second-to-last place.
+    [expireHold(), null],
+    [desiredTitle(trailingPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(thirdPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    // Every row read starts at the last root, so an older root never marks.
+    [expireHold(), null],
+    [desiredTitle(olderRootPage), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    // The user root carries no mark, and a finished turn drops every row mark.
+    [expireHold(), null],
+    [desiredTitle(userPage), TITLE_PREFIX + "clankers" + vtag],
     [desiredTitle(endedPage), TITLE_PREFIX + "clankers" + vtag],
-    [syncTitle(endedPage), true],
-    [endedPage.title, TITLE_PREFIX + "clankers" + vtag],
-    // The owner's newer bug: a finished row keeps its shimmer label or its
-    // pulsing icon, and the stop control is the only thing that leaves. Without the control
-    // no row holds the title, and a row's hold dies with the control instead of bridging it.
+    // The answered question card raises no mark of its own.
     [expireHold(), null],
-    [desiredTitle(lingeringRowDoc(true)), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCAD"],
-    [desiredTitle(lingeringRowDoc(false)), TITLE_PREFIX + "clankers" + vtag],
+    [summaryCard(summaryRow()), true],
+    [desiredTitle(summaryPage), TITLE_PREFIX + "clankers" + vtag],
+    // Direct row reads: the emoji picker and the source line name the kind.
+    [emojiForRow(directChat), AGENT_EMOJI],
+    [emojiForRow(directReasoning), REASONING_EMOJI],
+    [emojiForRow(directPoll), "\uD83D\uDCA4"],
+    [emojiForRow(null), null],
+    [rowSource(directChat), "chat row"],
+    [rowSource(directReasoning), "reasoning row"],
+    [rowSource(directAction), "action row (Bash sleep 25)"],
+    [rowSource(directPoll), "poll command (running Bash)"],
+    // The hold bridges the gaps inside a turn and dies with the stop control.
     [expireHold(), null],
-    [desiredTitle(lingeringPulseDoc(true)), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
-    [desiredTitle(lingeringPulseDoc(false)), TITLE_PREFIX + "clankers" + vtag],
+    [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag],
+    // A drifted stop label still opens the gate; the exact wording does not.
+    [stopSignal(looseStopDoc()), true],
+    [stopSignal(page([], { stop: false })), false],
     // The waiting line is a turn mark too: no control, no hourglass.
     [expireHold(), null],
-    [desiredTitle(canvasDoc([rowCanvas(true).canvas], null, null, false)), TITLE_PREFIX + "clankers" + vtag],
-    // The start-process card: a play icon and the process name, so the
-    // card alone raises the bash emoji while the turn runs. A finished card keeps its play icon
-    // in the page, so it marks no longer once the stop control leaves, and a newer message
-    // takes the title.
+    [desiredTitle(page([agentRoot([chatRow()])], { stop: false, canvas: rowCanvas(true).canvas })),
+      TITLE_PREFIX + "clankers" + vtag],
+    // A named action outranks the line, so the poll row keeps its own emoji. The row read
+    // runs before the waiting line on the same page.
     [expireHold(), null],
-    [desiredTitle(processDoc(true)), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDDA5\uFE0F"],
-    [desiredTitle(processDoc(false)), TITLE_PREFIX + "clankers" + vtag],
-    [desiredTitle(processDoc(true, true)), TITLE_PREFIX + "clankers" + vtag],
-    [typeof processRow(processDoc(true)), "object"],
-    [processRow(processDoc(false)), null],
-    [processRow(processDoc(true, true)), null],
-    [processRow(idleDoc), null],
-    // One mark for the agent's words: growth of the newest
-    // data-agent-word message raises the solid balloon, whatever the turn state. The first
-    // look only sets the mark in silence, so a page load or a chat switch stays quiet.
-    [expireHold(), null],
-    [resetSpeech(), null],
-    [speechGrowth(talking), false],
-    [addWord(talking, "again"), 3],
-    [speechGrowth(talking), true],
-    [speechGrowth(talking), false],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
-    // The next burst raises the one mark, and the same message keeps that one emoji: no
-    // second mark ever replaces it.
-    [resetSpeech(), null],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
-    [addWord(talking, "later"), 4],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    // The hold bridges the pause between two bursts of words.
-    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    [addWord(talking, "again"), 5],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    [expireHold(), null],
-    [desiredTitle(talking), TITLE_PREFIX + "clankers" + vtag],
-    // Speech wins over its own rows, but the hold after it does not: an action row
-    // that appears during the quiet gap takes the title. The first look only sets
-    // the speech baseline, so the row mark still marks that one tick.
-    [resetSpeech(), null],
-    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
-    [addWord(speechOverBash, "title"), 3],
-    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    [desiredTitle(speechOverBash), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
-    [expireHold(), null],
-    [resetSpeech(), null],
-    // A message that lands with no turn open takes the very same mark and emoji: one
-    // condition, one balloon.
-    [resetSpeech(), null],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers" + vtag],
-    [addWord(settledChat, "later"), 3],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    [expireHold(), null],
-    [desiredTitle(settledChat), TITLE_PREFIX + "clankers" + vtag],
     [
-      polls("/home/user/clankers/.agents/skills/arena-skill/scripts/arena-preview poll"),
-      true,
+      desiredTitle(page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])], {
+        canvas: rowCanvas(true).canvas,
+      })),
+      TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4",
     ],
-    [polls("arena-preview poll --max 1"), true],
-    [polls("python preview.py poll"), true],
-    [polls("cat skills/arena-skill/README.md | grep polling"), false],
-    [polls('cat > "$HOOK" <<EOF\n# arena-preview-hook: poll the steering inbox'), false],
-    [polls("python preview.py polls"), false],
-    [polls('python - <<PY\np = Path("skills/arena-skill/scripts/preview.py")\nprint("The poll error names the restart command.")\nPY'), false],
-    // The owner's waiting line: rotating words, one structural selector, one hourglass.
-    [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
-    [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
+    [expireHold(), null],
     [waitingSignal(waitingDoc()), true],
     [waitingSignal(blankWaitingDoc()), true],
-    // The owner's action row carries the very same canvas as its icon, so
-    // the canvas alone never reads as a waiting line and never outranks the Bash row.
+    // The owner's action row carries the very same canvas as its icon, so the canvas alone
+    // never reads as a waiting line and never outranks the Bash row.
     [waitingSignal(actionCanvasDoc()), false],
     [waitingSignal(setDoc), false],
     [expireHold(), null],
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
-    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag],
+    [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
+    [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
+    // The ask_user card holds the title with a question mark, and the security check beats
+    // it, like every other mark.
+    [questionSignal(questionDoc(questionCard())), true],
+    [questionSignal(questionDoc(null)), false],
     [expireHold(), null],
-    // A named action outranks the line, so the poll row keeps its own emoji.
-    [desiredTitle(waitingDoc([pollMessage])), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
-    // Streamed words outrank the line too: the first burst sets the mark, and the next one
-    // raises the same balloon over the line.
+    [desiredTitle(questionDoc(questionCard())), TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
     [expireHold(), null],
-    [resetSpeech(), null],
-    [desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }])),
-      TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
-    [expireHold(), null],
-    [
-      desiredTitle(waitingDoc(null, [{ textContent: "Sandbox" }, { textContent: "again" }])),
-      TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI,
-    ],
-    [expireHold(), null],
-    [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
-    [expireHold(), null],
-    // The gear row never blocks the line: an unmapped chat row sits in the transcript,
-    // and the waiting line still raises the hourglass.
-    [
-      desiredTitle(waitingDoc([divMessage("Agent chat", true)])),
-      TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI,
-    ],
-    [expireHold(), null],
-    [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
-    // The security check beats every other mark, including a poll row and the hourglass.
-    [CAPTCHA_SELECTOR, '.recaptcha-v2-container, iframe[title="reCAPTCHA"]'],
+    [desiredTitle(questionDoc(questionCard(), true)), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
     [captchaSignal(captchaDoc()), true],
-    [captchaSignal(idleDoc), false],
-    // A closed dialog stays in the DOM, so the shield clears with it.
-    [captchaSignal(captchaDoc(null, "closed")), false],
-    [captchaSignal(captchaDoc(null, "open")), true],
-    // A parked node keeps its place after the dialog closes, so the shield needs a rendered
-    // node: no box, no mark.
-    [captchaSignal(captchaDoc(null, null, true)), false],
-    [captchaSignal(captchaDoc(null, "open", true)), false],
-    [openDialog({ getAttribute: function () { return null; } }), true],
-    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
-    [desiredTitle(captchaDoc([pollMessage])), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
-    [desiredTitle(captchaDoc()), TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI],
-    // Every title change prints one line: the signal, then the emoji the title takes.
-    [
-      loggedTitleHead(captchaDoc()),
-      "[NemoUtils][title] security check -> " + TITLE_PREFIX + "clankers" + vtag + " " + CAPTCHA_EMOJI,
-    ],
-    // The anchors behind the decision ride the same line, so a title shows its cause.
-    [loggedTitleTail(captchaDoc()), "repo=clankers row=none kind=none captcha=1"],
-    // The label behind the row rides the line, so the cause is visible.
-    [
-      loggedTitleHead(waitingDoc([pollMessage])),
-      "[NemoUtils][title] poll command (running Bash) -> " + TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4",
-    ],
-    [
-      loggedTitleTail(waitingDoc([pollMessage])),
-      "repo=clankers row=poll command (running Bash) kind=poll captcha=0 question=0 speech=0 live=1",
-    ],
-    // The anchor cites the row that won the mark, not the row the page re-derives at
-    // write time: the reason and the row half name one row.
+    [captchaSignal(captchaDoc("closed")), false],
+    [captchaSignal(captchaDoc(null, true)), false],
+    [openDialog(node("div", "", [])), true],
+    // Every mark keeps its own label words, so the map stands.
+    [actionEmoji("running Bash"), BASH_EMOJI],
+    [actionEmoji("used Bash"), BASH_EMOJI],
+    [actionEmoji("Running commands"), BASH_EMOJI],
+    [actionEmoji("Ran commands"), BASH_EMOJI],
+    [actionEmoji("Reading files"), "\uD83D\uDCD6"],
+    [actionEmoji("Explored"), "\uD83D\uDCD6"],
+    [actionEmoji("Edit"), "\u270F\uFE0F"],
+    [actionEmoji("Writing"), "\u270F\uFE0F"],
+    [actionEmoji("Searching the web"), "\uD83D\uDD0D"],
+    [actionEmoji("Fetching web page"), "\uD83D\uDD0D"],
+    [actionEmoji("Thought for 2 seconds"), "\uD83D\uDCAD"],
+    [actionEmoji("Waiting"), "\uD83D\uDCA4"],
+    [actionEmoji("get_process_output"), "\uD83D\uDCDC"],
+    [actionEmoji("Agent chat"), "\u2699\uFE0F"],
+    [actionEmoji(null), null],
+    [liveLabel(directAction), "Bash sleep 25"],
+    [liveLabel(null), null],
+    [polls("arena-preview poll --max 1"), true],
+    [polls("python preview.py poll"), true],
+    [polls("cat skills/arena-skill/README.md | grep polling"), false],
+    // The title writes through syncTitle, and the line carries the row anchors.
+    [setPriorTitle("ChatGPT"), undefined],
     [expireHold(), null],
-    // The newest row owns the mark: a later Explored row, or a later Bash row,
-    // takes the title back from a start-process card in the same message.
-    [
-      loggedTitleHead(processDocExplored()),
-      "[NemoUtils][title] action row (Explored 2 reads) -> " +
-        TITLE_PREFIX +
-        "clankers" + vtag + " \uD83D\uDCD6",
-    ],
-    [
-      loggedTitleTail(processDocExplored()),
-      "repo=clankers row=action row (Explored 2 reads) kind=action captcha=0 question=0 speech=0 live=1",
-    ],
-    [
-      loggedTitleHead(processDocLaterRow()),
-      "[NemoUtils][title] action row (Bash sleep 25) -> " +
-        TITLE_PREFIX +
-        "clankers" + vtag + " \uD83D\uDDA5\uFE0F",
-    ],
-    [
-      loggedTitleTail(processDocLaterRow()),
-      "repo=clankers row=action row (Bash sleep 25) kind=action captcha=0 question=0 speech=0 live=1",
-    ],
-    [processRow(processDocLaterRow()), null],
-    // The owner's flip-flop: the watcher card loses the title once the message that
-    // started it keeps speaking; a spoken word after the card outranks it.
-    [processRow(processDocSpeaking()), null],
-    // A labelled row in an older message never marks once a newer message exists,
-    // even when the newer message carries no label of its own.
-    [strongRow(labeledBehindEmptyDoc()), null],
-    // A live row streams under its shimmer label before a group label lands; the
-    // mark follows it instead of freezing on the last labelled row.
-    [(function () {
-      var f = titleDocStreaming();
-      return strongRow(f.doc) === f.liveRow;
-    })(), true],
+    [syncTitle(syncChatPage), true],
+    [syncChatPage.title, TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [syncTitle(syncChatPage), false],
+    // The hold is still warm from the mark above; the quiet write needs its own window.
     [expireHold(), null],
-    [
-      loggedTitleHead(idleDoc),
-      "[NemoUtils][title] title -> " + TITLE_PREFIX + "clankers" + vtag,
-    ],
-    [loggedTitleTail(idleDoc), "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1"],
+    [syncTitle(quietPage), true],
+    [quietPage.title, TITLE_PREFIX + "clankers" + vtag],
+    [bashLogLine.split(" repo=")[0],
+      "[NemoUtils][title] action row (Bash sleep 25) -> " + TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    ["repo=" + bashLogLine.split(" repo=")[1],
+      "repo=clankers row=action row (Bash sleep 25) kind=action captcha=0 question=0 live=1"],
+    [chatLogLine.split(" repo=")[0],
+      "[NemoUtils][title] chat row -> " + TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    ["repo=" + chatLogLine.split(" repo=")[1],
+      "repo=clankers row=chat row kind=chat captcha=0 question=0 live=1"],
+    [VERSION, "1.10.23"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.
@@ -2258,12 +1350,8 @@ function checkTabTitle(api) {
     }
     return lines.length ? lines[lines.length - 1] : "";
   }
-  // The line carries the decision and the anchors behind it; the cases read both halves.
-  function loggedTitleHead(doc) {
-    return loggedTitle(doc).split(" repo=")[0];
-  }
-  function loggedTitleTail(doc) {
-    return "repo=" + loggedTitle(doc).split(" repo=")[1];
+  function loggedTitleLine(doc) {
+    return loggedTitle(doc);
   }
 
   function polls(text) {
@@ -2291,7 +1379,7 @@ function checkTabTitle(api) {
     // The line carried a one-second throttle while it existed, and the module keeps its own
     // Date, so the check waits the window out before the second sync.
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
-    api.syncTitle(idleDoc);
+    api.syncTitle(quietPage);
   } finally {
     console.log = louder;
   }

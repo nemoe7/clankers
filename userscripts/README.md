@@ -98,7 +98,7 @@ The script saves the pause, so a reload keeps it. Each feature switch stays in t
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title adds an emoji for the live action, such as `Arena | clankers 🖥️`. The action text is the shimmering status label.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title reads the newest row of the last message root. The row kind picks the mark, and an action row's shimmering status label names its emoji, such as `Arena | clankers 🖥️`.
 
 | Mark | Source |
 | --- | --- |
@@ -106,15 +106,15 @@ On `/agent/*`, ON reads the repository name from the GitHub link in the session 
 | 📖 | read: `Read` and `Explored` |
 | ✏️ | edit: `Edit`, `Editing`, `Editing files`, `Write` and `Writing` |
 | 🔍 | search and fetch |
-| 💭 | think |
+| 💭 | the reasoning row, the `not-prose` block |
 | 💤 | wait, and a row whose command runs the preview poll |
-| 💬 | a message whose words grow |
+| 💬 | the newest chat message, the `prose` body |
 | ❓ | an `ask_user` question card |
 | 🛡️ | the security check |
-| ⏳ | the model at work with no named action and no streamed words |
+| ⏳ | the model at work with no row mark |
 | ⚙️ | anything else |
 
-A finished row keeps its shimmer or its pulse in the page, so a row counts only while the stop-generating control is up. That control bounds the row, the words, the waiting line and the process card.
+A finished row keeps its shimmer or its pulse in the page, so a row counts only while the stop-generating control is up. That control bounds the read: the last root, its newest row, the waiting line and the process card.
 
 A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn.
 
