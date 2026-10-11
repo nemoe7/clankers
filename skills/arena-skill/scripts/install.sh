@@ -202,14 +202,20 @@ _arena_preview_gate() {
       ;;
   esac
   _arena_preview_line="\$(tr '\\0' ' ' < /proc/\$\$/cmdline 2>/dev/null)"
+  # A detached route runs its own line, and the gate already started that wait, so a
+  # shell that carries the marker never matches the same family twice.
+  case "\${ARENA_PREVIEW_ROUTE:-}" in 1) return 0 ;; esac
   # A PR-check wait belongs to a background process: a bash call holds the turn open
-  # while it waits, so the gate refuses the line and names the tool that starts the
-  # run instead.
+  # while it waits, so the gate starts the line detached, prints its status line, and
+  # stops the line from running a second time here.
   case "\$BASH_COMMAND" in
-    *gh*"pr"[[:space:]]*"checks"*|*gh*"run"[[:space:]]*"watch"*)
+    *gh*"pr"[[:space:]]*"checks"*|*gh*"run"[[:space:]]*"watch"*|*pytest*|*"node --test"*)
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" pr-check-tick "\$_arena_preview_line"
       case \$? in
-        1) exit 130 ;;
+        # Only a line that names a wait is stopped. A started wait ends the call clean,
+        # because the work runs in the background; a failed start keeps the refusal.
+        1) exit 0 ;;
+        2) exit 130 ;;
       esac
       ;;
   esac

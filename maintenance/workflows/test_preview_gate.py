@@ -37,6 +37,8 @@ if [ "$1" = "egress-tick" ]; then
   exec __PYTHON__ __PREVIEW__ egress-tick "$2"
 fi
 if [ "$1" = "pr-check-tick" ]; then
+  # The dry run writes the record and skips the real spawn, so the suite starts no wait.
+  export ARENA_PREVIEW_DETACH_DRY=1
   exec __PYTHON__ __PREVIEW__ pr-check-tick "$2"
 fi
 if [ "$1" = "commit-tick" ]; then
@@ -169,7 +171,13 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
       text=True,
       check=False,
       cwd=cwd,
-      env={**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"]},
+      env={
+        **os.environ,
+        "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+        # The tick writes its record under the temp state and starts no real wait.
+        "ARENA_PREVIEW_STATE_DIR": str(root),
+        "ARENA_PREVIEW_DETACH_DRY": "1",
+      },
     )
 
 
@@ -364,18 +372,22 @@ def test_a_branch_behind_main_hears_the_replay_line():
 
 
 def test_a_checks_line_meets_the_background_redirect():
-  # A PR-check wait belongs to a background process, so the gate refuses the bash
-  # line and names the tool that starts the run. A line that only prints the words
-  # or reads the pull request stays fine.
+  # A long run belongs to the background: the gate starts the line detached, ends the
+  # call clean with one stderr line, and stops the line from running here. A line that
+  # only prints the words stays fine.
   result = run("gh pr checks 7")
-  assert result.returncode == 130, result.stderr
-  assert "PR CHECKS BLOCKED" in result.stdout, result.stdout
-  assert "start_process" in result.stdout, result.stdout
+  assert result.returncode == 0, result.stderr
+  assert "RUN DETACHED" in result.stderr, result.stderr
+  assert "`pr-checks`" in result.stderr, result.stderr
   watch = run("gh run watch 7")
-  assert watch.returncode == 130, watch.stderr
-  assert "PR CHECKS BLOCKED" in watch.stdout, watch.stdout
+  assert watch.returncode == 0, watch.stderr
+  assert "`run-watch`" in watch.stderr, watch.stderr
+  # A test run parks the turn the same way, so the trap takes it too.
+  suite = run("pytest -q")
+  assert suite.returncode == 0, suite.stderr
+  assert "`pytest`" in suite.stderr, suite.stderr
   printed = run("echo gh pr checks 7")
-  assert "PR CHECKS BLOCKED" not in printed.stdout, printed.stdout
+  assert "RUN DETACHED" not in printed.stderr, printed.stderr
 
 
 def shallow_repo(root: Path, *, lone_tip: bool) -> Path:

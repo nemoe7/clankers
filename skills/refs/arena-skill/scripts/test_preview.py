@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
@@ -3673,7 +3674,7 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     )
     assert code == 3
     out = capsys.readouterr().out
-    assert "ok" in out and "run check: exit 3" in out
+    assert "ok" in out and "run check done: exit 3" in out
     preview.run_notices(directory)
     notice = capsys.readouterr().out
     assert "run check done: exit 3" in notice and notice.rstrip().endswith("ok")
@@ -3681,6 +3682,86 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     assert capsys.readouterr().out == ""
     assert preview.run_command(directory, "bad name!", ["true"]) == 2
     assert preview.run_command(directory, "empty", ["--"]) == 2
+
+
+def test_a_failed_background_start_keeps_the_refusal(capsys, monkeypatch):
+  # A spawn that never left must not read as a running wait: the tick refuses the line
+  # and names the route command that takes it.
+  monkeypatch.setattr(preview, "detach_run", lambda *args, **kwargs: False)
+  with tempfile.TemporaryDirectory() as refused_dir:
+    assert (
+      preview.pr_check_wait(refused_dir, "gh pr checks 7") == preview.PR_CHECK_REFUSED
+    )
+    # A line that only mentions the words is not a wait, so it runs untouched.
+    assert (
+      preview.pr_check_wait(refused_dir, "echo gh pr checks 7")
+      == preview.PR_CHECK_OTHER
+    )
+    refused = capsys.readouterr().err
+    assert refused.startswith("RUN BLOCKED: "), refused
+    assert "arena-preview route pr-checks" in refused, refused
+
+
+def test_a_second_line_keeps_the_standing_wait(monkeypatch):
+  # One live wait per name: a family that already runs keeps its record, so a repeated
+  # line cannot restart the same suite.
+  monkeypatch.setenv("ARENA_PREVIEW_DETACH_DRY", "1")
+  with tempfile.TemporaryDirectory() as standing_dir:
+    assert preview.detach_run(standing_dir, "pytest", ["bash", "-c", "pytest -q"])
+    record = Path(standing_dir) / "runs" / "pytest.json"
+    first = json.loads(record.read_text(encoding="utf-8"))["started_at"]
+    assert preview.detach_run(standing_dir, "pytest", ["bash", "-c", "pytest -q"])
+    assert json.loads(record.read_text(encoding="utf-8"))["started_at"] == first
+
+
+def test_route_starts_the_run_detached(tmp_path, monkeypatch):
+  # The call returns before the command ends, and the child finishes the record on its
+  # own, so a long run outlives the shell call that started it. The state directory
+  # rides the environment, because the child resolves its own from there.
+  monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(tmp_path))
+  marker = tmp_path / "late.txt"
+  code = (
+    "import pathlib, time; time.sleep(1.5);"
+    f" pathlib.Path({str(marker)!r}).write_text('done')"
+  )
+  started = time.monotonic()
+  assert (
+    preview.route_command(str(tmp_path), "quick", ["--", sys.executable, "-c", code])
+    == 0
+  )
+  assert time.monotonic() - started < 1.0
+  record = tmp_path / "runs" / "quick.json"
+  deadline = time.monotonic() + 20
+  while time.monotonic() < deadline:
+    if (
+      record.is_file()
+      and json.loads(record.read_text(encoding="utf-8")).get("exit") == 0
+    ):
+      break
+    time.sleep(0.2)
+  assert marker.is_file(), "the detached child never ran"
+  assert json.loads(record.read_text(encoding="utf-8"))["exit"] == 0
+
+
+def test_a_detached_run_prints_one_status_line_per_call(capsys):
+  """A detached wait reads as alive: one status line per gate call, none in a poll."""
+  with tempfile.TemporaryDirectory() as detached_dir:
+    preview.write_detached_placeholder(
+      detached_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
+    )
+    assert preview.run_notices(detached_dir) == 0
+    assert capsys.readouterr().err == ""
+    preview.run_notices(detached_dir, show_running=True)
+    line = capsys.readouterr().err
+    assert line.startswith("run pr-checks running "), line
+    assert line.rstrip().endswith("s")
+    # The finished record announces once, and the status line stops.
+    preview.run_command(detached_dir, "pr-checks", ["--", "true"])
+    preview.run_notices(detached_dir, show_running=True)
+    done = capsys.readouterr().out
+    assert "run pr-checks done: exit 0" in done, done
+    preview.run_notices(detached_dir, show_running=True)
+    assert capsys.readouterr().out == ""
 
 
 def test_shell_command_text_drops_the_launcher():
@@ -3754,10 +3835,10 @@ def test_gate_bans_timeout_on_poll():
     assert clean.returncode == 0, clean.stdout
 
 
-def test_gate_bans_pr_checks_on_a_line():
-  # A PR-check wait belongs to a background process: a bash line that runs it is
-  # refused, and the refusal names the tool that takes the run. A line that only
-  # prints the words stays fine.
+def test_a_long_run_line_detaches_the_wait():
+  # A long run belongs to the background: the tick starts the line detached under a run
+  # name and says so on stderr, so the run continues while the turn moves on. A line that
+  # only prints the words stays fine.
   assert preview.pr_check_line("gh pr checks 7") is True
   assert preview.pr_check_line("gh pr checks 7 --watch") is True
   assert preview.pr_check_line("cd repo && gh pr checks 7") is True
@@ -3782,6 +3863,18 @@ def test_gate_bans_pr_checks_on_a_line():
   assert preview.pr_check_line('echo "gh pr checks 7"') is False
   assert preview.pr_check_line("echo 'gh pr checks 7'") is False
   assert preview.pr_check_line("gh pr view 7 --json checks") is False
+  # The test runs join the check waits, because a suite can outrun the call that starts it.
+  assert preview.pr_check_line("pytest -q") is True
+  assert preview.pr_check_line(".venv/bin/python -m pytest -q") is True
+  assert preview.pr_check_line("node --test maintenance/workflows/x.cjs") is True
+  assert preview.long_run_name("pytest -q") == "pytest"
+  assert preview.long_run_name("python3 -m pytest -q") == "pytest"
+  assert preview.long_run_name("node --test x.cjs") == "node-tests"
+  # A tool that merely names a suite is not a suite.
+  assert preview.pr_check_line("echo pytest") is False
+  assert preview.pr_check_line("python -m pip install pytest") is False
+  assert preview.pr_check_line("grep -r pytest .") is False
+  assert preview.pr_check_line("node --version") is False
   with tempfile.TemporaryDirectory() as checks_dir:
     checks_script = str(Path(preview.__file__))
 
@@ -3792,16 +3885,29 @@ def test_gate_bans_pr_checks_on_a_line():
         text=True,
         check=False,
         cwd=checks_dir,
-        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": checks_dir},
+        env={
+          **os.environ,
+          "ARENA_PREVIEW_STATE_DIR": checks_dir,
+          "ARENA_PREVIEW_DETACH_DRY": "1",
+        },
       )
 
     banned = run_tick("gh pr checks 7 --watch")
-    assert banned.returncode == 1, banned.stdout
-    assert banned.stdout.startswith("PR CHECKS BLOCKED: "), banned.stdout
-    assert "start_process" in banned.stdout
-    assert run_tick("gh run watch 7").returncode == 1
+    assert banned.returncode == 1, banned.stderr
+    assert banned.stderr.startswith("RUN DETACHED: "), banned.stderr
+    assert "`pr-checks`" in banned.stderr, banned.stderr
+    watch = run_tick("gh run watch 7")
+    assert watch.returncode == 1 and "`run-watch`" in watch.stderr, watch.stderr
+    suite = run_tick("pytest -q")
+    assert suite.returncode == 1 and "`pytest`" in suite.stderr, suite.stderr
+    node = run_tick("node --test x.cjs")
+    assert node.returncode == 1 and "`node-tests`" in node.stderr, node.stderr
+    recorded = json.loads(
+      (Path(checks_dir) / "runs" / "pr-checks.json").read_text(encoding="utf-8")
+    )
+    assert recorded["exit"] is None and recorded["detached"] is True
     clean = run_tick("echo gh pr checks 7")
-    assert clean.returncode == 0, clean.stdout
+    assert clean.returncode == 0 and "RUN DETACHED" not in clean.stderr, clean.stderr
 
 
 def test_gate_blocks_a_cd_line_past_the_threshold():

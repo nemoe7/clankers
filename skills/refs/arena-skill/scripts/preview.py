@@ -1563,10 +1563,16 @@ def run_record_path(state_dir, name):
 
 
 def run_command(state_dir, name, argv):
-  """Run one command, keep its output tail, and record the exit for the next gate call."""
+  """Run one command in this process, then record its exit for a later call.
+
+  This is the child side of `route`: the detached child calls it as `route-run`, and a
+  test calls it directly. It prints the output tail and the verdict line for whoever
+  reads this process, and the record carries both either way.
+  """
   if not RUN_NAME.fullmatch(name or ""):
     print(
-      "arena-preview run: the name takes 1 to 64 letters, digits, dot, dash or underscore.",
+      "arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or"
+      " underscore.",
       flush=True,
     )
     return 2
@@ -1574,7 +1580,8 @@ def run_command(state_dir, name, argv):
     argv = argv[1:]
   if not argv:
     print(
-      "arena-preview run: name a command after --, for example: run gates -- make check",
+      "arena-preview route: name a command after --, for example: route gates -- make"
+      " check",
       flush=True,
     )
     return 2
@@ -1602,14 +1609,18 @@ def run_command(state_dir, name, argv):
   for line in tail:
     print(line, flush=True)
   # One stream: the agent reads both, so a duplicate line only costs tokens.
-  print(f"run {name}: exit {completed.returncode} {seconds}s {verdict}", flush=True)
+  print(
+    f"run {name} done: exit {completed.returncode} {seconds}s {verdict}", flush=True
+  )
   return completed.returncode
 
 
-def run_notices(state_dir):
+def run_notices(state_dir, show_running=False):
   """Print each finished run once, on the first gate call after it ends.
 
-  Return how many runs it printed, so a poll can end when a gate run finishes.
+  With `show_running`, a detached wait that has not finished prints one status line with
+  its elapsed seconds. Return how many finished runs it printed, so a poll can end when
+  a gate run finishes.
   """
   printed = 0
   runs = Path(state_dir) / "runs"
@@ -1619,6 +1630,16 @@ def run_notices(state_dir):
     try:
       record = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
+      continue
+    if record.get("exit") is None:
+      # One status line per call while a detached wait runs, so the agent reads it as
+      # alive instead of stalled. The poll loop asks for finished runs only.
+      if not show_running or not record.get("detached"):
+        continue
+      elapsed = detached_seconds(record.get("started_at"))
+      if elapsed is None or elapsed > DETACHED_STATUS_SECONDS:
+        continue
+      print(f"run {record.get('name')} running {elapsed}s", file=sys.stderr, flush=True)
       continue
     if record.get("announced"):
       continue
@@ -1699,19 +1720,35 @@ PR_CHECK_WRAPPERS = (
   "stdbuf",
   "sudo",
 )
-PR_CHECK_BLOCK = (
-  "PR CHECKS BLOCKED: a bash line must not run `gh pr checks` or `gh run watch`."
-  " Start the run with the `start_process` tool: `gh pr checks <PR> --watch`."
+PR_CHECK_NAMES = (("pr", "checks", "pr-checks"), ("run", "watch", "run-watch"))
+# Long runs that hold a turn open the way a check wait does: a test suite can outrun the
+# call that started it, so the trap starts these detached too. The heads carry no
+# repository knowledge, so the same set serves every repo the installer touched.
+LONG_RUN_HEADS = {"pytest": "pytest", "py.test": "pytest"}
+DETACHED_NOTICE = (
+  "RUN DETACHED: `{name}` runs in the background, so the call ends clean;"
+  " its verdict prints on a later call."
 )
+DETACHED_BLOCK = (
+  "RUN BLOCKED: the background start failed, so the wait never left."
+  " Run `arena-preview route {name} -- <the same line>` instead."
+)
+# A detached record older than this stops printing its status line, so a killed child
+# leaves no forever-running line.
+DETACHED_STATUS_SECONDS = 7200
+# Tests set this so a classifier probe writes the record without starting a real wait.
+DETACH_DRY_RUN = "ARENA_PREVIEW_DETACH_DRY"
 
 
-def pr_check_line(line):
-  """True when a command piece runs a PR-check wait the gate refuses.
+def long_run_name(line):
+  """The run name for a long run the gate detaches, or None for any other line.
 
-  A wrapper (`env gh pr checks 7`), a flag before the family (`gh -R repo pr checks 7`),
-  a substitution, and a chained piece all count, so the head moves past the wrapper and
-  the family words are read wherever they sit after it. A line that merely prints the
-  words, like `echo gh pr checks 7`, stays fine, and `bash` keeps its own gate.
+  The families are the check waits (`gh pr checks`, `gh run watch`) and the test runs
+  (`pytest`, `python -m pytest`, `node --test`). A wrapper (`env gh pr checks 7`), a flag
+  before the family (`gh -R repo pr checks 7`), a substitution, and a chained piece all
+  count, so the head moves past the wrapper and the family words are read wherever they
+  sit after it. A line that merely prints the words stays fine, and `bash` keeps its own
+  gate.
   """
   text = unquote_commands(line or "")
   for separator in ("&&", "||", ";", "|", "\n", "$(", "`"):
@@ -1739,12 +1776,173 @@ def pr_check_line(line):
     head = tokens[index].lstrip("({\"'").rsplit("/", 1)[-1]
     if head in INERT_COMMANDS or head == "bash":
       continue
+    if head in LONG_RUN_HEADS:
+      return LONG_RUN_HEADS[head]
+    if head.startswith("python") and tuple(tokens[index + 1 : index + 3]) == (
+      "-m",
+      "pytest",
+    ):
+      return "pytest"
+    if head == "node" and tokens[index + 1 : index + 2] == ["--test"]:
+      return "node-tests"
     if head != "gh":
       continue
     for position, word in enumerate(tokens[index + 1 : -1]):
-      if (word, tokens[index + 2 + position]) in PR_CHECK_COMMANDS:
-        return True
-  return False
+      for first, second, name in PR_CHECK_NAMES:
+        if word == first and tokens[index + 2 + position] == second:
+          return name
+  return None
+
+
+def pr_check_line(line):
+  """True when a command piece runs a long run the gate detaches."""
+  return long_run_name(line) is not None
+
+
+def detached_seconds(started_at):
+  """Whole seconds since a detached run started, or None when the stamp will not parse."""
+  try:
+    started = datetime.fromisoformat(str(started_at))
+    if started.tzinfo is None:
+      started = started.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - started).total_seconds()))
+  except (TypeError, ValueError):
+    return None
+
+
+def write_detached_placeholder(state_dir, name, argv):
+  """Write the record a detached run carries while it runs, and return its path."""
+  path = run_record_path(state_dir, name)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  record = {
+    "name": name,
+    "argv": list(argv),
+    "exit": None,
+    "seconds": None,
+    "started_at": now(),
+    "finished_at": None,
+    "verdict": None,
+    "tail": [],
+    "detached": True,
+    "announced": False,
+  }
+  path.write_text(
+    json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+  )
+  return path
+
+
+# The three answers the PR-check tick gives its hook. The hook tells them apart: a
+# line that only mentions the words still runs, a started wait ends the call clean,
+# and a failed start keeps the refusal.
+PR_CHECK_OTHER = 0
+PR_CHECK_RUNS = 1
+PR_CHECK_REFUSED = 2
+
+
+def pr_check_wait(state_dir, line):
+  """Detach the wait one line names, and say how the call must end.
+
+  A wait that started returns `PR_CHECK_RUNS`: the hook ends its shell clean, because
+  the work the line asked for already runs in the background. A failed start returns
+  `PR_CHECK_REFUSED`, so the hook keeps the refusal. Any other line returns
+  `PR_CHECK_OTHER` and runs untouched. Each message rides stderr.
+  """
+  name = long_run_name(line)
+  if not name:
+    return PR_CHECK_OTHER
+  if not detach_run(state_dir, name, ["bash", "-c", line]):
+    print(DETACHED_BLOCK.format(name=name), file=sys.stderr, flush=True)
+    return PR_CHECK_REFUSED
+  print(DETACHED_NOTICE.format(name=name), file=sys.stderr, flush=True)
+  return PR_CHECK_RUNS
+
+
+def detach_run(state_dir, name, argv):
+  """Start one command detached under `name`, and say whether the spawn left.
+
+  A detached child outlives the shell call that started it, so the run keeps going
+  while the agent works on. The child executes the command through `route-run` and
+  writes the finished record itself, so the verdict replays on a later call like any
+  routed run. One live wait per name: a second line for the same family keeps the run
+  that already stands. Tests set `ARENA_PREVIEW_DETACH_DRY` to write the record and skip
+  the spawn.
+  """
+  path = run_record_path(state_dir, name)
+  if path.is_file():
+    try:
+      standing = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+      standing = None
+    if standing and standing.get("exit") is None:
+      return True
+  write_detached_placeholder(state_dir, name, argv)
+  if os.environ.get(DETACH_DRY_RUN):
+    return True
+  # A plain `bash -c` reads no login profile, so a child never meets the gate that
+  # started it. The marker covers a shell that sources the gate anyway, and BASH_ENV
+  # leaves with it.
+  child_env = {
+    key: value
+    for key, value in os.environ.items()
+    if key not in ("BASH_ENV", DETACH_DRY_RUN, "ARENA_PREVIEW_ROUTE")
+  }
+  child_env["ARENA_PREVIEW_ROUTE"] = "1"
+  try:
+    subprocess.Popen(
+      [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "route-run",
+        name,
+        "--",
+        *argv,
+      ],
+      stdin=subprocess.DEVNULL,
+      stdout=subprocess.DEVNULL,
+      stderr=subprocess.DEVNULL,
+      env=child_env,
+      start_new_session=True,
+      close_fds=True,
+    )
+  except OSError:
+    return False
+  return True
+
+
+def route_command(state_dir, name, argv):
+  """Start a command detached under `name`, and return at once.
+
+  This is the helper the trap uses for a long run it detects, and the call a line names
+  when the trap could not start one. The verdict arrives on a later call, and `poll`
+  ends when the run finishes.
+  """
+  if not RUN_NAME.fullmatch(name or ""):
+    print(
+      "arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or"
+      " underscore.",
+      flush=True,
+    )
+    return 2
+  if argv[:1] == ["--"]:
+    argv = argv[1:]
+  if not argv:
+    print(
+      "arena-preview route: name a command after --, for example: route gates -- make"
+      " check",
+      flush=True,
+    )
+    return 2
+  if not detach_run(state_dir, name, argv):
+    print(f"arena-preview route: the start of `{name}` failed.", flush=True)
+    return 1
+  print(
+    f"routed {name}: the run continues in the background, and its verdict prints on a"
+    " later call.",
+    file=sys.stderr,
+    flush=True,
+  )
+  return 0
 
 
 def poll_hold_line(store):
@@ -4719,12 +4917,25 @@ def main():
     help="Report whether a command line that names an inbox call runs nothing else",
   )
   inbox_line.add_argument("line", help="The command line, as the hook read it")
-  run = commands.add_parser(
-    "run",
-    help="Run a command, keep its output tail, and show the exit on the next gate call",
+  route = commands.add_parser(
+    "route",
+    help=(
+      "Start a command detached, keep its output tail, and show the exit on a later"
+      " call"
+    ),
   )
-  run.add_argument("name", help="A short name for the run, for example gates")
-  run.add_argument(
+  route.add_argument("name", help="A short name for the run, for example gates")
+  route.add_argument(
+    "command_args", nargs=argparse.REMAINDER, help="The command, after --"
+  )
+  # The child side of `route`. The gate and the CLI both spawn it, so one place runs
+  # the command and writes the finished record.
+  route_run = commands.add_parser(
+    "route-run",
+    help="Run one command here and record its exit for a later call",
+  )
+  route_run.add_argument("name", help="The run name the caller already recorded")
+  route_run.add_argument(
     "command_args", nargs=argparse.REMAINDER, help="The command, after --"
   )
   ack_tick = commands.add_parser(
@@ -4916,7 +5127,9 @@ def main():
       parser.error("a command is required")
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
-    if args.command == "run":
+    if args.command == "route":
+      return route_command(state_dir, args.name, args.command_args)
+    if args.command == "route-run":
       return run_command(state_dir, args.name, args.command_args)
     if args.command == "ack-tick":
       warning = tick_warning(args.line)
@@ -4934,10 +5147,7 @@ def main():
         print(warning, file=sys.stderr)
       return 0
     if args.command == "pr-check-tick":
-      if pr_check_line(args.line):
-        print(PR_CHECK_BLOCK, flush=True)
-        return 1
-      return 0
+      return pr_check_wait(state_dir, args.line)
     if args.command == "rename":
       try:
         old_id = Store(state_dir).resolve_id(args.old_id)
@@ -4965,7 +5175,7 @@ def main():
         return 1
       return 0
     if args.command == "gate":
-      run_notices(state_dir)
+      run_notices(state_dir, show_running=True)
       if poll_timeout_line(args.line):
         print(
           "TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`."
@@ -4973,9 +5183,6 @@ def main():
           " 1800 instead, so a cut wait still returns its listing.",
           flush=True,
         )
-        return 1
-      if pr_check_line(args.line):
-        print(PR_CHECK_BLOCK, flush=True)
         return 1
       try:
         allowed = Store(state_dir).gate(pending_only=args.push)

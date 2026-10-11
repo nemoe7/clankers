@@ -136,8 +136,8 @@
 
 - If Chromium is needed, install `@sparticuz/chromium` from npm; use its extracted binary and runtime files, not a Playwright-managed browser.
 - Install dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
-- Start a background test or PR-check run with `start_process`, on a stable tree, and NEVER edit the files it covers while it runs. A bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
-- For a gate run, MUST use `arena-preview run <name> -- <command>` through `start_process`, and NEVER call `get_process_output` to wait for it. Wait with `arena-preview poll`, which breaks when the run finishes, or with the next task; the verdict prints in the start_process log, on stdout and on stderr, when the run exits. The next bash or `arena-preview` call also prints it once as `Finished run <name>`. Until then, scope the next task. Read the verdict line before any push.
+- Start a background test or PR-check run, on a stable tree, and NEVER edit the files it covers while it runs. A bash line that runs `gh pr checks` or `gh run watch` detaches instead: the gate starts it in the background, and the verdict arrives as `run <name> done: exit N` on a later call.
+- For a long run, MUST use `arena-preview route <name> -- <command>`, and NEVER call `get_process_output` to wait for it. Wait with `arena-preview poll`, which breaks when the run finishes, or with the next task; each call in between prints one status line with the elapsed seconds. The verdict prints once as `run <name> done: exit N` on the next bash or `arena-preview` call. Until then, scope the next task. Read the verdict line before any push.
 - Never report a check you have not read.
 
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.
