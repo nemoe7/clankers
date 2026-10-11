@@ -2790,6 +2790,50 @@ function checkStateDownload(api, session) {
   assert.equal(stateRepo(bareDoc), "daedalus");
   assert.equal(readSlug(bareDoc), "daedalus");
   assert.equal(stateScope(bareDoc).repo, "daedalus");
+  // A new chat on /agent has no session bar, so the composer's own picker row carries the
+  // repository chip ahead of the branch chip, and the fill reads it there.
+  var composerDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/clankers" }, { textContent: "main" }];
+    },
+  };
+  assert.equal(readSlug(composerDoc), "clankers");
+  assert.equal(stateRepo(composerDoc), "clankers");
+  // The leading chip is the repository, so a chip that is not the owner/repo form never
+  // answers, and the title still carries the read.
+  var branchChipDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "main" }, { textContent: "nemoe7/clankers" }];
+    },
+    title: "Arena | clankers",
+  };
+  assert.equal(readSlug(branchChipDoc), "clankers");
+  // A branch with a slash wears the owner/repo shape too, so two such chips stay ambiguous and
+  // the title decides instead of a branch.
+  var branchFirstDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "arena/595e8dec-clankers" }, { textContent: "nemoe7/clankers" }];
+    },
+    title: "Arena | clankers",
+  };
+  assert.equal(readSlug(branchFirstDoc), "clankers");
+  // The page's own chip outranks the title, because the title can still name the previous
+  // session after a new chat opens on the same tab.
+  var staleTitleDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/daedalus" }];
+    },
+    title: "Arena | clankers",
+  };
+  assert.equal(readSlug(staleTitleDoc), "daedalus");
   // The header leaves the page while a dialog holds it, so the fill's saved slug names the
   // repository; the branch stays empty.
   session.value = "clankers";

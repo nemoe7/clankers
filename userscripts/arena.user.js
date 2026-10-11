@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.20
+// @name         Arena.ai | NemoUtils | v1.10.21
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.20
+// @version      1.10.21
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -136,6 +136,10 @@
   // copy serves every feature.
   var BAR_SELECTOR =
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
+  // The composer and header picker rows hold the repository chip ahead of the branch chip, so
+  // one selector serves every chip read.
+  var CHIP_SPAN_SELECTOR =
+    'button[aria-haspopup="dialog"] span.truncate, button[aria-haspopup="menu"] span.truncate';
   var SLUG_KEY = "clankers-arena-agent-slug";
   // The tab title carries the repository even before the bar renders, so the regex lives
   // with the other page-wide constants: detectRepo runs at load, ahead of any later var.
@@ -2153,7 +2157,27 @@
       }
       if (bare) return bare;
     }
-    return titleRepo(doc);
+    return chipRepo(doc) || titleRepo(doc);
+  }
+
+  // A new chat on /agent renders no session bar, so the composer's own picker row names the
+  // attached repository. Its repository chip wears the owner/repo form and the branch chip
+  // beside it does not, so one such chip answers. Two of them are ambiguous, because a branch
+  // with a slash wears the same form, so then nothing answers and the title decides.
+  function chipRepo(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return "";
+    var chips = doc.querySelectorAll(CHIP_SPAN_SELECTOR);
+    var repo = "";
+    var hits = 0;
+    var i;
+    for (i = 0; chips && i < chips.length; i += 1) {
+      var hit = slugFromOwnerRepo(chips[i].textContent);
+      if (!hit) continue;
+      hits += 1;
+      if (hits > 1) return "";
+      repo = hit;
+    }
+    return repo;
   }
 
   function savedSlug() {
@@ -2169,7 +2193,7 @@
   // repository. Read that before falling back to the tab title.
   function headerRepo(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return "";
-    var spans = doc.querySelectorAll('button[aria-haspopup="dialog"] span.truncate, button[aria-haspopup="menu"] span.truncate');
+    var spans = doc.querySelectorAll(CHIP_SPAN_SELECTOR);
     for (var i = 0; i < spans.length; i += 1) {
       var first = String(spans[i].textContent || "").trim().split(/\s+/)[0];
       if (/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(first)) return first;
@@ -2669,7 +2693,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.20";
+    var VERSION = "1.10.21";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
