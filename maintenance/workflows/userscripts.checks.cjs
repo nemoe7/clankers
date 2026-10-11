@@ -2448,10 +2448,10 @@ function checkTabTitle(api) {
     [waitingSignal(nestedPanelDoc()), true],
     [desiredTitle(nestedPanelDoc()), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
-    // The user message holds the same box classes, and its text wrapper carries prose; the
-    // layout element keeps the mark off it, so the unmapped row earns the fallback gear.
+    // The user message holds the same box classes, and its text wrapper carries prose. The
+    // layout element keeps the row out of the pick, so no mark lands on the user's words.
     [USER_MESSAGE_SELECTOR, '[data-user-message-layout="true"]'],
-    [desiredTitle(userMessageDoc()), TITLE_PREFIX + "clankers" + vtag + " \u2699\uFE0F"],
+    [desiredTitle(userMessageDoc()), TITLE_PREFIX + "clankers" + vtag],
     [expireHold(), null],
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
     // The security check beats every other mark, including a poll row and the hourglass.
