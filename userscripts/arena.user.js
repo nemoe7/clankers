@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.24
+// @name         Arena.ai | NemoUtils | v1.10.25
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.24
+// @version      1.10.25
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2686,12 +2686,15 @@
     var LIVE_ICON_SELECTOR = ".animate-pulse";
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
+    // The user message layout: its text wrapper carries the same prose class, so the class
+    // alone never proves an agent message.
+    var USER_MESSAGE_SELECTOR = '[data-user-message-layout="true"]';
     // The answered question card wears the Summary header, and its chosen answer
     // row raises no mark.
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.24";
+    var VERSION = "1.10.25";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2762,11 +2765,22 @@
     function newestBox(doc) {
       var messages = typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
       var boxes;
+      var outer;
       var i;
+      var j;
       for (i = messages.length - 1; i >= 0; i -= 1) {
         boxes = typeof messages[i].querySelectorAll === "function" ? messages[i].querySelectorAll(ROW_BOX_SELECTOR) : [];
-        if (boxes && boxes.length) {
-          return boxes[boxes.length - 1];
+        // A row's own expanded panel carries the very classes of the message box, and only
+        // the outermost box holds rows, so a box inside another box never wins the pick.
+        outer = [];
+        for (j = 0; j < boxes.length; j += 1) {
+          if (boxes[j].closest && boxes[j].closest(ROW_BOX_SELECTOR) !== boxes[j]) {
+            continue;
+          }
+          outer.push(boxes[j]);
+        }
+        if (outer.length) {
+          return outer[outer.length - 1];
         }
       }
       return null;
@@ -2853,7 +2867,11 @@
     }
 
     function messageRow(row) {
-      return rowHasClass(row, "prose");
+      if (!rowHasClass(row, "prose")) {
+        return false;
+      }
+      // A user message styles its text with the same class inside its own layout element.
+      return !(typeof row.closest === "function" && row.closest(USER_MESSAGE_SELECTOR));
     }
 
     function thinkRow(row) {
@@ -3330,6 +3348,7 @@
       LIVE_ICON_SELECTOR: LIVE_ICON_SELECTOR,
       LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
       GROUP_LABEL_SELECTOR: GROUP_LABEL_SELECTOR,
+      USER_MESSAGE_SELECTOR: USER_MESSAGE_SELECTOR,
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
       SPEECH_SELECTOR: SPEECH_SELECTOR,
       WAITING_SELECTOR: WAITING_SELECTOR,

@@ -880,6 +880,7 @@ function checkTabTitle(api) {
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var ROW_BOX_SELECTOR = api.ROW_BOX_SELECTOR;
   var ROW_ICON_SELECTORS = api.ROW_ICON_SELECTORS;
+  var USER_MESSAGE_SELECTOR = api.USER_MESSAGE_SELECTOR;
   // A Tailwind name holds a dot, like h-3.5, so its class selector needs the CSS escape:
   // a raw dot before the digit threw a SyntaxError from the browser and killed the title.
   function escapedClassDots(selector) {
@@ -1868,6 +1869,79 @@ function checkTabTitle(api) {
     doc.__waiting = withCard !== false;
     return doc;
   }
+  // The owner's expanded action row: the row's own panel carries the same flex flex-col
+  // gap-2 classes as the message box, so the pick must stay on the outermost box.
+  // The owner's user message: the same box classes hold one div whose class list carries
+  // prose, and the layout element marks the message as the user's own.
+  function userMessageDoc() {
+    var text = { textContent: "wake up" };
+    // The user's own text wrapper: the same prose class, inside the layout element.
+    var row = {
+      tagName: "DIV",
+      classList: { contains: function (name) { return name === "prose"; } },
+      textContent: "wake up",
+      closest: function (selector) { return selector === USER_MESSAGE_SELECTOR ? layout : null; },
+      querySelector: function (selector) { return selector === "p" ? text : null; },
+      querySelectorAll: function () { return []; },
+    };
+    var layout = {
+      closest: function (selector) { return selector === USER_MESSAGE_SELECTOR ? layout : null; },
+    };
+    var box = {
+      children: [row],
+      closest: function (selector) { return selector === ROW_BOX_SELECTOR ? box : null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; },
+    };
+    var message = {
+      contains: function (candidate) { return candidate === row || candidate === box; },
+      querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [box] : []; },
+    };
+    return {
+      __structural: true,
+      title: "ChatGPT",
+      querySelector: function (selector) { return selector === REPO_LINK_SELECTOR ? repoLink : null; },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
+  function nestedPanelDoc() {
+    var words = { textContent: "Hello there" };
+    var row = {
+      classList: { contains: function (name) { return name === "prose"; } },
+      textContent: "Hello there",
+      querySelector: function (selector) { return selector === "p" ? words : null; },
+      querySelectorAll: function (selector) { return selector === LIVE_LABEL_SELECTOR ? [words] : []; },
+    };
+    var panel = {
+      children: [],
+      closest: function (selector) { return selector === ROW_BOX_SELECTOR ? box : null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; },
+    };
+    var box = {
+      children: [row, spinnerCard()],
+      closest: function (selector) { return selector === ROW_BOX_SELECTOR ? box : null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [panel] : []; },
+    };
+    var message = {
+      querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [box, panel] : []; },
+    };
+    return {
+      __structural: true,
+      title: "ChatGPT",
+      querySelector: function (selector) { return selector === REPO_LINK_SELECTOR ? repoLink : null; },
+      querySelectorAll: function (selector) {
+        if (selector === MESSAGE_SELECTOR) return [message];
+        if (selector === "button[aria-label]") return [stopButton("Stop generating")];
+        return [];
+      },
+    };
+  }
   // The owner's action page: the canvas sits in the row itself, so the box's last child is
   // a labelled row, never the waiting card.
   function actionCanvasDoc(messages, words, withStop) {
@@ -2367,6 +2441,17 @@ function checkTabTitle(api) {
     // The thinking row carries not-prose: an unmapped label there reads as the think step.
     [emojiForRow(divMessage("Analyzing the tree", true, "not-prose").row), THINK_EMOJI],
     [desiredTitle(balloonDoc("not-prose", false)), TITLE_PREFIX + "clankers" + vtag + " " + THINK_EMOJI],
+    [expireHold(), null],
+    // A row's own panel carries the same box classes as the message box, so the pick stays
+    // on the outermost box: the balloon behind the panel keeps the mark and the card behind
+    // the row is read.
+    [waitingSignal(nestedPanelDoc()), true],
+    [desiredTitle(nestedPanelDoc()), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
+    [expireHold(), null],
+    // The user message holds the same box classes, and its text wrapper carries prose; the
+    // layout element keeps the mark off it, so the unmapped row earns the fallback gear.
+    [USER_MESSAGE_SELECTOR, '[data-user-message-layout="true"]'],
+    [desiredTitle(userMessageDoc()), TITLE_PREFIX + "clankers" + vtag + " \u2699\uFE0F"],
     [expireHold(), null],
     [desiredTitle(idleDoc), TITLE_PREFIX + "clankers" + vtag],
     // The security check beats every other mark, including a poll row and the hourglass.
