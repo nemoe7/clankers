@@ -1615,6 +1615,31 @@ def run_command(state_dir, name, argv):
   return completed.returncode
 
 
+def live_runs(state_dir):
+  """Names of detached waits that have not finished, in run-name order.
+
+  The Skip poll press reads this list: a live run still has a verdict to deliver, so the
+  press waits for it instead of ending the turn early.
+  """
+  names = []
+  runs = Path(state_dir) / "runs"
+  if not runs.is_dir():
+    return names
+  for path in sorted(runs.glob("*.json")):
+    try:
+      record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+      continue
+    if record.get("detached") and record.get("exit") is None:
+      names.append(record.get("name") or path.stem)
+  return names
+
+
+def skip_poll_ready(store):
+  """True when the press may end the wait: it is armed and no detached run is live."""
+  return store.skip_poll_requested() and not live_runs(store.path.parent)
+
+
 def run_notices(state_dir, show_running=False):
   """Print each finished run once, on the first gate call after it ends.
 
@@ -2108,7 +2133,9 @@ def poll_inbox(store, sleeper=None):
         print_poll_hold(store)
         return 0
       # A message or an unblocked task outranks a skip: the turn reads that item first.
-      if store.skip_poll_requested():
+      # A live detached run outranks it too: its verdict is still coming, and the press
+      # waits armed until the run finishes. Only then does the skip end the turn.
+      if skip_poll_ready(store):
         store.take_skip_poll()
         # The skip ends the turn here, so the header learns the turn is over.
         store.mark_turn_ended()

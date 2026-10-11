@@ -4785,6 +4785,59 @@ def test_skip_poll():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
 
 
+def test_a_live_run_holds_the_skip_poll_press():
+  """A detached run with no exit holds the press; the poll waits and the stamp stays."""
+  with tempfile.TemporaryDirectory() as hold_dir:
+    store = preview.Store(hold_dir, create=True)
+    printed = []
+
+    def capture(value, **kwargs):
+      printed.append(value)
+
+    def run_poll():
+      sleeps = []
+      original = builtins.print
+      builtins.print = capture
+      try:
+        code = preview.poll_inbox(store, sleeper=sleeps.append)
+      finally:
+        builtins.print = original
+      return code, sleeps
+
+    saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
+    try:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
+      preview.write_detached_placeholder(
+        hold_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
+      )
+      store.request_skip_poll()
+      assert preview.live_runs(hold_dir) == ["pr-checks"]
+      assert preview.skip_poll_ready(store) is False
+      # The press waits armed while the run is live: the poll runs its whole span.
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 1 and sleeps == [10, 10]
+      assert store.skip_poll_requested() is True
+      # The run's finish outranks the press: the verdict breaks the next wait first.
+      preview.run_command(hold_dir, "pr-checks", ["--", "true"])
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 0 and sleeps == []
+      assert any("run pr-checks done: exit 0" in value for value in printed)
+      assert preview.live_runs(hold_dir) == []
+      assert store.skip_poll_requested() is True, "the finish leaves the press armed"
+      # With nothing live and nothing pending, the held press ends the wait.
+      printed.clear()
+      code, sleeps = run_poll()
+      assert code == 0 and sleeps == []
+      assert printed[1] == (
+        "SKIP: owner pressed Skip poll. End the turn, no second poll."
+      )
+      assert store.skip_poll_requested() is False
+    finally:
+      preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
+
+
 def test_turn_end_marker():
   """A poll that ends the turn marks it; the next agent call and a live turn clear the mark."""
   with tempfile.TemporaryDirectory() as end_dir:

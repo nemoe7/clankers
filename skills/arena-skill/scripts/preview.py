@@ -547,6 +547,15 @@ def run_command(state_dir,name,argv):
 	started=time.monotonic();completed=subprocess.run(argv,capture_output=True,text=True,check=False);seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=output[-RUN_TAIL_LINES:];verdict=tail[-1]if tail else'(no output)';record={'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};path=run_record_path(state_dir,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
 	for line in tail:print(line,flush=True)
 	print(f"run {name} done: exit {completed.returncode} {seconds}s {verdict}",flush=True);return completed.returncode
+def live_runs(state_dir):
+	names=[];runs=Path(state_dir)/'runs'
+	if not runs.is_dir():return names
+	for path in sorted(runs.glob('*.json')):
+		try:record=json.loads(path.read_text(encoding='utf-8'))
+		except(OSError,ValueError):continue
+		if record.get('detached')and record.get('exit')is None:names.append(record.get('name')or path.stem)
+	return names
+def skip_poll_ready(store):return store.skip_poll_requested()and not live_runs(store.path.parent)
 def run_notices(state_dir,show_running=False):
 	printed=0;runs=Path(state_dir)/'runs'
 	if not runs.is_dir():return printed
@@ -683,7 +692,7 @@ def poll_inbox(store,sleeper=None):
 			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);print_poll_hold(store);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);print_poll_hold(store);return 0
-			if store.skip_poll_requested():store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);print_poll_hold(store);return 0
+			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);print_poll_hold(store);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
 	store.mark_turn_ended();print('Poll ended: 0 pending.',flush=True);print_poll_hold(store);return 1

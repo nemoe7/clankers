@@ -1,6 +1,6 @@
 # Preview transport: commands and recovery
 
-Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. The state directory is `ARENA_PREVIEW_STATE_DIR` when that is set, and the repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts. The installed wrapper finds the repository from its own path, so every CLI call works from any directory and needs no `cd`.
+Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. The state directory is `ARENA_PREVIEW_STATE_DIR` when that is set, and the repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts. The installed wrapper finds the repository from its own path, so every CLI call works from any working directory and needs no `cd`.
 
 ## Commands
 
@@ -9,6 +9,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `init` | Create a missing state database without starting the server |
 | `serve --port 8000` | Start the shared preview with `start_process`. The gate warns when a serve names a port other than 8000 |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
+| `note <id>` | Reread a stored note by its seven or full characters; a short ID that matches several notes prints every match |
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after the quiet note is acknowledged |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list while an upcoming task is unblocked, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
 | `route <name> -- <command>` | The gate's helper for a detected long run, and the call a failed start names: it starts the command detached under a name and records its tail and exit, so the verdict prints on a later call as `run <name> done: exit N`, with one status line per call while it runs |
@@ -26,7 +27,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 
 Use complete IDs in CLI calls; cite their first seven characters in prose. `read` does not acknowledge an item. Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers. A repeated `ack` on an ID appends one more reply block and keeps the earlier ones. The same on a submission ID appends reply blocks to its receipt. An unknown ID fails the whole receipt batch. Answer later submissions under their own IDs. If the preview is unavailable, use `ACK:` in chat for delivered notes.
 
-Refer to a note in prose by the first seven characters of its ID. Use the full ID in CLI calls. Check a note reference against the ID `read` returned before sending it.
+Refer to a note in prose by the first seven characters of its ID. Use the full ID in CLI calls. Check a note reference against the ID returned by `read` before sending it.
 
 When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks; the seven-character shortening applies to note IDs only. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
 
@@ -38,7 +39,7 @@ Use this only after the owner selects the external channel. The owner supplies a
 
 Read the inbox when a Bash call reports a pending note, answer or upload count on stderr, before the next work step; that reminder is the schedule. NEVER wait for the Bash gate to block before a read. When ending a turn or a report form awaits answers, run `poll`. ALWAYS run `poll` on the bash call that ends the turn, chained or not. NEVER set or export `_arena_preview_platform`; a blocked gate is repaired, NEVER bypassed. A blocking-only call needs its read after return. Initial discovery may precede the first read; startup MUST. A blocked call that runs `tail`, `head` or `grep` hears which commands to drop. A call that spells the preview path hears the bare `arena-preview` form once a shell. A call that reads code-scanning alerts or workflow run logs hears the proxy route once a shell. A call the gate detects as a long run hears on stderr that the run continues detached, with one status line per later call and the verdict once at the end. A blocked push says that an ack clears it.
 
-The page's Message log toolbar carries a Skip poll button. A listing that carries a `skip_poll` stamp reports it: the poll that finds it consumes it, prints `SKIP: owner pressed Skip poll. End the turn, no second poll.` on stdout, and the turn ends there. Never poll again after a skip.
+The page's Message log toolbar carries a Skip poll button. A listing that carries a `skip_poll` stamp reports it: the poll that finds it consumes it, prints `SKIP: owner pressed Skip poll. End the turn, no second poll.` on stdout, and the turn ends there. Never poll again after a skip. While a detached run has no exit, the press waits: the poll runs its span, the stamp stays armed, and the run's finish breaks the wait first.
 
 ## The gate's cases
 
@@ -64,7 +65,6 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 | `call-count` | a line over the call threshold with a pending inbox | `exit 130` until the ack |
 
 A blocked call repeats its reason on stderr, and every case above answers one bash call: the gate never holds the turn.
-
 
 ## Tasks
 
@@ -119,7 +119,7 @@ Which checks must pass first? {#release-checks}
 
 Each file on a composed note is 1–50MB. `read` returns the note with an `attachments[]` list; read each record's `path` before acknowledging the single note ID. `present: false` means the record remains but the bytes do not.
 
-An agent asks with `download-request <url>`; that queues a pending job the owner approves or denies before the browser fetches the URL. Add `--allow-proxy` only for that URL. Credentials in URLs are rejected. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes.
+An agent asks with `download-request <url>`. That queues a pending job. The owner approves or denies it before the browser fetches the URL. Add `--allow-proxy` only for that URL. Credentials in URLs are rejected. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes.
 
 ## Restore
 
