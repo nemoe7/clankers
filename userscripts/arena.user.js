@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.23
+// @name         Arena.ai | NemoUtils | v1.10.24
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.23
+// @version      1.10.24
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2688,12 +2688,15 @@
     var LIVE_ICON_SELECTOR = ".animate-pulse";
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
+    // The fetch and lone-search rows carry no button and no secondary span: their label sits
+    // alone in a body-sm span, with the URL in an anchor of its own inside that span.
+    var LABEL_SPAN_SELECTOR = "span.body-sm";
     // The answered question card wears the Summary header, and its chosen answer
     // row raises no mark.
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.23";
+    var VERSION = "1.10.24";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // The chat row wears the speech balloon, and the reasoning row wears the thinking mark;
@@ -2752,8 +2755,12 @@
       return name || null;
     }
 
+    function squash(value) {
+      return String(value || "").replace(/\s+/g, " ").trim();
+    }
+
     function collapsed(node) {
-      return node ? String(node.textContent || "").replace(/\s+/g, " ").trim() : "";
+      return node ? squash(node.textContent) : "";
     }
 
     // The row reads all start at the last message root: the root chain tells the user's
@@ -2916,6 +2923,20 @@
       text = collapsed(group.length ? group[group.length - 1] : null);
       if (text) {
         return text;
+      }
+      var spans = typeof row.querySelectorAll === "function" ? row.querySelectorAll(LABEL_SPAN_SELECTOR) : [];
+      if (spans.length) {
+        var span = spans[spans.length - 1];
+        text = collapsed(span);
+        // The anchor holds the URL, never a label word: its copy comes out before the read.
+        var link = typeof span.querySelector === "function" ? span.querySelector("a") : null;
+        var linkText = collapsed(link);
+        if (linkText) {
+          text = squash(text.split(linkText).join(" "));
+        }
+        if (text) {
+          return text;
+        }
       }
       return collapsed(button) || null;
     }
@@ -3222,6 +3243,7 @@
       LIVE_ICON_SELECTOR: LIVE_ICON_SELECTOR,
       LIVE_LABEL_SELECTOR: LIVE_LABEL_SELECTOR,
       GROUP_LABEL_SELECTOR: GROUP_LABEL_SELECTOR,
+      LABEL_SPAN_SELECTOR: LABEL_SPAN_SELECTOR,
       REPO_LINK_SELECTOR: REPO_LINK_SELECTOR,
       WAITING_SELECTOR: WAITING_SELECTOR,
       WAITING_TEXT_SELECTOR: WAITING_TEXT_SELECTOR,

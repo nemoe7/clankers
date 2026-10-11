@@ -829,6 +829,7 @@ function checkTabTitle(api) {
   var LIVE_ICON_SELECTOR = api.LIVE_ICON_SELECTOR;
   var LIVE_LABEL_SELECTOR = api.LIVE_LABEL_SELECTOR;
   var GROUP_LABEL_SELECTOR = api.GROUP_LABEL_SELECTOR;
+  var LABEL_SPAN_SELECTOR = api.LABEL_SPAN_SELECTOR;
   var REPO_LINK_SELECTOR = api.REPO_LINK_SELECTOR;
   var WAITING_SELECTOR = api.WAITING_SELECTOR;
   var WAITING_TEXT_SELECTOR = api.WAITING_TEXT_SELECTOR;
@@ -890,6 +891,10 @@ function checkTabTitle(api) {
     if (selector === GROUP_LABEL_SELECTOR) {
       return node.tagName === "SPAN" && api.classOf(node, "text-text-secondary");
     }
+    if (selector === LABEL_SPAN_SELECTOR) {
+      return node.tagName === "SPAN" && api.classOf(node, "body-sm");
+    }
+    if (selector === "a") return node.tagName === "A";
     if (selector === "button") return node.tagName === "BUTTON";
     if (selector === "p") return node.tagName === "P";
     if (selector === "pre") return node.tagName === "PRE";
@@ -999,6 +1004,58 @@ function checkTabTitle(api) {
       row.children[0].children.push(pre);
     }
     return row;
+  }
+  // The buttonless rows: a size-4 icon beside a single body-sm span. The fetch row keeps the
+  // page's URL in an anchor inside that span, so the anchor's copy never joins the label.
+  function fetchRow(iconClass, text, url) {
+    var icon = node("svg", iconClass, []);
+    var span = node("span", "body-sm text-text-tertiary min-w-0 flex-1 truncate leading-4", []);
+    if (url) {
+      var linkNode = node("a", "text-interactive-link hover:underline", []);
+      linkNode.textContent = url;
+      span.children.push(linkNode);
+    }
+    span.textContent = url ? text + " " + url : text;
+    return node("div", "flex items-center gap-1.5", [icon, span]);
+  }
+  function fetchRunningRow() {
+    var icon = node("svg", "text-text-tertiary size-4 shrink-0 animate-pulse", []);
+    var p = node("p", "relative inline-block", []);
+    p.attrs.style = "animation: 2s linear 0s infinite normal none running text-shimmer;";
+    p.textContent = "Fetching";
+    var linkNode = node("a", "text-interactive-link ms-1 hover:underline", []);
+    linkNode.textContent = "https://example.test/page";
+    var span = node("span", "body-sm min-w-0 flex-1 truncate leading-4", [p, linkNode]);
+    span.textContent = "Fetching https://example.test/page";
+    return node("div", "flex items-center gap-1.5", [icon, span]);
+  }
+  function loneSearchRow(label) {
+    var span = node("span", "body-sm text-text-tertiary min-w-0 truncate leading-4", []);
+    span.textContent = label;
+    var inner = node("span", "flex min-w-0 items-center gap-1.5", [node("svg", "text-text-tertiary size-4 shrink-0", []), span]);
+    var head = node("div", "flex select-none items-center gap-1", [inner]);
+    head.attrs["aria-expanded"] = "false";
+    return node("div", "", [head]);
+  }
+  function batchFetchRow() {
+    var chevron = node("svg", "text-text-tertiary size-3 shrink-0 transition-transform duration-200 rotate-90", []);
+    var icon = node("svg", "text-text-tertiary size-4 shrink-0", []);
+    var pulse = node("span", "animate-pulse", []);
+    pulse.textContent = "Searching the web";
+    var label = node("span", "text-text-secondary shrink-0", [pulse]);
+    var button = node("button", "body-sm group flex w-full cursor-pointer items-center gap-1.5 leading-[1]", [chevron, icon, label]);
+    button.attrs["aria-expanded"] = "true";
+    var body = node("div", "flex flex-col gap-2 py-1 ps-[22px]", [fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")]);
+    return node("div", "", [button, body]);
+  }
+  function batchFetchDoneRow() {
+    var chevron = node("svg", "text-text-tertiary size-3 shrink-0 transition-transform duration-200", []);
+    var icon = node("svg", "text-text-tertiary size-4 shrink-0", []);
+    var label = node("span", "text-text-secondary shrink-0", []);
+    label.textContent = "Searched the web";
+    var button = node("button", "body-sm group flex w-full cursor-pointer items-center gap-1.5 leading-[1]", [chevron, icon, label]);
+    button.attrs["aria-expanded"] = "false";
+    return node("div", "", [button]);
   }
   function chatRow() {
     var row = node("div", "prose", []);
@@ -1147,6 +1204,10 @@ function checkTabTitle(api) {
   var readPage = page([agentRoot([commandRow("Read main.py")])]);
   var searchPage = page([agentRoot([commandRow("Searching the web")])]);
   var fetchPage = page([agentRoot([commandRow("Fetching web page")])]);
+  // The buttonless rows and the group three batched fetches collapse into.
+  var fetchDonePage = page([agentRoot([fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")])]);
+  var fetchFailedPage = page([agentRoot([fetchRow("text-text-tertiary size-4 shrink-0", "Fetch failed", null)])]);
+  var searchLonePage = page([agentRoot([loneSearchRow('Searched for "node test runner"')])]);
   var outputPage = page([agentRoot([commandRow("get_process_output")])]);
   var gearPage = page([agentRoot([commandRow("Agent chat")])]);
   var pollPage = page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])]);
@@ -1212,6 +1273,12 @@ function checkTabTitle(api) {
     [desiredTitle(searchPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
     [expireHold(), null],
     [desiredTitle(fetchPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(fetchDonePage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(fetchFailedPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
+    [expireHold(), null],
+    [desiredTitle(searchLonePage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDD0D"],
     [expireHold(), null],
     [desiredTitle(outputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
     [expireHold(), null],
@@ -1310,6 +1377,15 @@ function checkTabTitle(api) {
     [actionEmoji("Agent chat"), "\u2699\uFE0F"],
     [actionEmoji(null), null],
     [liveLabel(directAction), "Bash sleep 25"],
+    // The buttonless rows keep their label in a body-sm span, and the fetch row's URL anchor
+    // never joins the label words.
+    [liveLabel(fetchRunningRow()), "Fetching"],
+    [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "Fetched", "https://example.test/page")), "Fetched"],
+    [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "Fetch failed", null)), "Fetch failed"],
+    [liveLabel(loneSearchRow('Searched for "node test runner"')), 'Searched for "node test runner"'],
+    [liveLabel(fetchRow("text-text-tertiary size-4 shrink-0", "https://example.test/page", "https://example.test/page")), null],
+    [liveLabel(batchFetchRow()), "Searching the web"],
+    [liveLabel(batchFetchDoneRow()), "Searched the web"],
     [liveLabel(null), null],
     [polls("arena-preview poll --max 1"), true],
     [polls("python preview.py poll"), true],
@@ -1332,7 +1408,7 @@ function checkTabTitle(api) {
       "[NemoUtils][title] chat row -> " + TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     ["repo=" + chatLogLine.split(" repo=")[1],
       "repo=clankers row=chat row kind=chat captcha=0 question=0 live=1"],
-    [VERSION, "1.10.23"],
+    [VERSION, "1.10.24"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.
