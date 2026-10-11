@@ -41,6 +41,31 @@ Read the inbox when a Bash call reports a pending note, answer or upload count o
 
 The page's Message log toolbar carries a Skip poll button. A listing that carries a `skip_poll` stamp reports it: the poll that finds it consumes it, prints `SKIP: owner pressed Skip poll. End the turn, no second poll.` on stdout, and the turn ends there. Never poll again after a skip.
 
+## The gate's cases
+
+The profile gate and the EXIT hook beside it hold one case per shape below. Every case carries a label in `install.sh`, and a test compares this table with those labels.
+
+| Case | Trigger | Answer |
+| --- | --- | --- |
+| `shell-shape` | a caller that is not `bash`, `sh`, `dash`, `ksh` or `zsh` | pass, so a hosted process keeps its shell |
+| `platform-shell` | the platform's probe or its own hosted process | pass, and the shell is marked once |
+| `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
+| `main-moved` | `git commit` or `git push` while the branch trails `origin/main` | the rebase notice once per shell, then the line runs |
+| `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |
+| `long-run` | `gh pr checks`, `gh run watch`, `pytest` or `node --test` | the call ends clean and the run continues, or `exit 130` when the start fails |
+| `bare-path` | a line that spells out the installed `preview.py` or `arena-preview` | the bare-call notice once per shell, then the line runs |
+| `proxy-route` | a read of code-scanning alerts or workflow run logs | the proxy notice once per shell, then the line runs |
+| `ack-ticks` | an `ack` whose inline text holds a backtick inside double quotes | the warning lands before the call runs |
+| `serve-port` | a `serve` on a port other than 8000 | the warning lands before the call runs |
+| `egress` | `curl`, `wget`, `git clone`, `git fetch` or `git ls-remote` | the egress notice lands before the call runs |
+| `commit-id` | a `git commit` whose staged message carries a session ID | `exit 130`, with the message unchanged |
+| `inert-line` | a line of the families the gate ignores | pass, with no count and no stamp |
+| `push-checkpoint` | a `git push` with a pending inbox | `exit 130` until the ack |
+| `inbox-line` | a line whose every piece is an inbox call | pass, whatever the call count holds |
+| `call-count` | a line over the call threshold with a pending inbox | `exit 130` until the ack |
+
+A blocked call repeats its reason on stderr, and every case above answers one bash call: the gate never holds the turn.
+
 ## Tasks
 
 Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit; use a short kebab-case title. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.

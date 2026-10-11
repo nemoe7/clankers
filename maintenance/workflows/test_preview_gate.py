@@ -181,6 +181,25 @@ def run(command: str, cwd: str | None = None) -> subprocess.CompletedProcess[str
     )
 
 
+REFERENCE = ROOT / "skills" / "refs" / "arena-skill" / "references" / "REFERENCE.md"
+
+
+def test_the_reference_table_holds_every_gate_case() -> None:
+  """Every labelled case of the hook and the gate appears in the reference table."""
+  source = INSTALLER.read_text(encoding="utf-8")
+  labels = set(re.findall(r"^\s*# case: ([a-z][a-z0-9-]*)$", source, re.MULTILINE))
+  assert len(labels) >= 10, sorted(labels)
+  reference = REFERENCE.read_text(encoding="utf-8")
+  section = reference.split("## The gate's cases", 1)
+  assert len(section) == 2, "REFERENCE.md must carry the case table"
+  section = section[1].split("\n## ", 1)[0]
+  rows = set(re.findall(r"^\| `([a-z][a-z0-9-]*)` \|", section, re.MULTILINE))
+  assert rows == labels, (
+    f"table rows without a case: {sorted(rows - labels)}; "
+    f"cases without a row: {sorted(labels - rows)}"
+  )
+
+
 def test_plain_chain_meets_the_count_gate():
   result = run("cd /tmp && echo ran")
   assert result.returncode == 130, result.stderr

@@ -5113,6 +5113,8 @@ def main():
   )
   args = parser.parse_args()
   state_dir = resolve_state_dir()
+  # Read before the store opens: creating the database is what this call reports.
+  fresh_state = not (Path(state_dir).resolve() / "state.sqlite3").is_file()
   try:
     if args.reminder:
       store = Store(state_dir, create=False)
@@ -5382,6 +5384,10 @@ def main():
       )
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
+    elif args.command == "init":
+      # The command reports what it did, so a reader can tell a fresh state from a
+      # re-used one without looking at the directory.
+      print(f"state {store.path} {'created' if fresh_state else 'present'}")
 
   except (
     OSError,

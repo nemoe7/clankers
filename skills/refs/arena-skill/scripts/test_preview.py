@@ -2464,6 +2464,35 @@ def test_task_refuses_a_note_id_as_its_name():
     assert "proper name" in cli.stdout + cli.stderr
 
 
+def test_init_reports_the_state_path():
+  """The command names the database it used and whether the call made it."""
+  with tempfile.TemporaryDirectory() as init_dir:
+    # preview.main() may bootstrap itself, so the call runs as a subprocess.
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": init_dir}
+    first = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "init"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert first.returncode == 0, first.stderr
+    line = first.stdout.strip()
+    assert line.startswith("state "), line
+    assert line.endswith(" created"), line
+    assert str(Path(init_dir) / "state.sqlite3") in line
+    # A second call reports the same path and leaves it alone.
+    second = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "init"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert second.returncode == 0, second.stderr
+    assert second.stdout.strip() == line.replace(" created", " present")
+
+
 def test_clear_state():
   # The CLI clear empties every table in place: the schema, the database file and the
   # agent key survive, and the save file is refreshed to match.

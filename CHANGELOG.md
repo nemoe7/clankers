@@ -13,6 +13,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The gate refuses a bash line that runs `gh pr checks` or `gh run watch`, and the refusal names the `start_process` call that takes the run. The checks-empty notice leaves with it, because a refused line never lists checks. The reminder names the tool too.
 - The gate starts a detected long run detached instead of refusing the line, and a check wait and a test run both count. The call ends clean and the notice rides stderr. Each later call prints one status line with the elapsed seconds, and the finish replays once as `run <name> done: exit N`.
 - `arena-preview run` becomes `arena-preview route`, the gate's helper, which starts the command detached and returns at once. The detected set carries no repository knowledge, so a check wait and a suite match in every repo the installer touched.
+- `arena-preview init` prints `state <path> created`, or `present` for a database that was already there, so a restore reads what the call did.
 - The refusal covers the wrapped shapes of the same wait: a flag before the family, a wrapper, a subshell and a substitution. `env`, `command`, `timeout` and `xargs` count as wrappers, and the hook case reads the family words at any spacing.
 - `echo_task`, `Store.neighbours` and `scrollHistory` leave the tree: no production caller held them, and their coverage moves to the printed task and the board.
 - The reminder set drops to 16 entries and 558 characters, the poll disclaimer fits one shorter line, and the ack hint loses a word. The merged entries keep both of their facts.
@@ -29,6 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The proxy tables lose their recovery rows and four examples, and the transfer bullets merge, so SKILL.md reads 433 characters shorter. No route or parameter leaves the page.
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
+- REFERENCE.md gains "The gate's cases": one row per labelled case of the profile gate and its hook. A test compares the table with the labels in `install.sh`.
 
 ## 2026-10-11
 
