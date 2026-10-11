@@ -80,6 +80,9 @@ const get = id => {
   }
   return elements.get(id);
 };
+// The first shape of a control's icon: a control holds one SVG, and its shapes sit in draw
+// order, so the same index reads the same shape however many the icon carries.
+const shapeOf = element => element.children.at(-1).children[0];
 get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
 get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
 get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
@@ -141,7 +144,7 @@ const context = {
       addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
     }),
   },
-  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
+  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `${String(++counter).padStart(8, '0')}-0000-4000-8000-000000000000` },
@@ -498,25 +501,27 @@ test('preview client', async (t) => {
     await tick();
   });
 
-  await t.test("The page supplies the glyph, so the client starts with none; the copy sets it and restores", async () => {
-    // The page supplies the glyph, so the client starts with none; the copy sets it and restores it.
+  await t.test("A copy swaps the shape for its check and back, and the theme swaps its own", async () => {
+    // The page's icons come from the vendored Lucide table, so each swap redraws from one source.
     copyIcon = get('#copy-state');
     normalTimeout = context.setTimeout;
     finishCopy = undefined;
     context.setTimeout = callback => { finishCopy = callback; };
     await context.copyFrom(copyIcon, 'icon probe', 'state');
-    assert.equal(copyIcon.textContent, '✓');
+    assert.equal(shapeOf(copyIcon).getAttribute('d'), 'M20 6 9 17l-5-5');
     finishCopy();
-    assert.equal(copyIcon.textContent, '⧉', 'restore the copy glyph when its timer ends');
+    const restored = shapeOf(copyIcon);
+    assert.equal(restored.tagName, 'rect', 'restore the copy shape when its timer ends');
+    assert.equal(restored.getAttribute('width'), '14');
     context.setTimeout = normalTimeout;
     copied.length = 0;
 
     assert.equal(root.dataset.theme, 'dark');
-    assert.equal(get('#theme').textContent, '☀');
+    assert.equal(shapeOf(get('#theme')).getAttribute('r'), '4', 'the sun lights the dark theme');
     assert.equal(get('#theme').getAttribute('aria-label'), 'Switch to light mode');
     get('#theme').events.click();
     assert.equal(root.dataset.theme, 'light');
-    assert.equal(get('#theme').textContent, '☾');
+    assert.match(shapeOf(get('#theme')).getAttribute('d'), /^M20\.985 12\.486/, 'the moon lights the light theme');
     assert.equal(get('#theme').getAttribute('aria-label'), 'Switch to dark mode');
     assert.equal(storage.get('arena-preview-v1:theme'), 'light');
     body = context.document.body;
@@ -542,7 +547,8 @@ test('preview client', async (t) => {
     await get('#preview-note').events.click();
     assert.equal(get('#note').hidden, true);
     assert.equal(get('#preview-note').getAttribute('aria-pressed'), 'true');
-    assert.equal(get('#preview-note').textContent, 'MD 👁');
+    assert.equal(get('#preview-note').textContent, 'MD ');
+    assert.equal(get('#preview-note').children.at(-1).children[1].getAttribute('r'), '3', 'the eye rides the MD label');
     assert.equal(get('#draft-preview').innerHTML, '<strong>draft</strong>');
     assert.equal(sent.length, 0);
     await get('#preview-note').events.click();
@@ -923,7 +929,7 @@ test('preview client', async (t) => {
     documentEvents.click({ target: copyButton });
     await tick();
     assert.equal(copied.at(-1), 'print(1)');
-    assert.equal(copyButton.textContent, '✓');
+    assert.equal(shapeOf(copyButton).getAttribute('d'), 'M20 6 9 17l-5-5');
     assert.equal(copyButton.title, 'Copied through the clipboard API');
     assert.equal(copyButton.getAttribute('aria-label'), 'Copied through the clipboard API');
     assert.equal(copyButton.dataset.state, 'good');
@@ -935,7 +941,7 @@ test('preview client', async (t) => {
     fallback.dataset = { code: 'second' };
     documentEvents.click({ target: fallback });
     await tick();
-    assert.equal(fallback.textContent, '✓');
+    assert.equal(shapeOf(fallback).getAttribute('d'), 'M20 6 9 17l-5-5');
     assert.equal(fallback.title, 'Copied through the selection fallback');
     execCommandResult = false;
     denied = new Element();
@@ -943,7 +949,7 @@ test('preview client', async (t) => {
     denied.dataset = { code: 'third' };
     documentEvents.click({ target: denied });
     await tick();
-    assert.equal(denied.textContent, '✗');
+    assert.equal(shapeOf(denied).getAttribute('d'), 'M18 6 6 18');
     assert.equal(denied.title, 'Clipboard blocked; select the code and copy it');
     assert.equal(denied.dataset.state, 'bad');
     clipboardFails = false;
@@ -2400,7 +2406,7 @@ test('preview client', async (t) => {
 
     // The owner's X frees one saved row; the first click only arms it.
     dropRow = get('#fetch-list').children.find(item => item.children[0].textContent === chain);
-    dropButton = dropRow.children.find(item => item.textContent === '✕');
+    dropButton = dropRow.children.find(item => item.className === 'icon-button fetch-drop');
     await dropButton.events.click();
     assert.equal(dropped.length, 0, 'the first click only arms the delete');
     await dropButton.events.click();

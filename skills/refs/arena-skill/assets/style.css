@@ -92,7 +92,7 @@ main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
 .staged-chip button { min-height: 0; padding: 0 3px; border: 0; background: transparent; }
 #attach-file { min-height: 0; width: 30px; height: 30px; padding: 0; flex: none; }
 #compose[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -4px; }
-#preview-note { min-height: 0; padding: 6px 10px; font-size: 13px; }
+#preview-note { display: inline-flex; align-items: center; gap: 5px; min-height: 0; padding: 6px 10px; font-size: 13px; }
 .row.tight { gap: 8px; margin: 0; flex: 0 0 auto; flex-wrap: nowrap; }
 /* The log's toolbar keeps one line on every width: a wrap would drop the search box under the
    skip button and read as a row of its own. */
@@ -125,6 +125,9 @@ small, .muted, #last-check, #report-status { color: var(--muted); font-size: 13p
 #form > div:last-child { margin-bottom: 0; padding-bottom: 0; }
 p.muted { margin-block: 4px; }
 .icon-button { flex: none; width: 34px; height: 34px; min-height: 0; padding: 0; line-height: 1; font-size: 19px; display: inline-flex; align-items: center; justify-content: center; }
+/* Every icon is an inline SVG, so the shape never takes a pointer event of its own and
+   never stretches inside a flex row. */
+button svg, .icon-button svg { pointer-events: none; flex: none; }
 #preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 /* The log's scroll area wraps the list so a jump bar can sit over its bottom edge: a strip rather

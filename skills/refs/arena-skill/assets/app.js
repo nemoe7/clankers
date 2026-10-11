@@ -43,6 +43,44 @@ function stored(name) {
   try { return localStorage.getItem(`${key}:${name}`); }
   catch { return null; }
 }
+// The page's icons are Lucide geometry, vendored inline (ISC; Copyright (c) 2026 Lucide Icons
+// and Contributors). One table holds each shape a control can swap in, so a control redraws
+// from the same source as its static twin in index.html.
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ICONS = {
+  sun: [['circle', { cx: '12', cy: '12', r: '4' }], ['path', { d: 'M12 2v2' }],
+    ['path', { d: 'M12 20v2' }], ['path', { d: 'm4.93 4.93 1.41 1.41' }],
+    ['path', { d: 'm17.66 17.66 1.41 1.41' }], ['path', { d: 'M2 12h2' }],
+    ['path', { d: 'M20 12h2' }], ['path', { d: 'm6.34 17.66-1.41 1.41' }],
+    ['path', { d: 'm19.07 4.93-1.41 1.41' }]],
+  moon: [['path', { d: 'M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401' }]],
+  copy: [['rect', { width: '14', height: '14', x: '8', y: '8', rx: '2', ry: '2' }],
+    ['path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }]],
+  check: [['path', { d: 'M20 6 9 17l-5-5' }]],
+  x: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]],
+  eye: [['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
+    ['circle', { cx: '12', cy: '12', r: '3' }]],
+};
+function icon(name, size = 15) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  for (const [key, value] of Object.entries({
+    width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round',
+    'aria-hidden': 'true', focusable: 'false',
+  })) svg.setAttribute(key, value);
+  for (const [tag, attributes] of ICONS[name]) {
+    const shape = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attributes)) shape.setAttribute(key, value);
+    svg.append(shape);
+  }
+  return svg;
+}
+function setIcon(button, name, size) {
+  button.replaceChildren(icon(name, size));
+}
+function setLabelIcon(button, text, name, size) {
+  button.replaceChildren(text, icon(name, size));
+}
 function save(name, value) {
   try { localStorage.setItem(`${key}:${name}`, value); return true; }
   catch { return false; }
@@ -51,7 +89,7 @@ function setTheme(theme) {
   const light = theme === 'light';
   document.documentElement.dataset.theme = light ? 'light' : 'dark';
   const button = $('#theme');
-  button.textContent = light ? '☾' : '☀';
+  setIcon(button, light ? 'moon' : 'sun', 17);
   label(button, `Switch to ${light ? 'dark' : 'light'} mode`);
 }
 setTheme(stored('theme'));
@@ -875,7 +913,7 @@ function writeMode() {
   note.hidden = false;
   grow();
   $('#draft-preview').hidden = true;
-  $('#preview-note').textContent = 'MD 👁';
+  setLabelIcon($('#preview-note'), 'MD ', 'eye', 15);
   $('#preview-note').setAttribute('aria-pressed', 'false');
 }
 $('#preview-note').addEventListener('click', async () => {
@@ -886,7 +924,7 @@ $('#preview-note').addEventListener('click', async () => {
   const panel = $('#draft-preview');
   panel.hidden = false;
   panel.textContent = 'Rendering draft…';
-  $('#preview-note').textContent = 'MD 👁';
+  setLabelIcon($('#preview-note'), 'MD ', 'eye', 15);
   $('#preview-note').setAttribute('aria-pressed', 'true');
   try {
     const rendered = await (await request('/api/markdown', {
@@ -967,7 +1005,7 @@ function applyAnswers(root, answers) {
   }
 }
 function rest(button) {
-  button.textContent = '⧉';
+  setIcon(button, 'copy', 14);
   label(button, 'Copy code');
   button.title = 'Copy code';
   button.dataset.state = '';
@@ -993,7 +1031,7 @@ async function copyText(text) {
 async function copyCode(button) {
   const words = await copyText(button.dataset.code || '');
   const blocked = 'Clipboard blocked; select the code and copy it';
-  button.textContent = words ? '✓' : '✗';
+  setIcon(button, words ? 'check' : 'x', 14);
   label(button, words || blocked);
   button.title = words || blocked;
   button.dataset.state = words ? 'good' : 'bad';
@@ -1045,19 +1083,19 @@ function quoteTaskId(title) {
   quoteId(title.dataset.taskId, title);
 }
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
-async function copyFrom(button, text, what, glyph = '⧉') {
+async function copyFrom(button, text, what, glyph = 'copy') {
   // The label a copy came in with is the label it leaves behind, so a restored `Copy the state`
   // never names the wrong job.
   const before = button.title;
   const words = text === null ? null : await copyText(text);
   const message = words || (text === null ? `There is no ${what} to copy`
     : `Clipboard blocked; select the ${what} and copy it`);
-  button.textContent = words ? '✓' : '✗';
+  setIcon(button, words ? 'check' : 'x', 15);
   label(button, message);
   button.title = message;
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => {
-    button.textContent = typeof glyph === 'function' ? glyph() : glyph;
+    setIcon(button, typeof glyph === 'function' ? glyph() : glyph, 15);
     label(button, before);
     button.title = before;
     button.dataset.state = '';
@@ -1668,7 +1706,7 @@ function downloadRow(item) {
     const drop = document.createElement('button');
     drop.type = 'button';
     drop.className = 'icon-button fetch-drop';
-    drop.textContent = '✕';
+    setIcon(drop, 'x', 14);
     drop.setAttribute('aria-label', `Delete ${item.url}`);
     drop.addEventListener('click', async () => {
       if (drop.dataset.armed !== item.id) {

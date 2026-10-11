@@ -4444,6 +4444,16 @@ CODE_BLOCK = re.compile(r"<pre>(.*?)</pre>", re.DOTALL)
 CODE_TAG = re.compile(r"<[^>]+>")
 
 
+# The page's icons are Lucide geometry, vendored inline (ISC; Copyright (c) 2026 Lucide Icons
+# and Contributors). A rendered code block carries the copy shape, the twin of the page's own.
+ICON_COPY = (
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+  ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"'
+  ' focusable="false"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>'
+  '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>'
+)
+
+
 def add_copy_buttons(rendered):
   """Give every code block a copy button.
 
@@ -4458,7 +4468,7 @@ def add_copy_buttons(rendered):
     payload = html.escape(code, quote=True).replace("\n", "&#10;")
     button = (
       f'<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" '
-      f'data-code="{payload}">⧉</button>'
+      f'data-code="{payload}">{ICON_COPY}</button>'
     )
     return f'<div class="code-block">{button}<pre>{inner}</pre></div>'
 

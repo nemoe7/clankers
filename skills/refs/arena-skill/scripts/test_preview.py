@@ -1148,7 +1148,9 @@ def test_http_boundaries():
         '<div class="code-block"><button type="button" class="copy-code"'
       )
       assert 'data-code="print(1)&#10;"' in block and "<pre><code" in block
-      assert 'title="Copy code"' in block and ">⧉</button>" in block
+      # The copy button carries Lucide's copy shape, vendored inline like the page's own.
+      assert 'title="Copy code"' in block and "<svg" in block
+      assert 'd="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"' in block
       assert (
         preview.add_copy_buttons(preview.render("no code here")).count("copy-code") == 0
       )
