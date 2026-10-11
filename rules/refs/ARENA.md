@@ -199,7 +199,7 @@
 
 - If Chromium is needed, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
-- Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs. The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `python -m pytest`, `node --test`) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr.
+- Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs. The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test`, and the rest of the REFERENCE.md case table) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr.
 - NEVER call `get_process_output` to wait for a run. Wait with `arena-preview poll`, which breaks when the run finishes, or with the next task; each call in between prints one status line with the elapsed seconds. The verdict prints once as `run <name> done: exit N` on the next bash or `arena-preview` call. Until then, scope the next task. Read the verdict line before any push.
 - Never report a check you have not read.
 
