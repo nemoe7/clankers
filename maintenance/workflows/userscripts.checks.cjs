@@ -1660,7 +1660,7 @@ function checkTabTitle(api) {
         (function walk(item) {
           var i;
           for (i = 0; i < item.children.length; i += 1) {
-            if (item.children[i].text) hits.push(item.children[i]);
+            if (item.children[i].text || item.children[i].span) hits.push(item.children[i]);
             walk(item.children[i]);
           }
         })(node);
@@ -1690,11 +1690,16 @@ function checkTabTitle(api) {
   }
   // One row of the owner's blocks: the icon block with the canvas, and, on the waiting
   // line alone, the text block that holds the rotating words.
-  function rowCanvas(withText) {
+  function rowCanvas(withText, blank) {
     var canvas = pageTree("", []);
     var icon = pageTree("", [pageTree("", [canvas])]);
     var kids = [icon];
-    if (withText) kids.push(pageTree("", [pageTree("The cat sat on the", [])]));
+    // The rotating frame can stand empty between two words: the span is there, its text is not.
+    if (withText) {
+      var span = pageTree(blank ? "" : "The cat sat on the", []);
+      if (blank) span.span = true;
+      kids.push(pageTree("", [span]));
+    }
     return { canvas: canvas, row: pageTree("", kids) };
   }
   // The owner's waiting line: a 16px spinner canvas beside rotating monospace status
@@ -1705,6 +1710,10 @@ function checkTabTitle(api) {
   // The owner's action row: the same canvas alone, with no text block beside it.
   function actionCanvasDoc(messages, words) {
     return canvasDoc([rowCanvas(false).canvas], messages, words);
+  }
+  // A waiting line between two rotations: the span stands empty, and it still marks.
+  function blankWaitingDoc() {
+    return canvasDoc([rowCanvas(true, true).canvas]);
   }
   // The ask_user card from the owner's captured outerHTML: a radiogroup with an aria-label.
   function questionCard(label) {
@@ -2123,6 +2132,7 @@ function checkTabTitle(api) {
     [WAITING_SELECTOR, 'canvas[width="16"][height="16"]'],
     [WAITING_TEXT_SELECTOR, 'span[class*="whitespace-pre"]'],
     [waitingSignal(waitingDoc()), true],
+    [waitingSignal(blankWaitingDoc()), true],
     // The owner's action row carries the very same canvas as its icon, so
     // the canvas alone never reads as a waiting line and never outranks the Bash row.
     [waitingSignal(actionCanvasDoc()), false],

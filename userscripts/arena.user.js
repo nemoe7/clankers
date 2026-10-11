@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.21
+// @name         Arena.ai | NemoUtils | v1.10.22
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.21
+// @version      1.10.22
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2693,7 +2693,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.21";
+    var VERSION = "1.10.22";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -3106,7 +3106,8 @@
 
     // The waiting line is a spinner canvas beside the rotating monospace text. An action row
     // carries the very same canvas as its own icon, so the canvas alone proves
-    // nothing: the row must hold the text block too, beside the icon.
+    // nothing: the row must hold the text block too, beside the icon. The block answers by
+    // its span, never by its words, because the page writes and clears them on its own clock.
     function waitingText(row, canvas) {
       var kids = row && row.children ? row.children : [];
       var i;
@@ -3118,11 +3119,10 @@
           continue;
         }
         if (typeof kids[i].querySelectorAll !== "function") continue;
+        // The span alone marks the wait: Arena rotates the words, so an empty frame between
+        // two rotations stays a waiting line.
         var spans = kids[i].querySelectorAll(WAITING_TEXT_SELECTOR);
-        var j;
-        for (j = 0; j < spans.length; j += 1) {
-          if (collapsed(spans[j])) return true;
-        }
+        if (spans && spans.length) return true;
       }
       return false;
     }
