@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.23
+// @name         Arena.ai | NemoUtils | v1.10.24
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.23
+// @version      1.10.24
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2691,7 +2691,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.23";
+    var VERSION = "1.10.24";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -3045,6 +3045,13 @@
     function rowSource(row) {
       var label = liveLabel(row);
       var text = String(label || "").replace(/\s+/g, " ").trim().slice(0, 40);
+      // The row class names the kind, so the log reads the same kind the mark used.
+      if (messageRow(row)) {
+        return "message row" + (text ? " (" + text + ")" : "");
+      }
+      if (thinkRow(row)) {
+        return "think row" + (text ? " (" + text + ")" : "");
+      }
       if (POLL_RE.test(rowCommand(row).toLowerCase())) {
         return "poll command" + (text ? " (" + text + ")" : "");
       }
@@ -3151,7 +3158,13 @@
       // is news only while the stop control is up.
       var live = stopSignal(doc);
       var speaking = speechGrowth(doc);
-      titleTrace += " speech=" + (speaking ? 1 : 0) + " live=" + (live ? 1 : 0);
+      // The two structural gates of the row model: the balloon class on the newest row, and
+      // the bare spinner card that sits last in the newest box.
+      var balloonRow = live ? newestRow(doc) : null;
+      var balloon = !!balloonRow && messageRow(balloonRow);
+      var waiting = live && waitingSignal(doc);
+      titleTrace += " speech=" + (speaking ? 1 : 0) + " live=" + (live ? 1 : 0) +
+        " balloon=" + (balloon ? 1 : 0) + " waiting=" + (waiting ? 1 : 0);
       var speechHold =
         live && heldEmoji === AGENT_EMOJI && Date.now() - heldEmojiAt < EMOJI_HOLD_MS;
       var needsTurn = false;
@@ -3160,8 +3173,10 @@
       // A growing message outranks its own rows, but the hold after it does not:
       // an action row that appears during the quiet gap takes the title. The balloon row
       // carries the prose class, so it takes the mark with no word-count watch.
-      if (speaking || (live && messageRow(newestRow(doc)))) {
+      if (speaking || balloon) {
         titleReason = "agent message";
+        titleRowSource = balloon ? rowSource(balloonRow) : null;
+        titleRowKind = "message";
         heldEmoji = AGENT_EMOJI;
         heldEmojiAt = Date.now();
         heldEmojiNeedsTurn = false;
@@ -3183,7 +3198,7 @@
           needsTurn = true;
         }
       }
-      if (!emoji && live && waitingSignal(doc)) {
+      if (!emoji && waiting) {
         emoji = HOURGLASS_EMOJI;
         titleReason = "waiting line";
         needsTurn = true;

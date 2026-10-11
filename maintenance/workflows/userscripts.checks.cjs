@@ -2349,6 +2349,21 @@ function checkTabTitle(api) {
     // The same shimmer row without the class stays unmapped, so the line keeps the mark.
     [desiredTitle(balloonDoc(null, true)), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
+    // The line names the class kinds: the balloon row anchors itself as a message row, and
+    // the trace carries the two structural gates.
+    [
+      loggedTitleHead(balloonDoc("prose", true)),
+      "[NemoUtils][title] agent message -> " + TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI,
+    ],
+    [
+      loggedTitleTail(balloonDoc("prose", true)),
+      "repo=clankers row=message row (Hello there) kind=message captcha=0 question=0 speech=0 live=1 balloon=1 waiting=1",
+    ],
+    [
+      loggedTitleTail(balloonDoc("not-prose", false)),
+      "repo=clankers row=think row (Hello there) kind=think captcha=0 question=0 speech=0 live=1 balloon=0 waiting=0",
+    ],
+    [expireHold(), null],
     // The thinking row carries not-prose: an unmapped label there reads as the think step.
     [emojiForRow(divMessage("Analyzing the tree", true, "not-prose").row), THINK_EMOJI],
     [desiredTitle(balloonDoc("not-prose", false)), TITLE_PREFIX + "clankers" + vtag + " " + THINK_EMOJI],
@@ -2383,7 +2398,7 @@ function checkTabTitle(api) {
     ],
     [
       loggedTitleTail(waitingDoc([pollMessage])),
-      "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1",
+      "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1 balloon=0 waiting=1",
     ],
     // The anchor cites the row that won the mark, not the row the page re-derives at
     // write time: the reason and the row half name one row.
@@ -2398,7 +2413,7 @@ function checkTabTitle(api) {
     ],
     [
       loggedTitleTail(processDocExplored()),
-      "repo=clankers row=action row (Explored 2 reads) kind=action captcha=0 question=0 speech=0 live=1",
+      "repo=clankers row=action row (Explored 2 reads) kind=action captcha=0 question=0 speech=0 live=1 balloon=0 waiting=0",
     ],
     [
       loggedTitleHead(processDocLaterRow()),
@@ -2408,7 +2423,7 @@ function checkTabTitle(api) {
     ],
     [
       loggedTitleTail(processDocLaterRow()),
-      "repo=clankers row=action row (Bash sleep 25) kind=action captcha=0 question=0 speech=0 live=1",
+      "repo=clankers row=action row (Bash sleep 25) kind=action captcha=0 question=0 speech=0 live=1 balloon=0 waiting=0",
     ],
     [processRow(processDocLaterRow()), null],
     // The owner's flip-flop: the watcher card loses the title once the message that
@@ -2428,7 +2443,7 @@ function checkTabTitle(api) {
       loggedTitleHead(idleDoc),
       "[NemoUtils][title] title -> " + TITLE_PREFIX + "clankers" + vtag,
     ],
-    [loggedTitleTail(idleDoc), "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1"],
+    [loggedTitleTail(idleDoc), "repo=clankers row=none kind=none captcha=0 question=0 speech=0 live=1 balloon=0 waiting=0"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.
