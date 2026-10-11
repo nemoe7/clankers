@@ -1989,7 +1989,7 @@
     }
     var name = stateFileName(repo, branch, stamp, counts);
     var memory = stateRemembered(remembered);
-    // The owner's comparison lines (answers 1fcb4bd and 9602cb5): one short line per stamp pair,
+    // The comparison lines: one short line per stamp pair,
     // note then task, with hashes in place of the long stamps. The pair compares first, so a
     // quiet tick shows its two lines before the no-op. A backward stamp still refuses the plain
     // write and the newer local file stays. A forced save keeps no refusal, so
@@ -2066,7 +2066,7 @@
     return route === "pick" ? "hint" : route;
   }
 
-  // The owner's line shapes (answers 1fcb4bd and 9602cb5): the fetch on a write, the no-op on a
+  // The line shapes: the fetch on a write, the no-op on a
   // quiet tick, and short stamp hashes in place of the long stamps.
   function getLine(status, base) {
     return "GET " + status + " " + base;

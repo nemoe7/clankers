@@ -2117,7 +2117,7 @@ function checkStateDownload(api, session) {
   assert.equal(panelNeeded(false, true), false);
   assert.equal(stateAction("unchanged", false), "unchanged");
   // The owner's line shapes: the fetch on a write, the no-op on a quiet tick, and short
-  // stamp hashes in place of the long stamps (answers 1fcb4bd and 9602cb5).
+  // stamp hashes in place of the long stamps.
   assert.equal(writeLine("clankers", "clankers.ndjson"), "WRITE clankers state to clankers.ndjson");
   // The failure lines name the error and the way on, and each heads the corner card too.
   assert.equal(

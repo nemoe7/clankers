@@ -21,7 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
-- The skill scripts, `ruff.toml`, and the changelog drop their session-local citations the same way: the fact stays and the ID goes.
+- The skill scripts, `ruff.toml`, the userscript comments, the workflow checks and the changelog drop their session-local citations the same way. The fact stays and the ID goes.
 - The REFERENCE.md command table gains `rename` and `run`, and SKILL.md states the `arena-preview key` rule once instead of twice.
 - The SKILL.md frontmatter keeps the platform facts and drops the proxy-backend clause, which the body already covers.
 - The proxy tables lose their recovery rows and four examples, and the transfer bullets merge, so SKILL.md reads 433 characters shorter. No route or parameter leaves the page.
@@ -841,7 +841,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - The debug gate's call tally now blocks at 20 bash calls since the owner's last message while the inbox stays pending. The count drops from 50.
-- The poll wait always runs its 900 second span. Only a new message or an unblocked task breaks it, and a task that appears mid-wait breaks it too, printing the task list. Owner notes `04ca4e0` and `359c909`.
+- The poll wait always runs its 900 second span. Only a new message or an unblocked task breaks it, and a task that appears mid-wait breaks it too, printing the task list.
 - The poll error names the script on PATH and the recorded port, so the agent restarts the server as written.
 - A rotating tail line covers a pull request whose checks never ran: rebase onto `main` first.
 - A `git push` blocks while a note or answer awaits an ack, whatever the call count. The count threshold still holds every other command.
