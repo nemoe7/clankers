@@ -275,12 +275,16 @@ def repo_slug(root="."):
   return match.group(1) if match else ""
 
 
+FAILED_CONCLUSIONS = ("failure", "cancelled", "timed_out")
+
+
 def pr_failed_check(root="."):
   """The failed check names on the branch pull request, joined, or an empty string.
 
   The poll runs this off its wait path, so a gh read never delays a note. A missing
   branch or pull request reads as an empty string. A gh fault reads as None, so the
-  next poll reads again instead of reporting a false all-clear.
+  next poll reads again instead of reporting a false all-clear. Only the newest run
+  of each job name counts, so a passed re-run clears an older failure.
   """
   branch = workspace_branch(root)
   slug = repo_slug(root)
@@ -309,20 +313,35 @@ def pr_failed_check(root="."):
     head = listed.stdout.strip()
     if not head:
       return ""
-    query = (
-      '[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled"'
-      ' or .conclusion=="timed_out") | .name] | join(", ")'
-    )
-    checks = subprocess.run(
-      ["gh", "api", f"repos/{slug}/commits/{head}/check-runs", "--jq", query],
+    rows = subprocess.run(
+      [
+        "gh",
+        "api",
+        f"repos/{slug}/commits/{head}/check-runs",
+        "--paginate",
+        "--jq",
+        ".check_runs[] | [.name, .started_at, .conclusion] | @tsv",
+      ],
       cwd=root,
       capture_output=True,
       text=True,
       check=False,
     )
-    if checks.returncode:
+    if rows.returncode:
       return None
-    return checks.stdout.strip()
+    # The API lists every run of a re-run job, so the newest start per name decides.
+    newest = {}
+    for row in rows.stdout.splitlines():
+      name, _, rest = row.partition("\t")
+      stamp, _, conclusion = rest.partition("\t")
+      if name and (name not in newest or stamp.rstrip("Z") > newest[name][0]):
+        newest[name] = (stamp.rstrip("Z"), conclusion)
+    failed = [
+      name
+      for name, (_, conclusion) in newest.items()
+      if conclusion in FAILED_CONCLUSIONS
+    ]
+    return ", ".join(failed)
   except OSError:
     return None
 

@@ -95,6 +95,7 @@ def repo_slug(root='.'):
 	try:url=subprocess.run(['git','config','--get','remote.origin.url'],cwd=root,capture_output=True,text=True,check=False).stdout.strip()
 	except OSError:return''
 	match=re.search('[:/]([^/:]+/[^/]+?)(?:\\.git)?$',url);return match.group(1)if match else''
+FAILED_CONCLUSIONS='failure','cancelled','timed_out'
 def pr_failed_check(root='.'):
 	branch=workspace_branch(root);slug=repo_slug(root)
 	if not branch or not slug:return''
@@ -103,9 +104,13 @@ def pr_failed_check(root='.'):
 		if listed.returncode:return None
 		head=listed.stdout.strip()
 		if not head:return''
-		query='[.check_runs[] | select(.conclusion=="failure" or .conclusion=="cancelled" or .conclusion=="timed_out") | .name] | join(", ")';checks=subprocess.run(['gh','api',f"repos/{slug}/commits/{head}/check-runs",'--jq',query],cwd=root,capture_output=True,text=True,check=False)
-		if checks.returncode:return None
-		return checks.stdout.strip()
+		rows=subprocess.run(['gh','api',f"repos/{slug}/commits/{head}/check-runs",'--paginate','--jq','.check_runs[] | [.name, .started_at, .conclusion] | @tsv'],cwd=root,capture_output=True,text=True,check=False)
+		if rows.returncode:return None
+		newest={}
+		for row in rows.stdout.splitlines():
+			name,_,rest=row.partition('\t');stamp,_,conclusion=rest.partition('\t')
+			if name and(name not in newest or stamp.rstrip('Z')>newest[name][0]):newest[name]=stamp.rstrip('Z'),conclusion
+		failed=[name for(name,(_,conclusion))in newest.items()if conclusion in FAILED_CONCLUSIONS];return', '.join(failed)
 	except OSError:return None
 def pr_check_once(result,root):
 	failed=pr_failed_check(root)

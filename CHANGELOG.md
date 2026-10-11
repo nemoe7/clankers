@@ -20,6 +20,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### preview
+
+- The branch check read every run of a re-run job, so an older failure of a passed check broke the poll falsely. The read takes the newest run of each job name.
+
 #### userscripts
 
 - The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides.

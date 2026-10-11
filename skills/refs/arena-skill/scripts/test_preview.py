@@ -417,6 +417,30 @@ def test_pr_failed_check_gh_error():
       assert preview.pr_failed_check(str(root)) is None
 
 
+def test_pr_failed_check_reads_the_newest_run_per_name():
+  # A passed re-run of a job clears its older failure; only another job's failure stands.
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    (root / ".git").mkdir()
+    (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n", "utf-8")
+    listed = subprocess.CompletedProcess(["gh"], 0, stdout="abc1234\n", stderr="")
+    rows = subprocess.CompletedProcess(
+      ["gh"],
+      0,
+      stdout=(
+        "Quality\t2026-10-11T15:42:56Z\tfailure\n"
+        "Quality\t2026-10-11T15:44:25Z\tsuccess\n"
+        "Tests\t2026-10-11T15:44:00Z\tfailure\n"
+      ),
+      stderr="",
+    )
+    with (
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.subprocess.run", side_effect=[listed, rows]),
+    ):
+      assert preview.pr_failed_check(str(root)) == "Tests"
+
+
 def test_pr_check_once_reports_a_failure():
   # One read per poll: the failed names land in the poll's list, and a gh fault, read
   # as unknown, records nothing.
