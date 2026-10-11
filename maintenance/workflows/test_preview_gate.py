@@ -53,6 +53,19 @@ exit 1
 """
 
 
+def clean_env(**overrides: str) -> dict[str, str]:
+  """The environment the gate meets, minus the marker a routed child exports.
+
+  A shell that carries `ARENA_PREVIEW_ROUTE=1` skips the gate by design, so a suite
+  started from a routed child must drop the marker or it tests nothing.
+  """
+  env = {
+    key: value for key, value in os.environ.items() if key != "ARENA_PREVIEW_ROUTE"
+  }
+  env.update(overrides)
+  return env
+
+
 def gate_source() -> str:
   """Return the gate function as the installer writes it into the profile."""
   installer = INSTALLER.read_text(encoding="utf-8")
@@ -100,7 +113,7 @@ def test_the_hook_skips_the_platform_shells() -> None:
     hook = root / "hook.sh"
     hook.write_text(hook_source(), encoding="utf-8")
     hook.chmod(0o755)
-    env = {**os.environ, "STUB": str(stub)}
+    env = clean_env(STUB=str(stub))
     # The platform hosts its processes in a login shell over run.cmd under arena-workspace.
     # `; exit 0` keeps the shaped shell alive as the hook's parent instead of exec'ing the hook.
     hosted = subprocess.run(
@@ -182,13 +195,12 @@ def run_in(
     text=True,
     check=False,
     cwd=cwd,
-    env={
-      **os.environ,
-      "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+    env=clean_env(
+      PATH=str(bin_dir) + os.pathsep + os.environ["PATH"],
       # The tick writes its record under the temp state and starts no real wait.
-      "ARENA_PREVIEW_STATE_DIR": str(root),
-      "ARENA_PREVIEW_DETACH_DRY": "1",
-    },
+      ARENA_PREVIEW_STATE_DIR=str(root),
+      ARENA_PREVIEW_DETACH_DRY="1",
+    ),
   )
 
 
