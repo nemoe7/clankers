@@ -1978,6 +1978,47 @@ function checkTabTitle(api) {
     };
     return canvasDoc([row.querySelectorAll(WAITING_SELECTOR)[0]], (messages || []).concat([message]), words, withStop);
   }
+  // The second bash glyph wears the same class pair, so the row-icon list must hold the
+  // class selector itself, never a glyph path.
+  var GLYPH_SELECTOR = "svg.text-text-tertiary.size-4";
+  // The owner's bash row: the prompt glyph wears the same classes as the terminal glyph,
+  // and the row carries its canvas and the counter span beside it. The glyph alone marks
+  // the node as a row, so the row never reads as the waiting card.
+  function glyphRowDoc() {
+    var canvas = { nodeName: "CANVAS" };
+    var line = { nodeName: "SPAN", textContent: "Running Bash" };
+    var glyph = { nodeName: "svg" };
+    var row = {
+      children: [glyph, canvas, line],
+      querySelector: function (selector) {
+        return selector === GLYPH_SELECTOR ? glyph : null;
+      },
+      querySelectorAll: function (selector) {
+        if (selector === GLYPH_SELECTOR) return [glyph];
+        if (selector === WAITING_SELECTOR) return [canvas];
+        if (selector === "span" || selector === GROUP_LABEL_SELECTOR) return [line];
+        return [];
+      },
+    };
+    var message = {
+      row: row,
+      querySelectorAll: function (selector) { return row.querySelectorAll(selector); },
+      contains: function (candidate) { return candidate === row; },
+    };
+    return canvasDoc([canvas], [message], null, true);
+  }
+  // The box can hold the card alone while a turn opens: no row in front of it, so the pick
+  // finds nothing and the title still reads the waiting mark.
+  function cardOnlyDoc() {
+    var card = spinnerCard();
+    var box = { children: [card] };
+    var message = {
+      querySelectorAll: function (selector) { return selector === ROW_BOX_SELECTOR ? [box] : []; },
+    };
+    var doc = canvasDoc([], [message], null, true);
+    doc.__structural = true;
+    return doc;
+  }
   function questionCard(label) {
     return {
       getAttribute: function (name) {
@@ -2412,6 +2453,14 @@ function checkTabTitle(api) {
     [desiredTitle(waitingDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
     [desiredTitle(actionCanvasDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [expireHold(), null],
+    // The bash row can carry a second prompt glyph with the same classes, beside the canvas
+    // and the counter span. The glyph marks the node as a row, so no hourglass lands.
+    [waitingSignal(glyphRowDoc()), false],
+    [desiredTitle(glyphRowDoc()), TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
+    [expireHold(), null],
+    // A card-only box has no row: the pick returns nothing, and the hourglass still marks.
+    [desiredTitle(cardOnlyDoc()), TITLE_PREFIX + "clankers" + vtag + " " + HOURGLASS_EMOJI],
     [expireHold(), null],
     // The waiting card outranks a named action row: the checks run captcha, waiting,
     // then the rows, so the poll row's own emoji waits the card out.

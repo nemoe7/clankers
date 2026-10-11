@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.27
+// @name         Arena.ai | NemoUtils | v1.10.28
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.27
+// @version      1.10.28
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2694,7 +2694,7 @@
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
     // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
-    var VERSION = "1.10.27";
+    var VERSION = "1.10.28";
     // One constant for the bash mark: the start-process card takes the very emoji a bash call
     // takes.
     // One mark for the agent's words: a message that grows holds the title with the solid
@@ -2858,6 +2858,11 @@
         kids.pop();
       }
       var row = kids.length ? kids[kids.length - 1] : null;
+      // A card-only box leaves no row: the pick returns nothing and the title keeps the
+      // waiting mark.
+      if (!row) {
+        return null;
+      }
       // A user message row is no agent row: its text wrapper carries the prose class and
       // would earn the fallback gear, so the pick skips it.
       if (typeof row.closest === "function" && row.closest(USER_MESSAGE_SELECTOR)) {
