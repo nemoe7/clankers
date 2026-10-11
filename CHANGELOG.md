@@ -24,6 +24,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The skill scripts, `ruff.toml`, and the changelog drop their session-local citations the same way: the fact stays and the ID goes.
 - The REFERENCE.md command table gains `rename` and `run`, and SKILL.md states the `arena-preview key` rule once instead of twice.
 - The SKILL.md frontmatter keeps the platform facts and drops the proxy-backend clause, which the body already covers.
+- The proxy tables lose their recovery rows and four examples, and the transfer bullets merge, so SKILL.md reads 433 characters shorter. No route or parameter leaves the page.
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
 

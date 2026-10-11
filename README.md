@@ -43,7 +43,7 @@ Latest measurements as of 2026-10-11. `maintenance/check.py --update` rebuilds t
 | `rules/COMMIT-SPEC.txt` | `o200k_base` | 93 `tok` |
 | `system-prompts/NEMOGPT.md` | `o200k_base` | 3,034 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,598 `tok` |
-| `skills/arena-skill/SKILL.md` | `o200k_base` | 3,706 `tok` |
+| `skills/arena-skill/SKILL.md` | `o200k_base` | 3,539 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,662 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 2,807 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 49,359 `B` |
