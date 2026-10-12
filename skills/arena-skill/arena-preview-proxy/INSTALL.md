@@ -1,6 +1,6 @@
 # Arena preview proxy install
 
-This page carries the install detail for the tailnet preview proxy, the installed web app that opens an Arena sandbox preview on Android in the page, without the mobile redirect to a new window.
+This page carries the install detail for the tailnet preview proxy. The proxy is an installed web app. It opens an Arena sandbox preview on Android in the page, without the mobile redirect to a new window.
 
 ## Container
 
@@ -19,7 +19,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 - The tailnet needs an auth key for `TS_AUTHKEY`, with HTTPS certificates and MagicDNS enabled.
 - Serve publishes HTTPS inside the tailnet only. `AllowFunnel` stays false, so the route never reaches the public internet.
 - The sidecar uses userspace networking: no host `/dev/net/tun`, no added capabilities.
-- `docker compose down` keeps the Tailscale identity; `docker compose down -v` deletes it and needs a new enrollment.
+- `docker compose down` keeps the Tailscale identity. `docker compose down -v` deletes it and needs a new enrollment.
 
 ## The installed app
 
@@ -28,19 +28,19 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 - The proxy injects a manifest link and a worker registration into the preview HTML, so Android Chrome offers to install the page. The installed app reopens the same preview.
 - Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon.
  The package ships both beside the scalable icon, and the worker registers on the root scope.
-- The viewer root answers a page of its own when no preview is selected: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest.
+- When the request names no preview, the viewer root answers its own page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest.
 - The chooser lists the last 10 previews opened from its URL box or its list, newest first. Each entry opens its preview in one tap, and its × button deletes it. The list lives in the browser's storage, so the server still keeps no memory, and a share or a link adds no entry.
-- Only HTTPS roots on `sbx-*.arena.site` are accepted: no other host, no credentials, no port, no subpath. Write methods reach the selected preview only, and the browser's `Origin` is never forged.
-- A strict `Content-Security-Policy` on the preview page can suppress the manifest; the preview keeps working either way.
+- The proxy accepts only HTTPS roots on `sbx-*.arena.site`: no other host, no credentials, no port, no subpath. Write methods reach the selected preview only, and the proxy never forges the browser's `Origin`.
+- A strict `Content-Security-Policy` on the preview page can suppress the manifest. The preview keeps working either way.
 
 ## Links and the share sheet
 
 - A web app cannot capture `https://` links on another host, so tapping a raw `sbx-*.arena.site` link never opens this app directly. That dialog belongs to native apps.
-- A share does reach the app: the manifest registers `share_target`, so the Android share sheet lists the installed app, and it opens the shared preview at once.
+- A share does reach the app: the manifest registers `share_target`, so the Android share sheet lists the installed app. The app then opens the shared preview at once.
 - A link inside the preview keeps its own behavior: the proxy adds no click interception.
 
 ## Tailnet notes
 
-- The preview page embeds a client-side API token. Anyone who can load the page can read it, and write methods reach the preview; check the tailnet policy before sharing the node.
+- The preview page embeds a client-side API token. Anyone who can load the page can read it, and write methods reach the preview. Check the tailnet policy before sharing the node.
 - The proxy strips the browser's navigation-context headers (`Sec-Fetch-*` and `Referer`) and forwards the rest. That is the whole mechanism: no TLS bypass, no browser spoofing.
 - Cloudflare can still refuse the upstream request for its own reasons, and then the preview shows its gate again. The proxy cannot fix that.
