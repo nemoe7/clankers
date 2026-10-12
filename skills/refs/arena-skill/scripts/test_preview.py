@@ -1710,9 +1710,9 @@ def test_http_boundaries():
 
 
 def test_read_names_every_attachment():
-  # A note that carries its own text still names each attachment and its saved path in the
-  # read, so the agent opens the right file without a second state call. A lost upload keeps
-  # its name and path and says the bytes are gone.
+  # A note that carries its own text still names each attachment, its saved path and its
+  # size in the read, so the agent opens the right file without a second state call. A lost
+  # upload keeps its name and path and says the bytes are gone.
   with tempfile.TemporaryDirectory() as named_dir:
     named = preview.Store(named_dir, create=True)
     named.note_with_uploads(
@@ -1726,6 +1726,8 @@ def test_read_names_every_attachment():
     listing = preview.format_read(named.read())
     for record in named.uploads():
       assert f"{record['name']}: {record['path']}" in listing
+      # The size rides the path in the shortest unit, so a large read never arrives blind.
+      assert f"{record['name']}: {record['path']} ({record['size']} B)" in listing
     assert "here conversation page" in listing
     # A note with no text and no attachment keeps the header alone, and the header carries
     # the ticks that keep the head exact for the copy back into an ack.
@@ -1745,6 +1747,17 @@ def test_read_names_every_attachment():
       lost
       == "`lost`\ngone\nattachments: saved.html: /state/uploads/saved.html (missing)"
     )
+
+
+def test_attachment_size_reads_short():
+  # A size reads in B, KB or MB, whichever keeps the line short, so the agent sees the
+  # scale without a long byte count in the read.
+  assert preview.format_size(0) == "0 B"
+  assert preview.format_size(999) == "999 B"
+  assert preview.format_size(1024) == "1 KB"
+  assert preview.format_size(1536) == "1.5 KB"
+  assert preview.format_size(5000000) == "4.8 MB"
+  assert preview.format_size(50000000) == "47.7 MB"
 
 
 def test_note_owns_one_attachment():

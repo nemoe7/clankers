@@ -1179,6 +1179,30 @@ def bare_id(token):
   return str(token or "").strip().strip("`").strip()
 
 
+def format_size(size):
+  """A byte count in B, KB or MB, whichever keeps the read line short."""
+  if size < 1024:
+    return f"{size} B"
+  if size < 1024**2:
+    return f"{short_number(size / 1024)} KB"
+  return f"{short_number(size / 1024**2)} MB"
+
+
+def short_number(value):
+  """One decimal, dropped when the value is whole: 1.5, 2, 47.7."""
+  text = f"{value:.1f}"
+  return text[:-2] if text.endswith(".0") else text
+
+
+def attachment_line(record):
+  """One attachment as name and path, with the size of the bytes that are there."""
+  line = f"{record.get('name', '')}: {record.get('path', '')}"
+  if not record.get("present"):
+    return line + " (missing)"
+  size = record.get("size")
+  return line + (f" ({format_size(size)})" if isinstance(size, int) else "")
+
+
 def format_pending_item(item):
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
@@ -1193,15 +1217,11 @@ def format_pending_item(item):
   text = item.get("text") or ""
   if text:
     lines.append(text)
-  # A note's own text never names its uploads, so the read carries each file's name and saved path.
+  # A note's own text never names its uploads, so the read carries each file's name, saved
+  # path and size.
   attachments = item.get("attachments") or []
   if attachments:
-    names = ", ".join(
-      f"{record.get('name', '')}: {record.get('path', '')}"
-      if record.get("present")
-      else f"{record.get('name', '')}: {record.get('path', '')} (missing)"
-      for record in attachments
-    )
+    names = ", ".join(attachment_line(record) for record in attachments)
     lines.append(f"attachments: {names}")
   return "\n".join(lines)
 
