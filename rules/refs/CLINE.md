@@ -21,7 +21,6 @@
 - If write tools are blocked or unavailable: stay read-only, NEVER modify by any other means, and MUST report the limitation.
 - Use `fetch_web_content` for web retrieval.
 - Use `ask_question` when clarification is needed.
-- Tool priority: file tools (`read_files`/`search_codebase`/`editor`) for inspection and edits; `run_commands` for execution only.
 - NEVER call a tool merely to satisfy these rules.
 - If a required tool fails for a non-syntax reason, report the failure.
 - NEVER retry or work around it, except per Test Timeout.

@@ -52,6 +52,8 @@ A third bold clause in a rule file means one other clause becomes plain. Do not 
 
 Four deliberate voice rules describe no observable behavior: `Concise, direct, practical, accurate`, `Write clear, readable code`, `Never lazy about understanding`, and `Criticize all`. [refs/GUIDELINES.md](../system-prompts/refs/GUIDELINES.md) 2.3 says not to fight persona on style, and 4.8 requires marking deliberate deviations. These stay at about 60 `tok` in core and 400 `B` in ARENA.md. Audit them as marked exceptions, not untestable-rule violations.
 
+The `ARENA.md` constitution runs 16 rule lines in the live file and 17 in refs, above the 5-15 range of [refs/GUIDELINES.md](../system-prompts/refs/GUIDELINES.md) 3.1. The file stands alone for one platform and carries its own push, PR and read rules, so the length is a marked exception under 4.8.
+
 ### Skill rules
 
 A simpler scope needs approval before a substitution. The testing guidance in the reusable rules applies to the projects that use them, not to a test setup for this repository.

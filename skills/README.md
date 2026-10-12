@@ -31,7 +31,7 @@ Adapted skills record `metadata.upstream`. Update from that source, then reapply
 | --- | --- |
 | [web-interface-guidelines](web-interface-guidelines/SKILL.md) | [vercel-labs/web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines) |
 
-This repository maintains the other, first-party skills. `squash` and the `arena-skill` skill record `metadata.origin`. `web-interface-guidelines` fetches current rules at review time, without vendoring or an update pass, and includes the upstream MIT license.
+This repository maintains the other, first-party skills. `web-interface-guidelines` fetches current rules at review time, without vendoring or an update pass, and includes the upstream MIT license.
 
 ## Install
 

@@ -54,6 +54,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
 - REFERENCE.md gains "The gate's cases": one row per labelled case of the profile gate and its hook. A test compares the table with the labels in `install.sh`.
 - The ARENA.md read clause batches the required reads into one call and splits them only where the harness output cap cuts the text. The refs baseline, the live mirror and the root copy carry the same rule.
+- The guidelines audit lands its accepted fixes. The rule files lose their bold mark and their repeated or merged lines, and `CHATGPT-MORE.txt` names the override it means. NEMOGPT gains headings and its missing bad answer, the first-party skills drop `metadata.origin`, and the maintainer docs note the constitution exception and prompt checks.
 
 ## 2026-10-11
 

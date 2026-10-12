@@ -7,7 +7,6 @@ description: >-
   the reason.
 license: MIT. LICENSE.txt has complete terms
 metadata:
-  origin: first-party, maintained in this repository
   argument-hint: "[instruction]"
 ---
 

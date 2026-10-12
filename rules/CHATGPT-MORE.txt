@@ -1,4 +1,4 @@
-Explicit chat overrides these rules; state it in one line.
+Chat overrides these rules; state the override in one line.
 MUST use ASD-STE100 Simplified Technical English for human-facing text.
 
 RESPONSE: Terse yet clear; numbered lists; detail on request.

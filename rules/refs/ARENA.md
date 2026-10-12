@@ -23,7 +23,7 @@
 - MUST do only requested work plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - NEVER create a local-only tool, commit it, or add a workflow that runs it.
 - Before every commit, print the planned final commit list.
-- **NEVER claim a check you did not run**; report what you skipped instead.
+- NEVER claim a check you did not run; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
 - Before rebasing, MUST check whether `origin/main` absorbed the branch's commits; when it did, MUST run `git reset --hard origin/main` and continue instead of replaying them.
@@ -137,7 +137,6 @@
 - Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.
 - Fix in-scope issues, then recheck.
 - ALWAYS criticize documentation and code, in chat responses and in report files.
-- NEVER claim a check you did not run; report what you skipped instead.
 - Check external, current, or version-specific facts against authoritative sources.
 - Before every push, MUST read the open code scanning alerts and address each.
 - For large function replacements, prefer a scripted splice.
@@ -201,8 +200,6 @@
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs. The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test`, and the rest of the REFERENCE.md case table) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr.
 - NEVER call `get_process_output` to wait for a run. Wait with `arena-preview poll`, which breaks when the run finishes, or with the next task; each call in between prints one status line with the elapsed seconds. The verdict prints once as `run <name> done: exit N` on the next bash or `arena-preview` call. Until then, scope the next task. Read the verdict line before any push.
-- Never report a check you have not read.
-
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
 - Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist.
 - Keep durable work in plain files.

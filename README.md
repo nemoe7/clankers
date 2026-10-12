@@ -31,18 +31,18 @@ Latest measurements as of 2026-10-12. `maintenance/check.py --update` rebuilds t
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `o200k_base` | 1,561 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,906 `B` |
+| `rules/AGENTS.md` | `o200k_base` | 1,566 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 19,859 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
-| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,496 `chars` |
-| `rules/CLINE.md` | `o200k_base` | 466 `tok` |
+| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,497 `chars` |
+| `rules/CLINE.md` | `o200k_base` | 447 `tok` |
 | `rules/KILO.md` | `o200k_base` | 88 `tok` |
-| `rules/kilo/code.md` | `o200k_base` | 223 `tok` |
-| `rules/kilo/debug.md` | `o200k_base` | 270 `tok` |
-| `rules/kilo/plan.md` | `o200k_base` | 247 `tok` |
+| `rules/kilo/code.md` | `o200k_base` | 238 `tok` |
+| `rules/kilo/debug.md` | `o200k_base` | 299 `tok` |
+| `rules/kilo/plan.md` | `o200k_base` | 259 `tok` |
 | `rules/COMMIT-SPEC.txt` | `o200k_base` | 93 `tok` |
-| `system-prompts/NEMOGPT.md` | `o200k_base` | 3,034 `tok` |
-| `skills/amending-violations/SKILL.md` | `o200k_base` | 1,598 `tok` |
+| `system-prompts/NEMOGPT.md` | `o200k_base` | 3,067 `tok` |
+| `skills/amending-violations/SKILL.md` | `o200k_base` | 1,587 `tok` |
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,539 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,662 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 3,570 `tok` |
@@ -52,7 +52,7 @@ Latest measurements as of 2026-10-12. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,435 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 133,259 `B` |
-| `skills/squash/SKILL.md` | `o200k_base` | 1,389 `tok` |
+| `skills/squash/SKILL.md` | `o200k_base` | 1,378 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |
 | `workflows/init-docs.md` | `o200k_base` | 4,536 `tok` |
 | `gpt-plugins/skills/gpt-quirks/SKILL.md` | `o200k_base` | 134 `tok` |

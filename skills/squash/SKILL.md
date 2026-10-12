@@ -15,7 +15,6 @@ description: >
   rewrite for a new audience, since those discard content by design.
 license: MIT. LICENSE.txt has complete terms
 metadata:
-  origin: first-party, maintained in this repository
   argument-hint: "[tokens|words|chars|bytes] [target]"
 ---
 
