@@ -53,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The comments that cited a preview answer now keep the fact and drop the ID, because a session ID dies with its session.
 - The composer fill reads the repository beside a selected diff branch. The chip read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository chip instead, so a diff-branch selection no longer stops the fill. The `@name` line carries the number with `@version`.
+- The Arena bundle moves to 1.10.28 and loads its prompt text from `userscripts/arena-prompt-fill.txt`. The text signals a long, complex feature set and asks for a high-context model. It says work can continue indefinitely, with each final poll waiting up to 1,800 seconds or until skipped.
 
 #### house
 

@@ -125,6 +125,21 @@ function checkPromptFill(api) {
   var rotationDueAt = api.rotationDueAt;
   var rotationWaitMs = api.rotationWaitMs;
   var KEY43 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG";
+  var PROMPT_FILL_URL = api.PROMPT_FILL_URL;
+  assert.equal(PROMPT_FILL_URL,
+    "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt");
+  var promptFillText = fs.readFileSync(
+    path.join(__dirname, "../../userscripts/arena-prompt-fill.txt"), "utf8").trimEnd();
+  var promptSource = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+  assert.equal(promptSource.includes("TEMPLATE_TAIL"), false);
+  assert.equal(promptForSlug("clankers", ""), null);
+  var prompt = promptForSlug("clankers", promptFillText);
+  var promptWithRules = promptForSlug("clankers", promptFillText, "# Rules\n");
+  assert.match(promptFillText, /no fixed turn limit/i);
+  assert.match(promptFillText, /indefinitely/);
+  assert.match(promptFillText, /each final poll waits up to 1,800 seconds or until skipped/i);
+  assert.match(promptFillText, /long, complex feature set/i);
+  assert.match(promptFillText, /large context window/i);
 
   function frames(rows) {
     return {
@@ -158,39 +173,38 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    // The repo name leads the fill; the rules file rides under the initial message.
-    [promptForSlug("clankers").split("\n")[0],
+    // The repo name leads the fetched template; the rules file follows it when available.
+    [prompt.split("\n")[0],
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
-    [promptForSlug("clankers").indexOf("here is ARENA.md"), -1],
-    [promptForSlug("clankers").indexOf("red first") > 0, true],
+    [prompt.includes(promptFillText), true],
+    [prompt.indexOf("here is ARENA.md"), -1],
+    [prompt.indexOf("red first") > 0, true],
     // The checklist leads the tail; the dropped model paragraph never returns.
-    [promptForSlug("clankers").indexOf("run this order:") > 0, true],
-    [promptForSlug("clankers").indexOf("run this order:")
-      < promptForSlug("clankers").indexOf("red first"), true],
-    [promptForSlug("clankers").indexOf("1. Read the task and every file it touches in full") > 0, true],
-    [promptForSlug("clankers").indexOf("6. Verify with the project's own gate") > 0, true],
-    [promptForSlug("clankers").indexOf("add nothing the task does not ask for") > 0, true],
-    [promptForSlug("clankers").indexOf("Keep the behavior, interfaces, validation and security") > 0, true],
-    [promptForSlug("clankers").indexOf("Never repeat a failed approach without a new reason.") > 0, true],
-    [promptForSlug("clankers").indexOf("invent no visual detail") > 0, true],
-    [promptForSlug("clankers").indexOf("name what stays unverified") > 0, true],
-    [promptForSlug("clankers").indexOf("Pareto"), -1],
+    [prompt.indexOf("run this order:") > 0, true],
+    [prompt.indexOf("run this order:") < prompt.indexOf("red first"), true],
+    [prompt.indexOf("1. Read the task and every file it touches in full") > 0, true],
+    [prompt.indexOf("6. Verify with the project's own gate") > 0, true],
+    [prompt.indexOf("add nothing the task does not ask for") > 0, true],
+    [prompt.indexOf("Keep the behavior, interfaces, validation and security") > 0, true],
+    [prompt.indexOf("Never repeat a failed approach without a new reason.") > 0, true],
+    [prompt.indexOf("invent no visual detail") > 0, true],
+    [prompt.indexOf("name what stays unverified") > 0, true],
+    [prompt.indexOf("Pareto"), -1],
     [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
-    [promptForSlug("clankers", "# Rules\n").indexOf("here is ARENA.md:\n# Rules\n") > 0, true],
-    [promptForSlug("clankers", "# Rules\n").indexOf("here is ARENA.md")
-      > promptForSlug("clankers", "# Rules\n").indexOf("red first"), true],
+    [promptWithRules.indexOf("here is ARENA.md:\n# Rules\n") > 0, true],
+    [promptWithRules.indexOf("here is ARENA.md") > promptWithRules.indexOf("red first"), true],
     [shouldWrite("", "clankers", null, null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null, null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), true],
     [shouldWrite("clankers read AGENTS.md ARENA.md", "clankers", null, null), true],
-    [shouldWrite(promptForSlug("clankers"), "clankers", null, null), true],
+    [shouldWrite(prompt, "clankers", null, null), true],
     [shouldWrite("draft", "clankers", null, null), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "other", "clankers", null), true],
     [shouldWrite("draft", "clankers", "clankers", null), false],
-    [shouldWrite(promptForSlug("other"), "clankers", "other", "other"), true],
+    [shouldWrite(promptForSlug("other", promptFillText), "clankers", "other", "other"), true],
     // One fill per repo per page: the observer sees no second write, even when the
     // editor hands the text back with different whitespace or the send clears it.
-    [shouldWrite(promptForSlug("clankers"), "clankers", "clankers", "clankers"), false],
+    [shouldWrite(prompt, "clankers", "clankers", "clankers"), false],
     [shouldWrite("clankers read ARENA.md AGENTS.md in full before your first edit, and follow both.\n", "clankers", "clankers", "clankers"), false],
     [shouldWrite("", "clankers", "clankers", "clankers"), false],
     [shouldWrite("draft", "clankers", "clankers", "clankers"), false],
@@ -207,7 +221,7 @@ function checkPromptFill(api) {
     [agentKeyFrom({ key: "has spaces in it aaaaaaaaaaaaa" }), null],
     [agentKeyFrom(null), null],
     // The composer carries the fill only: the proxy rides the preview.
-    [promptForSlug("clankers").indexOf("http"), -1],
+    [prompt.indexOf("http"), -1],
     [PREVIEW_FRAME_TITLE, "App preview on port 8000"],
     [ROTATE_MIN_SECONDS, 900],
     [ROTATE_DUE_KEY, "clankers-arena-rotate-due"],
