@@ -2760,3 +2760,19 @@ test('the phone footer keeps Send beside a long status', () => {
   assert.ok(rule, 'the footer stack has its own rule');
   assert.match(rule[0], /flex: 1 1 0\b/, 'the status stack starts from zero width so Send stays on its line');
 });
+
+test('a wide table scrolls sideways on its own and keeps its words whole', () => {
+  // The report and message text wrap anywhere, so a cell could shrink to one character: a wide
+  // table squeezed and broke its words instead of scrolling. Each table is its own scroll box now,
+  // as on GitHub, and its cells wrap only between words.
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const table = /\.report table, \.message-text table {[^}]*}/.exec(css);
+  assert.ok(table, 'the tables have their own rule');
+  for (const part of ['display: block', 'width: max-content', 'max-width: 100%', 'overflow-x: auto']) {
+    assert.ok(table[0].includes(part), `the table rule sets ${part}`);
+  }
+  for (const cells of [/\.report th, \.report td {[^}]*}/, /\.message-text th, \.message-text td {[^}]*}/]) {
+    const rule = cells.exec(css);
+    assert.ok(rule && rule[0].includes('overflow-wrap: normal'), `${cells.source} keeps words whole`);
+  }
+});
