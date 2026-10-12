@@ -24,10 +24,21 @@ let writeToken = pageToken();
 function writeHeaders(type) {
   return { 'Content-Type': type, 'X-Preview-Token': writeToken };
 }
-// A cited ID prefix has to be a whole visible segment, so the first hyphen sits after 7 characters.
+// Six characters name a note in the log whole, so the mint carries no tail. A clash keeps the
+// earlier record, so the mint steps past every ID the state in hand shows.
 function newId() {
-  const hex = crypto.randomUUID().replaceAll('-', '');
-  return `${hex.slice(0, 7)}-${hex.slice(7)}`;
+  const seen = new Set();
+  const collect = value => {
+    if (!value || typeof value !== 'object') return;
+    if (typeof value.id === 'string') seen.add(value.id);
+    for (const child of Object.values(value)) collect(child);
+  };
+  collect(lastState);
+  for (let step = 0; step < 8; step += 1) {
+    const candidate = crypto.randomUUID().replaceAll('-', '').slice(0, 6);
+    if (!seen.has(candidate)) return candidate;
+  }
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 6);
 }
 let historySignature = '';
 let draftPreviewSequence = 0;
@@ -82,7 +93,7 @@ function setIcon(button, name, size) {
   button.replaceChildren(icon(name, size));
 }
 function setPreviewIcon(button) {
-  button.replaceChildren(icon('markdown', 15), icon('eye', 15));
+  button.replaceChildren(icon('markdown', 15));
   label(button, 'Preview Markdown');
 }
 function save(name, value) {
@@ -507,7 +518,7 @@ function showHistory(notes) {
     receipt.className = 'receipt';
     const receiptId = document.createElement('code');
     receiptId.className = 'note-id';
-    receiptId.textContent = item.id.slice(0, 7);
+    receiptId.textContent = item.id.slice(0, 6);
     receiptId.title = item.id;
     receiptId.dataset.full = item.id;
     // Sent until the agent reads it, Seen once an explicit receipt has stamped seen_at, Said once answered.
@@ -1062,10 +1073,10 @@ function quoteId(id, control) {
   control.title = `Quoted in the composer: RE: ${id}`;
 }
 function quoteNoteId(code) {
-  // The log's IDs are UUIDs, so the quote carries the seven characters on show, which find the
-  // note. A report ID is a slug: seven characters of it name nothing, so it marks itself whole.
+  // A cited note ID is its six characters, which are the whole ID of a note minted now. A report
+  // ID is a slug: six characters of it name nothing, so it marks itself whole.
   const full = code.dataset.full || code.textContent;
-  quoteId(code.dataset.quote === 'full' ? full : full.slice(0, 7), code);
+  quoteId(code.dataset.quote === 'full' ? full : full.slice(0, 6), code);
 }
 // The report ID rides the status line as a code element that quotes the report to the composer,
 // the one gesture the log's note IDs and the task titles carry too.
@@ -1192,7 +1203,7 @@ function savedAnswers(id) {
 // stamps, and the earlier ones wait in the object's title.
 function submissionParts(report) {
   if (!report?.latest_answer_at) return '';
-  return ` · Submission ${report.latest_answer_id.slice(0, 7)}`;
+  return ` · Submission ${report.latest_answer_id.slice(0, 6)}`;
 }
 // The read stamp is report-level, so it counts only when it lands after the latest answer.
 function submissionSeenAt(report) {
@@ -1258,7 +1269,7 @@ function renderReportAcknowledgement() {
     for (const reply of [{text: ack.ack_text, html: ack.ack_html, at: ack.acknowledged_at}, ...(ack.replies || [])]) {
       const block = document.createElement('div');
       block.className = 'reply-block';
-      block.title = `Submission ${ack.id.slice(0, 7)} · ${time(reply.at)}`;
+      block.title = `Submission ${ack.id.slice(0, 6)} · ${time(reply.at)}`;
       if (reply.html !== undefined) block.innerHTML = linkReferences(reply.html, references);
       else {
         const plain = document.createElement('p');
@@ -1366,7 +1377,7 @@ $('#report-form').addEventListener('submit', async event => {
     // The report ID keeps its chip after a send: the plain text assignment
     // dropped it, so the loaded line and the sent line disagreed.
     reportStatusLine(
-      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 7)}`,
+      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 6)}`,
       id,
     );
     const report = lastState?.reports.find(item => item.id === id);

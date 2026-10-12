@@ -1762,7 +1762,7 @@ def test_note_owns_one_attachment():
     assert note["id"] == "linked-note" and note["text"] == "Read this file"
     record = attached.uploads()[0]
     assert record["name"] == "old name.bin" and record["size"] == len(raw)
-    assert Path(record["path"]).name == "linked--1760000000-old-name.bin"
+    assert Path(record["path"]).name == "linked-1760000000-old-name.bin"
     assert Path(record["path"]).read_bytes() == raw
     assert [item["id"] for item in attached.read()["pending"]] == ["linked-note"]
     assert attached.state()["notes"][0]["attachment_name"] == "old name.bin"
@@ -1808,9 +1808,9 @@ def test_multi_file_note():
     assert saved["attachments"][0]["id"] == "several-note"
     assert len({item["id"] for item in saved["attachments"]}) == 3
     assert [Path(item["path"]).name for item in saved["attachments"]] == [
-      "several-1760000000-first-photo.png",
-      "several-1760000000-another.bin",
-      "several-1760000000-last-photo.png",
+      "severa-1760000000-first-photo.png",
+      "severa-1760000000-another.bin",
+      "severa-1760000000-last-photo.png",
     ]
     assert [Path(item["path"]).read_bytes() for item in saved["attachments"]] == [
       file[2] for file in files
@@ -1880,10 +1880,10 @@ def test_upload_filenames_are_unique():
     second_record = second["attachments"][0]
     names.append(Path(second_record["path"]).name)
     assert names == [
-      "abcdefg-1760000000-same-photo.png",
-      "abcdefg-1760000000-2-same-photo.png",
-      "abcdefg-1760000000-3-same-photo.png",
-      "abcdefg-1760000000-4-same-photo.png",
+      "abcdef-1760000000-same-photo.png",
+      "abcdef-1760000000-2-same-photo.png",
+      "abcdef-1760000000-3-same-photo.png",
+      "abcdef-1760000000-4-same-photo.png",
     ]
     assert [
       Path(item["path"]).read_bytes() for item in [*first["attachments"], second_record]
@@ -1989,7 +1989,7 @@ def test_http_note_attachment():
       saved = json.loads(payload)
       assert status == 201 and saved["id"] == "http-note"
       assert saved["attachment_name"] == "old photo.png"
-      assert Path(saved["attachment_path"]).name == "http-no-1760000000-old-photo.png"
+      assert Path(saved["attachment_path"]).name == "http-n-1760000000-old-photo.png"
       assert Path(saved["attachment_path"]).read_bytes() == binary
       assert [item["id"] for item in attached_http.read()["pending"]] == ["http-note"]
       assert request("POST", "/api/notes/with-file", body, headers)[0] == 201
@@ -2013,7 +2013,7 @@ def test_http_note_attachment():
       assert status == 201 and received["id"] == "http-several"
       assert [item["name"] for item in received["attachments"]] == ["a.txt", "b.bin"]
       assert [
-        re.fullmatch(rf"http-se-\d+-{re.escape(name)}", Path(item["path"]).name)
+        re.fullmatch(rf"http-s-\d+-{re.escape(name)}", Path(item["path"]).name)
         is not None
         for item, name in zip(received["attachments"], ("a.txt", "b.bin"))
       ] == [True, True]
@@ -2054,7 +2054,7 @@ def test_http_note_attachment():
         f"f{n}.txt" for n in range(6)
       ]
       assert [
-        re.fullmatch(rf"http-si-\d+-f{n}\.txt", Path(item["path"]).name) is not None
+        re.fullmatch(rf"http-s-\d+-f{n}\.txt", Path(item["path"]).name) is not None
         for n, item in enumerate(received["attachments"])
       ] == [True] * 6
     finally:
@@ -2535,7 +2535,7 @@ def test_bare_ack_answers_the_one_pending_item():
     store.note("bare-one", "One note waits")
     answered = cli("ack", "-n", "Answered without an ID.")
     assert answered.returncode == 0, answered.stderr
-    assert answered.stdout.splitlines()[0] == "ok bare-on"
+    assert answered.stdout.splitlines()[0] == "ok bare-o"
     assert store.read()["pending"] == []
     # Two pending items stay ambiguous, and the refusal names both.
     store.note("bare-two", "Second note")
@@ -2545,6 +2545,36 @@ def test_bare_ack_answers_the_one_pending_item():
     assert refused.returncode != 0, combined
     assert "bare-two" in combined and "bare-three" in combined
     assert len(store.read()["pending"]) == 2
+
+
+def test_bare_task_reads_the_stored_row():
+  """A task ID alone prints the stored task, and the read writes nothing back."""
+  with tempfile.TemporaryDirectory() as read_dir:
+    store = preview.Store(read_dir, create=True)
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": read_dir}
+
+    def cli(*arguments):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    written = cli(
+      "task", "read-task", "Read the queue", "-d", "Step one", "-d", "Step two"
+    )
+    assert written.returncode == 0, written.stderr
+    before = store.list_tasks()[0]
+    read = cli("task", "read-task")
+    assert read.returncode == 0, read.stderr
+    assert read.stdout.splitlines()[0] == "task read-task, order 1, status upcoming"
+    assert "- Step one" in read.stdout and "- Step two" in read.stdout
+    assert store.list_tasks()[0] == before
+    missing = cli("task", "read-nothing")
+    assert missing.returncode != 0
+    assert "holds the ID read-nothing" in missing.stdout + missing.stderr
 
 
 def test_init_reports_the_state_path():
@@ -2904,9 +2934,9 @@ def test_bare_task_list_names_the_current_task():
 
 
 def test_a_short_id_prefix_names_one_record():
-  # A 7-character prefix stands in for the full UUID. A prefix that names two records is
-  # a named conflict, and the error lists each match with its kind so the caller can see
-  # which full ID to give instead.
+  # A short prefix stands in for the full ID, and the cited form is the first six characters.
+  # A prefix that names two records is a named conflict, and the error lists each match with
+  # its kind so the caller can see which full ID to give instead.
   with tempfile.TemporaryDirectory() as short_dir:
     short = preview.Store(short_dir, create=True)
     short.note("abcd123-0289082512830518", "first note")
@@ -2915,7 +2945,7 @@ def test_a_short_id_prefix_names_one_record():
     # The head reaches the agent inside ticks, so the copied form names the same record.
     assert short.resolve_id("`abcd123`") == "abcd123-0289082512830518"
     assert preview.format_pending_item(short.read()["pending"][0]).startswith(
-      "`abcd123`"
+      "`abcd12`"
     )
     short.note("abcd123-9999000011112222", "second note, same head")
     try:
@@ -2941,7 +2971,7 @@ def test_a_short_id_prefix_names_one_record():
       check=True,
       env=env,
     ).stdout
-    assert "abcd123" in out
+    assert "abcd12" in out
     prefixed = subprocess.run(
       [sys.executable, script, "ack", "abcd123-9999", "-r", "answered too"],
       capture_output=True,
@@ -2949,7 +2979,7 @@ def test_a_short_id_prefix_names_one_record():
       check=True,
       env=env,
     ).stdout
-    assert "abcd123" in prefixed
+    assert "abcd12" in prefixed
 
 
 def test_short_flags_and_the_details_rename():
@@ -4302,8 +4332,8 @@ def test_reminder_rotation():
     assert "Publish your reports." in preview.REMINDERS
     assert "Never end a turn with unblocked tasks." in preview.REMINDERS
     assert (
-      "Check the PR's CI before ending a pushed turn; read the run's verdict on a later call."
-      in preview.REMINDERS
+      "Check the PR's CI before ending a pushed turn; read the run's verdict on a later"
+      " call, never a loop in the call." in preview.REMINDERS
     )
     assert "`task-list` at turn start. Update it as work changes." in preview.REMINDERS
     assert "Grep-verify each edit." in preview.REMINDERS
@@ -4836,7 +4866,7 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert "skip-no" in printed[-1]
+      assert "skip-n" in printed[-1]
       assert store.skip_poll_requested() is True
       # Once the ack empties the queue, the next poll consumes the skip it held.
       store.acknowledge(["skip-note"], "reply", "done")
@@ -4982,7 +5012,7 @@ def test_skip_poll_clears_on_owner_message():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
     assert code == 0 and sleeps == []
     assert not any(str(item).startswith("SKIP") for item in printed)
-    assert "skip-cl" in printed[-1]
+    assert "skip-c" in printed[-1]
     # A report answer clears it the same way.
     store.request_skip_poll()
     assert store.skip_poll_requested() is True
@@ -6103,6 +6133,38 @@ def test_commit_trap_matches_a_kebab_id_on_its_full_form_only():
     tokens = preview.session_id_tokens(store)
     assert "an-example-report-id" in tokens
     assert "an-example" not in tokens
+
+
+def test_new_id_is_six_hex_characters():
+  """The mint carries the cited length, and a taken ID steps to a free one."""
+  with tempfile.TemporaryDirectory() as mint_dir:
+    store = preview.Store(mint_dir, create=True)
+    first = store.free_id()
+    assert preview.NOTE_ID.fullmatch(first), first
+    assert len(first) == 6, first
+    store.note(first, "Occupied")
+    assert store.free_id() != first
+
+
+def test_commit_trap_names_a_six_character_citation():
+  """A staged line that cites the six characters of a minted note blocks the commit."""
+  with tempfile.TemporaryDirectory() as directory:
+    state = Path(directory, "state")
+    state.mkdir()
+    store = preview.Store(str(state), create=True)
+    note_id = "abcdef"
+    store.note(note_id, "a note")
+    repo = Path(directory, "repo")
+    repo.mkdir()
+    git = git_repo(str(repo))
+    Path(repo, "doc.md").write_text(f"Fixed in {note_id}.\n", encoding="utf-8")
+    git("add", "doc.md")
+
+    hits = preview.staged_session_id_hits(store, str(repo))
+
+    assert hits, hits
+    assert all(hit[2] == note_id for hit in hits), hits
+    assert "COMMIT BLOCKED" in preview.commit_id_report(hits)
 
 
 def test_rename_repoints_a_note_and_its_uploads():

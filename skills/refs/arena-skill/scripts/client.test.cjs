@@ -147,7 +147,7 @@ const context = {
   document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
-  crypto: { randomUUID: () => `${String(++counter).padStart(8, '0')}-0000-4000-8000-000000000000` },
+  crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
   AbortController,
   Blob,
   File,
@@ -548,7 +548,7 @@ test('preview client', async (t) => {
     assert.equal(get('#note').hidden, true);
     assert.equal(get('#preview-note').getAttribute('aria-pressed'), 'true');
     assert.equal(get('#preview-note').children[0].children[0].getAttribute('fill'), 'currentColor', 'the markdown mark is a filled path');
-    assert.equal(get('#preview-note').children.at(-1).children[1].getAttribute('r'), '3', 'the eye rides the markdown mark');
+    assert.equal(get('#preview-note').children.length, 1, 'the markdown mark stands alone');
     assert.equal(get('#draft-preview').innerHTML, '<strong>draft</strong>');
     assert.equal(sent.length, 0);
     await get('#preview-note').events.click();
@@ -856,7 +856,7 @@ test('preview client', async (t) => {
     get('#note').scrollHeight = 72;
     await get('#form').events.submit(event({}));
     assert.equal(sent[0].id, sent[1].id);
-    assert.match(sent[0].id, /^[0-9a-f]{7}-[0-9a-f]{25}$/);
+    assert.match(sent[0].id, /^[0-9a-f]{6}$/);
     assert.equal(get('#note').value, '');
   });
 
@@ -1271,10 +1271,8 @@ test('preview client', async (t) => {
     assert.ok(sentReceipt.children.at(-1).textContent.length > 0, 'the latest stamp ends the line');
     assert.match(sentReceipt.children[0].title, /^Sent /,
       'the full stamp breakdown waits in the title');
-    assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 7)),
-      'show the seven-character ID immediately after sending');
-    assert.ok(!get('#report-agent-ack').textContent.includes(sent.at(-1).id),
-      'do not show the full submission ID');
+    assert.ok(get('#report-agent-ack').textContent.includes(sent.at(-1).id.slice(0, 6)),
+      'show the six-character ID immediately after sending');
     assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     await get('#refresh-report').events.click();
     await tick();
@@ -1424,8 +1422,8 @@ test('preview client', async (t) => {
     state.reports[0].agent_seen_at = '2026-09-24T10:00:30';
     await refresh();
     assert.equal(agentAck.hidden, false, 'show the latest answer while it awaits a receipt');
-    assert.match(agentAck.textContent, /Submission a123456/);
-    assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows seven ID characters');
+    assert.match(agentAck.textContent, /Submission a12345/);
+    assert.ok(!agentAck.textContent.includes('a123456-'), 'the UI only shows six ID characters');
     assert.match(agentAck.children[0].title, / · Read \d+ hours ago/,
       'the read stamp waits in the title');
     assert.match(agentAck.textContent, / · \d+ hours ago$/,
@@ -1454,7 +1452,7 @@ test('preview client', async (t) => {
     state.reports[0].latest_answer_at = '2026-09-24T10:02:00';
     state.reports[0].latest_answer_acknowledged_at = null;
     await refresh();
-    assert.match(agentAck.textContent, /Submission b765432/);
+    assert.match(agentAck.textContent, /Submission b76543/);
     assert.ok(!agentAck.textContent.includes('a123456'), 'the old submission ID disappears');
     assert.equal(part(agentAck, 'state-dot').title, 'Sent',
       'a previous receipt and an earlier read stamp do not cover a later answer');
@@ -1968,16 +1966,16 @@ test('preview client', async (t) => {
     state = { notes: [{ id: 'a66700e4-37f0-4182-b782-33c38a83728d', text: 'long id', at: new Date().toISOString(), acknowledged_at: null }], reports: [], last_check: null };
     await refresh();
     longReceipt = get('#history').children.at(-1).children[2];
-    assert.equal(longReceipt.children[0].textContent, 'a66700e');
+    assert.equal(longReceipt.children[0].textContent, 'a66700');
     assert.equal(longReceipt.children[0].title, 'a66700e4-37f0-4182-b782-33c38a83728d');
     assert.equal(longReceipt.children[0].className, 'note-id');
     assert.doesNotMatch(longReceipt.textContent, /a66700e4-37f0/);
-    assert.match(longReceipt.textContent, /^a66700e ·  · (just now|\d+ (mins?|hours?) ago)$/);
+    assert.match(longReceipt.textContent, /^a66700 ·  · (just now|\d+ (mins?|hours?) ago)$/);
     assert.equal(part(longReceipt, 'state-dot').dataset.state, 'sent');
   });
 
-  await t.test("A plain click quotes the seven characters on show; no copy gesture is left on an ID", async () => {
-    // A plain click quotes the seven characters on show; no copy gesture is left on an ID. The
+  await t.test("A plain click quotes the six characters on show; no copy gesture is left on an ID", async () => {
+    // A plain click quotes the six characters on show; no copy gesture is left on an ID. The
     // shift-click that copied the whole UUID goes with the copy path.
     longId = longReceipt.children[0];
     assert.notEqual(longId.textContent, longId.dataset.full);
@@ -2006,8 +2004,8 @@ test('preview client', async (t) => {
     assert.equal(noteBox.value, `RE: ${longId.textContent}\n\na draft already written`);
     assert.equal(noteBox.hidden, false, 'quoting opens a hidden composer');
     assert.equal(noteBox.focused, true);
-    assert.equal(noteBox.selectionStart, 12, 'the caret sits after the quote line');
-    assert.equal(noteBox.selectionEnd, 12);
+    assert.equal(noteBox.selectionStart, 11, 'the caret sits after the quote line');
+    assert.equal(noteBox.selectionEnd, 11);
     assert.equal(longId.title, `Quoted in the composer: RE: ${longId.textContent}`);
     assert.equal(storage.get([...storage.keys()].find(item => item.endsWith(':draft'))), noteBox.value,
       'the quote is kept as the draft');
@@ -2038,9 +2036,9 @@ test('preview client', async (t) => {
     assert.equal(noteBox.value, `RE: ${longId.textContent}\n`, 'a plain click quotes');
   });
 
-  await t.test("A report ID quotes whole: its seven-character prefix names nothing", async () => {
-    // The log's UUIDs find their note from seven characters. A report ID is a slug, so the quote
-    // carries the whole of it.
+  await t.test("A report ID quotes whole: its six-character prefix names nothing", async () => {
+    // The log's notes answer to six characters. A report ID is a slug, so the quote carries the
+    // whole of it.
     context.reportStatusLine('Report · 3 fields', 'summarize-stops');
     const code = part(get('#report-status'), 'note-id');
     assert.equal(code.dataset.quote, 'full');

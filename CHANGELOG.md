@@ -27,6 +27,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Current seat goes to the first upcoming task no blocked mark holds, in the listing and in the page. A task that waits on a report no longer reads as the work in hand.
 - `arena-preview init` prints `state <path> created`, or `present` for a database that was already there, so a restore reads what the call did.
 - A bare `arena-preview ack` answers the one pending note or answer. Two or more pending items keep the ID required, and the refusal names them.
+- `arena-preview task ID` alone prints the stored task, so the queue reads back through the CLI. The read writes nothing back.
+- A note ID is six hex characters, minted whole, and prose cites it whole. An ID minted before the change keeps its longer form and cites its head, so the commit trap matches both lengths. The mint steps past a stored ID, and the page mint skips every ID the state in hand shows.
+- The Lucide eye leaves the preview button. The Simple Icons markdown mark names the button alone, and its label keeps the words.
+- The reference names the CLI as the only state read path, gains the `task ID` row, and stops promising details from `task-list`.
+- The reminder for a pushed turn bans a loop inside the call by name. The detached run prints its verdict on a later call, and a hand poll only hides it.
 - The refusal covers the wrapped shapes of the same wait: a flag before the family, a wrapper, a subshell and a substitution. `env`, `command`, `timeout` and `xargs` count as wrappers, and the hook case reads the family words at any spacing.
 - `echo_task`, `Store.neighbours` and `scrollHistory` leave the tree: no production caller held them, and their coverage moves to the printed task and the board.
 - The reminder set drops to 16 entries and 558 characters, the poll disclaimer fits one shorter line, and the ack hint loses a word. The merged entries keep both of their facts.
