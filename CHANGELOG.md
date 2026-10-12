@@ -16,6 +16,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The preview proxy chooser lists the last 10 previews opened from it, newest first, with a remove button on each. The list lives in the browser's storage only, so the server still keeps no memory. A share or a link adds no entry.
 
+#### userscripts
+
+- The Arena bundle keeps the screen awake while a turn runs. It asks for a Screen Wake Lock, and a menu switch turns the feature off.
 ### Changed
 
 #### preview

@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 const bundles = {
   arena: {
-    features: { "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0 },
+    features: { "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
     labels: {
       "prompt-fill": "Composer — fill",
       "open-steering": "Steering — open",
@@ -15,6 +15,7 @@ const bundles = {
       "transcript-trim": "Transcript — auto trim",
       "tab-title": "Page — tab title",
       "state-download": "State — download",
+      "keep-awake": "Page — keep awake",
     },
     // Every Arena entry leads with its module and carries no role word; a switch ends in (ON)/(OFF).
     moduleSwitch: true,
@@ -36,6 +37,7 @@ const bundles = {
       "prompt-fill": 2,
       "state-download": 1,
       "transcript-trim": 1,
+      "keep-awake": 1,
     },
   },
   chatgpt: {
@@ -164,6 +166,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "State — download (ON)",
       "State — choose the file",
       "State — force save",
+      "Page — keep awake (ON)",
       "Page — tab title (ON)",
       "Tab title — every 1 s",
       "Userscript — pause all",
@@ -243,6 +246,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "State — download (ON)",
         "State — choose the file",
         "State — force save",
+        "Page — keep awake (ON)",
         "Page — tab title (ON)",
         "Tab title — every 1 s",
         "Userscript — pause all",

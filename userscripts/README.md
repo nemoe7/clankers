@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Features |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Preview state download, Tab title |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
