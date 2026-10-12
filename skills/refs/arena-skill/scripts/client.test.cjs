@@ -547,8 +547,8 @@ test('preview client', async (t) => {
     await get('#preview-note').events.click();
     assert.equal(get('#note').hidden, true);
     assert.equal(get('#preview-note').getAttribute('aria-pressed'), 'true');
-    assert.equal(get('#preview-note').textContent, 'MD ');
-    assert.equal(get('#preview-note').children.at(-1).children[1].getAttribute('r'), '3', 'the eye rides the MD label');
+    assert.equal(get('#preview-note').children[0].children[0].getAttribute('fill'), 'currentColor', 'the markdown mark is a filled path');
+    assert.equal(get('#preview-note').children.at(-1).children[1].getAttribute('r'), '3', 'the eye rides the markdown mark');
     assert.equal(get('#draft-preview').innerHTML, '<strong>draft</strong>');
     assert.equal(sent.length, 0);
     await get('#preview-note').events.click();
