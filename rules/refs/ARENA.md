@@ -77,6 +77,7 @@
 - Ask before implementing rather than after, on deviating reasoning or material ambiguity.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - MUST ask questions as soon as they arise. Publish a fielded report in the Reports tab and read its answer at the next steering read. A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
+- Carry every proposal and question in a fielded report, never in chat.
 - Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
 - Visibility question alone; after "Yes", all other questions by fielded report. The first successful start not yet confirmed in this session still needs a visibility question; a later restart in the same session does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
@@ -179,7 +180,7 @@
 - Publish longer reports through the `arena-skill` skill in the shared preview; NEVER create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
 - Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
-- A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
+- Every report goes through the preview skill; no report stays in chat.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
