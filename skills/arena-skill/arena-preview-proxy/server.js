@@ -308,6 +308,25 @@ function rewriteHtml(upstreamRes, res, status, headers) {
   });
 }
 
+// Logs show the method, the path and the query, with secret-looking query values hidden.
+// Headers and cookies never reach a log line.
+const SECRET_PARAM = /key|token|secret|auth|pass|cookie/i;
+function redactedHref(raw) {
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return '(unparsed)';
+  }
+  for (const name of [...url.searchParams.keys()]) {
+    if (SECRET_PARAM.test(name)) url.searchParams.set(name, '***');
+  }
+  return url.href;
+}
+function logLine(...fields) {
+  console.log(new Date().toISOString(), ...fields);
+}
+
 const server = http.createServer((req, res) => {
   if (!ALLOWED_METHODS.has(req.method)) {
     return sendText(res, 405, 'Method not allowed.');
@@ -320,6 +339,11 @@ const server = http.createServer((req, res) => {
     return sendText(res, 400, 'Invalid request URL.');
   }
 
+  logLine(
+    'request', req.method,
+    redactedHref(`http://proxy.invalid${incoming.pathname}${incoming.search}`).slice('http://proxy.invalid'.length),
+    'referer', req.headers.referer ? redactedHref(req.headers.referer) : 'none'
+  );
   if (incoming.pathname === '/healthz') return sendText(res, 200, 'ok');
   if (incoming.pathname.startsWith('/pwa/')) return servePwa(incoming, req, res);
 
@@ -335,6 +359,7 @@ const server = http.createServer((req, res) => {
       // from the page that made them. The viewer root always opens the chooser.
       target = incoming.pathname === '/' ? null : targetFromReferer(incoming, req.headers.referer);
       if (!target) {
+        logLine('route', 'chooser: no target from the url or the referer');
         return sendHtml(res, 200, viewerPage(
           'Choose a preview: paste its URL, or open this page from a share or a link that'
           + ' carries one.'
@@ -348,6 +373,7 @@ const server = http.createServer((req, res) => {
     return sendText(res, 400, err.message || 'Invalid preview URL.');
   }
 
+  logLine('route', target.href.includes('?') ? redactedHref(target.href) : target.href);
   const headers = { ...req.headers };
   for (const name of HOP_BY_HOP_HEADERS) delete headers[name];
   for (const name of FETCH_METADATA_HEADERS) delete headers[name];
@@ -377,6 +403,7 @@ const server = http.createServer((req, res) => {
       }
       responseHeaders['cache-control'] = 'no-store';
       const status = upstreamRes.statusCode || 502;
+      logLine('upstream', status, req.method, target.origin + target.pathname);
       const isHtml = /\btext\/html\b/i.test(String(responseHeaders['content-type'] || ''));
       if (isHtml && req.method !== 'HEAD') {
         delete responseHeaders['content-length'];
@@ -388,6 +415,7 @@ const server = http.createServer((req, res) => {
 
   upstream.setTimeout(120000, () => upstream.destroy(new Error('Upstream timeout')));
   upstream.on('error', err => {
+    logLine('upstream error', err.message);
     if (!res.headersSent) sendText(res, 502, `Upstream request failed: ${err.message}`);
     else res.destroy(err);
   });

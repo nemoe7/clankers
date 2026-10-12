@@ -73,7 +73,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- The preview proxy forwards a page's own calls again. A call takes its target from the Referer of the page that made it, and the viewer root still opens the chooser.
+- The preview proxy forwards a page's own calls again. A call takes its target from the Referer of the page that made it, and the viewer root still opens the chooser. The proxy logs each request, route and upstream status, and it hides secret-looking query values.
 
 ## 2026-10-11
 
