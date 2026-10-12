@@ -13,6 +13,7 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after the quiet note is acknowledged |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list while an upcoming task is unblocked, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
 | `route <name> -- <command>` | The gate's helper for a detected long run, and the call a failed start names: it starts the command detached under a name and records its tail and exit, so the verdict prints on a later call as `run <name> done: exit N`, with one status line per call while it runs |
+| `ack` | A bare call answers the one pending note or answer. Two or more pending items keep the ID required, and the refusal names them |
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line; quote it the same way |
 | `ack <id> --reply-file <path>` | Read the rendered reply from a file, so no shell quoting touches a backtick; `--note-file` reads the plain line the same way. The gate warns when an inline ack text holds a backtick inside double quotes |

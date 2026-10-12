@@ -2514,6 +2514,39 @@ def test_agent_line_drops_the_harness_wrapper():
     ]
 
 
+def test_bare_ack_answers_the_one_pending_item():
+  """A bare ack answers the one pending item, and two waiting items keep the ID required."""
+  with tempfile.TemporaryDirectory() as bare_dir:
+    store = preview.Store(bare_dir, create=True)
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": bare_dir}
+
+    def cli(*arguments):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    empty = cli("ack", "-n", "Nothing waits.")
+    assert empty.returncode != 0, empty.stdout
+    assert "No pending" in empty.stdout + empty.stderr
+    store.note("bare-one", "One note waits")
+    answered = cli("ack", "-n", "Answered without an ID.")
+    assert answered.returncode == 0, answered.stderr
+    assert answered.stdout.splitlines()[0] == "ok bare-on"
+    assert store.read()["pending"] == []
+    # Two pending items stay ambiguous, and the refusal names both.
+    store.note("bare-two", "Second note")
+    store.note("bare-three", "Third note")
+    refused = cli("ack", "-n", "Which one?")
+    combined = refused.stdout + refused.stderr
+    assert refused.returncode != 0, combined
+    assert "bare-two" in combined and "bare-three" in combined
+    assert len(store.read()["pending"]) == 2
+
+
 def test_init_reports_the_state_path():
   """The command names the database it used and whether the call made it."""
   with tempfile.TemporaryDirectory() as init_dir:

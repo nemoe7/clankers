@@ -4116,6 +4116,27 @@ class Store:
           return row["at"]
     return None
 
+  def pending_ack(self):
+    """The one unanswered note or answer a bare `ack` answers.
+
+    Two or more pending items stay ambiguous, so the refusal names them and the ID stays
+    the way to answer either one.
+    """
+    with self.connect() as db:
+      rows = db.execute(
+        "SELECT id, at FROM notes WHERE acknowledged_at IS NULL"
+        " UNION ALL SELECT id, at FROM submissions WHERE acknowledged_at IS NULL"
+        " ORDER BY at"
+      ).fetchall()
+    if not rows:
+      raise ValueError("No pending note or answer to acknowledge")
+    if len(rows) > 1:
+      listed = ", ".join(row["id"] for row in rows)
+      raise ValueError(
+        f"{len(rows)} items are pending: {listed}. Name the ID to answer one"
+      )
+    return rows[0]["id"]
+
   def acknowledge(self, ids, kind, text):
     """Answer each ID: the first ack is the receipt, every later one appends a reply block.
 
@@ -5130,9 +5151,10 @@ def main():
   )
   ack = commands.add_parser(
     "ack",
-    help="Answer a note; -r replies, -n notes, -R and -N read the answer from a file",
+    help="Answer a note; a bare call answers the one pending item; -r replies, -n notes,"
+    " -R and -N read the answer from a file",
   )
-  ack.add_argument("ids", nargs="+")
+  ack.add_argument("ids", nargs="*")
   ack.add_argument("-r", "--reply", help="Markdown answer shown in the message log")
   ack.add_argument("-n", "--note", help="Short plain answer shown in the message log")
   # A backtick inside double quotes runs as a command, so the shell eats the ticks before this
@@ -5427,7 +5449,11 @@ def main():
           text = source.read_text(encoding="utf-8")
         except OSError as error:
           raise ValueError(f"Cannot read {source}: {error.strerror or error}") from None
-      ids = [store.resolve_id(token) for token in args.ids]
+      ids = (
+        [store.resolve_id(token) for token in args.ids]
+        if args.ids
+        else [store.pending_ack()]
+      )
       arrivals = {record_id: store.record_arrival(record_id) for record_id in ids}
       store.acknowledge(ids, kind, text)
       short = [i[:7] for i in ids]
