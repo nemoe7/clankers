@@ -46,7 +46,7 @@ The composer sends one note plus files through `/api/notes/with-file`.
 Pasted clipboard images join staged attachments with epoch-millisecond names, image extensions and numeric suffixes for collisions. Text paste stays native. Images keep the same per-file limit and retry path.
 Each note has one ID and acknowledgement. `read` lists files in `attachments[]`.
 Files stay outside SQLite in `<state-dir>/uploads/`. Each is at most 50MB.
-Name stored files with the note ID's first seven characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
+Name stored files with the note ID's first six characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
 Only duplicate names add `-2`, `-3`, and so on after the timestamp. Keep existing files unchanged.
 Long names use a short disk name when required by the filesystem. Records keep the original filename. `present` reports if bytes exist.
 Identical retries repair missing bytes without changing the note receipt or file order.

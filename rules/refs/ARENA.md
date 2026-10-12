@@ -77,7 +77,7 @@
 - Ask before implementing rather than after, on deviating reasoning or material ambiguity.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - MUST ask questions as soon as they arise. Publish a fielded report in the Reports tab and read its answer at the next steering read. A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
-- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect.
+- Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
 - Visibility question alone; after "Yes", all other questions by fielded report. The first successful start not yet confirmed in this session still needs a visibility question; a later restart in the same session does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with three or more options or an open choice carries a recommended answer, the one you would take on silence, marked among options where offered; a yes/no or confirm question carries none.
