@@ -152,7 +152,7 @@ REMINDERS = (
   "Grep-verify each edit.",
   TASK_REMINDER,
   "Rebase `origin/main` before pushing; empty checks mean it moved.",
-  "Check the PR's CI before ending a pushed turn; run it with `start_process`.",
+  "Check the PR's CI before ending a pushed turn; read the run's verdict on a later call.",
   "Run `arena-preview`, not the full path.",
 )
 REMINDER_CURSOR = "reminder_cursor"

@@ -4269,7 +4269,7 @@ def test_reminder_rotation():
     assert "Publish your reports." in preview.REMINDERS
     assert "Never end a turn with unblocked tasks." in preview.REMINDERS
     assert (
-      "Check the PR's CI before ending a pushed turn; run it with `start_process`."
+      "Check the PR's CI before ending a pushed turn; read the run's verdict on a later call."
       in preview.REMINDERS
     )
     assert "`task-list` at turn start. Update it as work changes." in preview.REMINDERS

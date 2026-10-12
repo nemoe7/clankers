@@ -42,6 +42,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The proxy tables lose their recovery rows and four examples, and the transfer bullets merge, so SKILL.md reads 433 characters shorter. No route or parameter leaves the page.
 - The ARENA.md long-run clause names the runner heads the scan carries, and points at the REFERENCE.md case table. The distributed sentence names a test runner beside the check waits.
 - The ARENA.md gate clauses drop the tool name. The refs line reads detached, and the two copies read the same way, so the rule names no harness call.
+- The PR-check reminder drops the tool name too. The line names the later call that carries the verdict, and the test string follows.
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
 - REFERENCE.md gains "The gate's cases": one row per labelled case of the profile gate and its hook. A test compares the table with the labels in `install.sh`.
