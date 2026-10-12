@@ -2850,10 +2850,19 @@ def test_bare_task_list_names_the_current_task():
     assert full[0] == "Tasks 3"
     assert "done-one" in "\n".join(full)
     assert "current" not in "\n".join(full)
-    # A blocked head is still the head: the page names upcoming[0] whatever its block.
+    # A blocked head never takes the seat: the first unblocked upcoming task is named
+    # current, and the page gives its div to the same one.
     bare.write_task("first", blocked=True)
-    blocked = preview.format_task_list(bare.list_tasks()).splitlines()
-    assert "current first" in blocked[1] and "*" in blocked[1]
+    held = preview.format_task_list(bare.list_tasks()).splitlines()
+    assert "upcoming first" in held[1] and "*" in held[1]
+    assert "current second" in held[2]
+    assert preview.current_task(bare.list_tasks())["id"] == "second"
+    # With every upcoming task blocked, no task reads as current work.
+    bare.write_task("second", blocked=True)
+    waiting = preview.format_task_list(bare.list_tasks()).splitlines()
+    assert "current" not in "\n".join(waiting)
+    assert preview.current_task(bare.list_tasks()) is None
+    bare.write_task("second", blocked=False)
     # An empty queue reads as empty rather than printing a lone header count of one.
     empty = preview.Store(bare_dir + "-empty", create=True)
     assert preview.format_task_list(empty.list_tasks()).splitlines() == [

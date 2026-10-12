@@ -1207,18 +1207,31 @@ def format_read(listing):
   return "\n".join([first, *(format_pending_item(item) for item in pending)])
 
 
+def current_task(tasks):
+  """The first upcoming task no blocked mark holds, or None when every one waits.
+
+  A task that waits on a report sorts first in its group, so the head alone would hand the
+  current seat to work the agent cannot start. Both the CLI listing and the page read this.
+  """
+  for task in tasks:
+    if task.get("status") == "upcoming" and not task.get("blocked"):
+      return task
+  return None
+
+
 def format_task_list(tasks, full=False):
   """The working queue by default; `full` prints every task, finished included.
 
-  The head of the queue reads `current`, the same head the page gives a div of its own, so
-  what the agent is on next is visible without reading down a list.
+  The first unblocked upcoming task reads `current`, the same one the page gives a div of its
+  own, so what the agent can start next is visible without reading down a list.
   """
   shown = tasks if full else [t for t in tasks if t.get("status") == "upcoming"]
   lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
-  for index, task in enumerate(shown):
+  head = None if full else current_task(shown)
+  for task in shown:
     order = task.get("order")
     status = task.get("status")
-    if not full and index == 0:
+    if head is not None and task.get("id") == head.get("id"):
       status = "current"
     id_ = task.get("id")
     blocked = task.get("blocked")

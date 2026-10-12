@@ -430,11 +430,15 @@ def format_read(listing):
 	else:first=f"Inbox: {count} pending"
 	if count==0:return first
 	return'\n'.join([first,*(format_pending_item(item)for item in pending)])
+def current_task(tasks):
+	for task in tasks:
+		if task.get('status')=='upcoming'and not task.get('blocked'):return task
+	return None
 def format_task_list(tasks,full=False):
-	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"]
-	for(index,task)in enumerate(shown):
+	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"];head=None if full else current_task(shown)
+	for task in shown:
 		order=task.get('order');status=task.get('status')
-		if not full and index==0:status='current'
+		if head is not None and task.get('id')==head.get('id'):status='current'
 		id_=task.get('id');blocked=task.get('blocked');report_id=task.get('report_id');blocked_mark='*'if blocked else'';line=f"{order}{blocked_mark}  {status} {id_}"
 		if report_id:line+=f" report {report_id}"
 		lines.append(line)

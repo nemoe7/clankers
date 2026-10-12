@@ -1451,15 +1451,17 @@ function renderTasks(tasks) {
     return;
   }
   status.textContent = `Updated ${time(tasks.updated_at)}`;
-  // The head of the queue gets a div of its own so what the agent is on next is visible without
-  // reading down a list. It stays in Upcoming as well: removing it would leave a hole in the
-  // authoritative order, and the copy button hands both stored sections over as they are.
-  const head = tasks.upcoming[0];
+  // The first upcoming task no blocked mark holds gets a div of its own, so what the agent can
+  // start next is visible without reading down a list; a task waiting on a report sorts first
+  // in its group and would otherwise take that seat. It stays in Upcoming as well: removing it
+  // would leave a hole in the authoritative order, and the copy button hands both stored
+  // sections over as they are.
+  const head = tasks.upcoming.find(task => !task.blocked);
   $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
   current.hidden = !head;
   $('#tasks-finished-body').replaceChildren(...tasks.finished.slice().reverse().map(task => taskRow(task)));
   // The head already renders in its own div above; re-listing it in Upcoming duplicates it.
-  $('#tasks-upcoming-body').replaceChildren(...tasks.upcoming.slice(1).map(task => taskRow(task)));
+  $('#tasks-upcoming-body').replaceChildren(...tasks.upcoming.filter(task => task !== head).map(task => taskRow(task)));
   finished.hidden = false;
   upcoming.hidden = false;
 }

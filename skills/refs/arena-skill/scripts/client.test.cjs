@@ -616,6 +616,66 @@ test('preview client', async (t) => {
     assert.equal(upcomingBody.children[0].children[1].children[0].textContent, '1 detail');
   });
 
+  await t.test("A blocked task never takes the Current seat while another task is open", async () => {
+    // A report-linked task sorts first in its group, so the head alone would hand the Current div
+    // to work the agent cannot start. The first unblocked task takes the seat instead.
+    const saved = state.tasks.upcoming;
+    state.tasks.upcoming = [
+      { id: 'waits-on-report', title: 'Blocked work', details: ['waits'], status: 'upcoming',
+        order: 1, blocked: true, updated_at: new Date().toISOString() },
+      { id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
+        order: 2, updated_at: new Date().toISOString() }
+    ];
+    await refresh();
+    assert.equal(get('#tasks-current-body').children.length, 1);
+    assert.equal(get('#tasks-current-body').children[0].title, 'second', 'the open task holds the seat');
+    assert.equal(get('#tasks-current').hidden, false);
+    // The blocked task still reads in Upcoming, with its muted mark.
+    upcomingBody = get('#tasks-upcoming-body');
+    assert.equal(upcomingBody.children.length, 1);
+    assert.equal(upcomingBody.children[0].title, 'waits-on-report');
+    assert.equal(upcomingBody.children[0].children[0].dataset.blocked, 'true');
+    // With every upcoming task blocked, no task reads as current work.
+    state.tasks.upcoming[1].blocked = true;
+    await refresh();
+    assert.equal(get('#tasks-current-body').children.length, 0);
+    assert.equal(get('#tasks-current').hidden, true);
+    assert.equal(get('#tasks-upcoming-body').children.length, 2);
+    // Put the fixture back: the checks below this one read the tasks they left.
+    state.tasks.upcoming = saved;
+    await refresh();
+  });
+
+  await t.test("A blocked task never takes the Current seat while another task is open", async () => {
+    // A report-linked task sorts first in its group, so the head alone would hand the Current div
+    // to work the agent cannot start. The first unblocked task takes the seat instead.
+    const saved = state.tasks.upcoming;
+    state.tasks.upcoming = [
+      { id: 'waits-on-report', title: 'Blocked work', details: ['waits'], status: 'upcoming',
+        order: 1, blocked: true, updated_at: new Date().toISOString() },
+      { id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
+        order: 2, updated_at: new Date().toISOString() }
+    ];
+    await refresh();
+    assert.equal(get('#tasks-current-body').children.length, 1);
+    assert.equal(get('#tasks-current-body').children[0].title, 'second', 'the open task holds the seat');
+    assert.equal(get('#tasks-current').hidden, false);
+    // The blocked task still reads in Upcoming, with its muted mark.
+    upcomingBody = get('#tasks-upcoming-body');
+    assert.equal(upcomingBody.children.length, 1);
+    assert.equal(upcomingBody.children[0].title, 'waits-on-report');
+    assert.equal(upcomingBody.children[0].children[0].dataset.blocked, 'true');
+    // With every upcoming task blocked, no task reads as current work.
+    state.tasks.upcoming[1].blocked = true;
+    await refresh();
+    assert.equal(get('#tasks-current-body').children.length, 0);
+    assert.equal(get('#tasks-current').hidden, true);
+    assert.equal(get('#tasks-upcoming-body').children.length, 2);
+    // Put the fixture back: the checks below this one read the tasks they left.
+    state.tasks.upcoming = saved;
+    await refresh();
+  });
+
   await t.test("The details are a real list, so each carries its own marker rather than being a line in a ", async () => {
     // The details are a real list, so each carries its own marker rather than being a line in a span.
     detailList = upcomingBody.children[0].children[1].children[1];
