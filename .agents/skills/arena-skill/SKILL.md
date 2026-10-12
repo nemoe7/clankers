@@ -65,7 +65,7 @@ Republish the same ID after each source update; if answers exist, use a new ID. 
 
 ## Files and downloads
 
-For each note's `attachments[]`, read every file at its `path` before acknowledging that note once. If `present` is false or bytes are missing, report the loss.
+For each note's `attachments[]`, the read carries each file's size; an image MUST be read before acknowledging that note once, and read a text file with caution. If `present` is false or bytes are missing, report the loss.
 
 To ask for a file, run `download-request <url>`: it queues a pending job and does not download it. The owner approves or denies it in Downloads. Add `--allow-proxy` only when that URL may use AllOrigins and then CodeTabs. URLs cannot contain credentials. A saved job writes an inbox note with the path. Read that note and acknowledge it. Report failed or missing files.
 
