@@ -53,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
 - The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
 - REFERENCE.md gains "The gate's cases": one row per labelled case of the profile gate and its hook. A test compares the table with the labels in `install.sh`.
+- The ARENA.md read clause batches the required reads into one call and splits them only where the harness output cap cuts the text. The refs baseline, the live mirror and the root copy carry the same rule.
 
 ## 2026-10-11
 
