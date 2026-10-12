@@ -40,7 +40,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The comments that cited a preview answer now keep the fact and drop the ID, because a session ID dies with its session. Version 1.10.25.
-- The composer fill reads the repository beside a selected diff branch. The chip read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository chip instead, so a diff-branch selection no longer stops the fill. Version 1.10.26.
+- The composer fill reads the repository beside a selected diff branch. The chip read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository chip instead, so a diff-branch selection no longer stops the fill. Version 1.10.26, and the `@name` line carries the number with `@version`.
 
 #### house
 

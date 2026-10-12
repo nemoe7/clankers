@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.25
+// @name         Arena.ai | NemoUtils | v1.10.26
 // @namespace    https://github.com/nemoe7/clankers
 // @version      1.10.26
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
