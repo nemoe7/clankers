@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.29
+// @name         Arena.ai | NemoUtils | v1.10.30
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.29
+// @version      1.10.30
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2748,7 +2748,77 @@
     };
   });
 
-    // The title mirrors the arena state: repo, poll, bubble, hourglass and shield.
+  // The screen stays awake while a turn runs. The browser drops the lock when the page hides,
+  // so the one-second sync asks for it again once the page shows.
+  runFeature("keep-awake", "Page — keep awake", function () {
+    function wakeLockPlan(generating, held, visible) {
+      if (generating && !held && visible) return "acquire";
+      if (!generating && held) return "release";
+      return "none";
+    }
+    if (exposeChecks("keepAwake", { wakeLockPlan: wakeLockPlan })) {
+      return function () {};
+    }
+    var lock = null;
+    var pending = false;
+    var unsupportedLogged = false;
+
+    function generating() {
+      return Boolean(isSessionUrl(location.href) && findStopGeneratingButton(document));
+    }
+
+    function release() {
+      var held = lock;
+      lock = null;
+      if (held) held.release().catch(function () {});
+    }
+
+    function acquire() {
+      pending = true;
+      navigator.wakeLock.request("screen").then(
+        function (sentinel) {
+          pending = false;
+          if (!generating()) {
+            sentinel.release().catch(function () {});
+            return;
+          }
+          lock = sentinel;
+          sentinel.addEventListener("release", function () {
+            if (lock === sentinel) lock = null;
+          });
+        },
+        function (err) {
+          pending = false;
+          logEvent("wake", "lock refused: " + ((err && err.name) || "unknown"));
+        },
+      );
+    }
+
+    function sync() {
+      if (typeof navigator === "undefined" || !navigator.wakeLock) {
+        if (!unsupportedLogged) {
+          unsupportedLogged = true;
+          logEvent("wake", "no screen wake lock in this browser");
+        }
+        return;
+      }
+      var plan = wakeLockPlan(
+        generating(),
+        Boolean(lock) || pending,
+        document.visibilityState === "visible",
+      );
+      if (plan === "acquire") acquire();
+      if (plan === "release") release();
+    }
+
+    var timer = setInterval(sync, 1000);
+    return function () {
+      clearInterval(timer);
+      release();
+    };
+  });
+
+  // The title mirrors the arena state: repo, poll, bubble, hourglass and shield.
   runFeature("tab-title", "Page — tab title", function () {
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';

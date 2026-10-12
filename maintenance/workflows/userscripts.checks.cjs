@@ -1736,6 +1736,18 @@ function checkAutoThink(api) {
   console.log("ok auto think " + cases.length);
 }
 
+function checkKeepAwake(api) {
+  var wakeLockPlan = api.wakeLockPlan;
+  // The lock is asked for only while a turn runs on a visible page, and dropped once it ends.
+  assert.equal(wakeLockPlan(true, false, true), "acquire");
+  assert.equal(wakeLockPlan(true, true, true), "none", "A held lock stays");
+  assert.equal(wakeLockPlan(true, false, false), "none", "A hidden page cannot take the lock");
+  assert.equal(wakeLockPlan(false, true, true), "release", "A finished turn drops the lock");
+  assert.equal(wakeLockPlan(false, true, false), "release", "A hidden page drops a held lock");
+  assert.equal(wakeLockPlan(false, false, true), "none");
+  console.log("ok keep awake 6");
+}
+
 function run(name, check) {
   try {
     check();
@@ -2348,6 +2360,7 @@ run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
 run("hide composer", () => checkHideComposer(arena.hideComposer));
 run("tab title", () => checkTabTitle(arena.tabTitle));
 run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session));
+run("keep awake", () => checkKeepAwake(arena.keepAwake));
 
 const chatgpt = loadChecks("chatgpt.user.js").checks;
 run("hide elements", () => checkHideElements(chatgpt.hideElements));
