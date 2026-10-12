@@ -422,7 +422,7 @@ def format_size(size):
 	if size<1024:return f"{size} B"
 	if size<1024**2:return f"{short_number(size/1024)} KB"
 	return f"{short_number(size/1024**2)} MB"
-def short_number(value):text=f"{value:.1f}";return text[:-2]if text.endswith('.0')else text
+def short_number(value):text=f"{value:.1f}";return text.removesuffix('.0')
 def attachment_line(record):
 	line=f"{record.get('name','')}: {record.get('path','')}"
 	if not record.get('present'):return line+' (missing)'
