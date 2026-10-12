@@ -56,6 +56,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The ARENA.md read clause batches the required reads into one call and splits them only where the harness output cap cuts the text. The refs baseline, the live mirror and the root copy carry the same rule.
 - The ARENA.md question rule names the bar for `ask_user`. It never carries a question the report path can carry, and a report with answers takes the follow-up as a new report. The refs line, the live mirror and the root copy carry the clause.
 - The live and installed arena-skill docs name the six-character note ID. The `note` row, the prose rules and the file-name rule match the refs source again.
+- The ARENA.md `When in doubt` section adds the ambiguity rule. An ambiguous request asks the user before implementing, and the refs line, the live mirror and the root copy carry it.
 - The guidelines audit lands its accepted fixes. The rule files lose their bold mark and their repeated or merged lines, and `CHATGPT-MORE.txt` names the override it means. NEMOGPT gains headings and its missing bad answer, the first-party skills drop `metadata.origin`, and the maintainer docs note the constitution exception and prompt checks.
 
 ## 2026-10-11

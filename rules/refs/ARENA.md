@@ -229,3 +229,4 @@
 ## When in doubt
 
 - Smallest change that holds: do the requested work, verify it, and stop.
+- An ambiguous request MUST ask the user before implementing; NEVER guess.
