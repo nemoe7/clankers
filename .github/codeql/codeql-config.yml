@@ -6,9 +6,9 @@
 #
 # The viewer route of arena-skill/arena-preview-proxy forwards a caller-supplied Arena preview URL
 # on purpose too: that is the feature. `isAllowedPreview` accepts only HTTPS roots on
-# sbx-*.arena.site, with no credentials, no port and no path, and the saved origin rides an
-# HMAC-signed cookie. The `js/request-forgery` rule cannot model that pattern allowlist, so it
-# is excluded here as well. Every other JavaScript rule still runs.
+# sbx-*.arena.site, with no credentials, no port and no path, and a page's own calls take that
+# root from the Referer through the same check. The `js/request-forgery` rule cannot model that
+# pattern allowlist, so it is excluded here as well. Every other JavaScript rule still runs.
 query-filters:
   - exclude:
       id: py/full-ssrf

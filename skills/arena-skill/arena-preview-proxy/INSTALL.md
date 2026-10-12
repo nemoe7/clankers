@@ -24,7 +24,7 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 ## The installed app
 
 - The first request carries the preview: `https://arena-preview.<tailnet>.ts.net/?url=https%3A%2F%2Fsbx-xxxx.arena.site%2F`.
-- The proxy answers with the preview itself, in-page. It sets a signed, HttpOnly cookie for the selected origin, so reloads and the preview's later `/api/...` requests stay on the same sandbox without the parameter.
+- The proxy answers with the preview itself, in-page. The preview's later `/api/...` calls carry no parameter, so the proxy takes their target from the Referer of the viewer page that made them.
 - The proxy injects a manifest link and a worker registration into the preview HTML, so Android Chrome offers to install the page. The installed app reopens the same preview.
 - Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon.
  The package ships both beside the scalable icon, and the worker registers on the root scope.
