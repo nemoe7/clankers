@@ -10,7 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- Every attachment in the read carries its size beside the path, shortened to `B`, `KB` or `MB` with one decimal only when the value is not whole. The size arrives before the file, so a large read never starts blind. A lost upload still reads `(missing)`.
+- Every attachment in the read carries its size beside the path. The size shortens to `B`, `KB` or `MB`, with one decimal only when the value is not whole. It arrives before the file, so a large read never starts blind, and a lost upload still reads `(missing)`.
 - The gate refuses a bash line that runs `gh pr checks` or `gh run watch`, and the refusal names the `start_process` call that takes the run. The checks-empty notice leaves with it, because a refused line never lists checks. The reminder names the tool too.
 - The gate starts a detected long run detached instead of refusing the line, and a check wait and a test run both count. The call ends clean and the notice rides stderr. Each later call prints one status line with the elapsed seconds, and the finish replays once as `run <name> done: exit N`.
 - The detach scan names the common test runners beside `pytest`. The heads cover `npm`, `yarn` and `pnpm` test scripts, `make test`, `npx jest`, `go test`, `cargo test` and their kin. A build command such as `npm install` or `make build` stays a plain call.

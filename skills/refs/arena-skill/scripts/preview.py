@@ -1191,7 +1191,7 @@ def format_size(size):
 def short_number(value):
   """One decimal, dropped when the value is whole: 1.5, 2, 47.7."""
   text = f"{value:.1f}"
-  return text[:-2] if text.endswith(".0") else text
+  return text.removesuffix(".0")
 
 
 def attachment_line(record):
