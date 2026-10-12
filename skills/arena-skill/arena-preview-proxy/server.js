@@ -20,6 +20,7 @@ const ALLOWED_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'
 const PREVIEW_HOST = /^sbx-[a-z0-9-]+\.arena\.site$/i;
 const ASSET_TYPES = {
   'register.js': 'text/javascript; charset=utf-8',
+  'recent.js': 'text/javascript; charset=utf-8',
   'service-worker.js': 'text/javascript; charset=utf-8',
   'icon.svg': 'image/svg+xml',
   'icon-192.png': 'image/png',
@@ -137,6 +138,7 @@ function viewerPage(message) {
 <meta name="color-scheme" content="light dark">
 <title>Arena preview</title>
 ${pwaHead()}
+<script src="/pwa/recent.js" defer></script>
 <style>
 body { margin: 0; padding: 2rem 1rem; font: 16px/1.5 system-ui, sans-serif;
   background: #1f2430; color: #e8ecf4; }
@@ -149,12 +151,18 @@ input { flex: 1; padding: .6rem .7rem; border-radius: .4rem; border: 1px solid #
 button { padding: .6rem 1rem; border-radius: .4rem; border: 0; background: #4f7cff;
   color: #fff; font: inherit; }
 .hint { color: #a8b0c4; font-size: .9rem; }
+.recent { list-style: none; padding: 0; margin: 1rem 0; }
+.recent li { display: flex; gap: .5rem; margin: 0 0 .5rem; }
+.recent a { flex: 1; min-width: 0; padding: .6rem .7rem; border-radius: .4rem; border: 1px solid #48506a;
+  background: #141922; color: inherit; text-decoration: none; overflow-wrap: anywhere; }
+.recent button { background: #3a2b34; color: #ffd9e0; }
 </style>
 </head>
 <body>
 <main>
 <h1>Arena preview</h1>
 ${reason}
+<ul id="recent" class="recent" aria-label="Recent previews" hidden></ul>
 <form method="get" action="/">
 <label for="url" hidden>Preview URL</label>
 <input id="url" name="url" type="url" inputmode="url" required autocomplete="off"

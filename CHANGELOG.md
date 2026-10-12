@@ -12,6 +12,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - ARENA.md adds a turn-start rule: the agent states in chat whether reasoning is on, as `Reasoning: on` or `Reasoning: off`. On a turn that owes the 10-4 line, the reasoning line follows it. The refs line, the live mirror and the root copy carry the rule.
 
+#### preview
+
+- The preview proxy chooser lists the last 10 previews opened from it, newest first, with a remove button on each. The list lives in the browser's storage only, so the server still keeps no memory. A share or a link adds no entry.
+
 ### Changed
 
 #### preview
