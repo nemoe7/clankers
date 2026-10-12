@@ -2008,6 +2008,30 @@ function checkStateDownload(api, session) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(branchFirstDoc), "clankers");
+  // A selected diff branch puts the session branch beside the repository chip, and the tab
+  // title stays bare on that page. The branch wears the platform namespace, so the chip read
+  // still names the repository with nothing else to fall back on.
+  var diffBranchDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/daedalus" }, { textContent: "arena/fef1ae85-daedalus" }];
+    },
+    title: "Arena",
+  };
+  assert.equal(readSlug(diffBranchDoc), "daedalus");
+  assert.equal(stateRepo(diffBranchDoc), "daedalus");
+  // A branch in another namespace carries no platform mark, so the pair stays ambiguous and
+  // the title alone can answer.
+  var otherBranchDoc = {
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      if (selector.indexOf("aria-haspopup") === -1) return [];
+      return [{ textContent: "nemoe7/daedalus" }, { textContent: "feature/panel" }];
+    },
+    title: "Arena",
+  };
+  assert.equal(readSlug(otherBranchDoc), null);
   // The page's own chip outranks the title, because the title can still name the previous
   // session after a new chat opens on the same tab.
   var staleTitleDoc = {

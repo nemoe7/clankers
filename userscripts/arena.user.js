@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arena.ai | NemoUtils | v1.10.25
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.25
+// @version      1.10.26
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -140,6 +140,9 @@
   // one selector serves every chip read.
   var CHIP_SPAN_SELECTOR =
     'button[aria-haspopup="dialog"] span.truncate, button[aria-haspopup="menu"] span.truncate';
+  // The platform mints a session branch as `arena/<session-hex>-<repo>`, so a chip that wears
+  // that shape beside another owner/repo chip is the selected diff branch, not the repository.
+  var SESSION_BRANCH_RE = /^arena\/[0-9a-f]{8}-/;
   var SLUG_KEY = "clankers-arena-agent-slug";
   // The tab title carries the repository even before the bar renders, so the regex lives
   // with the other page-wide constants: detectRepo runs at load, ahead of any later var.
@@ -2162,22 +2165,32 @@
 
   // A new chat on /agent renders no session bar, so the composer's own picker row names the
   // attached repository. Its repository chip wears the owner/repo form and the branch chip
-  // beside it does not, so one such chip answers. Two of them are ambiguous, because a branch
-  // with a slash wears the same form, so then nothing answers and the title decides.
+  // beside it does not, so one such chip answers. A selected diff branch wears that form too,
+  // but the session-branch namespace marks it, so the repository still answers beside it; any
+  // other second owner/repo chip stays ambiguous, and the title decides.
   function chipRepo(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return "";
     var chips = doc.querySelectorAll(CHIP_SPAN_SELECTOR);
     var repo = "";
+    var branch = "";
     var hits = 0;
     var i;
     for (i = 0; chips && i < chips.length; i += 1) {
-      var hit = slugFromOwnerRepo(chips[i].textContent);
+      var text = String(chips[i].textContent || "").trim();
+      var hit = slugFromOwnerRepo(text);
       if (!hit) continue;
       hits += 1;
-      if (hits > 1) return "";
-      repo = hit;
+      if (SESSION_BRANCH_RE.test(text)) {
+        branch = hit;
+      } else {
+        repo = repo || hit;
+      }
     }
-    return repo;
+    if (hits === 1) return repo || branch;
+    // With two owner/repo chips, the repository answers only when the other one is the
+    // session branch; any other pair stays ambiguous, and the title decides.
+    if (hits === 2 && repo && branch) return repo;
+    return "";
   }
 
   function savedSlug() {
