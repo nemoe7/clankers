@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SERVER = ROOT / "skills" / "arena-skill" / "arena-preview-proxy" / "server.js"
 MANIFEST = '<link rel="manifest" href="/pwa/manifest.webmanifest">'
 REGISTER = '<script src="/pwa/register.js" defer></script>'
+RECENT = '<script src="/pwa/recent.js" defer></script>'
 SECRET = "test-secret-that-is-at-least-thirty-two-characters"
 
 
@@ -93,11 +94,17 @@ def test_the_viewer_root_serves_an_installable_page():
     assert REGISTER in body, "the main page must carry the worker registration"
     assert 'name="url"' in body, "the main page must offer the preview URL box"
     assert body.index(MANIFEST) < body.index("</head>"), "the link belongs in the head"
+    assert RECENT in body and 'id="recent"' in body, (
+      "the main page must hold the recent list"
+    )
+    status, kind, _ = get(port, "/pwa/recent.js")
+    assert status == 200 and "javascript" in kind, (status, kind)
     # A rejected URL still answers the page, so the DOM never loses the manifest.
     status, kind, body = get(port, "/?url=https%3A%2F%2Fexample.com%2F")
     assert status == 400, status
     assert "text/html" in kind, kind
     assert MANIFEST in body, "a rejected URL must keep the manifest link"
+    assert RECENT in body, "a rejected URL must keep the recent list"
     # A page under the proxy that is not the root keeps its short plain-text refusal.
     status, kind, _ = get(port, "/somewhere?url=https%3A%2F%2Fexample.com%2F")
     assert status == 400 and "text/plain" in kind, (status, kind)
@@ -133,6 +140,9 @@ def test_injection_survives_a_page_without_a_head():
     "a head-less page takes the tags at its body"
   )
   assert result["fragment"].startswith(MANIFEST), result["fragment"]
+  assert "recent.js" not in result["head"], (
+    "a proxied preview never loads the chooser list"
+  )
   assert result["gzip"] == "<html></html>", result["gzip"]
   assert result["broken"] is None, "a body that will not decode must stay untouched"
 
@@ -274,3 +284,46 @@ def test_a_page_call_takes_its_target_from_the_referer():
     "a target outside sbx-*.arena.site must stay refused"
   )
   assert result["otherPath"] is None, "only the viewer root names a target"
+
+
+def test_the_chooser_keeps_the_last_ten_previews():
+  """The chooser lists the last ten preview roots opened from it, newest first.
+
+  The list lives in the browser's storage, so the server still keeps no memory. Every page on the
+  proxy origin can write that storage, so a read keeps valid preview roots only.
+  """
+  script = (
+    "const recent = require('./assets/recent.js');"
+    "const roots = n => Array.from({ length: n }, (_, i) => `https://sbx-p${i}.arena.site`);"
+    "const out = {};"
+    "out.accepted = ['https://sbx-demo.arena.site/', 'https://SBX-Demo.arena.site',"
+    " 'https://sbx-demo.arena.site:443/'].map(recent.previewRoot);"
+    "out.refused = ['https://example.com/', 'http://sbx-demo.arena.site/',"
+    " 'https://sbx-demo.arena.site/x', 'https://sbx-demo.arena.site/?a=1',"
+    " 'https://sbx-demo.arena.site/#x', 'https://u:p@sbx-demo.arena.site/',"
+    " 'https://sbx-demo.arena.site:444/', 'javascript:alert(1)', 'not a url', 42, null]"
+    ".map(recent.previewRoot);"
+    "out.capped = roots(12).reduce(recent.remember, []);"
+    "out.moved = recent.remember(roots(3).reduce(recent.remember, []), 'https://sbx-p0.arena.site');"
+    "out.forgot = recent.forget(roots(3), 'https://sbx-p1.arena.site');"
+    "out.cleaned = recent.clean(['https://sbx-a.arena.site', 'https://sbx-a.arena.site',"
+    " 'javascript:x', 7, ...roots(12)]);"
+    "out.notList = recent.clean({ a: 1 });"
+    "console.log(JSON.stringify(out));"
+  )
+  result = json.loads(node(script))
+  root = "https://sbx-p{}.arena.site".format
+  assert result["accepted"] == ["https://sbx-demo.arena.site"] * 3, result["accepted"]
+  assert result["refused"] == [None] * 11, "only HTTPS preview roots enter the list"
+  assert result["capped"] == [root(i) for i in range(11, 1, -1)], (
+    "ten entries, newest first"
+  )
+  assert result["moved"] == [root(0), root(2), root(1)], (
+    "a reopened root moves to the top"
+  )
+  assert result["forgot"] == [root(0), root(2)], result["forgot"]
+  assert result["cleaned"] == [
+    "https://sbx-a.arena.site",
+    *[root(i) for i in range(9)],
+  ], "a stored list drops junk and duplicates and keeps ten entries"
+  assert result["notList"] == [], result["notList"]
