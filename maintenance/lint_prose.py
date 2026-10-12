@@ -1,4 +1,4 @@
-"""Lint the prose in the covered scope and Python comments. Run: python maintenance/lint_prose.py"""
+"""Lint covered prose and code comments. Run: python maintenance/lint_prose.py"""
 
 import ast
 import io
@@ -13,6 +13,10 @@ TARGETS = ("maintenance", "rules")
 SKIP_PARTS = {".git", ".venv", "node_modules", ".agents", "arena-state", "__pycache__"}
 GENERATED = {Path("skills/arena-skill/scripts/preview.py")}
 ADR_REFERENCE = re.compile(r"\bADR[- ]?\d|docs/adr")
+USERSCRIPT_SUFFIX = ".user.js"
+USERSCRIPT_HEADER_START = "==UserScript=="
+USERSCRIPT_HEADER_END = "==/UserScript=="
+COMMENT_BLOCK_CAP = 2
 
 
 def prose(path: Path) -> str:
@@ -35,6 +39,63 @@ def prose(path: Path) -> str:
     if token.type == tokenize.COMMENT:
       lines.append(token.string.lstrip("# ").strip())
   return "\n".join(line for line in lines if line)
+
+
+def userscript_prose(source: str) -> str:
+  """Collect non-metadata line comments from one userscript source."""
+  lines: list[str] = []
+  in_metadata = False
+  for line in source.splitlines():
+    stripped = line.lstrip()
+    if not stripped.startswith("//"):
+      continue
+    comment = stripped[2:].strip()
+    if comment == USERSCRIPT_HEADER_START:
+      in_metadata = True
+      continue
+    if comment == USERSCRIPT_HEADER_END:
+      in_metadata = False
+      continue
+    if not in_metadata and comment:
+      lines.append(comment)
+  return "\n".join(lines)
+
+
+def userscript_comment_block_violations(label: str, source: str) -> list[str]:
+  """Report non-metadata userscript comment blocks above the line cap."""
+  violations: list[str] = []
+  in_metadata = False
+  block_start: int | None = None
+  block_lines = 0
+  for number, line in enumerate([*source.splitlines(), ""], start=1):
+    stripped = line.lstrip()
+    comment = stripped[2:].strip() if stripped.startswith("//") else ""
+    if comment == USERSCRIPT_HEADER_START:
+      in_metadata = True
+      is_comment = False
+    elif comment == USERSCRIPT_HEADER_END:
+      in_metadata = False
+      is_comment = False
+    else:
+      is_comment = stripped.startswith("//") and not in_metadata
+    if is_comment:
+      if block_start is None:
+        block_start = number
+      block_lines += 1
+      continue
+    if block_lines > COMMENT_BLOCK_CAP:
+      violations.append(
+        f"{label}:{block_start}: comment block has {block_lines} lines; "
+        f"the cap is {COMMENT_BLOCK_CAP}"
+      )
+    block_start = None
+    block_lines = 0
+  return violations
+
+
+def userscript_targets() -> list[Path]:
+  """Collect each userscript that the prose lint covers."""
+  return sorted(Path("userscripts").glob(f"*{USERSCRIPT_SUFFIX}"))
 
 
 def markdown_targets() -> list[Path]:
@@ -94,6 +155,16 @@ def main() -> int:
       if not text:
         continue
       failures += lint(str(path), text, True)
+  for path in userscript_targets():
+    source = path.read_text(encoding="utf-8")
+    text = userscript_prose(source)
+    if text:
+      failures += lint(str(path), text, False)
+    violations = userscript_comment_block_violations(str(path), source)
+    if violations:
+      print(f"--- {path}")
+      print("\n".join(violations))
+      failures += len(violations)
   for path in markdown_targets():
     text = path.read_text(encoding="utf-8")
     failures += lint(str(path), text, False)

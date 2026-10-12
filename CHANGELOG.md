@@ -59,6 +59,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The composer fill reads the repository beside a selected diff branch. The chip read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository chip instead, so a diff-branch selection no longer stops the fill. The `@name` line carries the number with `@version`.
 - The Arena bundle moves to 1.10.28 and loads its prompt text from `userscripts/arena-prompt-fill.txt`. The text signals a long, complex feature set and asks for a high-context model. It says work can continue indefinitely, with each final poll waiting up to 1,800 seconds or until skipped.
 - Prompt-fill step 1 greps every caller of the code it touches, and no longer reads each file in full.
+- The prose lint now covers non-metadata userscript comments. It skips the required metadata header. Other comment blocks cannot exceed two lines.
 
 #### house
 

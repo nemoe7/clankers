@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT.com | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.5
+// @version      1.3.6
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @icon         https://chatgpt.com/favicon.ico
@@ -19,8 +19,6 @@
 (function () {
   "use strict";
 
-  // Outside a browser each feature publishes its helpers, so the checks live in
-  // maintenance/ instead of shipping inside this bundle.
   function exposeChecks(name, api) {
     if (typeof document !== "undefined") {
       return false;
@@ -31,12 +29,8 @@
     return true;
   }
 
-  // One tag filters the whole story of a page in the devtools console. A line names
-  // the event a person needs and never the feature's own loop.
   var LOG_TAG = "[NemoUtils]";
 
-  // One tag carries every line, and the module rides a second bracket, so one filter shows
-  // one module alone.
   function logEvent(module, event, detail) {
     var line = LOG_TAG + "[" + module + "] " + event;
     try {
@@ -142,8 +136,6 @@
       return true;
     }
 
-    // One destination keeps two live nodes: the collapsed rail and the open nav
-    // list. Hiding one leaves the other visible in the other sidebar state.
     function hideAll(doc, selector) {
       var found = doc.querySelectorAll(selector);
       var i;

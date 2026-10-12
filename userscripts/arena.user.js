@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.31
+// @name         Arena.ai | NemoUtils | v1.10.32
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.31
+// @version      1.10.32
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -24,7 +24,6 @@
 (function () {
   "use strict";
 
-  // Outside a browser each feature publishes its helpers, so the checks live in maintenance/.
   function exposeChecks(name, api) {
     if (typeof document !== "undefined") {
       return false;
@@ -37,7 +36,6 @@
 
   var LOG_TAG = "[NemoUtils]";
 
-  // One tag filters the whole page story; the module rides a second bracket.
   function logEvent(module, event, detail) {
     var line = LOG_TAG + "[" + module + "] " + event;
     try {
@@ -51,9 +49,6 @@
     }
   }
 
-  // The manager appends every command in the order it arrives, so the entries come from one
-  // ordered list: each script registers an entry, and the whole list opens in module order. One
-  // module's entries then sit together whatever order the features load in.
   var MENU_ORDER = [
     "Composer",
     "Proxy",
@@ -85,8 +80,6 @@
     entry.id = null;
   }
 
-  // One refresh writes the whole list in module order, so a label that moved or an entry that
-  // arrived after the load lands in its own group.
   function menuRefresh() {
     if (typeof GM_registerMenuCommand !== "function") return;
     var ordered = menuEntries.slice().sort(function (a, b) {
@@ -117,8 +110,6 @@
     menuRefresh();
   }
 
-  // One menu entry with one guard, so a manager without a menu gets nothing. The press writes
-  // its own line before the command runs, so one filter shows every menu press.
   function menuItem(list, label, run) {
     list.push(
       menuAdd(function () {
@@ -132,20 +123,12 @@
 
   exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG, menuItem: menuItem });
 
-  // The transcript bar, the saved slug key and the arena URL readers are page-wide, so one
-  // copy serves every feature.
   var BAR_SELECTOR =
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
-  // The composer and header picker rows hold the repository chip ahead of the branch chip, so
-  // one selector serves every chip read.
   var CHIP_SPAN_SELECTOR =
     'button[aria-haspopup="dialog"] span.truncate, button[aria-haspopup="menu"] span.truncate';
-  // The platform mints a session branch as `arena/<session-hex>-<repo>`, so a chip that wears
-  // that shape beside another owner/repo chip is the selected diff branch, not the repository.
   var SESSION_BRANCH_RE = /^arena\/[0-9a-f]{8}-/;
   var SLUG_KEY = "clankers-arena-agent-slug";
-  // The tab title carries the repository even before the bar renders, so the regex lives
-  // with the other page-wide constants: detectRepo runs at load, ahead of any later var.
   var STATE_TITLE_RE = /^Arena \| (\S+)/;
 
   function arenaUrl(urlString) {
@@ -182,8 +165,6 @@
     return repo;
   }
 
-  // The bar can render the repository as a bare chip without its owner, so a
-  // slash-less slug-like span in the bar still names the repository.
   function slugFromBare(text) {
     var trimmed = String(text || "").trim();
     return /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(trimmed) ? trimmed : null;
@@ -193,15 +174,12 @@
     return detectRepo(doc) || null;
   }
 
-  // The global pause stops every feature where it stands and honors the pause on the next
-  // load; the resume brings back the features whose own switch is ON.
   var PAUSE_KEY = "clankers-arena-userscript-paused";
   var PAUSE_LABEL = "Userscript";
   var pauseUnits = [];
   var pauseEntry = null;
 
   function pauseStored() {
-    // The checks load this file without the manager grants, so the pause reads as off there.
     if (typeof GM_getValue !== "function") return false;
     return GM_getValue(PAUSE_KEY, false) === true;
   }
@@ -236,9 +214,6 @@
     logEvent("pause", "all: " + (next ? "PAUSED" : "RESUMED"));
   }
 
-  // A repeating timer that touches HTTP scatters each call inside its own band, so the requests
-  // never form a fixed beat; a DOM tick keeps its steady interval. A stop clears the beat and
-  // any call already waiting.
   var HTTP_JITTER_MS = 15000;
 
   function jitteredTimer(run, everyMs, spreadMs) {
@@ -328,7 +303,6 @@
     return null;
   }
 
-  // The security check owns the page while it shows, so the automatic posts wait for it.
   var CAPTCHA_SELECTOR = '.recaptcha-v2-container, iframe[title="reCAPTCHA"]';
 
   function openDialog(node) {
@@ -353,8 +327,6 @@
     return !node.hidden;
   }
 
-  // The ask_user card: one radiogroup with an aria-label, taken from the owner's
-  // captured outerHTML. It holds the title while the question waits for an answer.
   var QUESTION_SELECTOR = 'div[role="radiogroup"][aria-label]';
   var QUESTION_EMOJI = "\u2753";
 
@@ -382,7 +354,6 @@
     return false;
   }
 
-    // The fill writes the initial message: the repo name leads it, the rules stay in the files.
   runFeature("prompt-fill", "Composer — fill", function () {
 
     var COMPOSER_SELECTOR = 'div.tiptap.ProseMirror[contenteditable="true"]';
@@ -552,8 +523,6 @@
 
     var PROMPT_FILL_URL =
       "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt";
-    // The rules of this repository, at a fixed URL: a session in another repository
-    // still receives them.
     var ARENA_MD_URL =
       "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md";
 
@@ -850,8 +819,6 @@
       if (captchaSignal(document)) return;
       postKeyToPreview(false);
       if (!isComposerUrl(location.href)) {
-        // A route away from the composer ends that conversation's fill: a return to
-        // /agent is a new chat, so the same repo fills again.
         lastSlug = null;
         filledSlug = null;
         return;
@@ -874,7 +841,6 @@
       }
       slugLogged = false;
       rememberSlug(slug);
-      // Wait for both repository files before the single composer write.
       if (!promptResourcesTried) {
         ensureFetch();
         ensureAgentKey();
@@ -933,7 +899,6 @@
     };
   });
 
-    // The Steering row drifts on labels, so it is found by its words.
   runFeature("open-steering", "Steering — open", function () {
 
     var STEERING_LABEL_RE = /steering|preview/i;
@@ -1027,7 +992,6 @@
     }
 
     function parseSteeringButton(button) {
-      // The port switcher in the header wears the same ":8000" text. Clicking it opens a dialog, not a steering channel.
       if (/switch preview port/i.test(String(button.getAttribute && button.getAttribute("aria-label")))) {
         return null;
       }
@@ -1122,9 +1086,6 @@
     };
   });
 
-  // The preview frame's sandbox omits allow-popups and allow-downloads, so its target=_blank
-  // links and its file downloads go nowhere. Add the three flags, and re-apply them when Arena
-  // rebuilds the frame or resets the attribute.
   runFeature("preview-sandbox", "Steering — new tabs and downloads", function () {
     var FRAME_TITLE = "App preview on port 8000";
     var FRAME_FLAGS = [
@@ -1204,7 +1165,6 @@
     autoToggleButton.setAttribute("aria-pressed", autoScroll.isOn() ? "true" : "false");
   }
 
-  // One toggle beside Stop mirrors the auto-scroll switch.
   var autoScroll = runFeature("auto-scroll", "Transcript — auto-scroll", function () {
     var scroller = null;
     var content = null;
@@ -1317,7 +1277,6 @@
 
     var observer = new MutationObserver(ensureButton);
 
-    // The button injector runs beside the switch: the script-wide pause stops it too.
     function startButtonWatch() {
       observer.observe(document.documentElement, { childList: true, subtree: true });
       ensureButton();
@@ -1333,9 +1292,6 @@
     });
   })();
 
-    // A trim empties every older root and hides it, and keeps the newest rows of the
-    // newest root, once the page settles. The switch gates the interval and the tick
-    // alone: the plan line and the trim-now press stay on the menu whatever it reads.
   (function () {
     var KEEP_KEY = "clankers-arena-trim-keep";
     var DEFAULT_ROWS = 50;
@@ -1419,9 +1375,6 @@
       }
     }
 
-    // The budget root is the newest root that still holds rows: an answered
-    // question appends an empty root behind the transcript, and the rows in
-    // front of it must keep their newest count instead of clearing the page.
     function budgetRoot(roots) {
       var i;
       for (i = roots.length - 1; i >= 0; i -= 1) {
@@ -1441,9 +1394,6 @@
       return count;
     }
 
-    // The budget root keeps its own newest rows; every other root empties in full
-    // and takes the hidden class once empty, while the root node itself stays,
-    // because that node is the part Arena needs intact.
     function trimPlan(doc, plan) {
       var roots = messageRoots(doc);
       var keep = planParts(plan).rows;
@@ -1456,17 +1406,12 @@
         var rows = rowsOfRoot(roots[i]);
         var removedFromRoot = trimRows(rows, newest ? keep : 0);
         removed += removedFromRoot;
-        // The action container carries the newest rows on the live page, so it
-        // leaves only with a root the trim emptied; a root that keeps rows keeps
-        // its actions, and the newest rows stay with them.
         var attached = 0;
         var j;
         for (j = 0; j < rows.length; j += 1) {
           if (rowLive(rows[j])) attached += 1;
         }
         if (removedFromRoot && !attached) removeActionSibling(roots[i]);
-        // Hidden cut rows still occupy the root, so the root itself never hides;
-        // a page with no rows at all keeps every root the way it stands.
         if (holder !== -1 && !newest && !attached && typeof roots[i].classList !== "undefined") {
           roots[i].classList.add("hidden");
         }
@@ -1474,18 +1419,12 @@
       return removed;
     }
 
-    // The trim runs only while a turn is up, so a missing stop control aborts it and
-    // is checked first; a visible question card aborts too; the quiet gate rides the
-    // scheduler.
     function isSettled(doc) {
       if (!findStopGeneratingButton(doc)) return false;
       if (doc.querySelector(QUESTION_SELECTOR)) return false;
       return true;
     }
 
-    // Quiet means the whole page holding still, not the row count alone: the page
-    // streams into existing rows after the last row lands, so a fresh mutation keeps
-    // the trim waiting even while the count holds.
     function quietReady(state, count, now) {
       if (count !== state.rows) {
         state.rows = count;
@@ -1497,8 +1436,6 @@
       return true;
     }
 
-    // A row counts while it is attached and not yet cut: a cut row stays in the
-    // page as a hidden empty shell, because the page reinstates removed nodes.
     function rowLive(row) {
       if (!row.parentElement) return false;
       return !(
@@ -1508,9 +1445,6 @@
       );
     }
 
-    // The cut hides the row and empties its text instead of removing the node: a
-    // hidden empty shell cannot be reinstated, and its inner text is what the row
-    // costs.
     function clearRow(row) {
       if (row.classList && typeof row.classList.add === "function") {
         row.classList.add("hidden");
@@ -1518,7 +1452,6 @@
       row.textContent = "";
     }
 
-    // The owner sets the per-pass cap; anything under one row falls back to the default.
     function capValue() {
       if (typeof GM_getValue !== "function") return DEFAULT_TRIM_CAP;
       var cap = Number(GM_getValue(CAP_KEY, DEFAULT_TRIM_CAP));
@@ -1534,8 +1467,6 @@
         if (rowLive(rows[i])) attached += 1;
       }
       excess = attached - keep;
-      // One pass cuts at most the cap, so a big backlog drains in steps instead of
-      // one blocking burst the page must reconcile at once.
       var cap = capValue();
       if (excess > cap) excess = cap;
       for (i = 0; i < rows.length && removed < excess; i += 1) {
@@ -1614,7 +1545,6 @@
       }, 1000);
     }
 
-    // The owner sets the tick in seconds; the bounds hold it between one second and a minute.
     var INTERVAL_KEY = "clankers-arena-trim-interval-ms";
     var MAX_TICK_MS = 60000;
 
@@ -1699,15 +1629,12 @@
       var removed = trimPlan(document, keep);
       if (removed) {
         trimmedTotal += removed;
-        // The cut is silent on the page, so the console line carries what left.
         logEvent("trim", trimMessage(removed, keep));
         refreshLabel();
       }
       return removed;
     }
 
-    // Streaming mutates the page constantly, so a mutation-driven scheduler fired
-    // on every flicker; one plain interval asks the gates at a steady 5 s instead.
     function tick() {
       if (location.pathname.indexOf("/agent/") !== 0) return;
       if (!isSettled(document)) return;
@@ -1735,7 +1662,6 @@
     }, null, false);
     registerCount();
     registerCap();
-    // The owner's button: one press runs the cut at once, whatever the switch reads.
     nowEntry = menuAdd(function () {
       return "Transcript — trim now";
     }, function () {
@@ -1743,7 +1669,6 @@
     });
   })();
 
-    // The composer hides while a turn runs, and its spacer height returns on show.
   runFeature("hide-composer", "Composer — hide", function () {
 
     var SHELL_SELECTOR = "div.flex.w-full.flex-col.items-start.justify-center.p-2";
@@ -1941,8 +1866,6 @@
     return [part(repo), part(branch)].filter(Boolean).join("-") || "arena";
   }
 
-  // The name leads with the repository, then the branch: the bare pair,
-  // and the stamp and the counts follow the branch part when the save is stamped.
   function stateFileName(repo, branch, stamp, counts) {
     var scope = stateScopeKey(repo, branch);
     var when = String(stamp || "")
@@ -1988,11 +1911,6 @@
     }
     var name = stateFileName(repo, branch, stamp, counts);
     var memory = stateRemembered(remembered);
-    // The comparison lines: one short line per stamp pair,
-    // note then task, with hashes in place of the long stamps. The pair compares first, so a
-    // quiet tick shows its two lines before the no-op. A backward stamp still refuses the plain
-    // write and the newer local file stays. A forced save keeps no refusal, so
-    // it announces the update instead: the menu entry takes the state as it stands.
     var held = [];
     var keys = ["note", "task"];
     var index;
@@ -2038,9 +1956,6 @@
     return { kind: "download", name: name, message: "Wrote " + name };
   }
 
-  // A remembered file belongs to the scope that chose it. The name carries the scope, so a handle
-  // whose name lies outside the current scope is refused and the owner is asked again. Without
-  // this guard a reused handle wrote one repo's state into another repo's backup.
   function handleMatchesScope(handle, repo, branch) {
     if (!handle || !handle.name) return false;
     var scope = stateScopeKey(repo, branch);
@@ -2049,8 +1964,6 @@
     return name === scope || name.indexOf(scope + "-") === 0;
   }
 
-  // A save moves when no branch or prior scope is known, or when the preview URL or branch
-  // differs from the last write.
   function saveMoved(branch, remembered, base, rememberedScope, rememberedBranch) {
     return !(branch || rememberedScope) ||
       (Boolean(remembered) && remembered !== base) ||
@@ -2062,7 +1975,6 @@
       "; branch stored=" + (storedBranch || "(none)") + " read=" + (branch || "(none)");
   }
 
-  // A moved save that would write asks first. A forced save never asks.
   function overwriteAsk(moved, plan, hasHandle, force) {
     return !force && Boolean(moved) && hasHandle && plan.kind === "download";
   }
@@ -2077,23 +1989,15 @@
     return hasPicker ? "pick" : "download";
   }
 
-  // With no file set, an automatic tick blocks: a stamped download lands instead of the owner's
-  // file and fills the downloads folder. A save that waited on the network
-  // cannot open the picker either: the browser needs the press itself, and the wait spends it.
-  // That route asks for the choose entry, which runs on the press. A manual press keeps the
-  // download where no picker exists.
   function stateAction(route, manual) {
     if (!manual) return route === "pick" || route === "download" ? "block" : route;
     return route === "pick" ? "hint" : route;
   }
 
-  // The line shapes: the fetch on a write, the no-op on a
-  // quiet tick, and short stamp hashes in place of the long stamps.
   function getLine(status, base) {
     return "GET " + status + " " + base;
   }
 
-  // The refused read names its own route, so the copy-state failure reads as a GET.
   function copyLine(status, base) {
     return getLine(status, base + "/api/copy-state");
   }
@@ -2106,8 +2010,6 @@
     return "WRITE " + repo + " state to " + name;
   }
 
-  // A failed write and a failed manager download name the error that stopped them, so the
-  // console line and the page card read the same words.
   function writeFailLine(err) {
     return (
       "write failed (" + ((err && err.name) || "unknown") +
@@ -2131,9 +2033,6 @@
     return ("0000000" + (hash >>> 0).toString(16)).slice(-7);
   }
 
-  // The owner's line texts for the save path: the no-file hint names the dialog
-  // it launches, a stale state reads as a history mismatch, and a closed picker reads as a plain
-  // no-file line.
   var STATE_LINES = {
     hint: "no file selected; launching dialog",
     history: "history does not match",
@@ -2156,9 +2055,6 @@
     return match ? match[1] : "";
   }
 
-  // The live bar names the repository; the tab title carries it when the bar is gone or not
-  // yet rendered. Both are reliable, so the greppier header read stays a last resort in
-  // stateRepo only. Returns "" when neither source is present.
   function detectRepo(doc) {
     var bar = doc.querySelector(BAR_SELECTOR);
     var spans;
@@ -2182,11 +2078,6 @@
     return chipRepo(doc) || titleRepo(doc);
   }
 
-  // A new chat on /agent renders no session bar, so the composer's own picker row names the
-  // attached repository. Its repository chip wears the owner/repo form and the branch chip
-  // beside it does not, so one such chip answers. A selected diff branch wears that form too,
-  // but the session-branch namespace marks it, so the repository still answers beside it; any
-  // other second owner/repo chip stays ambiguous, and the title decides.
   function chipRepo(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return "";
     var chips = doc.querySelectorAll(CHIP_SPAN_SELECTOR);
@@ -2206,8 +2097,6 @@
       }
     }
     if (hits === 1) return repo || branch;
-    // With two owner/repo chips, the repository answers only when the other one is the
-    // session branch; any other pair stays ambiguous, and the title decides.
     if (hits === 2 && repo && branch) return repo;
     return "";
   }
@@ -2220,9 +2109,6 @@
     }
   }
 
-  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
-  // the conversation header still opens with the repository name, and its first word is the
-  // repository. Read that before falling back to the tab title.
   function headerRepo(doc) {
     if (!doc || typeof doc.querySelectorAll !== "function") return "";
     var spans = doc.querySelectorAll(CHIP_SPAN_SELECTOR);
@@ -2268,7 +2154,6 @@
     return { repo: stateRepo(doc), branch: stateBranch(doc) };
   }
 
-  // The state leaves through the owner's browser: one picked file, written only when the stamp moves.
   runFeature("state-download", "State — download", function () {
     if (exposeChecks("stateDownload", {
       STATE_LINES: STATE_LINES,
@@ -2309,19 +2194,15 @@
 
     var STATE_DB = "clankers-arena-state";
     var STATE_HINT_KEY = "clankers-arena-state-hinted";
-    // One stamp memory and one chosen file per repo and branch, so two tabs of two
-    // sessions never share either.
     function stampKey(scopeKey) {
       return "clankers-arena-state-stamp-" + scopeKey;
     }
     function fileKey(scopeKey) {
       return "state-file-" + scopeKey;
     }
-    // The last scope that wrote this repository, so a save without a branch finds its file.
     function lastScopeKey(repo) {
       return "clankers-arena-state-scope-" + stateScopeKey(repo, "");
     }
-    // The preview URL that last wrote a scope, and the flag that holds the one overwrite card.
     function baseKey(scopeKey) {
       return "clankers-arena-state-base-" + scopeKey;
     }
@@ -2440,13 +2321,9 @@
       });
     }
 
-    // A save problem the console hides becomes a small card in the page corner. The checks
-    // run without a DOM, so the card is skipped there.
     var STATE_PANEL_ID = "clankers-state-panel";
     var STATE_PANEL_MS = 6000;
 
-    // The card appears on a manual press whatever the flag says, and once a period while
-    // no file is set: the owner needs the nudge, not a nag on every watch tick.
     function panelNeeded(manual, shown) {
       return Boolean(manual) || !shown;
     }
@@ -2506,9 +2383,6 @@
       }
     }
 
-    // A failed read or write reaches the page as well as the console. The card carries the
-    // same line, and it stays until a dismiss. The checks run without a
-    // DOM, where the card is skipped.
     function stateError(line, actionLabel, action) {
       logEvent("state", line);
       statePanel(line, actionLabel, action);
@@ -2529,7 +2403,6 @@
       }
     }
 
-    // The card is the alert. Its Overwrite press reruns the save forced.
     function askOverwrite(handle, storeKey, manual) {
       var askedKey = overwriteKey(storeKey);
       var shown = GM_getValue(askedKey, false);
@@ -2668,13 +2541,11 @@
             return;
           }
           if (action === "block") {
-            // The card is the alert, so the blocked tick needs no line.
             hintStateFile(manual);
             return;
           }
           if (action === "hint") {
             hintStateFile(manual);
-            // The picker needs the press itself: this save waited, so the gesture is spent.
             logEvent("state", "no picker from a deferred save; press the choose entry");
             return;
           }
@@ -2698,15 +2569,12 @@
               function (err) {
                 picked = null;
                 pickedKey = null;
-                // The write ran after the press, so the picker would refuse a spent gesture;
-                // the card carries the choose action instead.
                 hintStateFile(true);
                 stateError(writeFailLine(err), "Choose file", chooseStateFile);
               },
             );
             return;
           }
-          // Only a manual press reaches here, and only where the browser offers no picker.
           logEvent("state", "stamped download: " + plan.name);
           if (force) {
             statePanel("Force save downloaded " + plan.name + ".", null, null, true);
@@ -2749,7 +2617,6 @@
             picked = handle;
             pickedKey = storeKey;
             GM_setValue(stampKey(storeKey), "");
-            // A file is set, so the next unconfigured period may speak again.
             GM_setValue(STATE_HINT_KEY, false);
             removeStatePanel();
             fetchStateFile(true);
@@ -2762,13 +2629,11 @@
 
     var menus = [];
     menuItem(menus, "State — choose the file", chooseStateFile);
-    // A forced save writes whatever the state holds and moves the reference to it.
     menuItem(menus, "State — force save", function () {
       fetchStateFile(true, true);
     });
 
     fetchStateFile(false);
-    // The watch asks the preview over HTTP, so it scatters like the proxy timers.
     var stopStateWatch = jitteredTimer(function () {
       fetchStateFile(false);
     }, STATE_WATCH_MS, HTTP_JITTER_MS);
@@ -2779,8 +2644,6 @@
     };
   });
 
-  // The screen stays awake while a turn runs. The browser drops the lock when the page hides,
-  // so the one-second sync asks for it again once the page shows.
   runFeature("keep-awake", "Page — keep awake", function () {
     function wakeLockPlan(generating, held, visible) {
       if (generating && !held && visible) return "acquire";
@@ -2849,7 +2712,6 @@
     };
   });
 
-  // The title mirrors the arena state: repo, poll, bubble, hourglass and shield.
   runFeature("tab-title", "Page — tab title", function () {
 
     var REPO_LINK_SELECTOR = 'a[aria-label^="Open "][aria-label$=" on GitHub"]';
@@ -2857,19 +2719,10 @@
     var LIVE_ICON_SELECTOR = ".animate-pulse";
     var LIVE_LABEL_SELECTOR = 'p[style*="text-shimmer"]';
     var GROUP_LABEL_SELECTOR = "span.text-text-secondary";
-    // The fetch and lone-search rows carry no button and no secondary span: their label sits
-    // alone in a body-sm span, with the URL in an anchor of its own inside that span.
     var LABEL_SPAN_SELECTOR = "span.body-sm";
-    // The answered question card wears the Summary header, and its chosen answer
-    // row raises no mark.
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
-    // The name carries the running version, the way the owner reads it: Arena | repo | v1.10.x.
     var VERSION = "1.10.25";
-    // One constant for the bash mark: the start-process card takes the very emoji a bash call
-    // takes.
-    // The chat row wears the speech balloon, and the reasoning row wears the thinking mark;
-    // the row kind decides both, with no growth read of the words.
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var REASONING_EMOJI = "\uD83D\uDCAD";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -2881,24 +2734,18 @@
       ["read", "\uD83D\uDCD6"],
       ["explor", "\uD83D\uDCD6"],
       ["edit", "\u270F\uFE0F"],
-      // Writ covers write, writing, writes and written; the owner's Writing row fell to the gear.
       ["writ", "\u270F\uFE0F"],
       ["search", "\uD83D\uDD0D"],
-      // Fetch covers fetch, fetching and fetched: a web page read is a search, and the owner's
-      // Fetching row fell to the gear without it.
       ["fetch", "\uD83D\uDD0D"],
       ["think", "\uD83D\uDCAD"],
       ["thought", "\uD83D\uDCAD"],
       ["wait", "\uD83D\uDCA4"],
-      // The owner's pick for the process output row: the scroll reads as the log roll.
       ["process_output", "\uD83D\uDCDC"],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
     var EMOJI_HOLD_MS = 5000;
     var heldEmoji = null;
     var heldEmojiAt = 0;
-    // Whether the held mark came from a row, the words or the waiting line: those marks end
-    // with the stop control, so the hold must not outlive it.
     var heldEmojiNeedsTurn = false;
     var WAITING_EMOJI = "\uD83D\uDCA4";
     var WAITING_SELECTOR = 'canvas[width="16"][height="16"]';
@@ -2932,14 +2779,11 @@
       return node ? squash(node.textContent) : "";
     }
 
-    // The row reads all start at the last message root: the root chain tells the user's
-    // turn from the agent's, and the root's own container holds the rows.
     function classNameOf(node) {
       if (!node) {
         return "";
       }
       var value = node.className;
-      // SVG nodes carry an SVGAnimatedString; the class reads off its base value.
       if (value && typeof value === "object") {
         value = value.baseVal;
       }
@@ -2968,9 +2812,6 @@
       return roots.length ? roots[roots.length - 1] : null;
     }
 
-    // A user message root: `#chat-message-<uuid> > div > div > div` is the raised card,
-    // and `div > div > div` under it ends on the `prose` body. The agent root is the
-    // negation of that fact: its chain holds no `div.prose` at that depth.
     function userRoot(root) {
       var card = childChain(root, 3);
       if (!card || !classOf(card, "relative") || !classOf(card, "overflow-hidden")) {
@@ -2980,7 +2821,6 @@
       return !!(body && classOf(body, "prose"));
     }
 
-    // The rows sit in `message_root > div > div > div.flex.flex-col.gap-2`.
     function rowContainer(root) {
       var node = childChain(root, 3);
       if (!node || !classOf(node, "flex") || !classOf(node, "flex-col") || !classOf(node, "gap-2")) {
@@ -2989,8 +2829,6 @@
       return node;
     }
 
-    // The newest row is the second-to-last `div` of that container: `:nth-last-of-type(2)`
-    // counts div siblings only, so a non-div sibling cannot shift it.
     function newestRow(root) {
       var container = rowContainer(root);
       var kids = container && container.children ? container.children : [];
@@ -3008,8 +2846,6 @@
       return divs.length ? divs[divs.length - 1] : null;
     }
 
-    // The row kind: `prose` is an agent chat message, `not-prose` is a reasoning block,
-    // and a row with no class is an action row.
     function rowKind(row) {
       if (!row) {
         return "none";
@@ -3035,8 +2871,6 @@
       return false;
     }
 
-    // A row inside the answered question card raises no mark; the Summary header
-    // is the card's mark in the page, so the tab stays clean of a fallback.
     function summaryCard(row) {
       var node = row;
       var depth = 0;
@@ -3097,7 +2931,6 @@
       if (spans.length) {
         var span = spans[spans.length - 1];
         text = collapsed(span);
-        // The anchor holds the URL, never a label word: its copy comes out before the read.
         var link = typeof span.querySelector === "function" ? span.querySelector("a") : null;
         var linkText = collapsed(link);
         if (linkText) {
@@ -3154,8 +2987,6 @@
         return null;
       }
       var kind = rowKind(row);
-      // The row kind carries the mark: the chat body takes the balloon and the reasoning
-      // block takes the thinking mark, with no label read of their own.
       if (kind === "chat") {
         titleRowKind = "chat";
         return AGENT_EMOJI;
@@ -3168,8 +2999,6 @@
         titleRowKind = "poll";
         return WAITING_EMOJI;
       }
-      // The start-process card wears a play icon and the process name, so it reads as the
-      // bash call it starts.
       if (typeof row.querySelector === "function" && row.querySelector(PLAY_SELECTOR)) {
         titleRowKind = "play";
         return BASH_EMOJI;
@@ -3193,10 +3022,6 @@
       return lastRepo && path === lastPath ? lastRepo : null;
     }
 
-    // The waiting line is a spinner canvas beside the rotating monospace text. An action row
-    // carries the very same canvas as its own icon, so the canvas alone proves
-    // nothing: the row must hold the text block too, beside the icon. The block answers by
-    // its span, never by its words, because the page writes and clears them on its own clock.
     function waitingText(row, canvas) {
       var kids = row && row.children ? row.children : [];
       var i;
@@ -3208,8 +3033,6 @@
           continue;
         }
         if (typeof kids[i].querySelectorAll !== "function") continue;
-        // The span alone marks the wait: Arena rotates the words, so an empty frame between
-        // two rotations stays a waiting line.
         var spans = kids[i].querySelectorAll(WAITING_TEXT_SELECTOR);
         if (spans && spans.length) return true;
       }
@@ -3255,18 +3078,14 @@
         heldEmojiNeedsTurn = false;
         return QUESTION_EMOJI;
       }
-      // Every row mark lives inside the turn: the read starts at the last message root, and
-      // the page keeps a finished turn's rows, so the stop control bounds the read.
       var live = stopSignal(doc);
       titleTrace += " live=" + (live ? 1 : 0);
       var needsTurn = false;
       var row = null;
       var emoji = null;
       var root = live ? lastRoot(doc) : null;
-      // The user's message carries no mark: the agent root appears when the turn starts.
       if (root && !userRoot(root)) {
         row = newestRow(root);
-        // The answered question card raises no mark of its own.
         if (row && summaryCard(row)) {
           row = null;
         }
@@ -3288,8 +3107,6 @@
         heldEmojiNeedsTurn = needsTurn;
         return emoji;
       }
-      // The hold bridges the gaps inside a turn; a hold taken from a turn mark ends with the
-      // stop control, so a vanished button clears the title at once.
       if (
         heldEmoji &&
         Date.now() - heldEmojiAt < EMOJI_HOLD_MS &&
@@ -3318,11 +3135,7 @@
     var appliedTitle = null;
     var priorTitle = null;
     var titleReason = null;
-    // The row behind the reason, snapshotted with it: the anchor logs the same row the
-    // mark came from, not whatever the page re-derives at write time.
     var titleRowSource = null;
-    // The emoji-choice trace: each hierarchy gate the last mark checked, and the kind the
-    // row picker matched, so the log shows why a mark won over the latest row.
     var titleTrace = null;
     var titleRowKind = null;
     var lastRepo = null;
@@ -3332,7 +3145,6 @@
     var lastTitleLineAt = 0;
 
     function titleLog(reason, anchors) {
-      // One line per reason, once a second: the trace is a diagnostic, not a ticker.
       var now = Date.now();
       if (reason === lastTitleLine && now - lastTitleLineAt < TITLE_LOG_MS) {
         return;
@@ -3343,8 +3155,6 @@
     }
 
     function titleAnchors(doc) {
-      // A row mark snapshots its row at selection; a re-derived row can be another one
-      // by write time, so the line cites the snapshot.
       var rowText = titleRowSource;
       var kind = titleRowKind || "none";
       if (!rowText) {
@@ -3367,7 +3177,6 @@
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
       if (desired) {
-        // Only a change writes a line; a title already in place stays quiet.
         if (doc.title === desired) return false;
         titleLog((titleReason || "title") + " -> " + desired, titleAnchors(doc));
         appliedTitle = desired;
@@ -3452,7 +3261,6 @@
     syncTitle(document);
     var titleTimer = null;
     var titleEntry = null;
-    // The owner sets the tick in seconds; the bounds hold it between one second and a minute.
     var TITLE_INTERVAL_KEY = "clankers-arena-title-interval-ms";
 
     function titleTickMs() {
@@ -3525,8 +3333,6 @@
     };
   });
 
-  // The pause entry registers once, after every feature has offered its stop closure, and the
-  // list opens last so every entry lands in its module group.
   exposeChecks("pause", { PAUSE_KEY: PAUSE_KEY, pauseLabel: pauseLabel });
   exposeChecks("menus", { menuRank: menuRank, MENU_ORDER: MENU_ORDER });
   exposeChecks("timers", { jitteredTimer: jitteredTimer, HTTP_JITTER_MS: HTTP_JITTER_MS });
