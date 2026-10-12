@@ -3635,7 +3635,8 @@ class Store:
       return newest_live, newest_import
     return None
 
-  def import_state(self, text, replace_tasks=False, force=False):
+  def import_state(self, text, replace_tasks=False, force=False, merge=False):
+    """Import a backup; the live notes, answers, reports and tasks are replaced unless `merge`."""
     records = parse_state_import(text)
     reports = [r for r in records if "markdown" in r and "text" not in r]
     tasks = [
@@ -3655,6 +3656,9 @@ class Store:
           f" import {clip_stamp(older.isoformat()) if older else 'none'})."
           " Pass --force to import anyway."
         )
+      if not merge:
+        for table in ("notes", "reports", "submissions", "tasks"):
+          db.execute(f"DELETE FROM {table}")
       self.import_reports(reports, shared=db)
       self.import_tasks(tasks, replace_tasks, autosave=False, shared=db)
       for record in messages:
@@ -5306,10 +5310,15 @@ def main():
   )
   state_import = commands.add_parser(
     "import-state",
-    help="Import an NDJSON backup; -r replaces tasks, -f forces over newer messages",
+    help="Import an NDJSON backup; replaces the live state unless --merge; -f forces",
   )
   state_import.add_argument("source", nargs="?", type=Path)
   state_import.add_argument("-r", "--replace-tasks", action="store_true")
+  state_import.add_argument(
+    "--merge",
+    action="store_true",
+    help="keep the live notes, answers, reports and tasks, and merge the import by ID",
+  )
   state_import.add_argument(
     "-f",
     "--force",
@@ -5616,7 +5625,9 @@ def main():
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
       print(
-        format_import_receipt(store.import_state(text, args.replace_tasks, args.force))
+        format_import_receipt(
+          store.import_state(text, args.replace_tasks, args.force, args.merge)
+        )
       )
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))

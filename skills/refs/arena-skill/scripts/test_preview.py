@@ -3516,6 +3516,7 @@ def test_shared_save_import():
         sys.executable,
         script_again,
         "import-state",
+        "--merge",
         "--replace-tasks",
       ],
       input=tasks_json,
@@ -5243,7 +5244,7 @@ def test_unified_import_atomicity():
         "ack_text": "Received",
       },
     ]
-    assert store.import_state(json.dumps(imported))["answers"] == 1
+    assert store.import_state(json.dumps(imported), merge=True)["answers"] == 1
     assert (
       next(n for n in store.state()["notes"] if n["id"] == "already-here") == existing
     )
@@ -5289,7 +5290,7 @@ def test_import_refuses_a_snapshot_older_than_the_state():
       assert "live state is fresher" in str(error)
       assert "--force" in str(error)
     assert {note["id"] for note in store.state()["notes"]} == {"live"}
-    receipt = store.import_state(older, force=True)
+    receipt = store.import_state(older, force=True, merge=True)
     assert receipt["forced"] is True
     assert {note["id"] for note in store.state()["notes"]} == {"live", "old"}
 
@@ -5302,9 +5303,51 @@ def test_import_accepts_a_newer_snapshot():
     newer = json.dumps(
       [{"id": "new", "text": "Newer message", "at": "2026-10-04T15:00:00+00:00"}]
     )
-    assert store.import_state(newer)["notes"] == 1
-    assert "forced" not in store.import_state(newer)
+    assert store.import_state(newer, merge=True)["notes"] == 1
+    assert "forced" not in store.import_state(newer, merge=True)
     assert {note["id"] for note in store.state()["notes"]} == {"live", "new"}
+
+
+def test_import_replaces_the_live_state_by_default():
+  """An import replaces the live notes, answers, reports and tasks; `merge` keeps them."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("live", "Live message", at="2026-10-04T11:42:48")
+    form = Path(directory) / "old-form.md"
+    form.write_text("# Old form\n\nOne question.\n", encoding="utf-8")
+    store.publish("old-form", "Old form", form)
+    store.import_state(
+      json.dumps(
+        {
+          "notes": [],
+          "tasks": {
+            "upcoming": [
+              {
+                "id": "old-task",
+                "title": "Old",
+                "status": "upcoming",
+                "details": ["one"],
+              }
+            ],
+            "finished": [],
+          },
+        }
+      )
+    )
+    snapshot = json.dumps(
+      [{"id": "new", "text": "Snapshot message", "at": "2026-10-04T15:00:00+00:00"}]
+    )
+    store.import_state(snapshot)
+    assert {note["id"] for note in store.state()["notes"]} == {"new"}
+    assert store.state()["reports"] == []
+    assert store.list_tasks() == []
+    store.import_state(
+      json.dumps(
+        [{"id": "later", "text": "Merged message", "at": "2026-10-04T16:00:00+00:00"}]
+      ),
+      merge=True,
+    )
+    assert {note["id"] for note in store.state()["notes"]} == {"new", "later"}
 
 
 def test_agent_key_route_records_the_key_for_the_page():
