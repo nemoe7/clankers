@@ -118,6 +118,7 @@
 - NEVER add another question to the same ask_user batch without first stating the updated total.
 - MUST update the stored task details in the same tool block as the work that moves them, and MUST run task-list before the final reply; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- A poll the finish of a run cut is spent; run `poll` again and close the turn inside a waiting poll.
 - Run every arena-preview poll as 1 Bash call with tool timeout 1800 s and no pipe. A shorter tool timeout is a failed wait, and NEVER a result.
 - If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
