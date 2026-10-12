@@ -46,6 +46,8 @@ The feature fills the composer on `/agent` and on `/agent/`, not on paths with a
 
 The bar serves a session. On a new chat the composer's own repository chip names the repository, and the tab title answers when neither is rendered.
 
+A selected diff branch wears the same owner/repo shape as the repository chip. The read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository beside it.
+
 ```mermaid
 flowchart TB
   B[GitHub repo bar] --> N[repo name]
