@@ -39,8 +39,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- The comments that cited a preview answer now keep the fact and drop the ID, because a session ID dies with its session. Version 1.10.25.
-- The composer fill reads the repository beside a selected diff branch. The chip read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository chip instead, so a diff-branch selection no longer stops the fill. Version 1.10.26, and the `@name` line carries the number with `@version`.
+- The comments that cited a preview answer now keep the fact and drop the ID, because a session ID dies with its session.
+- The composer fill reads the repository beside a selected diff branch. The chip read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository chip instead, so a diff-branch selection no longer stops the fill. The `@name` line carries the number with `@version`.
 
 #### house
 
@@ -94,10 +94,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides.
-- The waiting line is read by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark. Version 1.10.22.
+- The waiting line is read by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark.
 - The tab title read a chat body that kept growing to raise the balloon, so a re-render could pass for new words. The read now starts at the last message root and takes its newest row.
-- The newest row's kind picks the mark: a `prose` body raises 💬, a `not-prose` reasoning block raises 💭, and a user root raises none. An action row keeps its label emoji, and every mark ends with the stop control. Version 1.10.23.
-- The fetch and lone-search rows carry no button, so the label read found nothing and the mark fell to the plain title. The read now takes the row's `body-sm` span and drops a fetch URL's anchor text. Version 1.10.24.
+- The newest row's kind picks the mark: a `prose` body raises 💬, a `not-prose` reasoning block raises 💭, and a user root raises none. An action row keeps its label emoji, and every mark ends with the stop control.
+- The fetch and lone-search rows carry no button, so the label read found nothing and the mark fell to the plain title. The read now takes the row's `body-sm` span and drops a fetch URL's anchor text.
 
 ## 2026-10-10
 
@@ -535,7 +535,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
   The tab title keeps the shield, each tab reads its own page, and the held work resumes when the check clears.
 - The userscript saves the preview state to one owner-chosen file, checked once a minute.
   It writes only when the newest stamp moves, and an older stamp never overwrites the file.
-  The name carries the repo, the branch, the stamp and the record counts. Version 1.4.0.
+  The name carries the repo, the branch, the stamp and the record counts.
 
 #### preview
 
@@ -613,14 +613,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The two bundles take new manager names: Arena.ai | NemoUtils and ChatGPT.com | NemoUtils. Both scripts add a favicon icon: arena.ai for Arena and chatgpt.com for ChatGPT.
 - The state tick line carries the server stamp and the last written stamp beside the file name.
 - Every `[clankers]` line carries the module in a second bracket, so one filter shows one module. New lines cover each state tick and its route, each title decision with its anchors, the fill failures, and the link download route.
-- Each tab-title change prints one `[clankers]` line: the signal that won, the label behind it and the emoji the title takes. Version 1.6.6.
-- The stamped save goes through the manager's own download, which the page download policy cannot block. The page link stays as the fallback. Version 1.6.5.
-- The saved name keeps the repository from the saved slug when the header leaves the page. The stamp drops its timezone offset. Version 1.6.4.
-- The tab title shows a shield while the Arena security check holds the page. The mark outranks the poll row, the speech bubble and the waiting line. Version 1.6.3.
+- Each tab-title change prints one `[clankers]` line: the signal that won, the label behind it and the emoji the title takes.
+- The stamped save goes through the manager's own download, which the page download policy cannot block. The page link stays as the fallback.
+- The saved name keeps the repository from the saved slug when the header leaves the page. The stamp drops its timezone offset.
+- The tab title shows a shield while the Arena security check holds the page. The mark outranks the poll row, the speech bubble and the waiting line.
 - Both bundles log under one `[clankers]` tag. Feature switches, the prompt fill and the state save land in the devtools console filter.
-- The composer fill writes the initial-message block under the repo name. It drops the ARENA.md fetch and the `here is ARENA.md:` copy, because the agent reads the rules file from the repository. Version 1.5.0.
+- The composer fill writes the initial-message block under the repo name. It drops the ARENA.md fetch and the `here is ARENA.md:` copy, because the agent reads the rules file from the repository.
 - A waiting line shows a 16px spinner canvas beside rotating monospace text. The tab title shows ⏳ for that state.
-  The words rotate, so the selector anchors on the canvas and the animated ellipsis. Version 1.3.0.
+  The words rotate, so the selector anchors on the canvas and the animated ellipsis.
 
 ### Fixed
 
@@ -628,14 +628,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The fill memory survived a route away from the composer, so a return to `/agent` after a session route wrote nothing. The memory now leaves with the route, and the same repo fills its new chat.
 - The auto save kept one memory and one file per browser, so two tabs of two sessions wrote one file. The script now scopes the memory, the chosen file and the handle cache by repo and branch.
-- The hourglass needs the spinner canvas and the text block beside it. An action row carries the same canvas as its icon, so a bare canvas no longer reads as a waiting line. Version 1.6.19.
-- A pick needs a click for the browser gesture. The automatic path writes the stamped download, so the state lands. Version 1.6.9.
-- Every state-file notice is a console line under the `[clankers]` tag, and no popup interrupts the preview. Version 1.6.9.
-- The save line names the file the write reached, from the chosen handle. The repo name falls back to the tab title when the bar is gone. Version 1.6.11.
-- The page keeps the reCAPTCHA node after the widget closes, so the shield stuck. The mark now needs a rendered node, not a present one. Version 1.6.8.
-- Radix keeps the closed dialog in the page, so the shield stuck. The mark now needs an open dialog ancestor. Version 1.6.7.
-- The picker ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window. Version 1.6.2.
-- The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed picker and the stamped download each print a line. Version 1.6.1.
+- The hourglass needs the spinner canvas and the text block beside it. An action row carries the same canvas as its icon, so a bare canvas no longer reads as a waiting line.
+- A pick needs a click for the browser gesture. The automatic path writes the stamped download, so the state lands.
+- Every state-file notice is a console line under the `[clankers]` tag, and no popup interrupts the preview.
+- The save line names the file the write reached, from the chosen handle. The repo name falls back to the tab title when the bar is gone.
+- The page keeps the reCAPTCHA node after the widget closes, so the shield stuck. The mark now needs a rendered node, not a present one.
+- Radix keeps the closed dialog in the page, so the shield stuck. The mark now needs an open dialog ancestor.
+- The picker ran in the userscript sandbox, which refuses the call with a TypeError. The call now runs on the page window.
+- The state download logs each silent path. A missing frame, a bad copy-state status, the plan, the missing handle, a closed picker and the stamped download each print a line.
 - The prompt fill rewrote the composer on every DOM mutation when the editor changed the text, which made the page unresponsive. It writes once per repo per page now.
 
 #### skills
@@ -702,9 +702,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The push checkpoint refuses a push whose HEAD tree equals `origin/main`. Such a push leaves the pull request without a diff, and GitHub closes it.
 - A poll that returns for an unblocked task names the task on stderr, so the turn continues it.
 - `arena-preview key` prints the recorded agent key, host and stamp. A later session recovers the key after the key note leaves the pending list.
-- The key note names `/v1/ping` as the route list. It names `skills/arena-proxy` as the map, so a session without the skill guesses no route. Version 1.2.8.
+- The key note names `/v1/ping` as the route list. It names `skills/arena-proxy` as the map, so a session without the skill guesses no route.
 - The 401 line in the proxy skill names `arena-preview key` beside the inbox read, and the preview reference table carries the row.
-- A fourth proxy menu command posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one. Version 1.2.7.
+- A fourth proxy menu command posts the key the script holds to the preview. It rotates nothing, and a missing key fetches the live one.
 - The rotation line prints the new agent key, as the start line does. The owner reads the key from the container log when no preview is at hand.
 - The read gate blocks after ten calls while notes wait. The owner raised the number from three.
 - The gate exempts a command line only when every command on it is an inbox call or an inert prefix. A read beside work no longer exempts the work, so the work meets the gate. Quoted text is an argument, so a reply may span lines.
@@ -748,8 +748,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The userscript posts the held key when the preview frame appears and once a minute after that.
-  A refresh and a preview enabled later both land, and the preview stamp keeps moving. Version 1.2.9.
-- The title reverted to the Arena default when a turn ended. The title now keeps the repository name, and only the emoji clears. Version 1.2.6.
+  A refresh and a preview enabled later both land, and the preview stamp keeps moving.
+- The title reverted to the Arena default when a turn ended. The title now keeps the repository name, and only the emoji clears.
 
 #### workflows
 
@@ -804,10 +804,9 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The bundle saves the rotation due time. A reload therefore resumes the countdown instead of waiting a fresh 15 minutes. A second tab that asks early reads the key's age and waits.
-  The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview. Version 1.2.1.
+  The key note is quiet, so it wakes no poll and stops no command. The script posts the key it holds to the preview.
 - The bundle asks the key route every minute. A container restart therefore reaches the agent inside a minute, not at the next rotation. A changed key swaps the composer line, posts one quiet note, and shows in the Downloads panel.
-  Version 1.2.2.
-- The bundle carries `@connect arena.site`, so the userscript manager stops asking the owner about each new preview host. The rotation call moves to `fetch`, which keeps the owner's proxy host out of the file. Version 1.2.5.
+- The bundle carries `@connect arena.site`, so the userscript manager stops asking the owner about each new preview host. The rotation call moves to `fetch`, which keeps the owner's proxy host out of the file.
 - The composer keeps the rules line only. The script posts the proxy host with the key, and the quiet note names both.
 
 #### system-prompts
@@ -840,7 +839,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
-- The tab title shows a speech bubble while the agent speaks in regular chat. Streaming `data-agent-word` spans under an open turn raise the bubble, and a settled message drops it after the hold. Version 1.1.34.
+- The tab title shows a speech bubble while the agent speaks in regular chat. Streaming `data-agent-word` spans under an open turn raise the bubble, and a settled message drops it after the hold.
 
 #### arena
 
@@ -922,15 +921,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The live anchor matched `svg.animate-pulse` only. A collapsed edit row pulses its label span, so the title never read as editing. The anchor takes any pulsing element.
-  The label reader falls back to the pulsing element text. A class-aware checks case guards both tag forms. Version 1.1.31.
+  The label reader falls back to the pulsing element text. A class-aware checks case guards both tag forms.
 - The fill wrote the plain line first and the file second. The second write put a line break after `AGENTS.md`. The editor reads that break as the end of a bare domain and links the name.
-  The fill now waits for the one fetch of `rules/ARENA.md` to settle and writes the composer once per page. A failed fetch writes the plain prompt. Version 1.1.35.
-- The read line ends with a space after `AGENTS.md`, on owner direction. Without a character between the name and the line break, the editor links the name. Version 1.1.37.
-- The trailing space did not hold, and the editor still linked the name. A full stop after `AGENTS.md` stops the link, on the owner's live test. Version 1.1.38.
+  The fill now waits for the one fetch of `rules/ARENA.md` to settle and writes the composer once per page. A failed fetch writes the plain prompt.
+- The read line ends with a space after `AGENTS.md`, on owner direction. Without a character between the name and the line break, the editor links the name.
+- The trailing space did not hold, and the editor still linked the name. A full stop after `AGENTS.md` stops the link, on the owner's live test.
 - The read and edit group fallback waited on a button whose aria-label reads exactly Stop generating. One label drift therefore silenced every read and write in the title. The fallback now bounds to the newest transcript message, which a new user message clears without any button.
-  Version 1.1.32.
 - The group fallback lost the stop bound at 1.1.32. A finished group label then kept the title alive after the turn ended. The fallback now bounds by a loose stop word match on the button aria-label.
-  The whole title reverts when no row, no held emoji and no stop control remain. Version 1.1.33.
+  The whole title reverts when no row, no held emoji and no stop control remain.
 - The tab title matches a poll call as the script name followed by `poll`. A `polling` or `polls` word in another command no longer shows the waiting emoji. The Arena bundle moves to `1.1.30`.
 
 ## 2026-10-01
