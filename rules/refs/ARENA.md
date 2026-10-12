@@ -222,7 +222,7 @@
 - Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
 - Prefer numbered lists for multiple points.
 - Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours.
-- Short chat reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
+- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
 - NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
 - When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.

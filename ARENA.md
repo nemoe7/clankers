@@ -153,7 +153,7 @@
 ## Response
 
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
-- Short chat reports: concise on phone and vertical monitors; limit prose; no essays unless necessary.
+- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
 - NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
 - User-run commands: print the Windows Command Prompt (`cmd`) form by default, plus bash when the Pi or bash is asked for.
 - Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
