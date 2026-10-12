@@ -21,7 +21,7 @@ The NDJSON file tracks notes, tasks, and report answers. It does not contain rep
 queued jobs, or uploaded/downloaded bytes. Normal note/task/answer writes refresh it.
 Fetch queue writes do not, and the import command leaves it unchanged.
 The clipboard Copy state button exports notes, tasks and answers for reports still in the tab.
-A restore uses `import-state [FILE]` for notes, tasks and report answers together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It merges by ID in one transaction and leaves the backup unchanged. `--replace-tasks` replaces only tasks.
+A restore uses `import-state [FILE]` for notes, tasks and report answers together. The command accepts copied NDJSON, a JSON array or a state object, from a file or stdin. It replaces the live state in one transaction. `--merge` merges by ID instead. The backup stays unchanged. `--replace-tasks` replaces only tasks.
 Republish surviving report sources after restoring a database without reports.
 
 ## Reports and inputs
