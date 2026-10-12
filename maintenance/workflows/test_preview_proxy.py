@@ -240,3 +240,37 @@ def test_the_installed_app_opens_the_proxy_home():
   finally:
     server.terminate()
     server.wait(timeout=10)
+
+
+def test_a_page_call_takes_its_target_from_the_referer():
+  """A page's own calls carry no url, so the proxy reads the target from the page's Referer.
+
+  Without that target a bare path gets the chooser as HTML, and the page fails to parse it.
+  Only a viewer page with a valid preview url counts. The viewer root keeps its chooser.
+  """
+  script = (
+    "const proxy = require('./server.js');"
+    "const at = path => new URL(path, 'http://proxy.invalid');"
+    "const viewer = 'https://proxy.example/?url=https%3A%2F%2Fsbx-demo.arena.site%2F';"
+    "const out = {};"
+    "const target = (path, referer) => {"
+    "  const found = proxy.targetFromReferer(at(path), referer);"
+    "  return found ? found.href : null;"
+    "};"
+    "out.api = target('/api/reports/a/submit?name=a%20b&x=1', viewer);"
+    "out.noReferer = target('/api/state', undefined);"
+    "out.garbage = target('/api/state', 'not a url');"
+    "out.rejected = target('/api/state', 'https://proxy.example/?url=https%3A%2F%2Fexample.com%2F');"
+    "out.otherPath = target('/api/state', 'https://proxy.example/x?url=https%3A%2F%2Fsbx-demo.arena.site%2F');"
+    "console.log(JSON.stringify(out));"
+  )
+  result = json.loads(node(script))
+  assert result["api"] == (
+    "https://sbx-demo.arena.site/api/reports/a/submit?name=a%20b&x=1"
+  ), result
+  assert result["noReferer"] is None, result
+  assert result["garbage"] is None, result
+  assert result["rejected"] is None, (
+    "a target outside sbx-*.arena.site must stay refused"
+  )
+  assert result["otherPath"] is None, "only the viewer root names a target"

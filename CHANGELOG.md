@@ -71,6 +71,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - An unpushed session's branch read no value, so two sessions in one repo shared a save scope. The branch now reads from any titled element of the session bar, and a save without a branch shows the state card and writes nothing.
 
+#### preview
+
+- The preview proxy forwards a page's own calls again. A call takes its target from the Referer of the page that made it, and the viewer root still opens the chooser.
+
 ## 2026-10-11
 
 ### Added

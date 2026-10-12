@@ -49,6 +49,23 @@ function parseSelectedUrl(raw) {
   return url;
 }
 
+// A page's own calls name no target, so the target comes from the Referer of the page that
+// made the call. The Referer must be a viewer page carrying a valid url; otherwise there is none.
+function targetFromReferer(incoming, referer) {
+  let page;
+  try {
+    page = new URL(referer || '');
+  } catch {
+    return null;
+  }
+  if (page.pathname !== '/' || !page.searchParams.has('url')) return null;
+  try {
+    const selected = parseSelectedUrl(page.searchParams.get('url'));
+    return makeTarget(selected.origin, incoming.pathname, incoming.search);
+  } catch {
+    return null;
+  }
+}
 function makeTarget(origin, pathname, search) {
   const target = new URL(`${origin}/`);
   target.pathname = pathname || '/';
@@ -314,12 +331,15 @@ const server = http.createServer((req, res) => {
       }
       target = parseSelectedUrl(incoming.searchParams.get('url'));
     } else {
-      // The proxy keeps no memory: every open without a url lands on the chooser,
-      // so a stale address can never carry a launch to a dead site.
-      return sendHtml(res, 200, viewerPage(
-        'Choose a preview: paste its URL, or open this page from a share or a link that'
-        + ' carries one.'
-      ));
+      // The proxy keeps no memory. A page's own calls carry no url, so they take the target
+      // from the page that made them. The viewer root always opens the chooser.
+      target = incoming.pathname === '/' ? null : targetFromReferer(incoming, req.headers.referer);
+      if (!target) {
+        return sendHtml(res, 200, viewerPage(
+          'Choose a preview: paste its URL, or open this page from a share or a link that'
+          + ' carries one.'
+        ));
+      }
     }
   } catch (err) {
     if (incoming.pathname === '/') {
@@ -380,7 +400,7 @@ server.requestTimeout = 10 * 60 * 1000;
 
 // The pure helpers are exported for the checks; the image runs this file directly, so the
 // listening server stays out of a require.
-module.exports = { injectPwa, decodeBody, viewerPage };
+module.exports = { injectPwa, decodeBody, viewerPage, targetFromReferer };
 
 if (require.main === module) {
   server.listen(PORT, '127.0.0.1', () => {
