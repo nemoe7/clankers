@@ -157,11 +157,6 @@ def seconds_since(value):
 	if not value:return None
 	try:return(datetime.now(timezone.utc)-datetime.fromisoformat(value)).total_seconds()
 	except ValueError:return None
-def stamp_age_seconds(value):
-	if not value:return None
-	try:age=datetime.fromisoformat(now())-datetime.fromisoformat(str(value))
-	except(TypeError,ValueError):return None
-	return age.total_seconds()
 def clip_stamp(value):return value[:19]if value else value
 def at_or_after(value,other):
 	if not value or not other:return False
@@ -486,7 +481,6 @@ def require_server(store):
 	raise ValueError(f"preview server is down; start it before polling: arena-preview serve --port {port}")
 def print_read(store):listing=store.read();print(format_read(listing),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
 POLL_INTERVAL=1
-HOLD_STALE_SECONDS=1800
 POLL_MAX_LOOPS=1800
 POLLING_META='polling_at'
 POLL_SINCE_META='polling_since'
@@ -690,28 +684,21 @@ def route_command(state_dir,name,argv):
 	if not argv:print('arena-preview route: name a command after --, for example: route gates -- make check',flush=True);return 2
 	if not detach_run(state_dir,name,argv):print(f"arena-preview route: the start of `{name}` failed.",flush=True);return 1
 	print(f"routed {name}: the run continues in the background, and its verdict prints on a later call.",file=sys.stderr,flush=True);return 0
-def poll_hold_line(store):
-	age=stamp_age_seconds(store.newest_record_stamp())
-	if age is None or age<=HOLD_STALE_SECONDS:return None
-	minutes=int(age//60);return f"HOLD: the newest record is {minutes} min old, past the {HOLD_STALE_SECONDS} s poll span. The arena session memory may have rolled back. Hold further work until a new owner note lands."
-def print_poll_hold(store):
-	line=poll_hold_line(store)
-	if line is not None:print(line,file=sys.stderr,flush=True)
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
 	listing={'checked_at':None,'pending':[]};print('POLL: 1800 s; a cut call retries with the tool timeout at 1800.',file=sys.stderr,flush=True);store.start_poll();failures=[];threading.Thread(target=pr_check_once,args=(failures,resolve_repo_root()),daemon=True).start()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
-			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);print_poll_hold(store);return 0
-			if run_notices(store.path.parent):print_poll_hold(store);return 0
-			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);print_poll_hold(store);return 0
+			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
+			if run_notices(store.path.parent):return 0
+			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
-			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);print_poll_hold(store);return 0
-			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);print_poll_hold(store);return 0
+			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
+			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
 	finally:store.clear_polling()
-	store.mark_turn_ended();print('Poll ended: 0 pending.',flush=True);print_poll_hold(store);return 1
+	store.mark_turn_ended();print('Poll ended: 0 pending.',flush=True);return 1
 def parse_state_import(text):
 	try:value=json.loads(text)
 	except json.JSONDecodeError:value=[json.loads(line)for line in text.splitlines()if line.strip()]
@@ -1257,27 +1244,6 @@ class Store:
 				cursor=db.execute(f"UPDATE {table} SET task_id = ? WHERE id = ?",(task_id,record_id))
 				if cursor.rowcount:return
 		raise ValueError(f"Unknown note: {record_id}; no task marker written")
-	def newest_record_stamp(self):
-		stamps=[]
-		with self.connect()as db:
-			for row in db.execute('SELECT at, seen_at, acknowledged_at, ack_edited_at, replies FROM notes'):
-				stamps.extend([row['at'],row['seen_at'],row['acknowledged_at'],row['ack_edited_at']])
-				for reply in replies_list(row['replies']):
-					if isinstance(reply,dict):stamps.append(reply.get('at'))
-			for row in db.execute('SELECT updated_at FROM tasks'):stamps.append(row['updated_at'])
-			for row in db.execute('SELECT at, seen_at FROM submissions'):stamps.extend([row['at'],row['seen_at']])
-			for row in db.execute('SELECT updated_at, seen_at, agent_seen_at FROM reports'):stamps.extend([row['updated_at'],row['seen_at'],row['agent_seen_at']])
-		newest=None
-		for value in stamps:
-			if not value:continue
-			if newest is None or clip_stamp(value)>clip_stamp(newest):newest=value
-		return newest
-	def record_arrival(self,record_id):
-		with self.connect()as db:
-			for table in('notes','submissions'):
-				row=db.execute(f"SELECT at FROM {table} WHERE id = ?",(record_id,)).fetchone()
-				if row is not None:return row['at']
-		return None
 	def pending_ack(self):
 		with self.connect()as db:rows=db.execute('SELECT id, at FROM notes WHERE acknowledged_at IS NULL UNION ALL SELECT id, at FROM submissions WHERE acknowledged_at IS NULL ORDER BY at').fetchall()
 		if not rows:raise ValueError('No pending note or answer to acknowledge')
@@ -1629,11 +1595,7 @@ def main():
 				source=args.reply_file if args.reply_file is not None else args.note_file;kind='reply'if args.reply_file is not None else'note'
 				try:text=source.read_text(encoding='utf-8')
 				except OSError as error:raise ValueError(f"Cannot read {source}: {error.strerror or error}")from None
-			ids=[store.resolve_id(token)for token in args.ids]if args.ids else[store.pending_ack()];arrivals={record_id:store.record_arrival(record_id)for record_id in ids};store.acknowledge(ids,kind,text);short=[i[:6]for i in ids];print('ok '+' '.join(short))
-			for record_id in ids:
-				age=stamp_age_seconds(arrivals.get(record_id))
-				if age is not None and age>HOLD_STALE_SECONDS:minutes=int(age//60);print(f"HOLD: this ack answered a message {minutes} min old. The message might be stale. Hold further work until the owner confirms.",file=sys.stderr,flush=True)
-			print('task? '+'; '.join(f'task <id> "<title>" -m {i}'for i in ids))
+			ids=[store.resolve_id(token)for token in args.ids]if args.ids else[store.pending_ack()];store.acknowledge(ids,kind,text);short=[i[:6]for i in ids];print('ok '+' '.join(short));print('task? '+'; '.join(f'task <id> "<title>" -m {i}'for i in ids))
 		elif args.command=='publish':
 			count=store.publish(args.id,args.title,args.source);print(f"Published {args.id}, {count} fields.")
 			if not count and'{#'in Path(args.source).read_text('utf-8'):print('Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then the `- ( ) option` lines follow.',file=sys.stderr)

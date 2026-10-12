@@ -494,21 +494,6 @@ def seconds_since(value):
     return None
 
 
-def stamp_age_seconds(value):
-  """Seconds between one stored stamp and the preview clock, or None when it fails.
-
-  A save file may carry a naive stamp beside an aware one, and a mismatch refuses
-  the subtraction, so an unparseable pair simply reports no age.
-  """
-  if not value:
-    return None
-  try:
-    age = datetime.fromisoformat(now()) - datetime.fromisoformat(str(value))
-  except (TypeError, ValueError):
-    return None
-  return age.total_seconds()
-
-
 def clip_stamp(value):
   "Cut an ISO stamp to seconds. A restore needs no milliseconds or offset."
   return value[:19] if value else value
@@ -1361,8 +1346,6 @@ def print_read(store):
 
 POLL_INTERVAL = 1
 
-# One full poll span with nothing newer names a possible session memory rollback.
-HOLD_STALE_SECONDS = 1800
 # One loop a second, so the wait spans the bash tool's 1800-second ceiling.
 POLL_MAX_LOOPS = 1800
 POLLING_META = "polling_at"
@@ -2031,30 +2014,6 @@ def route_command(state_dir, name, argv):
   return 0
 
 
-def poll_hold_line(store):
-  """The hold line for a stale state, or None while a fresh record stands.
-
-  The scan covers every record kind, reads and acks included, so one fresh stamp
-  anywhere keeps the hold quiet.
-  """
-  age = stamp_age_seconds(store.newest_record_stamp())
-  if age is None or age <= HOLD_STALE_SECONDS:
-    return None
-  minutes = int(age // 60)
-  return (
-    f"HOLD: the newest record is {minutes} min old, past the {HOLD_STALE_SECONDS} s"
-    " poll span. The arena session memory may have rolled back. Hold further work"
-    " until a new owner note lands."
-  )
-
-
-def print_poll_hold(store):
-  """Print the hold line when every record sits older than one full poll span."""
-  line = poll_hold_line(store)
-  if line is not None:
-    print(line, file=sys.stderr, flush=True)
-
-
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -2083,11 +2042,9 @@ def poll_inbox(store, sleeper=None):
         store.mark_reports_agent_seen(
           [item.get("report_id") for item in full["pending"]]
         )
-        print_poll_hold(store)
         return 0
       # A finished gate run ends the wait with its verdict, so the turn reads the result now.
       if run_notices(store.path.parent):
-        print_poll_hold(store)
         return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
       if failures:
@@ -2095,7 +2052,6 @@ def poll_inbox(store, sleeper=None):
           f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",
           flush=True,
         )
-        print_poll_hold(store)
         return 0
       open_tasks = [
         item
@@ -2112,7 +2068,6 @@ def poll_inbox(store, sleeper=None):
         )
         print(continue_line, flush=True)
         print(format_task_list(listing.get("tasks", [])), flush=True)
-        print_poll_hold(store)
         return 0
       # A message, unblocked task, or live detached run outranks a skip so its verdict arrives first.
       # The skip stays armed until the run ends. It ends the turn only then.
@@ -2127,7 +2082,6 @@ def poll_inbox(store, sleeper=None):
           flush=True,
         )
         print(format_read(listing), flush=True)
-        print_poll_hold(store)
         return 0
       if index + 1 < POLL_MAX_LOOPS:
         sleeper(POLL_INTERVAL)
@@ -2137,7 +2091,6 @@ def poll_inbox(store, sleeper=None):
   # The wait ran its whole span with nothing to read: the turn ends here.
   store.mark_turn_ended()
   print("Poll ended: 0 pending.", flush=True)
-  print_poll_hold(store)
   return 1
 
 
@@ -4008,49 +3961,6 @@ class Store:
           return
     raise ValueError(f"Unknown note: {record_id}; no task marker written")
 
-  def newest_record_stamp(self):
-    """The newest stamp any record carries: notes, tasks, reports, reads and acks.
-
-    The poll hold compares this age against its own span, so a state that rolled
-    back behind every live record reads as stale, and one fresh stamp anywhere
-    keeps the hold quiet. Polling heartbeats live in meta and stay out of the scan.
-    """
-    stamps = []
-    with self.connect() as db:
-      for row in db.execute(
-        "SELECT at, seen_at, acknowledged_at, ack_edited_at, replies FROM notes"
-      ):
-        stamps.extend(
-          [row["at"], row["seen_at"], row["acknowledged_at"], row["ack_edited_at"]]
-        )
-        for reply in replies_list(row["replies"]):
-          if isinstance(reply, dict):
-            stamps.append(reply.get("at"))
-      for row in db.execute("SELECT updated_at FROM tasks"):
-        stamps.append(row["updated_at"])
-      for row in db.execute("SELECT at, seen_at FROM submissions"):
-        stamps.extend([row["at"], row["seen_at"]])
-      for row in db.execute("SELECT updated_at, seen_at, agent_seen_at FROM reports"):
-        stamps.extend([row["updated_at"], row["seen_at"], row["agent_seen_at"]])
-    newest = None
-    for value in stamps:
-      if not value:
-        continue
-      if newest is None or clip_stamp(value) > clip_stamp(newest):
-        newest = value
-    return newest
-
-  def record_arrival(self, record_id):
-    """The arrival stamp one note or answer carries, or None past the tables."""
-    with self.connect() as db:
-      for table in ("notes", "submissions"):
-        row = db.execute(
-          f"SELECT at FROM {table} WHERE id = ?", (record_id,)
-        ).fetchone()
-        if row is not None:
-          return row["at"]
-    return None
-
   def pending_ack(self):
     """The one unanswered note or answer a bare `ack` answers.
 
@@ -5351,20 +5261,9 @@ def main():
         if args.ids
         else [store.pending_ack()]
       )
-      arrivals = {record_id: store.record_arrival(record_id) for record_id in ids}
       store.acknowledge(ids, kind, text)
       short = [i[:6] for i in ids]
       print("ok " + " ".join(short))
-      for record_id in ids:
-        age = stamp_age_seconds(arrivals.get(record_id))
-        if age is not None and age > HOLD_STALE_SECONDS:
-          minutes = int(age // 60)
-          print(
-            f"HOLD: this ack answered a message {minutes} min old. The message might"
-            " be stale. Hold further work until the owner confirms.",
-            file=sys.stderr,
-            flush=True,
-          )
       print("task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in ids))
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
