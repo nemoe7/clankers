@@ -65,6 +65,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The ARENA.md poll rule names the run-cut case. A run verdict spends the poll that carried it, so the agent runs `poll` again and ends the turn inside a waiting poll. The refs line, the live mirror and the root copy carry it.
 - The guidelines audit lands its accepted fixes. The rule files lose their bold mark and their repeated or merged lines, and `CHATGPT-MORE.txt` names the override it means. NEMOGPT gains headings and its missing bad answer, the first-party skills drop `metadata.origin`, and the maintainer docs note the constitution exception and prompt checks.
 
+### Fixed
+
+#### userscripts
+
+- An unpushed session's branch read no value, so two sessions in one repo shared a save scope. The branch now reads from any titled element of the session bar, and a save without a branch shows the state card and writes nothing.
+
 ## 2026-10-11
 
 ### Added

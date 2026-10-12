@@ -1758,6 +1758,7 @@ function checkStateDownload(api, session) {
   var handleMatchesScope = api.handleMatchesScope;
   var stateScope = api.stateScope;
   var stateRepo = api.stateRepo;
+  var stateBranch = api.stateBranch;
   var stateScopeKey = api.stateScopeKey;
   var readSlug = api.readSlug;
   var slugFromBare = api.slugFromBare;
@@ -1936,7 +1937,7 @@ function checkStateDownload(api, session) {
   var bar = {
     querySelectorAll: function (selector) {
       if (selector === "span.truncate") return [{ textContent: "nemoe7/clankers" }];
-      if (selector === "a") return [branchLink];
+      if (selector === "a, [title]") return [branchLink];
       return [];
     },
   };
@@ -1959,7 +1960,7 @@ function checkStateDownload(api, session) {
   var bareBar = {
     querySelectorAll: function (selector) {
       if (selector === "span.truncate") return [{ textContent: "daedalus" }];
-      if (selector === "a") return [branchLink];
+      if (selector === "a, [title]") return [branchLink];
       return [];
     },
   };
@@ -2289,6 +2290,36 @@ function checkStateDownload(api, session) {
   assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "", ""), false);
   assert.equal(handleMatchesScope({ name: "arena.ndjson" }, "", ""), true);
   console.log("ok state download 32");
+  // The session bar names an unpushed branch in a titled span; a pushed branch also gets an
+  // anchor with a /tree/ href. The repository anchor carries no branch.
+  const element = (tag, title, href) => ({
+    tag: tag,
+    getAttribute: (name) => (name === "title" ? title || null : name === "href" ? href || null : null),
+  });
+  // The fake answers a selector list the way the bar does: a tag name, or any titled element.
+  const matches = (el, selector) => selector.split(",").some((part) => {
+    const token = part.trim();
+    return token === el.tag || (token === "[title]" && el.getAttribute("title") !== null);
+  });
+  const docWith = (links) => ({
+    querySelector: () => ({ querySelectorAll: (selector) => links.filter((el) => matches(el, selector)) }),
+  });
+  const repoLink = element("a", "nemoe7/clankers", "https://github.com/nemoe7/clankers");
+  assert.equal(
+    stateBranch(docWith([repoLink, element("span", "main \u2192 arena/1bc9bdc9-clankers")])),
+    "arena/1bc9bdc9-clankers",
+    "An unpushed branch reads from its titled span",
+  );
+  assert.equal(
+    stateBranch(docWith([
+      repoLink,
+      element("a", "main \u2192 arena/fef1ae85-daedalus", "https://github.com/nemoe7/daedalus/tree/arena%2Ffef1ae85-daedalus"),
+    ])),
+    "arena/fef1ae85-daedalus",
+    "A pushed branch reads from its /tree/ anchor",
+  );
+  assert.equal(stateBranch(docWith([repoLink])), "", "A repository link alone names no branch");
+  console.log("ok state download 33");
 }
 
 const { test } = require("node:test");

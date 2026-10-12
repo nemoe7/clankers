@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.26
+// @name         Arena.ai | NemoUtils | v1.10.27
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.26
+// @version      1.10.27
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2121,6 +2121,7 @@
     history: "history does not match",
     pickerClosed: "no file selected;",
     noPreview: "no preview detected",
+    noBranch: "session branch not found; state save blocked",
   };
 
   function writtenName(handle, fallback) {
@@ -2221,7 +2222,7 @@
   function stateBranch(doc) {
     var bar = doc.querySelector(BAR_SELECTOR);
     if (!bar) return "";
-    var links = bar.querySelectorAll("a");
+    var links = bar.querySelectorAll("a, [title]");
     var i;
     for (i = 0; i < links.length; i += 1) {
       var href = String(links[i].getAttribute("href") || "");
@@ -2273,6 +2274,7 @@
       handleMatchesScope: handleMatchesScope,
       stateScope: stateScope,
       stateRepo: stateRepo,
+      stateBranch: stateBranch,
       readSlug: readSlug,
       slugFromBare: slugFromBare,
       pagePicker: pagePicker,
@@ -2547,6 +2549,10 @@
           return;
         }
         var scope = stateScope(document);
+        if (!scope.branch) {
+          stateError(STATE_LINES.noBranch);
+          return;
+        }
         var storeKey = stateScopeKey(scope.repo, scope.branch);
         var memory = stateRemembered(GM_getValue(stampKey(storeKey), ""));
         if (force) {
