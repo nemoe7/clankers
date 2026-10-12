@@ -48,13 +48,18 @@ The bar serves a session. On a new chat the composer's own repository chip names
 
 A selected diff branch wears the same owner/repo shape as the repository chip. The read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository beside it.
 
+The fill fetches `userscripts/arena-prompt-fill.txt` once from this repository. It waits for that text before writing, and leaves the composer unchanged if the fetch fails. The `rules/ARENA.md` fetch remains optional and is appended when it succeeds.
+
+The template signals a potentially long, complex feature set and calls for a high-context model. It says work can continue indefinitely, and each final poll waits up to 1,800 seconds or until skipped.
+
 ```mermaid
 flowchart TB
   B[GitHub repo bar] --> N[repo name]
   C[composer repository chip] --> N
   N --> T[fill text]
-  F[fetch rules/ARENA.md] --> W[write the composer once]
-  T --> W
+  F[fetch prompt template] --> T
+  R[fetch optional rules file] --> T
+  T --> W[write the composer once]
 ```
 
 The message then carries a six-step checklist:

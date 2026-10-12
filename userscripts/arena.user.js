@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.27
+// @name         Arena.ai | NemoUtils | v1.10.28
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.27
+// @version      1.10.28
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -515,32 +515,10 @@
         });
     }
 
-    var TEMPLATE_TAIL =
-      "\n\nBefore you implement, answer or report, run this order:" +
-      "\n\n1. Read the task and every file it touches in full; trace the real flow end to end" +
-      " before you plan." +
-      "\n2. Name the requirements and the constraints; follow the conventions the code already uses." +
-      "\n3. Take the smallest change that holds: reuse first, one line second, new code last," +
-      " and add nothing the task does not ask for." +
-      "\n4. Write the failing check before new behavior; reproduce a bug before you touch it." +
-      "\n5. Keep the behavior, interfaces, validation and security that stand, unless the task" +
-      " changes them." +
-      "\n6. Verify with the project's own gate; read the result before you report it." +
-      "\n\nNew behavior: red first. Write the failing check, make the smallest change that passes it," +
-      " refactor without a behavior change, then recheck." +
-      "\n\nFor a bug: reproduce it, change one variable at a time, fix the root cause where every" +
-      " caller routes through, cover the fix with a check, then recheck. Never repeat a failed" +
-      " approach without a new reason." +
-      "\n\nState every assumption the moment you make it. Ask one question when a wrong reading" +
-      " changes the result." +
-      "\n\nNEVER claim a check you did not run. Print what you skipped, and name what stays unverified." +
-      "\n\nExpect screenshots, notes and corrections through the steering channel. Read an image" +
-      " itself, not only its text, and invent no visual detail. Take each one in the next reply." +
-      "\n\nStop when verification holds, and finish with what changed, what you checked, and what" +
-      " is open.";
-
-    function promptForSlug(slug, arenaMd) {
-      var base = slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." + TEMPLATE_TAIL;
+    function promptForSlug(slug, promptFill, arenaMd) {
+      if (typeof promptFill !== "string" || !promptFill.trim()) return null;
+      var base = slug + " read ARENA.md AGENTS.md in full before your first edit, and follow both." +
+        "\n\n" + promptFill.trim();
       if (arenaMd) {
         return base + "\n\nhere is ARENA.md:\n" + arenaMd;
       }
@@ -572,6 +550,8 @@
       }
     }
 
+    var PROMPT_FILL_URL =
+      "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt";
     // The rules of this repository, at a fixed URL: a session in another repository
     // still receives them.
     var ARENA_MD_URL =
@@ -582,6 +562,7 @@
       slugFromOwnerRepo: slugFromOwnerRepo,
       promptForSlug: promptForSlug,
       shouldWrite: shouldWrite,
+      PROMPT_FILL_URL: PROMPT_FILL_URL,
       ARENA_MD_URL: ARENA_MD_URL,
       PROXY_HOST_KEY: PROXY_HOST_KEY,
       PROXY_MASTER_KEY: PROXY_MASTER_KEY,
@@ -607,28 +588,34 @@
       return;
     }
 
+    var promptFillCache = null;
     var arenaMdCache = null;
     var heldKey = null;
-    var arenaMdTried = false;
+    var promptResourcesTried = false;
+    var promptFillFailureLogged = false;
     var pendingFetch = null;
     var keyTried = false;
     var keyFetch = null;
 
-    function fetchArenaMd() {
-      return fetch(ARENA_MD_URL).then(function (r) {
+    function fetchText(url) {
+      return fetch(url).then(function (r) {
         if (!r.ok) return null;
         return r.text();
+      }).then(function (content) {
+        return typeof content === "string" && content.trim() ? content : null;
       }).catch(function () { return null; });
     }
 
     function ensureFetch() {
-      if (arenaMdTried || pendingFetch) return;
-      pendingFetch = fetchArenaMd().then(function (content) {
-        arenaMdCache = typeof content === "string" ? content : null;
-        arenaMdTried = true;
-        pendingFetch = null;
-        sync();
-      });
+      if (promptResourcesTried || pendingFetch) return;
+      pendingFetch = Promise.all([fetchText(PROMPT_FILL_URL), fetchText(ARENA_MD_URL)])
+        .then(function (contents) {
+          promptFillCache = contents[0];
+          arenaMdCache = contents[1];
+          promptResourcesTried = true;
+          pendingFetch = null;
+          sync();
+        });
     }
 
     function postAgentKey(key, host) {
@@ -887,9 +874,8 @@
       }
       slugLogged = false;
       rememberSlug(slug);
-      // One write per page: the fill waits for the one ARENA.md fetch, then writes the
-      // message with the file under it when the fetch answered and without it when not.
-      if (!arenaMdTried) {
+      // Wait for both repository files before the single composer write.
+      if (!promptResourcesTried) {
         ensureFetch();
         ensureAgentKey();
         return;
@@ -911,7 +897,17 @@
         ensureAgentKey();
         return;
       }
-      setComposerText(composer, promptForSlug(slug, arenaMdCache));
+      var prompt = promptForSlug(slug, promptFillCache, arenaMdCache);
+      if (!prompt) {
+        if (!promptFillFailureLogged) {
+          promptFillFailureLogged = true;
+          logEvent("fill", "prompt template unavailable");
+        }
+        lastSlug = slug;
+        ensureAgentKey();
+        return;
+      }
+      setComposerText(composer, prompt);
       logEvent("fill", "filled composer for " + slug);
       lastSlug = slug;
       filledSlug = slug;

@@ -503,6 +503,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   // proxy posts wait for it, and the tab title keeps its shield.
   test("captcha hold", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const promptFillUrl = "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/userscripts/arena-prompt-fill.txt";
+    const arenaMdUrl = "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md";
+    const promptFillResponse = "REMOTE PROMPT TEMPLATE FROM REPOSITORY";
     let captchaVisible = true;
     let clicked = 0;
     const posts = [];
@@ -598,11 +601,27 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       clearTimeout(id) { timeouts.delete(id); },
       fetch(url) {
         fetches.push(url);
+        if (url === promptFillUrl) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({}),
+            text: () => Promise.resolve(promptFillResponse),
+          });
+        }
+        if (url === arenaMdUrl) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({}),
+            text: () => Promise.resolve("# Rules"),
+          });
+        }
         return Promise.resolve({
           ok: true,
           status: 200,
           json: () => Promise.resolve({ key: "testkey-testkey-test", rotated: false, age: 700 }),
-          text: () => Promise.resolve("# Rules"),
+          text: () => Promise.resolve(""),
         });
       },
       sessionStorage: { getItem() { return null; }, setItem() {} },
@@ -675,6 +694,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       `the fill line names the repo it filled: ${logged.join(" | ")}`,
     );
     assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns when the check clears");
+    assert.ok(composer.innerText.includes(promptFillResponse), "The fill uses the text fetched from the prompt file");
+    assert.equal(fetches.filter((url) => url === promptFillUrl).length, 1, "The prompt file loads once");
+    assert.equal(fetches.filter((url) => url === arenaMdUrl).length, 1, "ARENA.md loads once");
     assert.ok(composer.innerText.includes("here is ARENA.md:\n# Rules"), "The fill carries the rules file under the message");
     // The pause clears a scattered call that waits, so no request leaves after the press.
     const idle = httpCalls();
@@ -701,6 +723,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     flush();
     await settle();
     assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns on a new chat after a session route");
+    assert.equal(fetches.filter((url) => url === promptFillUrl).length, 1, "The prompt file stays cached for later chats on the page");
     console.log("ok captcha hold: fill, steering click, proxy posts wait for the check");
   });
 }
