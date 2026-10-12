@@ -160,9 +160,8 @@ def check_preview_path():
     )
     assert event_result.returncode == 0, event_result.stderr
     assert event_result.stderr.count(reminder) == 1, event_result.stderr
-    # A blocking gate must not exit a shell that hosts a long-lived process, nor
-    # Arena's own probe shells: a killed probe reads as a dead preview or sandbox
-    # while the process it probed stays up. Only an agent call shell meets the gate.
+    # A blocking gate must not exit a shell that hosts a long-lived process or an Arena probe.
+    # A killed probe can report a dead preview or sandbox. Only an agent call shell meets the gate.
     python.write_text(
       '#!/usr/bin/env bash\ncase " $*" in *" gate "*|*" gate") exit 1 ;; esac\nexit 0\n',
       encoding="utf-8",

@@ -41,7 +41,7 @@ def rotation_line(key):
 
 
 def log_line(method, target, code, address=None):
-  """Format one log line with the query string removed, so no key is written."""
+  "Format one log line without its query string. This prevents keys in logs."
   line = f"{method} {urllib.parse.urlsplit(target).path} -> {code}"
   return f"{line} from {address}" if address else line
 
@@ -501,7 +501,7 @@ def parse_args(argv=None):
 
 
 def agent_key():
-  """Return a fresh agent key; every start makes a new one."""
+  "Return a fresh agent key. Every start makes a new one."
   return secrets.token_urlsafe(32)
 
 

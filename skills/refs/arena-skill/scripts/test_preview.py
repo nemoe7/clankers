@@ -39,7 +39,7 @@ def compact(text):
 
 
 def test_edited_ack_stamp():
-  """A second ack appends a reply block; the first answer stays."""
+  "A second ack appends a reply block. The first answer stays."
   with tempfile.TemporaryDirectory() as edit_dir:
     edited = preview.Store(edit_dir, create=True)
     edited.note("edit-note", "Question")
@@ -61,7 +61,6 @@ def test_edited_ack_stamp():
     answer = edited.submissions()[0]
     assert answer["ack_edited_at"] == row["ack_edited_at"]
     assert answer["replies"] == row["replies"]
-    # The same text again is still one more block: nothing is compared, nothing is dropped.
     with patch.object(preview, "now", return_value="2026-09-22T12:02:00"):
       edited.acknowledge(ids, "note", "Second answer")
     row = edited.state()["notes"][0]
@@ -134,8 +133,6 @@ def test_reply_seen_persistence():
     backup = Path(directory) / "saved-state.ndjson"
     store = preview.Store(root, create=True, save_path=backup)
     store.note("edited-note", "Question")
-    # The answer rides in the save only while its report is published, which every real
-    # answer's report is.
     form = Path(directory) / "form.md"
     form.write_text("# Form\n\nNo fields here.\n", encoding="utf-8")
     store.publish("form", "Form", form)
@@ -291,7 +288,7 @@ def test_report_receipt_ids():
 
 
 def test_report_unpublish():
-  """Deleting a report prunes the tab row only; answers and the source file stay."""
+  "Deleting a report prunes the tab row only. Answers and the source file stay."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -342,7 +339,7 @@ def test_report_unpublish():
 
 def test_stale_report_reminder():
   # Ten published reports cross the stale threshold. A field-less report is stale at
-  # once; a fresh form with an open question is not.
+  # once. A fresh form with an open question is not.
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     store = preview.Store(root, create=True)
@@ -419,7 +416,7 @@ def test_pr_failed_check_gh_error():
 
 
 def test_pr_failed_check_reads_the_newest_run_per_name():
-  # A passed re-run of a job clears its older failure; only another job's failure stands.
+  # A passed re-run of a job clears its older failure. Only another job's failure stands.
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     (root / ".git").mkdir()
@@ -458,8 +455,6 @@ def test_pr_check_once_reports_a_failure():
 def test_http_boundaries():
   global app
   with tempfile.TemporaryDirectory() as directory:
-    # The state directory and the save file are siblings, the way they are in the repository: the
-    # save file is written at the root, so a restore that drops the state directory keeps it.
     root = Path(directory) / "arena-preview"
     save_file = Path(directory) / "saved-state.ndjson"
     try:
@@ -474,9 +469,8 @@ def test_http_boundaries():
       linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
     )
     assert "<s>" in preview.render("~~gone~~")
-    # A paragraph carries no `<br>` at all, on the owner's suggestion: markdown-it
-    # turns a newline into one when breaks are on, and the owner read the result as too airy beside
-    # the message log, where a line breaks through `white-space: pre-wrap` and needs no tag.
+    # With `breaks`, markdown-it turns a newline into `<br>`. The owner rejected it beside the message log.
+    # `white-space: pre-wrap` needs no tag and avoids an airy paragraph.
     chat = preview.render("line one\nline two", breaks=True)
     assert "<br" not in chat and "\n" in chat and chat.count("<p>") == 1
     css = compact((preview.ASSETS / "style.css").read_text())
@@ -488,9 +482,6 @@ def test_http_boundaries():
     )
     assert re.search(r"border-left:3px solid (rgb\(199,194,188\)|#c7c2bc)", css)
     assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
-    # The three report toolbar buttons share one box size (owner screenshot: the late unpublish
-    # button had fallen back to the 34px default), and the report select carries the log
-    # filter's chevron rather than the native arrow.
     assert (
       "#copy-report,#refresh-report,#unpublish-report{width:44px;height:44px;}" in css
     )
@@ -499,7 +490,7 @@ def test_http_boundaries():
     )
     assert re.search(r"#report-select\{appearance:none;padding-right:26px;\}", css)
     # The green send flash is gone (owner: the footnote under the report covers it), so neither the
-    # page nor the client script carries report-receipt; the footnote element stays.
+    # page nor the client script carries report-receipt. The footnote element stays.
     page = (preview.ASSETS / "index.html").read_text()
     script = (preview.ASSETS / "app.js").read_text()
     assert "report-receipt" not in page and "report-receipt" not in script
@@ -509,13 +500,10 @@ def test_http_boundaries():
     assert page.index('id="report-agent-ack-footer"') > page.index('id="report-submit"')
     # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
     assert "<br" in preview.render("- a\n  b", breaks=True)
-    # The log renders without `breaks`: its paragraphs are `white-space: pre-wrap`, so the newline
-    # the source carries is the line break and a `<br>` beside it doubled every gap. That doubling
-    # is what the owner removed by hand in the browser.
+    # The log uses pre-wrap paragraphs without breaks. A `<br>` would double each newline gap.
+    # That doubling is what the owner removed by hand in the browser.
     logged = preview.render("line one\nline two")
     assert "<br" not in logged and "\n" in logged and logged.count("<p>") == 1
-    # A fence the owner escaped still opens a block: the line-leading escape is dropped before the
-    # render, so the marker reaches the rule that carries the background.
     escaped = preview.render("before\n\\```\ncode\n\\```\nafter")
     assert escaped.count('class="code-block"') == 1
     assert "<p>before</p>" in escaped and "<p>after</p>" in escaped
@@ -525,7 +513,7 @@ def test_http_boundaries():
     # An escape that is not a fence stays markdown-it's own, so inline text keeps its literal
     # backticks rather than turning into a code block.
     assert "<pre" not in preview.render("a \\`code\\` b")
-    # An image the agent sized keeps that size; commonmark alone prints the syntax.
+    # An image the agent sized keeps that size. Commonmark alone prints the syntax.
     sized = preview.render("![alt](https://example.com/a.png =320x200)")
     assert 'width="320" height="200"' in sized and 'alt="alt"' in sized
     assert 'width="320"' in preview.render("![a](https://example.com/a.png =320x)")
@@ -546,7 +534,7 @@ def test_http_boundaries():
     store.publish("second", "Second revised", source)
     assert len(store.state()["reports"]) == 2
     assert store.report("second")["markdown"] == source.read_text()
-    # A republish moves the edit stamp; the publish date stays at the first one.
+    # A republish moves the edit stamp. The publish date stays at the first one.
     assert published_stamp, "the first publish keeps its date"
     assert store.report("second")["published_at"] == published_stamp
     assert store.report("second")["updated_at"] >= published_stamp
@@ -580,17 +568,15 @@ def test_http_boundaries():
       assert re.search(r"\.log-newest\s*\{[^}]*border-radius:\s*4px", page)
       # The bar hugs its label rather than spanning the pane.
       assert "translateX(-50%)" in page
-      # The new-reply pill floats the same way, at the log's top: the placement says the reply
-      # waits above, and the two pills can never meet.
-      # It clears the card border below it and wears the plain text color, not the accent.
+      # The reply pill floats above the log, so it cannot meet the placement pill.
+      # It clears the card border and uses plain text, not accent color.
       assert re.search(r"\.log-edited\s*\{[^}]*position:\s*absolute", page)
       assert re.search(r"\.log-edited\s*\{[^}]*top:\s*20px", page)
       assert re.search(r"\.log-edited\s*\{[^}]*color:\s*var\(--text\)", page)
       assert re.search(r"\.log-edited\s*\{[^}]*border-radius:\s*4px", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
-      # The save button sits in the top bar after the theme button rather than in the log's own
-      # row. The log's own copy and the tasks' copy are gone, and one copy button carries the
-      # state to the clipboard.
+      # The save button sits in the top bar after the theme button rather than in the log's own row.
+      # The log's own copy and the tasks' copy are gone, and one copy button carries the state to the clipboard.
       assert (
         page.index('id="theme"')
         < page.index('id="copy-state"')
@@ -612,7 +598,7 @@ def test_http_boundaries():
         block = page[page.index(f'id="{control}"') :]
         assert "title=" in block[: block.index(">")]
       # A note owns staged file chips and a native multi-file picker. Backend records remain,
-      # but no saved-files list crowds the composer; Downloads alone keeps the remaining tab.
+      # but no saved-files list crowds the composer. Downloads alone keeps the remaining tab.
       assert 'id="downloads-tab" aria-controls="downloads-panel"' in page
       assert (
         'id="downloads-panel" role="tabpanel" aria-labelledby="downloads-tab"' in page
@@ -796,8 +782,6 @@ def test_http_boundaries():
       assert request("POST", "/api/reports/prune/seen", "{}", auth)[0] == 200
       status, _, removed = request("POST", "/api/reports/prune/unpublish", "{}", auth)
       assert status == 200 and json.loads(removed) == {"unpublished": "prune"}
-      # The page deletes a report only on the owner's two clicks, so the route writes the
-      # note that tells the agent the report was dismissed instead of lost.
       dismissed = [
         note for note in store.state()["notes"] if "dismissed" in note["text"]
       ]
@@ -959,16 +943,12 @@ def test_http_boundaries():
         ":not(pre)>code{background:var(--code-bg);padding:1px 5px;border-radius:4px"
         in page
       )
-      # Inline code sits darker than the page in dark mode; the light theme keeps its bubble.
+      # Inline code sits darker than the page in dark mode. The light theme keeps its bubble.
       assert "--code-bg:#1b1a19" in page
       assert "--code-bg:var(--bubble)" in page
-      # The composer's hint is half as prominent as the muted face, so what is being typed and what
-      # was sent stay distinguishable from a placeholder that is neither.
-      # The minified sheet shortens 0.5 to .5, so both spellings count.
       assert re.search(
         r"textarea::placeholder\{color:var\(--muted\);opacity:(?:0)?\.5", page
       )
-      # An ID carries one gesture now: a click quotes it, and no copy path is left to colour.
       assert "data-copied" not in page
       assert "#clock{font-size:inherit;font-variant-numeric:tabular-nums" in page
       assert re.search(
@@ -976,17 +956,12 @@ def test_http_boundaries():
       )
       assert re.search(r'\.icon-button\[data-state="?bad"?\]\{color:#ef4444;', page)
       assert 'id="copy-log"' not in page, "the log lost its copy button"
-      # The log card carries no heading: the tab above already names the panel, and the title
-      # only repeated it while spending a line of height. The status
-      # stack and the toolbar keep their places.
+      # The log card has no heading because its tab names the panel. The status stack and toolbar stay in place.
       assert "history-title" not in page
       assert '<section class="card log-card" aria-label="Message log">' in page
       assert page.index('id="connection"') < page.index('id="log-search"')
-      # A phone keeps the tabs alone and drops the composer hint. The footer's Send button sits
-      # at the right edge of the bottom line, with or without staged files, and the composer
-      # card steps its paddings and row gaps down.
-      # The copy button keeps its seat beside Downloads on a touch top bar: the strip holds one
-      # line, the labels step down to make room, and only the clock and the theme toggle leave.
+      # On phones, hide the composer hint and keep Send right-aligned with smaller padding and gaps.
+      # Keep Copy beside Downloads and the bar on one line. Shrink labels and hide the clock and theme.
       assert (
         "@media (pointer:coarse){.topbar-row{flex-wrap:nowrap;}"
         ".topbar-row>.row.tight{flex:0 0 auto;gap:4px;}#clock,#theme{display:none;}"
@@ -996,9 +971,8 @@ def test_http_boundaries():
       )
       assert page.index('id="downloads-tab"') < page.index('id="copy-state"')
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
-      # The log's header row holds one line at phone widths, so the search box never drops
-      # under the skip button, and the Reports toolbar keeps its buttons beside a select that
-      # grows into the width they leave. The status line keeps a row of its own.
+      # The phone header remains one line. Search stays above Skip. The Reports toolbar keeps buttons beside its select.
+      # The status line keeps a row of its own.
       assert (
         ".log-card>.row:first-child>.stack{flex:0 1 auto;}"
         ".log-card>.row>.row.tight{flex:1 1 0;min-width:0;}"
@@ -1014,7 +988,7 @@ def test_http_boundaries():
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
       assert '<button id="copy-report" class="icon-button"' in page
-      # The report copy button matches the boxes beside it; they were 34px against 44px.
+      # The report copy button matches the boxes beside it. They were 34px against 44px.
       # No negative assertion here: the combined rule contains the old single-selector text.
       assert (
         "#copy-report,#refresh-report,#unpublish-report{width:44px;height:44px" in page
@@ -1046,7 +1020,6 @@ def test_http_boundaries():
         r"border-radius:50%;background:var\(--accent\)",
         page,
       )
-      # The pip is given a shape by a display rule, so the sheet's blanket rule is what hides it.
       assert "[hidden]{display:none!important" in page
       assert page.index('id="copy-report"') < page.index('id="refresh-report"')
       assert '<span id="clock" class="muted" title="Local time">--:--</span>' in page
@@ -1079,17 +1052,14 @@ def test_http_boundaries():
       assert re.search(r"nav\{[^}]*min-width:0;", page), (
         "the tab strip shrinks rather than pushing the bar"
       )
-      # The four tabs share one width: the grid gives every track 1fr, so no label sets a tab's
-      # shape. The narrow block steps the padding and the font down, and the
-      # tracks stay equal then.
+      # The four tabs share one width: the grid gives every track 1fr, so no label sets a tab's shape.
+      # The narrow block steps the padding and the font down, and the tracks stay equal then.
       assert re.search(r"nav\{[^}]*grid-template-columns:repeat\(4,1fr\)", page)
       assert re.search(r"nav button\{[^}]*min-width:0;[^}]*padding:7px 9px;", page)
       assert re.search(r"nav button\{[^}]*white-space:nowrap", page)
       assert "nav button{padding:7px 4px;font-size:14px" in page
-      # The composer footer fits a narrow width: shorter hints, and the key's own line is short.
-      # The hint is its own span, so the client swaps it with the pointer: a touch keyboard writes
-      # the newline and the Send button sends.
-      # The hint carries its own separator, so a phone that hides it leaves the key line whole.
+      # The footer has short hints and a short key line for narrow widths. Touch keyboards write a newline. Send sends.
+      # The hint and its separator share a span, so hiding it leaves the key line whole.
       assert '<span id="send-hint">Enter sends · Shift+Enter:new line ·</span>' in page
       # A list in message text sits flush, matching the log's lists and the composer: the ack
       # thread under a report was the last outlier, on the browser's own step.
@@ -1120,9 +1090,6 @@ def test_http_boundaries():
       assert '<ul id="tasks-current-body" class="task-list"></ul>' in page
       assert '<ul id="tasks-finished-body" class="task-list"></ul>' in page
       assert '<ul id="tasks-upcoming-body" class="task-list"></ul>' in page
-      # Current leads the panel: what the agent is on next is the first thing the owner reads.
-      # Current leads the panel and Upcoming follows it, with the finished record last: what the
-      # agent is on next and what is coming are the owner's questions, and what is done is the log.
       assert page.index('id="tasks-current"') < page.index('id="tasks-upcoming"')
       assert page.index('id="tasks-upcoming"') < page.index('id="tasks-finished"')
       assert ".task-list{margin:0;padding-left:20px" in page
@@ -1141,12 +1108,11 @@ def test_http_boundaries():
         ".notes-layout{display:flex;flex-direction:column;gap:14px;height:100%" in page
       )
       assert "resize:none;min-height:72px;overflow:hidden" in page
-      # The document itself never scrolls: the panels own their scrolling. The log card's floor
-      # steps down on a short viewport, so a small phone keeps the whole column on screen with the
-      # composer closed.
+      # The document does not scroll. Panels do. A short viewport lowers the log-card floor.
+      # A small phone then keeps the column on screen with the composer closed.
       assert "html,body{height:100%;overflow:hidden;overscroll-behavior:none" in page
       # The log header wraps into four short lines on a narrow width, and the 12px wrap gap read
-      # as dead space; the lines sit close now.
+      # as dead space. The lines sit close now.
       assert ".log-card>.row:first-child{margin-block:0;row-gap:2px" in page
       assert ".log-card{flex:1 1 auto;min-height:min(500px,60dvh)" in page
       assert "h1{letter-spacing:-.035em;margin:4px 0" in page
@@ -1366,8 +1332,6 @@ def test_http_boundaries():
         raise AssertionError("Two free-text options shared one label")
       except ValueError:
         pass
-      # A report whose fields fail validation is refused at publish, so it can never be stored in a
-      # shape that cannot be rendered; before this it published and then broke its own html route.
       broken = root / "broken.md"
       broken.write_text(
         "# Broken\n\nPick one:\n\n- ( ) " + "x" * 201 + "\n", encoding="utf-8"
@@ -1400,12 +1364,6 @@ def test_http_boundaries():
       assert "cannot be rendered" in json.loads(body)["error"]
       # Its source still serves, so the agent can read what the browser could not render.
       assert request("GET", "/api/reports/stale/source")[0] == 200
-      # A submission is limited in characters and its request body in bytes, and the byte limit has
-      # to sit above the character one or the documented maximum stays unreachable over HTTP, which
-      # is what one 32 KiB limit for every POST did, before the note cap set the bound. That
-      # maximum is 50 fields of 2,000 characters,
-      # and no single answer reaches it because a text answer is capped at 2,000, so it takes a whole
-      # wide report. The Store layer already covers the submission; this covers the HTTP path.
       wide = root / "wide-http.md"
       wide.write_text(
         "# Wide\n\n"
@@ -1427,7 +1385,6 @@ def test_http_boundaries():
         "the case has to exceed the limit it is testing"
       )
       assert request("POST", "/api/reports/wide/submit", full, auth)[0] == 201
-      # Owner answers above the former cap are accepted.
       assert (
         request(
           "POST",
@@ -1443,10 +1400,9 @@ def test_http_boundaries():
         )[0]
         == 201
       )
-      # Past the body limit, so HTTP refuses it before the answers are parsed at all.
       over_body = "x" * (1_000_001)
       assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 400
-      # Notes keep the smaller limit; report answers take the wider one.
+      # Notes keep the smaller limit. Report answers take the wider one.
       assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 400
       # The note schema carries no author column: a record is just the message and its receipt.
       note = store.note("plain-note", "no author field")
@@ -1469,9 +1425,6 @@ def test_http_boundaries():
       reopened.close()
       assert "origin" not in columns, "the migration drops a leftover origin column"
 
-      # A report answer the owner sent is stored here, and the save file carries it: the answers
-      # come from the database rather than from the page, so a restore returns what the owner
-      # typed instead of asking for it twice.
       store.submission(
         "saved-answer",
         "first",
@@ -1518,7 +1471,7 @@ def test_http_boundaries():
         for line in Path(written["path"]).read_text(encoding="utf-8").splitlines()
       ]
       lines_by_id = {line["id"]: line for line in saved_lines}
-      # The given lines come first, in the order the writer takes them; the answers come after
+      # The given lines come first, in the order the writer takes them. The answers come after
       # them, from the store, because the page never holds an answer it did not just send.
       assert [line["id"] for line in saved_lines][:2] == ["saved-note", "saved-task"]
       assert written["answers"] == len(
@@ -1659,8 +1612,6 @@ def test_http_boundaries():
       first = json.loads(stamped)["seen_at"]
       assert status == 200 and first
       assert store.state()["reports"][-1]["seen_at"] == first
-      # A later look does not move it: the stamp records when the report was read, and only a
-      # republish, which changes the text, clears it.
       assert (
         json.loads(request("POST", "/api/reports/seen/seen", "{}", auth)[2])["seen_at"]
         == first
@@ -1710,9 +1661,8 @@ def test_http_boundaries():
 
 
 def test_read_names_every_attachment():
-  # A note that carries its own text still names each attachment, its saved path and its
-  # size in the read, so the agent opens the right file without a second state call. A lost
-  # upload keeps its name and path and says the bytes are gone.
+  # A note read lists attachment names, paths, and sizes. The agent opens the right file without another state call.
+  # A lost upload keeps its name and path and says the bytes are gone.
   with tempfile.TemporaryDirectory() as named_dir:
     named = preview.Store(named_dir, create=True)
     named.note_with_uploads(
@@ -1761,8 +1711,6 @@ def test_attachment_size_reads_short():
 
 
 def test_note_owns_one_attachment():
-  # A composed note owns one attachment with the same ID. The original name reaches its receipt,
-  # while the stored bytes use the full note ID and only one inbox note is created.
   with tempfile.TemporaryDirectory() as attached_dir:
     attached = preview.Store(attached_dir, create=True)
     raw = bytes(range(256)) + b"\r\nline two\x00"
@@ -1916,7 +1864,7 @@ def test_upload_filenames_are_unique():
 
 def test_upload_record_migration():
   # Migration backfills existing single-file upload records so their parent note still displays a
-  # filename after this schema introduces note_id; stored bytes are not renamed or removed.
+  # filename after this schema introduces note_id. Stored bytes are not renamed or removed.
   with tempfile.TemporaryDirectory() as old_upload_dir:
     old_db = Path(old_upload_dir) / "state.sqlite3"
     with sqlite3.connect(old_db) as db:
@@ -2078,8 +2026,6 @@ def test_http_note_attachment():
 
 def test_download_queue():
   global app
-  # The same SQLite server accepts browser-mediated jobs but never makes an outbound request. Queue
-  # claims are exclusive, bytes are bounded, and both saved files and failures survive a restart.
   with tempfile.TemporaryDirectory() as queue_dir:
     queue_store = preview.Store(Path(queue_dir) / "state", create=True)
     assert queue_store.state()["fetch_jobs"] == []
@@ -2257,7 +2203,7 @@ def test_download_queue():
       assert preview.Store(queue_store.path.parent).fetch_jobs()[-1]["present"] is False
       assert queue_store.state()["notes"][-1]["id"] == job["id"]
 
-      # A proxy source needs that job's opt-in; failure and retry keep its URL and choice.
+      # A proxy source needs that job's opt-in. Failure and retry keep its URL and choice.
       proxy = queue_store.enqueue_fetch("https://example.org/proxy.zip", True)
       claim = json.loads(request("POST", "/api/fetch-jobs/claim", "{}", auth)[2])["job"]
       assert claim["id"] == proxy["id"] and claim["allow_proxy"]
@@ -2288,7 +2234,7 @@ def test_download_queue():
       )
       assert status == 201 and json.loads(completed)["source"] == "codetabs"
 
-      # The download route refuses a declared excess; the store keeps the upload ceiling.
+      # The download route refuses a declared excess. The store keeps the upload ceiling.
       status, _, _problem = request(
         "POST",
         f"/api/fetch-jobs/{proxy['id']}/result?name=large.bin",
@@ -2445,8 +2391,6 @@ def test_notes_carry_no_seq():
 
 
 def test_task_needs_one_detail():
-  # A task write must leave at least one detail, so a new task without one is refused
-  # and clearing the last detail is refused too.
   with tempfile.TemporaryDirectory() as detail_dir:
     store = preview.Store(detail_dir, create=True)
     try:
@@ -2466,9 +2410,8 @@ def test_task_needs_one_detail():
 
 
 def test_task_refuses_a_note_id_as_its_name():
-  # A task named after the note it answers puts one ID on two things: the board and the
-  # log. The write refuses a note ID and names the fix, so the agent gives the task a
-  # proper name instead.
+  # A task named after the note it answers puts one ID on two things: the board and the log.
+  # The write refuses a note ID and names the fix, so the agent gives the task a proper name instead.
   with tempfile.TemporaryDirectory() as note_id_dir:
     store = preview.Store(note_id_dir, create=True)
     for note_id in ("c6b0af0", "c6b0af0-462e549f387100613fcede90b"):
@@ -2620,8 +2563,6 @@ def test_init_reports_the_state_path():
 
 
 def test_clear_state():
-  # The CLI clear empties every table in place: the schema, the database file and the
-  # agent key survive, and the save file is refreshed to match.
   with tempfile.TemporaryDirectory() as clear_dir:
     clear_root = Path(clear_dir)
     store = preview.Store(clear_root, create=True)
@@ -2730,9 +2671,8 @@ def test_seen_receipts():
 
 def test_read_stamps_on_delivery():
   with tempfile.TemporaryDirectory() as printed_dir:
-    # A CLI read stamps Seen for the IDs it printed, once its output write succeeds;
-    # a failed write stamps nothing, so the next read delivers the note again. Pending
-    # selection is the acknowledgement queue, so a stamped note still prints until answered.
+    # A successful CLI write stamps printed IDs Seen. A failed write leaves the note for the next read.
+    # Pending IDs still print until acknowledgement.
     printed = preview.Store(printed_dir, create=True)
     printed.note("p-1", "printed once")
     printed.submission("answer-2", "form", "REPORT form Answers:\n  Choice: no")
@@ -2770,7 +2710,7 @@ def test_read_stamps_on_delivery():
 
 
 def test_report_agent_seen_receipt():
-  # A read or a poll that delivers an answer stamps the parent report's agent receipt;
+  # A read or a poll that delivers an answer stamps the parent report's agent receipt.
   # the owner's unread stamp stays its own field, and a stale receipt waits for the new answer.
   with tempfile.TemporaryDirectory() as receipt_dir:
     receipt = preview.Store(receipt_dir, create=True)
@@ -2824,15 +2764,14 @@ def test_report_agent_seen_migration():
     migrated = preview.Store(receipt_migration_dir)
     assert migrated.report("old")["agent_seen_at"] is None
     migrated.mark_reports_agent_seen(["old"])
-    # The row keeps the receipt; the state hides it while no answer exists to read.
+    # The row keeps the receipt. The state hides it while no answer exists to read.
     assert migrated.report("old")["agent_seen_at"] is not None
     assert migrated.state()["reports"][0]["agent_seen_at"] is None
 
 
 def test_poll_hold_on_stale_records(capsys):
-  # The hold reads the newest stamp every record kind carries, reads and acks
-  # included. Every record older than one full poll span names a possible
-  # session memory rollback, so the wait ends with the hold line.
+  # The hold uses the newest record stamp, including reads and acknowledgements.
+  # A record older than a poll span may show rollback, so print the hold line.
   with tempfile.TemporaryDirectory() as hold_dir:
     hold = preview.Store(hold_dir, create=True)
     hold.note(
@@ -2869,9 +2808,8 @@ def test_poll_hold_on_stale_records(capsys):
 
 
 def test_ack_of_a_stale_message_prints_the_hold():
-  # An ack that answers a message older than one full poll span may chase a
-  # rolled-back memory, so the receipt carries the hold line; a fresh message
-  # acks quiet.
+  # An acknowledgement older than a poll span may use rolled-back memory, so its receipt includes the hold line.
+  # A fresh acknowledgement is quiet.
   with tempfile.TemporaryDirectory() as ack_dir:
     acked = preview.Store(ack_dir, create=True)
     acked.note("stale-ack", "old message", at="2026-01-01T00:00:00+00:00")
@@ -2909,9 +2847,8 @@ def test_ack_of_a_stale_message_prints_the_hold():
 
 
 def test_bare_task_list_names_the_current_task():
-  # The bare list is the working queue: the upcoming tasks only, with the head of the
-  # queue named as current, the same head the page gives a div of its own. `--full`
-  # still prints every task, finished included, so the order stays readable.
+  # The bare list shows upcoming tasks. It names the first unblocked task current. The page gives that task its own div.
+  # `--full` still prints every task, finished included, so the order stays readable.
   with tempfile.TemporaryDirectory() as bare_dir:
     bare = preview.Store(bare_dir, create=True)
     bare.write_task("done-one", "Finished work", ["Step one"], status="finished")
@@ -2926,8 +2863,6 @@ def test_bare_task_list_names_the_current_task():
     assert full[0] == "Tasks 3"
     assert "done-one" in "\n".join(full)
     assert "current" not in "\n".join(full)
-    # A blocked head never takes the seat: the first unblocked upcoming task is named
-    # current, and the page gives its div to the same one.
     bare.write_task("first", blocked=True)
     held = preview.format_task_list(bare.list_tasks()).splitlines()
     assert "upcoming first" in held[1] and "*" in held[1]
@@ -2948,8 +2883,7 @@ def test_bare_task_list_names_the_current_task():
 
 def test_a_short_id_prefix_names_one_record():
   # A short prefix stands in for the full ID, and the cited form is the first six characters.
-  # A prefix that names two records is a named conflict, and the error lists each match with
-  # its kind so the caller can see which full ID to give instead.
+  # An ID prefix can match two records. The error lists each record and kind. The caller must use a full ID.
   with tempfile.TemporaryDirectory() as short_dir:
     short = preview.Store(short_dir, create=True)
     short.note("abcd123-0289082512830518", "first note")
@@ -2996,9 +2930,8 @@ def test_a_short_id_prefix_names_one_record():
 
 
 def test_short_flags_and_the_details_rename():
-  # The task flags drop the redundant `--task-` head: `--details` is the name now, and
-  # `--task-details` stays an alias so a stored call and the reference table still work.
-  # Every flag also takes a short form, so a routine call costs fewer tokens to type.
+  # `--details` drops the redundant `--task-` head. `--task-details` stays an alias for stored calls and docs.
+  # Every flag has a short form to reduce routine call cost.
   script = str(Path(preview.__file__))
   with tempfile.TemporaryDirectory() as flag_dir:
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": flag_dir}
@@ -3016,8 +2949,6 @@ def test_short_flags_and_the_details_rename():
     for flag in ("--details", "--task-details", "-d"):
       out = cli("task", "flag-task", "Flags", flag, "one\ntwo")
       assert "one" in out and "two" in out, flag
-    # The short forms reach the same places the long forms reach. A finished task refuses
-    # the blocked mark, so the block is proved while the task is still upcoming.
     assert "blocked" in cli("task", "flag-task", "Flags", "-b")
     assert "blocked" not in cli("task", "flag-task", "Flags", "-u")
     out = cli("task", "flag-task", "Flags", "-s", "finished", "-o", "1")
@@ -3092,13 +3023,12 @@ def test_task_list():
         raise AssertionError(message)
       except ValueError:
         pass
-    # The printed task cuts a long detail to save the agent tokens; the stored row keeps
+    # The printed task cuts a long detail to save the agent tokens. The stored row keeps
     # it whole.
     long_detail = "y" * 400
     printed = preview.format_task(tasks_store.write_task("long", "Long", [long_detail]))
     assert f"- {'y' * 200}\u2026" in printed
     assert tasks_store.state()["tasks"]["upcoming"][-1]["details"] == [long_detail]
-    # Clearing the last detail is refused: a task always carries at least one step.
     try:
       tasks_store.write_task("long", details=[""])
       raise AssertionError("Clearing the last detail was accepted")
@@ -3171,7 +3101,7 @@ def test_task_finish_blocked_refused():
 
 
 def test_task_report_link_unblocks_on_answer():
-  # A blocked task names the report it waits on; the owner's answer clears the mark.
+  # A blocked task names the report it waits on. The owner's answer clears the mark.
   with tempfile.TemporaryDirectory() as link_dir:
     link_store = preview.Store(link_dir, create=True)
     source = Path(link_dir) / "pick.md"
@@ -3215,7 +3145,6 @@ def test_report_linked_task_sorts_ahead_in_its_status():
 
 
 def test_task_report_link_refuses_missing_report():
-  # The CLI refuses a link to a report that is not stored, before the task is written.
   with tempfile.TemporaryDirectory() as cli_dir:
     cli_store = preview.Store(cli_dir, create=True)
     cli_store.write_task("keep", "Keep", ["Step one"])
@@ -3267,7 +3196,6 @@ def test_task_amend():
       "docz-archive", "Move to docs/archive/", ["one", "two"], "upcoming", 1
     )
     amend_store.write_task("minify", "Minify the live build", ["Step one"])
-    # A malformed ID is renamed rather than deleted and rewritten, and keeps everything else.
     amend_store.amend_task("docz-archive", "docs-archive")
     fixed = amend_store.write_task("docs-archive")
     assert fixed["title"] == "Move to docs/archive/"
@@ -3306,9 +3234,8 @@ def test_task_amend():
     other.write_task("extra", "Extra", ["Step one"])
     other.import_tasks(preview.parse_state_import(backup), replace=True)
     assert [item["id"] for item in other.list_tasks()] == ["docs-archive", "minify"]
-    # A --replace that meets an invalid record must cost nothing. The delete and the writes are one
-    # transaction, so the list that was there is still there afterwards and nothing is half applied;
-    # deleting first, as this did, lost the whole list to a bad record further down.
+    # An invalid --replace changes nothing: deletion and writes share a transaction.
+    # Delete-first logic once lost the list to a later invalid record.
     before = other.list_tasks()
     for bad, flaw in (
       (
@@ -3391,7 +3318,6 @@ def test_wide_report_fields():
     record = wide_store.submit_report(
       "wide", "note-wide", answers, wide_store.report("wide")["updated_at"]
     )
-    # The combined answers pass the cap on a note, and none of it is dropped.
     assert len(record["text"]) > preview.MAX_NOTE
     assert record["text"].count("x" * 2000) == 50
     stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
@@ -3477,7 +3403,7 @@ def test_shared_save_import():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout
     assert "notes 1" in imported and "answers 1" in imported and "tasks 1" in imported
-    # The import does not overwrite its source; reimport merges by ID without duplicates.
+    # The import does not overwrite its source. Reimport merges by ID without duplicates.
     assert any(
       "title" in json.loads(line)
       for line in mixed.read_text(encoding="utf-8").splitlines()
@@ -3533,8 +3459,8 @@ def test_shared_save_import():
       check=True,
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(mixed_root)},
     ).stdout.strip()
-    # The imported note carries its receipt, so `read` has nothing pending; the receipt is what
-    # makes it acknowledged; reading alone never stamps Seen.
+    # The imported note carries its receipt, so `read` has nothing pending. The receipt is what
+    # makes it acknowledged. Reading alone never stamps Seen.
     assert "0 pending" in read_out or "pending" not in read_out or "Inbox" in read_out
     restored = preview.Store(mixed_root)
     assert [row["id"] for row in restored.state()["notes"]] == ["saved-note"]
@@ -3608,8 +3534,6 @@ def test_restore_import():
     ).stdout
     assert "notes 3" in imported
     rows = {row["id"]: row for row in preview.Store(restore).state()["notes"]}
-    # The receipt comes back as it was written: the original stamp, not the time of the import,
-    # and the state surface shows it cut to seconds.
     assert rows["carried"]["acknowledged_at"] == "2026-09-20T22:05:11.982172+00:00"[:19]
     assert rows["carried"]["ack_kind"] == "reply"
     assert rows["carried"]["ack_text"] == "Fixed in `preview.py`."
@@ -3618,7 +3542,7 @@ def test_restore_import():
     assert rows["carried"]["task_id"] == "carried-task"
     assert rows["plain"]["task_id"] is None
 
-    # A task names the message it answers, and that message then says so; a mistyped message ID is
+    # A task names the message it answers, and that message then says so. A mistyped message ID is
     # refused with no task left behind, because the task and the marker land in one transaction.
     linked = subprocess.run(
       [
@@ -3663,14 +3587,11 @@ def test_restore_import():
     assert rows["plain"]["ack_kind"] is None
     assert rows["plain"]["ack_text"] is None
     assert rows["plain"]["seen_at"] is None
-    # Read state is restored for its own sake: a line seen but never answered comes back seen
-    # and unacknowledged, because a restore that drops it re-lights the whole log.
     assert rows["carried"]["seen_at"] == "2026-09-20T22:00:52"
     assert rows["read"]["seen_at"] == "2026-09-20T22:01:30"
     assert rows["read"]["acknowledged_at"] is None
     assert rows["read"]["ack_kind"] is None
     assert rows["read"]["ack_text"] is None
-    # A partial receipt is refused rather than filled in, and the refusal stores nothing.
     partial = restore / "partial.jsonl"
     partial.write_text(
       json.dumps(
@@ -3807,7 +3728,6 @@ def test_bash_gate():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": gate_dir},
     )
     assert pushed.returncode == 1
-    # A blocked push says what was stopped and what clears it, then the inbox block.
     assert pushed.stdout.startswith("PUSH BLOCKED: "), pushed.stdout
     assert (
       "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
@@ -3880,9 +3800,8 @@ def test_a_second_line_keeps_the_standing_wait(monkeypatch):
 
 
 def test_route_starts_the_run_detached(tmp_path, monkeypatch):
-  # The call returns before the command ends, and the child finishes the record on its
-  # own, so a long run outlives the shell call that started it. The state directory
-  # rides the environment, because the child resolves its own from there.
+  # The starter shell returns before the command. Its child completes the run record.
+  # The state directory travels through the environment for the child's own resolution.
   monkeypatch.setenv("ARENA_PREVIEW_STATE_DIR", str(tmp_path))
   marker = tmp_path / "late.txt"
   code = (
@@ -3979,7 +3898,7 @@ def test_first_blocking_piece_names_the_part_that_blocks():
 
 
 def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
-  # A cd prefix is fine on the writer's line, on the way to a read or a poll; the banned
+  # A cd prefix is fine on the writer's line, on the way to a read or a poll. The banned
   # readers end the quiet-line exemption, so their call blocks instead of riding along.
   clean = "cd /home/user/clankers && arena-preview read"
   poll = "cd /home/user/clankers && arena-preview poll"
@@ -3992,9 +3911,8 @@ def test_quiet_inbox_line_allows_cd_and_blocks_tail_head_grep():
 
 
 def test_gate_bans_timeout_on_poll():
-  # The shell timeout command must not wrap a poll: it kills the wait mid-flight and
-  # the turn loses its listing, so the gate refuses the line even with an empty inbox.
-  # Other inbox calls and clean poll lines stay fine.
+  # A shell timeout kills a poll and drops its listing, so the gate rejects it even for an empty inbox.
+  # Other inbox calls and clean poll lines pass.
   assert preview.poll_timeout_line("timeout 300 arena-preview poll") is True
   assert preview.poll_timeout_line("timeout 1800 arena-preview poll --max 1") is True
   assert (
@@ -4028,9 +3946,8 @@ def test_gate_bans_timeout_on_poll():
 
 
 def test_a_long_run_line_detaches_the_wait():
-  # A long run belongs to the background: the tick starts the line detached under a run
-  # name and says so on stderr, so the run continues while the turn moves on. A line that
-  # only prints the words stays fine.
+  # A long run uses the background. The tick detaches it under a run name and writes status. The turn continues.
+  # A line that only prints the words stays fine.
   assert preview.pr_check_line("gh pr checks 7") is True
   assert preview.pr_check_line("gh pr checks 7 --watch") is True
   assert preview.pr_check_line("cd repo && gh pr checks 7") is True
@@ -4039,8 +3956,6 @@ def test_a_long_run_line_detaches_the_wait():
   assert preview.pr_check_line("echo gh pr checks 7") is False
   assert preview.pr_check_line("gh pr view 7") is False
   assert preview.pr_check_line("gh run list") is False
-  # A flag before the family, a wrapper in front, a substitution and a subshell all name
-  # the same wait, so each is refused too.
   assert preview.pr_check_line("gh -R nemoe7/clankers pr checks 7") is True
   assert preview.pr_check_line("gh --repo nemoe7/clankers pr checks 7") is True
   assert preview.pr_check_line("gh -R nemoe7/clankers run watch 7") is True
@@ -4158,9 +4073,8 @@ def test_a_long_run_line_detaches_the_wait():
 
 
 def test_gate_blocks_a_cd_line_past_the_threshold():
-  # cd is fine on the line, but the count gate still holds it: with a pending note past
-  # the threshold a plain cd line meets READ INBOX NOW, and the block names no command,
-  # because cd is never the noise.
+  # cd is fine on the line, but the count gate still holds it: with a pending note past the threshold a
+  # plain cd line meets READ INBOX NOW, and the block names no command, because cd is never the noise.
   with tempfile.TemporaryDirectory() as cd_dir:
     cd_store = preview.Store(cd_dir, create=True)
     cd_store.note("cd-note", "Pending work")
@@ -4186,7 +4100,7 @@ def test_gate_blocks_a_cd_line_past_the_threshold():
 
 
 def test_gate_hint_names_the_banned_tools_without_cd():
-  # A blocked call that runs grep, head or tail hears which commands to drop; cd is fine
+  # A blocked call that runs grep, head or tail hears which commands to drop. Cd is fine
   # on the line, so the hint never names it, and a clean line hears the plain block alone.
   with tempfile.TemporaryDirectory() as hint_dir:
     hint_store = preview.Store(hint_dir, create=True)
@@ -4226,7 +4140,7 @@ def test_gate_hint_names_the_banned_tools_without_cd():
 
 
 def test_dispatch_reminder():
-  # Every dispatch carries a reminder without changing stdout; only a delivered read
+  # Every dispatch carries a reminder without changing stdout. Only a delivered read
   # marks a note seen.
   with tempfile.TemporaryDirectory() as reminder_dir:
     reminder_store = preview.Store(reminder_dir, create=True)
@@ -4398,7 +4312,7 @@ def test_reminder_rotation():
     tail = tail_at(offset + 2)
     assert result.stderr.strip() == f"calls 2 {pending}{tail}"
     # A read does not erase the calls since the first unread message. Only a fresh backlog
-    # resets the tally; a message landing on an unacked pile leaves it running.
+    # resets the tally. A message landing on an unacked pile leaves it running.
     rotate_store.read()
     assert rotate_store.reminder() == (f"calls 2 {pending}{tail_at(offset + 3)}")
     # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
@@ -4499,8 +4413,6 @@ def test_report_unread_markers():
     assert "submitted answers" in result.stderr
     assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
     with marker_store.connect() as db, db:
-      # The answer is backdated on purpose: any answer, however old, keeps needs_answer false,
-      # and the republish that once had to preserve it is refused while answers exist.
       db.execute(
         "UPDATE submissions SET at = '2020-01-01T00:00:00' WHERE id = 'answer'"
       )
@@ -4519,7 +4431,7 @@ def test_report_unread_markers():
 
 
 def test_report_ever_seen_migration():
-  # An older reports table gains ever_seen; the backfill marks a stamped report opened so a
+  # An older reports table gains ever_seen. The backfill marks a stamped report opened so a
   # republish after migration still hides the tab dot for it while a fresh report keeps it.
   with tempfile.TemporaryDirectory() as old_report_dir:
     old_db = Path(old_report_dir) / "state.sqlite3"
@@ -4713,7 +4625,7 @@ def test_poll_inbox():
 
 
 def test_poll_blocked_tasks():
-  """An unblocked upcoming task ends a poll at once; a blocked one lets it wait."""
+  "An unblocked upcoming task ends a poll at once. A blocked one lets it wait."
   with tempfile.TemporaryDirectory() as poll_dir:
     store = preview.Store(poll_dir, create=True)
     saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
@@ -4814,7 +4726,6 @@ def test_skip_poll():
     saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
     try:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
-      # A fresh state waits, and the listing says no skip is armed.
       assert store.state()["skip_poll"] is None
       assert store.read()["skip_poll"] is None
       assert store.skip_poll_requested() is False
@@ -4897,7 +4808,7 @@ def test_skip_poll():
 
 
 def test_a_live_run_holds_the_skip_poll_press():
-  """A detached run with no exit holds the press; the poll waits and the stamp stays."""
+  "A detached run with no exit holds the press. The poll waits and the stamp stays."
   with tempfile.TemporaryDirectory() as hold_dir:
     store = preview.Store(hold_dir, create=True)
     printed = []
@@ -4950,7 +4861,7 @@ def test_a_live_run_holds_the_skip_poll_press():
 
 
 def test_turn_end_marker():
-  """A poll that ends the turn marks it; the next agent call and a live turn clear the mark."""
+  "A poll that ends the turn marks it. The next agent call and a live turn clear the mark."
   with tempfile.TemporaryDirectory() as end_dir:
     store = preview.Store(end_dir, create=True)
     printed = []
@@ -4998,7 +4909,7 @@ def test_turn_end_marker():
 
 
 def test_skip_poll_clears_on_owner_message():
-  """A note or a report answer clears an armed skip; the poll delivers it instead."""
+  "A note or a report answer clears an armed skip. The poll delivers it instead."
   with tempfile.TemporaryDirectory() as clear_dir:
     store = preview.Store(clear_dir, create=True)
     store.request_skip_poll()
@@ -5309,7 +5220,7 @@ def test_import_accepts_a_newer_snapshot():
 
 
 def test_import_replaces_the_live_state_by_default():
-  """An import replaces the live notes, answers, reports and tasks; `merge` keeps them."""
+  "An import replaces the live notes, answers, reports and tasks. `merge` keeps them."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("live", "Live message", at="2026-10-04T11:42:48")
@@ -5373,7 +5284,6 @@ def test_agent_key_route_records_the_key_for_the_page():
     state = json.loads(request("GET", "/api/state")[2])["agent_key"]
     assert state["key"] == key
     assert state["host"] == "https://arena-proxy.example.ts.net"
-    # A host with a path is refused, and the stored record stands.
     status, _, body = request(
       "POST",
       "/api/key",
@@ -5447,7 +5357,7 @@ def test_quiet_note_route():
 
 
 def test_skip_poll_route():
-  """POST /api/skip-poll arms the page's skip; the state and the poll report it."""
+  "POST /api/skip-poll arms the page's skip. The state and the poll report it."
   global app
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(Path(directory) / "arena-preview", create=True)
@@ -5562,7 +5472,7 @@ def test_key_command_reads_the_recorded_key():
 
 
 def test_expired_agent_key_tells_the_agent_once():
-  """An old key record posts one quiet note; a fresh record stays silent and a read prints it."""
+  "An old key record posts one quiet note. A fresh record stays silent and a read prints it."
   with tempfile.TemporaryDirectory() as state_dir:
     script = str(Path(preview.__file__))
     store = preview.Store(state_dir, create=True)
@@ -5655,12 +5565,7 @@ def test_report_sources_ride_in_the_saved_state():
 
 
 def test_removed_report_leaves_nothing_in_the_save():
-  """A removed report leaves nothing in the ndjson, its answer lines included.
-
-  The report line already went with the report; the answer line stayed, so a save still
-  carried the id of a report the owner had unpublished.
-  The database keeps the answer as the agent's read history; the save does not.
-  """
+  "A removed report leaves no report or answer lines in a state save. The database keeps the answer as inbox history."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -5707,10 +5612,7 @@ def test_unpublish_moves_the_state_stamp():
 
 
 def test_unpublish_waits_for_the_owner_to_see_the_ack():
-  """An unseen report holds the removal until seen.
-
-  The new guard holds until the report has been seen, not a timed view window.
-  """
+  "An unseen report blocks removal until the owner views it. The guard uses a view stamp, not a timer."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -5744,10 +5646,7 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
 
 
 def test_unpublish_waits_out_a_fresh_view():
-  """The agent's unpublish holds until seen; owner's press passes it.
-
-  The new guard holds until the report has been seen, not a timed view window.
-  """
+  "The agent cannot remove a fresh report until the owner views it. A view stamp releases the guard."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -5814,12 +5713,8 @@ def test_unpublish_route_holds_and_the_view_route_stamps():
 
 
 def test_ack_reads_a_file_when_the_text_carries_backticks():
-  """An ack takes its text from a file, so the shell never quotes it.
-
-  A backtick inside double quotes runs as a command, so the shell eats the ticks before the
-  tool sees them. The file form carries the text as it stands, backticks
-  and quotes included, and one source alone is required.
-  """
+  """An acknowledgement reads text from a file when it contains backticks. The file preserves backticks and quotes
+  without shell expansion. Require exactly one text source."""
   script = str(Path(preview.__file__))
   with tempfile.TemporaryDirectory() as ack_dir:
     preview.Store(ack_dir, create=True)
@@ -5852,7 +5747,6 @@ def test_ack_reads_a_file_when_the_text_carries_backticks():
       env=env,
     )
     assert preview.Store(ack_dir).state()["notes"][1]["ack_text"] == "Kept `as is`"
-    # Two sources, or none, are refused before anything is written.
     both = subprocess.run(
       [
         sys.executable,
@@ -5930,8 +5824,6 @@ def test_serve_warning_reads_the_port():
 
 
 def test_task_detail_steps():
-  # A task detail is one step per line: a block splits on its line breaks, and a wall of
-  # text is refused before anything is written.
   script = str(Path(preview.__file__))
   with tempfile.TemporaryDirectory() as tasks_dir:
     preview.Store(tasks_dir, create=True)
@@ -6176,7 +6068,7 @@ def test_commit_trap_skips_a_removed_citation():
 
 
 def test_commit_trap_matches_a_kebab_id_on_its_full_form_only():
-  """A report ID matches whole; its head is a word fragment, so it stays out."""
+  "A report ID matches whole. Its head is a word fragment, so it stays out."
   with tempfile.TemporaryDirectory() as directory:
     state = Path(directory, "state")
     state.mkdir()
@@ -6325,7 +6217,7 @@ EGRESS_WARNING = (
 
 
 def test_egress_warning_names_a_blocked_host():
-  """A fetch to an off-allowlist host is named, with the tool that reaches it."""
+  "A fetch to a blocked host names the tool that can reach it."
   assert preview.egress_warning("curl -sS https://httpbin.org/get") == (
     EGRESS_WARNING.format(host="httpbin.org")
   )

@@ -1,20 +1,4 @@
-"""Build compact preview assets and scripts from their readable refs sources.
-
-The readable sources live in `skills/refs/arena-skill/`. Both distributed
-copies carry minified JavaScript, CSS, HTML and Python, each budgeted in README.md.
-Markdown compression is editorial, never part of this build.
-
-Install the pinned npm tools with `npm ci` and the build-only Python dependency with
-`python -m pip install python-minifier==3.3.0`. CI builds with Python 3.11. Generated
-Python must retain its parsed tree and parse as Python 3.10 before any output is written.
-
-Usage:
-  python maintenance/minify/minify.py            # build in memory, report drift, write nothing
-  python maintenance/minify/minify.py --update   # write the minified copies
-
-`check.py` gates each live file's size through the README table. This script reports drift,
-which the budget cannot see. Run it after any change to a refs asset or script.
-"""
+"""Build compact preview assets, validate them, and repair distributed-copy drift."""
 
 from __future__ import annotations
 
@@ -71,7 +55,7 @@ def minify(source: Path, binary: str, flags: tuple[str, ...]) -> str:
   )
 
   if result.returncode or result.stderr.strip():
-    # A warning is a failure here. clean-css reported an unterminated string once by dropping every
+    # A warning is a failure here. Clean-css reported an unterminated string once by dropping every
     # rule it swallowed, which a size budget cannot see and a browser may hide (commit 99b126e).
     raise RuntimeError(
       f"{binary} on {source.name}:\n{result.stderr.strip() or 'failed'}"
@@ -100,10 +84,7 @@ def strip_string_statements(tree):
 
 
 def check_python(source: str, built: str, filename: str) -> None:
-  """Keep the Python 3.10 syntax floor, every parsed statement, name and annotation.
-
-  Bare string statements are compared away, because the build removes them.
-  """
+  "Check Python 3.10 syntax and parsed-tree equality. Ignore bare string statements because the build removes them."
   before = ast.parse(source, filename, feature_version=(3, 10), type_comments=True)
   after = ast.parse(built, filename, feature_version=(3, 10), type_comments=True)
   if ast.dump(strip_string_statements(before)) != ast.dump(
@@ -197,7 +178,7 @@ def check_stylesheet(built: str) -> None:
 
 
 def build() -> dict[str, tuple[str, str]]:
-  """Build and validate all outputs before the first write."""
+  "Build and validate all outputs before the first write."
   sources = {}
 
   for name, binary, flags in JOBS:

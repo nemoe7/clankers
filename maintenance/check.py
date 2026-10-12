@@ -19,9 +19,8 @@ from markdown_it import MarkdownIt
 ROOT = Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 SKILLS = ROOT / "skills"
-# Vendored agent-facing skills live only under `.agents/skills/`, which this script
-# deliberately never reads: they are not owner skills, so they are neither checked
-# here nor listed in `skills/README.md`.
+# Vendored agent-facing skills live only under `.agents/skills/`, which this script deliberately never
+# reads: they are not owner skills, so they are neither checked here nor listed in `skills/README.md`.
 RULES = ROOT / "rules"
 WORKFLOWS = ROOT / "workflows"
 
@@ -52,11 +51,8 @@ EXPECTED_BUDGETS = {
   "skills/arena-skill/SKILL.md": "o200k_base",
   "skills/arena-skill/README.md": "o200k_base",
   "skills/arena-skill/references/REFERENCE.md": "o200k_base",
-  # The table covers the arena suite: ARENA.md and every arena-skill file, one row per file,
-  # except the proxies. The shipped assets and scripts keep byte budgets from
-  # `maintenance/minify/minify.py`, so growth fails this check until the table is updated on
-  # purpose. The `.agents/skills/` twins are byte-identical by construction, and this script
-  # never reads that tree.
+  # This table lists the arena suite except proxies. Minify budgets reject asset and script growth until a table update.
+  # This script ignores byte-identical `.agents/skills/` twins.
   "skills/arena-skill/assets/app.js": "UTF-8 file size",
   "skills/arena-skill/assets/index.html": "UTF-8 file size",
   "skills/arena-skill/assets/style.css": "UTF-8 file size",
@@ -101,11 +97,8 @@ EXPECTED_LINTED = (
   "rules/wenyan/README.md",
 )
 
-# Where the documented markdownlint file count lives, and how to find it. Root AGENTS.md
-# carries the same claim in its own words and is deliberately left out of the check: it is an
-# agent-facing file, and the owner's ruling keeps this script off those.
-# Prose covered by the ASD-STE100 linter. Add a path only when the linter reports 0 violations
-# for it. CI runs `check.py --ste` against this same list, so the local gate and CI agree.
+# This comment identifies the documented markdownlint count. Root AGENTS.md is agent-facing and excluded.
+# Add a path only when it has no STE violations. CI and `check.py --ste` use this same list.
 STE_DOCS = (
   "userscripts/README.md",
   "maintenance/README.md",
@@ -144,8 +137,8 @@ KILO_PAIRS = ("plan.md", "code.md", "debug.md")
 # and `More about you`, each capped at 1,500 characters.
 CHATGPT_FIELDS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt")
 
-# Token counts ride the npm package gpt-tokenizer, which ships its own ranks and
-# measures offline, so no cache seeding is needed.
+# gpt-tokenizer ships its ranks and measures offline.
+# It needs no cache seeding.
 _NODE_CWD = Path(__file__).resolve().parent.parent
 _TOKEN_COUNT_SCRIPT = """
 const { encode } = require("gpt-tokenizer/encoding/o200k_base");
@@ -678,9 +671,8 @@ def check_system_prompt_parity(errors: list[str]) -> None:
       errors.append(f"{label}: sections absent from refs: {added}")
       continue
 
-    # A caption may repeat a section name, so refs "Prompt transparency" is both a
-    # section and a worked-example caption. Compare only the unambiguous names both
-    # copies carry, so a compressed-away caption does not read as a divergence.
+    # A caption may repeat a section name, so refs "Prompt transparency" is both a section and a worked-example caption.
+    # Compare only the unambiguous names both copies carry, so a compressed-away caption does not read as a divergence.
     repeated = {head for head in ref_names if ref_names.count(head) > 1}
     shared = [
       head

@@ -36,7 +36,7 @@ jobs:
 
       - name: Install actionlint
         env:
-          # The release tarball carries the pinned tool; the workflow needs no Go toolchain.
+          # The release tarball carries the pinned tool. The workflow needs no Go toolchain.
           ACTIONLINT_VERSION: "1.7.12"
         run: |
           set -eu
@@ -58,7 +58,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Audit The Workflows
-        # Medium and above fail the run; the pinned policy accepts major-version action tags.
+        # Medium and above fail the run. The pinned policy accepts major-version action tags.
         run: zizmor --config .github/zizmor.yml --min-severity=medium --format github .github/workflows
 
   audit:

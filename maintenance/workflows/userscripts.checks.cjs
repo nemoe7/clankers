@@ -1,7 +1,4 @@
-// The Arena and ChatGPT bundles carry no checks of their own. Outside a browser each feature
-// publishes its helpers through `exposeChecks`, and this file drives them, so the installed
-// scripts ship runtime code only.
-//
+// The Arena and ChatGPT bundles carry no checks of their own. Outside a browser each feature publishes its helpers through `exposeChecks`, and this file drives them, so the installed scripts ship runtime code only.
 // Run: node --test maintenance/workflows/userscripts.checks.cjs
 
 const fs = require("node:fs");
@@ -78,8 +75,6 @@ function checkLogging(api, menus) {
       ran.push("save");
     });
     assert.equal(list.length, 1);
-    // The registry reopens the list in module order, so the entry is found by its label rather
-    // than by sitting last in the array.
     var registered = menus.filter(function (item) {
       return item.label === "State — force save";
     }).pop();
@@ -168,7 +163,7 @@ function checkPromptFill(api) {
     [slugFromOwnerRepo("a/"), null],
     [slugFromOwnerRepo("/b"), null],
     [slugFromOwnerRepo("a/b/c"), null],
-    // The repo name leads the fetched template; the rules file follows it when available.
+    // The repo name leads the fetched template. The rules file follows it when available.
     [prompt.split("\n")[0],
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
     [prompt.includes(promptFillText), true],
@@ -357,7 +352,7 @@ function checkOpenSteering(api) {
       "clankers"), "clankers - Steering :8000"],
     [steeringRowText([["Website", ":3000"], ["arena - preview", ":8000"]], "clankers"),
       "arena - preview :8000"],
-    // A Start row is a transcript card; a click on one opens nothing, so it never counts.
+    // A Start row is a transcript card. A click on one opens nothing, so it never counts.
     [steeringRowText([["Start clankers - Steering", ":8000"]], "clankers"), null],
     [steeringRowText([["Arena preview", ":8000", "Switch preview port"]], null), null],
     [steeringRowText([["Arena preview", ":8000", "Switch preview port"],
@@ -609,9 +604,8 @@ function checkTranscriptTrim(api) {
     // The newest root keeps exactly its K newest rows: the ten oldest hide and empty.
     [trimPlan(logDoc([messageRoot([rowBox(rows(30))])], true), "20"), 10],
     [rootRowsRemoved, 30],
-    // Cut rows stay as hidden empty shells: the page reinstates removed nodes, so the
-    // trim hides and empties instead of deleting; the older root hides in full while
-    // the newest root keeps its 20 newest rows.
+    // Cut rows stay as hidden empty shells: the page reinstates removed nodes, so the trim hides and empties instead of deleting.
+    // The older root hides in full while the newest root keeps its 20 newest rows.
     [cleared(rootRows[0][24]), true],
     [rootRows[0][24].parentElement !== null, true],
     [rootNodes[0].hiddenClass, true],
@@ -629,7 +623,7 @@ function checkTranscriptTrim(api) {
     [emptyAction.removed, false],
     [emptyRoot.hiddenClass, false],
     [emptyRoot.parentElement !== null, true],
-    // Two older roots empty and hide; the newest keeps all of its 25 rows.
+    // Two older roots empty and hide. The newest keeps all of its 25 rows.
     [globalRemoved, 45],
     [cleared(globalRows[0][24]), true],
     [globalNodes[0].hiddenClass, true],
@@ -660,16 +654,15 @@ function checkTranscriptTrim(api) {
     [globalNodes[0].parentElement !== null, true],
     [globalNodes[1].parentElement !== null, true],
     [globalNodes[2].parentElement !== null, true],
-    // No stop control means no turn, and the trim aborts; it runs only while a turn
-    // is up. A question card aborts too; the pulsing icon no longer gates anything.
+    // No stop control means no turn, and the trim aborts. It runs only while a turn
+    // is up. A question card aborts too. The pulsing icon no longer gates anything.
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function () { return null; } }), false],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === "svg.animate-pulse" ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return []; }, querySelector: function (selector) { return selector === QUESTION_SELECTOR ? {} : null; } }), false],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Stop generating"; } }]; }, querySelector: function () { return null; } }), true],
     [isSettled({ querySelectorAll: function () { return [{ getAttribute: function () { return "Send"; } }]; }, querySelector: function () { return null; } }), false],
-    // Quiet means the whole page holding still, not the row count alone: the page
-    // streams into existing rows after the last row lands, so a fresh mutation
-    // keeps the trim waiting even while the count holds.
+    // Quiet means the whole page holding still, not the row count alone: the page streams into existing
+    // rows after the last row lands, so a fresh mutation keeps the trim waiting even while the count holds.
     [quietReady({ rows: null, rowsAt: 0, mutationAt: 0 }, 10, 100000), false],
     [quietReady({ rows: 10, rowsAt: 100000, mutationAt: 0 }, 10, 100500), false],
     [(function () {
@@ -786,7 +779,7 @@ function checkHideComposer(api) {
 }
 
 function checkTabTitle(api) {
-  // The bundle hooks change its state; the cases compare the call result to null.
+  // The bundle hooks change its state. The cases compare the call result to null.
   function expireHold() {
     api.expireHold();
     return null;
@@ -1104,9 +1097,8 @@ function checkTabTitle(api) {
       },
     };
   }
-  // The waiting line is a spinner canvas beside the rotating monospace text. An action row
-  // carries the very same canvas as its own icon, so the canvas alone proves nothing: the
-  // row must hold the text block too, beside the icon.
+  // The waiting line is a spinner canvas beside the rotating monospace text.
+  // An action row also uses the spinner canvas as its icon. The canvas alone does not prove an action row. Require text beside it.
   function pageTree(text, children) {
     var el = {
       text: text || "",
@@ -1326,7 +1318,7 @@ function checkTabTitle(api) {
     [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [expireHold(), null],
     [desiredTitle(quietPage), TITLE_PREFIX + "clankers" + vtag],
-    // A drifted stop label still opens the gate; the exact wording does not.
+    // A drifted stop label still opens the gate. The exact wording does not.
     [stopSignal(looseStopDoc()), true],
     [stopSignal(page([], { stop: false })), false],
     // The waiting line is a turn mark too: no control, no hourglass.
@@ -1404,7 +1396,7 @@ function checkTabTitle(api) {
     [syncTitle(syncChatPage), true],
     [syncChatPage.title, TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     [syncTitle(syncChatPage), false],
-    // The hold is still warm from the mark above; the quiet write needs its own window.
+    // The hold is still warm from the mark above. The quiet write needs its own window.
     [expireHold(), null],
     [syncTitle(quietPage), true],
     [quietPage.title, TITLE_PREFIX + "clankers" + vtag],
@@ -1600,9 +1592,8 @@ function checkHideElements(api) {
       return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
     },
   };
-  // One document answers every selector, so the sync pass itself is under test:
-  // a target left out of syncDocument leaves its element unhidden here. The library
-  // answers twice, once for the collapsed rail and once for the open nav list.
+  // One document answers every selector, so the sync pass itself is under test: a target left out of syncDocument leaves its element unhidden here.
+  // The library answers twice, once for the collapsed rail and once for the open nav list.
   var fullDoc = {
     querySelector: function (selector) {
       if (selector === MODE_TOGGLE_SELECTOR) return modeToggle;
@@ -1738,7 +1729,6 @@ function checkAutoThink(api) {
 
 function checkKeepAwake(api) {
   var wakeLockPlan = api.wakeLockPlan;
-  // The lock is asked for only while a turn runs on a visible page, and dropped once it ends.
   assert.equal(wakeLockPlan(true, false, true), "acquire");
   assert.equal(wakeLockPlan(true, true, true), "none", "A held lock stays");
   assert.equal(wakeLockPlan(true, false, false), "none", "A hidden page cannot take the lock");
@@ -1829,9 +1819,8 @@ function checkStateDownload(api, session) {
   var unstamped = stateDownload(repo, branch, null, counts, "");
   assert.equal(unstamped.kind, "error");
   assert.match(unstamped.message, /carries no stamp/);
-  // The approved pair: the newest note stamp and the newest task stamp. A rollback leaves the
-  // older records behind while one new note moves the state stamp forward, so the pair refuses
-  // that write and the owner's file keeps the newer state.
+  // The approved pair: the newest note stamp and the newest task stamp.
+  // A rollback leaves older records while a new note moves the state stamp. The pair rejects that write. The owner keeps the newer state.
   var memory = stateMemory("2026-10-05T20:00:00", {
     note: "2026-10-05T20:00:00",
     task: "2026-10-05T19:00:00",
@@ -1899,8 +1888,6 @@ function checkStateDownload(api, session) {
     { note: "2026-10-06T06:12:33", task: "2026-10-06T06:00:00" },
   );
   assert.equal(pairForward.kind, "download");
-  // One note deleted alone moves the note stamp back and leaves the state stamp still, so the
-  // write is unchanged, never a refusal and never a rewrite.
   var deletion = stateDownload(
     repo,
     branch,
@@ -1962,14 +1949,13 @@ function checkStateDownload(api, session) {
     stateFileName(scope.repo, scope.branch, "2026-10-06T06:12:33", counts),
     "clankers-arena-01a0fd4f-clankers-20261006T061233-n12-t4.ndjson",
   );
-  // The server stamp carries the timezone; the name keeps the seconds alone.
+  // The server stamp carries the timezone. The name keeps the seconds alone.
   assert.equal(
     stateFileName(scope.repo, scope.branch, "2026-10-06T08:33:57+00:00", null),
     "clankers-arena-01a0fd4f-clankers-20261006T083357.ndjson",
   );
-  // An ongoing session renders the repository as a bare chip without its owner, so a
-  // slash-less slug-like span in the bar still names the repository for the picker and
-  // the fill, instead of falling through to a header session token.
+  // An ongoing session renders the repository as a bare chip without its owner, so a slash-less slug-like span in the
+  // bar still names the repository for the picker and the fill, instead of falling through to a header session token.
   var bareBar = {
     querySelectorAll: function (selector) {
       if (selector === "span.truncate") return [{ textContent: "daedalus" }];
@@ -2022,9 +2008,8 @@ function checkStateDownload(api, session) {
     title: "Arena | clankers",
   };
   assert.equal(readSlug(branchFirstDoc), "clankers");
-  // A selected diff branch puts the session branch beside the repository chip, and the tab
-  // title stays bare on that page. The branch wears the platform namespace, so the chip read
-  // still names the repository with nothing else to fall back on.
+  // A selected diff branch puts the session branch beside the repository chip, and the tab title stays bare on that page.
+  // The branch wears the platform namespace, so the chip read still names the repository with nothing else to fall back on.
   var diffBranchDoc = {
     querySelector: function () { return null; },
     querySelectorAll: function (selector) {
@@ -2058,7 +2043,7 @@ function checkStateDownload(api, session) {
   };
   assert.equal(readSlug(staleTitleDoc), "daedalus");
   // The header leaves the page while a dialog holds it, so the fill's saved slug names the
-  // repository; the branch stays empty.
+  // repository. The branch stays empty.
   session.value = "clankers";
   assert.equal(stateRepo({ querySelector: function () { return null; } }), "clankers");
   assert.equal(
@@ -2078,25 +2063,24 @@ function checkStateDownload(api, session) {
   assert.equal(downloadRoute(true), "manager");
   assert.equal(downloadRoute(false), "link");
   assert.equal(stateDownloadRoute(), "manager");
-  // A title without the arrow falls back to the href; a page without the bar stays empty.
+  // A title without the arrow falls back to the href. A page without the bar stays empty.
   branchLink.getAttribute = function (name) {
     if (name === "href") return "https://github.com/other/repo/tree/feat%2Fx";
     return "";
   };
   assert.equal(stateScope(doc).branch, "feat/x");
-  // The structure crosses the VM realm, so it is compared as JSON.
   assert.equal(
     JSON.stringify(stateScope({ querySelector: function () { return null; } })),
     JSON.stringify({ repo: "", branch: "" }),
   );
-  // The picker call runs on the page window; a realm without one yields no picker rather
+  // The picker call runs on the page window. A realm without one yields no picker rather
   // than a throw, which is what keeps the download route alive.
   assert.equal(pagePicker(), null);
   // The chosen file keeps its own name, so the save line names the file the write reached.
   assert.equal(writtenName({ name: "clankers-state.ndjson" }, "generated.ndjson"), "clankers-state.ndjson");
   assert.equal(writtenName({}, "generated.ndjson"), "generated.ndjson");
   assert.equal(writtenName(null, "generated.ndjson"), "generated.ndjson");
-  // The bar leaves the page while a dialog holds it; with no saved slug either, the title
+  // The bar leaves the page while a dialog holds it. With no saved slug either, the title
   // still carries the repository this script wrote.
   session.value = null;
   assert.equal(
@@ -2107,10 +2091,8 @@ function checkStateDownload(api, session) {
     stateRepo({ querySelector: function () { return null; }, title: "ChatGPT" }),
     "",
   );
-  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish;
-  // the conversation header still opens with the repository name, and its first word is the
-  // repository. That read comes before the tab title.
-  // The tab title is the reliable read, so it comes before the greppier header read.
+  // The Arena UI moves the GitHub integration around, so the repo/branch span can vanish. The conversation header still opens with the repository name, and its first word is the repository.
+  // That read comes before the tab title. The tab title is the reliable read, so it comes before the greppier header read.
   var headerSpan = { textContent: "clankers read ARENA.md AGENTS.md in full before your first edit" };
   var headerDoc = {
     querySelector: function () { return null; },
@@ -2136,12 +2118,6 @@ function checkStateDownload(api, session) {
   headerSpan.textContent = "clankers read ARENA.md";
   assert.equal(stateRepo(headerOnlyDoc), "saved");
   session.value = null;
-  // A menu click grants no browser gesture, so the automatic path writes the stamped
-  // download and the pick stays a manual action.
-  // No file is set: an automatic tick blocks instead of dropping a stamped download on the
-  // owner. A deferred save never opens the picker, because the browser needs the
-  // press itself and a save that waited on the network has spent it: it asks for
-  // the choose entry instead. A manual press keeps the download where no picker exists.
   assert.equal(stateAction("pick", false), "block");
   assert.equal(stateAction("pick", true), "hint");
   assert.equal(stateAction("download", false), "block");
@@ -2287,8 +2263,6 @@ function checkStateDownload(api, session) {
     );
   });
   assert.deepEqual(leftovers, [], compared.join("\n"));
-  // A remembered file belongs to the scope that chose it: the name carries the scope, and a
-  // handle outside the current scope is refused so one repo never writes into another's file.
   assert.equal(handleMatchesScope({ name: "clankers-main.ndjson" }, "clankers", "main"), true);
   assert.equal(
     handleMatchesScope({ name: "clankers-main-20261006T061233-n12-t4.ndjson" }, "clankers", "main"),
@@ -2299,12 +2273,10 @@ function checkStateDownload(api, session) {
   assert.equal(handleMatchesScope({ name: "my-backup.ndjson" }, "clankers", "main"), false);
   assert.equal(handleMatchesScope(null, "clankers", "main"), false);
   assert.equal(handleMatchesScope({}, "clankers", "main"), false);
-  // An unknown scope adopts nothing: the fallback name alone passes, so the owner is asked again.
   assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "", ""), false);
   assert.equal(handleMatchesScope({ name: "arena.ndjson" }, "", ""), true);
-  // A save moves when the session branch is unknown, or when the preview URL differs from the
-  // one that last wrote this scope. A moved save that would write asks before it writes; a
-  // forced save never asks.
+  // A save moves when the session branch is unknown, or when the preview URL differs from the one that last wrote this scope.
+  // A moved save that would write asks before it writes. A forced save never asks.
   assert.equal(saveMoved("", "", "https://p.example"), true, "No branch moves the save");
   assert.equal(saveMoved("arena/x", "", "https://p.example"), false, "A first write does not move");
   assert.equal(saveMoved("arena/x", "https://p.example", "https://p.example"), false);
@@ -2335,7 +2307,7 @@ function checkStateDownload(api, session) {
   assert.equal(overwriteAsk(true, { kind: "download" }, false, false), false, "No file to protect");
   assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson with this state\?$/);
   console.log("ok state download 32");
-  // The session bar names an unpushed branch in a titled span; a pushed branch also gets an
+  // The session bar names an unpushed branch in a titled span. A pushed branch also gets an
   // anchor with a /tree/ href. The repository anchor carries no branch.
   const element = (tag, title, href) => ({
     tag: tag,

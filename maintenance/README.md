@@ -127,9 +127,11 @@ python3 maintenance/lint_prose.py
 
 `maintenance/check.py` runs the same lint, so the local gate and CI cover it.
 
-The prose linter runs the ste-lint rules over the covered scope: `docs/`, every `README.md`, and `CHANGELOG.md`. It also runs them on Python comments in `maintenance/` and `rules/`, and on non-metadata comments in `userscripts/`.
+The prose linter runs the ste-lint rules over the covered scope: `docs/`, every `README.md`, and `CHANGELOG.md`. It also checks each tracked first-party code comment and Python docstring. It reads `.bat`, `.cjs`, `.css`, `.html`, `.ini`, `.js`, `.jsonc`, `.py`, `.sh`, `.svg`, `.toml`, and `.yml` files, plus `Dockerfile` and `arena-preview`.
 
-It skips a userscript metadata header. Every other userscript comment block has a two-line limit. `CHANGELOG.md` bullets cap at 3 sentences. `skills/` stays out of the target set.
+Vendored code stays outside the code target. Required userscript metadata stays, and the linter checks prose in `@name` and `@description`. Every ordinary code-comment block has a two-line limit. Required directive markers stay outside that limit.
+
+`CHANGELOG.md` bullets cap at 3 sentences.
 
 ## Update README measurements
 

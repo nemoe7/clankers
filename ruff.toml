@@ -1,8 +1,8 @@
 required-version = "0.16.6"
 indent-width = 2
 
-# Vendored third-party code is copied verbatim, so it is not ours to reformat or lint.
-# Generated Python is checked by minify.py; lint and format its readable refs instead.
+# The project does not own vendored third-party code. Do not reformat or lint it.
+# Check generated Python through minify.py. Lint and format its readable refs.
 extend-exclude = [
   ".agents/skills",
   "skills/arena-skill/scripts/preview.py",
@@ -10,9 +10,8 @@ extend-exclude = [
 
 [lint]
 ignore = ["BLE001", "S110"]
-# E501 is not in ruff's default rule set, and the formatter's own `line-length` must stay where
-# `ruff format` put it. The 120-character limit rides the pycodestyle setting alone, so lint and
-# format keep their separate widths.
+# E501 is not in ruff's default rule set, and the formatter's own `line-length` must stay where `ruff format` put it.
+# The 120-character limit rides the pycodestyle setting alone, so lint and format keep their separate widths.
 extend-select = ["E501"]
 extend-safe-fixes = ["C408", "PERF102", "RUF059"]
 

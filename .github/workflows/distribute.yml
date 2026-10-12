@@ -1,11 +1,5 @@
-# Dispatch-only distribution of ARENA.md, the skills and the Gemini release workflow.
-# One job walks the union of the two target lists and leaves exactly one commit per
-# target repository. The lists stay independent: the Arena files reach only the Arena
-# targets, and the Gemini workflow reaches only the Gemini targets.
-# CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write
-# on the Gemini targets.
-# Delivery is not activation: each session must start its own preview, and GitHub
-# activates a copied workflow on the target default branch.
+# Dispatch-only distribution of ARENA.md, the skills and the Gemini release workflow. One job walks the union of the two target lists and leaves exactly one commit per target repository. The lists stay independent: the Arena files reach only the Arena targets, and the Gemini workflow reaches only the Gemini targets.
+# CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets. Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
 name: Distribute
 on:
   push:
@@ -17,9 +11,8 @@ on:
       - "github/workflows/gemini_release.py"
       - ".github/workflows/distribute.yml"
   schedule:
-    # Daily reconciliation: 03:17 UTC stays away from the top of the hour, when
-    # scheduled runs queue behind peak load. The schedule repairs missed, failed
-    # and partial synchronization in both target groups.
+    # Daily reconciliation: 03:17 UTC stays away from the top of the hour, when scheduled runs queue behind peak load.
+    # The schedule repairs missed, failed and partial synchronization in both target groups.
     - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
@@ -82,10 +75,8 @@ jobs:
             case " $1 " in *" $2 "*) return 0 ;; *) return 1 ;; esac
           }
 
-          # One skill's shipped file list: tracked files, minus the pages that stay in
-          # this repository and minus the owner-run packages under arena-egress-proxy/
-          # and arena-preview-proxy/. The docker files and the proxy code stay here
-          # beside the published images.
+          # One skill's shipped file list: tracked files, minus the pages that stay in this repository and minus the owner-run packages under arena-egress-proxy/ and arena-preview-proxy/.
+          # The docker files and the proxy code stay here beside the published images.
           skill_files() {
             local out
             out=$(git -C "$GITHUB_WORKSPACE" ls-files "$SKILL_ROOT/$1" | sed "s|^$SKILL_ROOT/$1/||" | grep -vFx -e README.md -e INSTALL.md | grep -vE '^(arena-egress-proxy|arena-preview-proxy)/' || true)
@@ -114,7 +105,7 @@ jobs:
                 mkdir -p "$work/$(dirname "$DEST")"
                 cp "$src" "$work/$DEST"
                 for legacy in $LEGACY_SKILLS; do
-                  # shellcheck disable=SC2115  # $work comes from mktemp -d and this path is fixed.
+                  # shellcheck disable=SC2115
                   rm -rf "$work/$SKILL_DEST_ROOT/$legacy"
                 done
                 for skill in $SKILLS; do
@@ -122,9 +113,8 @@ jobs:
                   skill_dest="$SKILL_DEST_ROOT/$skill"
                   files=$(skill_files "$skill")
                   [ -n "$files" ] || { echo "::error::no tracked files for $skill"; exit 1; }
-                  # shellcheck disable=SC2115  # $work comes from mktemp -d and $skill_dest is a fixed path.
-                  # The whole directory goes, so a page that this repository keeps
-                  # leaves the target repo on the same run.
+                  # shellcheck disable=SC2115
+                  # The whole directory goes, so a page that this repository keeps leaves the target repo on the same run.
                   rm -rf "$work/$skill_dest"
                   for f in $files; do
                     mkdir -p "$work/$skill_dest/$(dirname "$f")"

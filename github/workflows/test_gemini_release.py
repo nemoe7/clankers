@@ -1,4 +1,4 @@
-"""Offline release-history, reduction and API-boundary tests; `pytest` runs them."""
+"Offline release-history, reduction and API-boundary tests. `pytest` runs them."
 
 import hashlib
 import io
@@ -270,7 +270,7 @@ def test_release_pipeline():
     lambda: release.response_text({"promptFeedback": {"blockReason": "SAFETY"}}),
     "blocked",
   )
-  # The chunk rounds cap the output; the compact combine round stays uncapped.
+  # The chunk rounds cap the output. The compact combine round stays uncapped.
   sent = []
 
   def capture_call(model, action, payload):
@@ -305,9 +305,8 @@ def test_release_pipeline():
     patch.object(release, "CHUNK_TOKENS", 350),
   ):
     release.release_body([(str(n), "x" * 100) for n in range(80)], {}, "test", phased)
-  # The whole payload does not fit the ceiling in the first round: the summarize round
-  # runs as chunk, and the last request writes the release body whichever round it
-  # lands on. A tighter ceiling forces a combine round with several requests.
+  # The first payload exceeds the ceiling and runs a chunk round. The final request writes the current release body.
+  # A lower ceiling forces a combine round with several requests.
   assert set(phases) == {"chunk", "release"}
   assert phases[-1] == "release"
   with (
@@ -324,8 +323,8 @@ def test_release_pipeline():
   ):
     release.release_body([("one", "x" * 10)], {}, "test", phased)
   assert "release" in phases
-  # The reduction is done once per run: the raw commits go into the chunk rounds
-  # a single time, and the returned summaries serve the later requests.
+  # A run sends raw commits to the chunk round once.
+  # Later requests use the returned summaries.
   chunk_phases, chunk_ids = [], []
 
   def chunker(context, evidence, model):
@@ -422,7 +421,7 @@ def test_release_pipeline():
     assert release.gemini_call("gemini-3.8-flash", "generateContent", {}) == {
       "ok": True
     }
-  # A successful call is silent; the ladder prints the one line that matters.
+  # A successful call is silent. The ladder prints the one line that matters.
   assert status_log.call_args is None
   with (
     patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}),
@@ -476,9 +475,8 @@ def test_release_pipeline():
   assert any("HTTP 404" in line for line in lines)
   assert any("stepping down" in line for line in lines)
   assert any("cooling" in line for line in lines)
-  # A 429 cools that rung with the reported wait plus the safety margin, so the next
-  # pick starts lower; a model that answered cools for a minute; a fully cooling
-  # ladder waits for the earliest rung to come back.
+  # A 429 cools that rung with the reported wait plus the safety margin, so the next pick starts lower.
+  # A model that answered cools for a minute. A fully cooling ladder waits for the earliest rung to come back.
   with (
     patch.object(
       release,
@@ -741,11 +739,13 @@ def test_release_pipeline():
   assert set(release.PROMPTS) == {"chunk", "combine", "release", "repair", "version"}
   assert "style reference" in release.PROMPTS["release"]
   assert "NEVER use them as evidence" in release.PROMPTS["release"]
+  assert release.TEMPLATE.startswith("## Summary\n")
   assert release.TEMPLATE.count("{{") == 6 and release.TEMPLATE.endswith(
     "{{comparison_url}}\n"
   )
+  assert release.INITIAL_TEMPLATE.startswith("## Summary\n")
   assert release.INITIAL_TEMPLATE.count("{{") == 2
-  # Sections may be dropped, never reordered or duplicated; Summary and the range link stay.
+  # Sections may be dropped, never reordered or duplicated. Summary and the range link stay.
   full = {"template": release.TEMPLATE, "comparison_url": "https://x/compare/a...b"}
   release.check_body(
     "## Summary\n\ns\n\n## Fixes\n\nf\n\n## Commit comparison\n\nhttps://x/compare/a...b\n",
@@ -985,7 +985,7 @@ def test_release_pipeline():
       [(str(n), "x" * 100) for n in range(80)], {"phase": "version"}, "test", phase_spy
     )
   assert prompt_phases[0] == "chunk" and prompt_phases[-1] == "version"
-  # An invalid classification retries on the next rung; the run stops only when
+  # An invalid classification retries on the next rung. The run stops only when
   # every rung refused the word.
   answers = ["maybe minor", "minor"]
   real_release_body = release.release_body

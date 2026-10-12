@@ -171,8 +171,8 @@ def check_skill(root: Path, name: str, errors: list[str]) -> None:
   if len(text.splitlines()) > 500:
     errors.append(f"{label}: SKILL.md exceeds 500 lines")
 
-  # A skill may carry a references/ folder. shipped_paths() and check_references()
-  # account for its files, so no entry list is enforced here.
+  # A skill can include a references folder.
+  # Shipped_paths() and check_references() account for its files. This check needs no entry list.
 
 
 def check_collections(errors: list[str]) -> None:

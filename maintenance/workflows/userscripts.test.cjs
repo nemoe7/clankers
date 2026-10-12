@@ -17,10 +17,10 @@ const bundles = {
       "state-download": "State — download",
       "keep-awake": "Page — keep awake",
     },
-    // Every Arena entry leads with its module and carries no role word; a switch ends in (ON)/(OFF).
+    // Every Arena entry leads with its module and carries no role word. A switch ends in (ON)/(OFF).
     moduleSwitch: true,
     offByDefault: ["transcript-trim"],
-    // The prompt fill owns the three proxy entries; the state download owns its two; the auto
+    // The prompt fill owns the three proxy entries. The state download owns its two. The auto
     // trim gates its interval line behind the switch alone.
     extraMenus: { "transcript-trim": 1, "prompt-fill": 3, "state-download": 2, "tab-title": 1 },
     // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
@@ -55,8 +55,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const source = fs.readFileSync(
     path.join(__dirname, "../../userscripts", `${domain}.user.js`), "utf8",
   );
-  // A granted cross-origin call meets the dynamic preview host and the owner's proxy host.
-  // A manager asks the owner once per host without a connect tag, so the tag is required.
   const header = /\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/.exec(source)[0];
   if (/^\/\/ @grant\s+GM_xmlhttpRequest\s*$/m.test(header)) {
     assert.match(header, /^\/\/ @connect\s+arena\.site\s*$/m, `${domain}: the connect tag names the preview host only`);
@@ -146,10 +144,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   const defaults = load();
   assert.equal(defaults.menus.size, menusFor(stored));
   if (domain === "arena") {
-    // The owner's shape decision: one module's entries share a prefix, a switch names its state
-    // in parentheses, and no entry carries a role word.
-    // The modules sit in one order, and one module's entries stay together: Composer, Proxy,
-    // Steering, Transcript, State, Page, Userscript.
+    // The owner's shape decision: one module's entries share a prefix, a switch names its state in parentheses, and no entry carries a role word.
+    // The modules sit in one order, and one module's entries stay together: Composer, Proxy, Steering, Transcript, State, Page, Userscript.
     const expected = [
       "Composer — fill (ON)",
       "Composer — hide (ON)",
@@ -209,7 +205,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const toggle = menuFor(counted, "transcript-trim");
     assert.ok(toggle, "Missing the transcript trim toggle");
     assert.ok(reads(toggle.label, false), "Transcript trim ships OFF");
-    // The plan menu is the one that names rows; the switch menu reads ": ON/OFF".
+    // The plan menu is the one that names rows. The switch menu reads ": ON/OFF".
     const findCount = () => [...counted.menus.values()].find((item) => item.label.includes("keep"));
     const findNow = () =>
       [...counted.menus.values()].find((item) => item.label === "Transcript — trim now");
@@ -332,7 +328,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   // The global pause stops every feature where it stands, with no reload, and the resume
   // brings back the features whose own switch is ON.
   if (domain === "arena") {
-    // The storage-failure check above leaves the writes refused; the pause writes again.
+    // The storage-failure check above leaves the writes refused. The pause writes again.
     refuseWrite = false;
     stored.clear();
     const live = load();
@@ -350,7 +346,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(live.menus.size, keys.length + bundle.globalMenus + alwaysTotal, "Every feature switch stays usable while paused");
     assert.ok(reads(menuFor(live, "tab-title").label, true), "A paused feature keeps its own switch label");
     assert.ok(resumeMenu(), "The pause entry flips to resume");
-    // A switch flipped while paused is stored, and the resume honors it.
     menuFor(live, "tab-title").callback();
     assert.equal(stored.get("tab-title"), false, "A switch flips while paused");
     resumeMenu().callback();
@@ -515,7 +510,6 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const posts = [];
     const fetches = [];
     const intervals = [];
-    // The timeout ids are tracked, so a cleared wait really leaves the queue.
     const timeouts = new Map();
     let nextTimeout = 0;
     const popstates = [];
@@ -910,7 +904,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
     sync();
     assert.equal(page.title, "Arena | clankers \uD83D\uDCAC", `The chat row raises the balloon: ${page.title}`);
-    // The agent root appears when a turn starts; a user root carries no mark, and the hold
+    // The agent root appears when a turn starts. A user root carries no mark, and the hold
     // dies with the stop control.
     goto("/c/two");
     roots = [userRootNode()];

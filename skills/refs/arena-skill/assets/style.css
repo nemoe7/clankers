@@ -23,7 +23,7 @@
   --bg: #f4f2ed;
   --panel: #fffefa;
   --bubble: #e9e4dd;
-  /* The owner named one dark hex; the light theme keeps the bubble it already had. */
+  /* The dark theme uses one specified hex. The light theme keeps its existing bubble. */
   --code-bg: var(--bubble);
   --hover: #e0d9ce;
   --text: #2c2925;
@@ -53,10 +53,8 @@ h2 { margin: 0 0 8px; }
 p, li { line-height: 1.6; }
 .topbar { flex: none; position: sticky; top: 0; z-index: 5; padding: 10px 5vw; background: var(--bg); border-bottom: 1px solid var(--border); }
 .topbar-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-/* The strip shrinks and scrolls rather than pushing the bar wider than the viewport: the four
-   tabs must fit a phone as they fit a desk, with no width of its own to fight. */
-/* The four tabs share one width: the grid makes every track equal, so the longest label sets
-   no tab's shape. */
+/* The tab strip shrinks and scrolls rather than widen the viewport. Its four tabs must fit phones and desks. */
+/* The four tabs share one width: the grid makes every track equal, so the longest label sets no tab's shape. */
 nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 100%; min-width: 0; overflow-x: auto; }
 /* The four labels fit a phone strip at a shorter minimum, so the whole strip reads without a
    scroll of its own. */
@@ -64,10 +62,8 @@ nav button { min-width: 0; padding: 7px 9px; white-space: nowrap; position: rela
 /* nav button outranks the global :focus-visible, so focus needs its own rule here. */
 nav button:focus-visible { border-color: var(--focus); }
 nav [aria-selected="true"] { background: var(--bubble); }
-/* The pip is the tab's unread mark. `[hidden] { display: none !important; }` above is what keeps
-   it hidden against the inline-block that gives it a shape. */
-/* The pip is a corner badge rather than an inline box, so a tab keeps one width whether the dot
-   shows or not. */
+/* The pip is the tab's unread mark. `[hidden] { display: none !important; }` keeps it hidden against its inline-block shape. */
+/* The pip is a corner badge rather than an inline box, so a tab keeps one width whether the dot shows or not. */
 #report-pip, #notes-pip, #downloads-pip { position: absolute; top: 5px; right: 5px; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
 main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
@@ -130,15 +126,13 @@ p.muted { margin-block: 4px; }
 button svg, .icon-button svg { pointer-events: none; flex: none; }
 #preview-note[aria-pressed="false"] { color: var(--muted); opacity: .55; }
 #history { list-style: none; padding: 0; margin: 12px 0 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-/* The log's scroll area wraps the list so a jump bar can sit over its bottom edge: a strip rather
-   than a round button, on owner direction, thin enough to cost no vertical space and wide enough to
-   say what it does. It appears only while the log is scrolled away from its end. */
+/* The log scroll area leaves space for its jump bar.
+   Show the bar only away from the log end. */
 .log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 /* The new-reply pill floats at the log's top, mirroring the jump bar at its foot: the placement
    says where the reply waits, and the two pills can never meet. */
 .log-edited {
-  /* The owner's screenshot showed 8px clipping the card border; the label reads as a
-     neutral white, not the accent. */
+  /* The screenshot showed an 8px clip at the card border. The label uses neutral white, not the accent. */
   position: absolute; left: 50%; top: 20px; transform: translateX(-50%);
   z-index: 1;
   min-height: 0; padding: 4px 12px; font-size: 12px; border-radius: 4px;
@@ -150,7 +144,7 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
 .log-edited:hover { color: var(--muted); border-color: var(--muted); }
 .log-edited:focus-visible { box-shadow: 0 0 0 2px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 .log-newest {
-  /* Compact arrow from the owner's Arena UI reference; the log still owns its scroll state. */
+  /* Use the compact arrow from the Arena UI reference. The log keeps its scroll state. */
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
   display: inline-flex; align-items: center; justify-content: center;
   min-height: 0; padding: 4px 12px; font-size: 12px; border-radius: 4px;
@@ -183,15 +177,16 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 .state-dot[data-state="seen"] { background: var(--dot-seen); }
 .state-dot[data-state="said"] { background: var(--dot-said); }
 .answer { margin-top: 8px; }
-/* Only the reply carries the bar and the muted colour; the message itself stays plain. */
+/* Only replies use the bar and muted colour. Messages stay plain. */
 /* Only the reply carries the bar, the muted colour and the smaller size: prose costs log space. */
 .answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
-/* Each later ack is one more block under the first answer, parted by a hairline; nothing is replaced. */
+/* Each later acknowledgement adds a block below the first answer.
+   Keep every earlier block. */
 .answer .reply-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .answer .reply-block > p:first-child { margin-top: 0; }
 .answer .reply-block > p:last-child { margin-bottom: 0; }
-/* The first ack under the toolbar needs no hairline; 10px keeps it off the rule. */
+/* The first acknowledgement needs no toolbar hairline. A 10px gap keeps it off the rule. */
 #report-ack-history { margin-top: 10px; }
 #report-ack-history .reply-block:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 #report-ack-history .reply-block:first-child > p { margin-top: 0; }
@@ -201,19 +196,16 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
-/* The report select takes the log filter's own chevron instead of the native arrow, on owner
-   note: both selects now read as one control. position sits on the wrap, which also holds the
-   label, so the triangle anchors to the bottom half where the select box lives. */
+/* The report select takes the log filter's own chevron instead of the native arrow, on owner note: both selects now read as one control. */
+/* Position sits on the wrap, which also holds the label, so the triangle anchors to the bottom half where the select box lives. */
 .select-wrap::after {
   content: ""; position: absolute; right: 10px; bottom: 22px; transform: translateY(50%);
   border-left: 5px solid transparent; border-right: 5px solid transparent;
   border-top: 5px solid var(--muted); pointer-events: none;
 }
 #report-select { appearance: none; padding-right: 26px; }
-/* The log's search box is a control in a header row, not a form field: it takes the icon buttons'
-   34px and no minimum of its own, so it costs the log no vertical space. It gives way on a narrow
-   screen rather than pushing the skip button out, and an aria-label carries the name instead of a
-   visible label, on owner direction. */
+/* The log search is a header control, not a form field. It uses 34px icon-button height and no minimum width. */
+/* On narrow screens, it yields before pushing out Skip. Its aria label replaces a visible label. */
 #log-search {
   flex: 0 1 auto; width: 100%; max-width: 13em; min-width: 0; height: 34px; min-height: 0;
   padding: 0 8px;
@@ -226,10 +218,9 @@ a { color: #6ea3d6; text-underline-offset: 3px; }
 .report, .message-text { overflow-wrap: anywhere; overflow-x: auto; }
 .report :is(h1, h2, h3, h4, h5, h6), .message-text :is(h1, h2, h3, h4, h5, h6) { margin: 10px 0 6px; }
 .report > :first-child, .message-text > :first-child { margin-top: 0; }
-/* Paragraph gaps were the browser default 16px while the headings had been tightened; the owner
-   called the paragraphs too far apart, so they take the heading's 6px rhythm at 8. */
+/* Use an 8px paragraph gap to match the heading rhythm. */
 .report p, .message-text p { margin: 8px 0; }
-/* The allowlisted list passes through as-is; give it the paragraph spacing and the marker indent. */
+/* The allowlisted list passes through unchanged. Give it paragraph spacing and marker indent. */
 .report ul, .report ol { margin: 8px 0; padding-left: 22px; }
 /* A list in message text sits flush, the way the log's own lists and the composer do: the ack
    thread under a report was the last outlier, with the browser's default step under it. */
@@ -244,9 +235,7 @@ a { color: #6ea3d6; text-underline-offset: 3px; }
 /* A message table is a receipt, not a document: tight rows stop three columns from eating the tab. */
 .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 3px 8px; overflow-wrap: normal; }
 /* Rendered message text used to borrow the report class, which said the wrong thing about a note. */
-/* The background belongs to the block wherever markdown renders, not to a report alone: a fence
-   in a message or in the draft preview is the same block, and the owner read a missing background
-   as the bug. */
+/* Use the same code background wherever Markdown renders. A message fence and draft-preview fence are the same block. */
 pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .code-block { position: relative; }
 .code-block pre { padding-right: 40px; }
@@ -254,10 +243,10 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .copy-code:hover { color: var(--text); border-color: var(--focus); }
 .copy-code[data-state="bad"] { color: #ef4444; }
 .report code { font-family: ui-monospace, monospace; font-size: .9em; }
-/* An image keeps the size the agent set; one wider than the panel shrinks to fit it. */
+/* An image keeps the agent-specified size. A wider image shrinks to fit the panel. */
 .report img, .message-text img { max-width: 100%; }
-/* The owner preferred the tone inline code had before a chip variable was introduced for it,
-   so it shares the message background again; a receipt ID still opts out by class. */
+/* Inline code shares the message background.
+   Receipt IDs opt out by class. */
 :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid rgb(199, 194, 188); }
 .draft-preview blockquote { border-left-color: rgb(199, 194, 188); }
@@ -270,33 +259,22 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
      step down rather than a track giving way. */
   nav { gap: 6px; }
   nav button { padding: 7px 4px; font-size: 14px; }
-  /* The owner's phone dropped the log's search toolbar to a line of its own: the header row
-     wraps on the toolbar's 13em box before either side shrinks, and a wrapped item never gets
-     the chance. The toolbar starts from zero and grows into the width the status stack leaves,
-     so the row holds one line, the status keeps its words, and the box takes what is left. */
+  /* Start the search toolbar at zero width so the phone header stays on one line.
+   Let it grow into space after the status stack. */
   .log-card > .row:first-child > .stack { flex: 0 1 auto; }
   .log-card > .row > .row.tight { flex: 1 1 0; min-width: 0; }
   #log-search { min-width: 5em; }
-  /* The footer wraps and the lone Send button would drop left; the left margin pulls it back
-     to the right edge of the bottom line, under the status stack. */
+  /* When the footer wraps, the Send button can drop left. Its left margin returns it to the bottom-right edge. */
   #send { margin-left: auto; }
-  /* The Reports toolbar held its select and one button on the first line and dropped the other
-     two to a second. Only the select shortens: it starts from zero and grows into the width the
-     three buttons leave, so they keep their seats and it keeps the rest. The toolbar keeps its
-     wrap, so the status line under the fields keeps a row of its own. */
+  /* The Reports toolbar held its select and one button on the first line and dropped the other two to a second. */
+  /* Only the select shortens. It grows into button-free width. The toolbar keeps its wrap and status row. */
   .report-toolbar { gap: 8px; }
   .select-wrap { flex: 1 1 0; min-width: 0; max-width: none; }
   #copy-report, #refresh-report, #unpublish-report { width: 36px; height: 36px; }
 }
 
-/* The copy button keeps its seat beside Downloads on a touch top bar: the strip holds one line,
-   and the labels step down to hold the four tracks beside it. */
-/* A phone's top bar keeps the tabs and the copy button: the clock and the theme toggle are desk
-   furniture, and the width they take crowds the four tracks. The composer
-   hint goes too: a touch Return key needs no caption, and its separator rides the hint, so the
-   key line stays whole beside it. */
-/* A touch composer keeps Send on the right edge in both states, with or without staged files,
-   and the card steps its paddings and row gaps down so the phone footer sits shorter. */
+/* The copy button stays beside Downloads on touch devices. The tab strip stays one line. Labels shrink. The clock and theme toggle leave the phone bar. */
+/* The touch Return key needs no caption, so its separator leaves too. Send stays right-aligned. The phone composer uses smaller padding and gaps. */
 @media (pointer: coarse) {
   .topbar-row { flex-wrap: nowrap; }
   .topbar-row > .row.tight { flex: 0 0 auto; gap: 4px; }
@@ -336,7 +314,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
 .question-id { display: block; margin-bottom: 4px; }
-/* The browser moves one queued HTTPS file at a time; long URLs and errors must wrap. */
+/* The browser moves one queued HTTPS file at a time. Long URLs and errors must wrap. */
 .downloads-layout { max-width: 900px; margin: auto; display: flex; flex-direction: column; gap: 12px; }
 .downloads-layout h2, .downloads-layout p { margin: 0; }
 .fetch-controls { justify-content: flex-start; margin: 0 0 10px; }

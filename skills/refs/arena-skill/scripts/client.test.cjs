@@ -8,9 +8,8 @@ const vm = require('node:vm');
 const { File } = require('node:buffer');
 
 class Element {
-  // textContent reads through to children, the way a browser does, so a receipt built from
-  // two elements still asserts as one string; setting it clears the children, as in a browser.
-  // A bare string child is a text node, the way replaceChildren takes one.
+  // textContent reads through to children, the way a browser does, so a receipt built from two elements still asserts as one string.
+  // Setting it clears the children, as in a browser. A bare string child is a text node, the way replaceChildren takes one.
   get textContent() {
     return this.children.length
       ? this.children.map(child => (typeof child === 'string' ? child : child.textContent)).join('')
@@ -44,9 +43,8 @@ class Element {
     }
   }
   replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
-  // A browser clamps a scroll container when the content inside it collapses, and replacing the report
-  // is the case the owner hit: the harness does the same, so a missing restore shows up as a jump to
-  // the top here exactly as it does on screen.
+  // A browser clamps a scroll container when the content inside it collapses, and replacing the report is the case the owner
+  // hit: the harness does the same, so a missing restore shows up as a jump to the top here exactly as it does on screen.
   set innerHTML(value) {
     this.inner = value; this.renders = (this.renders || 0) + 1;
     const panel = elements.get('#reports-panel');
@@ -166,7 +164,7 @@ const context = {
     if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
     if (url === '/api/report-sources') return response(state.reportSources || []);
     if (url === '/api/copy-state') {
-      // The route serves the save-file text and its counts; the harness projects the same keys.
+      // The route serves the save-file text and its counts. The harness projects the same keys.
       if (state.copyStateFails) return response({ error: 'no route' }, false);
       const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
       const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked'];
@@ -324,10 +322,8 @@ const context = {
       };
     }
     if (url === '/') {
-      // A fresh page carries the token the restarted server accepts, so the retry has one to take.
-      // The token rides an HTML attribute, the way the served page carries it; a reader that looked
-      // for it inside the script text found nothing once the script shipped minified, which is why
-      // the owner's save presses after a reset never landed.
+      // A fresh page carries the token the restarted server accepts, so the retry has one to take. The token rides an HTML attribute, the way the served page carries it.
+      // The minified script did not include this text. Save presses after a reset then failed.
       pageFetches += 1;
       return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
     }
@@ -354,9 +350,8 @@ const context = {
       const id = decodeURIComponent(url.split('/')[3]);
       const stamp = new Date().toISOString();
       ackSeenCalls.push(url);
-      // The stamp is the reply's alone: the client folds it into the state it holds. Writing it
-      // into the shared fixture as well let a late reply from one case light the marks of the
-      // next case, which made the suite flaky.
+      // The stamp is the reply's alone: the client folds it into the state it holds.
+      // A shared fixture let a late reply light marks in the next case. That made the suite flaky.
       return response({ id, ack_seen_at: stamp });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
@@ -376,11 +371,9 @@ const context = {
   }
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
-// The page's own poll timer is the test's refresh: the toolbar button it used to share that work
-// with is gone with the state select. The reload test loads a second client
-// into the same document, and its timer is the live one, so the last refresh wins.
+// The page's own poll timer is the test's refresh: the toolbar button it used to share that work with is gone with the state select.
+// The reload test loads a second client into the same document, and its timer is the live one, so the last refresh wins.
 const refresh = () => intervals.filter(callback => callback.name === 'refreshState').at(-1)();
-// Receipts are built from named parts, so a test reads the part it means instead of counting.
 const part = (node, cls) => node.children.find(child => (child.className || '') === cls);
 const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
 
@@ -526,8 +519,6 @@ test('preview client', async (t) => {
     assert.equal(storage.get('arena-preview-v1:theme'), 'light');
     body = context.document.body;
     log = get('#history');
-    // The bar's collapse control and the composer's hide button both went, so neither closed state
-    // survives and nothing is saved for either.
     assert.equal(body.dataset.chrome, undefined, 'the closed state is gone');
     assert.equal(get('#chrome').events.click, undefined, 'no collapse handler');
     assert.equal(body.dataset.composer, undefined, 'the composer has no closed state');
@@ -536,7 +527,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box op", async () => {
-    // An empty field keeps the stylesheet's min-height; a placeholder no longer holds the box open.
+    // An empty field keeps the stylesheet's min-height. A placeholder no longer holds the box open.
     assert.equal(get('#note').style.height, '');
     get('#note').value = 'a draft';
     // The stub carries the height the browser would measure for three lines.
@@ -604,8 +595,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("The head renders in its own div and stays out of Upcoming; the row shape is asserted on", async () => {
-    // The head renders in its own div and stays out of Upcoming; the row shape is asserted on
-    // the second task, which Upcoming does carry.
+    // The second task shows the Upcoming row shape.
     assert.equal(upcomingBody.children.length, 1, 'the head stays out of Upcoming');
     assert.equal(upcomingBody.children[0].tagName, 'li');
     assert.equal(upcomingBody.children[0].children[0].textContent, 'Second in line');
@@ -705,8 +695,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("A hostile title is text in the current row, because a row is built with textContent", async () => {
-    // A hostile title is text in the current row, because a row is built with textContent
-    // rather than innerHTML. The head renders in a div of its own and stays out of Upcoming.
     currentBody = get('#tasks-current-body');
     assert.equal(get('#tasks-current').hidden, false);
     assert.equal(currentBody.children.length, 1);
@@ -756,10 +744,8 @@ test('preview client', async (t) => {
   });
 
   await t.test("The log and the tasks lost their own copy buttons", async () => {
-    // The log and the tasks lost their own copy buttons. One copy button carries the note, task and
-    // live-answer lines a restore reads back, as NDJSON, and the reports tab keeps its button.
-    // Nothing derived rides the copy: no rendered html, token, seq, uploads or last check, and the
-    // stamps arrive from the poll already cut to seconds, which is all a restore needs.
+    // The log and the tasks lost their own copy buttons. One copy button carries the note, task and live-answer lines a restore reads back, as NDJSON, and the reports tab keeps its button.
+    // Copy only state data. Exclude rendered HTML, tokens, sequences, uploads, and last checks. Poll stamps already use seconds.
     cacheKeyHere = [...storage.keys()].find(key => key.endsWith(':state-cache'));
     assert.ok(cacheKeyHere, 'every poll caches the state the copy button copies');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString() }];
@@ -835,7 +821,7 @@ test('preview client', async (t) => {
     get('#note').events.keydown(event({ key: 'Enter', shiftKey: false, isComposing: true }));
     assert.equal(get('#form').submissions, 1);
     // A touch keyboard has no Shift key, so there the Return key writes the newline and the Send
-    // button sends; a mouse-and-keyboard device keeps Enter-to-send.
+    // button sends. A mouse-and-keyboard device keeps Enter-to-send.
     coarsePointer = true;
     pointerListeners.forEach(callback => callback({ matches: true }));
     const newline = event({ key: 'Enter', shiftKey: false, isComposing: false });
@@ -885,14 +871,12 @@ test('preview client', async (t) => {
 
   await t.test("The line reads ID \u00b7 who \u00b7 state \u00b7 time, and the dot after the ID is the ASCII separator th", async () => {
     // The line reads ID · who · state · time, and the dot after the ID is the ASCII separator the
-    // owner asked for by name; the state stays a coloured dot.
+    // owner asked for by name. The state stays a coloured dot.
     assert.equal(part(get('#history').children[0].children[2], 'receipt-sep').textContent, ' · ');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'sent');
   });
 
   await t.test("A message that became a task says so, so a line that was read is never mistaken for one th", async () => {
-    // A message that became a task says so, so a line that was read is never mistaken for one that
-    // was dropped; the task ID rides in the marker's title.
     state.notes[0].task_id = 'dots-in-receipt';
     await refresh();
     assert.match(get('#history').children[0].children[2].textContent, / · Task added$/);
@@ -904,9 +888,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("A message the agent wrote used to say so through an origin tag; that key is gone from the", async () => {
-    // A message the agent wrote used to say so through an origin tag; that key is gone from the
-    // schema, and the rendered text wrapper is named for what it is rather than borrowing the
-    // report class.
     assert.equal(get('#history').children[0].children[0].className, 'raw-message',
       'a message the server sent without rendered HTML keeps the raw class');
     state.notes.push({
@@ -926,7 +907,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("The fixture note is this block's own; the tests after it read the log that was there befor", async () => {
-    // The fixture note is this block's own; the tests after it read the log that was there before.
+    // The fixture note is this block's own. The tests after it read the log that was there before.
     state.notes.pop();
     await refresh();
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').title, 'Sent');
@@ -950,7 +931,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("A seconds-only stamp is UTC on the wire; the formatter pins it to UTC so a browser", async () => {
-    // A seconds-only stamp is UTC on the wire; the formatter pins it to UTC so a browser
+    // A seconds-only stamp is UTC on the wire. The formatter pins it to UTC so a browser
     // outside UTC shows the converted local wall clock, not the server's digits.
     {
       const secondsOnly = context.time('2026-06-15T12:00:00');
@@ -1070,7 +1051,7 @@ test('preview client', async (t) => {
     assert.equal(get('#connection-dot').dataset.state, 'down');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Disconnected');
     assert.match(get('#connection-text').textContent, /Connection failed: server gone/);
-    // A Cloudflare page for the dead sandbox must not land in the header; the status stands in.
+    // A Cloudflare page for the dead sandbox must not land in the header. The status stands in.
     stateGatewayBody = '<!DOCTYPE html><html class="no-js ie6 oldie" lang="en-US"><head><title>arena-site.site | 502: Bad gateway</title></head><body><h2>Bad gateway</h2><p>Error code 502</p></body></html>';
     await refresh();
     assert.equal(get('#connection-text').textContent, 'Connection failed: HTTP 502 Bad Gateway. Draft kept; history may be stale.');
@@ -1088,7 +1069,7 @@ test('preview client', async (t) => {
     assert.equal(get('#connection-dot').dataset.state, 'polling');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'Connected');
     assert.equal(get('#connection-text').textContent, '3 messages saved');
-    // A poll start times the wait in the header; the clock ticks between state refreshes.
+    // A poll start times the wait in the header. The clock ticks between state refreshes.
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
     await refresh();
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
@@ -1106,8 +1087,6 @@ test('preview client', async (t) => {
     state.polling_since = null;
     await refresh();
     assert.equal(get('#connection-text').textContent, '3 messages saved');
-    // Between calls the line names the last call's stamp once the hook has written one, so the
-    // long-call wording has no line of its own.
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
     await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'ok');
@@ -1120,7 +1099,6 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#connection-dot').dataset.state, 'idle');
     assert.equal(get('#connection-dot').getAttribute('aria-label'), 'No agent');
-    // No call stamp is known yet, so the gone mark stands alone.
     assert.equal(get('#connection-text').textContent, 'Agent 404');
     // A fresh turn end keeps the plain line until the quiet window passes.
     state.turn_ended_at = new Date(Date.now() - 5_000).toISOString().slice(0, 19);
@@ -1280,9 +1258,8 @@ test('preview client', async (t) => {
       'a report never republished shows the publish stamp');
     assert.match(get('#report-status').textContent, /· Submission /);
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
-    // The ID is on show, a click quotes it like a note ID, and a ctrl-click is the same gesture. The
-    // quote lands in the Messages tab with the box regrown: measured from the hidden panel the
-    // textarea collapsed to its border, which showed the quote cut off.
+    // The ID is on show, a click quotes it like a note ID, and a ctrl-click is the same gesture.
+    // The quote opens in Messages with a regrown box. A hidden-panel measurement collapsed the textarea and clipped it.
     const reportCode = part(get('#report-status'), 'note-id');
     assert.equal(reportCode.textContent, 'r1', 'the loaded report shows its ID');
     assert.equal(reportCode.dataset.full, 'r1');
@@ -1554,8 +1531,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("What stamps a report is the browser showing it: one second in view for one that fits the", async () => {
-    // What stamps a report is the browser showing it: one second in view for one that fits the
-    // panel with nothing to scroll, and the moment its end is reached for one that does not.
     panel = get('#reports-panel');
     wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
     state.reports = [{ id: 'r1', title: 'Fits', updated_at: new Date().toISOString(), seen_at: null }];
@@ -1584,9 +1559,8 @@ test('preview client', async (t) => {
   });
 
   await t.test("A report showing its end stays read when the last scroll event missed: the poll rechecks", async () => {
-    // The dot and star outlived a reload because the end-scroll stamp can miss
-    // its event, and nothing looked at the panel again. The state poll now rechecks it, so a report
-    // showing its end stamps without another scroll.
+    // The dot and star outlived a reload because the end-scroll stamp can miss its event, and nothing looked at the panel again.
+    // The state poll now rechecks it, so a report showing its end stamps without another scroll.
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
     readStamps.length = 0;
     panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 0;
@@ -1630,9 +1604,8 @@ test('preview client', async (t) => {
   });
 
   await t.test("Marking a report read folds the stamp into the state instead of re-rendering: the panel ke", async () => {
-    // Marking a report read folds the stamp into the state instead of re-rendering: the panel keeps
-    // its place and that report's label loses its asterisk at once, which is the bug the owner hit
-    // when reading a report threw the page back to the top.
+    // Marking a report read folds the stamp into the state instead of re-rendering: the panel keeps its place and that report's
+    // label loses its asterisk at once, which is the bug the owner hit when reading a report threw the page back to the top.
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
     await refresh();
     await tick();
@@ -1650,8 +1623,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("An update to the report being read keeps the panel where the owner left it, and a report t", async () => {
-    // An update to the report being read keeps the panel where the owner left it, and a report the owner
-    // switches to starts at its top, because the panel is the scroller and the report is replaced.
     panel.scrollHeight = 900; panel.clientHeight = 300; panel.scrollTop = 450;
     state.reports = [
       { id: 'r1', title: 'Long', updated_at: new Date(Date.now() + 1000).toISOString(), seen_at: new Date().toISOString() },
@@ -1751,7 +1722,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("A longer search re-marks text that a shorter search marked", async () => {
-    // The shorter search leaves a mark on "a"; the longer search must still mark "alpha" whole.
+    // The shorter search leaves a mark on "a". The longer search must still mark "alpha" whole.
     state.notes = [{ id: 'n1', text: 'Alpha beta', at: logStamp, acknowledged_at: null }];
     await refresh();
     await tick();
@@ -1808,7 +1779,7 @@ test('preview client', async (t) => {
 
   await t.test("Only the newest twenty messages render, and scrolling up loads the older ones", async () => {
     // The log renders its newest page only, so a long session does not pay for every message
-    // at once; scrolling to the top renders the next older page.
+    // at once. Scrolling to the top renders the next older page.
     state = {
       notes: Array.from({ length: 25 }, (_, index) => ({
         id: `page-${index}`,
@@ -1836,8 +1807,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("The jump bar is the remedy for a long log: hidden at the end, shown once the log is scroll", async () => {
-    // The jump bar is the remedy for a long log: hidden at the end, shown once the log is scrolled
-    // away from it, and taking the log back to the newest message when it is used.
     jump = get('#log-newest');
     logView.scrollTop = 900;
     logView.events.scroll();
@@ -1851,8 +1820,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("The save button posts the page's cached copy, so a wiped server is refilled from the brows", async () => {
-    // The save button posts the page's cached copy, so a wiped server is refilled from the browser,
-    // and a page that has never polled says so instead of posting nothing.
     priorState = state;
     state = {
       notes: [{ id: 'saved', text: 'cached here', at: new Date().toISOString(), acknowledged_at: null }],
@@ -1879,9 +1846,6 @@ test('preview client', async (t) => {
     assert.equal(copied.length, 1, 'the server export copies without a client cache');
     assert.match(get('#send-status').textContent,
       /^Copied state as NDJSON/);
-    // With the route down, nothing is copied: the server builds the copy, and the page
-    // says so instead of assembling one from its cache. The store retries once, so a
-    // failing route costs about a second per call.
     state.copyStateFails = true;
     copied.length = 0;
     stateCopyButton.events.click();
@@ -1894,10 +1858,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("A page outlives the server that served it", async () => {
-    // A page outlives the server that served it. After a sandbox reset the token baked into the page
-    // is refused, so the page takes a fresh token, from the poll or from a fresh page, and tries once
-    // more instead of waiting for a manual refresh; the owner pressed save state several times after
-    // a reset and nothing landed. The save route is gone, so a note send carries the same proof.
     staleToken = true;
     storage.set(cacheKey, JSON.stringify({ notes: state.notes, tasks: state.tasks }));
     sendHandler = async note => response({ ...note, at: new Date().toISOString() });
@@ -1933,13 +1893,13 @@ test('preview client', async (t) => {
 
   await t.test("Give the page back the token its own page carried, so a later test that writes does not", async () => {
     // Give the page back the token its own page carried, so a later test that writes does not
-    // inherit this one's stand-in token; the poll is what hands it over.
+    // inherit this one's stand-in token. The poll is what hands it over.
     servedToken = '__TOKEN__';
     await refresh();
   });
 
   await t.test("The fixture above is this test's own; later tests read the state that was live before it", async () => {
-    // The fixture above is this test's own; later tests read the state that was live before it.
+    // The fixture above is this test's own. Later tests read the state that was live before it.
     state = priorState;
     await refresh();
   });
@@ -1975,8 +1935,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("A plain click quotes the six characters on show; no copy gesture is left on an ID", async () => {
-    // A plain click quotes the six characters on show; no copy gesture is left on an ID. The
-    // shift-click that copied the whole UUID goes with the copy path.
+    // A plain click quotes the short ID and leaves the clipboard unchanged.
     longId = longReceipt.children[0];
     assert.notEqual(longId.textContent, longId.dataset.full);
     get('#note').value = '';
@@ -1992,9 +1951,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("A ctrl-click quotes instead of copying: the composer takes a `RE: <shortid>` line, the car", async () => {
-    // A ctrl-click quotes instead of copying: the composer takes a `RE: <shortid>` line, the caret
-    // lands after it, and a hidden composer is opened first. A draft already written is kept below
-    // a blank line rather than lost.
     noteBox = get('#note');
     noteBox.value = 'a draft already written';
     noteBox.hidden = true;
@@ -2012,8 +1968,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("An empty composer gets exactly the line that was asked for, and quoting a second note", async () => {
-    // An empty composer gets exactly the line that was asked for, and quoting a second note
-    // retargets the prefix rather than stacking two of them.
     noteBox.value = '';
     firstId = get('#history').children[0].children[2].children[0];
     documentEvents.click({ target: firstId, ctrlKey: true });
@@ -2065,8 +2019,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("A report delete asks for a second click against the same selection, then leaves the tab", async () => {
-    // A report delete asks for a second click against the same selection, then leaves the tab.
-    // Later subtests read the state that was live before this one, so both are restored on exit.
     const keptReports = state.reports;
     const keptSelect = get('#report-select').value;
     state.reports = [
@@ -2076,8 +2028,6 @@ test('preview client', async (t) => {
     get('#reports-tab').events.click();
     await new Promise(resolve => setTimeout(resolve, 0));
     get('#report-select').value = 'gone1';
-    // The Deleted receipt is transient: the poll the handler fires reloads the report and rewrites
-    // the line, so this probe records every write the flow makes before the receipt is asserted.
     const statusLines = [];
     const statusNode = get('#report-status');
     const nodeProto = Object.getPrototypeOf(statusNode);
@@ -2115,8 +2065,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("The delete press stamps the open first, so the server's hold clears", async () => {
-    // The press is the owner's open: the receipt shows at the top of the panel they delete
-    // from, so the page stamps the ack the server's hold reads before the removal lands.
+    // The receipt appears atop the panel that the owner deletes from. The page stamps its acknowledgement before removal.
     // The ack time sits past every stamp, so the tab's own open cannot clear it.
     const keptReports = state.reports;
     const keptSelect = get('#report-select').value;
@@ -2148,7 +2097,7 @@ test('preview client', async (t) => {
 
   await t.test("Multiple files stage as removable filename chips beside \"Your message\"", async () => {
     // Multiple files stage as removable filename chips beside "Your message". The saved-files list
-    // is deliberately gone; the note receipt and backend state still carry every original name.
+    // is deliberately gone. The note receipt and backend state still carry every original name.
     picker = get('#upload-file');
     chips = () => get('#staged-files').children.map(chip => chip.children[0].textContent.replace(/ · .*$/, ''));
     chipText = () => get('#staged-files').children[0].children[0].textContent;
@@ -2206,7 +2155,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("One multipart call writes the note and all three files", async () => {
-    // One multipart call writes the note and all three files. A lost response keeps them in memory;
+    // One multipart call writes the note and all three files. A lost response keeps them in memory.
     // manual retry reuses the same note ID and the backend returns the one saved message.
     notesBeforeFile = state.notes.length;
     uploadsBeforeFile = (state.uploads || []).length;
@@ -2247,8 +2196,6 @@ test('preview client', async (t) => {
   });
 
   await t.test("An upload the network drops retries once under the same note ID", async () => {
-    // A dropped connection is the one failure worth replaying unseen: the note ID, text and file
-    // set are unchanged, and the server returns the first record instead of writing a second note.
     picker.files = [{ name: 'retry.bin', size: 2048, type: 'application/octet-stream' }];
     picker.events.change();
     const calls = uploadCalls.length;
@@ -2462,7 +2409,7 @@ test('preview client', async (t) => {
     await waitFor(() => state.fetch_jobs.find(item => item.url === chain)?.status === 'saved');
     assert.equal(queuedCalls.length, 3, 'retry reuses the same SQLite job');
 
-    // The owner's X frees one saved row; the first click only arms it.
+    // The owner's X frees one saved row. The first click only arms it.
     dropRow = get('#fetch-list').children.find(item => item.children[0].textContent === chain);
     dropButton = dropRow.children.find(item => item.className === 'icon-button fetch-drop');
     await dropButton.events.click();
@@ -2752,9 +2699,8 @@ test('preview client', async (t) => {
 });
 
 test('the phone footer keeps Send beside a long status', () => {
-  // The stacked key and status lines must shrink inside the footer row, so a long
-  // staged-files line wraps within its own column and never pushes the Send note
-  // button onto a line of its own.
+  // The stacked key and status lines must shrink inside the footer row, so a long staged-files
+  // line wraps within its own column and never pushes the Send note button onto a line of its own.
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
   const rule = /\.compose \.row > \.stack {[^}]*}/.exec(css);
   assert.ok(rule, 'the footer stack has its own rule');
@@ -2762,9 +2708,8 @@ test('the phone footer keeps Send beside a long status', () => {
 });
 
 test('a wide table scrolls sideways on its own and keeps its words whole', () => {
-  // The report and message text wrap anywhere, so a cell could shrink to one character: a wide
-  // table squeezed and broke its words instead of scrolling. Each table is its own scroll box now,
-  // as on GitHub, and its cells wrap only between words.
+  // Report and message text wrap anywhere. A table cell could shrink to one character. Wide tables now scroll.
+  // Each table is its own scroll box now, as on GitHub, and its cells wrap only between words.
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
   const table = /\.report table, \.message-text table {[^}]*}/.exec(css);
   assert.ok(table, 'the tables have their own rule');

@@ -70,7 +70,7 @@ WORKSPACE_SKIP = {
   "target",
 }
 FETCH_LEASE = timedelta(minutes=5)
-# File bytes live beside the database, never inside it; stored names are relative to state.
+# File bytes live beside the database, never inside it. Stored names are relative to state.
 UPLOAD_DIR = "uploads"
 FETCH_DIR = "downloads"
 
@@ -101,7 +101,7 @@ CHOICE = re.compile(r"^\s*[-*]\s+\(([ xX]?)\)\s+(\S.*?)\s*$")
 CHECKBOX = re.compile(r"^\s*[-*]\s+\[([ xX]?)\]\s+(\S.*?)\s*$")
 BLANK = re.compile(r"^(?:(.*?)[\s:])?_{3,}\s*$")
 ANCHOR = re.compile(r"\s*\{#([a-zA-Z0-9_-]{1,80})\}\s*$")
-# A wrapped option label may run past its marker line; a block start ends the option instead.
+# A wrapped option label may run past its marker line. A block start ends the option instead.
 BLOCK_START = re.compile(
   r"^ {0,3}(?:"
   r"#{1,6}(?:\s|$)|"
@@ -172,11 +172,10 @@ AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
 AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
-# silence after a turn never reads as a running bash call; the agent's next call clears it.
+# silence after a turn never reads as a running bash call. The agent's next call clears it.
 TURN_ENDED_META = "turn_ended_at"
-# A removal deletes rows, so the group stamps alone can only hold still or move back. The
-# state stamp reads this mark too, so a save that still carries a removed report is rewritten
-# by its own stamp trigger.
+# A removal deletes rows, so group stamps can move back. The state stamp also reads this mark.
+# The save stamp trigger rewrites a file that still has a removed report.
 REMOVED_META = "state_removed_at"
 # The unpublish guard holds until seen, not a timed view window.
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
@@ -511,12 +510,12 @@ def stamp_age_seconds(value):
 
 
 def clip_stamp(value):
-  """Cut an ISO stamp to seconds; a restore needs no milliseconds or offset."""
+  "Cut an ISO stamp to seconds. A restore needs no milliseconds or offset."
   return value[:19] if value else value
 
 
 def at_or_after(value, other):
-  """True when a stored stamp is at or after another; equal seconds count."""
+  "True when a stored stamp is at or after another. Equal seconds count."
   if not value or not other:
     return False
   return clip_stamp(value) >= clip_stamp(other)
@@ -567,11 +566,8 @@ def when(value):
 
 
 def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
-  """Validate the receipt a restored line carries: all three fields, or none of them.
-
-  A partial receipt is refused rather than filled in, because supplying the missing half
-  is how a note comes back answered when nobody answered it.
-  """
+  """Validate a restored receipt. Require all receipt fields or none. Reject a partial receipt so a note never
+  returns as answered."""
   carried = (acknowledged_at, ack_kind, ack_text)
   if all(value is None for value in carried):
     if ack_edited_at is not None:
@@ -592,11 +588,8 @@ def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
 
 
 def restore_replies(replies, acknowledged):
-  """Validate the replies a second and later ack appended: a list of kind, text and stamp.
-
-  A reply block cannot exist without the first answer, so replies on an unanswered line
-  are refused the way a partial receipt is. The database keeps the list as JSON text.
-  """
+  """Validate replies from later acknowledgements. Require kind, text, and a stamp for each reply. Reject replies
+  on an unanswered record. Store the list as JSON text."""
   if not replies:
     return None
   if not acknowledged:
@@ -638,7 +631,7 @@ def message_row(row):
 
 
 def restore_reply_seen_count(value, replies):
-  """Validate how many appended replies a save records as already viewed."""
+  "Validate the saved count of viewed appended replies."
   if value is None:
     return 0
   if type(value) is not int or value < 0:
@@ -649,7 +642,7 @@ def restore_reply_seen_count(value, replies):
 
 
 def submission_text(text):
-  """Validate the flattened owner answers."""
+  "Validate flattened owner answers."
   if not isinstance(text, str) or not text.strip():
     raise ValueError("A report submission carries at least one answer")
   return text
@@ -673,15 +666,14 @@ def prompt_text(line):
 def custom_label(option):
   """The label of a free-text option, or None for a plain one.
 
-  `Label: ___` means free text whether it is a whole field or one option in a group, so the
-  same BLANK pattern decides both; a bare `___` option falls back to the label `Other`.
-  """
+  `Label: ___` means free text whether it is a whole field or one option in a group, so the same BLANK pattern
+  decides both. A bare `___` option falls back to the label `Other`."""
   found = BLANK.match(option)
   return None if not found else prompt_text(found.group(1) or "") or "Other"
 
 
 def custom_answer(field, value):
-  """True when `value` is typed text for one of this field's free-text options."""
+  "Return true when a free-text option in this field receives typed text."
   if not isinstance(value, str):
     return False
   for option in field["options"]:
@@ -817,9 +809,8 @@ def field_html(question):
 
 TASK_STATUSES = ("upcoming", "finished")
 TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
-# A note ID is six hex characters, alone or followed by a hyphen and the rest for a row
-# minted before the six-character change, and the shape check above accepts it as a task
-# name without this.
+# A note ID is six hex characters, alone or followed by a hyphen and the rest for a row minted
+# before the six-character change, and the shape check above accepts it as a task name without this.
 NOTE_ID = re.compile(r"^[0-9a-f]{6,7}(?:-[0-9a-f]+)?$")
 MAX_TASK_TITLE = 200
 MAX_TASK_DETAIL = 2000
@@ -828,9 +819,8 @@ MAX_TASK_DETAILS = 40
 TASK_STEP_MAX = 120
 ECHO_DETAIL = 200
 TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked, report_id"
-# Each kind's own table and the columns elsewhere that carry its ID. The schema
-# declares no foreign keys and no connection sets PRAGMA foreign_keys, so nothing
-# cascades on its own: a rename repoints these rows by hand.
+# Each kind has its own table and ID columns. No foreign keys or cascades change these rows.
+# A rename repoints them by hand.
 RENAME_TARGETS = {
   "note": ("notes", (("uploads", "note_id"),)),
   "answer": ("submissions", ()),
@@ -839,11 +829,8 @@ RENAME_TARGETS = {
 }
 RENAME_TABLES = ("notes", "submissions", "reports", "tasks")
 
-# The save file carries note, task and answer lines through one importer. Keys are named
-# here so the writer and reader cannot drift apart.
-#
-# The default path is `saved-state.ndjson` inside the state directory, which the installer
-# ignores through `core.excludesFile`. `--save-path` moves it.
+# The importer carries note, task, and answer lines through one schema.
+# Name keys here so the writer and reader stay aligned. The default save path stays inside the ignored state directory.
 CLI_DESCRIPTION = "Notes, reports, tasks and the preview server for Arena steering."
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
@@ -924,11 +911,10 @@ def state_ndjson(lines):
 
 
 def saved_task_line(record):
-  """Return the keys a saved task line carries; details keep their list shape.
+  """Return the keys a saved task line carries. Details keep their list shape.
 
-  The report link rides only when a task has one, so a task line stays disjoint from an
-  answer line, which is the only other line that carries a `report_id`.
-  """
+  The report link rides only when a task has one, so a task line stays disjoint from an answer line, which is
+  the only other line that carries a `report_id`."""
   if not isinstance(record, dict):
     raise TypeError("Every saved task is an object")
   line = {key: record.get(key) for key in TASK_LINE_KEYS}
@@ -939,7 +925,7 @@ def saved_task_line(record):
 
 
 def upload_name(name):
-  """The owner's file name, kept for display and for the download header."""
+  "Return the supplied file name for display and the download header."
   cleaned = Path(str(name or "")).name.strip()
   if not cleaned:
     raise ValueError("An upload needs a file name")
@@ -954,7 +940,7 @@ def header_filename(name):
 
 
 def fetch_url(value, *, agent=True):
-  """Accept one HTTPS URL without credentials or control characters; the server never fetches it."""
+  "Accept one HTTPS URL without credentials or control characters. The server never fetches it."
   if not isinstance(value, str) or not value.strip() or (agent and len(value) > 2048):
     raise ValueError("Enter one HTTPS URL of at most 2048 characters")
   value = value.strip()
@@ -984,7 +970,7 @@ def fetch_row(row, directory):
 
 
 def upload_type(content_type):
-  """The content type the browser sent, or a neutral one; it never decides how the bytes are read."""
+  "Return the browser content type or a neutral type. Do not use it to read bytes."
   cleaned = str(content_type or "").split(";")[0].strip()[:120]
   return cleaned or "application/octet-stream"
 
@@ -1166,7 +1152,7 @@ def upload_row(row, directory):
 
 
 def add_note_attachments(note, records):
-  """Expose all file paths to the agent and names to the receipt; keep first-file compatibility."""
+  "Expose all file paths to the agent and names to the receipt. Keep first-file compatibility."
   if records:
     note["attachment_name"] = records[0]["name"]
     note["attachment_path"] = records[0]["path"]
@@ -1175,7 +1161,7 @@ def add_note_attachments(note, records):
 
 
 def bare_id(token):
-  """The ID as one token: the ticks `read` prints are accepted back, and blanks go."""
+  "Return one ID token. Accept a token wrapped in backticks. Reject blank values."
   return str(token or "").strip().strip("`").strip()
 
 
@@ -1253,11 +1239,10 @@ def current_task(tasks):
 
 
 def format_task_list(tasks, full=False):
-  """The working queue by default; `full` prints every task, finished included.
+  """The working queue by default. `full` prints every task, finished included.
 
-  The first unblocked upcoming task reads `current`, the same one the page gives a div of its
-  own, so what the agent can start next is visible without reading down a list.
-  """
+  The first unblocked upcoming task reads `current`, the same one the page gives a div of its own, so what the
+  agent can start next is visible without reading down a list."""
   shown = tasks if full else [t for t in tasks if t.get("status") == "upcoming"]
   lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
   head = None if full else current_task(shown)
@@ -1366,13 +1351,8 @@ def require_server(store):
 
 
 def print_read(store):
-  """Print a read listing, then stamp Seen for the IDs it delivered.
-
-  The stamp follows the write on purpose: a write that fails or never reaches the
-  agent leaves every printed note unseen, so the next read delivers it again.
-  Pending selection is the acknowledgement queue, so a stamped note still prints
-  until it is answered.
-  """
+  """Print pending entries, then mark delivered IDs as seen. Mark IDs after the write so a failed write leaves each
+  entry pending. A seen entry stays pending until acknowledgement."""
   listing = store.read()
   print(format_read(listing), flush=True)
   store.mark_seen([item["id"] for item in listing["pending"]])
@@ -1386,7 +1366,8 @@ HOLD_STALE_SECONDS = 1800
 # One loop a second, so the wait spans the bash tool's 1800-second ceiling.
 POLL_MAX_LOOPS = 1800
 POLLING_META = "polling_at"
-# The wait start is stamped once, so the page can show how long the agent has waited.
+# Stamp the wait start once.
+# The page then shows the agent wait length.
 POLL_SINCE_META = "polling_since"
 # The page shows its polling dot while a poll heartbeat is no older than this.
 POLLING_FRESH_SECONDS = 5.0
@@ -1473,12 +1454,8 @@ SERVE_PORT_RE = re.compile(
 
 
 def serve_warning(line):
-  """A warning when a serve names a port other than the default.
-
-  The poll follows the port the state records, and the owner's page lives on the address
-  the skill names, so an off-default serve hides both. The gate reads the line before the
-  call runs, so the port is named while the change is still cheap.
-  """
+  """Warn when `serve` uses a nondefault port. The poll and page use the recorded port, so another port hides both.
+  Inspect the line before it runs."""
   found = SERVE_PORT_RE.search(line or "")
   if not found or int(found.group(1)) == DEFAULT_PORT:
     return None
@@ -1489,10 +1466,8 @@ def serve_warning(line):
   )
 
 
-# The hosts this sandbox type reaches, read from docs/archive/arena-quirks.md, section
-# "Sandbox egress allowlist, GitHub session" (observed 2026-10-03). A fetch to any other
-# host resolves and accepts TCP, then fails the TLS handshake with SSL_ERROR_SYSCALL.
-# That reads as a transient fault, so a session retries it instead of reporting a limit.
+# Sandbox hosts come from arena-quirks.md: "Sandbox egress allowlist, GitHub session" (2026-10-03).
+# Other hosts resolve and accept TCP, then fail TLS with SSL_ERROR_SYSCALL. Callers retry this transient fault.
 EGRESS_ALLOWLIST = frozenset(
   (
     "github.com",
@@ -1514,12 +1489,8 @@ URL_HOST_RE = re.compile(r"(?:https?|ftp)://([^/\s\"'@?]+)")
 
 
 def egress_warning(line):
-  """A warning when a line fetches a host the sandbox egress filter blocks.
-
-  The gate reads the line before it runs, so the block is named while the session
-  can still switch tools. `fetch_page` runs outside the sandbox and reaches hosts
-  this filter blocks, which makes it the route to suggest.
-  """
+  """Warn before a command reaches a host that the sandbox filter blocks. Suggest `fetch_page`, which runs outside
+  the sandbox."""
   text = line or ""
   if not FETCH_COMMAND_RE.search(text):
     return None
@@ -1539,16 +1510,9 @@ def egress_warning(line):
 
 
 def first_blocking_piece(line):
-  """Return the first command piece that ends the quiet-line exemption, or None.
-
-  A line that names an inbox call runs nothing else when this returns None.
-
-  The gate exempts a line so a read reaches its read. Work beside the read must
-  not ride that exemption: every command on the line is either an inbox call or
-  an inert prefix, or the line meets the count gate like any other work. A
-  redirect on an inbox call ends the exemption: it discards the reminder that
-  read delivers. Debug traps that silence output with >/dev/null are ignored.
-  """
+  """Return the first command that ends the inbox-only exemption. Return None only when the line contains an inbox
+  call and inert prefixes. A redirect ends the exemption because it hides the reminder. Ignore debug traps that
+  silence output."""
   text = unquote_commands(line)
   for separator in ("&&", "||", ";", "|", "\n"):
     text = text.replace(separator, "\x00")
@@ -1567,10 +1531,10 @@ def first_blocking_piece(line):
       idx += 1
       while idx < len(tokens) and tokens[idx].startswith("-"):
         idx += 1
-        # -c takes a following arg that is the script; skip it if present
+        # -c takes a following arg that is the script. Skip it if present
         # but keep checking remaining pieces via outer split.
         if idx < len(tokens) and tokens[idx - 1] == "-c":
-          # The script itself is handled via newline split, so stop here
+          # Split the script by newline and stop here.
           break
       if idx >= len(tokens):
         continue
@@ -1579,8 +1543,7 @@ def first_blocking_piece(line):
       continue
     if head in ("arena-preview", "preview.py"):
       rest = tokens[idx + 1 :]
-      # A substitution runs work beside the read; a plain redirect is ignored
-      # for debug traps that silence output.
+      # A substitution runs work beside the read. Ignore a plain redirect for debug traps.
       if any(token.startswith("$(") or "`" in token for token in rest):
         return piece.strip()
       continue
@@ -1593,10 +1556,8 @@ def quiet_inbox_line(line):
   return first_blocking_piece(line) is None
 
 
-# The commands an agent chains around an inbox call. Each one ends the quiet-line
-# exemption, so a blocked call names the ones it ran. A cd prefix
-# is fine on the line, so the hint never names it; the count gate still holds a cd line
-# past the threshold.
+# Commands around an inbox call end its quiet-line exemption and appear in the block hint.
+# A cd prefix may stay on a line but still counts against the call threshold.
 GATE_NOISE = ("tail", "grep", "head")
 
 
@@ -1682,7 +1643,7 @@ def live_runs(state_dir):
 
 
 def skip_poll_ready(store):
-  """True when the press may end the wait: it is armed and no detached run is live."""
+  "Return true when the owner requests a skip and no detached run is live."
   return store.skip_poll_requested() and not live_runs(store.path.parent)
 
 
@@ -1775,9 +1736,8 @@ def poll_timeout_line(line):
   return False
 
 
-# The command families that wait on a pull request's checks. A bash call holds the
-# turn open while it waits, so the gate refuses the line and names the background
-# tool that takes the run instead.
+# The command families that wait on a pull request's checks.
+# A bash wait holds the turn open. The gate refuses it and names the background tool.
 PR_CHECK_COMMANDS = (("pr", "checks"), ("run", "watch"))
 # A wrapper in front of the head token changes only that token, so the scan steps past
 # one and the flags, assignments or seconds that follow it.
@@ -1792,14 +1752,11 @@ PR_CHECK_WRAPPERS = (
   "sudo",
 )
 PR_CHECK_NAMES = (("pr", "checks", "pr-checks"), ("run", "watch", "run-watch"))
-# Long runs that hold a turn open the way a check wait does: a test suite can outrun the
-# call that started it, so the trap starts these detached too. The heads carry no
-# repository knowledge, so the same set serves every repo the installer touched.
+# Long test runs can outlive their shell call. The trap detaches them as it detaches check waits.
+# The heads carry no repository knowledge, so the same set serves every repo the installer touched.
 LONG_RUN_HEADS = {"pytest": "pytest", "py.test": "pytest", "tox": "tox", "nox": "nox"}
-# A runner that names its command in the words after the head. Each rule holds the words
-# and the run name; a word that ends in `*` matches its prefix, so `npm run test:unit`
-# counts. Every rule names a test command on its own, while a build command (`npm
-# install`, `make build`, `go build`) stays legal.
+# Each rule stores command words and a run name. A final `*` matches a prefix, so `npm run test:unit` counts.
+# Test commands match alone. Build commands (`npm install`, `make build`, `go build`) stay legal.
 LONG_RUN_WORDS = (
   (("npm", "test"), "npm-tests"),
   (("npm", "run", "test*"), "npm-tests"),
@@ -1834,12 +1791,8 @@ DETACH_DRY_RUN = "ARENA_PREVIEW_DETACH_DRY"
 
 
 def long_run_words(tokens, index, head):
-  """The run name a word rule gives at this head position, or None.
-
-  The head arrives already stripped of its path and quoting, so a rule reads the words
-  after it. A flag between the head and the rule words is skipped, because `npm -s run
-  test` and `npx --yes jest` name the same runner as their plain forms.
-  """
+  """Return the matching runner name at this head position. The caller removes paths and quotes first. Skip flags
+  between the head and runner words."""
   rest = [token for token in tokens[index + 1 :] if not token.startswith("-")]
   for words, name in LONG_RUN_WORDS:
     if head != words[0]:
@@ -1856,15 +1809,8 @@ def long_run_words(tokens, index, head):
 
 
 def long_run_name(line):
-  """The run name for a long run the gate detaches, or None for any other line.
-
-  The families are the check waits (`gh pr checks`, `gh run watch`) and the test runs
-  (`pytest`, `python -m pytest`, `node --test`). A wrapper (`env gh pr checks 7`), a flag
-  before the family (`gh -R repo pr checks 7`), a substitution, and a chained piece all
-  count, so the head moves past the wrapper and the family words are read wherever they
-  sit after it. A line that merely prints the words stays fine, and `bash` keeps its own
-  gate.
-  """
+  """Return a detached-run name or None. Recognize check waits and test runs after wrappers, flags, substitutions,
+  or chains. Ignore a line that only prints those words. Let `bash` use its own gate."""
   text = unquote_commands(line or "")
   for separator in ("&&", "||", ";", "|", "\n", "$(", "`"):
     text = text.replace(separator, "\x00")
@@ -1950,19 +1896,15 @@ def write_detached_placeholder(state_dir, name, argv):
   return path
 
 
-# The three answers the PR-check tick gives its hook. The hook tells them apart: a
-# line that only mentions the words still runs, a started wait ends the call clean,
-# and a failed start keeps the refusal.
+# The three answers the PR-check tick gives its hook.
+# The hook allows lines that only mention wait words. A started wait ends the call clean. A failed start keeps refusal.
 PR_CHECK_OTHER = 0
 PR_CHECK_RUNS = 1
 PR_CHECK_REFUSED = 2
 
 
-# The harness runs an agent line as `bash -l -c <the line>`, so the recorded command
-# line carries that wrapper. A replay of the wrapper reads its own `-c` argument as the
-# command and the child then loses the working directory the harness set, so the wrapper
-# leaves before the line runs anywhere else. Only a login shell is stripped: a `bash -c`
-# the agent wrote itself stays part of the line.
+# The harness wraps an agent line in `bash -l -c`.
+# Remove only that login-shell wrapper before replay. Keep an agent-written `bash -c` command intact.
 SHELL_BASENAMES = ("bash", "sh", "dash", "ksh", "zsh")
 
 
@@ -2024,9 +1966,8 @@ def detach_run(state_dir, name, argv):
   write_detached_placeholder(state_dir, name, argv)
   if os.environ.get(DETACH_DRY_RUN):
     return True
-  # A plain `bash -c` reads no login profile, so a child never meets the gate that
-  # started it. The marker covers a shell that sources the gate anyway, and BASH_ENV
-  # leaves with it.
+  # A plain `bash -c` reads no login profile, so a child never meets the gate that started it.
+  # The marker covers a shell that sources the gate anyway, and BASH_ENV leaves with it.
   child_env = {
     key: value
     for key, value in os.environ.items()
@@ -2118,12 +2059,8 @@ def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
   listing = {"checked_at": None, "pending": []}
-  # The wait always runs its span; only a new message, a new task or a failed branch
-  # check breaks it, and each sits inside the loop so a late arrival breaks a wait too.
-  # One heartbeat a second, so the page can light its dot while the agent waits here.
-  # The wait can run its full span, but the bash tool's own timeout can cut the call
-  # first. Say so up front: a call that ends early with nothing to read was cut, and
-  # the retry needs the tool timeout at 1800.
+  # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
+  # The Bash timeout can cut it short, so tell agents to retry with a tool timeout of 1800.
   print(
     "POLL: 1800 s; a cut call retries with the tool timeout at 1800.",
     file=sys.stderr,
@@ -2168,9 +2105,8 @@ def poll_inbox(store, sleeper=None):
       if open_tasks:
         listing["tasks"] = open_tasks
         names = ", ".join(item["id"] for item in open_tasks)
-        # The early return must not read as an empty wait: the turn continues that task, and the
-        # still-up list must be handled before the next poll. The line rides stderr and
-        # stdout both, so a turn that reads only stdout still meets the warning.
+        # The early return continues the task. Process the still-up list before the next poll.
+        # The line rides stderr and stdout both, so a turn that reads only stdout still meets the warning.
         continue_line = (
           f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn."
         )
@@ -2178,16 +2114,14 @@ def poll_inbox(store, sleeper=None):
         print(format_task_list(listing.get("tasks", [])), flush=True)
         print_poll_hold(store)
         return 0
-      # A message or an unblocked task outranks a skip: the turn reads that item first.
-      # A live detached run outranks it too: its verdict is still coming, and the press
-      # waits armed until the run finishes. Only then does the skip end the turn.
+      # A message, unblocked task, or live detached run outranks a skip so its verdict arrives first.
+      # The skip stays armed until the run ends. It ends the turn only then.
       if skip_poll_ready(store):
         store.take_skip_poll()
         # The skip ends the turn here, so the header learns the turn is over.
         store.mark_turn_ended()
-        # The skip is one-shot and never a message: the turn ends here, and no note repeats.
-        # This rides stdout with the rest of the poll's own output. On stderr it mixed into
-        # the gate's rotating hints, and an agent read it as a hint and polled again.
+        # A one-shot skip prints on stdout, never as a repeated note.
+        # On stderr it merged with gate hints and made agents poll again.
         print(
           "SKIP: owner pressed Skip poll. End the turn, no second poll.",
           flush=True,
@@ -2252,15 +2186,14 @@ def check_task_steps(details):
 
 
 def check_task(task_id, title, details):
-  """Validate one task's fields before anything is written."""
+  "Validate task fields before a write."
   if not TASK_ID.match(task_id or ""):
     raise ValueError(
       "A task ID is 1-64 characters of lowercase letters, digits and hyphens,"
       " and starts with a letter or digit"
     )
-  # A note ID passes the shape check, so it needs its own refusal: a task named after the note
-  # it answers puts one ID on two things, and the agent that reaches for the note ID reads the
-  # fix here.
+  # A note ID passes the shape check, so it needs its own refusal: a task named after the note it
+  # answers puts one ID on two things, and the agent that reaches for the note ID reads the fix here.
   if NOTE_ID.match(task_id or ""):
     raise ValueError(
       "That ID is a note ID. A task ID names the job: give the task a proper name,"
@@ -2310,14 +2243,11 @@ def put_back(rendered, held, slug):
 def render_report_block(markdown):
   """Render a markdown chunk, letting allowlisted list markup through the renderer.
 
-  Bare ul, ol and li tags pass anywhere when they form one contiguous block of tags and
-  padding; the text around and between them renders as markdown (a `<li>`'s text
-  renders inline, so **bold** survives). A tag with an attribute, or any other tag,
-  keeps escaping like every other HTML.
-  """
-  # A maximal run of list tags with optional whitespace between them is one holdout;
-  # the run stays inline so a table cell keeps its structure, and the spaces around
-  # let markdown end the paragraph on either side.
+  Bare ul, ol and li tags pass anywhere when they form one contiguous block of tags and padding. The text around
+  and between them renders as markdown (a `<li>`'s text renders inline, so **bold** survives). A tag with an
+  attribute, or any other tag, keeps escaping like every other HTML."""
+  # A maximal run of list tags and optional whitespace is one holdout.
+  # Keep it inline in table cells. Surrounding spaces let Markdown end adjacent paragraphs.
   tagged, held = hold_out(
     markdown,
     r"(?:\s*(?:</?(?:ul|ol|li)>)\s*){2,}",
@@ -2362,9 +2292,8 @@ class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
     self.path = directory / "state.sqlite3"
-    # The save file is not the database, and it lands beside it by default: one directory the
-    # installer ignores through core.excludesFile carries both, and a sandbox restore keeps a
-    # path the repository does not ignore.
+    # The save file is not the database, and it lands beside it by default: one directory the installer ignores
+    # through core.excludesFile carries both, and a sandbox restore keeps a path the repository does not ignore.
     self.save_path = Path(save_path) if save_path else self.path.parent / SAVED_STATE
     existed = self.path.is_file()
     if not create and not existed:
@@ -2445,7 +2374,7 @@ class Store:
         # never wakes a poll or stops a command. The userscript posts the key this way.
         db.execute("ALTER TABLE notes ADD COLUMN quiet INTEGER NOT NULL DEFAULT 0")
       if "origin" in columns:
-        # The author tag is gone from the note schema; drop a column a restore might
+        # The author tag is gone from the note schema. Drop a column a restore might
         # still carry so SELECT * never resurfaces it on the state surface.
         db.execute("ALTER TABLE notes DROP COLUMN origin")
         columns.discard("origin")
@@ -2512,7 +2441,7 @@ class Store:
         # Older uploads posted one notification note with the upload's ID. Keep those links.
         db.execute("UPDATE uploads SET note_id = id WHERE note_id IS NULL")
       db.execute("CREATE INDEX IF NOT EXISTS uploads_note_id ON uploads(note_id)")
-      # Older owner-entered jobs stay claimable after the approval column is introduced.
+      # Keep older owner-entered jobs claimable after this migration.
       columns = {row["name"] for row in db.execute("PRAGMA table_info(fetch_jobs)")}
       if "approval" not in columns:
         db.execute(
@@ -2607,14 +2536,8 @@ class Store:
     ack_edited_seen_count=None,
     quiet=False,
   ):
-    """Record a message; a restore carries its receipt and it is written as given.
-
-    Nothing here stamps a receipt with now(), because a restored acknowledgement has to
-    say when it was actually written. Read state rides along on the same terms and answers
-    to nobody, so a line seen but never answered comes back seen and unacknowledged. An ID
-    that is already stored keeps the record it has, so importing the same log twice
-    changes nothing.
-    """
+    """Store a message with its supplied receipt and read state. Never replace a restored receipt stamp. Leave
+    existing IDs unchanged so imports stay idempotent."""
     identifier(note_id)
     owner_text(text)
     receipt = restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at)
@@ -2668,13 +2591,8 @@ class Store:
     replies=None,
     ack_edited_seen_count=None,
   ):
-    """Record report answers apart from user messages; the log never shows them.
-
-    `import-state` restores a saved answer through here too, receipt and all, for the same
-    reason a note keeps its own: the save file exists so a restore returns what the owner
-    sent, and an answer that comes back unread was read when the agent read it. An ID
-    already stored keeps its record.
-    """
+    """Store report answers separately from messages. Restore receipts and read state without new stamps. Leave
+    existing IDs unchanged."""
     identifier(submission_id)
     identifier(report_id)
     submission_text(text)
@@ -2735,12 +2653,8 @@ class Store:
       ]
 
   def state(self):
-    """The page's state, with every stamp cut to seconds.
-
-    The shift-click copy and the save file restore from this shape, and a restore
-    needs no milliseconds or offset, so the state surface carries second stamps
-    while the database keeps what it was given.
-    """
+    """Return page state with second-precision stamps. The save file and shift-click copy restore this shape. Keep
+    full stamps in the database."""
     tasks = self.tasks()
     with closing(self.connect()) as db:
       meta = dict(db.execute("SELECT key, value FROM meta"))
@@ -2839,13 +2753,13 @@ class Store:
         # The header suppresses the long call text after this mark and turns amber past the
         # quiet window, since silence after a returned poll is not a running call.
         "turn_ended_at": clip_stamp(meta.get(TURN_ENDED_META)),
-        # The hook stamps this after every bash call; the long call text holds only while
+        # The hook stamps this after every bash call. The long call text holds only while
         # the last seen stamp is newer, so a finished call never reads as running.
         "agent_call_ended_at": clip_stamp(meta.get(AGENT_CALL_ENDED_META)),
       }
 
   def tasks(self):
-    """Both divs as records in order, or None while nothing is stored."""
+    "Return ordered task records for both page divs. Return None when no task exists."
     with closing(self.connect()) as db:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id"
@@ -2882,9 +2796,8 @@ class Store:
   def free_id(self):
     """A six-character ID no stored row holds, so a server mint never lands on a record.
 
-    Six characters name a note whole, and the mint shares that space with every stored
-    row. A clash re-mints; a state that fills the space refuses instead of looping.
-    """
+    Six characters name a note whole, and the mint shares that space with every stored row. A clash re-mints. A
+    state that fills the space refuses instead of looping."""
     tables = ("notes", "submissions", "uploads", "reports", "tasks")
     with closing(self.connect()) as db:
       for _ in range(MINT_ATTEMPTS):
@@ -2898,12 +2811,8 @@ class Store:
 
   @contextmanager
   def transaction(self, db=None, autosave=True):
-    """One commit for this call's work, or a caller's open transaction when it passes one.
-
-    An import needs the second form: a delete and several writes that all land or none do.
-    A committed outer transaction then refreshes the save file, unless the caller already
-    wrote it and passes `autosave=False`.
-    """
+    """Use one transaction for the work. Reuse a supplied transaction so imports can delete and write atomically.
+    Refresh the save file after an outer commit unless autosave is false."""
     if db is not None:
       yield db
       return
@@ -2923,13 +2832,8 @@ class Store:
     report_id=None,
     shared=None,
   ):
-    """Insert or update one task and return it as stored.
-
-    A title or details left out keep the stored ones, so moving a task between
-    the two divs is one short command rather than a rewrite of the whole list.
-    A transaction passed in is written into rather than committed separately,
-    which is what lets an import be one atomic replacement.
-    """
+    """Insert or update a task and return it. Keep omitted title and detail values. Use a supplied transaction so
+    imports remain atomic."""
     details = [str(item) for item in details if str(item).strip()] if details else None
     check_task(task_id, title, details)
     if status is not None and status not in TASK_STATUSES:
@@ -3008,8 +2912,8 @@ class Store:
           report_id,
         ),
       )
-      # Positions are written from the computed list, because the row just upserted can tie
-      # with a sibling it was inserted before, and a tie would reorder them by ID.
+      # Write positions from the computed list.
+      # A tie could reorder siblings by ID.
       for position, item in enumerate(siblings, 1):
         db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, item["id"]))
       self.renumber(db)
@@ -3039,7 +2943,7 @@ class Store:
     )
 
   def remove_task(self, task_id):
-    """Delete one task and return what was stored, so the echo can confirm it."""
+    "Delete one task and return its stored record. This lets the echo confirm the removal."
     with self.transaction() as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
@@ -3130,17 +3034,8 @@ class Store:
       print(f"preview: autosave failed: {error}", file=sys.stderr)
 
   def state_lines(self, notes, tasks):
-    """Return the save-file lines and their counts for one state snapshot.
-
-    Notes carry their receipts, read stamps and task markers, because a restore that drops any
-    of them is the failure this exists to prevent; task lines keep their status and order, so the
-    queue comes back in the same shape. Answer lines come from the database rather than from the
-    page, because the owner's report answers are stored here the moment they are sent, and an
-    answer that a restore drops is an answer the owner has to type again. Report lines carry
-    each report's markdown, so a restore that rebuilds the database brings the report pages
-    back instead of leaving the answers without their reports. An answer whose report is no
-    longer published stays out of the save, because a removed report leaves nothing behind.
-    """
+    """Build save-file lines and counts for one state snapshot. Include note receipts, read stamps, task markers,
+    task order, answers, and report Markdown. Omit answers for unpublished reports."""
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
     lines = [saved_note_line(record) for record in notes]
@@ -3188,9 +3083,8 @@ class Store:
           if stamp and (newest is None or stamp > newest):
             newest = stamp
         stamps[group] = newest.isoformat() if newest else None
-      # A removal deletes the newest row of its group, so the group maxes alone can hold
-      # still or move back. The removal mark carries the stamp forward, so the save's own
-      # stamp trigger rewrites a file that still carries the removed report.
+      # A removal can move a group maximum back. Its removal mark carries the newest stamp forward.
+      # The save stamp trigger rewrites a file that still contains the removed report.
       removed = db.execute(
         "SELECT value FROM meta WHERE key = ?", (REMOVED_META,)
       ).fetchone()
@@ -3199,14 +3093,8 @@ class Store:
     return stamps
 
   def newest_stamp(self, stamps=None):
-    """Return the newest stamp the state carries, in UTC, or None.
-
-    The owner's browser names a downloaded state with this stamp, so the name comes
-    from the state the server exports rather than from the browser clock. Any committed
-    change moves it, receipts included, so the file follows the state. The poll
-    heartbeat stays out, because it changes on every listing. A caller that already
-    holds the per-group stamps passes them, so the state is read once.
-    """
+    """Return the latest state stamp in UTC. Use it in a download name so the name follows state rather than
+    browser time. Exclude the poll heartbeat. Accept already-read group stamps."""
     stamps = stamps or self.newest_stamps()
     values = [import_stamp(value) for value in stamps.values()]
     values = [value for value in values if value]
@@ -3215,12 +3103,11 @@ class Store:
   def save_state(self, payload):
     """Write the current state to the save file, in the shape the importer reads.
 
-    Autosave calls this after every committed mutation, so the file follows the database with no
-    button press. The page copies the same text from `/api/copy-state`; it posts nothing.
+    Autosave calls this after every committed mutation, so the file follows the database with no button press.
+    The page copies the same text from `/api/copy-state`. It posts nothing.
 
-    The file lands inside the state directory unless a path overrides it, so one
-    globally ignored directory carries the database and its export together.
-    """
+    The file lands inside the state directory unless a path overrides it, so one globally ignored directory
+    carries the database and its export together."""
     if not isinstance(payload, dict):
       raise TypeError("Save a state object")
     notes = payload.get("notes")
@@ -3320,7 +3207,7 @@ class Store:
     return upload_row(row, self.path.parent)
 
   def note_with_uploads(self, note_id, text, files):
-    """Store several linked files and one note in one transaction; identical retries are safe."""
+    "Store several linked files and one note in one transaction. Identical retries are safe."
     identifier(note_id)
     owner_text(text)
     if not isinstance(files, (list, tuple)) or len(files) < 1:
@@ -3398,7 +3285,7 @@ class Store:
     return result
 
   def fetch_jobs(self):
-    """Queue status and saved file locations; a claim token never reaches the state poll."""
+    "Queue status and saved file locations. A claim token never reaches the state poll."
     with closing(self.connect()) as db:
       rows = db.execute("SELECT * FROM fetch_jobs ORDER BY seq DESC").fetchall()
     return [fetch_row(row, self.path.parent) for row in rows]
@@ -3455,7 +3342,7 @@ class Store:
     return fetch_row(row, self.path.parent)
 
   def claim_fetch(self):
-    """Atomically take the oldest queued URL; abandoned claims return after five minutes."""
+    "Atomically take the oldest queued URL. Abandoned claims return after five minutes."
     stamp = now()
     with self.transaction(autosave=False) as db:
       # UPDATE obtains SQLite's write lock before SELECT, so two browser tabs cannot take the
@@ -3606,7 +3493,7 @@ class Store:
       if target is not None:
         target.unlink(missing_ok=True)
       raise
-    self.autosave()  # the completion wrote an inbox note; unfinished queue rows stay only in SQLite
+    self.autosave()  # the completion wrote an inbox note. Unfinished queue rows stay only in SQLite
     return fetch_row(result, self.path.parent)
 
   def stale_import(self, db, messages):
@@ -3636,7 +3523,7 @@ class Store:
     return None
 
   def import_state(self, text, replace_tasks=False, force=False, merge=False):
-    """Import a backup; the live notes, answers, reports and tasks are replaced unless `merge`."""
+    "Import a backup. Replace live entries unless the caller requests merge."
     records = parse_state_import(text)
     reports = [r for r in records if "markdown" in r and "text" not in r]
     tasks = [
@@ -3697,12 +3584,8 @@ class Store:
     return receipt
 
   def import_reports(self, records, shared=None):
-    """Rebuild report sources from a save file, published state included.
-
-    The save file carries each report's markdown, so a restore that rebuilds the database
-    brings the report pages back with it. Every record is validated before anything is
-    written, as the task import does.
-    """
+    """Restore reports and published state from the save file. Use saved Markdown to rebuild report pages. Validate
+    every record before writing."""
     if not isinstance(records, list):
       raise TypeError("Import a list of report objects")
     prepared = []
@@ -3737,13 +3620,8 @@ class Store:
     return len(prepared)
 
   def import_tasks(self, records, replace=False, autosave=True, shared=None):
-    """Rebuild a list from the JSON a copy button or task-list produced.
-
-    Every record is validated before anything is written, and the whole import is one
-    transaction, so an invalid record costs nothing. Deleting first, as this did, meant a
-    bad record later in the list took the existing list with it and left the replacement
-    half applied, which is data loss rather than an error.
-    """
+    """Restore tasks from saved JSON. Validate every record before writes, then use one transaction. Reject an
+    invalid replacement before it deletes stored tasks."""
     if not isinstance(records, list):
       # The importer also calls this directly, so reject malformed records here.
       raise TypeError("Import a list of task objects")
@@ -3771,10 +3649,8 @@ class Store:
       )
     with self.transaction(shared, autosave=autosave) as db:
       if replace:
-        # A replacement makes every record new, so a title cannot be inherited from a stored
-        # row. Refusing before the delete names the offending record; refusing after it would
-        # still roll back, but the error would arrive with the table emptied inside the
-        # transaction and the record that caused it already written.
+        # Replacement records cannot inherit a title. Reject before deletion to name the offending record.
+        # A later error rolls back before an empty transaction appears saved.
         for task_id, title, _, _, _, _, _ in prepared:
           stored = db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
           if title is None and not stored:
@@ -3827,7 +3703,7 @@ class Store:
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
 
   def request_skip_poll(self, armed=True):
-    """Arm or clear the owner's Skip poll press; the next poll consumes an armed flag once."""
+    "Arm or clear the owner's Skip poll press. The next poll consumes an armed flag once."
     if not armed:
       self.take_skip_poll()
       return {"skip_poll": None}
@@ -3861,7 +3737,7 @@ class Store:
     self.clear_turn_ended()
 
   def mark_turn_ended(self):
-    """Record that the turn ended here; the header reads the mark."""
+    "Record that the turn ended here. The header reads the mark."
     self.set_meta(TURN_ENDED_META, now())
 
   def clear_turn_ended(self):
@@ -3886,7 +3762,7 @@ class Store:
     record = self.agent_key()
     if not record:
       return None
-    # The stored stamp is clipped to seconds with no offset, so it needs the UTC read.
+    # Read the stored stamp as UTC because it has no offset.
     stamp = import_stamp(record["at"])
     if stamp is None:
       return None
@@ -3948,15 +3824,13 @@ class Store:
     return stale
 
   def reminder(self, advance=False):
-    """Count pending kinds without marking any message seen; any count asks for an ack.
+    """Count pending kinds without marking any message seen. Any count asks for an ack.
 
-    The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook
-    poll, and that count prints only beside a pending count, so an idle line carries the tail
-    alone. A poll that finds nothing pending clears the count, so the printed number reports
-    the bash calls since the owner's first still-unread message. Only `--reminder` advances
-    it; a new note or form answer resets it only when it starts a fresh backlog, and `read`
-    does not.
-    """
+    The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook poll, and that
+    count prints only beside a pending count, so an idle line carries the tail alone. A poll that finds nothing
+    pending clears the count, so the printed number reports the bash calls since the owner's first still-unread
+    message. Only `--reminder` advances it. A new note or form answer resets it only when it starts a fresh
+    backlog, and `read` does not."""
     with closing(self.connect()) as db, db:
       uploads = db.execute(
         "SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL"
@@ -3979,7 +3853,7 @@ class Store:
       ).fetchone()[0]
       stale = self.stale_report_ids(db) if published >= STALE_REPORT_THRESHOLD else []
       cursor = meta_number(db, REMINDER_CURSOR)
-      # A new user item resets the count. An idle poll clears it; reading does not.
+      # A new user item resets the count. An idle poll clears it. Reading does not.
       polls = (
         0
         if advance and not (notes + reports + uploads)
@@ -4097,7 +3971,7 @@ class Store:
         )
 
   def mark_replies_seen(self, record_id, count):
-    """Persist the number of appended replies this page actually displayed as viewed."""
+    "Persist the number of appended replies displayed as viewed."
     identifier(record_id)
     if type(count) is not int or count < 0:
       raise ValueError("A viewed-reply count is a nonnegative integer")
@@ -4121,13 +3995,8 @@ class Store:
     raise FileNotFoundError("Message not found")
 
   def mark_task(self, record_id, task_id, shared=None):
-    """Record that a message has a task, on whichever table holds that message.
-
-    The receipt then says so in the log, which is what the owner asked for:
-    a line without a marker leaves the reader unable to tell whether it was read and dropped
-    or read and queued. An unknown message ID raises, and a caller's transaction takes the
-    task with it, so a mistyped ID costs no half-written task.
-    """
+    """Mark the message record that holds a task. Store the marker so the receipt shows whether the agent queued
+    the message. Raise on unknown IDs inside the caller transaction."""
     identifier(record_id)
     identifier(task_id)
     with self.transaction(shared) as db:
@@ -4204,12 +4073,8 @@ class Store:
     return rows[0]["id"]
 
   def acknowledge(self, ids, kind, text):
-    """Answer each ID: the first ack is the receipt, every later one appends a reply block.
-
-    Nothing is replaced: the owner asked that a second ack keep the earlier answer in view
-    and add its own block under it. `ack_edited_at` carries the stamp of the latest added
-    block, so the page can point at the line that grew.
-    """
+    """Store the first acknowledgement as a receipt. Append each later reply without replacing earlier text. Use
+    `ack_edited_at` for the latest reply stamp."""
     if kind not in {"note", "reply"}:
       raise ValueError("Every acknowledgement is a note or a reply, with its text")
     text = note_text(text)
@@ -4271,14 +4136,11 @@ class Store:
     if len(data) > MAX_REPORT:
       raise ValueError("Report exceeds the 2 MB limit; split it into reports")
     text = data.decode("utf-8")
-    # A report whose fields fail validation used to publish happily and then break its own html
-    # route at render time, so the owner could never open it. Refusing here costs the agent one
-    # command and names the offending field; refusing there cost the report and, until the guard
-    # below existed, the HTTP connection with it.
+    # Reject invalid fields before publication so the error names the field and preserves the report and connection.
     fields = parse_fields(text)[1]
     with self.transaction() as db:
       # Sent answers live in the owner's browser under this report ID, so a republish would
-      # reload them pre-filled against fields that no longer match; a new ID starts clean.
+      # reload them pre-filled against fields that no longer match. A new ID starts clean.
       answered = db.execute(
         "SELECT count(*) FROM submissions WHERE report_id = ?", (report_id,)
       ).fetchone()[0]
@@ -4299,15 +4161,8 @@ class Store:
     return len(fields)
 
   def unpublish(self, report_id, dismissed_by_owner=False):
-    """Delete the report's tab row only; its answers and source file stay.
-
-    Sent answers are inbox history the agent already read, and the .md under the
-    state directory is the republish source, so pruning the tab touches neither.
-
-    A dismissal from the page writes one inbox note, because a report that
-    vanishes with no word reads as a report that never arrived. The CLI form
-    stays silent: the agent already knows what it removed.
-    """
+    """Remove only the report tab row. Keep answers and the Markdown source. Let a page dismissal create an inbox
+    note. Keep the CLI form silent."""
     identifier(report_id)
     with self.transaction() as db:
       row = db.execute(
@@ -4316,8 +4171,8 @@ class Store:
       ).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
-      # An unseen report holds the removal: the owner has not opened it yet, so the
-      # tab stays until seen and the Reports tab is closed on the front end.
+      # Hold an unseen report until the owner opens it.
+      # Then close the Reports tab on the front end.
       if not row["seen_at"]:
         raise UnpublishHeld(
           "The report waits for the owner: it has not been seen yet. "
@@ -4342,12 +4197,10 @@ class Store:
   def clear_state(self):
     """Empty every state table in one transaction and return the row counts.
 
-    The owner asked for the page's clear as a command, so it runs while the server
-    stays up: rows go, the schema and the page token stay. The transaction's autosave
-    refreshes the save file to match, so the export does not keep the cleared state;
-    copy the state first to keep a backup. The agent key is channel plumbing the
-    page re-posts on load, not state the owner reads, so the record survives.
-    """
+    The owner asked for the page's clear as a command, so it runs while the server stays up: rows go, the schema
+    and the page token stay. The transaction's autosave refreshes the save file to match, so the export does not
+    keep the cleared state. Copy the state first to keep a backup. The agent key is channel plumbing the page
+    re-posts on load, not state the owner reads, so the record survives."""
     counts = {}
     with self.transaction() as db:
       for table in (
@@ -4369,13 +4222,8 @@ class Store:
     return counts
 
   def mark_report_seen(self, report_id):
-    """Stamp the moment the owner reached the end of a report, and only the first one.
-
-    The stamp records when the report was actually read, so reopening it in another browser
-    keeps that moment instead of moving it. Republishing clears it, which is what makes a
-    changed report unread in fact rather than unread by a comparison the client has to get right.
-    ever_seen survives that clear, so the tab dot waits for a report nobody ever opened.
-    """
+    """Store the first completed report view. Keep that stamp when another browser opens the report. Clear it on
+    republish. Keep `ever_seen` so the tab dot waits for a first view."""
     identifier(report_id)
     with self.transaction() as db:
       row = db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
@@ -4544,7 +4392,7 @@ CODE_BLOCK = re.compile(r"<pre>(.*?)</pre>", re.DOTALL)
 CODE_TAG = re.compile(r"<[^>]+>")
 
 
-# The page's icons are Lucide geometry, vendored inline (ISC; Copyright (c) 2026 Lucide Icons
+# The page's icons are Lucide geometry, vendored inline (ISC. Copyright (c) 2026 Lucide Icons
 # and Contributors). A rendered code block carries the copy shape, the twin of the page's own.
 ICON_COPY = (
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
@@ -4555,12 +4403,8 @@ ICON_COPY = (
 
 
 def add_copy_buttons(rendered):
-  """Give every code block a copy button.
-
-  The button carries the code in `data-code`, because rendered HTML is assigned with
-  `innerHTML` and so cannot hold a listener of its own; the client copies from the attribute.
-  Newlines become `&#10;` to survive attribute parsing unchanged.
-  """
+  """Add a copy button to each code block. Store code in `data-code` because `innerHTML` cannot hold listeners.
+  Encode newlines as `&#10;` for attribute parsing."""
 
   def replace(match):
     inner = match.group(1)
@@ -4581,15 +4425,8 @@ ESCAPED_FENCE = re.compile(
 
 
 def unescape_fences(source):
-  """Give a fence back the backslash that hid it.
-
-  A backslash before a line-leading fence makes markdown-it read a literal ``` inside a
-  paragraph, so the block never reaches the rule that carries the code background. The owner
-  reported exactly that: the fence was meant as a block, and the marker is
-  unescaped here so it opens one. A tilde fence is a fence too, so the run takes either marker.
-  An escape anywhere else is left alone, because inline backticks are the other thing an escape
-  can mean.
-  """
+  """Restore a line-leading fence that a backslash hides. Markdown treats that fence as literal text instead of a
+  code block. Accept backticks and tildes. Leave other escapes unchanged."""
   return ESCAPED_FENCE.sub(
     lambda match: match.group("indent") + match.group("fence"), source
   )
@@ -4603,21 +4440,15 @@ PARAGRAPH_BREAK = re.compile(r"<br\s*/?>")
 def drop_paragraph_breaks(rendered):
   """Take the `<br>` out of a paragraph, on the owner's suggestion.
 
-  With breaks on, markdown-it turns each newline into a `<br>` and the owner found the result too
-  airy next to the message log, where a line breaks through `white-space: pre-wrap` and needs no
-  tag. A paragraph now keeps its source newlines and no break; a `<br>` inside any other element,
-  a list item for one, stays as it was.
-  """
+  With breaks on, markdown-it turns each newline into a `<br>` and the owner found the result too airy next to
+  the message log, where a line breaks through `white-space: pre-wrap` and needs no tag. A paragraph now keeps
+  its source newlines and no break. A `<br>` inside any other element, a list item for one, stays as it was."""
   return PARAGRAPH.sub(lambda match: PARAGRAPH_BREAK.sub("", match.group(0)), rendered)
 
 
 def sized_image(match, validate):
-  """Build the `<img>` for a sized image, or None when the renderer would refuse it.
-
-  Commonmark carries no size syntax, so `![alt](src =320x200)` renders as plain text
-  and the agent cannot say how big its image is. The attributes are escaped here,
-  because the renderer never sees them.
-  """
+  """Build an escaped `<img>` for a sized image. CommonMark has no size syntax, so this function handles
+  `![alt](src =320x200)`. Return None when the renderer rejects it."""
   alt, source, width, height = match.groups()
   if not validate(source):
     return None
@@ -4674,7 +4505,7 @@ def handler(store):
         "connect-src 'self' https:; base-uri 'none'; form-action 'self'",
       )
       if filename:
-        # A CR or LF here splits the response header; a quote ends the value early.
+        # A CR or LF here splits the response header. A quote ends the value early.
         safe = header_filename(filename)
         self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
       self.end_headers()
@@ -4698,17 +4529,15 @@ def handler(store):
           return
         if path == "/api/state":
           state = store.state()
-          # The page keeps its write token fresh from the poll, so a save pressed after a server
-          # restart lands without a browser refresh. The token is CSRF
-          # resistance rather than authentication, and this page already carries it.
+          # Polling refreshes the page write token, so a post-restart save needs no browser reload.
+          # The token resists CSRF. The page already has authentication.
           state["token"] = token
           try:
             for item in state["notes"] + [
               ack for report in state["reports"] for ack in report["acknowledgements"]
             ]:
-              # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source
-              # carries is the line break. A `<br>` beside it doubled every gap, which is what
-              # the owner saw and removed by hand in the browser.
+              # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source carries is the line break.
+              # A `<br>` beside it doubled every gap, which is what the owner saw and removed by hand in the browser.
               if "text" in item:
                 item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
@@ -4722,7 +4551,7 @@ def handler(store):
           return
         if path == "/api/submissions":
           # The clipboard copy asks for the answer lines on click, scoped to the reports still in
-          # the tab; a deleted report's answers stay in the database and out of this copy.
+          # the tab. A deleted report's answers stay in the database and out of this copy.
           live = {report["id"] for report in store.state()["reports"]}
           self.reply(
             200,
@@ -4738,9 +4567,8 @@ def handler(store):
           )
           return
         if path == "/api/copy-state":
-          # One request carries what the save file carries, so the copy button copies the
-          # server's own export instead of assembling notes, tasks, answers and reports.
-          # The stamp names a downloaded state, so its file name comes from the server.
+          # The copy button requests the server state export in one call.
+          # The server stamp names the downloaded state file.
           notes = store.state()["notes"]
           lines, counts = store.state_lines(notes, store.tasks() or {})
           stamps = store.newest_stamps()
@@ -4784,10 +4612,8 @@ def handler(store):
             try:
               body, questions = render_report(report["markdown"])
             except ValueError as error:
-              # A report stored before publish validated its fields can still be unrenderable.
-              # do_GET catches OSError, sqlite3.Error and RuntimeError but not ValueError, so
-              # this used to escape the handler and close the connection with no response at
-              # all: the browser saw a failed fetch and the tab had nothing to explain it with.
+              # A report saved before field validation can still fail to render. Do_GET returns its ValueError.
+              # Otherwise the connection closes without a response and the tab cannot explain the fetch failure.
               self.problem(500, f"This report cannot be rendered: {error}")
               return
             self.reply(
@@ -5066,7 +4892,7 @@ def resolve_repo_root():
 
 
 def resolve_state_dir():
-  """ARENA_PREVIEW_STATE_DIR wins; otherwise the repository arena-state."""
+  "ARENA_PREVIEW_STATE_DIR wins. Otherwise the repository arena-state."
   configured = os.environ.get("ARENA_PREVIEW_STATE_DIR")
   if configured:
     return configured
@@ -5338,12 +5164,11 @@ def main():
       store = Store(state_dir, create=False)
       require_server(store)
       print(store.reminder(advance=True), flush=True)
-      # The hook runs this after every bash call, so the stamp marks the call's end:
-      # the page keeps the long call text only while a call started after the last
-      # recorded end.
+      # The hook runs this after every bash call, so the stamp marks the call's end: the
+      # page keeps the long call text only while a call started after the last recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())
       # The hook runs this after every bash call, so the heartbeat rides the one path a
-      # call always takes; the gate's own copy prints under `2>/dev/null` in the hook.
+      # call always takes. The gate's own copy prints under `2>/dev/null` in the hook.
       run_notices(state_dir, show_running=True)
       return 0
     if not args.command:
@@ -5398,7 +5223,7 @@ def main():
         return 1
       return 0
     if args.command == "gate":
-      # Finished runs announce here; the running heartbeat rides the reminder alone, so a
+      # Finished runs announce here. The running heartbeat rides the reminder alone, so a
       # call prints one status line, not one per gated command plus one at exit.
       run_notices(state_dir)
       if poll_timeout_line(args.line):
@@ -5456,8 +5281,8 @@ def main():
     )
     print(store.reminder(), file=sys.stderr, flush=True)
     if args.command != "serve":
-      # The agent's own CLI call is the debug-trap signal made durable: the header reads
-      # this stamp, so a preview left open after a turn says no agent has spoken.
+      # Store the agent CLI call as a durable debug-trap signal.
+      # A preview left open after a turn then reports no agent activity.
       store.touch_agent()
     if args.command == "serve":
       require_renderer()
@@ -5473,7 +5298,7 @@ def main():
       store.notice_expired_key()
       print_read(store)
     elif args.command == "note":
-      # The read lists the pending notes; this one reaches the acked history, so
+      # The read lists the pending notes. This one reaches the acked history, so
       # a note stays open to the agent after its answer lands.
       rows = store.notes_matching(args.id)
       if not rows:
@@ -5500,7 +5325,7 @@ def main():
       store.notice_expired_key()
       return poll_inbox(store)
     elif args.command == "download-request":
-      # The agent path is pending; the browser form keeps its existing immediate queue path.
+      # The agent path is pending. The browser form keeps its existing immediate queue path.
       print(
         format_fetch_job(store.enqueue_fetch(args.url, args.allow_proxy, pending=True))
       )
@@ -5545,7 +5370,7 @@ def main():
       count = store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}, {count} fields.")
       if not count and "{#" in Path(args.source).read_text("utf-8"):
-        # A `{#id}` marker on its own parses as prose; the owner then sees no answer form.
+        # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(
           "Warning: 0 fields parsed. A `{#id}` marker ends a prompt line, then"
           " the `- ( ) option` lines follow.",
@@ -5570,7 +5395,7 @@ def main():
         and args.msg_id is None
         and args.amend is None
       ):
-        # A bare ID is the read: the row prints as stored, and nothing is written.
+        # A bare ID reads the stored row without writing.
         resolved = store.resolve_id(task_id)
         record = store.task_record(resolved)
         if record is None:

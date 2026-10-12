@@ -27,7 +27,7 @@ const ASSET_TYPES = {
   'icon-512.png': 'image/png'
 };
 const ASSETS = path.join(__dirname, 'assets');
-// The head rewrite buffers one small page; a larger body streams untouched.
+// The head rewrite buffers one small page. A larger body streams untouched.
 const HEAD_CAP = 1_000_000;
 
 function isAllowedPreview(url) {
@@ -51,7 +51,7 @@ function parseSelectedUrl(raw) {
 }
 
 // A page's own calls name no target, so the target comes from the Referer of the page that
-// made the call. The Referer must be a viewer page carrying a valid url; otherwise there is none.
+// made the call. The Referer must be a viewer page carrying a valid url. Otherwise there is none.
 function targetFromReferer(incoming, referer) {
   let page;
   try {
@@ -93,7 +93,7 @@ function sendHtml(res, status, body) {
 }
 
 function rewriteArenaCookie(cookie) {
-  // The browser is on the tailnet host, so make Arena's cookie host-only there;
+  // The browser is on the tailnet host, so make Arena's cookie host-only there.
   // the proxy forwards it upstream on later requests.
   return cookie.replace(/;\s*domain=\.?arena\.site(?=;|$)/i, '');
 }
@@ -179,7 +179,7 @@ as an app from the browser menu to reopen the preview in one tap.</p>
 
 function decodeBody(buffer, encoding) {
   // The proxy forwards the browser's Accept-Encoding, so an upstream page often arrives
-  // compressed. The rewrite reads plain HTML, so decode it here; a body that will not decode
+  // compressed. The rewrite reads plain HTML, so decode it here. A body that will not decode
   // returns null and passes through untouched.
   const name = String(encoding || '').trim().toLowerCase();
   if (!name || name === 'identity') return buffer;
@@ -209,7 +209,7 @@ function manifestJson() {
     theme_color: '#1f2430',
     // A launch reuses the open window, so the preview stays in-page.
     launch_handler: { client_mode: 'navigate-existing' },
-    // The installed app takes a shared link; Android has no per-link "open with"
+    // The installed app takes a shared link. Android has no per-link "open with"
     // entry for a web app, so the share sheet is the system path in.
     share_target: {
       action: '/pwa/share',
@@ -387,10 +387,8 @@ const server = http.createServer((req, res) => {
   for (const name of FETCH_METADATA_HEADERS) delete headers[name];
   headers.host = target.host;
 
-  // The target origin comes from parseSelectedUrl, and isAllowedPreview
-  // pins both to HTTPS roots on sbx-*.arena.site with no credentials, port or path. CodeQL
-  // cannot model that pattern allowlist, so .github/codeql/codeql-config.yml excludes
-  // js/request-forgery for this forwarding request.
+  // The target origin comes from parseSelectedUrl, and isAllowedPreview pins both to HTTPS roots on sbx-*.arena.site with no credentials, port or path.
+  // CodeQL cannot model that pattern allowlist, so .github/codeql/codeql-config.yml excludes js/request-forgery for this forwarding request.
   const upstream = https.request(target, { method: req.method, headers, timeout: 120000 },
     upstreamRes => {
       const responseHeaders = { ...upstreamRes.headers };
@@ -438,8 +436,8 @@ const server = http.createServer((req, res) => {
 server.headersTimeout = 65_000;
 server.requestTimeout = 10 * 60 * 1000;
 
-// The pure helpers are exported for the checks; the image runs this file directly, so the
-// listening server stays out of a require.
+// Checks import the pure helpers.
+// The image runs this file directly, so require does not start the server.
 module.exports = { injectPwa, decodeBody, viewerPage, targetFromReferer };
 
 if (require.main === module) {

@@ -1,14 +1,5 @@
-# The fetch route of arena-proxy hands a caller-supplied URL to urllib on purpose:
-# that is the feature. The `allowed_url` guard rejects private, link-local,
-# metadata and single-label hosts, and its tests pin that behaviour. The
-# `py/full-ssrf` rule therefore reports the design of this proxy, not a bug in it,
-# so the rule is excluded here. Every other Python rule still runs.
-#
-# The viewer route of arena-skill/arena-preview-proxy forwards a caller-supplied Arena preview URL
-# on purpose too: that is the feature. `isAllowedPreview` accepts only HTTPS roots on
-# sbx-*.arena.site, with no credentials, no port and no path, and a page's own calls take that
-# root from the Referer through the same check. The `js/request-forgery` rule cannot model that
-# pattern allowlist, so it is excluded here as well. Every other JavaScript rule still runs.
+# The proxy accepts a caller URL by design. `allowed_url` rejects private, link-local, metadata, and single-label hosts. Exclude `py/full-ssrf` because it reports that design. Keep every other Python rule.
+# The viewer forwards a caller preview URL by design. `isAllowedPreview` accepts only HTTPS sandbox roots. Exclude `js/request-forgery` because it cannot model the pattern allowlist. Keep every other JavaScript rule.
 query-filters:
   - exclude:
       id: py/full-ssrf

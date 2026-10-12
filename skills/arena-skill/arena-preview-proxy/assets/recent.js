@@ -1,8 +1,7 @@
 'use strict';
 
-// The chooser keeps the last preview roots opened from it in this browser's storage, so the
-// server keeps no memory. Every page on the proxy origin can write that storage, so a read keeps
-// valid preview roots only, and the list renders as text, never as HTML.
+// The chooser keeps the last preview roots opened from it in this browser's storage, so the server keeps no memory.
+// Every proxy page can write this storage. Keep valid preview roots only. Render the list as text, not HTML.
 const KEY = 'arena-preview-recent';
 const LIMIT = 10;
 const ROOT = /^https:\/\/sbx-[a-z0-9-]+\.arena\.site$/i;
@@ -88,7 +87,7 @@ function start() {
   });
 }
 
-// The checks load the pure helpers in Node; the chooser page runs the list.
+// The checks load the pure helpers in Node. The chooser page runs the list.
 if (typeof module === 'object' && module.exports) {
   module.exports = { previewRoot, remember, forget, clean, LIMIT };
 } else {

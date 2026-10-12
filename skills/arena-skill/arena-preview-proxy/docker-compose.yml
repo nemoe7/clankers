@@ -1,7 +1,5 @@
-# Runs the published arena-preview-proxy image behind a Tailscale sidecar.
-# Set TS_AUTHKEY in the environment, or in a .env file.
-# The sidecar applies tailscale-serve.json, so the tailnet reaches the proxy over
-# HTTPS at https://arena-preview.<tailnet>.ts.net; Funnel stays off.
+# Runs the published arena-preview-proxy image behind a Tailscale sidecar. Set TS_AUTHKEY in the environment, or in a .env file.
+# The sidecar applies tailscale-serve.json, so the tailnet reaches the proxy over HTTPS at https://arena-preview.<tailnet>.ts.net. Funnel stays off.
 services:
   proxy:
     image: ghcr.io/nemoe7/arena-preview-proxy:latest

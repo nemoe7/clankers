@@ -115,7 +115,7 @@ def test_the_hook_skips_the_platform_shells() -> None:
     hook.chmod(0o755)
     env = clean_env(STUB=str(stub))
     # The platform hosts its processes in a login shell over run.cmd under arena-workspace.
-    # `; exit 0` keeps the shaped shell alive as the hook's parent instead of exec'ing the hook.
+    # `. Exit 0` keeps the shaped shell alive as the hook's parent instead of exec'ing the hook.
     hosted = subprocess.run(
       [
         "bash",
@@ -432,9 +432,8 @@ def test_a_branch_behind_main_hears_the_replay_line():
 
 
 def test_a_checks_line_meets_the_background_redirect():
-  # A long run belongs to the background: the gate starts the line detached, ends the
-  # call clean with one stderr line, and stops the line from running here. A line that
-  # only prints the words stays fine.
+  # A long run belongs in the background. The gate detaches it, writes one stderr line, and stops the inline run.
+  # A line that only prints the words stays fine.
   result = run("gh pr checks 7")
   assert result.returncode == 0, result.stderr
   assert "RUN DETACHED" in result.stderr, result.stderr

@@ -32,10 +32,8 @@ permissions:
   contents: read
 
 jobs:
-  # One trigger feeds several jobs with different path interests, so a small job decides which
-  # side has work. It uses the PR base for pull requests, the previous push for pushes, and a
-  # fixed answer for manual runs: package from main, never publish the Gist, and publish an
-  # image only when its own input asks.
+  # One trigger feeds several jobs with different path interests, so a small job decides which side has work.
+  # Use the PR base for pull requests and the previous push for pushes. Manual runs package main and never publish the Gist. Publish an image only when its input asks.
   changes:
     name: Changes
     runs-on: ubuntu-latest
@@ -122,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      # The original workflow cancelled an older run in this group; keep that at job level.
+      # The original workflow cancelled an older run in this group. Keep that at job level.
       group: Validate-GPT-Plugins-${{ github.ref }}
       cancel-in-progress: true
     steps:
@@ -249,7 +247,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      # The original workflow cancelled an older run in this group; keep that at job level.
+      # The original workflow cancelled an older run in this group. Keep that at job level.
       group: Package-GPT-Plugins-${{ github.ref }}
       cancel-in-progress: true
     steps:
@@ -335,7 +333,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      # A later main push supersedes an older pending run; never interrupt a running reconciliation.
+      # A later main push supersedes an older pending run. Never interrupt a running reconciliation.
       group: publish-clankers-rules-${{ github.repository }}
       cancel-in-progress: false
     steps:
@@ -344,8 +342,8 @@ jobs:
       - name: Check Reconciliation Fixtures Without GitHub Credentials
         run: python3 maintenance/publish/gate_publish.py
       - name: Reconcile Secret Clankers-Rules Gist
-        # GIST_TOKEN needs Gists:write and repository Variables:write. The default
-        # GITHUB_TOKEN is used only by checkout; it cannot manage repository variables.
+        # GIST_TOKEN needs Gists:write and repository Variables:write.
+        # Checkout uses GITHUB_TOKEN only. It cannot manage repository variables.
         env:
           GH_TOKEN: ${{ secrets.GIST_TOKEN }}
           GIST_ID: ${{ vars.GIST_ID }}
@@ -422,7 +420,7 @@ jobs:
       # Two main pushes serialize, so one image write never races another.
       group: Publish-Arena-Egress-Proxy-Image-${{ github.repository }}
       cancel-in-progress: false
-    # A package write publishes the image; every other scope stays read-only. Its `if`
+    # A package write publishes the image. Every other scope stays read-only. Its `if`
     # names a non-pull-request event, so no pull request code ever runs with it.
     permissions:
       contents: read
@@ -468,7 +466,7 @@ jobs:
       # Two main pushes serialize, so one image write never races another.
       group: Publish-Arena-Preview-Proxy-Image-${{ github.repository }}
       cancel-in-progress: false
-    # A package write publishes the image; every other scope stays read-only. Its `if`
+    # A package write publishes the image. Every other scope stays read-only. Its `if`
     # names a non-pull-request event, so no pull request code ever runs with it.
     permissions:
       contents: read

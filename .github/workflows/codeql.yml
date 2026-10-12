@@ -44,7 +44,8 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
-          # Every language here is interpreted or declarative, so no build is needed.
+          # These languages need no build.
+          # CodeQL interprets or declares each one.
           build-mode: none
           # The shared config excludes py/full-ssrf and js/request-forgery, the two
           # proxy fetches that carry a guarded, caller-supplied URL by design.
