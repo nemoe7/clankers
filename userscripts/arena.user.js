@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.28
+// @name         Arena.ai | NemoUtils | v1.10.29
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.28
+// @version      1.10.29
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2049,6 +2049,21 @@
     return name === scope || name.indexOf(scope + "-") === 0;
   }
 
+  // A save moves when the session branch is unknown, or when the preview URL differs from the
+  // one that last wrote this scope.
+  function saveMoved(branch, remembered, base) {
+    return !branch || (Boolean(remembered) && remembered !== base);
+  }
+
+  // A moved save that would write asks first. A forced save never asks.
+  function overwriteAsk(moved, plan, hasHandle, force) {
+    return !force && Boolean(moved) && hasHandle && plan.kind === "download";
+  }
+
+  function overwriteLine(name) {
+    return "Preview URL or branch changed. Overwrite " + name + " with this state?";
+  }
+
   function stateDelivery(plan, hasHandle, hasPicker) {
     if (plan.kind !== "download") return plan.kind;
     if (hasHandle) return "write";
@@ -2268,6 +2283,9 @@
       panelNeeded: panelNeeded,
       writtenName: writtenName,
       handleMatchesScope: handleMatchesScope,
+      saveMoved: saveMoved,
+      overwriteAsk: overwriteAsk,
+      overwriteLine: overwriteLine,
       stateScope: stateScope,
       stateRepo: stateRepo,
       stateBranch: stateBranch,
@@ -2290,6 +2308,17 @@
     }
     function fileKey(scopeKey) {
       return "state-file-" + scopeKey;
+    }
+    // The last scope that wrote this repository, so a save without a branch finds its file.
+    function lastScopeKey(repo) {
+      return "clankers-arena-state-scope-" + stateScopeKey(repo, "");
+    }
+    // The preview URL that last wrote a scope, and the flag that holds the one overwrite card.
+    function baseKey(scopeKey) {
+      return "clankers-arena-state-base-" + scopeKey;
+    }
+    function overwriteKey(scopeKey) {
+      return "clankers-arena-state-ask-" + scopeKey;
     }
     var staleWarned = false;
     var picked = null;
@@ -2482,6 +2511,17 @@
       }
     }
 
+    // The card is the alert. Its Overwrite press reruns the save forced.
+    function askOverwrite(handle, storeKey, manual) {
+      var askedKey = overwriteKey(storeKey);
+      var shown = GM_getValue(askedKey, false);
+      if (!panelNeeded(manual, shown)) return;
+      GM_setValue(askedKey, true);
+      statePanel(overwriteLine(writtenName(handle, "the save file")), "Overwrite", function () {
+        fetchStateFile(true, true);
+      });
+    }
+
     function downloadRoute(hasManagerDownload) {
       return hasManagerDownload ? "manager" : "link";
     }
@@ -2545,11 +2585,15 @@
           return;
         }
         var scope = stateScope(document);
-        if (!scope.branch) {
+        var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
+        if (!scope.branch && !lastScope && !force) {
           stateError(STATE_LINES.noBranch);
           return;
         }
-        var storeKey = stateScopeKey(scope.repo, scope.branch);
+        var storeKey = scope.branch
+          ? stateScopeKey(scope.repo, scope.branch)
+          : lastScope || stateScopeKey(scope.repo, "");
+        var moved = saveMoved(scope.branch, GM_getValue(baseKey(storeKey), ""), base);
         var memory = stateRemembered(GM_getValue(stampKey(storeKey), ""));
         if (force) {
           logEvent("state", "forced save");
@@ -2582,6 +2626,11 @@
             );
             handle = null;
           }
+          if (overwriteAsk(moved, plan, Boolean(handle), force)) {
+            if (manual) logEvent("state", "no write: " + handle.name + " awaits confirmation");
+            askOverwrite(handle, storeKey, manual);
+            return;
+          }
           picked = handle || null;
           pickedKey = handle ? storeKey : null;
           var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
@@ -2609,6 +2658,9 @@
             logEvent("state", getLine(status, base));
             writeToHandle(handle, body.text).then(
               function () {
+                GM_setValue(lastScopeKey(scope.repo), storeKey);
+                GM_setValue(baseKey(storeKey), base);
+                GM_setValue(overwriteKey(storeKey), false);
                 GM_setValue(
                   stampKey(storeKey),
                   JSON.stringify(stateMemory(body.stamp, body.stamps)),
@@ -2635,6 +2687,7 @@
             statePanel("Force save downloaded " + plan.name + ".", null, null, true);
           }
           writeStateDownload(body.text, plan.name);
+          GM_setValue(baseKey(storeKey), base);
           GM_setValue(stampKey(storeKey), JSON.stringify(stateMemory(body.stamp, body.stamps)));
         });
       });

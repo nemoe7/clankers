@@ -1767,6 +1767,9 @@ function checkStateDownload(api, session) {
   var stateMemory = api.stateMemory;
   var stateRemembered = api.stateRemembered;
   var stateDelivery = api.stateDelivery;
+  var saveMoved = api.saveMoved;
+  var overwriteAsk = api.overwriteAsk;
+  var overwriteLine = api.overwriteLine;
   var stateAction = api.stateAction;
   var panelNeeded = api.panelNeeded;
   var handleMatchesScope = api.handleMatchesScope;
@@ -2303,6 +2306,19 @@ function checkStateDownload(api, session) {
   // An unknown scope adopts nothing: the fallback name alone passes, so the owner is asked again.
   assert.equal(handleMatchesScope({ name: "f360-main.ndjson" }, "", ""), false);
   assert.equal(handleMatchesScope({ name: "arena.ndjson" }, "", ""), true);
+  // A save moves when the session branch is unknown, or when the preview URL differs from the
+  // one that last wrote this scope. A moved save that would write asks before it writes; a
+  // forced save never asks.
+  assert.equal(saveMoved("", "", "https://p.example"), true, "No branch moves the save");
+  assert.equal(saveMoved("arena/x", "", "https://p.example"), false, "A first write does not move");
+  assert.equal(saveMoved("arena/x", "https://p.example", "https://p.example"), false);
+  assert.equal(saveMoved("arena/x", "https://p.example", "https://q.example"), true);
+  assert.equal(overwriteAsk(true, { kind: "download" }, true, false), true);
+  assert.equal(overwriteAsk(true, { kind: "download" }, true, true), false, "A forced save writes");
+  assert.equal(overwriteAsk(false, { kind: "download" }, true, false), false);
+  assert.equal(overwriteAsk(true, { kind: "unchanged" }, true, false), false, "Nothing to write");
+  assert.equal(overwriteAsk(true, { kind: "download" }, false, false), false, "No file to protect");
+  assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson with this state\?$/);
   console.log("ok state download 32");
   // The session bar names an unpushed branch in a titled span; a pushed branch also gets an
   // anchor with a /tree/ href. The repository anchor carries no branch.
