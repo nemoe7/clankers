@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-12
 
+### Added
+
+#### arena
+
+- ARENA.md adds a turn-start rule: the agent states in chat whether reasoning is on, as `Reasoning: on` or `Reasoning: off`. On a turn that owes the 10-4 line, the reasoning line follows it. The refs line, the live mirror and the root copy carry the rule.
+
 ### Changed
 
 #### preview
