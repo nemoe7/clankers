@@ -1763,6 +1763,7 @@ function checkStateDownload(api, session) {
   var stateRemembered = api.stateRemembered;
   var stateDelivery = api.stateDelivery;
   var saveMoved = api.saveMoved;
+  var stateMoveLine = api.stateMoveLine;
   var overwriteAsk = api.overwriteAsk;
   var overwriteLine = api.overwriteLine;
   var stateAction = api.stateAction;
@@ -2308,6 +2309,25 @@ function checkStateDownload(api, session) {
   assert.equal(saveMoved("arena/x", "", "https://p.example"), false, "A first write does not move");
   assert.equal(saveMoved("arena/x", "https://p.example", "https://p.example"), false);
   assert.equal(saveMoved("arena/x", "https://p.example", "https://q.example"), true);
+  assert.equal(
+    saveMoved("", "https://p.example", "https://p.example", "clankers-arena-x"),
+    false,
+    "A remembered scope keeps the same preview after overwrite",
+  );
+  assert.equal(
+    saveMoved("", "https://p.example", "https://q.example", "clankers-arena-x"),
+    true,
+    "A new preview still moves the save",
+  );
+  assert.equal(
+    saveMoved("arena/y", "https://p.example", "https://p.example", "clankers-arena-x", "arena/x"),
+    true,
+    "A new branch still moves the save",
+  );
+  assert.equal(
+    stateMoveLine("https://p.example", "https://q.example", "arena/x", "arena/y"),
+    "save moved: preview URL stored=https://p.example read=https://q.example; branch stored=arena/x read=arena/y",
+  );
   assert.equal(overwriteAsk(true, { kind: "download" }, true, false), true);
   assert.equal(overwriteAsk(true, { kind: "download" }, true, true), false, "A forced save writes");
   assert.equal(overwriteAsk(false, { kind: "download" }, true, false), false);

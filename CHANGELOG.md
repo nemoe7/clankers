@@ -87,6 +87,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- A forced state save now remembers its preview URL and branch. A later watch uses the remembered scope when the session bar has no branch, so the overwrite card does not repeat. State logs show stored and read URL and branch values when a save moves.
 - An unpushed session's branch read no value, so two sessions in one repo shared a save scope. The branch now reads from any titled element of the session bar, and a save without a branch shows the state card and writes nothing.
 - A state save no longer writes over the owner's file when the preview URL changed or the session branch is not found. A card asks first, and its Overwrite press forces the save. A forced save writes at once.
 
