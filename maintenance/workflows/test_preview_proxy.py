@@ -193,7 +193,10 @@ def test_the_root_always_opens_the_chooser():
 
 
 def sign_origin(origin: str) -> str:
-  """The cookie the proxy hands a viewer, signed the way the server signs it."""
+  """Build the retired target cookie, signed the way the old proxy signed it.
+
+  The proxy no longer sets this cookie. The checks send it to prove that the proxy ignores it.
+  """
   payload = base64.urlsafe_b64encode(origin.encode()).decode().rstrip("=")
   signature = (
     base64.urlsafe_b64encode(

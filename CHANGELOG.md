@@ -83,6 +83,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- The proxy check helper `sign_origin` now names the retired target cookie, which the proxy no longer sets.
 - The proxy install page and the CodeQL config no longer name the signed cookie that left the proxy. Both now say that a page's own calls take their target from the Referer.
 - The preview proxy forwards a page's own calls again. A call takes its target from the Referer of the page that made it, and the viewer root still opens the chooser. The proxy logs each request, route and upstream status, hides secret-looking query values, and sets the referrer policy on proxied pages.
 
