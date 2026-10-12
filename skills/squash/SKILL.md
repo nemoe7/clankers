@@ -45,7 +45,7 @@ Resolve the unit in this order, stopping at the first that applies:
 
 Never substitute a proxy silently: say which unit governs, and label any count you could not measure directly an estimate.
 
-Set the target first: an explicit budget, a percentage, or "as small as still faithful", the default when no budget is stated. Without a target, stop when a pass yields nothing safe.
+Set the target first: an explicit budget, a percentage, or "as small as still faithful", the default without a stated budget. Without a target, stop when a pass yields nothing safe.
 
 ### Mixed units
 

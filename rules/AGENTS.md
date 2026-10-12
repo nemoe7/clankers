@@ -10,7 +10,7 @@
 - MUST do only requested work plus what implementing/verifying strictly needs; smallest coherent change; stop when verified.
 - MUST check the harness shell before commands; use its syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
-- MUST keep behavior, architecture, interfaces, intent, conventions unless change is required.
+- MUST keep behavior, architecture, interfaces, intent, conventions unless required.
 - Grep every caller before planning or editing a function.
 - When in doubt, MUST ask; NEVER assume anything.
 
@@ -92,7 +92,7 @@
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- Code first, then at most three short lines: what was skipped, when to add it; no essays or feature tours, and explanation the user asked for is NEVER debt.
+- Code first, then at most three short lines: skipped work, when to add it; no essays or feature tours, and explanation the user asked for is NEVER debt.
 - User-run commands: MUST print the Windows Command Prompt (`cmd`) form by default, plus bash when the user asks for the Raspberry Pi or bash.
 - Mermaid for pipelines, diagrams, flows where the surface renders it; fit narrow viewports (phone, sidebar): `flowchart TB`, short labels, no wide rows.
 

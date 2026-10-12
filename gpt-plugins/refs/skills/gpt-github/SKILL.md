@@ -9,7 +9,7 @@ Apply these rules to every git and GitHub action, including through the GitHub c
 
 ## Repository discovery
 
-- Prefer `mcp__GitHub__fetch` to inspect repository trees, directories, and files before using `fetch_file`; do not guess file paths. Use `fetch_file` only after the path is established, and batch discovery where practical to avoid unnecessary connector calls and tool-call limits. Verify available GitHub tools before concluding an operation is unsupported.
+- Prefer `mcp__GitHub__fetch` to inspect repository trees, directories, and files before using `fetch_file`; do not guess file paths. Use `fetch_file` only after the path is established, and batch discovery where practical to avoid unnecessary connector calls and tool-call limits. Verify available GitHub tools before calling an operation unsupported.
 
 ## Pull requests and merges
 

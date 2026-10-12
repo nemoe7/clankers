@@ -218,7 +218,7 @@ Use icons to improve recognition. Never rely on color alone. Do not use an icon 
 
 `<svg>` properties: `color`, `fill`, `height`, `preserveAspectRatio`, `size`, `stroke`, `strokeLinecap`, `strokeLinejoin`, `strokeWidth`, `viewBox`, `width`, `xmlns`. Children must be native SVG elements. Do not put event handlers on native SVG elements.
 
-Use SVG for a small, precise vector graphic. Use Mermaid for a structured diagram, `<Chart>` for supported quantitative charts, and `<MapWidgetV2>` for maps. Do not use a decorative image when an editable structured format is required.
+Use SVG for a small, precise vector graphic. Use Mermaid for a structured diagram, `<Chart>` for supported quantitative charts, and `<MapWidgetV2>` for maps. Never use decorative images for required editable structured formats.
 
 ## 9. Maps and routes
 
@@ -230,7 +230,7 @@ before writing a map block.
 
 ## 10. Entities, links, citations, and data bindings
 
-Use exact references returned by the relevant source or tool. Do not reuse historical refs unless they are declared in the current response. A citation component does not make an unsupported claim true. Put each citation close to the claim it supports.
+Use exact references returned by the relevant source or tool. Do not reuse historical refs unless the current response declares them. A citation component does not make an unsupported claim true. Put each citation close to the claim it supports.
 
 ### 10.1 Link and entity components
 
@@ -287,7 +287,7 @@ Use it only when the user needs a custom app visualization or interaction that s
 
 Inside AppBlock source:
 
-- Read `globalThis.__bindings?.value` inside `globalThis.__effect?.(() => ...)` when synchronization is required.
+- Read `globalThis.__bindings?.value` inside `globalThis.__effect?.(() => ...)` for required synchronization.
 - Call `globalThis.__bindings?.setValue?.(...)` only from direct user interaction within the visualization, never from an effect.
 - Optional-chain every access to `__bindings` and every call to `__effect`.
 - Keep a useful static view when bindings or effects are absent.
@@ -425,7 +425,7 @@ Use this escalation order:
 6. `<CodeBlock>` or `<WritingBlock>` when editing, preview, or copyable artifact support matters.
 7. `<AppBlock>` only for a custom visualization or behavior that the existing methods cannot express.
 
-Do not substitute image generation for a user-required editable diagram, data table, or working interactive control. When a static illustration is explicitly requested and no structured format is required, image generation may be appropriate. Retrieved images cannot be treated as editable source diagrams.
+Do not substitute image generation for a user-required editable diagram, data table, or working interactive control. When a static illustration is explicitly requested without a required structured format, image generation may be appropriate. Retrieved images cannot be treated as editable source diagrams.
 
 ## 16. Common failures
 
@@ -457,7 +457,7 @@ Do not substitute image generation for a user-required editable diagram, data ta
 Before presenting the answer, verify:
 
 1. The representation serves the user's goal and does not add unnecessary complexity.
-2. Every component name, property, callback, and child shape is documented.
+2. Document every component name, property, callback, and child shape.
 3. Chart and map data use grounded values and correct units.
 4. Every source reference and model-data binding is real and current.
 5. Interactions modify visible state or perform their stated action.
@@ -469,8 +469,8 @@ Before presenting the answer, verify:
 
 Before finalizing Mermaid documentation or examples:
 
-1. Confirm that every diagram family in the catalog has an example.
-2. Confirm that every example includes its required declaration.
+1. Ensure every diagram family in the catalog has an example.
+2. Ensure every example includes its required declaration.
 3. Verify every declaration and example against the official diagram reference.
 4. Check version requirements for beta and recently added diagram types.
 5. Render each example in the target environment when possible.

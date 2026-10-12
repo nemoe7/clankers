@@ -31,35 +31,35 @@ Latest measurements as of 2026-10-12. `maintenance/check.py --update` rebuilds t
 
 | File | Measure | Current |
 | --- | --- | --- |
-| `rules/AGENTS.md` | `o200k_base` | 1,566 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 20,402 `B` |
+| `rules/AGENTS.md` | `o200k_base` | 1,563 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 20,344 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,497 `chars` |
-| `rules/CLINE.md` | `o200k_base` | 447 `tok` |
+| `rules/CLINE.md` | `o200k_base` | 444 `tok` |
 | `rules/KILO.md` | `o200k_base` | 88 `tok` |
-| `rules/kilo/code.md` | `o200k_base` | 238 `tok` |
-| `rules/kilo/debug.md` | `o200k_base` | 299 `tok` |
-| `rules/kilo/plan.md` | `o200k_base` | 259 `tok` |
+| `rules/kilo/code.md` | `o200k_base` | 236 `tok` |
+| `rules/kilo/debug.md` | `o200k_base` | 294 `tok` |
+| `rules/kilo/plan.md` | `o200k_base` | 253 `tok` |
 | `rules/COMMIT-SPEC.txt` | `o200k_base` | 93 `tok` |
-| `system-prompts/NEMOGPT.md` | `o200k_base` | 3,067 `tok` |
+| `system-prompts/NEMOGPT.md` | `o200k_base` | 3,046 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,587 `tok` |
-| `skills/arena-skill/SKILL.md` | `o200k_base` | 3,583 `tok` |
+| `skills/arena-skill/SKILL.md` | `o200k_base` | 3,558 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,672 `tok` |
-| `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 3,622 `tok` |
+| `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 3,598 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 51,395 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 10,466 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,941 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 14,809 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 131,553 `B` |
-| `skills/squash/SKILL.md` | `o200k_base` | 1,378 `tok` |
+| `skills/squash/SKILL.md` | `o200k_base` | 1,377 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |
-| `workflows/init-docs.md` | `o200k_base` | 4,536 `tok` |
+| `workflows/init-docs.md` | `o200k_base` | 4,503 `tok` |
 | `gpt-plugins/skills/gpt-quirks/SKILL.md` | `o200k_base` | 134 `tok` |
 | `gpt-plugins/skills/gpt-handoff/SKILL.md` | `o200k_base` | 1,301 `tok` |
-| `gpt-plugins/skills/gpt-planning/SKILL.md` | `o200k_base` | 367 `tok` |
-| `gpt-plugins/skills/gpt-github/SKILL.md` | `o200k_base` | 434 `tok` |
-| `gpt-plugins/skills/gpt-display/SKILL.md` | `o200k_base` | 9,203 `tok` |
+| `gpt-plugins/skills/gpt-planning/SKILL.md` | `o200k_base` | 359 `tok` |
+| `gpt-plugins/skills/gpt-github/SKILL.md` | `o200k_base` | 433 `tok` |
+| `gpt-plugins/skills/gpt-display/SKILL.md` | `o200k_base` | 9,192 `tok` |
 
 `rules/ARENA.md` and the shipped preview assets and scripts measure by UTF-8 file size, the two ChatGPT fields by Unicode characters, and every other file by `o200k_base` tokens. `maintenance/minify/minify.py` builds the minified files from readable refs, and their recorded sizes are their budgets. Measurements cover complete files, including whitespace and markup.
 

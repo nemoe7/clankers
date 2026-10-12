@@ -14,14 +14,14 @@ The workflow MUST be portable across coding-agent platforms. The body MUST NOT d
 
 Quadrant rules follow Diátaxis ([diataxis.fr](https://diataxis.fr/), aligned 2026-09); on conflict this file governs.
 
-Read by task: bootstrapping an empty repo — Core Rules through Bootstrap, then the Catalog. Adding one document — the Catalog for whether it is warranted, then that document's section. Reconciling existing docs — Inspection, Audit, then Reconciliation through Verification. Full pass — straight through.
+Read by task: bootstrapping an empty repo — Core Rules through Bootstrap, then the Catalog. Adding one document — the Catalog for whether it belongs, then that document's section. Reconciling existing docs — Inspection, Audit, then Reconciliation through Verification. Full pass — straight through.
 
 ## 1. Core Rules
 
 - The repository is the primary source of truth.
 - The client chooses what gets built: propose, let them pick, confirm before creating beyond the baseline.
-- New documentation is created only for baseline documents, user-selected documents, or reconciliation of an authoritative document.
-- Existing valid documentation is preserved. Link to the authoritative location instead of duplicating it.
+- Create documentation only for baseline or user-selected documents, or to reconcile an authoritative document.
+- Preserve valid documentation. Link to the authoritative location instead of duplicating it.
 - Organize by reader need on the Diátaxis map: tutorials, how-to guides, reference, explanation.
 - One page serves one need; quadrants link instead of absorbing each other, and splits follow need, never organization.
 - Technical documentation is the default; business/product documentation needs explicit request.
@@ -42,7 +42,7 @@ Determine the execution mode before making changes. If the host agent has differ
 
 PLAN mode MUST inspect the repository, audit existing documentation, identify gaps, conflicts, duplication and sources of truth, determine applicable documents, ask required questions, and produce the proposed documentation set and changes.
 
-PLAN mode MUST NOT create, modify, delete or rename files, commit, or push.
+PLAN mode MUST leave files unchanged and not commit or push.
 
 ### APPLY
 
@@ -75,7 +75,7 @@ Do not scaffold the whole tree in one run. A thin floor that is true beats a ful
 
 ## 5. Repository Inspection
 
-Inspect the repository before deciding what documentation is needed.
+Inspect the repository before deciding which documentation belongs.
 
 Inspect, where present:
 
@@ -258,7 +258,7 @@ Explanation is discursive treatment that builds understanding: why things are so
 
 The SRS defines WHAT done means. It is the outcome contract — most valuable when agents build the work, because agents check conformance but cannot infer intent.
 
-Use an ISO/IEC/IEEE 29148:2018-aligned structure when formal rigor is required; otherwise keep the shape and drop the ceremony. Never claim formal compliance unless established.
+Use an ISO/IEC/IEEE 29148:2018-aligned structure when formal rigor applies; otherwise keep the shape and drop the ceremony. Never claim formal compliance unless established.
 
 ### Functional Requirements
 
@@ -289,7 +289,7 @@ Normative statements and their IDs live here. Tutorials, how-tos, reference, and
 
 ## 16. Design proposals
 
-A design proposal argues for one change before it is implemented: problem, options considered, the chosen design, interfaces affected, verification plan. It is reviewed, approved, then implemented — and then it is history, not standing documentation.
+A design proposal argues for one change before implementation: problem, options considered, chosen design, affected interfaces, and verification plan. Review, approve, then implement it — it then becomes history, not standing documentation.
 
 Use proposals for changes big enough to get wrong: new components, interface changes, data-model changes, anything crossing a boundary the SRS or the repo's conventions set.
 
@@ -297,7 +297,7 @@ Keep proposals in `docs/proposals/`, one file per change, named by date or seque
 
 ## 17. Architecture Decision Records
 
-An ADR records WHY one significant decision was made, so the reasoning survives the people who made it. The SDD (when it exists) records HOW the current design works.
+An ADR records WHY people made a significant decision, so its reasoning survives them. The SDD (when it exists) records HOW the current design works.
 
 Do not use ADRs for routine implementation, minor configuration, every library choice, or anything the design docs already capture.
 
@@ -305,7 +305,7 @@ Keep them in `docs/adr/`, numbered (`0001-title.md`), preserving existing number
 
 ## 18. Software Design Description
 
-The standing SDD describes HOW the system is designed. Create it only for the formal track: contracts, regulators, or enterprise process demand it. Otherwise the design lives where it is used — interfaces in reference, rationale in ADRs and explanation, behavior in how-tos.
+The standing SDD describes the system's design. Create it only for the formal track: contracts, regulators, or enterprise process demand it. Otherwise, document interfaces in reference, rationale in ADRs and explanation, and behavior in how-tos.
 
 When created, use an IEEE 1016-2009-aligned structure: identification and scope; design context; relevant viewpoints (context, composition, logical, dependency, information, interface, interaction, state, deployment); views in Mermaid, UML, tables, or structured text; structural, behavioral, data, interface, and deployment design; constraints; significant rationale; traceability to requirements.
 
@@ -336,7 +336,7 @@ For every selected document: locate existing equivalents; identify the apparent 
 
 Never rewrite a document solely to match a template. Never silently merge contradictions — conflicting sources of truth with unclear authority are a question, not a judgment call.
 
-Precedence when existing pages mix quadrants: split them only when the page is being updated anyway and authority is clear; otherwise preserve the page and flag the mix in FINDINGS. Preservation beats purity on pages nobody asked to touch.
+Precedence when existing pages mix quadrants: split them only as part of an existing update when authority is clear; otherwise preserve the page and flag the mix in FINDINGS. Preservation beats purity on pages nobody asked to touch.
 
 ## 22. Cross-document consistency
 
@@ -356,7 +356,7 @@ Before finalizing, every material statement MUST trace to repository evidence or
 
 ## 24. Verification
 
-In APPLY mode, verify the result: referenced commands, paths, and files exist; links resolve; names are correct; APIs, components, deployment, and diagrams match the repository; requirement identifiers are unique and stable; traceability references are valid; standards references are correctly named; repo conventions are followed.
+In APPLY mode, verify the result: referenced commands, paths, and files exist; links resolve; names are correct; APIs, components, deployment, and diagrams match the repository; requirement identifiers are unique and stable; traceability references are valid; standards references are correctly named; follow repo conventions.
 
 Use repo-provided validation, linting, and link checking when available. Never run unrelated or expensive tests solely because docs changed.
 
@@ -372,7 +372,7 @@ Classifying `docs/deploy.md` ("here is how our deploy pipeline works, step by st
 
 Classifying `docs/api.md` ("endpoints, auth flows with examples, rate-limit policy"): endpoints and rate limits are reference; the auth flows walk the reader through a task and belong in how-to, linked from reference.
 
-Classifying `FAQ.md` ("how do I reset the db?", "what versions are supported?", "why Postgres?"): reset steps go to how-to, supported versions to reference (or `SECURITY.md`), the Postgres rationale to explanation. Delete the FAQ when empty.
+Classifying `FAQ.md` ("how do I reset the db?", "supported versions?", "why Postgres?"): reset steps go to how-to, supported versions to reference (or `SECURITY.md`), the Postgres rationale to explanation. Remove an empty FAQ.
 
 ## 27. PLAN Mode Output
 

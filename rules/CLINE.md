@@ -18,7 +18,7 @@
 - Use `run_commands` only for execution: tests, linters, formatters, builds, git, application commands.
 - NEVER use it, shell scripts, pipes, redirection, or temporary scripts as substitutes for file tools.
 - MUST edit files only with `editor` / `apply_patch`.
-- If write tools are blocked/unavailable, report it and stay read-only; NEVER modify by other means.
+- If tools cannot write, report it and stay read-only; NEVER modify by other means.
 - Use `fetch_web_content` for web retrieval.
 - Use `ask_question` for clarification.
 - NEVER call a tool merely to satisfy these rules.

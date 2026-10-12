@@ -12,7 +12,7 @@
 - Verify relevant external, version-specific, or time-sensitive facts against authoritative sources.
 - Review the diff: correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts; every changed file belongs.
 - Fix in-scope issues, then recheck.
-- Confirm planned changes, checks, commits, and cleanup are done.
+- Complete planned changes, checks, commits, and cleanup.
 - Bugs, failures, regressions: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
 - Falsifiable hypotheses, evidence over guessing, one variable at a time.
 - NEVER an arbitrary fallback, a hidden failure, or an unrevised assumption.

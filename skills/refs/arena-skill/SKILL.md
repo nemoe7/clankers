@@ -1,6 +1,6 @@
 ---
 name: arena-skill
-description: Steer an Arena.ai agent mid-turn through a local preview inbox, publish rendered Markdown reports, and reach data outside the sandbox through the owner's proxy backend. Use in Arena Agent Mode when the user wants steering or a report, or ARENA.md requires it, and when a source the sandbox cannot reach is needed. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
+description: Steer an Arena.ai agent mid-turn through a local preview inbox, publish rendered Markdown reports, and reach data outside the sandbox through the owner's proxy backend. Use in Arena Agent Mode when the user wants steering or a report, ARENA.md requires it, or the sandbox cannot reach a needed source. NEVER USE THIS SKILL OUTSIDE OF ARENA.AI.
 license: MIT
 compatibility: Arena.ai Agent Mode, Python 3.10+, persisted workspace and long-lived process tools; serve needs markdown-it-py.
 ---
@@ -17,7 +17,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 2. Start the preview as Setup step 3 describes.
 3. Read the inbox with `arena-preview read`, and answer with `arena-preview ack`.
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp and needs no server.
-5. When a read cannot leave the sandbox, use the proxy routes in [When the proxy is needed](#when-the-proxy-is-needed) through `fetch_page`.
+5. When a read cannot leave the sandbox, use [proxy routes](#proxy-access) through `fetch_page`.
 
 ## Setup
 
@@ -30,7 +30,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
    ```
 
    After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it. The gate warns when a serve names another port.
-4. Name the preview in chat. At first setup, ask one visibility question with `ask_user` as soon as the preview starts, options: Yes, No, ntfy, Continue without steering. Block all work beyond setup until the answer. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running; the first `read` follows the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a confirmed visible preview without asking again. Keep ARENA.md's activation acknowledgement when applicable.
+4. Name the preview in chat. At first setup, ask one visibility question with `ask_user` as soon as the preview starts, options: Yes, No, ntfy, Continue without steering. Block all work beyond setup until the answer. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running; the first `read` follows the answer. Do not claim visibility before confirmation. If it stays hidden, use `ask_user` to ask how to continue. Reuse a visible preview after confirmation. Keep ARENA.md's activation acknowledgement when applicable.
 
 ## Read, acknowledge, and track work
 
@@ -41,7 +41,7 @@ arena-preview poll
 
 When a Bash call's stderr names a pending count, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged, and stamps the parent report read by the agent. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call. When ending a turn or a report form awaits answers, run `poll`. When a listing carries a `skip_poll` stamp, the owner pressed Skip poll in the page: the poll consumes it and the turn ends there, with no note for it and no second poll.
 
-Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. A text that carries a backtick rides `--reply-file` or `--note-file`: the shell runs a backtick inside double quotes as a command, so the ticks never reach the tool. Single-quote the text when it stays inline. The gate warns when an inline ack text carries that backtick. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack on the same ID appends a reply block under the earlier answer; nothing is replaced. Receipt is not completion. Failure to ack immediately earns a negative rating. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
+Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. A text that carries a backtick rides `--reply-file` or `--note-file`: the shell runs a backtick inside double quotes as a command, so the ticks never reach the tool. Single-quote the text when it stays inline. The gate warns when an inline ack text carries that backtick. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack adds a reply without replacing the earlier answer. Receipt is not completion. Failure to ack immediately earns a negative rating. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
 
 ```bash
 arena-preview ack <id> --reply 'a reply with `backticks`'
@@ -73,7 +73,7 @@ To ask for a file, run `download-request <url>`. That command queues a pending j
 
 Keep `state.sqlite3`, `saved-state.ndjson`, report sources and saved file bytes in the ignored state directory. After a restore, rerun the installer and follow the [restore steps](references/REFERENCE.md#restore). Never call an unconfirmed save successful. If the preview fails, report the failure and use `ask_user` to ask how to continue; do not silently switch channels or commit reports. Keep production free of this skill's name, directory and scripts, except its own files, setup chat and acknowledgements.
 
-## When the proxy is needed
+## Proxy access
 
 The backend answers over one public HTTPS URL. An Arena session reads it through `fetch_page`, with a key in the URL.
 
@@ -173,7 +173,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 ## Failure modes
 
 - An HTML page instead of JSON means the tunnel or the proxy answered, not the backend. A cold tunnel needs a retry.
-- A 502 with an upstream error means the backend host lost its network path, or the token is malformed.
+- A 502 with an upstream error means the backend host lost its network path, or a malformed token.
 - A 404 from GitHub through `/v1/gh` usually means the owner's token lacks a scope for that endpoint.
 - An empty reply means the owner stopped the backend. `/v1/health` needs no key, so it separates a dead server from a rejected key.
 - A job that stays `running` for minutes means the model endpoint is slow or the poll is racing a restart. Check `/v1/ping` for the model state.

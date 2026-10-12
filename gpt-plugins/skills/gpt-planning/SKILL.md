@@ -27,7 +27,7 @@ Before declaring any plan, handoff, or implementation complete:
 5. Only then declare the result complete.
 
 NEVER wait for the user to ask `final?`, `good?`, `sure?`, or similar.
-NEVER ask the user to confirm completion.
+NEVER ask users to check completion.
 
 After completion, reopen the gate only if the user changes requirements, scope or artifact.
 
@@ -35,9 +35,9 @@ After completion, reopen the gate only if the user changes requirements, scope o
 
 Apply both gates to each phase:
 
-- **Plan:** verify that the plan covers the requirements.
-- **Handoff:** verify that the handoff preserves the validated plan.
-- **Execute:** verify the implementation against the requirements.
+- **Plan:** ensure the plan covers the requirements.
+- **Handoff:** preserve the verified plan.
+- **Execute:** test the implementation against requirements.
 - **Verify:** run the required checks before claiming completion.
 
 Treat implementation defects exposed in later phases as verification findings, not new requirements.

@@ -9,7 +9,7 @@ Apply to every git/GitHub action, including GitHub connector and scheduled tasks
 
 ## Repository discovery
 
-- Prefer `mcp__GitHub__fetch` for repository trees, directories and files before `fetch_file`; NEVER guess paths. Use `fetch_file` only for established paths. Batch discovery where practical to avoid unnecessary connector calls and tool-call limits. Verify available GitHub tools before concluding an operation is unsupported.
+- Prefer `mcp__GitHub__fetch` for repository trees, directories and files before `fetch_file`; NEVER guess paths. Use `fetch_file` only for established paths. Batch discovery where practical to avoid unnecessary connector calls and tool-call limits. Verify available GitHub tools before calling an operation unsupported.
 
 ## Pull requests and merges
 

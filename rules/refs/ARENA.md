@@ -24,7 +24,7 @@
 - MUST do only requested work plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - NEVER create a local-only tool, commit it, or add a workflow that runs it.
 - Before every commit, print the planned final commit list.
-- NEVER claim a check you did not run; report what you skipped instead.
+- NEVER claim unrun validation; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
 - Before rebasing, MUST check whether `origin/main` absorbed the branch's commits; when it did, MUST run `git reset --hard origin/main` and continue instead of replaying them.
@@ -64,7 +64,7 @@
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
 - Keep working while tasks remain. End the turn when the work is verified and stopped. NEVER name the remaining token budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
-- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline, and push only when they pass; an inline run counts as skipping the gate, whatever its speed. The detached run frees the wait to scope the next task, but NEVER the reading: read the passed or failed line of every gate you run, because a pipe that hides the verdict counts as skipping the gate. After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch`, and scope the next task while it runs. A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand. Stop on HTTP 401 or any other command/API error, and report it. Pending checks are not command errors. An empty or absent check list is unverified, NEVER a conclusion. Failed checks remain unfinished work.
+- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline, and push only when they pass; an inline run counts as skipping the gate, whatever its speed. The detached run frees the wait to scope the next task, but NEVER the reading: read the passed or failed line of every gate you run, because a pipe that hides the verdict counts as skipping the gate. After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch`, and scope the next task while it runs. A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand. Stop on HTTP 401 or any other command/API error, and report it. Pending checks are not command errors. An empty or absent check list proves nothing. Failed checks keep work open.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
@@ -199,7 +199,7 @@
 
 ## Workspace
 
-- If Chromium is needed, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
+- For Chromium work, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs. The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test`, and the rest of the REFERENCE.md case table) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr.
 - NEVER call `get_process_output` to wait for a run. Wait with `arena-preview poll`, which breaks when the run finishes, or with the next task; each call in between prints one status line with the elapsed seconds. The verdict prints once as `run <name> done: exit N` on the next bash or `arena-preview` call. Until then, scope the next task. Read the verdict line before any push.
@@ -225,7 +225,7 @@
 - Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours.
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
 - NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
-- When the agent hands a command to the user to run instead of running it, print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
+- For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
 - ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
 - MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 

@@ -11,7 +11,7 @@
 - MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - MUST check which shell and terminal the harness runs before executing a command, and use that shell's syntax.
 - **NEVER claim a check you did not run**; report what you skipped instead.
-- Preserve behavior, architecture, interfaces, intent, and conventions unless change is required.
+- Preserve behavior, architecture, interfaces, intent, and conventions unless required.
 - Before planning or making an edit, MUST grep every caller of the function you are about to touch.
 - When in doubt, MUST ask; NEVER assume anything.
 
@@ -107,7 +107,7 @@
 - Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations, without unnecessary prose but with the detail the task requires or the user requests.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
-- Code first, then at most three short lines: what was skipped and when to add it. No essays and no feature tours.
+- Code first, then at most three short lines: skipped work and when to add it. No essays and no feature tours.
 - When the agent hands a command to the user to run instead of running it, MUST print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 - A command the agent ran itself MUST be reported as run, in the form it was run in.
 - Default to a mermaid diagram for pipelines, diagrams, and flow visualizations wherever the surface renders it.
