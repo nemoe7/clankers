@@ -152,7 +152,7 @@ REMINDERS = (
   "Grep-verify each edit.",
   TASK_REMINDER,
   "Rebase `origin/main` before pushing; empty checks mean it moved.",
-  "Check the PR's CI before ending a pushed turn; read the run's verdict on a later call.",
+  "Check the PR's CI before ending a pushed turn; read the run's verdict on a later call, never a loop in the call.",
   "Run `arena-preview`, not the full path.",
 )
 REMINDER_CURSOR = "reminder_cursor"
@@ -363,7 +363,11 @@ SESSION_ID_TABLES = (
   ("reports", "report"),
   ("tasks", "task"),
 )
+# A row minted before the six-character change cites its seven-character head in old prose.
 HEX7_RE = re.compile(r"[0-9a-f]{7}")
+# A minted ID that clashes with a stored row re-mints. Six characters hold 16.7 million
+# values, so a handful of tries clears every realistic clash, and the last one refuses.
+MINT_ATTEMPTS = 16
 DIFF_FILE_RE = re.compile(r"^\+\+\+ b/(.+)$")
 DIFF_HUNK_RE = re.compile(r"^@@ -\S+ \+(\d+)")
 
@@ -372,8 +376,9 @@ def session_id_tokens(store):
   """Every literal the commit trap matches, mapped to the record it names.
 
   The list comes from the state database and never from a pattern, so a git SHA
-  that is not a session ID cannot match. A dashed ID also matches on its
-  7-character head, the form prose and task details cite.
+  that is not a session ID cannot match. A citation is the first six characters, which
+  is the whole ID of a row minted now, and an older dashed ID also matches on its
+  seven-character head, the form older prose cites.
   """
   tokens = {}
   with closing(store.connect()) as db:
@@ -381,6 +386,10 @@ def session_id_tokens(store):
       for row in db.execute(f"SELECT id FROM {table}").fetchall():
         ident = row["id"]
         tokens.setdefault(ident, (label, ident))
+        # Only a minted ID takes a citation token: a written ID such as a task name
+        # keeps its whole form, whatever its first characters spell.
+        if NOTE_ID.fullmatch(ident):
+          tokens.setdefault(ident[:6], (label, ident))
         head = ident.split("-", 1)[0]
         if HEX7_RE.fullmatch(head):
           tokens.setdefault(head, (label, ident))
@@ -468,9 +477,12 @@ def commit_id_report(hits):
 
 
 def new_id():
-  """One identifier in the shape the log shows: seven characters, a hyphen, the rest."""
-  hexed = uuid.uuid4().hex
-  return f"{hexed[:7]}-{hexed[7:]}"
+  """One identifier in the shape the log shows: six characters, whole.
+
+  Six characters name a note in prose and in a task marker, so the mint carries no tail
+  to cut. A row minted before this change keeps its longer ID and cites its head.
+  """
+  return uuid.uuid4().hex[:6]
 
 
 def seconds_since(value):
@@ -805,9 +817,10 @@ def field_html(question):
 
 TASK_STATUSES = ("upcoming", "finished")
 TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
-# A note ID is seven hex characters, alone or followed by a hyphen and the rest, and the
-# shape check above accepts it as a task name without this.
-NOTE_ID = re.compile(r"^[0-9a-f]{7}(?:-[0-9a-f]+)?$")
+# A note ID is six hex characters, alone or followed by a hyphen and the rest for a row
+# minted before the six-character change, and the shape check above accepts it as a task
+# name without this.
+NOTE_ID = re.compile(r"^[0-9a-f]{6,7}(?:-[0-9a-f]+)?$")
 MAX_TASK_TITLE = 200
 MAX_TASK_DETAIL = 2000
 MAX_TASK_DETAILS = 40
@@ -1169,9 +1182,9 @@ def bare_id(token):
 def format_pending_item(item):
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
-  # A short ID names the record, and a short ID acks it, so the full UUID costs nothing here.
-  # The ticks hold the head together across any renderer between this line and its reader.
-  header = "`" + str(item.get("id", ""))[:7] + "`"
+  # A short ID names the record, and a short ID acks it, so the full ID costs nothing here.
+  # The ticks hold the citation together across any renderer between this line and its reader.
+  header = "`" + str(item.get("id", ""))[:6] + "`"
   if display_kind != "note":
     header += f" {display_kind}"
   if item.get("report_id"):
@@ -2834,6 +2847,35 @@ class Store:
       ).fetchall()
     return [task_row(row) for row in rows]
 
+  def task_record(self, task_id):
+    """One task as stored, or None when the table holds no row under that ID.
+
+    The read form of the task command uses this, so a look at the queue never
+    writes a row back.
+    """
+    with closing(self.connect()) as db:
+      row = db.execute(
+        f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
+      ).fetchone()
+    return task_row(row) if row else None
+
+  def free_id(self):
+    """A six-character ID no stored row holds, so a server mint never lands on a record.
+
+    Six characters name a note whole, and the mint shares that space with every stored
+    row. A clash re-mints; a state that fills the space refuses instead of looping.
+    """
+    tables = ("notes", "submissions", "uploads", "reports", "tasks")
+    with closing(self.connect()) as db:
+      for _ in range(MINT_ATTEMPTS):
+        candidate = new_id()
+        if not any(
+          db.execute(f"SELECT 1 FROM {table} WHERE id = ?", (candidate,)).fetchone()
+          for table in tables
+        ):
+          return candidate
+    raise RuntimeError("The state holds no free six-character ID for a new record")
+
   @contextmanager
   def transaction(self, db=None, autosave=True):
     """One commit for this call's work, or a caller's open transaction when it passes one.
@@ -3000,7 +3042,7 @@ class Store:
   def rename_entity(self, prev_id, new_id):
     """Move one record to a new ID and repoint every row that names the old one.
 
-    A git SHA can share its seven letters with a session ID, and the commit trap then
+    A git SHA can share its letters with a session ID, and the commit trap then
     has no way to tell them apart. Renaming the session record clears the collision
     without touching the SHA. One transaction covers the record and its dependents,
     so a rename never lands half.
@@ -3198,7 +3240,7 @@ class Store:
     cleaned = upload_name(name)
     kind = upload_type(content_type)
     digest = body_digest(data)
-    upload_id = identifier(upload_id) if upload_id is not None else new_id()
+    upload_id = identifier(upload_id) if upload_id is not None else self.free_id()
     note_id = identifier(note_id) if note_id is not None else upload_id
     if position is not None and (not isinstance(position, int) or position < 1):
       raise ValueError("Invalid attachment position")
@@ -3237,7 +3279,7 @@ class Store:
       filename_stem = Path(cleaned).stem.replace(" ", "-")
       while True:
         duplicate = f"-{number}" if number > 1 else ""
-        stem = f"{note_id[:7]}-{timestamp}{duplicate}-{filename_stem}"
+        stem = f"{note_id[:6]}-{timestamp}{duplicate}-{filename_stem}"
         target = directory / f"{stem}{extension}"
         if len(os.fsencode(target.name)) > 255:
           target = directory / f"{upload_id}{duplicate}{extension}"
@@ -3830,7 +3872,7 @@ class Store:
       return None
     self.set_meta(AGENT_KEY_EXPIRY_META, record["at"])
     return self.note(
-      new_id(),
+      self.free_id(),
       f"The recorded agent key expired (set {record['at']}). Run `arena-preview key`"
       " for the live key; a new post overwrites this record by itself.",
       quiet=True,
@@ -5055,7 +5097,7 @@ def main():
     "note",
     help="Reread a stored note by its short or full ID",
   )
-  note_reread.add_argument("id", help="Seven or all characters of a note ID")
+  note_reread.add_argument("id", help="Six or all characters of a note ID")
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
   inbox_line = commands.add_parser(
     "inbox-line",
@@ -5178,8 +5220,9 @@ def main():
   task = commands.add_parser(
     "task",
     help=(
-      "Write or update a task; -s status, -o order, -d details, -m note,"
-      " -r report, -b blocked, -u unblocked, -a amend"
+      "Write or update a task; TASK-ID alone prints the stored row; -s status,"
+      " -o order, -d details, -m note, -r report, -b blocked, -u unblocked,"
+      " -a amend"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -5456,7 +5499,7 @@ def main():
       )
       arrivals = {record_id: store.record_arrival(record_id) for record_id in ids}
       store.acknowledge(ids, kind, text)
-      short = [i[:7] for i in ids]
+      short = [i[:6] for i in ids]
       print("ok " + " ".join(short))
       for record_id in ids:
         age = stamp_age_seconds(arrivals.get(record_id))
@@ -5487,6 +5530,24 @@ def main():
       task_id = args.id_arg
       if not task_id:
         raise ValueError("A task needs an ID")
+      if (
+        args.title_arg is None
+        and not args.detail_arg
+        and args.task_details is None
+        and args.status is None
+        and args.order is None
+        and args.blocked is None
+        and args.report is None
+        and args.msg_id is None
+        and args.amend is None
+      ):
+        # A bare ID is the read: the row prints as stored, and nothing is written.
+        resolved = store.resolve_id(task_id)
+        record = store.task_record(resolved)
+        if record is None:
+          raise ValueError(f"No task is stored under {resolved}")
+        print(format_task(record))
+        return 0
       details = args.task_details
       if details is None and args.detail_arg:
         details = args.detail_arg
