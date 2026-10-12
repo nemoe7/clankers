@@ -23,7 +23,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 1. Find this skill's actual path; installed and source paths differ. Report missing installed files; do not install or repair them without authorization.
 2. Use an ignored, persisted state directory, default `arena-state`. Verify `core.excludesFile` with `git check-ignore`; never add this directory to the repository `.gitignore`, put it in a cache/build folder, or commit/push its state and reports.
-3. Use `arena-preview <command>` for CLI calls, never the full script path. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task`, `publish` and every other command as one-shot shell calls:
+3. Use `arena-preview <command>` for CLI calls, never the full script path. Start the server with Arena's long-lived process tool, named `<repo> - Steering`, not a timed shell. That tool MUST host `serve` alone. Run `read`, `ack`, `task`, `publish` and every other command as one-shot shell calls. Send a long command the gate does not start detached through `arena-preview route <name> -- <command>`; its verdict prints on a later call:
 
    ```bash
    arena-preview serve --port 8000
