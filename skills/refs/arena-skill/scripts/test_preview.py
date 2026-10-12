@@ -996,18 +996,20 @@ def test_http_boundaries():
       )
       assert page.index('id="downloads-tab"') < page.index('id="copy-state"')
       assert "nav button{padding:7px 4px;font-size:14px;}" in page
-      # The Reports toolbar holds one line at phone widths, like the log's own: the select
-      # shrinks and the three buttons step down to make room.
+      # The log's header row holds one line at phone widths, so the search box never drops
+      # under the skip button, and the Reports toolbar keeps its buttons beside a select that
+      # grows into the width they leave. The status line keeps a row of its own.
       assert (
-        ".report-toolbar{flex-wrap:nowrap;gap:8px;}"
-        ".select-wrap{flex:1 1 auto;min-width:0;max-width:none;}"
-        "#copy-report,#refresh-report,#unpublish-report{width:36px;height:36px;}"
-        in page
+        ".log-card>.row:first-child>.stack{flex:0 1 auto;}"
+        ".log-card>.row>.row.tight{flex:1 1 0;min-width:0;}"
+        "#log-search{min-width:5em;}" in page
       )
       assert (
+        ".report-toolbar{gap:8px;}"
+        ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}"
         "#copy-report,#refresh-report,#unpublish-report{width:36px;height:36px;}}"
         in page
-      )
+      ), "the phone block still ends with the Reports toolbar rule"
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page

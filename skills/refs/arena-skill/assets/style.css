@@ -268,19 +268,22 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
      step down rather than a track giving way. */
   nav { gap: 6px; }
   nav button { padding: 7px 4px; font-size: 14px; }
-  /* The owner's phone dropped the log's search toolbar to a line of its own. The toolbar
-     shrinks instead, so the status stack, the search box and the skip button share a line,
-     and the box keeps a usable floor. */
-  .log-card > .row > .row.tight { flex: 0 1 auto; min-width: 0; }
+  /* The owner's phone dropped the log's search toolbar to a line of its own: the header row
+     wraps on the toolbar's 13em box before either side shrinks, and a wrapped item never gets
+     the chance. The toolbar starts from zero and grows into the width the status stack leaves,
+     so the row holds one line, the status keeps its words, and the box takes what is left. */
+  .log-card > .row:first-child > .stack { flex: 0 1 auto; }
+  .log-card > .row > .row.tight { flex: 1 1 0; min-width: 0; }
   #log-search { min-width: 5em; }
   /* The footer wraps and the lone Send button would drop left; the left margin pulls it back
      to the right edge of the bottom line, under the status stack. */
   #send { margin-left: auto; }
   /* The Reports toolbar held its select and one button on the first line and dropped the other
-     two to a second. The wrap and the buttons step down, so the select and the three buttons
-     share one line the way the log's toolbar does. */
-  .report-toolbar { flex-wrap: nowrap; gap: 8px; }
-  .select-wrap { flex: 1 1 auto; min-width: 0; max-width: none; }
+     two to a second. Only the select shortens: it starts from zero and grows into the width the
+     three buttons leave, so they keep their seats and it keeps the rest. The toolbar keeps its
+     wrap, so the status line under the fields keeps a row of its own. */
+  .report-toolbar { gap: 8px; }
+  .select-wrap { flex: 1 1 0; min-width: 0; max-width: none; }
   #copy-report, #refresh-report, #unpublish-report { width: 36px; height: 36px; }
 }
 

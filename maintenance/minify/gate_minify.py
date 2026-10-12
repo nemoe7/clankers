@@ -44,6 +44,9 @@ def check_preview_path():
     environment["XDG_CONFIG_HOME"] = str(home / ".config")
     environment.pop("BASH_ENV", None)
     environment.pop("GIT_CONFIG_GLOBAL", None)
+    # A shell that carries the marker skips the gate by design, so a sweep started from a
+    # routed child must drop it or every block case below passes for the wrong reason.
+    environment.pop("ARENA_PREVIEW_ROUTE", None)
     install = minify.TARGETS[1] / "scripts/install.sh"
 
     # A fresh home models a reset. Reinstallation must restore the hook once.
