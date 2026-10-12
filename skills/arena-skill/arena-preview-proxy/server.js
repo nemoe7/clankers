@@ -402,8 +402,12 @@ const server = http.createServer((req, res) => {
         }
       }
       responseHeaders['cache-control'] = 'no-store';
+      // A page with no-referrer sends no Referer on its own calls, so the proxy could not read
+      // the target. The browser default keeps the viewer URL on same-origin calls.
+      responseHeaders['referrer-policy'] = 'strict-origin-when-cross-origin';
       const status = upstreamRes.statusCode || 502;
-      logLine('upstream', status, req.method, target.origin + target.pathname);
+      logLine('upstream', status, req.method, target.origin + target.pathname,
+        'referrer-policy', upstreamRes.headers['referrer-policy'] || 'none');
       const isHtml = /\btext\/html\b/i.test(String(responseHeaders['content-type'] || ''));
       if (isHtml && req.method !== 'HEAD') {
         delete responseHeaders['content-length'];
