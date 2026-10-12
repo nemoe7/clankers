@@ -45,6 +45,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### house
 
 - REFERENCE.md names the size that the `attachments[]` list carries beside each file, so the reference and the read agree. The refs line is the source, and both shipped copies carry the same sentence.
+- The arena-skill docs send a long command the gate does not start detached through `arena-preview route <name> -- <command>`, and the verdict prints on a later call. The refs line and both shipped copies carry it.
 - The skill scripts, `ruff.toml`, the userscript comments, the workflow checks and the changelog drop their session-local citations the same way. The fact stays and the ID goes.
 - The REFERENCE.md command table gains `rename` and `run`, and SKILL.md states the `arena-preview key` rule once instead of twice.
 - REFERENCE.md leaves the required reads. The rule keeps ARENA.md, every AGENTS.md and the skill's SKILL.md, and the reference becomes a file to grep when a question needs it. The refresh reminder drops it too.
