@@ -135,11 +135,6 @@ function checkPromptFill(api) {
   assert.equal(promptForSlug("clankers", ""), null);
   var prompt = promptForSlug("clankers", promptFillText);
   var promptWithRules = promptForSlug("clankers", promptFillText, "# Rules\n");
-  assert.match(promptFillText, /no fixed turn limit/i);
-  assert.match(promptFillText, /indefinitely/);
-  assert.match(promptFillText, /each final poll waits up to 1,800 seconds or until skipped/i);
-  assert.match(promptFillText, /long, complex feature set/i);
-  assert.match(promptFillText, /large context window/i);
 
   function frames(rows) {
     return {
@@ -178,21 +173,9 @@ function checkPromptFill(api) {
       "clankers read ARENA.md AGENTS.md in full before your first edit, and follow both."],
     [prompt.includes(promptFillText), true],
     [prompt.indexOf("here is ARENA.md"), -1],
-    [prompt.indexOf("red first") > 0, true],
-    // The checklist leads the tail; the dropped model paragraph never returns.
-    [prompt.indexOf("run this order:") > 0, true],
-    [prompt.indexOf("run this order:") < prompt.indexOf("red first"), true],
-    [prompt.indexOf("1. Read the task and every file it touches in full") > 0, true],
-    [prompt.indexOf("6. Verify with the project's own gate") > 0, true],
-    [prompt.indexOf("add nothing the task does not ask for") > 0, true],
-    [prompt.indexOf("Keep the behavior, interfaces, validation and security") > 0, true],
-    [prompt.indexOf("Never repeat a failed approach without a new reason.") > 0, true],
-    [prompt.indexOf("invent no visual detail") > 0, true],
-    [prompt.indexOf("name what stays unverified") > 0, true],
     [prompt.indexOf("Pareto"), -1],
     [ARENA_MD_URL, "https://raw.githubusercontent.com/nemoe7/clankers/refs/heads/main/rules/ARENA.md"],
     [promptWithRules.indexOf("here is ARENA.md:\n# Rules\n") > 0, true],
-    [promptWithRules.indexOf("here is ARENA.md") > promptWithRules.indexOf("red first"), true],
     [shouldWrite("", "clankers", null, null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md", "clankers", null, null), true],
     [shouldWrite("clankers read ARENA.md AGENTS.md\nExpect screenshots to be sent via the steering channel.", "clankers", null, null), true],

@@ -4,7 +4,7 @@ The work can continue indefinitely; there is no fixed turn limit. Each final pol
 
 Before you implement, answer or report, run this order:
 
-1. Read the task and every file it touches in full; trace the real flow end to end before you plan.
+1. Read the task, and grep every caller of the code it touches; trace the real flow end to end before you plan.
 2. Name the requirements and the constraints; follow the conventions the code already uses.
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
 4. Write the failing check before new behavior; reproduce a bug before you touch it.
