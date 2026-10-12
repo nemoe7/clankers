@@ -32,7 +32,7 @@ Latest measurements as of 2026-10-12. `maintenance/check.py --update` rebuilds t
 | File | Measure | Current |
 | --- | --- | --- |
 | `rules/AGENTS.md` | `o200k_base` | 1,561 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,822 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 19,807 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,496 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 466 `tok` |
