@@ -44,8 +44,9 @@ function stored(name) {
   catch { return null; }
 }
 // The page's icons are Lucide geometry, vendored inline (ISC; Copyright (c) 2026 Lucide Icons
-// and Contributors). One table holds each shape a control can swap in, so a control redraws
-// from the same source as its static twin in index.html.
+// and Contributors), beside the Markdown mark from Simple Icons (CC0-1.0). One table holds each
+// shape a control can swap in, so a control redraws from the same source as its static twin in
+// index.html.
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const ICONS = {
   sun: [['circle', { cx: '12', cy: '12', r: '4' }], ['path', { d: 'M12 2v2' }],
@@ -60,6 +61,8 @@ const ICONS = {
   x: [['path', { d: 'M18 6 6 18' }], ['path', { d: 'm6 6 12 12' }]],
   eye: [['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
     ['circle', { cx: '12', cy: '12', r: '3' }]],
+  markdown: [['path', { d: 'M22.27 19.385H1.73A1.73 1.73 0 0 1 0 17.655V6.345a1.73 1.73 0 0 1 1.73-1.73h20.54A1.73 1.73 0 0 1 24 6.345v11.308a1.73 1.73 0 0 1-1.73 1.731Zm-16.501-3.462v-4.5l2.308 2.885 2.307-2.885v4.5h2.308V8.078h-2.308l-2.307 2.885-2.308-2.885H3.46v7.847Zm15.463-3.923h-2.309V8.077h-2.307V12h-2.308l3.461 4.039Z',
+    fill: 'currentColor', stroke: 'none' }]],
 };
 function icon(name, size = 15) {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -78,8 +81,9 @@ function icon(name, size = 15) {
 function setIcon(button, name, size) {
   button.replaceChildren(icon(name, size));
 }
-function setLabelIcon(button, text, name, size) {
-  button.replaceChildren(text, icon(name, size));
+function setPreviewIcon(button) {
+  button.replaceChildren(icon('markdown', 15), icon('eye', 15));
+  label(button, 'Preview Markdown');
 }
 function save(name, value) {
   try { localStorage.setItem(`${key}:${name}`, value); return true; }
@@ -913,7 +917,7 @@ function writeMode() {
   note.hidden = false;
   grow();
   $('#draft-preview').hidden = true;
-  setLabelIcon($('#preview-note'), 'MD ', 'eye', 15);
+  setPreviewIcon($('#preview-note'));
   $('#preview-note').setAttribute('aria-pressed', 'false');
 }
 $('#preview-note').addEventListener('click', async () => {
@@ -924,7 +928,7 @@ $('#preview-note').addEventListener('click', async () => {
   const panel = $('#draft-preview');
   panel.hidden = false;
   panel.textContent = 'Rendering draft…';
-  setLabelIcon($('#preview-note'), 'MD ', 'eye', 15);
+  setPreviewIcon($('#preview-note'));
   $('#preview-note').setAttribute('aria-pressed', 'true');
   try {
     const rendered = await (await request('/api/markdown', {

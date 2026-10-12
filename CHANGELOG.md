@@ -21,6 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The page's two icon shapes come from Lucide, vendored inline. The Skip poll button takes `skip-forward`, and the jump bar takes `arrow-down` in `currentColor`, so it follows the theme. Lucide is ISC, Copyright (c) 2026 Lucide Icons and Contributors.
 - The copy button keeps its seat on a touch top bar, beside Downloads. The clock and the theme toggle leave, and the four tab labels step down to hold the strip on one line.
 - Every text glyph gives way to Lucide geometry. The set covers the theme toggle, attach, the MD preview eye, refresh and both copy buttons.
+- The preview button carries the Simple Icons Markdown mark beside the Lucide eye. The mark is one filled path under CC0-1.0, and the letters `MD` leave.
 - A copy result shows Lucide's check and cross marks in place of the old glyphs.
 - The Reports toolbar holds one line at phone widths. The select shrinks to the space left, and the three icon buttons step down to 36px beside it.
 - The Current seat goes to the first upcoming task no blocked mark holds, in the listing and in the page. A task that waits on a report no longer reads as the work in hand.
