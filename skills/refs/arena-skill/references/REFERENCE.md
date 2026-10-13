@@ -27,7 +27,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it replaces the live notes, answers, reports and tasks unless `--merge` keeps them; `--replace-tasks` replaces only tasks |
 | `download-request <url>` | Queue one pending file download for the owner to approve in Downloads; `--allow-proxy` permits the two proxies |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
-| `unpublish <id>` | Remove a report from the tab; its answers and source survive. It refuses while the owner has an unseen answer ack, or within the minute after the owner's last look. A held call answers `409` |
+| `unpublish <id>` | Remove a report from the tab; its answers and source survive. It refuses while the owner has an unseen answer ack. A fresh owner view of an answered report holds it too, but an agent unpublish passes that hold: the page keeps the open report on screen until the owner clicks away. A held call answers `409` |
 | `stale-reports` | List stale published report IDs and reasons without changing state |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token |

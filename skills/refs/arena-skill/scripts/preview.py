@@ -4444,11 +4444,12 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,)
         )
 
-  def guard_report_change(self, db, report_id, report):
+  def guard_report_change(self, db, report_id, report, hold_view=True):
     """Hold an agent change while an answer, acknowledgement, or fresh view is unread.
 
     The view hold applies to an answered report only: a report nobody answered has nothing to
-    disturb, so a look at it never blocks a change.
+    disturb, so a look at it never blocks a change. An unpublish passes `hold_view=False`: the
+    page keeps the open report on screen, so a removal never empties a reader's view.
     """
     unread = db.execute(
       "SELECT 1 FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL LIMIT 1",
@@ -4464,6 +4465,8 @@ class Store:
       raise ReportHeld(
         "The report waits for the owner: its answer acknowledgement is unseen."
       )
+    if not hold_view:
+      return
     answered = db.execute(
       "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
     ).fetchone()
@@ -4528,7 +4531,8 @@ class Store:
       if row is None:
         raise FileNotFoundError("Report not found")
       if not dismissed_by_owner:
-        self.guard_report_change(db, report_id, row)
+        # The page holds the open report, so the owner's view never blocks this removal.
+        self.guard_report_change(db, report_id, row, hold_view=False)
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
       # still carries the removed report.

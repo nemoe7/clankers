@@ -1409,11 +1409,12 @@ class Store:
 				else:raise ValueError(f"Unknown note: {record_id}; no receipts written")
 			db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(stamp,))
 			if not any(db.execute(f"SELECT 1 FROM {table} WHERE acknowledged_at IS NULL LIMIT 1").fetchone()for table in('notes','submissions')):db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
-	def guard_report_change(self,db,report_id,report):
+	def guard_report_change(self,db,report_id,report,hold_view=True):
 		unread=db.execute('SELECT 1 FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL LIMIT 1',(report_id,)).fetchone()
 		if unread is not None:raise ReportHeld('The report has an unacknowledged answer.')
 		acknowledged=db.execute('SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
 		if acknowledged and not at_or_after(report['ack_seen_at'],acknowledged):raise ReportHeld('The report waits for the owner: its answer acknowledgement is unseen.')
+		if not hold_view:return
 		answered=db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone();age=seconds_since(report['viewed_at'])
 		if answered is not None and age is not None and 0<=age<REPORT_CHANGE_VIEW_SECONDS:remaining=max(1,int(REPORT_CHANGE_VIEW_SECONDS-age));raise ReportHeld(f"The owner is reading this report: retry after {remaining} s without a view.")
 	def publish(self,report_id,title,source):
@@ -1437,7 +1438,7 @@ class Store:
 		with self.transaction()as db:
 			row=db.execute('SELECT title, ack_seen_at, viewed_at FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
-			if not dismissed_by_owner:self.guard_report_change(db,report_id,row)
+			if not dismissed_by_owner:self.guard_report_change(db,report_id,row,hold_view=False)
 			db.execute('DELETE FROM reports WHERE id = ?',(report_id,));db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMOVED_META,now()))
 			if dismissed_by_owner:db.execute('INSERT INTO notes (id, text, at, quiet) VALUES (?, ?, ?, 1)',(new_id(),f"The owner dismissed the report {report_id} ({row['title']}).",now()))
 	def clear_state(self):

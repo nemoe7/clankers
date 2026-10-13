@@ -1652,6 +1652,36 @@ test('preview client', async (t) => {
     assert.equal(panel.scrollTop, 0, 'a report the owner switched to starts at its top');
   });
 
+  await t.test("A report the agent unpublished under the owner's eyes stays until they click away", async () => {
+    // The agent unpublish lands at once, so the page holds the open report and its row until the
+    // owner clicks away rather than emptying the panel under a reader.
+    state.reports = [
+      { id: 'keep', title: 'Keep', updated_at: new Date().toISOString(), seen_at: new Date().toISOString() },
+      { id: 'gone', title: 'Gone', updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }
+    ];
+    await refresh();
+    get('#reports-tab').events.click();
+    await tick(); await tick();
+    get('#report-select').value = 'gone';
+    get('#report-select').events.change();
+    await tick(); await tick();
+    assert.equal(get('#report').dataset.reportId, 'gone');
+    const body = get('#report').innerHTML;
+    state.reports = [state.reports[0]];
+    await refresh();
+    await tick(); await tick();
+    assert.equal(get('#report').dataset.reportId, 'gone', 'the body stays under the reader');
+    assert.equal(get('#report').innerHTML, body, 'the body is untouched');
+    assert.equal(get('#report-select').value, 'gone', 'the row stays');
+    assert.match(get('#report-select').children.find(item => item.value === 'gone').textContent, /unpublished/);
+    get('#report-select').value = 'keep';
+    get('#report-select').events.change();
+    await tick(); await tick();
+    assert.equal(get('#report').dataset.reportId, 'keep', 'clicking away loads the other report');
+    assert.equal(get('#report-select').children.some(item => item.value === 'gone'), false,
+      'the held row leaves with the click');
+  });
+
   await t.test("The log search narrows the rows by substring and leaves the copy whole", async () => {
     // The log search narrows the rows by substring over each row as it stands, and leaves the copy
     // alone: that is the restore path, and a narrowed copy would restore a partial log.
