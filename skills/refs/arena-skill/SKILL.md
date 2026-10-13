@@ -78,6 +78,8 @@ Republish the same ID after each source update; if answers exist, use a new ID. 
 
 For each note's `attachments[]`, the read carries each file's size; an image MUST be read before acknowledging that note once, and read a text file with caution. If `present` is false or bytes are missing, report the loss.
 
+For an explicit state import, NEVER read the full text attachment unless the import fails or its contents are needed to resolve an error.
+
 To ask for a file, run `download-request <url>`. That command queues a pending job and does not download it. The owner approves or denies the request in Downloads. Add `--allow-proxy` only when that URL may use AllOrigins and then CodeTabs. URLs cannot contain credentials. A saved job writes an inbox note with the path. Read that note and acknowledge it. Report failed or missing files.
 
 ## Recovery
