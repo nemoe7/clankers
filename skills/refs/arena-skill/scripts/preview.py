@@ -2293,8 +2293,9 @@ def poll_inbox(store, sleeper=None):
           [item.get("report_id") for item in full["pending"]]
         )
         return 0
-      # A finished gate run ends the wait with its verdict, so the turn reads the result now.
+      # A finished gate run ends this poll, so a separate closing poll still ends the turn.
       if run_notices(store.path.parent):
+        print("CLOSING POLL REQUIRED", flush=True)
         return 0
       # A failed check on the branch pull request ends the wait, so the turn fixes it now.
       if failures:

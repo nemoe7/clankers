@@ -4819,6 +4819,17 @@ def test_poll_inbox():
       assert result.returncode == 2 and "unrecognized arguments" in result.stderr
 
 
+def test_poll_requires_a_closing_poll_after_a_run_verdict(capsys):
+  with tempfile.TemporaryDirectory() as poll_dir:
+    store = preview.Store(poll_dir, create=True)
+    assert preview.run_command(poll_dir, "check", ["true"]) == 0
+    capsys.readouterr()
+    assert preview.poll_inbox(store) == 0
+    output = capsys.readouterr().out
+    assert "run check done: exit 0" in output
+    assert "CLOSING POLL REQUIRED" in output
+
+
 def test_poll_blocked_tasks():
   "An unblocked upcoming task ends a poll at once. A blocked one lets it wait."
   with tempfile.TemporaryDirectory() as poll_dir:
@@ -6165,7 +6176,8 @@ def test_poll_breaks_on_finished_run(capsys):
     assert preview.poll_inbox(store, sleeper=sleeper) == 0
     assert len(sleeps) == 1
     out = capsys.readouterr().out
-    assert "run gate done: exit 0" in out and out.rstrip().endswith("ok")
+    assert "run gate done: exit 0" in out
+    assert out.rstrip().endswith("CLOSING POLL REQUIRED")
     assert preview.run_notices(directory) == 0
 
 

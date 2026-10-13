@@ -791,7 +791,7 @@ def poll_inbox(store,sleeper=None):
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
 			if listing['pending']:full=store.read();print(format_read(full),flush=True);store.mark_seen([item['id']for item in full['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in full['pending']]);return 0
-			if run_notices(store.path.parent):return 0
+			if run_notices(store.path.parent):print('CLOSING POLL REQUIRED',flush=True);return 0
 			if failures:print(f"PR CHECKS FAILED: {failures[0]}. Fix the failed check before the next push.",flush=True);return 0
 			open_tasks=[item for item in store.list_tasks()if item['status']=='upcoming'and not item['blocked']]
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
