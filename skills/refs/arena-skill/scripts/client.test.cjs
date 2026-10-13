@@ -107,6 +107,7 @@ const sent = [];
 const readStamps = [];
 const ackSeenCalls = [];
 const viewCalls = [];
+const viewActive = [];
 const skipCalls = [];
 const replySeenCalls = [];
 const unpublished = [];
@@ -344,6 +345,7 @@ const context = {
       // The view stamp is the reader's side of the unpublish guard: a report the panel shows
       // must not vanish under the owner.
       viewCalls.push(url);
+      viewActive.push(options && options.body ? JSON.parse(options.body).active : true);
       return response({ id: decodeURIComponent(url.split('/')[3]), viewed_at: new Date().toISOString() });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/ack-seen')) {
@@ -1474,12 +1476,16 @@ test('preview client', async (t) => {
     assert.equal(pip.title, 'A report is unread');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. * Fielded', 'an acked answer stars a report already read once');
+    // An earlier subtest already stamped the look, so the count stands as the throttle's base.
+    const viewsBefore = viewCalls.length;
+    assert.ok(viewsBefore >= 1, 'an earlier look stamped the view');
     await get('#reports-tab').events.click();
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
       'opening the report stamps the ack open once');
-    assert.deepEqual(viewCalls, ['/api/reports/r1/view'],
-      'showing the report stamps the view once, and the half-minute throttle holds it there');
+    assert.equal(viewCalls.length, viewsBefore,
+      'the half-minute throttle holds a repeat look at the same report to one stamp');
+    assert.equal(viewActive[viewActive.length - 1], true, 'that stamp counts as an active look');
     assert.equal(pip.hidden, true, 'the dot goes with the open');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
       '1. Fielded', 'the ack star goes with the open');
@@ -1487,6 +1493,12 @@ test('preview client', async (t) => {
     await tick(); await tick();
     assert.deepEqual(ackSeenCalls, ['/api/reports/r1/ack-seen'],
       'a later open stamps nothing, because the ack is already seen');
+    assert.equal(viewCalls.length, viewsBefore, 'a refresh on the same report stamps no look');
+    // Leaving the report clears the stamp, so a page sitting in the background holds nothing.
+    await get('#notes-tab').events.click();
+    await tick(); await tick();
+    assert.equal(viewCalls.length, viewsBefore + 1, 'leaving the report sends the clear');
+    assert.equal(viewActive[viewActive.length - 1], false, 'the clear ends the look');
   });
 
   await t.test("An ack the owner already opened leaves neither marker", async () => {
