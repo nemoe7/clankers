@@ -2097,9 +2097,13 @@ LONG_RUN_WORDS = (
   (("gradle", "test"), "gradle-tests"),
   (("gradlew", "test"), "gradle-tests"),
 )
+WORKTREE_STEP = (
+  "NEXT TASK: a queued task that edits files continues in a worktree while this runs:"
+  " `arena-preview worktree start <name> -- <command line>`."
+)
 DETACHED_NOTICE = (
   "RUN DETACHED: `{name}` runs in the background, so the call ends clean;"
-  " its verdict prints on a later call."
+  " its verdict prints on a later call. " + WORKTREE_STEP
 )
 DETACHED_BLOCK = (
   "RUN BLOCKED: the background start failed, so the wait never left."
@@ -2359,7 +2363,7 @@ def route_command(state_dir, name, argv):
     return 1
   print(
     f"routed {name}: the run continues in the background, and its verdict prints on a"
-    " later call.",
+    f" later call. {WORKTREE_STEP}",
     file=sys.stderr,
     flush=True,
   )

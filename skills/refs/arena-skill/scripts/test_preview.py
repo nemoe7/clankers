@@ -4549,6 +4549,16 @@ def test_a_long_run_line_detaches_the_wait():
     assert clean.returncode == 0 and "RUN DETACHED" not in clean.stderr, clean.stderr
 
 
+def test_route_names_the_worktree_step(capsys):
+  """A routed call tells the agent to continue the next task in a worktree."""
+  with tempfile.TemporaryDirectory() as directory:
+    with patch.dict(os.environ, {"ARENA_PREVIEW_DETACH_DRY": "1"}):
+      assert preview.route_command(directory, "gates", ["make", "check"]) == 0
+  captured = capsys.readouterr()
+  assert "routed gates:" in captured.err
+  assert "arena-preview worktree start" in captured.err
+
+
 def test_gate_blocks_a_cd_line_past_the_threshold():
   # cd is fine on the line, but the count gate still holds it: with a pending note past the threshold a
   # plain cd line meets READ INBOX NOW, and the block names no command, because cd is never the noise.
