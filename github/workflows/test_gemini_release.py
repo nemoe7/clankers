@@ -1063,5 +1063,100 @@ def test_release_pipeline():
   print("Offline Gemini release checks passed")
 
 
+def test_evidence_scope():
+  original = Path.cwd()
+  with tempfile.TemporaryDirectory() as directory:
+    os.chdir(directory)
+    try:
+
+      def git(*args):
+        return release.git(*args).strip()
+
+      def commit(message):
+        git("add", ".")
+        git("commit", "-m", message)
+        return git("rev-parse", "HEAD")
+
+      git("init", "-b", "main")
+      git("config", "user.name", "Check")
+      git("config", "user.email", "check@example.invalid")
+      policy_path = Path("evidence.json")
+      policy_path.write_text(
+        json.dumps(
+          {"include": ["product/**", ".agents/**"], "exclude": [".agents/**"]}
+        ),
+        encoding="utf-8",
+      )
+      blacklist_path = Path("blacklist-evidence.json")
+      blacklist_path.write_text(
+        json.dumps({"include": [], "exclude": ["private/**"]}), encoding="utf-8"
+      )
+      Path("product").mkdir()
+      Path("product/root.txt").write_text("root evidence\n")
+      root = commit("root change")
+      Path(".agents").mkdir()
+      Path(".agents/only.txt").write_text("agent-only evidence\n")
+      excluded = commit("agent-only change")
+      Path("product/visible.txt").write_text("visible evidence\n")
+      Path(".agents/secret.txt").write_text("excluded evidence\n")
+      mixed = commit("mixed change")
+      Path("product/skipped.txt").write_text("skip evidence\n")
+      skipped = commit("skip release\n\nRelease-note: skip")
+      Path("product/not-skipped.txt").write_text("non-exact trailer evidence\n")
+      not_skipped = commit("do not skip\n\nRelease-note: skipped")
+      scoped_target = git("rev-parse", "HEAD")
+      policy = release.load_evidence_policy(policy_path)
+      blacklist = release.load_evidence_policy(blacklist_path)
+      assert release.scoped_paths(["unlisted/file.txt"], blacklist, root) == [
+        "unlisted/file.txt"
+      ]
+      lines = []
+      with patch.object(release, "summary", lines.append):
+        units = release.history(scoped_target, root, policy=policy)
+      assert [item[0] for item in units] == [mixed, not_skipped]
+      text = dict(units)[mixed]
+      assert "visible evidence" in text
+      assert "excluded evidence" not in text
+      assert ".agents/secret.txt" not in text
+      assert "Selected paths:\nproduct/visible.txt" in text
+      assert f"  selected {mixed}: selected-paths: product/visible.txt" in lines
+      assert (
+        f"  selected {not_skipped}: selected-paths: product/not-skipped.txt" in lines
+      )
+      assert f"  omitted {excluded}: excluded-only" in lines
+      assert f"  omitted {skipped}: release-note-skip" in lines
+      Path("unowned").mkdir()
+      Path("unowned/change.txt").write_text("unknown evidence\n")
+      unknown = commit("unknown path")
+      with (
+        tempfile.TemporaryDirectory() as artifacts,
+        patch.dict(
+          os.environ,
+          {
+            "PROPOSAL_PATH": str(Path(artifacts) / "proposal.json"),
+            "IMPACT_OVERRIDE": "patch",
+            "PROMOTE_TO_STABLE": "false",
+            "EVIDENCE": "commits-and-diffs",
+            "GITHUB_RUN_ATTEMPT": "1",
+          },
+        ),
+        patch.object(release, "target_commit", return_value=unknown),
+        patch.object(release, "current_base", return_value=("v1.0.0", root, None)),
+        patch.object(release, "load_evidence_policy", return_value=policy),
+        patch.object(
+          release,
+          "prepared",
+          side_effect=AssertionError("Gemini received unknown-path evidence"),
+        ),
+      ):
+        fails(
+          lambda: release.propose("owner/repo", "main"),
+          "Unknown evidence path: unowned/change.txt",
+        )
+    finally:
+      os.chdir(original)
+
+
 if __name__ == "__main__":
   test_release_pipeline()
+  test_evidence_scope()

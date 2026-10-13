@@ -13,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -273,32 +274,123 @@ def baseline(rows, target):
 
 
 EVIDENCE_KINDS = ("commits-and-diffs", "commits")
+EVIDENCE_POLICY = HERE / "gemini-release-evidence.json"
 
 
-def history(target, base, evidence=EVIDENCE_KINDS[0]):
+def load_evidence_policy(path=EVIDENCE_POLICY):
+  """Load the target-owned include and exclude path policy."""
+  try:
+    policy = json.loads(Path(path).read_text(encoding="utf-8"))
+  except FileNotFoundError as error:
+    raise RuntimeError(f"Evidence policy is missing: {path}") from error
+  except json.JSONDecodeError as error:
+    raise RuntimeError(f"Evidence policy is invalid JSON: {path}") from error
+  if not isinstance(policy, dict) or set(policy) != {"include", "exclude"}:
+    raise RuntimeError("Evidence policy must contain only include and exclude lists")
+  for key in ("include", "exclude"):
+    patterns = policy[key]
+    if not isinstance(patterns, list) or any(
+      not isinstance(pattern, str) or not pattern for pattern in patterns
+    ):
+      raise RuntimeError(f"Evidence policy {key} must be a list of nonempty strings")
+  return {key: tuple(policy[key]) for key in ("include", "exclude")}
+
+
+def diff_tree_args(parent, sha):
+  """The safe diff-tree arguments for one parent edge."""
+  args = [
+    "diff-tree",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-color",
+    "--full-index",
+    "--no-commit-id",
+    "-r",
+  ]
+  return args + ([parent, sha] if parent else ["--root", sha])
+
+
+def commit_paths(parent, sha):
+  """Return paths changed along one commit-parent edge."""
+  return [
+    path
+    for path in git(*diff_tree_args(parent, sha), "--name-only", "-z").split("\0")
+    if path
+  ]
+
+
+def release_note_skip(sha):
+  """True only for an exact Release-note: skip trailer."""
+  message = git("show", "-s", "--format=%B", sha)
+  trailers = run(
+    "git", "interpret-trailers", "--parse", input=message.encode()
+  ).splitlines()
+  return "Release-note: skip" in trailers
+
+
+def scoped_paths(paths, policy, sha):
+  """Keep policy-approved paths and stop on an unknown path."""
+  selected = []
+  for path in paths:
+    if any(fnmatchcase(path, pattern) for pattern in policy["exclude"]):
+      continue
+    if policy["include"] and not any(
+      fnmatchcase(path, pattern) for pattern in policy["include"]
+    ):
+      raise RuntimeError(f"Unknown evidence path: {path} in commit {sha}")
+    selected.append(path)
+  return selected
+
+
+def history(target, base, evidence=EVIDENCE_KINDS[0], policy=None):
   if evidence not in EVIDENCE_KINDS:
     raise RuntimeError("Invalid evidence input")
   revision = f"{base}..{target}" if base else target
   commits = git("rev-list", "--reverse", "--topo-order", revision).splitlines()
-  units = []
+  units, selected_audit, omitted_audit = [], [], []
   for sha in commits:
+    parents = git("rev-list", "--parents", "-n", "1", sha).split()[1:] or [""]
+    parent_paths = []
+    if policy is not None:
+      seen, changed = set(), []
+      for parent in parents:
+        paths = commit_paths(parent, sha)
+        parent_paths.append((parent, paths))
+        for path in paths:
+          if path not in seen:
+            seen.add(path)
+            changed.append(path)
+      selected = scoped_paths(changed, policy, sha)
+      if not selected:
+        omitted_audit.append((sha, "excluded-only"))
+        continue
+      if release_note_skip(sha):
+        omitted_audit.append((sha, "release-note-skip"))
+        continue
+      selected_audit.append((sha, selected))
     parts = [git("show", "-s", "--format=fuller", sha)]
+    if policy is not None:
+      parts.append("Selected paths:\n" + "\n".join(selected))
     if evidence != "commits":
-      parents = git("rev-list", "--parents", "-n", "1", sha).split()[1:]
-      for parent in parents or [""]:
-        args = [
-          "diff-tree",
-          "--no-ext-diff",
-          "--no-textconv",
-          "--no-color",
-          "--full-index",
-          "--no-commit-id",
-          "-r",
-          "-p",
-        ]
-        args += [parent, sha] if parent else ["--root", sha]
-        parts.append(git(*args))
+      if policy is None:
+        for parent in parents:
+          parts.append(git(*diff_tree_args(parent, sha), "-p"))
+      else:
+        selected_paths = set(selected)
+        for parent, paths in parent_paths:
+          included = [path for path in paths if path in selected_paths]
+          if included:
+            parts.append(git(*diff_tree_args(parent, sha), "-p", "--", *included))
     units.append((sha, "\n\n".join(parts)))
+  if policy is not None:
+    summary(
+      f"Evidence scope: selected {len(selected_audit)} commit(s); "
+      f"omitted {len(omitted_audit)} commit(s)"
+    )
+    for sha, paths in selected_audit:
+      summary(f"  selected {sha}: selected-paths: {', '.join(paths)}")
+    for sha, reason in omitted_audit:
+      summary(f"  omitted {sha}: {reason}")
   return units
 
 
@@ -889,7 +981,8 @@ def propose(repo, branch):
   # Refuse ambiguous baselines before sending history to Gemini.
   if previous:
     next_version(version_base, "patch")
-  units = history(target, base, os.getenv("EVIDENCE") or EVIDENCE_KINDS[0])
+  policy = load_evidence_policy()
+  units = history(target, base, os.getenv("EVIDENCE") or EVIDENCE_KINDS[0], policy)
   if not units:
     raise RuntimeError("No commits since the published baseline")
   link = (

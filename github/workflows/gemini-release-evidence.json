@@ -1,0 +1,13 @@
+{
+  "include": [
+    "CHANGE-ME/**"
+  ],
+  "exclude": [
+    ".agents/**",
+    ".github/**",
+    "AGENTS.md",
+    "ARENA.md",
+    "vendor/**",
+    "upstream/**"
+  ]
+}
