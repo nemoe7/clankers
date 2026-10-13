@@ -33,6 +33,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 - When multiple queued tasks each edit files, ALWAYS start the root gate after task scope.
 - While that gate runs, ALWAYS use `arena-preview worktree start` before unrelated file-editing work; a lone file-editing task needs no worktree.
+- A queued file task with non-overlapping paths works in that worktree while the gate runs; do not wait read-only.
 - Declare nonoverlapping paths before you start the worktree.
 - NEVER start a gate, commit or push in the detached worktree.
 - Collect the worktree diff only after the root gate passes.
