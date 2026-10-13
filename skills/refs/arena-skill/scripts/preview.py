@@ -1631,32 +1631,23 @@ def skip_poll_ready(store):
 
 
 def run_notices(state_dir, show_running=False):
-  """Print each finished run once, on the first gate call after it ends.
+  """Print one useful routed-run notice per call.
 
-  With `show_running`, a detached wait that has not finished prints one status line with
-  its elapsed seconds. Return how many finished runs it printed, so a poll can end when
-  a gate run finishes.
+  A finished verdict wins over a live status. Each finished record prints once, while a
+  live detached record can report its age on a later call. The return value lets a poll
+  stop when a verdict arrives.
   """
-  printed = 0
   runs = Path(state_dir) / "runs"
   if not runs.is_dir():
-    return printed
+    return 0
+  records = []
   for path in sorted(runs.glob("*.json")):
     try:
-      record = json.loads(path.read_text(encoding="utf-8"))
+      records.append((path, json.loads(path.read_text(encoding="utf-8"))))
     except (OSError, ValueError):
       continue
-    if record.get("exit") is None:
-      # One status line per call while a detached wait runs, so the agent reads it as
-      # alive instead of stalled. The poll loop asks for finished runs only.
-      if not show_running or not record.get("detached"):
-        continue
-      elapsed = detached_seconds(record.get("started_at"))
-      if elapsed is None or elapsed > DETACHED_STATUS_SECONDS:
-        continue
-      print(f"run {record.get('name')} running {elapsed}s", file=sys.stderr, flush=True)
-      continue
-    if record.get("announced"):
+  for path, record in records:
+    if record.get("exit") is None or record.get("announced"):
       continue
     print(
       f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s"
@@ -1667,8 +1658,18 @@ def run_notices(state_dir, show_running=False):
     path.write_text(
       json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
-    printed += 1
-  return printed
+    return 1
+  if not show_running:
+    return 0
+  for _, record in records:
+    if record.get("exit") is not None or not record.get("detached"):
+      continue
+    elapsed = detached_seconds(record.get("started_at"))
+    if elapsed is None or elapsed > DETACHED_STATUS_SECONDS:
+      continue
+    print(f"run {record.get('name')} running {elapsed}s", file=sys.stderr, flush=True)
+    return 1
+  return 0
 
 
 SHELL_WRAPPER = re.compile(r"^(?:\S*/)?(?:ba|z|da)?sh\s+(?:-\w+\s+)*-c\s+")
@@ -3828,10 +3829,12 @@ class Store:
     # "8. 1 note" for eight notes.
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
     head = [f"calls {polls}"] if polls and counts else []
-    tail = reminder_tail(cursor, remaining)
+    tail = (
+      f"Unpublish {len(stale)} stale report{'s' if len(stale) != 1 else ''}."
+      if stale
+      else reminder_tail(cursor, remaining)
+    )
     parts = [" ".join([*head, *unacked]).strip(), tail]
-    if stale:
-      parts.append("Unpublish stale reports: " + ", ".join(stale))
     return " | ".join(parts).strip(" |")
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
@@ -5073,13 +5076,14 @@ def main():
     if args.reminder:
       store = Store(state_dir, create=False)
       require_server(store)
-      print(store.reminder(advance=True), flush=True)
+      reminder = store.reminder(advance=True)
       # The hook runs this after every bash call, so the stamp marks the call's end: the
       # page keeps the long call text only while a call started after the last recorded end.
       store.set_meta(AGENT_CALL_ENDED_META, now())
-      # The hook runs this after every bash call, so the heartbeat rides the one path a
-      # call always takes. The gate's own copy prints under `2>/dev/null` in the hook.
-      run_notices(state_dir, show_running=True)
+      # A pending inbox item outranks a routed status. Otherwise one routed status or one
+      # reminder line is enough for the agent to act.
+      if "unacked " in reminder or not run_notices(state_dir, show_running=True):
+        print(reminder, flush=True)
       return 0
     if not args.command:
       parser.error("a command is required")

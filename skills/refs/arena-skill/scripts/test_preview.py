@@ -351,8 +351,15 @@ def test_stale_report_reminder():
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
     store.publish("plain", "Plain", plain)
     line = store.reminder()
-    assert "plain" in line, "the field-less report is named stale"
+    assert line.endswith("Unpublish 1 stale report."), line
+    assert "plain" not in line, "the reminder must not repeat a report ID"
     assert "form0" not in line, "a fresh form awaiting an answer is not stale"
+    with store.connect() as db, db:
+      db.execute(
+        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain")
+      )
+    store.unpublish("plain")
+    assert "stale report" not in store.reminder()
 
 
 def test_pr_failed_check_breaks_poll():
@@ -3765,10 +3772,32 @@ def test_a_detached_run_prints_one_status_line_per_call(capsys):
     # The finished record announces once, and the status line stops.
     preview.run_command(detached_dir, "pr-checks", ["--", "true"])
     preview.run_notices(detached_dir, show_running=True)
-    done = capsys.readouterr().out
-    assert "run pr-checks done: exit 0" in done, done
+    done = capsys.readouterr()
+    assert "run pr-checks done: exit 0" in done.out, done.out
+    assert done.err == ""
     preview.run_notices(detached_dir, show_running=True)
-    assert capsys.readouterr().out == ""
+    later = capsys.readouterr()
+    assert later.out == "" and later.err == ""
+
+
+def test_a_hook_prints_only_one_routed_run_notice(capsys):
+  with tempfile.TemporaryDirectory() as detached_dir:
+    preview.write_detached_placeholder(
+      detached_dir, "alpha", ["bash", "-c", "gh pr checks 7"]
+    )
+    preview.write_detached_placeholder(
+      detached_dir, "bravo", ["bash", "-c", "gh pr checks 8"]
+    )
+    preview.run_command(detached_dir, "bravo", ["--", "true"])
+    capsys.readouterr()
+    assert preview.run_notices(detached_dir, show_running=True) == 1
+    finished = capsys.readouterr()
+    assert finished.out.strip().startswith("run bravo done: exit 0"), finished.out
+    assert finished.err == ""
+    assert preview.run_notices(detached_dir, show_running=True) == 1
+    live = capsys.readouterr()
+    assert live.out == ""
+    assert live.err.strip().startswith("run alpha running "), live.err
 
 
 def test_the_reminder_carries_the_running_status_line():
@@ -3786,7 +3815,8 @@ def test_the_reminder_carries_the_running_status_line():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
     )
     assert result.returncode == 0, result.stderr
-    assert "run pr-checks running" in result.stderr, result.stderr
+    assert result.stdout == ""
+    assert result.stderr.strip().startswith("run pr-checks running "), result.stderr
     # The gate path stays quiet for a live run: the reminder owns the one line per call.
     gate = subprocess.run(
       [sys.executable, str(Path(preview.__file__)), "gate", "--line", "git status"],
@@ -3796,6 +3826,46 @@ def test_the_reminder_carries_the_running_status_line():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
     )
     assert "run pr-checks running" not in gate.stderr, gate.stderr
+
+
+def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
+  with tempfile.TemporaryDirectory() as heartbeat_dir:
+    store = preview.Store(heartbeat_dir, create=True)
+    store.note("owner-note", "Read this first")
+    preview.write_detached_placeholder(
+      heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
+    )
+    result = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "--reminder"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "unacked 1 note" in result.stdout, result.stdout
+    assert result.stderr == ""
+
+
+def test_reminder_reports_a_finished_run_without_a_second_line(capsys):
+  with tempfile.TemporaryDirectory() as heartbeat_dir:
+    preview.Store(heartbeat_dir, create=True)
+    preview.write_detached_placeholder(
+      heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
+    )
+    preview.run_command(heartbeat_dir, "pr-checks", ["--", "true"])
+    capsys.readouterr()
+    result = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "--reminder"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().startswith("run pr-checks done: exit 0"), result.stdout
+    assert len(result.stdout.splitlines()) == 1, result.stdout
+    assert result.stderr == ""
 
 
 def test_shell_command_text_drops_the_launcher():
