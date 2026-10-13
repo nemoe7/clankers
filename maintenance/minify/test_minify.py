@@ -1,4 +1,4 @@
-"""Check the compact build, drift handling and generated runtime without a test framework."""
+"""Tests for the compact build, drift handling and generated runtime."""
 
 import contextlib
 import http.client
@@ -17,7 +17,7 @@ from unittest.mock import patch
 import minify
 
 
-def check_preview_path():
+def test_preview_path():
   """Check PATH installation, reset recovery and repo-local command dispatch."""
   source_scripts = minify.SOURCE / "scripts"
   copies = ("install.sh", "arena-preview")
@@ -251,10 +251,8 @@ def check_preview_path():
       f"a mid-work command met the push gate: {open_shell.returncode}"
     )
 
-  print("PASS: repo-aware PATH install, reset and dispatch")
 
-
-def check_css_library():
+def test_css_library():
   """Check CSS level 2, relative URLs, warnings, and missing files."""
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
@@ -272,13 +270,10 @@ def check_css_library():
         raise AssertionError(f"Invalid CSS input was accepted: {path}")
       except RuntimeError as error:
         assert "clean-css on" in str(error), error
-  print("PASS: direct CSS library, level 2, relative URLs, warnings and missing files")
 
 
-check_css_library()
-check_preview_path()
-
-sample = '''#!/usr/bin/env python3
+def test_python_minification_and_version_floor():
+  sample = '''#!/usr/bin/env python3
 """Keep CLI help and module documentation."""
 from __future__ import annotations
 # This comment can go.
@@ -291,112 +286,107 @@ def public(value: int, /, *, enabled: bool = True) -> int:
     raise ValueError()
   return value + 2 * 3
 '''
-built = minify.minify_python(sample, "example.py")
-minify.check_python(sample, built, "example.py")
-assert len(built) < len(sample) and "This comment can go" not in built
-assert "This docstring goes" not in built
-assert built.startswith("#!/usr/bin/env python3\n")
-try:
-  minify.check_python("x = 1", "x = 2", "changed.py")
-  raise AssertionError("Changed Python tree was accepted")
-except RuntimeError:
-  pass
-try:
-  minify.check_python("x = 1", "try:\n pass\nexcept* Exception:\n pass", "new.py")
-  raise AssertionError("Python 3.11-only syntax was accepted")
-except SyntaxError:
-  pass
-with patch("minify.version", return_value="0.0.0"):
+  built = minify.minify_python(sample, "example.py")
+  minify.check_python(sample, built, "example.py")
+  assert len(built) < len(sample) and "This comment can go" not in built
+  assert "This docstring goes" not in built
+  assert built.startswith("#!/usr/bin/env python3\n")
   try:
-    minify.minify_python(sample, "example.py")
-    raise AssertionError("Wrong minifier version was accepted")
+    minify.check_python("x = 1", "x = 2", "changed.py")
+    raise AssertionError("Changed Python tree was accepted")
   except RuntimeError:
     pass
-
-sources = minify.build()
-assert set(sources) == {
-  "assets/app.js",
-  "assets/style.css",
-  "assets/index.html",
-  "scripts/preview.py",
-}
-for relative, (source, compact) in sources.items():
-  assert len(compact.encode()) < len(source.encode()), relative
-  for target in minify.TARGETS:
-    assert (target / relative).read_bytes() == compact.encode(), target / relative
-
-with tempfile.TemporaryDirectory() as directory:
-  root = Path(directory)
-  targets = (root / "live", root / "installed")
-  with (
-    patch.object(minify, "ROOT", root),
-    patch.object(minify, "TARGETS", targets),
-    patch.object(minify, "build", return_value=sources),
-    patch.object(sys, "argv", ["minify.py"]),
-    contextlib.redirect_stdout(io.StringIO()),
-  ):
-    assert minify.main() == 1
-    assert not targets[0].exists(), "A drift check wrote files"
-    with patch.object(sys, "argv", ["minify.py", "--update"]):
-      assert minify.main() == 0
-    assert minify.main() == 0
-    stale = targets[1] / "scripts/preview.py"
-    stale.write_text("stale\n", encoding="utf-8")
-    assert minify.main() == 1
-    assert stale.read_text() == "stale\n"
-
-  # Exact CSS/JS assertions still use readable assets. The runtime is the generated build. The
-  # harness is not shipped, so it comes from the readable refs tree and drives that build.
-  skill = root / "runtime"
-  shutil.copytree(minify.SOURCE / "assets", skill / "assets")
-  (skill / "scripts").mkdir()
-  shutil.copyfile(
-    minify.TARGETS[0] / "scripts/preview.py", skill / "scripts/preview.py"
-  )
-  shutil.copyfile(
-    minify.SOURCE / "scripts/test_preview.py", skill / "scripts/test_preview.py"
-  )
-  subprocess.run(
-    [
-      sys.executable,
-      "-m",
-      "pytest",
-      str(skill / "scripts/test_preview.py"),
-      "-q",
-      "-p",
-      "no:cacheprovider",
-    ],
-    check=True,
-  )
-
-  spec = importlib.util.spec_from_file_location(
-    "compact_preview", minify.TARGETS[0] / "scripts/preview.py"
-  )
-  runtime = importlib.util.module_from_spec(spec)
-  spec.loader.exec_module(runtime)
-  # Also exercise page assembly with the actual shipped assets, not the readable test assets.
-  store = runtime.Store(root / "state", create=True)
-  server = runtime.ThreadingHTTPServer(("127.0.0.1", 0), runtime.handler(store))
-  worker = threading.Thread(target=server.serve_forever, daemon=True)
-  worker.start()
-  client = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
   try:
-    client.request("GET", "/", headers={"Host": "8000-sandbox.e2b.app"})
-    response = client.getresponse()
-    page = response.read().decode()
-    assert response.status == 200
-    assert "__STYLE__" not in page and "__SCRIPT__" not in page
-    assert 'id="notes-panel"' in page and 'id="reports-panel"' in page
-    token = re.search(r'data-token="([^"]+)"', page)[1]
-    for name in ("app.js", "style.css"):
-      asset = (minify.TARGETS[0] / "assets" / name).read_text()
-      assert asset.replace("__TOKEN__", token).strip() in page
-  finally:
-    client.close()
-    server.shutdown()
-    worker.join()
-    server.server_close()
+    minify.check_python("x = 1", "try:\n pass\nexcept* Exception:\n pass", "new.py")
+    raise AssertionError("Python 3.11-only syntax was accepted")
+  except SyntaxError:
+    pass
+  with patch("minify.version", return_value="0.0.0"):
+    try:
+      minify.minify_python(sample, "example.py")
+      raise AssertionError("Wrong minifier version was accepted")
+    except RuntimeError:
+      pass
 
-print(
-  "PASS: compact copies, Python parity and syntax floor, drift, generated runtime and shipped page"
-)
+
+def test_compact_copies_drift_and_runtime():
+  sources = minify.build()
+  assert set(sources) == {
+    "assets/app.js",
+    "assets/style.css",
+    "assets/index.html",
+    "scripts/preview.py",
+  }
+  for relative, (source, compact) in sources.items():
+    assert len(compact.encode()) < len(source.encode()), relative
+    for target in minify.TARGETS:
+      assert (target / relative).read_bytes() == compact.encode(), target / relative
+
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    targets = (root / "live", root / "installed")
+    with (
+      patch.object(minify, "ROOT", root),
+      patch.object(minify, "TARGETS", targets),
+      patch.object(minify, "build", return_value=sources),
+      patch.object(sys, "argv", ["minify.py"]),
+      contextlib.redirect_stdout(io.StringIO()),
+    ):
+      assert minify.main() == 1
+      assert not targets[0].exists(), "A drift check wrote files"
+      with patch.object(sys, "argv", ["minify.py", "--update"]):
+        assert minify.main() == 0
+      assert minify.main() == 0
+      stale = targets[1] / "scripts/preview.py"
+      stale.write_text("stale\n", encoding="utf-8")
+      assert minify.main() == 1
+      assert stale.read_text() == "stale\n"
+
+    skill = root / "runtime"
+    shutil.copytree(minify.SOURCE / "assets", skill / "assets")
+    (skill / "scripts").mkdir()
+    shutil.copyfile(
+      minify.TARGETS[0] / "scripts/preview.py", skill / "scripts/preview.py"
+    )
+    shutil.copyfile(
+      minify.SOURCE / "scripts/test_preview.py", skill / "scripts/test_preview.py"
+    )
+    subprocess.run(
+      [
+        sys.executable,
+        "-m",
+        "pytest",
+        str(skill / "scripts/test_preview.py"),
+        "-q",
+        "-p",
+        "no:cacheprovider",
+      ],
+      check=True,
+    )
+
+    spec = importlib.util.spec_from_file_location(
+      "compact_preview", minify.TARGETS[0] / "scripts/preview.py"
+    )
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    store = runtime.Store(root / "state", create=True)
+    server = runtime.ThreadingHTTPServer(("127.0.0.1", 0), runtime.handler(store))
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    client = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+    try:
+      client.request("GET", "/", headers={"Host": "8000-sandbox.e2b.app"})
+      response = client.getresponse()
+      page = response.read().decode()
+      assert response.status == 200
+      assert "__STYLE__" not in page and "__SCRIPT__" not in page
+      assert 'id="notes-panel"' in page and 'id="reports-panel"' in page
+      token = re.search(r'data-token="([^"]+)"', page)[1]
+      for name in ("app.js", "style.css"):
+        asset = (minify.TARGETS[0] / "assets" / name).read_text()
+        assert asset.replace("__TOKEN__", token).strip() in page
+    finally:
+      client.close()
+      server.shutdown()
+      worker.join()
+      server.server_close()

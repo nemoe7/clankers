@@ -54,17 +54,17 @@ jobs:
           ruff check .
           ruff format --diff .
 
-      - name: Check Budget Generator And Shipped Script Syntax
+      - name: Check Budget Tests And Shipped Script Syntax
         run: |
-          python maintenance/measurements/gate_measurements.py
+          python -m pytest -q maintenance/measurements/test_measurements.py
           node --check skills/arena-skill/assets/app.js
 
       # The covered list lives in maintenance/check.py (STE_DOCS), shared with the local gate.
       - name: Lint The Covered Documentation
         run: python maintenance/check.py --ste
 
-      - name: Check The Rules Gist Publisher
-        run: python3 maintenance/publish/gate_publish.py
+      - name: Test The Rules Gist Publisher
+        run: python3 -m pytest -q maintenance/publish/test_publish.py
 
       - name: Check The Workflow Set
         run: python maintenance/workflows/gate_workflows.py
@@ -239,7 +239,7 @@ jobs:
             skills/arena-skill \
             .agents/skills/arena-skill \
             maintenance/minify/minify.py \
-            maintenance/minify/gate_minify.py \
+            maintenance/minify/test_minify.py \
             github/workflows \
             pytest.ini \
             package.json \
@@ -265,8 +265,8 @@ jobs:
           python -m pip install -r requirements.txt
           npm ci
 
-      - name: Run Preview Checks
+      - name: Run Preview Tests
         if: steps.preview.outputs.run == 'true'
         run: |
-          python maintenance/minify/gate_minify.py
+          python -m pytest -q maintenance/minify/test_minify.py
           node --test --test-reporter=dot --test-concurrency=4 skills/refs/arena-skill/scripts/client.test.cjs

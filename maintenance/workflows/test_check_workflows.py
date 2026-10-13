@@ -158,19 +158,18 @@ def test_pull_requests_write_stays_allowed_for_review_comments():
   assert findings(document) == []
 
 
-def test_check_minify_job_without_pytest_fails():
+def test_minify_test_entrypoint_without_pytest_fails():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
-    {"name": "Minify", "run": "python maintenance/minify/gate_minify.py"}
+    {"name": "Minify", "run": "python maintenance/minify/test_minify.py"}
   ]
-  assert any("must install pytest" in finding for finding in findings(document))
+  assert any("must use pytest" in finding for finding in findings(document))
 
 
-def test_check_minify_job_with_pytest_passes():
+def test_minify_test_entrypoint_with_pytest_passes():
   document = copy.deepcopy(BASE)
   document["jobs"]["work"]["steps"] = [
-    {"name": "Install", "run": "python -m pip install pytest==9.1.1"},
-    {"name": "Minify", "run": "python maintenance/minify/gate_minify.py"},
+    {"name": "Minify", "run": "python -m pytest maintenance/minify/test_minify.py"},
   ]
   assert findings(document) == []
 

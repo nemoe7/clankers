@@ -158,9 +158,9 @@ def audit_document(name: str, document: object) -> list[str]:
       for step in job.get("steps", []) or []
       if isinstance(step, dict)
     )
-    if "gate_minify.py" in run_text and "pytest" not in run_text:
+    if "test_minify.py" in run_text and "pytest" not in run_text:
       findings.append(
-        f"{where}: a job that runs gate_minify.py must install pytest; the script runs pytest on the minified runtime"
+        f"{where}: a job that runs test_minify.py must use pytest; the test checks the minified runtime"
       )
   return findings
 
