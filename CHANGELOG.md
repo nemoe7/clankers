@@ -40,6 +40,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Unavoidable assumptions now appear in the acknowledgement before work starts.
 - Rule violations now go through preview reports.
+- The Arena Workspace freeze now covers the root tree only. A queued task that edits other files starts a worktree while the root gate runs, and read-only tracing is not its waiting mode.
 
 #### maintenance
 
@@ -52,6 +53,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill tells agents to suggest a verified improvement or fix when its behavior shows a gap.
 - The Arena skill sends workaround and bypass violations through preview reports.
 - The Arena skill requires task details to include a landed commit subject and short hash.
+- The Arena skill now states the waiting mode for a queued file task with non-overlapping paths. It works in the worktree while the gate runs, never read-only.
 
 ## 2026-10-12
 
