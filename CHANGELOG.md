@@ -22,6 +22,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### rules
 
 - Unavoidable assumptions now appear in the acknowledgement before work starts.
+- Rule violations now go through preview reports.
 
 #### maintenance
 
@@ -30,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### skills
 
 - The Arena skill tells agents to suggest a verified improvement or fix when its behavior shows a gap.
+- The Arena skill sends workaround and bypass violations through preview reports.
 
 ## 2026-10-12
 

@@ -32,7 +32,7 @@
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - Grep-verify each file edit landed before building on it.
 - NEVER edit this file or the preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
-- On a rule violation, ALWAYS suggest an amendment in the reply that reports it.
+- On a rule violation, ALWAYS report it through a preview report and suggest an amendment to the rule that failed or should have prevented it.
 
 ## General
 

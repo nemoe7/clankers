@@ -37,7 +37,7 @@
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - After every file edit, grep-verify the change actually landed before building on it.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- Upon any rule violation, ALWAYS suggest an amendment to the rule that failed or that should have prevented it, in the reply that reports the violation.
+- Upon any rule violation, ALWAYS report it through a preview report and suggest an amendment to the rule that failed or should have prevented it.
 
 ## General
 

@@ -56,7 +56,7 @@ arena-preview ack <id> --reply 'a reply with `backticks`'
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-ALWAYS report every workaround or bypass found during Arena skill work to the owner immediately as a violation.
+ALWAYS report every workaround or bypass found during Arena skill work through a preview report immediately as a violation.
 
 ALWAYS report every dead end found during Arena skill work to the owner as an upstream bug to fix.
 
