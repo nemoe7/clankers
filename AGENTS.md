@@ -143,7 +143,7 @@ Read these first:
 - No hard-wrapped prose: one line per paragraph, list item, and table row, soft-wrapped by the editor.
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
-- Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
+- Python: Ruff, configured by `ruff.toml`, which owns the selection and the pinned version.
 - Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100.
   - The covered files are `docs/`, every `README.md`, and `CHANGELOG.md`.
   - The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files.

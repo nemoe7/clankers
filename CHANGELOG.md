@@ -54,6 +54,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - `rules/refs/AGENTS.md` drops the unavoidable-assumption line, so the ask rule stands alone.
 - The Arena read set names the root AGENTS.md and any nested AGENTS.md. A template copy kept for installation turns supplementary.
 - The Arena Use section states its precedence. These rules outrank skills and plugins, and user chat outranks them.
+- The house AGENTS.md names `ruff.toml` for the Python setup instead of the config list. The Arena style line drops the same list and points at the AGENTS.md conventions.
 
 #### maintenance
 
