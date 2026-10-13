@@ -1439,9 +1439,7 @@ def test_http_boundaries():
           "answers": {q["id"]: "x" * 2000 for q in wide_questions},
         }
       )
-      assert len(full) > 96_000, (
-        "the case has to exceed the limit it is testing"
-      )
+      assert len(full) > 96_000, "the case has to exceed the limit it is testing"
       assert request("POST", "/api/reports/wide/submit", full, auth)[0] == 201
       assert (
         request(
@@ -2341,8 +2339,7 @@ def test_download_queue():
         "large.bin", "application/octet-stream", b"x" * 5_000_001
       )
       assert (
-        large["size"] == 5_000_001
-        and Path(large["path"]).stat().st_size == 5_000_001
+        large["size"] == 5_000_001 and Path(large["path"]).stat().st_size == 5_000_001
       )
 
       # Competing tabs claim distinct rows even when both are ready at once.
@@ -4551,9 +4548,11 @@ def test_a_long_run_line_detaches_the_wait():
 
 def test_route_names_the_worktree_step(capsys):
   """A routed call tells the agent to continue the next task in a worktree."""
-  with tempfile.TemporaryDirectory() as directory:
-    with patch.dict(os.environ, {"ARENA_PREVIEW_DETACH_DRY": "1"}):
-      assert preview.route_command(directory, "gates", ["make", "check"]) == 0
+  with (
+    tempfile.TemporaryDirectory() as directory,
+    patch.dict(os.environ, {"ARENA_PREVIEW_DETACH_DRY": "1"}),
+  ):
+    assert preview.route_command(directory, "gates", ["make", "check"]) == 0
   captured = capsys.readouterr()
   assert "routed gates:" in captured.err
   assert "arena-preview worktree start" in captured.err
