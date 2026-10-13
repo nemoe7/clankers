@@ -32,6 +32,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The Arena skill tells agents to suggest a verified improvement or fix when its behavior shows a gap.
 - The Arena skill sends workaround and bypass violations through preview reports.
+- The Arena skill requires task details to include a landed commit subject and short hash.
 
 ## 2026-10-12
 

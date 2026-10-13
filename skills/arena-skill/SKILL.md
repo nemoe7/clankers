@@ -59,6 +59,8 @@ ALWAYS report every dead end found during Arena skill work to the owner as an up
 
 Run `task-list` at turn start. Before implementation, record approved work with `task <kebab-title-id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it. For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block. The task marker does not replace `ack`. Mark a task `--status finished` only after verification. For a task that waits on a report, add `--report <report-id>`; the owner's answer clears its blocked mark, and until then the task sorts first in its group.
 
+When a task creates a commit, MUST add its landed subject and short hash to task details.
+
 ## Publish reports and forms
 
 Short answers stay in chat. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result.
