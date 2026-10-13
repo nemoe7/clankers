@@ -12,6 +12,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The Arena preview can create a detached task worktree while a root gate runs. It blocks gate, commit and push actions there. It collects an allowed diff only after the gate passes.
 
+#### GPT plugins
+
+- The collection now includes `gpt-question` for supported interactive questions with visible custom answers.
+
 ### Changed
 
 #### workflows
@@ -26,6 +30,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
+- GPT-plugin references can now squash shipped prose while the gate keeps fenced code blocks byte-identical to the source.
 - The measurements, minify and publish test harnesses now run through pytest. Product gates stay runnable as scripts.
 
 #### skills

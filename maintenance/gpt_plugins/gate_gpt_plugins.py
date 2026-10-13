@@ -39,8 +39,13 @@ EXPECTED_SKILLS = (
   "gpt-planning",
   "gpt-github",
   "gpt-display",
+  "gpt-question",
 )
 SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+FENCED_CODE_BLOCK = re.compile(
+  r"(?ms)^(?: {0,3})(?:(?P<ticks>`{3,})(?!`)|(?P<tildes>~{3,})(?!~))[^\n]*\n"
+  r".*?^(?: {0,3})(?:(?P=ticks)`*|(?P=tildes)~*)[ \t]*$"
+)
 
 
 def shipped_paths() -> list[Path]:
@@ -213,6 +218,16 @@ def matching_structure(reference: str, live: str) -> bool:
   ) and len(live.encode()) <= len(reference.encode())
 
 
+def fenced_code_blocks(text: str) -> list[str]:
+  """Return complete Markdown code fences in their source order."""
+  return [match.group(0) for match in FENCED_CODE_BLOCK.finditer(text)]
+
+
+def matching_reference(reference: str, live: str) -> bool:
+  """True when a prose squash leaves every fenced code block unchanged."""
+  return fenced_code_blocks(reference) == fenced_code_blocks(live)
+
+
 def reference_files(root: Path, name: str) -> list[Path]:
   """Return the skill's references files, relative to its directory."""
   return sorted(
@@ -223,7 +238,7 @@ def reference_files(root: Path, name: str) -> list[Path]:
 
 
 def check_references(errors: list[str]) -> None:
-  """Require both trees to carry the same references files, byte for byte."""
+  """Require matching reference paths and unchanged fenced Markdown code blocks."""
   for name in EXPECTED_SKILLS:
     source = REFS / name / "references"
     copy = SHIPPED / name / "references"
@@ -244,11 +259,23 @@ def check_references(errors: list[str]) -> None:
       continue
 
     for item in ref_files:
-      left = (REFS / name / item).read_bytes()
-      right = (SHIPPED / name / item).read_bytes()
+      source_path = REFS / name / item
+      copy_path = SHIPPED / name / item
+      left = source_path.read_bytes()
+      right = copy_path.read_bytes()
+      same = (
+        matching_reference(left.decode("utf-8"), right.decode("utf-8"))
+        if item.suffix == ".md"
+        else left == right
+      )
 
-      if left != right:
-        errors.append(f"{(SHIPPED / name / item).relative_to(ROOT)}: differs from refs")
+      if not same:
+        reason = (
+          "fenced code blocks differ from refs"
+          if item.suffix == ".md"
+          else "differs from refs"
+        )
+        errors.append(f"{copy_path.relative_to(ROOT)}: {reason}")
 
 
 def check_tree(errors: list[str]) -> None:
@@ -344,7 +371,14 @@ def run_self_check() -> None:
   assert matching_structure("# Skill\nFull wording", "# Skill\nShort")
   assert not matching_structure("# Skill\nFull wording", "# Other\nShort")
   assert not matching_structure("# Skill\nShort", "# Skill\nLonger wording")
-  print("ok version and compression-structure checks")
+  fenced = "```jsx\nconst answer = 1;\n```"
+  long_fence = "````jsx\nconst answer = 1;\n`````"
+  assert fenced_code_blocks(fenced) == [fenced]
+  assert fenced_code_blocks(long_fence) == [long_fence]
+  assert not fenced_code_blocks("````jsx\nconst answer = 1;\n```")
+  assert matching_reference(f"Full prose\n{fenced}", f"Short prose\n{fenced}")
+  assert not matching_reference(fenced, "```jsx\nconst answer = 2;\n```")
+  print("ok version, compression-structure and fenced-code checks")
 
 
 def check_archive(archive: Path, errors: list[str]) -> None:

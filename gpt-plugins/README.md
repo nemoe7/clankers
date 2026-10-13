@@ -7,7 +7,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 | `plugin.json` | Manifest. The checker checks it against the canonical schema at agent-plugins.org. |
 | `skills/<name>/SKILL.md` | Shipped skill copies. The archive carries these. |
 | `refs/skills/<name>/SKILL.md` | Readable sources. Keep these full. Compress shipped copies without losing rules. |
-| `skills/<name>/references/` | Per-type detail files. A reader loads only the file its answer needs. Both trees stay byte-identical. |
+| `skills/<name>/references/` | Per-type detail files. A reader loads only the file its answer needs. The shipped copy may be squashed, but it preserves every fenced code block byte for byte. |
 | `README.md` | This file. It never ships. |
 
 ## Skills
@@ -19,6 +19,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 | [gpt-planning](skills/gpt-planning/SKILL.md) | Check requirements and completion before each plan, handoff, execution, and final report. |
 | [gpt-github](skills/gpt-github/SKILL.md) | Apply the owner's git and GitHub rules to every git or GitHub action. |
 | [gpt-display](skills/gpt-display/SKILL.md) | Choose and build a supported response representation: Markdown, DIL components, charts, maps, citations, and Mermaid diagrams. |
+| [gpt-question](skills/gpt-question/SKILL.md) | Ask for needed user input with supported interactive forms and visible custom answers. |
 
 ## Edit a skill
 
