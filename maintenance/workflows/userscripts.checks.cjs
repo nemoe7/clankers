@@ -1207,6 +1207,7 @@ function checkTabTitle(api) {
   var processOutputPage = page([agentRoot([processOutputRow()])]);
   var outputPage = page([agentRoot([commandRow("get_process_output")])]);
   var gearPage = page([agentRoot([commandRow("Agent chat")])]);
+  var questionsPage = page([agentRoot([commandRow("Generating questions\u2026")])]);
   var pollPage = page([agentRoot([commandRow("running Bash", "$ arena-preview poll")])]);
   var playPage = page([agentRoot([playRow()])]);
   var summaryPage = page([agentRoot([summaryRow()])]);
@@ -1219,6 +1220,7 @@ function checkTabTitle(api) {
   var olderRootPage = page([agentRoot([chatRow()]), agentRoot([commandRow("Bash sleep 25", "$ npm test")])]);
   var bashLogLine = loggedTitleLine(bashPage);
   var chatLogLine = loggedTitleLine(chatPage);
+  var questionsLogLine = loggedTitleLine(questionsPage);
   var syncChatPage = page([agentRoot([chatRow()])]);
   var directChat = chatRow();
   var directReasoning = reasoningRow();
@@ -1282,6 +1284,8 @@ function checkTabTitle(api) {
     [desiredTitle(outputPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCDC"],
     [expireHold(), null],
     [desiredTitle(gearPage), TITLE_PREFIX + "clankers" + vtag + " \u2699\uFE0F"],
+    [expireHold(), null],
+    [desiredTitle(questionsPage), TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
     [expireHold(), null],
     [desiredTitle(pollPage), TITLE_PREFIX + "clankers" + vtag + " \uD83D\uDCA4"],
     [expireHold(), null],
@@ -1408,6 +1412,10 @@ function checkTabTitle(api) {
       "[NemoUtils][title] chat row -> " + TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
     ["repo=" + chatLogLine.split(" repo=")[1],
       "repo=clankers row=chat row kind=chat captcha=0 question=0 live=1"],
+    [questionsLogLine.split(" repo=")[0],
+      "[NemoUtils][title] action row (Generating questions\u2026) -> " + TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
+    ["repo=" + questionsLogLine.split(" repo=")[1],
+      "repo=clankers row=action row (Generating questions\u2026) kind=action captcha=0 question=0 live=1"],
     [VERSION, "1.10.25"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
