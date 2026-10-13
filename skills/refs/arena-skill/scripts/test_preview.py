@@ -3681,6 +3681,33 @@ def test_missing_inbox_error_instructs():
       assert fragment in text
 
 
+def test_unacknowledged_call_trap():
+  """Calls one through five count. Call six shows the block and inbox calls stay open."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.note("trap-note", "Pending work")
+    assert preview.GATE_THRESHOLD == 6
+    for calls in range(1, preview.GATE_THRESHOLD):
+      store.set_meta(preview.POLLS_SINCE_MESSAGE, str(calls))
+      assert store.reminder().startswith(f"calls {calls} unacked 1 note | ")
+    store.set_meta(preview.POLLS_SINCE_MESSAGE, str(preview.GATE_THRESHOLD))
+    assert store.reminder().startswith("blocked unacked 1 note | ")
+    result = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "gate"],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=directory,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
+    )
+    assert result.returncode == 1
+    assert result.stdout.startswith("BASH BLOCKED AFTER 6 CALLS.\nREAD INBOX NOW. "), (
+      result.stdout
+    )
+    assert preview.quiet_inbox_line("arena-preview read") is True
+    assert preview.quiet_inbox_line("arena-preview ack abcdef --note Done") is True
+
+
 def test_bash_gate():
   # The gate blocks only past the threshold while the inbox stays pending.
   with tempfile.TemporaryDirectory() as gate_dir:
@@ -3704,8 +3731,8 @@ def test_bash_gate():
     assert blocked.returncode == 1
     # The blocked line names the command that clears the block.
     assert (
-      blocked.stdout.strip()
-      == "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
+      blocked.stdout.strip() == "BASH BLOCKED AFTER 6 CALLS.\n"
+      "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
       " note: `arena-preview ack <id> --reply <markdown>` or"
       " `arena-preview ack <id> --note <text>`."
     )
@@ -4401,7 +4428,9 @@ def test_gate_blocks_a_cd_line_past_the_threshold():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": cd_dir},
     )
     assert cd_run.returncode == 1
-    assert cd_run.stdout.startswith("READ INBOX NOW. "), cd_run.stdout
+    assert cd_run.stdout.startswith("BASH BLOCKED AFTER 6 CALLS.\nREAD INBOX NOW. "), (
+      cd_run.stdout
+    )
     assert "Omit them" not in cd_run.stdout
     assert "`cd`" not in cd_run.stdout
 

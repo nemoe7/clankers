@@ -64,7 +64,7 @@ def reminder_tail(cursor,remaining):
 REMINDERS='Refresh: ARENA.md, SKILL.md.','`task-list` at turn start. Update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP in reports.','Publish your reports.','Never end a turn with unblocked tasks.','Unpublish stale reports.','End the turn with `poll`.','Grep-verify each edit.',TASK_REMINDER,'Rebase `origin/main` before pushing; empty checks mean it moved.',"Check the PR's CI before ending a pushed turn; read the run's verdict on a later call, never a loop in the call.",'Run `arena-preview`, not the full path.'
 REMINDER_CURSOR='reminder_cursor'
 POLLS_SINCE_MESSAGE='polls_since_message'
-GATE_THRESHOLD=10
+GATE_THRESHOLD=6
 STALE_REPORT_THRESHOLD=10
 DEFAULT_PORT=8000
 AGENT_KEY_META='agent_key'
@@ -86,6 +86,7 @@ def reset_poll_count(db):
 	unacked=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0]
 	if unacked==1:db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')",(POLLS_SINCE_MESSAGE,))
 def meta_number(db,key):row=db.execute('SELECT value FROM meta WHERE key = ?',(key,)).fetchone();value=str(row[0])if row else'';return int(value)if value.isdigit()else 0
+def gate_pending_count(db):return db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0]
 def main_identical(root='.'):
 	def git(*arguments):return subprocess.run(['git',*arguments],cwd=root,capture_output=True,text=True,check=False)
 	try:
@@ -1328,11 +1329,13 @@ class Store:
 		with closing(self.connect())as db:return self.stale_report_rows(db)
 	def reminder(self,advance=False):
 		with closing(self.connect())as db,db:
-			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
+			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);blocked=bool(gate_pending_count(db))and polls>=GATE_THRESHOLD;db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=[f"calls {polls}"]if polls and counts else[];tail=f"Unpublish {len(stale)} stale report{'s'if len(stale)!=1 else''}."if stale else reminder_tail(cursor,remaining);parts=[' '.join([*head,*unacked]).strip(),tail];return' | '.join(parts).strip(' |')
+		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=['blocked']if blocked else[f"calls {polls}"]if polls and counts else[];tail=f"Unpublish {len(stale)} stale report{'s'if len(stale)!=1 else''}."if stale else reminder_tail(cursor,remaining);parts=[' '.join([*head,*unacked]).strip(),tail];return' | '.join(parts).strip(' |')
+	def calls_since_message(self):
+		with closing(self.connect())as db:return meta_number(db,POLLS_SINCE_MESSAGE)
 	def gate(self,threshold=GATE_THRESHOLD,pending_only=False):
-		with closing(self.connect())as db,db:pending=db.execute('SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0) + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)').fetchone()[0];polls=meta_number(db,POLLS_SINCE_MESSAGE)
+		with closing(self.connect())as db,db:pending=gate_pending_count(db);polls=meta_number(db,POLLS_SINCE_MESSAGE)
 		if pending_only:return not pending
 		return not(pending and polls>=threshold)
 	def read(self,include_quiet=True):
@@ -1714,10 +1717,11 @@ def main():
 		if args.command=='gate':
 			run_notices(state_dir)
 			if poll_timeout_line(args.line):print('TIMEOUT BANNED: never wrap `arena-preview poll` in shell `timeout`. The poll holds its own 1800-second span. Set the bash tool timeout 1800 instead, so a cut wait still returns its listing.',flush=True);return 1
-			try:allowed=Store(state_dir).gate(pending_only=args.push)
-			except FileNotFoundError:allowed=True
+			try:gate_store=Store(state_dir);allowed=gate_store.gate(pending_only=args.push);blocked_calls=gate_store.calls_since_message()if not allowed and not args.push else None
+			except FileNotFoundError:allowed=True;blocked_calls=None
 			except Exception:return 2
 			if not allowed:
+				if blocked_calls is not None:print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.",flush=True)
 				if args.push:print('PUSH BLOCKED: a note or answer awaits an ack, so nothing left the sandbox. Read the inbox, ack every item, push again.',flush=True)
 				print('READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every note: `arena-preview ack <id> --reply <markdown>` or `arena-preview ack <id> --note <text>`.',flush=True);hint=gate_line_hint(args.line)
 				if hint:print(hint,flush=True)

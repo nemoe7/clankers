@@ -159,7 +159,7 @@ REMINDERS = (
 )
 REMINDER_CURSOR = "reminder_cursor"
 POLLS_SINCE_MESSAGE = "polls_since_message"
-GATE_THRESHOLD = 10
+GATE_THRESHOLD = 6
 # At this many published reports, the reminder names the stale ones to unpublish.
 STALE_REPORT_THRESHOLD = 10
 # The port the skill names. A serve on another one hides the owner's page from the
@@ -235,6 +235,14 @@ def meta_number(db, key):
   row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
   value = str(row[0]) if row else ""
   return int(value) if value.isdigit() else 0
+
+
+def gate_pending_count(db):
+  """The unacknowledged items that hold a non-inbox Bash call."""
+  return db.execute(
+    "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0)"
+    " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
+  ).fetchone()[0]
 
 
 def main_identical(root="."):
@@ -4178,6 +4186,7 @@ class Store:
         if advance and not (notes + reports + uploads)
         else meta_number(db, POLLS_SINCE_MESSAGE) + (1 if advance else 0)
       )
+      blocked = bool(gate_pending_count(db)) and polls >= GATE_THRESHOLD
       db.execute(
         "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMINDER_CURSOR, str(cursor + 1))
       )
@@ -4193,7 +4202,7 @@ class Store:
     # The label keeps the pending tally apart from the call count, so a reader never takes
     # "8. 1 note" for eight notes.
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
-    head = [f"calls {polls}"] if polls and counts else []
+    head = ["blocked"] if blocked else [f"calls {polls}"] if polls and counts else []
     tail = (
       f"Unpublish {len(stale)} stale report{'s' if len(stale) != 1 else ''}."
       if stale
@@ -4201,6 +4210,11 @@ class Store:
     )
     parts = [" ".join([*head, *unacked]).strip(), tail]
     return " | ".join(parts).strip(" |")
+
+  def calls_since_message(self):
+    """The current debug-call count for a blocked-call message."""
+    with closing(self.connect()) as db:
+      return meta_number(db, POLLS_SINCE_MESSAGE)
 
   def gate(self, threshold=GATE_THRESHOLD, pending_only=False):
     """Return False when bash calls must block.
@@ -4210,10 +4224,7 @@ class Store:
     unacknowledged item, whatever the count.
     """
     with closing(self.connect()) as db, db:
-      pending = db.execute(
-        "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0)"
-        " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
-      ).fetchone()[0]
+      pending = gate_pending_count(db)
       polls = meta_number(db, POLLS_SINCE_MESSAGE)
     if pending_only:
       return not pending
@@ -5583,12 +5594,19 @@ def main():
         )
         return 1
       try:
-        allowed = Store(state_dir).gate(pending_only=args.push)
+        gate_store = Store(state_dir)
+        allowed = gate_store.gate(pending_only=args.push)
+        blocked_calls = (
+          gate_store.calls_since_message() if not allowed and not args.push else None
+        )
       except FileNotFoundError:
         allowed = True
+        blocked_calls = None
       except Exception:
         return 2
       if not allowed:
+        if blocked_calls is not None:
+          print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.", flush=True)
         if args.push:
           # The owner asked a blocked push to say what stopped and what clears it.
           print(
