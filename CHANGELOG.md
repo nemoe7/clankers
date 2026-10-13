@@ -24,6 +24,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Gemini release workflow now reads a target-owned evidence policy. It sends selected paths only, skips exact `Release-note: skip` commits and stops unknown paths before a Gemini call. Its log lists the selected and omitted commits.
 - Gemini release progress now stays in the workflow log. Only deliberate proposal and approval results enter the step summary, and every Gemini request identifies its model and action first.
 
+#### GPT plugins
+
+- `gpt-display` now documents the current DIL component, binding, action, chart, map, and interaction contracts through linked technical references.
+
 #### rules
 
 - Unavoidable assumptions now appear in the acknowledgement before work starts.

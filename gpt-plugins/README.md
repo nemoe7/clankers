@@ -18,7 +18,7 @@ One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin
 | [gpt-handoff](skills/gpt-handoff/SKILL.md) | Audit agent work and human-facing docs. Use Ponytail for code and docs audits. Own the final format or draft a handoff. |
 | [gpt-planning](skills/gpt-planning/SKILL.md) | Check requirements and completion before each plan, handoff, execution, and final report. |
 | [gpt-github](skills/gpt-github/SKILL.md) | Apply the owner's git and GitHub rules to every git or GitHub action. |
-| [gpt-display](skills/gpt-display/SKILL.md) | Choose and build a supported response representation: Markdown, DIL components, charts, maps, citations, and Mermaid diagrams. |
+| [gpt-display](skills/gpt-display/SKILL.md) | Choose and author supported response representations: DIL interfaces, source bindings, charts, maps, host actions, and Mermaid diagrams. |
 | [gpt-question](skills/gpt-question/SKILL.md) | Ask for needed user input with supported interactive forms and visible custom answers. |
 
 ## Edit a skill
