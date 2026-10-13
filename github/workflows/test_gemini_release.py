@@ -472,8 +472,20 @@ def test_release_pipeline():
       lambda: release.gemini_call("m", "generateContent", {}),
       "HTTP 429: RESOURCE_EXHAUSTED Quota exceeded for key [REDACTED]",
     )
-  # The ladder moves to the next model on an HTTP failure or blocked output, not on
-  # an oversized request, and names every rung when all of them fail.
+  with (
+    patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSecret1"}),
+    patch.object(
+      release.urllib.request,
+      "urlopen",
+      side_effect=TimeoutError("The read operation timed out"),
+    ),
+  ):
+    fails(
+      lambda: release.gemini_call("m", "generateContent", {}),
+      "request timed out after 180s: The read operation timed out",
+    )
+  # The ladder moves to the next model on a request failure or blocked output, not
+  # on an oversized request, and names every rung when all of them fail.
   good = {
     "candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "ok"}]}}]
   }
@@ -499,6 +511,28 @@ def test_release_pipeline():
   assert any("HTTP 404" in line for line in lines)
   assert any("stepping down" in line for line in lines)
   assert any("cooling" in line for line in lines)
+  with (
+    patch.object(
+      release,
+      "gemini_call",
+      side_effect=[
+        {"totalTokens": 1},
+        RuntimeError(
+          "Gemini generateContent failed: request timed out after 180s: "
+          "The read operation timed out"
+        ),
+        good,
+      ],
+    ),
+    patch.object(release, "summary") as timeout_log,
+  ):
+    release.COOLDOWNS.clear()
+    release.TOKEN_COUNTS.clear()
+    assert release.generate({}, [], ["a", "b"]) == "ok"
+  assert any(
+    "request timed out after 180s" in call.args[0] and "stepping down" in call.args[0]
+    for call in timeout_log.call_args_list
+  )
   # A 429 cools that rung with the reported wait plus the safety margin, so the next pick starts lower.
   # A model that answered cools for a minute. A fully cooling ladder waits for the earliest rung to come back.
   with (
@@ -1096,12 +1130,12 @@ def test_evidence_scope():
       root = commit("root change")
       Path(".agents").mkdir()
       Path(".agents/only.txt").write_text("agent-only evidence\n")
-      excluded = commit("agent-only change")
+      commit("agent-only change")
       Path("product/visible.txt").write_text("visible evidence\n")
       Path(".agents/secret.txt").write_text("excluded evidence\n")
       mixed = commit("mixed change")
       Path("product/skipped.txt").write_text("skip evidence\n")
-      skipped = commit("skip release\n\nRelease-note: skip")
+      commit("skip release\n\nRelease-note: skip")
       Path("product/not-skipped.txt").write_text("non-exact trailer evidence\n")
       not_skipped = commit("do not skip\n\nRelease-note: skipped")
       scoped_target = git("rev-parse", "HEAD")
@@ -1119,12 +1153,12 @@ def test_evidence_scope():
       assert "excluded evidence" not in text
       assert ".agents/secret.txt" not in text
       assert "Selected paths:\nproduct/visible.txt" in text
-      assert f"  selected {mixed}: selected-paths: product/visible.txt" in lines
-      assert (
-        f"  selected {not_skipped}: selected-paths: product/not-skipped.txt" in lines
-      )
-      assert f"  omitted {excluded}: excluded-only" in lines
-      assert f"  omitted {skipped}: release-note-skip" in lines
+      assert lines == [
+        (
+          "Evidence scope: 2 selected commit(s); 2 omitted "
+          "(excluded-only: 1, release-note-skip: 1)"
+        )
+      ]
       Path("unowned").mkdir()
       Path("unowned/change.txt").write_text("unknown evidence\n")
       unknown = commit("unknown path")
