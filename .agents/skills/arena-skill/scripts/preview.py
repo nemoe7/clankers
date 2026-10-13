@@ -25,6 +25,7 @@ try:import markdown_it;HAS_RENDERER=True
 except ImportError:HAS_RENDERER=False
 ASSETS=Path(__file__).resolve().parents[1]/'assets'
 IDENTIFIER=re.compile('[a-zA-Z0-9_-]{1,80}\\Z')
+REPLY_REFERENCE=re.compile('^RE:\\s*([a-zA-Z0-9_-]{1,80})(?:\\s|$)',re.IGNORECASE)
 MAX_REPORT=2000000
 MAX_NOTE=15000
 MAX_BODY=96000
@@ -202,6 +203,19 @@ def message_row(row):
 	record=dict(row);record.pop('seq',None)
 	if'replies'in record:record['replies']=replies_list(record['replies'])
 	return record
+def reply_reference(text):match=REPLY_REFERENCE.match(text or'');return match.group(1)if match else None
+def reply_thread(record,notes,pending_ids):
+	thread,seen=[],{record['id']};target=reply_reference(record.get('text'))
+	while target:
+		parent=notes.get(target)
+		if parent is None:
+			matches=[note for(note_id,note)in notes.items()if note_id.startswith(target)]
+			if len(matches)!=1:break
+			parent=matches[0]
+		parent_id=parent['id']
+		if parent_id in seen or parent_id in pending_ids:break
+		thread.append(parent);seen.add(parent_id);target=reply_reference(parent.get('text'))
+	return list(reversed(thread))
 def restore_reply_seen_count(value,replies):
 	if value is None:return 0
 	if type(value)is not int or value<0:raise ValueError('A saved viewed-reply count is a nonnegative integer')
@@ -422,7 +436,7 @@ def attachment_line(record):
 	line=f"{record.get('name','')}: {record.get('path','')}"
 	if not record.get('present'):return line+' (missing)'
 	size=record.get('size');return line+(f" ({format_size(size)})"if isinstance(size,int)else'')
-def format_pending_item(item):
+def format_pending_record(item):
 	kind=item.get('kind')or'note';display_kind='answer'if kind=='report'else kind;header='`'+str(item.get('id',''))[:6]+'`'
 	if display_kind!='note':header+=f" {display_kind}"
 	if item.get('report_id'):header+=f" report {item['report_id']}"
@@ -431,6 +445,7 @@ def format_pending_item(item):
 	attachments=item.get('attachments')or[]
 	if attachments:names=', '.join(attachment_line(record)for record in attachments);lines.append(f"attachments: {names}")
 	return'\n'.join(lines)
+def format_pending_item(item):thread=item.get('thread')or[];return'\n'.join([*(format_pending_record(record)for record in thread),format_pending_record(item)])
 def format_read(listing):
 	checked_at=listing.get('checked_at');pending=listing.get('pending')or[];count=len(pending)
 	if checked_at:first=f"Inbox {checked_at}: {count} pending"
@@ -1206,10 +1221,15 @@ class Store:
 	def read(self,include_quiet=True):
 		quiet_filter=''if include_quiet else' AND quiet = 0'
 		with self.transaction()as db:
-			pending=[message_row(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];attachments={}
+			pending=[message_row(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];notes={}
+			for row in db.execute('SELECT * FROM notes ORDER BY at, seq'):record=message_row(row);notes[record['id']]=record
+			pending_note_ids={row['id']for row in db.execute('SELECT id FROM notes WHERE acknowledged_at IS NULL')};attachments={}
 			for row in db.execute('SELECT * FROM uploads ORDER BY seq'):record=upload_row(row,self.path.parent);attachments.setdefault(record['note_id'],[]).append(record)
+			for record in notes.values():add_note_attachments(record,attachments.get(record['id'],[]))
 			for item in pending:
-				if item['kind']=='note':add_note_attachments(item,attachments.get(item['id'],[]))
+				if item['kind']=='note':
+					add_note_attachments(item,attachments.get(item['id'],[]));thread=reply_thread(item,notes,pending_note_ids)
+					if thread:item['thread']=thread
 				for key in('at','acknowledged_at','ack_edited_at','seen_at'):item[key]=clip_stamp(item[key])
 			pending.sort(key=lambda item:item['at']);checked=now();db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)",(checked,));waiting=db.execute('SELECT value FROM meta WHERE key = ?',(SKIP_POLL_META,)).fetchone();return{'checked_at':clip_stamp(checked),'pending':pending,'skip_poll':clip_stamp(waiting[0])if waiting else None}
 	def mark_seen(self,ids):

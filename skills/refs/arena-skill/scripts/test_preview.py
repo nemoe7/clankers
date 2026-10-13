@@ -1706,6 +1706,35 @@ def test_read_names_every_attachment():
     )
 
 
+def test_read_attaches_reply_threads():
+  with tempfile.TemporaryDirectory() as thread_dir:
+    store = preview.Store(thread_dir, create=True)
+    store.note("root", "hello", at="2026-10-13T00:00:00+00:00")
+    store.note("middle", "RE: root\nfrom the middle", at="2026-10-13T00:01:00+00:00")
+    store.acknowledge(["root"], "note", "read")
+    store.acknowledge(["middle"], "note", "read")
+    store.note("child", "RE: middle\nworld", at="2026-10-13T00:02:00+00:00")
+    listing = store.read()
+    child = listing["pending"][0]
+    assert [record["id"] for record in child["thread"]] == ["root", "middle"]
+    rendered = preview.format_read(listing)
+    assert "`root`\nhello\n`middle`\nRE: root\nfrom the middle\n`child`\nRE: middle\nworld" in rendered
+    store.note("pending", "already pending")
+    store.note("duplicate", "RE: pending\nno duplicate")
+    store.note("missing", "RE: absent\nno parent")
+    store.note("cycle-a", "RE: cycle-b\na")
+    store.note("cycle-b", "RE: cycle-a\nb")
+    store.acknowledge(["cycle-a", "cycle-b"], "note", "read")
+    store.note("cycle-c", "RE: cycle-a\nc")
+    pending = {record["id"]: record for record in store.read()["pending"]}
+    assert not pending["duplicate"].get("thread")
+    assert not pending["missing"].get("thread")
+    assert [record["id"] for record in pending["cycle-c"]["thread"]] == [
+      "cycle-b",
+      "cycle-a",
+    ]
+
+
 def test_attachment_size_reads_short():
   # A size reads in B, KB or MB, whichever keeps the line short, so the agent sees the
   # scale without a long byte count in the read.

@@ -35,6 +35,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- A `read` shows the stored parent thread before a note that starts `RE: <id>`. A parent still pending shows once. Missing and circular references stop safely.
 - A wide Markdown table now scrolls sideways on its own, and its cells wrap only between words. The report or message around it keeps its up-down scroll. A narrow table shrinks to its content, as on GitHub.
 - The proxy install page now passes the STE lint. Long sentences split, and the semicolons and passive forms go.
 - Every attachment in the read carries its size beside the path. The size shortens to `B`, `KB` or `MB`, with one decimal only when the value is not whole. It arrives before the file, so a large read never starts blind, and a lost upload still reads `(missing)`.

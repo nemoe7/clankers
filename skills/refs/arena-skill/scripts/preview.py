@@ -33,6 +33,7 @@ except ImportError:
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
+REPLY_REFERENCE = re.compile(r"^RE:\s*([a-zA-Z0-9_-]{1,80})(?:\s|$)", re.IGNORECASE)
 MAX_REPORT = 2_000_000
 MAX_NOTE = 15_000
 MAX_BODY = 96_000
@@ -615,6 +616,32 @@ def message_row(row):
   return record
 
 
+def reply_reference(text):
+  """Return the first-line RE target, or None for an ordinary note."""
+  match = REPLY_REFERENCE.match(text or "")
+  return match.group(1) if match else None
+
+
+def reply_thread(record, notes, pending_ids):
+  """Return parent notes that do not print as separate pending items."""
+  thread, seen = [], {record["id"]}
+  target = reply_reference(record.get("text"))
+  while target:
+    parent = notes.get(target)
+    if parent is None:
+      matches = [note for note_id, note in notes.items() if note_id.startswith(target)]
+      if len(matches) != 1:
+        break
+      parent = matches[0]
+    parent_id = parent["id"]
+    if parent_id in seen or parent_id in pending_ids:
+      break
+    thread.append(parent)
+    seen.add(parent_id)
+    target = reply_reference(parent.get("text"))
+  return list(reversed(thread))
+
+
 def restore_reply_seen_count(value, replies):
   "Validate the saved count of viewed appended replies."
   if value is None:
@@ -1174,7 +1201,8 @@ def attachment_line(record):
   return line + (f" ({format_size(size)})" if isinstance(size, int) else "")
 
 
-def format_pending_item(item):
+def format_pending_record(item):
+  """Format one pending record without its reply thread."""
   kind = item.get("kind") or "note"
   display_kind = "answer" if kind == "report" else kind
   # A short ID names the record, and a short ID acks it, so the full ID costs nothing here.
@@ -1195,6 +1223,11 @@ def format_pending_item(item):
     names = ", ".join(attachment_line(record) for record in attachments)
     lines.append(f"attachments: {names}")
   return "\n".join(lines)
+
+
+def format_pending_item(item):
+  thread = item.get("thread") or []
+  return "\n".join([*(format_pending_record(record) for record in thread), format_pending_record(item)])
 
 
 def format_read(listing):
@@ -3871,13 +3904,26 @@ class Store:
           "SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq"
         )
       ]
+      notes = {}
+      for row in db.execute("SELECT * FROM notes ORDER BY at, seq"):
+        record = message_row(row)
+        notes[record["id"]] = record
+      pending_note_ids = {
+        row["id"]
+        for row in db.execute("SELECT id FROM notes WHERE acknowledged_at IS NULL")
+      }
       attachments = {}
       for row in db.execute("SELECT * FROM uploads ORDER BY seq"):
         record = upload_row(row, self.path.parent)
         attachments.setdefault(record["note_id"], []).append(record)
+      for record in notes.values():
+        add_note_attachments(record, attachments.get(record["id"], []))
       for item in pending:
         if item["kind"] == "note":
           add_note_attachments(item, attachments.get(item["id"], []))
+          thread = reply_thread(item, notes, pending_note_ids)
+          if thread:
+            item["thread"] = thread
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           item[key] = clip_stamp(item[key])
       pending.sort(key=lambda item: item["at"])
