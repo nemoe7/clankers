@@ -56,6 +56,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena Use section states its precedence. These rules outrank skills and plugins, and user chat outranks them.
 - The house AGENTS.md names `ruff.toml` for the Python setup instead of the config list. The Arena style line drops the same list and points at the AGENTS.md conventions.
 - The Arena splice, file-tool, next-task and cache lines are gone. The validation rule keeps its entrypoint and generated-config duty, and the durable-work rule stays.
+- Twenty Arena rule lines leave: ten duplicates another file already carries, and ten fold into a merged line that keeps every duty of both parents. The Response section joins General.
 
 #### maintenance
 
