@@ -42,6 +42,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Unavoidable assumptions now appear in the acknowledgement before work starts.
 - Rule violations now go through preview reports.
 - The Arena Workspace freeze now covers the root tree only. A queued task that edits other files starts a worktree while the root gate runs, and read-only tracing is not its waiting mode.
+- The Arena Workspace run-wait line now bans the mid-task `arena-preview poll` as a run wait. The verdict arrives on the next call, and the turn-end poll keeps its rule.
 
 #### maintenance
 
