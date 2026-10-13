@@ -80,6 +80,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The preview view guard applies only to an answered report, and a hidden page clears the view stamp.
 - The preview page stamps a report view only while the browser shows it, and clears the stamp on leaving.
 - The arena skill drops the fixed limit numbers for chunks and reports. An over-limit value fails with the tool's own error.
+- The note body and the agent reply drop their length cap. The 50 MB per-file upload ceiling leaves the server, the browser and the shipped readme.
 
 #### userscripts
 

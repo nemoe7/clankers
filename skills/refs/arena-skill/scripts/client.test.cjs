@@ -2124,7 +2124,9 @@ test('preview client', async (t) => {
     assert.equal(get('#send-status').textContent, 'empty.bin is empty.');
     picker.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
     picker.events.change();
-    assert.equal(get('#send-status').textContent, 'big.bin is 50,000,001 bytes; the ceiling is 50,000,000.');
+    assert.equal(get('#send-status').textContent, 'Staged 1 file. Send note to save them together.');
+    assert.deepEqual(chips(), ['big.bin'], 'a large file has no ceiling');
+    get('#staged-files').children[0].children[1].events.click();
     tooMany = Array.from({ length: 6 }, (_, n) => ({ name: `file-${n}.bin`, size: 1, type: '' }));
     picker.files = tooMany;
     picker.events.change();
@@ -2274,8 +2276,9 @@ test('preview client', async (t) => {
       assert.match(get('#send-status').textContent, /is empty/);
       const oversized = new File([new Uint8Array(50_000_001)], 'large.png', { type: 'image/png' });
       paste(pasteEvent([oversized]));
-      assert.match(get('#send-status').textContent, /ceiling is 50,000,000/);
-      assert.equal(chips().length, 4, 'invalid paste keeps existing attachments');
+      assert.equal(chips().length, 5, 'a large paste has no ceiling');
+      get('#staged-files').children[4].children[1].events.click();
+      assert.equal(chips().length, 4, 'the large paste removes cleanly');
       await get('#form').events.submit(event({}));
       assert.equal(uploadCalls.length, before + 1);
       const files = uploadCalls.at(-1).files;

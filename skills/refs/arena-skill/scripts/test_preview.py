@@ -714,11 +714,7 @@ def test_http_boundaries():
       assert request("POST", "/api/markdown", '{"text":"draft"}')[0] == 415
       assert request("POST", "/api/notes", "{}")[0] == 415
       assert request("POST", "/api/notes", "{}", {"X-Preview-Token": token})[0] == 415
-      # A full-length note stays inside the general body limit, so the cap is reachable over HTTP.
-      assert (
-        len(json.dumps({"id": "x", "text": "x" * preview.MAX_NOTE})) < preview.MAX_BODY
-      )
-      assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 400
+      assert request("POST", "/api/notes", "x" * 200_001, auth)[0] == 400
       for body in (
         "{",
         "[]",
@@ -745,7 +741,7 @@ def test_http_boundaries():
         (["message-1", "unknown"], "reply", "done"),
         (["message-1"], "shout", "done"),
         (["message-1"], "reply", ""),
-        (["message-1"], "reply", "x" * (preview.MAX_NOTE + 1)),
+        (["message-1"], "reply", 3),
       ):
         try:
           store.acknowledge(*broken)
@@ -1443,7 +1439,7 @@ def test_http_boundaries():
           "answers": {q["id"]: "x" * 2000 for q in wide_questions},
         }
       )
-      assert len(full) > preview.MAX_BODY, (
+      assert len(full) > 96_000, (
         "the case has to exceed the limit it is testing"
       )
       assert request("POST", "/api/reports/wide/submit", full, auth)[0] == 201
@@ -1464,8 +1460,7 @@ def test_http_boundaries():
       )
       over_body = "x" * (1_000_001)
       assert request("POST", "/api/reports/wide/submit", over_body, auth)[0] == 400
-      # Notes keep the smaller limit. Report answers take the wider one.
-      assert request("POST", "/api/notes", "x" * (preview.MAX_BODY + 1), auth)[0] == 400
+      assert request("POST", "/api/notes", "x" * 200_001, auth)[0] == 400
       # The note schema carries no author column: a record is just the message and its receipt.
       note = store.note("plain-note", "no author field")
       assert "origin" not in note
@@ -1589,7 +1584,7 @@ def test_http_boundaries():
       assert request("POST", "/api/save-state", "{}", auth)[0] == 404
       assert request("POST", "/api/save-state", "{}")[0] == 404
       # The legacy upload surface left the skill: attachments ride the note route, and the
-      # store cases keep the bytes, the ceiling and a missing file.
+      # store cases keep the bytes and a missing file.
       assert request("POST", "/api/uploads?name=gone.bin", b"x", auth)[0] == 404
       assert request("GET", "/api/uploads/gone")[0] == 404
 
@@ -2328,7 +2323,7 @@ def test_download_queue():
       )
       assert status == 201 and json.loads(completed)["source"] == "codetabs"
 
-      # The download route refuses a declared excess. The store keeps the upload ceiling.
+      # The download route refuses a declared excess. The store keeps a large upload.
       status, _, _problem = request(
         "POST",
         f"/api/fetch-jobs/{proxy['id']}/result?name=large.bin",
@@ -2341,22 +2336,14 @@ def test_download_queue():
         },
       )
       assert status == 409
-      assert preview.MAX_UPLOAD == 50_000_000
       assert preview.MAX_FETCH == 102_400_000
-      exact = queue_store.save_upload(
-        "exact.bin", "application/octet-stream", b"x" * preview.MAX_UPLOAD
+      large = queue_store.save_upload(
+        "large.bin", "application/octet-stream", b"x" * 5_000_001
       )
       assert (
-        exact["size"] == preview.MAX_UPLOAD
-        and Path(exact["path"]).stat().st_size == preview.MAX_UPLOAD
+        large["size"] == 5_000_001
+        and Path(large["path"]).stat().st_size == 5_000_001
       )
-      try:
-        queue_store.save_upload(
-          "too-large.bin", "application/octet-stream", b"x" * (preview.MAX_UPLOAD + 1)
-        )
-        raise AssertionError("A 50 MB + 1 upload was accepted")
-      except ValueError:
-        pass
 
       # Competing tabs claim distinct rows even when both are ready at once.
       first = queue_store.enqueue_fetch("https://example.org/a", False)
@@ -3464,7 +3451,7 @@ def test_wide_report_fields():
     record = wide_store.submit_report(
       "wide", "note-wide", answers, wide_store.report("wide")["updated_at"]
     )
-    assert len(record["text"]) > preview.MAX_NOTE
+    assert len(record["text"]) > 100_000
     assert record["text"].count("x" * 2000) == 50
     stored = [item for item in wide_store.submissions() if item["id"] == "note-wide"]
     assert stored and stored[0]["text"] == record["text"]
@@ -3481,13 +3468,14 @@ def test_wide_report_fields():
         raise AssertionError(message)
       except ValueError as error:
         assert "150,000" in str(error) or "at least one answer" in str(error)
-    # A note keeps its own, much smaller cap, and says so in its own words.
+    # A note carries no length cap of its own. Only blank text fails.
+    long_note = "n" * 200_000
+    assert preview.note_text(long_note) == long_note
     try:
-      assert preview.note_text("n" * preview.MAX_NOTE) == "n" * preview.MAX_NOTE
-      preview.note_text("n" * (preview.MAX_NOTE + 1))
-      raise AssertionError("An oversized note was accepted")
-    except ValueError as error:
-      assert str(preview.MAX_NOTE) in str(error)
+      preview.note_text("   ")
+      raise AssertionError("A blank note was accepted")
+    except ValueError:
+      pass
 
 
 def test_shared_save_import():
@@ -5544,7 +5532,6 @@ def test_workspace_usage():
   assert usage["bytes"] == 4 and usage["files"] == 1
   assert usage["documented_cap_bytes"] == 128_000_000
   assert usage["download_cap_bytes"] == preview.MAX_FETCH == 102_400_000
-  assert preview.MAX_UPLOAD == 50_000_000
 
 
 def test_owner_limits_and_streams():
@@ -5554,11 +5541,9 @@ def test_owner_limits_and_streams():
     store = preview.Store(directory, create=True)
     text = "👋" * 150_001
     assert store.note("long-owner", text)["text"] == text
-    try:
-      store.acknowledge(["long-owner"], "reply", "a" * 15_001)
-      raise AssertionError("Agent reply cap was removed")
-    except ValueError:
-      pass
+    long_reply = "a" * 15_001
+    store.acknowledge(["long-owner"], "reply", long_reply)
+    assert store.state()["notes"][0]["ack_text"] == long_reply
     url = "https://example.com/" + "a" * 3000
     owner = store.enqueue_fetch(url, False)
     assert owner["origin"] == "owner"
@@ -5622,14 +5607,6 @@ def test_owner_limits_and_streams():
           "multipart/form-data; boundary=boundary", Chunks(data), length
         ):
           raise AssertionError("Incomplete multipart accepted")
-      except ValueError:
-        pass
-    with patch.object(preview, "MAX_UPLOAD", 4):
-      try:
-        with preview.stream_note_attachments(
-          "multipart/form-data; boundary=boundary", Chunks(raw), len(raw)
-        ):
-          raise AssertionError("Per-file upload cap removed")
       except ValueError:
         pass
 

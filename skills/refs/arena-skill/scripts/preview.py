@@ -36,10 +36,6 @@ ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 REPLY_REFERENCE = re.compile(r"^RE:\s*([a-zA-Z0-9_-]{1,80})(?:\s|$)", re.IGNORECASE)
 MAX_REPORT = 2_000_000
-MAX_NOTE = 15_000
-MAX_BODY = 96_000
-# Owner uploads keep a 50 MB (decimal) per-file ceiling.
-MAX_UPLOAD = 50_000_000
 # Documented snapshot cap, not a measured limit. The 128 MB figure was for a workspace
 # without GitHub. One session reported 512 MB. Downloads use 80% of the documented figure.
 SNAPSHOT_CAP_BYTES = 128_000_000
@@ -549,8 +545,8 @@ def owner_text(text):
 
 
 def note_text(text):
-  if not isinstance(text, str) or not text.strip() or len(text) > MAX_NOTE:
-    raise ValueError(f"Enter a note of 1–{MAX_NOTE} characters")
+  if not isinstance(text, str) or not text.strip():
+    raise ValueError("Enter a nonblank note")
   return text
 
 
@@ -1154,8 +1150,6 @@ def stream_note_attachments(content_type, stream, length):
         body.path = path
 
         def write(chunk, body=body):
-          if len(body) + len(chunk) > MAX_UPLOAD:
-            raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
           body.write(chunk)
 
         with stream:
@@ -3499,8 +3493,6 @@ class Store:
       raise TypeError("An upload is bytes")
     if not data:
       raise ValueError("An upload must not be empty")
-    if len(data) > MAX_UPLOAD:
-      raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
     cleaned = upload_name(name)
     kind = upload_type(content_type)
     digest = body_digest(data)
@@ -3576,8 +3568,8 @@ class Store:
       name, content_type, data = file
       if not isinstance(data, (bytes, bytearray, FileBody)):
         raise TypeError("An upload is bytes")
-      if not data or len(data) > MAX_UPLOAD:
-        raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
+      if not data:
+        raise ValueError("An upload must not be empty")
       prepared.append(
         (
           upload_name(name),
@@ -3703,7 +3695,7 @@ class Store:
     stamp = now()
     with self.transaction(autosave=False) as db:
       # UPDATE obtains SQLite's write lock before SELECT, so two browser tabs cannot take the
-      # same row. Active clients renew their lease while reading or sending up to 50 MB.
+      # same row. Active clients renew their lease while reading or sending a large file.
       db.execute(
         "UPDATE fetch_jobs SET status = 'queued', claim = NULL, lease_until = NULL,"
         " error = 'Browser stopped; queued again', updated_at = ?"
