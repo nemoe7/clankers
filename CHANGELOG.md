@@ -52,6 +52,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena work rule drops the token-budget line, and the ack, question and session-ID rules split apart.
 - The house AGENTS.md splits the proposal bullet and the STE bullet into rule lists. The grandfather clause leaves the STE rule.
 - `rules/refs/AGENTS.md` drops the unavoidable-assumption line, so the ask rule stands alone.
+- The Arena read set names the root AGENTS.md and any nested file outside `rules/`. The two installer templates under `rules/` turn supplementary.
+- The Arena Use section states its precedence. These rules outrank skills and plugins, and user chat outranks them.
 
 #### maintenance
 
@@ -68,6 +70,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill moves the gate and worktree rules out of Setup into their own section. The worktree trigger now names the declared path globs.
 - The preview reference lists `logs`, `worktree`, `download-request` and `stale-reports`, and requires the bare `arena-preview` call form for every command. A test compares its commands table with the CLI parser.
 - The arena skill carries the inbox, ack, task, external-channel, read-cadence and publish-reports paragraphs as lists.
+- The arena skill drops the fixed limit numbers for chunks and reports. An over-limit value fails with the tool's own error.
 
 #### userscripts
 
