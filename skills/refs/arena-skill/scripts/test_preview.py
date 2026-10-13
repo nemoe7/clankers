@@ -6785,3 +6785,39 @@ def test_egress_warning_covers_wget_and_git_clone():
   assert preview.egress_warning("git clone https://gitlab.com/x/y.git") == (
     EGRESS_WARNING.format(host="gitlab.com")
   )
+
+
+def test_reference_commands_table_lists_every_agent_facing_command():
+  """The commands table in the reference matches the CLI parser, internal commands aside."""
+  reference = (Path(__file__).parents[1] / "references" / "REFERENCE.md").read_text(
+    encoding="utf-8"
+  )
+  table = reference.split("## Commands", 1)[1].split("\n\n", 1)[0]
+  documented = {
+    match.group(1)
+    for line in table.splitlines()
+    if (match := re.match(r"\| `([a-z][a-z-]*)", line))
+  }
+  help_text = subprocess.run(
+    [sys.executable, str(Path(__file__).parent / "preview.py"), "--help"],
+    capture_output=True,
+    text=True,
+    check=True,
+  ).stdout
+  actual = set(re.search(r"\{([a-z,\-]+)\}", help_text).group(1).split(","))
+  internal = {
+    "inbox-line",
+    "route-run",
+    "worktree-tick",
+    "ack-tick",
+    "serve-tick",
+    "pr-check-tick",
+    "egress-tick",
+    "commit-tick",
+    "gate",
+  }
+  assert documented <= actual, (
+    f"table names unknown commands: {sorted(documented - actual)}"
+  )
+  missing = sorted(actual - internal - documented)
+  assert not missing, f"CLI commands missing from the table: {missing}"

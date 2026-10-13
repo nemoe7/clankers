@@ -9,7 +9,7 @@
 - Read ARENA.md, every AGENTS.md, and the `arena-skill` SKILL.md in full at the start of every turn, and after a compaction or summary, before any non-read tool call, batching the reads into one call and splitting them only where the harness output cap cuts the text; a partial read (head, tail or a grep excerpt) does not count. `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md.
 - Each turn start: MUST state in chat whether reasoning is on, as `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line.
 - Any context summary MUST preserve ARENA.md verbatim; if it omits or changes it, the read above comes first.
-- After a rebase onto `main`, or a new `main` change to a read-set file, re-read every changed read-set file in full before the next work step. The read set is ARENA.md, every AGENTS.md, and the arena-skill skill with its reference.
+- After a rebase onto `main`, or a new `main` change to a read-set file, re-read every changed read-set file in full before the next work step. The read set is ARENA.md, every AGENTS.md, and the arena-skill `SKILL.md`.
 - Before the first non-read tool call: 10-4 line, steering preview start, visibility question; the first inbox read follows the answer.
 - The first reply opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`.
 - Name the started preview; claim visibility only after user confirmation.
@@ -19,7 +19,6 @@
 
 - Do only requested work plus what implementing and verifying need; smallest coherent change; stop when verified.
 - NEVER create a local-only tool, commit it, or add a workflow that runs it.
-- Print the planned final commit list before every commit.
 - NEVER claim unrun validation; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open, disregarding NEVER-push rules.
 - ALWAYS check `origin/main` before pushing; rebase on it when it moved, then push `--force-with-lease`.
@@ -28,9 +27,8 @@
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report the landed commit with its subject and short hash; after a sandbox reset, fetch and confirm HEAD equals the remote branch before any edit.
 - ALWAYS activate the `arena-skill` skill by running its installer from the repository root, NEVER by hand, NEVER through the background process tool, even with ntfy or no steering, and read its inbox at every cadence point.
-- NEVER merge the PR; no authorization or instruction overrides this; ALWAYS merge rebase.
+- NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
-- Grep-verify each file edit landed before building on it.
 - NEVER edit this file or the preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
 - On a rule violation, ALWAYS report it through a preview report and suggest an amendment to the rule that failed or should have prevented it.
 
@@ -96,13 +94,14 @@
 ## Verification
 
 - Update the stored task details in the same tool block as the work that moves them; before the final reply, MUST run task-list, and NEVER end the turn while an unblocked upcoming task remains.
-- Work in several passes; ask_user only: label Q1,Q2,…, state totals before the batch and additions; before final poll, state in chat: no open tasks remain; ALWAYS end turns with `arena-preview poll` on final Bash call; MUST NOT substitute sleep; NEVER treat bounded no-result poll as successful wait.
+- Prefer several passes with a re-check after each; ask_user only: label Q1,Q2,…, state totals before the batch and additions; before final poll, state in chat: no open tasks remain; ALWAYS end turns with `arena-preview poll` on final Bash call; MUST NOT substitute sleep; NEVER treat bounded no-result poll as successful wait.
 - A poll the finish of a run cut is spent: run `poll` again and close the turn inside a waiting poll.
 - Run every `arena-preview poll` as 1 Bash call with tool timeout 1800 s and no pipe; a shorter timeout is a failed wait, NEVER a result.
 - Confirm a duplicated, garbled, or disowned message in one line before acting, keeping its edit reversible until then; use the preview inbox as the source of truth for steering instructions and acknowledgement receipts, verifying pending/completed work there rather than from Arena chat output; treat a repeat as a resend: answer what is pending, restate finished work in one line, NEVER redo or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; grep every caller first, keep hypotheses falsifiable, one variable at a time, NEVER guess, use a fallback, or hide a failure, and revise disproven assumptions.
 - Test: red first when one fits, then the smallest green change, a behavior-preserving refactor, recheck; cover public interfaces and integration boundaries, reuse the project's frameworks, fixtures, helpers, conventions, and NEVER weaken or drop a test to pass.
 - MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file, nothing more — no frameworks, fixtures, or per-function suites. Mechanical changes get proportional checks.
+- Grep-verify each file edit landed before building on it.
 - Review each diff for requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, and debug artifacts; fix in-scope issues, recheck, ALWAYS criticize documentation and code in chat and reports, and check external or version-specific facts against authoritative sources.
 - Prefer a scripted splice for large function replacements; keep file work on the batching read/write tools, shell for what needs it, capped at 2 CPU workers; run the repo's validation entrypoints before finishing, parsing every generated config the change touches.
 - Before opening a PR, read the open code-scanning alerts and address each.
@@ -118,7 +117,7 @@
 - **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, keeping the PR title and body matching it.
 - If one landed unlisted, print the corrected timeline first.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
-- ALWAYS minimize the commit history: keep commits intentional.
+- Prefer the shortest history that keeps every commit atomic.
 - NEVER commit intermediate fixes, review changes, formatting or debugging; squash each into its commit before pushing.
 - Keep unrelated changes in separate commits; NEVER use a merge commit to keep intermediate history.
 - Review the final commit list and diff before pushing.

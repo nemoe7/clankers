@@ -29,13 +29,15 @@ Use this guide and its Markdown references for instructions. Do not read shipped
    arena-preview serve --port 8000
    ```
 
-   After a sandbox restart, rerun the installer and reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it. The gate warns when a serve names another port.
-
-- When multiple queued tasks each edit files, ALWAYS start the root gate after task scope.
-- While that gate runs, ALWAYS use `arena-preview worktree start` before unrelated file-editing work; a queued file task with non-overlapping paths works in that worktree and never waits read-only; a lone file-editing task needs no worktree; declare nonoverlapping paths first.
-- NEVER start a gate, commit or push in the detached worktree; only collect its diff after the root gate passes, then validate it on the root.
+   After a sandbox restart, rerun the installer and reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it. The gate warns when a serve names another port. Read a routed run's recorded tail with `arena-preview logs <name>`.
 
 4. Name the preview in chat. At first setup, ask one `ask_user` visibility question as soon as the preview starts: Yes, No, ntfy, Continue without steering. Block non-setup work until the answer. Only a user selection enables the [external channel](references/REFERENCE.md#external-channel-ntfy); never switch silently. Keep the preview inbox running; the first `read` follows the answer. Do not claim visibility before confirmation. If it stays hidden, ask how to continue with `ask_user`. Reuse a visible preview after confirmation. Keep ARENA.md's activation acknowledgement when applicable.
+
+## Gate and worktrees
+
+- When several queued tasks each edit files, declare each task's paths, then start the root gate before that file work.
+- While that gate runs, ALWAYS use `arena-preview worktree start` before unrelated file-editing work; a queued file task with non-overlapping paths works in that worktree and never waits read-only; a lone file-editing task needs no worktree; declare nonoverlapping paths first.
+- NEVER start a gate, commit or push in the detached worktree; only collect its diff after the root gate passes, then validate it on the root.
 
 ## Read, acknowledge, and track work
 
@@ -70,7 +72,7 @@ Short answers stay in chat. For a longer report, write UTF-8 Markdown to an igno
 arena-preview publish <source.md> --id <id> --title <title>
 ```
 
-Republish the same ID after each source update; if answers exist, use a new ID. Remove a stale one with `unpublish <id>`; its answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Write an option set's custom slot inside the group, as `- ( ) custom: ___`.
+Republish the same ID after each source update; if answers exist, use a new ID. List stale ones with `stale-reports`; remove one with `unpublish <id>`; its answers and source survive for a new ID. Do not use Mermaid, raw HTML or remote report assets. [Field syntax and limits](references/REFERENCE.md#report-fields) apply when you write answerable reports. Write an option set's custom slot inside the group, as `- ( ) custom: ___`.
 
 `read` lists report submissions as `kind: report`. Acknowledge each submission ID separately, including newer answers to an already answered form. Publishing a report never acknowledges a submission.
 
