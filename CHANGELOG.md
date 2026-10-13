@@ -31,6 +31,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### GPT plugins
 
+- The package and release archives now place `plugin.json` and `skills/` at their roots for Plugin Creator.
 - `gpt-display` now documents the current DIL component, binding, action, chart, map, and interaction contracts through linked technical references.
 
 #### rules

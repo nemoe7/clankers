@@ -17,6 +17,7 @@ import argparse
 import json
 import re
 import sys
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -61,6 +62,11 @@ def shipped_paths() -> list[Path]:
         paths.append(item)
 
   return paths
+
+
+def archive_members() -> dict[str, Path]:
+  """Return archive-root paths and their source files."""
+  return {path.relative_to(PLUGIN).as_posix(): path for path in shipped_paths()}
 
 
 def load_schema(source: str, errors: list[str]) -> dict | None:
@@ -378,7 +384,26 @@ def run_self_check() -> None:
   assert not fenced_code_blocks("````jsx\nconst answer = 1;\n```")
   assert matching_reference(f"Full prose\n{fenced}", f"Short prose\n{fenced}")
   assert not matching_reference(fenced, "```jsx\nconst answer = 2;\n```")
-  print("ok version, compression-structure and fenced-code checks")
+  expected = archive_members()
+  assert "plugin.json" in expected
+  assert any(name.startswith("skills/") for name in expected)
+  assert not any(name.startswith("gpt-plugins/") for name in expected)
+  with tempfile.TemporaryDirectory() as directory:
+    archive = Path(directory) / "gpt-plugins.zip"
+    with zipfile.ZipFile(archive, "w") as opened:
+      for name, source in expected.items():
+        opened.writestr(name, source.read_bytes())
+    errors: list[str] = []
+    check_archive(archive, errors)
+    assert not errors, errors
+    legacy = Path(directory) / "legacy-gpt-plugins.zip"
+    with zipfile.ZipFile(legacy, "w") as opened:
+      for name, source in expected.items():
+        opened.writestr(f"gpt-plugins/{name}", source.read_bytes())
+    legacy_errors: list[str] = []
+    check_archive(legacy, legacy_errors)
+    assert legacy_errors, "a nested gpt-plugins archive passed"
+  print("ok version, compression-structure, fenced-code and archive-layout checks")
 
 
 def check_archive(archive: Path, errors: list[str]) -> None:
@@ -387,10 +412,7 @@ def check_archive(archive: Path, errors: list[str]) -> None:
     errors.append(f"{archive}: missing archive")
     return
 
-  expected = {
-    f"gpt-plugins/{path.relative_to(PLUGIN).as_posix()}": path
-    for path in shipped_paths()
-  }
+  expected = archive_members()
 
   with zipfile.ZipFile(archive) as opened:
     members = [name for name in opened.namelist() if not name.endswith("/")]
