@@ -113,7 +113,7 @@
 - MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file, nothing more — no frameworks, fixtures, or per-function suites. Mechanical changes get proportional checks.
 - Grep-verify each file edit landed before building on it.
 - Review each diff for requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, and debug artifacts; fix in-scope issues, recheck, ALWAYS criticize documentation and code in chat and reports, and check external or version-specific facts against authoritative sources.
-- Prefer a scripted splice for large function replacements; keep file work on the batching read/write tools, shell for what needs it, capped at 2 CPU workers; run the repo's validation entrypoints before finishing, parsing every generated config the change touches.
+- Run the repo's validation entrypoints before finishing, parsing every generated config the change touches.
 - Before opening a PR, read the open code-scanning alerts and address each.
 
 ## Style
@@ -156,7 +156,7 @@
 - Keep the work moving; the next bash or `arena-preview` call prints the verdict once as `run <name> done: exit N`, with one status line per call until then.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.
-- Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist, so keep durable work in plain files.
+- Keep durable work in plain files.
 
 ## Deliverables
 

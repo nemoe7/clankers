@@ -158,8 +158,6 @@
 - ALWAYS criticize documentation and code, in chat responses and in report files.
 - Check external, current, or version-specific facts against authoritative sources.
 - Before opening a PR, MUST read the open code-scanning alerts and address each.
-- For large function replacements, prefer a scripted splice.
-- Prefer the file read/write tools for file operations; shell is for what needs it, capped at 2 CPU workers.
 - Before finishing, MUST run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 
@@ -224,10 +222,8 @@
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
 - NEVER call `get_process_output` to wait for a run, and NEVER run `arena-preview poll` mid-task as a run wait.
 - Keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then.
-- Scope the next task meanwhile.
 - Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
-- Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist.
 - Keep durable work in plain files.
 
 ## Deliverables
