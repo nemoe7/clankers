@@ -346,44 +346,23 @@ def input_tokens(model, request):
   return int(count["totalTokens"])
 
 
-def payload_evidence(request):
-  """The evidence a counted request carries, so a count line names its payload."""
-  return json.loads(request["contents"][0]["parts"][0]["text"])["evidence"]
-
-
 def measured(model, request):
-  """A count per payload, memoized: packing must not re-count the same request."""
+  """Return a memoized exact count for one payload."""
   model = first_rung(model)
   key = (model, hashlib.sha256(encoded(request)).hexdigest())
   if key not in TOKEN_COUNTS:
     TOKEN_COUNTS[key] = input_tokens(model, request)
-    # The count is the packing's unit of work, so every one of them prints.
-    summary(
-      f"  countTokens {model}: {len(payload_evidence(request))} evidence item(s)"
-      f" -> {TOKEN_COUNTS[key]:,} tokens"
-    )
   return TOKEN_COUNTS[key]
 
 
-def split_group(items, context, model, ceiling, cover):
-  """Cut an oversized evidence list in half until every part fits the ceiling."""
-  if measured(model, request_for(context, items)) <= ceiling:
-    return [items]
-  if len(items) > 1:
-    middle = len(items) // 2
-    # The cut prints the ids it falls between, so a split reads as a step.
-    summary(
-      f"  split {len(items)} evidence item(s) between "
-      f"{items[middle - 1]['id']} and {items[middle]['id']}"
-    )
-    return split_group(items[:middle], context, model, ceiling, cover) + split_group(
-      items[middle:], context, model, ceiling, cover
-    )
-  item = items[0]
+def split_item(item, context, model, ceiling, cover):
+  """Split one oversized evidence item until each text part fits."""
+  tokens = measured(model, request_for(context, [item]))
+  if tokens <= ceiling:
+    return [item]
   text = item["text"]
   if len(text) < 2:
     raise RuntimeError("One evidence item cannot fit the token ceiling")
-  tokens = measured(model, request_for(context, items))
   summary(
     f"  evidence item {item['id']} is {tokens:,} input tokens over the "
     f"{ceiling:,} ceiling; splitting its text in half"
@@ -394,30 +373,35 @@ def split_group(items, context, model, ceiling, cover):
     half = {"id": f"{item['id']}:{index + 1}/2", "text": part}
     cover[half["id"]] = cover[item["id"]]
     halves.append(half)
-  return split_group([halves[0]], context, model, ceiling, cover) + split_group(
-    [halves[1]], context, model, ceiling, cover
+  return split_item(halves[0], context, model, ceiling, cover) + split_item(
+    halves[1], context, model, ceiling, cover
   )
 
 
-def grouped(items, context, model, cover, ceiling=None):
-  """Pack the evidence into requests under the token ceiling.
+def fitting_prefix(items, context, model, ceiling):
+  """Find an ordered prefix that fits with exact-token binary search."""
+  low, high = 0, len(items)
+  while low < high:
+    middle = (low + high + 1) // 2
+    if measured(model, request_for(context, items[:middle])) <= ceiling:
+      low = middle
+    else:
+      high = middle - 1
+  return low
 
-  The list bisection proves that every piece fits. The greedy pass over the pieces then fills each request, so
-  the request count stays the smallest one."""
+
+def grouped(items, context, model, cover, ceiling=None):
+  """Pack ordered evidence under the exact-token ceiling with few probes."""
   ceiling = CHUNK_TOKENS if ceiling is None else ceiling
-  pieces = [
-    piece
-    for part in split_group(items, context, model, ceiling, cover)
-    for piece in part
-  ]
-  packed, group = [], []
-  for piece in pieces:
-    if group and measured(model, request_for(context, group + [piece])) > ceiling:
-      packed.append(group)
-      group = []
-    group.append(piece)
-  if group:
-    packed.append(group)
+  pending, packed = list(items), []
+  while pending:
+    end = fitting_prefix(pending, context, model, ceiling)
+    if end:
+      packed.append(pending[:end])
+      pending = pending[end:]
+      continue
+    first, pending = pending[0], pending[1:]
+    pending = split_item(first, context, model, ceiling, cover) + pending
   return packed
 
 
@@ -599,23 +583,29 @@ def generate_once(context, evidence, model):
 
 def round_requests(items, context, phase, model, cover, round_number):
   """One request if the whole payload fits the chunk ceiling, else packed chunks."""
+  probes_before = len(TOKEN_COUNTS)
   whole = {**context, "phase": phase}
   tokens = measured(model, request_for(whole, items))
   if tokens <= CHUNK_TOKENS:
-    summary(f"  {phase} round {round_number}: {tokens:,} input tokens; one request")
+    probes = len(TOKEN_COUNTS) - probes_before
+    summary(
+      f"  {phase} round {round_number}: {tokens:,} input tokens; one request "
+      f"after {probes} exact token probe(s)"
+    )
     return whole, [items]
   # A packed first round summarizes the evidence. A packed later round combines the
   # summaries, whatever phase the final request carries.
   chunked = {**context, "phase": "chunk" if round_number == 1 else phase}
   groups = grouped(items, chunked, model, cover)
+  shares = [measured(model, request_for(chunked, group)) for group in groups]
+  probes = len(TOKEN_COUNTS) - probes_before
   summary(
     f"  {phase} round {round_number}: {len(items)} evidence item(s), {tokens:,} input"
     f" tokens over the {CHUNK_TOKENS:,} ceiling; packed into {len(groups)} request(s)"
+    f" after {probes} exact token probe(s)"
   )
-  # The plan prints each request's share before the requests run, so the packing
-  # reads as numbered steps of one plan.
-  for index, group in enumerate(groups, 1):
-    share = measured(model, request_for(chunked, group))
+  # The plan names each request's share before the requests run.
+  for index, (group, share) in enumerate(zip(groups, shares), 1):
     summary(
       f"    chunk {index}/{len(groups)}: {len(group)} evidence item(s), {share:,} tokens"
     )

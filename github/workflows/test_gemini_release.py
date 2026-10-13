@@ -124,62 +124,86 @@ def test_release_pipeline():
     assert "diff --git" not in dict(messages)[target]
     fails(lambda: release.history(target, root, "everything"), "Invalid evidence input")
 
-    # An oversized evidence list is cut in half until every part fits the ceiling.
+    # Ordered chunks use exact token counts and keep evidence order.
     def text_size(model, request):
       payload = json.loads(request["contents"][0]["parts"][0]["text"])
       return sum(len(item["text"]) for item in payload["evidence"])
 
-    # Every count prints, and a split names the two ids it falls between.
     with (
       patch.object(release, "input_tokens", text_size),
-      patch.object(release, "summary") as step_log,
       patch.object(release, "TOKEN_COUNTS", {}),
     ):
       items = [{"id": str(n), "text": "x" * 40} for n in range(8)]
       cover = {item["id"]: [item["id"]] for item in items}
-      parts = release.split_group(items, {}, "test", 100, cover)
-    step_lines = [call.args[0] for call in step_log.call_args_list]
-    assert any(
-      "countTokens test: 8 evidence item(s) -> 320 tokens" in line
-      for line in step_lines
-    )
-    assert any(
-      "split 8 evidence item(s) between 3 and 4" in line for line in step_lines
-    )
-    assert any(
-      "countTokens test: 2 evidence item(s) -> 80 tokens" in line for line in step_lines
-    )
-    assert [[piece["id"] for piece in part] for part in parts] == [
+      groups = release.grouped(items, {}, "test", cover, 100)
+    assert [[item["id"] for item in group] for group in groups] == [
       ["0", "1"],
       ["2", "3"],
       ["4", "5"],
       ["6", "7"],
     ]
-    with patch.object(release, "input_tokens", text_size):
+
+    # Ordered binary packing finds the same full groups without probing every next item.
+    probes = []
+
+    def counted_size(model, request):
+      probes.append(request)
+      return text_size(model, request)
+
+    items = [{"id": str(n), "text": "x" * 10} for n in range(80)]
+    cover = {item["id"]: [item["id"]] for item in items}
+    with (
+      patch.object(release, "input_tokens", counted_size),
+      patch.object(release, "summary"),
+      patch.object(release, "TOKEN_COUNTS", {}),
+    ):
       groups = release.grouped(items, {}, "test", cover, 100)
-    assert len(groups) == 4
+    assert [[item["id"] for item in group] for group in groups] == [
+      [str(n) for n in range(start, start + 10)] for start in range(0, 80, 10)
+    ]
+    assert len(probes) <= 45
+
+    # A round reports its final plan and probe total, not every binary-search probe.
+    round_lines = []
+    cover = {item["id"]: [item["id"]] for item in items}
+    with (
+      patch.object(release, "input_tokens", counted_size),
+      patch.object(release, "summary", round_lines.append),
+      patch.object(release, "TOKEN_COUNTS", {}),
+      patch.object(release, "CHUNK_TOKENS", 100),
+    ):
+      _, round_groups = release.round_requests(items, {}, "chunk", "test", cover, 1)
+    assert [[item["id"] for item in group] for group in round_groups] == [
+      [str(n) for n in range(start, start + 10)] for start in range(0, 80, 10)
+    ]
+    assert len(round_lines) == 9
+    assert any("after 43 exact token probe(s)" in line for line in round_lines)
+    assert not any("countTokens" in line for line in round_lines)
+
     # One item's text halves only as a last resort, because a single item barely
     # reaches the ceiling.
+    split_cover = {"big": ["big"]}
     with (
       patch.object(release, "input_tokens", text_size),
       patch.object(release, "summary") as split_log,
     ):
-      halved = release.split_group(
-        [{"id": "big", "text": "x" * 80}], {}, "test", 20, {"big": ["big"]}
+      halved = release.split_item(
+        {"id": "big", "text": "x" * 80}, {}, "test", 20, split_cover
       )
     assert any(
       "splitting its text" in call.args[0] for call in split_log.call_args_list
     )
-    assert [part[0]["id"] for part in halved] == [
+    assert [item["id"] for item in halved] == [
       "big:1/2:1/2",
       "big:1/2:2/2",
       "big:2/2:1/2",
       "big:2/2:2/2",
     ]
+    assert all(split_cover[item["id"]] == ["big"] for item in halved)
     with patch.object(release, "input_tokens", text_size):
       fails(
-        lambda: release.split_group(
-          [{"id": "one", "text": "x"}], {}, "test", 0, {"one": ["one"]}
+        lambda: release.split_item(
+          {"id": "one", "text": "x"}, {}, "test", 0, {"one": ["one"]}
         ),
         "cannot fit the token ceiling",
       )

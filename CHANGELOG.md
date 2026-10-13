@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-13
+
+### Changed
+
+#### workflows
+
+- The Gemini release packer uses exact-token binary search for ordered chunks. It splits only an oversized evidence item. The log shows the final plan and its probe total instead of each probe.
+
 ## 2026-10-12
 
 ### Added
