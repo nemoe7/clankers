@@ -6201,19 +6201,43 @@ def test_report_changes_hold_a_fresh_view_of_an_answered_report():
     store.mark_report_ack_seen("pick")
     store.mark_report_viewed("pick")
     with patch.object(preview, "seconds_since", return_value=0):
-      for change in (
-        lambda: store.publish("pick", "Pick revised", source),
-        lambda: store.unpublish("pick"),
-      ):
-        try:
-          change()
-          raise AssertionError("A fresh view allowed an agent report change")
-        except preview.ReportHeld as error:
-          assert "reading" in str(error)
-    with patch.object(preview, "seconds_since", return_value=60):
-      store.publish("pick", "Pick revised", source)
+      try:
+        store.publish("pick", "Pick revised", source)
+        raise AssertionError("A fresh view allowed a republish")
+      except preview.ReportHeld as error:
+        assert "reading" in str(error)
+      # The page holds the open report, so the same fresh view never blocks an unpublish.
       store.unpublish("pick")
     assert store.state()["reports"] == []
+
+
+def test_agent_unpublish_passes_the_view_hold():
+  """An unpublished report leaves at once while the owner reads, and the answer holds stand."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text("# Pick\n", encoding="utf-8")
+    store.publish("pick", "Pick", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.mark_report_viewed("pick")
+    with patch.object(preview, "seconds_since", return_value=0):
+      # An unacknowledged answer still holds the removal.
+      try:
+        store.unpublish("pick")
+        raise AssertionError("An unacknowledged answer allowed the removal")
+      except preview.ReportHeld as error:
+        assert "unacknowledged" in str(error)
+      store.acknowledge(["answer-1"], "reply", "Received")
+      try:
+        store.unpublish("pick")
+        raise AssertionError("An unseen acknowledgement allowed the removal")
+      except preview.ReportHeld as error:
+        assert "acknowledgement" in str(error)
+      store.mark_report_ack_seen("pick")
+      # The holder has nothing left but the view, and the removal passes it.
+      store.unpublish("pick")
+    assert store.state()["reports"] == []
+    assert source.exists()
 
 
 def test_report_changes_ignore_a_fresh_view_of_an_unanswered_report():

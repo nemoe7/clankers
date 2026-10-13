@@ -780,19 +780,32 @@ async function refreshState() {
       listSignature = signature;
       const select = $('#report-select');
       const selected = select.value || stored('report');
+      const shown = $('#report').dataset.reportId;
+      // Held only while the shown report is really gone: a republished ID releases it.
+      heldReport = shown && !state.reports.some(report => report.id === shown) && !$('#reports-panel').hidden
+        ? { id: shown, title: reportTitles.get(shown) || shown }
+        : null;
       select.replaceChildren();
       state.reports.forEach((report, position) => {
+        reportTitles.set(report.id, report.title);
         const option = document.createElement('option');
         option.value = report.id;
         option.textContent = reportLabel(report, position);
         select.append(option);
       });
-      if (!state.reports.length) {
+      if (heldReport && !state.reports.some(report => report.id === heldReport.id)) {
+        const option = document.createElement('option');
+        option.value = heldReport.id;
+        option.textContent = `${heldReport.title} · unpublished`;
+        select.append(option);
+      }
+      if (!state.reports.length && !heldReport) {
         const option = document.createElement('option');
         option.value = '';
         option.textContent = 'No reports published yet';
         select.append(option);
       } else if (state.reports.some(report => report.id === selected)) select.value = selected;
+      else if (heldReport && heldReport.id === selected) select.value = selected;
       const selectedReport = state.reports.find(report => report.id === select.value);
       if (!$('#reports-panel').hidden &&
           ($('#report').dataset.reportId !== select.value ||
@@ -1258,6 +1271,10 @@ function renderReportAcknowledgement() {
   history.replaceChildren(...blocks);
   history.hidden = !blocks.length;
 }
+// An agent unpublish lands at once, even while the owner reads. The page keeps that report
+// and its row on screen until the owner clicks away, so the panel never empties under a reader.
+let heldReport = null;
+const reportTitles = new Map();
 let reportDirty = false;
 // A reload must keep the draft. The browser restores typed text but not the boxes, so every edit
 // writes the answers, and a submit replaces the record with the server's own stamp.
@@ -1274,6 +1291,9 @@ $('#report-form').addEventListener('input', () => { reportDirty = true; saveRepo
 $('#report-form').addEventListener('change', () => { reportDirty = true; saveReportDraft(); });
 async function loadReport(force = false) {
   const id = $('#report-select').value;
+  // A report the agent unpublished keeps its body until the owner clicks away.
+  if (id && heldReport && heldReport.id === id &&
+      !(lastState?.reports || []).some(report => report.id === id)) return;
   const sequence = ++reportRequest;
   // The reports panel is the element that scrolls, and replacing the report collapses its content, so
   // the browser clamps the panel to the top before the new HTML arrives. An update to the report being
@@ -1605,6 +1625,7 @@ function showTab(tab) {
   } else {
     clearReadTimer();
     if (left) void markReportViewed(left, false);
+    releaseHeldReport(null);
   }
 }
 function followReference(type, id) {
@@ -1935,12 +1956,34 @@ $('#fetch-form').addEventListener('submit', async event => {
   } catch (error) { $('#fetch-status').textContent = `Queue not confirmed: ${error.message}. Check the list before retrying.`; }
   finally { button.disabled = false; }
 });
-$('#report-select').addEventListener('change', () => { renderReportAcknowledgement(); loadReport(); });
+$('#report-select').addEventListener('change', () => {
+  releaseHeldReport($('#report-select').value);
+  renderReportAcknowledgement();
+  loadReport();
+});
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
 // A delete asks for a second click against the same report, the way the log's armed actions do,
 // and the arm expires so a stray first click does not sit armed forever. The server keeps the
 // report's answers and its source file. Only the tab row goes.
 let unpublishArmed = null;
+// A report the agent unpublished leaves the page when the owner clicks away, not before.
+function releaseHeldReport(nextId) {
+  if (!heldReport || heldReport.id === nextId) return;
+  const id = heldReport.id;
+  heldReport = null;
+  const select = $('#report-select');
+  const keep = select.children.filter(item => item.value !== id);
+  const wasSelected = select.value === id;
+  select.replaceChildren(...keep);
+  if (wasSelected) select.value = keep.length ? keep[0].value : '';
+  if ($('#report').dataset.reportId !== id) return;
+  $('#report').replaceChildren();
+  delete $('#report').dataset.reportId;
+  delete $('#report').dataset.updatedAt;
+  delete $('#report').dataset.revision;
+  save('report', '');
+  $('#report-status').textContent = `Report ${id} · Unpublished by the agent.`;
+}
 function clearReportPanel(id) {
   if ($('#report').dataset.reportId !== id && $('#report-select').value !== id) return;
   $('#report').replaceChildren();
