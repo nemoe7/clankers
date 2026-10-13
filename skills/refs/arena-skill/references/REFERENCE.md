@@ -67,7 +67,6 @@ When an acknowledgement refers to a report or task, use `ack --reply` and put it
 - Read the inbox when a Bash call reports a pending note, answer or upload count on stderr, before the next work step; that reminder is the schedule.
 - NEVER wait for the Bash gate to block before a read.
 - When ending a turn or a report form awaits answers, run `poll`.
-- ALWAYS run `poll` on the bash call that ends the turn, chained or not.
 - NEVER set or export `_arena_preview_platform`; repair a blocked gate, NEVER bypass it.
 - A blocking-only call needs its read after return.
 - Initial discovery may precede the first read; startup MUST.
