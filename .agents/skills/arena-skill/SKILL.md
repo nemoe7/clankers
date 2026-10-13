@@ -48,11 +48,9 @@ arena-preview poll
 
 - When a Bash call's stderr names a pending count, `read` now.
 - It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox.
-- `read` marks only fully delivered IDs Seen, not acknowledged, and stamps the parent report read by the agent.
 - Do not mark count-only, truncated, or failed deliveries Seen.
 - A pending item repeats until acknowledged.
 - The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call.
-- When ending a turn or a report form awaits answers, run `poll`.
 - A `skip_poll` stamp means the owner pressed Skip poll in the page: the poll consumes it and the turn ends there, with no note and no second poll.
 - A note that starts `RE: <id>` also shows its stored parent notes before the reply.
 - A parent that is still pending shows once.

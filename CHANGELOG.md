@@ -76,6 +76,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The arena skill carries the inbox, ack, task, external-channel, read-cadence and publish-reports paragraphs as lists.
 - The Arena skill carries answers and questions through itself. A short answer goes in the `ack` reply, and a long answer or a question goes in a fielded report.
 - The Arena worktree line drops the lone-task exception. The reference names the 10-second long-run rule, the report-ID namespace and the preselect as the marked recommendation.
+- The Arena skill drops three duplicate lines. The poll turn-end duty stays in the reference, and the read-marking duty stays in its commands table.
 - The preview view guard applies only to an answered report, and a hidden page clears the view stamp.
 - The preview page stamps a report view only while the browser shows it, and clears the stamp on leaving.
 - The arena skill drops the fixed limit numbers for chunks and reports. An over-limit value fails with the tool's own error.
