@@ -1057,10 +1057,10 @@ class Store:
 		except Exception as error:print(f"preview: autosave failed: {error}",file=sys.stderr)
 	def state_lines(self,notes,tasks):
 		if not isinstance(notes,list)or not isinstance(tasks,dict):raise TypeError('Save a state object with notes and tasks')
-		lines=[saved_note_line(record)for record in notes]
+		saved_notes=[record for record in notes if not record.get('quiet')];lines=[saved_note_line(record)for record in saved_notes]
 		for status in TASK_STATUSES:
 			for record in tasks.get(status)or[]:lines.append(saved_task_line(record))
-		sources=self.report_sources();live={record['id']for record in sources};answers=[saved_answer_line(record)for record in self.submissions()if record.get('report_id')in live];lines.extend(answers);reports=[saved_report_line(record)for record in sources];lines.extend(reports);return lines,{'notes':len(notes),'tasks':len(lines)-len(notes)-len(answers)-len(reports),'answers':len(answers),'reports':len(reports)}
+		sources=self.report_sources();live={record['id']for record in sources};answers=[saved_answer_line(record)for record in self.submissions()if record.get('report_id')in live];lines.extend(answers);reports=[saved_report_line(record)for record in sources];lines.extend(reports);return lines,{'notes':len(saved_notes),'tasks':len(lines)-len(saved_notes)-len(answers)-len(reports),'answers':len(answers),'reports':len(reports)}
 	def newest_stamps(self):
 		groups=('note','notes',('at','acknowledged_at','ack_edited_at','seen_at')),('answer','submissions',('at','acknowledged_at','seen_at')),('report','reports',('updated_at','published_at','seen_at','agent_seen_at')),('upload','uploads',('at',)),('task','tasks',('updated_at',));stamps={}
 		with closing(self.connect())as db:

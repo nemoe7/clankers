@@ -3325,10 +3325,11 @@ class Store:
 
   def state_lines(self, notes, tasks):
     """Build save-file lines and counts for one state snapshot. Include note receipts, read stamps, task markers,
-    task order, answers, and report Markdown. Omit answers for unpublished reports."""
+    task order, answers, and report Markdown. Omit quiet notes and answers for unpublished reports."""
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
-    lines = [saved_note_line(record) for record in notes]
+    saved_notes = [record for record in notes if not record.get("quiet")]
+    lines = [saved_note_line(record) for record in saved_notes]
     for status in TASK_STATUSES:
       for record in tasks.get(status) or []:
         lines.append(saved_task_line(record))
@@ -3343,8 +3344,8 @@ class Store:
     reports = [saved_report_line(record) for record in sources]
     lines.extend(reports)
     return lines, {
-      "notes": len(notes),
-      "tasks": len(lines) - len(notes) - len(answers) - len(reports),
+      "notes": len(saved_notes),
+      "tasks": len(lines) - len(saved_notes) - len(answers) - len(reports),
       "answers": len(answers),
       "reports": len(reports),
     }

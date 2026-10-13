@@ -2441,6 +2441,26 @@ def test_autosave_export():
     )
 
 
+def test_ndjson_omits_quiet_notes():
+  """Quiet notes stay in live state but do not cross an NDJSON save and restore."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview.Store(root, create=True)
+    store.note("quiet-note", "Do not save", quiet=True)
+    store.note("visible-note", "Save this")
+    saved = store.save_path.read_text(encoding="utf-8")
+    assert "quiet-note" not in saved
+    assert "visible-note" in saved
+    restored = preview.Store(root / "restored", create=True)
+    receipt = restored.import_state(saved)
+    assert receipt["notes"] == 1
+    assert [note["id"] for note in restored.state()["notes"]] == ["visible-note"]
+    assert [note["id"] for note in store.state()["notes"]] == [
+      "quiet-note",
+      "visible-note",
+    ]
+
+
 def test_notes_carry_no_seq():
   # Note and answer records carry no seq: the arrival stamp orders and identifies a
   # note, and a surfaced sequence number only invites citing it instead of the ID.
