@@ -122,7 +122,7 @@ def test_publish_workflow_contract():
     "contents: read",
     "GH_TOKEN: ${{ secrets.GIST_TOKEN }}",
     "GIST_ID: ${{ vars.GIST_ID }}",
-    "python -m pip install pytest==9.1.1",
+    "python -m pip install pytest==9.1.1 pytest-xdist==3.6.1",
     "run: python3 -m pytest -q maintenance/publish/test_publish.py",
     "run: python3 maintenance/publish/publish.py",
     "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.rules == 'true'",
