@@ -28,9 +28,6 @@ ASSETS=Path(__file__).resolve().parents[1]/'assets'
 IDENTIFIER=re.compile('[a-zA-Z0-9_-]{1,80}\\Z')
 REPLY_REFERENCE=re.compile('^RE:\\s*([a-zA-Z0-9_-]{1,80})(?:\\s|$)',re.IGNORECASE)
 MAX_REPORT=2000000
-MAX_NOTE=15000
-MAX_BODY=96000
-MAX_UPLOAD=50000000
 SNAPSHOT_CAP_BYTES=128000000
 MAX_FETCH=SNAPSHOT_CAP_BYTES*80//100
 WORKSPACE_SKIP={'.arena','.cache','.git','.local','.mypy_cache','.next','.nox','.npm','.nuxt','.output','.parcel-cache','.pytest_cache','.ruff_cache','.svelte-kit','.tox','.turbo','.venv','.vite','__pycache__','build','coverage','dist','node_modules','out','target'}
@@ -180,7 +177,7 @@ def owner_text(text):
 	if not isinstance(text,str)or not text.strip():raise ValueError('Enter a nonblank note')
 	return text
 def note_text(text):
-	if not isinstance(text,str)or not text.strip()or len(text)>MAX_NOTE:raise ValueError(f"Enter a note of 1–{MAX_NOTE} characters")
+	if not isinstance(text,str)or not text.strip():raise ValueError('Enter a nonblank note')
 	return text
 def when(value):
 	try:datetime.fromisoformat(str(value))
@@ -413,9 +410,7 @@ def stream_note_attachments(content_type,stream,length):
 			if name!='file'and(name in fields or part.get_filename()is not None):raise ValueError('Duplicate or invalid note attachment field')
 			if name=='file':
 				path=Path(staging)/str(len(files));stream=path.open('wb');body=FileBody(stream);body.path=path
-				def write(chunk,body=body):
-					if len(body)+len(chunk)>MAX_UPLOAD:raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
-					body.write(chunk)
+				def write(chunk,body=body):body.write(chunk)
 				with stream:reader.until(b'\r\n'+delimiter,write,boundary=True)
 				if not body:raise ValueError('An upload must not be empty')
 				files.append((part.get_filename(),part.get_content_type(),body))
@@ -1099,7 +1094,6 @@ class Store:
 	def save_upload(self,name,content_type,data,upload_id=None,shared=None,note_id=None,position=None):
 		if not isinstance(data,(bytes,bytearray,FileBody)):raise TypeError('An upload is bytes')
 		if not data:raise ValueError('An upload must not be empty')
-		if len(data)>MAX_UPLOAD:raise ValueError(f"An upload must be {MAX_UPLOAD:,} bytes or fewer")
 		cleaned=upload_name(name);kind=upload_type(content_type);digest=body_digest(data);upload_id=identifier(upload_id)if upload_id is not None else self.free_id();note_id=identifier(note_id)if note_id is not None else upload_id
 		if position is not None and(not isinstance(position,int)or position<1):raise ValueError('Invalid attachment position')
 		directory=self.path.parent/UPLOAD_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448)
@@ -1128,7 +1122,7 @@ class Store:
 			if not isinstance(file,(list,tuple))or len(file)!=3:raise ValueError('Each attachment needs a name, type and bytes')
 			name,content_type,data=file
 			if not isinstance(data,(bytes,bytearray,FileBody)):raise TypeError('An upload is bytes')
-			if not data or len(data)>MAX_UPLOAD:raise ValueError(f"Each attachment must be 1–{MAX_UPLOAD:,} bytes")
+			if not data:raise ValueError('An upload must not be empty')
 			prepared.append((upload_name(name),upload_type(content_type),data if isinstance(data,FileBody)else bytes(data)))
 		created=[]
 		try:

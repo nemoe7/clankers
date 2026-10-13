@@ -36,21 +36,21 @@ Report answers live in a separate `submissions` table and appear as `kind: repor
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.
 
-Owner notes, draft rendering and form answers have no application length cap. Agent replies, reports, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
+Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
 
 Finished tasks show newest completion first. Upcoming tasks keep their stored order.
 
 ## Note attachments
 
 The composer sends one note plus files through `/api/notes/with-file`.
-Pasted clipboard images join staged attachments with epoch-millisecond names, image extensions and numeric suffixes for collisions. Text paste stays native. Images keep the same per-file limit and retry path.
+Pasted clipboard images join staged attachments with epoch-millisecond names, image extensions and numeric suffixes for collisions. Text paste stays native. Images keep the same retry path.
 Each note has one ID and acknowledgement. `read` lists files in `attachments[]`.
-Files stay outside SQLite in `<state-dir>/uploads/`. Each is at most 50MB.
+Files stay outside SQLite in `<state-dir>/uploads/`.
 Name stored files with the note ID's first six characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
 Only duplicate names add `-2`, `-3`, and so on after the timestamp. Keep existing files unchanged.
 Long names use a short disk name when required by the filesystem. Records keep the original filename. `present` reports if bytes exist.
 Identical retries repair missing bytes without changing the note receipt or file order.
-Multipart uploads stream each file to temporary storage without a total request cap. Each file keeps its 50 MB cap. The server rejects incomplete transfers before it saves the note.
+Multipart uploads stream each file to temporary storage with no total or per-file cap. The server rejects incomplete transfers before it saves the note.
 
 ## Browser download queue
 

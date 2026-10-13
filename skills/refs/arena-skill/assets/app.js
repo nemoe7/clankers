@@ -4,8 +4,6 @@ const note = $('#note');
 const send = $('#send');
 const status = $('#send-status');
 const key = 'arena-preview-v1';
-// Browser and server both enforce the decimal 50 MB per-file ceiling.
-const MAX_UPLOAD = 50_000_000;
 // A text paste over this length becomes one attachment instead of filling the composer.
 const PASTE_LINE_LIMIT = 25;
 const MAX_FETCH = 102_400_000;
@@ -269,10 +267,6 @@ function stageFiles(files) {
   for (const file of files) {
     if (!file.name || file.name.length > 200) { status.textContent = 'Use filenames of 1–200 characters.'; return; }
     if (!file.size) { status.textContent = `${file.name} is empty.`; return; }
-    if (file.size > MAX_UPLOAD) {
-      status.textContent = `${file.name} is ${file.size.toLocaleString()} bytes; the ceiling is ${MAX_UPLOAD.toLocaleString()}.`;
-      return;
-    }
   }
   stagedFiles.push(...files);
   picker.value = '';
