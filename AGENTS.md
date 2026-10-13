@@ -78,7 +78,16 @@ Read these first:
 ## Reports and approval
 
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote. Omit only unchanged context with `...`. Quote clauses in double quotes, NEVER backticks, in proposals, acks, and reports. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Open the report with `Status: proposal. No line lands before approval.` and a `Citation:` line naming the GUIDELINES section, and follow each table with `Decision on the amended line:` and the approve, squash, reject and custom options. Code changes need no proposal; keep them lean.
+- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line.
+  - Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
+  - Omit only unchanged context with `...`.
+  - Quote clauses in double quotes, NEVER backticks, in proposals, acks, and reports.
+  - Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom.
+  - Put its options directly under its row, and start a new table for the next clause under the same file heading.
+  - Put it above form fields; a form without it is not a proposal.
+  - Open the report with `Status: proposal. No line lands before approval.` and a `Citation:` line naming the GUIDELINES section.
+  - Follow each table with `Decision on the amended line:` and the approve, squash, reject and custom options.
+  - Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.
 - Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
@@ -135,7 +144,11 @@ Read these first:
 - markdownlint covers `rules/**/*.md` — 11 files, `rules/refs/` included — and excludes root-level `*.md`, `skills/**`, the ChatGPT text files, `rules/README.md`, and `rules/refs/kilo/**`.
   - **MD060 enabled**, **MD013 disabled**.
 - Python: Ruff default selection (E4, E7, E9, F), configured by `ruff.toml`, which pins `required-version = "0.16.6"`.
-- Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100. The covered files are `docs/`, every `README.md`, and `CHANGELOG.md`. The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files. Prose that predates this rule keeps its wording until someone edits it. Rules, skills and agent-facing files such as this one stay outside the linter's scope. A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
+- Simplified Technical English: write and edit the documentation prose of this repository in ASD-STE100.
+  - The covered files are `docs/`, every `README.md`, and `CHANGELOG.md`.
+  - The vendored linter at `.agents/skills/asd-ste100/scripts/ste-lint.py` reports violations, and MUST pass on the text you add or change in those files.
+  - Rules, skills and agent-facing files such as this one stay outside the linter's scope.
+  - A copy of a third-party file stays outside it too, because the copy belongs to its upstream: no rewrite of a vendored file, and no path into the gate for one.
 
 - Squash every `README.md` and every file in `docs/` against the [compression procedure](README.md#compression); prose is not exempt.
 
