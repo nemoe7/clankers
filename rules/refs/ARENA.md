@@ -9,7 +9,8 @@
 - Initial reads of this file and the preview skill may precede that reply.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
 - Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
-- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md end-to-end before any other tool call, batching the read set into one call and splitting it only where the harness output cap cuts the text; a partial read, such as head, tail or a grep excerpt, does not count. `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there.
+- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md end-to-end before any other tool call, batching the read set into one call and splitting it only where the harness output cap cuts the text; a partial read, such as head, tail or a grep excerpt, does not count.
+- `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there.
 - At the start of every turn, MUST state in chat whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`; on a turn that owes the 10-4 line, this line follows it.
 - After a rebase onto `main` or a `main` change to a read-set file, MUST reread every changed read-set file end-to-end before the next work step; the read set is ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md, and nothing else; a partial read (head, tail, grep excerpt) does not count.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
@@ -41,7 +42,9 @@
 - The stderr reminder is the only read schedule; the Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence.
 - When a Bash call reports a pending note, answer or upload count above zero on stderr, MUST read the inbox with `arena-preview read` before the next work step; a Bash call with no reminder line at all MAY signal a sandbox reset, and the session MUST run the reset steps before other work.
 - Before the first start there is no inbox to poll, and a missing state file then is no failed read; once the inbox exists, missing or failed reads are errors, NEVER empty inboxes.
-- Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt. One call carries one answer text, so acknowledge notes separately when the answers differ. NEVER blindly acknowledge all pending notes.
+- Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt.
+- One call carries one answer text, so acknowledge notes separately when the answers differ.
+- NEVER blindly acknowledge all pending notes.
 - Refer to a note by its ID, NEVER by its sequence number or list position: the first six characters in prose, task details, reports and notes. Extend the prefix when two notes share it.
 - A receipt means received, not implemented. MUST acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
 - Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
@@ -60,8 +63,19 @@
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
-- Keep working while tasks remain. End the turn when the work is verified and stopped. NEVER name the remaining token budget as the reason for ending a turn. Before ending a turn with a pushed branch, check the open PR’s CI and report its state. A failing check is unfinished work.
-- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline, and push only when they pass; an inline run counts as skipping the gate, whatever its speed. The detached run frees the wait to scope the next task, but NEVER the reading: read the passed or failed line of every gate you run, because a pipe that hides the verdict counts as skipping the gate. After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch`, and scope the next task while it runs. A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand. Stop on HTTP 401 or any other command/API error, and report it. Pending checks are not command errors. An empty or absent check list proves nothing. Failed checks keep work open.
+- Keep working while tasks remain.
+- End the turn when the work is verified and stopped.
+- Before ending a turn with a pushed branch, check the open PR's CI and report its state.
+- A failing check is unfinished work.
+- Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline.
+- Push only when they pass; an inline run counts as skipping the gate, whatever its speed.
+- The detached run frees the wait to scope the next task.
+- Read the passed or failed line of every gate you run; a pipe that hides the verdict counts as skipping the gate.
+- After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch`; scope the next task while it runs.
+- A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
+- Stop on HTTP 401 or any other command/API error, and report it.
+- Pending checks are not command errors.
+- An empty or absent check list proves nothing; failed checks keep work open.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 
 ## Scope
@@ -74,7 +88,10 @@
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.
 - Ask before implementing rather than after, on deviating reasoning or material ambiguity.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
-- MUST ask questions as soon as they arise. Publish a fielded report in the Reports tab and read its answer at the next steering read. A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
+- MUST ask questions as soon as they arise.
+- Publish a fielded report in the Reports tab and read its answer at the next steering read.
+- A rule collision or blocking doubt stops the affected work.
+- Continue independent tasks while the owner answers.
 - Carry every proposal and question in a fielded report, never in chat.
 - Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
 - Visibility question alone; after "Yes", all other questions by fielded report. The first successful start not yet confirmed in this session still needs a visibility question; a later restart in the same session does not.
@@ -174,7 +191,8 @@
 - Reuse previous scopes, adding one only when none fits.
 - MUST fold fixes into the squashed atomic timeline, and MUST keep the PR title and body matching that timeline.
 - Report and audit artifacts, preview state, inboxes and receipts live in Git-ignored workspace directories outside transient caches; NEVER commit or push them.
-- NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session. It does not persist. ALWAYS strip a session-local citation on sight.
+- NEVER cite a session-local artifact in a repository file: a preview note ID, a report or submission ID, a task ID, or any other identifier minted for one session.
+- A session-local citation does not persist; ALWAYS strip one on sight.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
 - Publish longer reports through the `arena-skill` skill in the shared preview; NEVER create local report commits for the native diff viewer.
 - Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
@@ -200,8 +218,13 @@
 - For Chromium work, install `@sparticuz/chromium` from npm and use its extracted binary and required runtime files instead of a Playwright-managed browser.
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Treat a run that takes 10 seconds or more as a long run.
-- Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs. The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test`, and the rest of the REFERENCE.md case table) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr. The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
-- NEVER call `get_process_output` to wait for a run, and NEVER run `arena-preview poll` mid-task as a run wait: keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then. Scope the next task meanwhile. Read the verdict line before any push.
+- Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs.
+- The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test`, and the rest of the REFERENCE.md case table`) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr.
+- The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
+- NEVER call `get_process_output` to wait for a run, and NEVER run `arena-preview poll` mid-task as a run wait.
+- Keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then.
+- Scope the next task meanwhile.
+- Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both and drop large/temp artifacts.
 - Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist.
 - Keep durable work in plain files.

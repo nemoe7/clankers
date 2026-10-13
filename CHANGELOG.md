@@ -48,6 +48,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena constitution drops two mechanical rules. The Git section keeps the commit-list rule, and the post-edit grep rule moves to Verification.
 - Two Arena rules now use preferences: several passes with a re-check, and the shortest atomic history.
 - The house AGENTS.md splits the CHANGELOG bullet into four rules. It restores the reports list marker and drops the history and measurement background that `maintenance/README.md` already carries.
+- The Arena rule lines split to one rule each. The read set, the work and turn-end rules, the push checks, the run freeze and the deliverables carry single lines.
+- The Arena work rule drops the token-budget line, and the ack, question and session-ID rules split apart.
+- The house AGENTS.md splits the proposal bullet and the STE bullet into rule lists. The grandfather clause leaves the STE rule.
+- `rules/refs/AGENTS.md` drops the unavoidable-assumption line, so the ask rule stands alone.
 
 #### maintenance
 
@@ -63,6 +67,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill now states the waiting mode for a queued file task with non-overlapping paths. It works in the worktree while the gate runs, never read-only.
 - The Arena skill moves the gate and worktree rules out of Setup into their own section. The worktree trigger now names the declared path globs.
 - The preview reference lists `logs`, `worktree`, `download-request` and `stale-reports`, and requires the bare `arena-preview` call form for every command. A test compares its commands table with the CLI parser.
+- The arena skill carries the inbox, ack, task, external-channel, read-cadence and publish-reports paragraphs as lists.
 
 #### userscripts
 

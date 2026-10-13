@@ -50,9 +50,28 @@ arena-preview read
 arena-preview poll
 ```
 
-When a Bash call's stderr names a pending count, `read` now. It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox. `read` marks only fully delivered IDs Seen, not acknowledged, and stamps the parent report read by the agent. Do not mark count-only, truncated, or failed deliveries Seen. A pending item repeats until acknowledged. The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call. When ending a turn or a report form awaits answers, run `poll`. When a listing carries a `skip_poll` stamp, the owner pressed Skip poll in the page: the poll consumes it and the turn ends there, with no note for it and no second poll. A note that starts `RE: <id>` also shows its stored parent notes before the reply. A parent that is still pending shows once.
+- When a Bash call's stderr names a pending count, `read` now.
+- It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox.
+- `read` marks only fully delivered IDs Seen, not acknowledged, and stamps the parent report read by the agent.
+- Do not mark count-only, truncated, or failed deliveries Seen.
+- A pending item repeats until acknowledged.
+- The hook checks counts after Arena bash calls; end the turn's last tool block with a bash call.
+- When ending a turn or a report form awaits answers, run `poll`.
+- When a listing carries a `skip_poll` stamp, the owner pressed Skip poll in the page: the poll consumes it and the turn ends there, with no note for it and no second poll.
+- A note that starts `RE: <id>` also shows its stored parent notes before the reply.
+- A parent that is still pending shows once.
 
-Acknowledge each delivered ID with its own answer where the owner reads it. Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line. A text that carries a backtick rides `--reply-file` or `--note-file`: the shell runs a backtick inside double quotes as a command, so the ticks never reach the tool. Single-quote the text when it stays inline. The gate warns when an inline ack text carries that backtick. Never blindly acknowledge all items or give different notes one shared answer. Use the full ID, not a sequence number. A second ack adds a reply without replacing the earlier answer. Receipt is not completion. Failure to ack immediately earns a negative rating. After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
+- Acknowledge each delivered ID with its own answer where the owner reads it.
+- Use `--reply <Markdown>` for a rendered answer, or `--note <text>` for one plain line.
+- A text that carries a backtick rides `--reply-file` or `--note-file`: the shell runs a backtick inside double quotes as a command, so the ticks never reach the tool.
+- Single-quote the text when it stays inline.
+- The gate warns when an inline ack text carries that backtick.
+- Never blindly acknowledge all items or give different notes one shared answer.
+- Use the full ID, not a sequence number.
+- A second ack adds a reply without replacing the earlier answer.
+- Receipt is not completion.
+- Failure to ack immediately earns a negative rating.
+- After each `ack` of a note that asks for work, record it with `task <id> ... --msg-id <full-id>`; `ack` prints this reminder.
 
 ```bash
 arena-preview ack <id> --reply 'a reply with `backticks`'
@@ -64,7 +83,12 @@ ALWAYS report every workaround or bypass found during Arena skill work through a
 
 ALWAYS report every dead end found during Arena skill work to the owner as an upstream bug to fix.
 
-Run `task-list` at turn start. Before implementation, record approved work with `task <kebab-title-id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it. For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block. The task marker does not replace `ack`. Mark a task `--status finished` only after verification. For a task that waits on a report, add `--report <report-id>`; the owner's answer clears its blocked mark, and until then the task sorts first in its group.
+- Run `task-list` at turn start.
+- Before implementation, record approved work with `task <kebab-title-id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it.
+- For a task from a note or report answer, use `--msg-id <full-message-id>`; queue and acknowledge it in the same tool block.
+- The task marker does not replace `ack`.
+- Mark a task `--status finished` only after verification.
+- For a task that waits on a report, add `--report <report-id>`; the owner's answer clears its blocked mark, and until then the task sorts first in its group.
 
 When a task creates a commit, MUST add the landed commit's subject and short hash to its task details.
 

@@ -6,7 +6,8 @@
 - Initial file/skill reads may precede the first reply.
 - Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
 - Before the first skill use in a session, read its SKILL.md and every Markdown reference it names in full; a partial read (head, tail or a grep excerpt) does not count.
-- Read ARENA.md, every AGENTS.md, and the `arena-skill` SKILL.md in full at the start of every turn, and after a compaction or summary, before any non-read tool call, batching the reads into one call and splitting them only where the harness output cap cuts the text; a partial read (head, tail or a grep excerpt) does not count. `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md.
+- Read ARENA.md, every AGENTS.md, and the `arena-skill` SKILL.md in full at the start of every turn, and after a compaction or summary, before any non-read tool call, batching the reads into one call and splitting them only where the harness output cap cuts the text; a partial read (head, tail or a grep excerpt) does not count.
+- `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md.
 - Each turn start: MUST state in chat whether reasoning is on, as `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line.
 - Any context summary MUST preserve ARENA.md verbatim; if it omits or changes it, the read above comes first.
 - After a rebase onto `main`, or a new `main` change to a read-set file, re-read every changed read-set file in full before the next work step. The read set is ARENA.md, every AGENTS.md, and the arena-skill `SKILL.md`.
@@ -55,7 +56,15 @@
 - Step straight on after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 - ALWAYS take the smallest open task; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
-- Work while tasks remain. End when verified and stopped; NEVER name the remaining token budget. Run the repo's checks before every push, and after each push watch the PR's checks to conclusion with `gh pr checks <PR> --watch`; both run detached, NEVER inline, and the wait scopes the next task; an inline run counts as skipping the gate. Push only green; read each gate's passed or failed line, because a pipe that hides the verdict counts as skipping it. A fresh push can leave the checks list empty for up to 30 seconds, so wait once, briefly, then watch, and NEVER poll by hand; an empty or absent list proves nothing. Stop and report HTTP 401 or any other command/API error; pending checks are not command errors. Before turn end with a pushed branch, check and report open PR CI; failed checks keep work open.
+- Work while tasks remain.
+- End when verified and stopped.
+- Run the repo's checks before every push, detached, NEVER inline; push only green, and an inline run counts as skipping the gate.
+- Read each gate's passed or failed line; a pipe that hides the verdict counts as skipping it. The wait scopes the next task.
+- After each push, watch the PR's checks to conclusion with `gh pr checks <PR> --watch`.
+- A fresh push can leave the checks list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
+- Stop and report HTTP 401 or any other command/API error; pending checks are not command errors.
+- An empty or absent list proves nothing; failed checks keep work open.
+- Before turn end with a pushed branch, check and report open PR CI.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 
 ## Scope
@@ -138,14 +147,22 @@
 
 - For Chromium work, install `@sparticuz/chromium` from npm; use its extracted binary and runtime files, not a Playwright-managed browser.
 - Install dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
-- Start a background test or PR-check run, on a stable tree, and NEVER edit the files it covers while it runs. A bash line that runs `gh pr checks`, `gh run watch` or a test runner detaches instead: the gate starts it in the background, and the verdict arrives as `run <name> done: exit N` on a later call. The freeze covers the root tree only: a queued task that edits other files starts a worktree while the root gate runs (`arena-preview worktree start`), never read-only tracing.
-- A >=10-second run is long; MUST use `arena-preview route <name> -- <command>`, and NEVER call `get_process_output` to wait for it, nor run `arena-preview poll` mid-task as a run wait; keep the work moving, and the next bash or `arena-preview` call prints the verdict once as `run <name> done: exit N`, with one status line per call until then. Scope the next task meanwhile. Read the verdict line before any push.
+- Start a background test or PR-check run on a stable tree, and NEVER edit the files it covers while it runs.
+- A bash line that runs `gh pr checks`, `gh run watch` or a test runner detaches instead: the gate starts it in the background, and the verdict arrives as `run <name> done: exit N` on a later call.
+- The freeze covers the root tree only: a queued task that edits other files starts a worktree while the root gate runs (`arena-preview worktree start`), never read-only tracing.
+- A >=10-second run is long; MUST use `arena-preview route <name> -- <command>`.
+- NEVER call `get_process_output` to wait for a run, nor run `arena-preview poll` mid-task as a run wait.
+- Keep the work moving; the next bash or `arena-preview` call prints the verdict once as `run <name> done: exit N`, with one status line per call until then.
+- Read the verdict line before any push.
 - Snapshot limits are best-effort (~128 MB/10,000 files): stay well below both, dropping large or temp artifacts.
 - Cache/build/dependency dirs (`node_modules`, `.cache`, `.venv`, `dist`, `build`, `out`, `target`, `__pycache__`, etc.), installed packages, and processes do not persist, so keep durable work in plain files.
 
 ## Deliverables
 
-- Save/open the main deliverable. Other formats remain request-only. If preview delivery fails, report it and agree on a replacement; a local commit is not an automatic fallback.
+- Save/open the main deliverable.
+- Other formats remain request-only.
+- If preview delivery fails, report it and agree on a replacement.
+- A local commit is not an automatic fallback.
 - Previews have no network: inline CSS, embedded SVG/data URIs, no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Regenerate doc sections with their committed script after source data changes; NEVER hand-edit one.
