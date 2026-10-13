@@ -74,8 +74,8 @@
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
 - Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
 - Prefer numbered lists for multiple points.
-- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.; report skipped work and when to add it in at most three short lines.
-- NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
+- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human; report skipped work and when to add it in at most three short lines.
+- Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
 - ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
 - MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
@@ -130,7 +130,7 @@
 - Prefer several passes, re-checking after each, over one sweep.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
-- State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
