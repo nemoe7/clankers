@@ -118,7 +118,7 @@
 
 ## Style
 
-- `nemoe7` repos: 2-space indent overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off; Python is Ruff defaults, from the project's `ruff.toml` or one created exactly with `indent-width = 2`, `[lint] ignore = ["BLE001", "S110"]`, `[lint] extend-select = ["E501"]`, `extend-safe-fixes = ["C408", "PERF102", "RUF059"]`, `[lint.pycodestyle] max-line-length = 120`, `required-version = "0.16.6"`; gates: `ruff check`, `ruff format`, no CLI overrides.
+- `nemoe7` repos: 2-space indent overrides formatter defaults; Markdown is markdownlint defaults + MD060, MD013 off; Python is Ruff defaults, from the project's `ruff.toml` or one created exactly as the AGENTS.md conventions direct; gates: `ruff check`, `ruff format`, no CLI overrides.
 - Add code/config comments ONLY when method complexity needs them.
 
 ## Git
