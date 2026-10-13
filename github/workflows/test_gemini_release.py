@@ -453,6 +453,20 @@ def test_release_pipeline():
   ):
     release.summary("retry detail")
   print_output.assert_called_once_with("retry detail", flush=True)
+  with tempfile.TemporaryDirectory() as directory:
+    step_summary = Path(directory) / "summary.md"
+    with (
+      patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(step_summary)}),
+      patch("builtins.print") as printed,
+    ):
+      release.summary("operational progress")
+      assert not step_summary.exists()
+      release.draft_summary("proposal result")
+    assert step_summary.read_text(encoding="utf-8") == "proposal result\n"
+    assert [call.args for call in printed.call_args_list] == [
+      ("operational progress",),
+      ("proposal result",),
+    ]
 
   with (
     patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSecret1"}),

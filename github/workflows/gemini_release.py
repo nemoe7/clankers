@@ -1013,11 +1013,17 @@ def validated_body(body, context, model, generate_fn=generate):
 
 
 def summary(message):
+  """Write operational progress to the workflow log, never the release draft summary."""
+  print(message, flush=True)
+
+
+def draft_summary(message):
+  """Publish a deliberate proposal or approval result to the release draft summary."""
   path = os.getenv("GITHUB_STEP_SUMMARY")
   if path:
     with open(path, "a", encoding="utf-8") as output:
       output.write(message + "\n")
-  print(message, flush=True)
+  summary(message)
 
 
 def propose(repo, branch):
@@ -1116,7 +1122,7 @@ def propose(repo, branch):
   if os.getenv("GITHUB_OUTPUT"):
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
       stream.write("generated=true\n")
-  summary(
+  draft_summary(
     f"Proposal run: `{os.getenv('GITHUB_RUN_ID', 'local')}`\n\n"
     f"Proposed tag: `{tag}`\n\nTarget SHA: `{target}`\n\n"
     f"Baseline: `{previous or '(all history)'}`\n\nImpact: `{impact}`\n\n"
@@ -1303,8 +1309,8 @@ def approve(repo, branch):
         raise
   if remote_tag_sha(repo, tag) != target:
     raise RuntimeError("Existing tag conflicts with the approved target")
-  summary(f"Approved proposal run `{run_id}`. Tag `{tag}` points to `{target}`.")
-  summary(save_draft(repo, tag, proposal["body"], target))
+  draft_summary(f"Approved proposal run `{run_id}`. Tag `{tag}` points to `{target}`.")
+  draft_summary(save_draft(repo, tag, proposal["body"], target))
 
 
 def main():
