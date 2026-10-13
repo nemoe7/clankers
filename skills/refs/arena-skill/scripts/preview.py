@@ -130,11 +130,13 @@ def fill_reminder(tail, remaining):
   return tail.replace("{remaining} tasks", count)
 
 
-def reminder_tail(cursor, remaining):
+def reminder_tail(cursor, remaining, stale=0):
   """Return the rotating tail at the cursor. A hidden entry yields the next one."""
   for step in range(len(REMINDERS)):
     tail = fill_reminder(REMINDERS[(cursor + step) % len(REMINDERS)], remaining)
     if tail:
+      if tail == "Unpublish stale reports." and stale:
+        return f"Unpublish {stale} stale report{'s' if stale != 1 else ''}."
       return tail
   return REMINDERS[cursor % len(REMINDERS)]
 
@@ -4213,11 +4215,7 @@ class Store:
     # "8. 1 note" for eight notes.
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
     head = ["blocked"] if blocked else [f"calls {polls}"] if polls and counts else []
-    tail = (
-      f"Unpublish {len(stale)} stale report{'s' if len(stale) != 1 else ''}."
-      if stale
-      else reminder_tail(cursor, remaining)
-    )
+    tail = reminder_tail(cursor, remaining, len(stale))
     parts = [" ".join([*head, *unacked]).strip(), tail]
     return " | ".join(parts).strip(" |")
 

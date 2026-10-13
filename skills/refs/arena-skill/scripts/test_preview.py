@@ -369,16 +369,23 @@ def test_stale_report_reminder():
     plain = root / "plain.md"
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
     store.publish("plain", "Plain", plain)
-    line = store.reminder()
-    assert line.endswith("Unpublish 1 stale report."), line
-    assert "plain" not in line, "the reminder must not repeat a report ID"
-    assert "form0" not in line, "a fresh form awaiting an answer is not stale"
+    stale_at = preview.REMINDERS.index("Unpublish stale reports.")
+    cycle = [store.reminder() for _ in range(len(preview.REMINDERS))]
+    assert cycle[stale_at] == "Unpublish 1 stale report."
+    assert cycle[0] == preview.REMINDERS[0]
+    assert cycle[stale_at + 1] == preview.REMINDERS[stale_at + 1]
+    assert "plain" not in cycle[stale_at], "the reminder must not repeat a report ID"
+    assert "form0" not in cycle[stale_at], (
+      "a fresh form awaiting an answer is not stale"
+    )
     with store.connect() as db, db:
       db.execute(
         "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain")
       )
     store.unpublish("plain")
-    assert "stale report" not in store.reminder()
+    cycle = [store.reminder() for _ in range(len(preview.REMINDERS))]
+    assert "Unpublish 1 stale report." not in cycle
+    assert "Unpublish stale reports." in cycle
 
 
 def test_stale_reports_command_lists_ids_and_reasons():
