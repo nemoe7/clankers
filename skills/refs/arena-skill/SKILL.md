@@ -31,7 +31,8 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
    After a sandbox restart, rerun the installer. Reuse the same state directory. If the server dies, warn the owner before restarting. If another service owns the port, choose a free one without stopping it. The gate warns when a serve names another port.
 
-- When a root gate runs, ALWAYS use `arena-preview worktree start` before unrelated task work.
+- When multiple queued tasks each edit files, ALWAYS start the root gate after task scope.
+- While that gate runs, ALWAYS use `arena-preview worktree start` before unrelated file-editing work; a lone file-editing task needs no worktree.
 - Declare nonoverlapping paths before you start the worktree.
 - NEVER start a gate, commit or push in the detached worktree.
 - Collect the worktree diff only after the root gate passes.
