@@ -18,6 +18,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### preview
+
+- Finished tasks record their first completion time. The preview shows the newest first, clears the time on reopen, and saves it with task state.
+
 #### workflows
 
 - The Gemini release packer uses exact-token binary search for ordered chunks. It splits only an oversized evidence item. The log shows the final plan and its probe total instead of each probe.

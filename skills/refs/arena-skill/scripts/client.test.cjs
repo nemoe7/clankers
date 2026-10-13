@@ -684,12 +684,15 @@ test('preview client', async (t) => {
     assert.equal(get('#tasks-upcoming').hidden, false);
   });
 
-  await t.test("Finished tasks display newest first without changing saved order", async () => {
+  await t.test("Finished tasks keep the backend completion order", async () => {
     const original = state.tasks.finished.slice();
-    state.tasks.finished.push({ id: 'latest', title: 'Latest finished', details: [], status: 'finished', order: 2 });
+    state.tasks.finished = [
+      { id: 'latest', title: 'Latest finished', details: [], status: 'finished', order: 2 },
+      ...original
+    ];
     await refresh();
     assert.deepEqual(get('#tasks-finished-body').children.map(row => row.title), ['latest', 'shipped']);
-    assert.deepEqual(state.tasks.finished.map(task => task.id), ['shipped', 'latest']);
+    assert.deepEqual(state.tasks.finished.map(task => task.id), ['latest', 'shipped']);
     state.tasks.finished = original;
     await refresh();
   });

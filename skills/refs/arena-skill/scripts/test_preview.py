@@ -3062,6 +3062,115 @@ def test_task_list():
     )
 
 
+def test_task_completion_time_tracks_transitions_and_finished_order():
+  with tempfile.TemporaryDirectory() as task_dir:
+    store = preview.Store(task_dir, create=True)
+    for task_id in ("alpha", "bravo", "charlie"):
+      store.write_task(task_id, task_id.title(), ["Step one"])
+    with patch.object(preview, "now", return_value="2026-10-13T01:00:00+00:00"):
+      first_finish = store.write_task("alpha", status="finished")
+    assert first_finish["completed_at"] == "2026-10-13T01:00:00+00:00"
+    with patch.object(preview, "now", return_value="2026-10-13T02:00:00+00:00"):
+      store.write_task("bravo", status="finished")
+      store.write_task("charlie", status="finished")
+    with patch.object(preview, "now", return_value="2026-10-13T03:00:00+00:00"):
+      edited = store.write_task("alpha", details=["Edited after finish"])
+    assert edited["completed_at"] == "2026-10-13T01:00:00+00:00"
+    store.amend_task("alpha", "alpha-renamed")
+    assert (
+      store.task_record("alpha-renamed")["completed_at"] == "2026-10-13T01:00:00+00:00"
+    )
+    assert [item["id"] for item in store.tasks()["finished"]] == [
+      "charlie",
+      "bravo",
+      "alpha-renamed",
+    ]
+    with patch.object(preview, "now", return_value="2026-10-13T04:00:00+00:00"):
+      reopened = store.write_task("alpha-renamed", status="upcoming")
+    assert reopened["completed_at"] is None
+    with patch.object(preview, "now", return_value="2026-10-13T05:00:00+00:00"):
+      finished_again = store.write_task("alpha-renamed", status="finished")
+    assert finished_again["completed_at"] == "2026-10-13T05:00:00+00:00"
+    assert [item["id"] for item in store.tasks()["finished"]] == [
+      "alpha-renamed",
+      "charlie",
+      "bravo",
+    ]
+
+
+def test_task_completion_time_migrates_and_survives_state_import():
+  with tempfile.TemporaryDirectory() as legacy_dir:
+    legacy = Path(legacy_dir)
+    with sqlite3.connect(legacy / "state.sqlite3") as db:
+      db.execute(
+        """CREATE TABLE tasks (
+          id TEXT PRIMARY KEY, title TEXT NOT NULL, details TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL, position INTEGER NOT NULL, created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL, blocked INTEGER NOT NULL DEFAULT 0, report_id TEXT
+        )"""
+      )
+      db.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+          "old-finished",
+          "Old finished",
+          '["Step one"]',
+          "finished",
+          1,
+          "2026-10-01T00:00:00+00:00",
+          "2026-10-02T00:00:00+00:00",
+          0,
+          None,
+        ),
+      )
+      db.execute(
+        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+          "old-upcoming",
+          "Old upcoming",
+          '["Step one"]',
+          "upcoming",
+          1,
+          "2026-10-01T00:00:00+00:00",
+          "2026-10-03T00:00:00+00:00",
+          0,
+          None,
+        ),
+      )
+    migrated = preview.Store(legacy)
+    rows = {item["id"]: item for item in migrated.list_tasks()}
+    assert rows["old-finished"]["completed_at"] == "2026-10-02T00:00:00+00:00"
+    assert rows["old-upcoming"]["completed_at"] is None
+    migrated.autosave()
+    saved = [
+      json.loads(line)
+      for line in migrated.save_path.read_text(encoding="utf-8").splitlines()
+    ]
+    saved_finished = next(item for item in saved if item["id"] == "old-finished")
+    assert saved_finished["completed_at"] == "2026-10-02T00:00:00+00:00"
+    restored = preview.Store(legacy / "restored", create=True)
+    restored.import_state(migrated.save_path.read_text(encoding="utf-8"))
+    assert (
+      restored.task_record("old-finished")["completed_at"]
+      == "2026-10-02T00:00:00+00:00"
+    )
+    imported = preview.Store(legacy / "imported", create=True)
+    with patch.object(preview, "now", return_value="2026-10-13T06:00:00+00:00"):
+      imported.import_tasks(
+        [
+          {
+            "id": "old-import",
+            "title": "Old import",
+            "details": ["Step one"],
+            "status": "finished",
+          }
+        ]
+      )
+    assert (
+      imported.task_record("old-import")["completed_at"] == "2026-10-13T06:00:00+00:00"
+    )
+
+
 def test_shared_ids_refused():
   # One backticked ID links to one panel, so a task and a report never share an ID.
   with tempfile.TemporaryDirectory() as shared_dir:

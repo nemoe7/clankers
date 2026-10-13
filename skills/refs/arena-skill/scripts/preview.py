@@ -839,7 +839,13 @@ MAX_TASK_DETAILS = 40
 # A task detail is one step: a longer line is a wall of text, and the tool refuses it.
 TASK_STEP_MAX = 120
 ECHO_DETAIL = 200
-TASK_COLUMNS = "id, title, details, status, position, updated_at, blocked, report_id"
+TASK_COLUMNS = (
+  "id, title, details, status, position, updated_at, completed_at, blocked, report_id"
+)
+TASK_ORDER = (
+  "status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC,"
+  " CASE WHEN status = 'finished' THEN id END DESC, (report_id IS NULL), position, id"
+)
 # Each kind has its own table and ID columns. No foreign keys or cascades change these rows.
 # A rename repoints them by hand.
 RENAME_TARGETS = {
@@ -867,7 +873,15 @@ NOTE_LINE_KEYS = (
   "seen_at",
   "task_id",
 )
-TASK_LINE_KEYS = ("id", "title", "details", "status", "order", "report_id")
+TASK_LINE_KEYS = (
+  "id",
+  "title",
+  "details",
+  "status",
+  "completed_at",
+  "order",
+  "report_id",
+)
 SUBMISSION_LINE_KEYS = (
   "id",
   "report_id",
@@ -898,10 +912,11 @@ def task_row(row):
     "status": row[3],
     "order": row[4],
     "updated_at": row[5],
-    "blocked": bool(row[6]) if len(row) > 6 else False,
+    "completed_at": row[6] if len(row) > 6 else None,
+    "blocked": bool(row[7]) if len(row) > 7 else False,
   }
-  if len(row) > 7 and row[7]:
-    shaped["report_id"] = row[7]
+  if len(row) > 8 and row[8]:
+    shaped["report_id"] = row[8]
   return shaped
 
 
@@ -2649,6 +2664,7 @@ class Store:
           position INTEGER NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
+          completed_at TEXT,
           blocked INTEGER NOT NULL DEFAULT 0
         );
       """)
@@ -2686,6 +2702,12 @@ class Store:
         db.execute("ALTER TABLE tasks ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
       if "report_id" not in columns:
         db.execute("ALTER TABLE tasks ADD COLUMN report_id TEXT")
+      if "completed_at" not in columns:
+        db.execute("ALTER TABLE tasks ADD COLUMN completed_at TEXT")
+      db.execute(
+        "UPDATE tasks SET completed_at = updated_at"
+        " WHERE status = 'finished' AND completed_at IS NULL"
+      )
       columns = {row["name"] for row in db.execute("PRAGMA table_info(submissions)")}
       if "ack_edited_at" not in columns:
         db.execute("ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT")
@@ -3060,7 +3082,7 @@ class Store:
     "Return ordered task records for both page divs. Return None when no task exists."
     with closing(self.connect()) as db:
       rows = db.execute(
-        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id"
+        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
     records = [task_row(row) for row in rows]
     if not records:
@@ -3075,7 +3097,7 @@ class Store:
     """Every task as stored, for an agent to read the list back."""
     with closing(self.connect()) as db:
       rows = db.execute(
-        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY status DESC, (report_id IS NULL), position, id"
+        f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
     return [task_row(row) for row in rows]
 
@@ -3128,6 +3150,7 @@ class Store:
     order=None,
     blocked=None,
     report_id=None,
+    completed_at=None,
     shared=None,
   ):
     """Insert or update a task and return it. Keep omitted title and detail values. Use a supplied transaction so
@@ -3153,6 +3176,13 @@ class Store:
         # A task with no detail is a title alone, and the queue works from its steps.
         raise ValueError("A task needs at least one detail")
       status = status or (stored["status"] if stored else "upcoming")
+      if status == "finished":
+        if stored and stored["status"] == "finished":
+          completed_at = stored["completed_at"]
+        elif completed_at is None:
+          completed_at = stamp
+      else:
+        completed_at = None
       if blocked is None:
         blocked = stored["blocked"] if stored else False
       if report_id is None:
@@ -3181,6 +3211,7 @@ class Store:
         "status": status,
         "order": len(siblings) + 1,
         "updated_at": stamp,
+        "completed_at": completed_at,
         "blocked": bool(blocked),
         "report_id": report_id,
       }
@@ -3193,11 +3224,13 @@ class Store:
       siblings.insert(index, record)
       record["order"] = index + 1
       db.execute(
-        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO tasks (id, title, details, status, position, created_at, updated_at,"
+        " completed_at, blocked, report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(id) DO UPDATE SET title = excluded.title,"
         " details = excluded.details, status = excluded.status,"
         " position = excluded.position, updated_at = excluded.updated_at,"
-        " blocked = excluded.blocked, report_id = excluded.report_id",
+        " completed_at = excluded.completed_at, blocked = excluded.blocked,"
+        " report_id = excluded.report_id",
         (
           task_id,
           title,
@@ -3206,6 +3239,7 @@ class Store:
           index + 1,
           stamp,
           stamp,
+          completed_at,
           1 if blocked else 0,
           report_id,
         ),
@@ -3304,7 +3338,7 @@ class Store:
     stamp = now()
     with self.transaction() as db:
       row = db.execute(
-        "SELECT id, title, details, status, position, created_at, blocked, report_id"
+        "SELECT id, title, details, status, position, created_at, completed_at, blocked, report_id"
         " FROM tasks WHERE id = ?",
         (prev_id,),
       ).fetchone()
@@ -3315,8 +3349,20 @@ class Store:
       self.refuse_shared_id(db, "tasks", "reports", task_id)
       db.execute("DELETE FROM tasks WHERE id = ?", (prev_id,))
       db.execute(
-        "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (task_id, row[1], row[2], row[3], row[4], row[5], stamp, row[6], row[7]),
+        "INSERT INTO tasks (id, title, details, status, position, created_at, updated_at,"
+        " completed_at, blocked, report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+          task_id,
+          row[1],
+          row[2],
+          row[3],
+          row[4],
+          row[5],
+          stamp,
+          row[6],
+          row[7],
+          row[8],
+        ),
       )
       self.renumber(db)
 
@@ -3949,11 +3995,16 @@ class Store:
         raise TypeError("Import a list of task objects")
       details = [str(item) for item in record.get("details") or [] if str(item).strip()]
       status = record.get("status")
+      completed_at = record.get("completed_at")
       # The checks write_task applies, run over every record up front: an import that can
       # only fail on its fortieth record should fail before it touches the first.
       check_task(record.get("id"), record.get("title"), details)
       if status is not None and status not in TASK_STATUSES:
         raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
+      if completed_at is not None:
+        if not isinstance(completed_at, str):
+          raise ValueError("A saved completion stamp is text")
+        when(completed_at)
       prepared.append(
         (
           record.get("id"),
@@ -3963,13 +4014,14 @@ class Store:
           record.get("order") or index,
           record.get("blocked"),
           record.get("report_id"),
+          completed_at,
         )
       )
     with self.transaction(shared, autosave=autosave) as db:
       if replace:
         # Replacement records cannot inherit a title. Reject before deletion to name the offending record.
         # A later error rolls back before an empty transaction appears saved.
-        for task_id, title, _, _, _, _, _ in prepared:
+        for task_id, title, *_ in prepared:
           stored = db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
           if title is None and not stored:
             raise ValueError(f"A new task needs a title: {task_id}")
