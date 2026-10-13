@@ -90,7 +90,7 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
 | `main-moved` | `git commit` or `git push` while the branch trails `origin/main` | the rebase notice once per shell, then the line runs |
 | `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |
-| `long-run` | `gh pr checks`, `gh run watch`, or a test runner head (`pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test` and the rest) | the call ends clean and the run continues, or `exit 130` when the start fails |
+| `long-run` | `gh pr checks`, `gh run watch`, or a test runner head (`pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test` and the rest) | the call ends clean and the run continues, or `exit 130` when the start fails. Any run of 10 seconds or more is a long run too, and MUST use `route` |
 | `bare-path` | a line that spells out the installed `preview.py` or `arena-preview` | the bare-call notice once per shell, then the line runs |
 | `proxy-route` | a read of code-scanning alerts or workflow run logs | the proxy notice once per shell, then the line runs |
 | `ack-ticks` | an `ack` whose inline text holds a backtick inside double quotes | the warning lands before the call runs |
@@ -125,7 +125,7 @@ A task linked with `--report` stays blocked until the owner answers that report.
 ## Publish reports
 
 - A report source is UTF-8 `.md`, at most 2,000,000 bytes.
-- IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters.
+- Report IDs have 1–80 letters, digits, hyphens or underscores; titles have 1–200 characters.
 - Source edits do not update a published report: call `publish` again.
 - A report that has answers refuses republishing under the same ID; publish its update under a new ID.
 - Delete a report the owner no longer needs with `unpublish <id>`; its sent answers and its `.md` source under the state directory stay.
@@ -140,7 +140,7 @@ A task linked with `--report` stays blocked until the owner answers that report.
 
 | Markdown marker | Control |
 | --- | --- |
-| `- ( ) option` (`- (x)` to preselect) | One radio choice |
+| `- ( ) option` (`- (x)` to preselect) | One radio choice; the preselect is the marked recommended answer |
 | `- [ ] option` (`- [x]` to preselect) | Checkbox choices |
 | `- ( ) Label: ___` or `- [ ] Label: ___` inside a group | A labeled free-text choice |
 | `Label: ___` or bare `___` | A text answer |

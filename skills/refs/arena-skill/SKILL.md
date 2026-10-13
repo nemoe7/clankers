@@ -36,8 +36,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 ## Gate and worktrees
 
 - When several queued tasks each edit files, ALWAYS declare each task's path glob, then start the root gate before any of that file work.
-- While that gate runs, ALWAYS use `arena-preview worktree start` before unrelated file-editing work; a lone file-editing task needs no worktree.
-- A queued file task with non-overlapping paths works in that worktree while the gate runs; do not wait read-only.
+- While that gate runs, ALWAYS use `arena-preview worktree start` before unrelated file-editing work; a queued file task with non-overlapping paths works in that worktree and never waits read-only.
 - Declare nonoverlapping paths before you start the worktree.
 - NEVER start a gate, commit or push in the detached worktree.
 - Collect the worktree diff only after the root gate passes.
@@ -94,7 +93,7 @@ When a task creates a commit, MUST add the landed commit's subject and short has
 
 ## Publish reports and forms
 
-Short answers stay in chat. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result.
+Report carriage always goes through this skill: a short answer goes in the `ack` reply; a long answer or a question goes in a fielded report. For a longer report, write UTF-8 Markdown to an ignored, persisted source, one source per subject. Report actual findings, changes, checks, limits and decisions. Publish in Reports; verify its `/api/state` entry and rendered `/api/reports/<id>/html` result.
 
 ```bash
 arena-preview publish <source.md> --id <id> --title <title>

@@ -56,6 +56,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena Use section states its precedence. These rules outrank skills and plugins, and user chat outranks them.
 - The house AGENTS.md names `ruff.toml` for the Python setup instead of the config list. The Arena style line drops the same list and points at the AGENTS.md conventions.
 - The Arena splice, file-tool, next-task and cache lines are gone. The validation rule keeps its entrypoint and generated-config duty, and the durable-work rule stays.
+- The mermaid rule names one home: documentation ALWAYS, nowhere else. The poll law carries the skip-poll case.
 - Twenty Arena rule lines leave. Ten duplicates go to the home that already carries them, and ten fold into a merged line that keeps both parents' duties. The Response section joins General.
 
 #### maintenance
@@ -73,6 +74,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill moves the gate and worktree rules out of Setup into their own section. The worktree trigger now names the declared path globs.
 - The preview reference lists `logs`, `worktree`, `download-request` and `stale-reports`, and requires the bare `arena-preview` call form for every command. A test compares its commands table with the CLI parser.
 - The arena skill carries the inbox, ack, task, external-channel, read-cadence and publish-reports paragraphs as lists.
+- The Arena skill carries answers and questions through itself. A short answer goes in the `ack` reply, and a long answer or a question goes in a fielded report.
+- The Arena worktree line drops the lone-task exception. The reference names the 10-second long-run rule, the report-ID namespace and the preselect as the marked recommendation.
 - The preview view guard applies only to an answered report, and a hidden page clears the view stamp.
 - The preview page stamps a report view only while the browser shows it, and clears the stamp on leaving.
 - The arena skill drops the fixed limit numbers for chunks and reports. An over-limit value fails with the tool's own error.
