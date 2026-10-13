@@ -4106,7 +4106,7 @@ class Store:
       host = None
     return {"key": key, "host": host, "at": clip_stamp(record.get("at"))}
 
-  def stale_report_ids(self, db):
+  def stale_report_rows(self, db):
     """Published reports that are stale: no fields, or fields answered and acked."""
     stale = []
     rows = db.execute(
@@ -4118,7 +4118,7 @@ class Store:
       except ValueError:
         continue
       if fields == 0:
-        stale.append(row["id"])
+        stale.append({"id": row["id"], "reason": "no fields"})
         continue
       pending = db.execute(
         "SELECT count(*) FROM submissions"
@@ -4129,8 +4129,17 @@ class Store:
         "SELECT count(*) FROM submissions WHERE report_id = ?", (row["id"],)
       ).fetchone()[0]
       if answered and not pending:
-        stale.append(row["id"])
+        stale.append({"id": row["id"], "reason": "all submissions acknowledged"})
     return stale
+
+  def stale_report_ids(self, db):
+    """The stale report IDs for the reminder line."""
+    return [record["id"] for record in self.stale_report_rows(db)]
+
+  def stale_reports(self):
+    """List stale published report IDs and reasons without changing state."""
+    with closing(self.connect()) as db:
+      return self.stale_report_rows(db)
 
   def reminder(self, advance=False):
     """Count pending kinds without marking any message seen. Any count asks for an ack.
@@ -5373,6 +5382,10 @@ def main():
     "unpublish", help="Withdraw a published report by its ID"
   )
   unpublish.add_argument("report_id")
+  commands.add_parser(
+    "stale-reports",
+    help="List stale published report IDs and reasons without changing state",
+  )
   task = commands.add_parser(
     "task",
     help=(
@@ -5613,8 +5626,10 @@ def main():
       state_dir,
       create=args.command in {"serve", "init", "import-state"},
     )
-    print(store.reminder(), file=sys.stderr, flush=True)
-    if args.command != "serve":
+    read_only = args.command == "stale-reports"
+    if not read_only:
+      print(store.reminder(), file=sys.stderr, flush=True)
+    if args.command != "serve" and not read_only:
       # Store the agent CLI call as a durable debug-trap signal.
       # A preview left open after a turn then reports no agent activity.
       store.touch_agent()
@@ -5703,6 +5718,11 @@ def main():
       report_id = store.resolve_id(args.report_id)
       store.unpublish(report_id)
       print(f"Unpublished {report_id}. Answers and source file remain.")
+    elif args.command == "stale-reports":
+      reports = store.stale_reports()
+      print(f"Stale reports {len(reports)}")
+      for report in reports:
+        print(f"{report['id']}\t{report['reason']}")
     elif args.command == "task":
       task_id = args.id_arg
       if not task_id:

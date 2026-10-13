@@ -373,6 +373,36 @@ def test_stale_report_reminder():
     assert "stale report" not in store.reminder()
 
 
+def test_stale_reports_command_lists_ids_and_reasons():
+  """The list exposes only stale report IDs and their reason without changing reports."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    store = preview.Store(root, create=True)
+    plain = root / "plain.md"
+    plain.write_text("Information only, with no question to answer.\n", "utf-8")
+    store.publish("plain", "Plain", plain)
+    answered = root / "answered.md"
+    answered.write_text("Pick one: {#answered}\n\n- ( ) a\n- ( ) b\n", "utf-8")
+    store.publish("answered", "Answered", answered)
+    store.submission("answered-reply", "answered", "REPORT answered: a")
+    store.acknowledge(["answered-reply"], "reply", "Received")
+    before = store.state()["reports"]
+    result = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "stale-reports"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root)},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+      "Stale reports 2",
+      "plain\tno fields",
+      "answered\tall submissions acknowledged",
+    ]
+    assert store.state()["reports"] == before
+
+
 def test_pr_failed_check_breaks_poll():
   # The poll starts the branch check in the background and ends the wait on a failure,
   # so the turn fixes the check now.
