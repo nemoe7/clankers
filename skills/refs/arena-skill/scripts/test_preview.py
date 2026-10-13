@@ -38,6 +38,17 @@ def compact(text):
   return re.sub(r"\s*([{};:,><!])\s*", r"\1", text)
 
 
+def live_detached_placeholder(state_dir, name, argv):
+  """Record this test process as a live routed child."""
+  path = preview.write_detached_placeholder(state_dir, name, argv)
+  record = json.loads(path.read_text(encoding="utf-8"))
+  record.update(
+    {"pid": os.getpid(), "pid_started_at": preview.process_start_identity(os.getpid())}
+  )
+  preview.write_run_record(path, record)
+  return path
+
+
 def test_edited_ack_stamp():
   "A second ack appends a reply block. The first answer stays."
   with tempfile.TemporaryDirectory() as edit_dir:
@@ -3749,6 +3760,46 @@ def test_a_failed_background_start_keeps_the_refusal(capsys, monkeypatch):
     assert "arena-preview route pr-checks" in refused, refused
 
 
+def test_a_failed_spawn_records_a_terminal_route_failure(monkeypatch):
+  """A launcher failure becomes a visible failed verdict instead of a live placeholder."""
+
+  def fail_spawn(*args, **kwargs):
+    raise OSError("cannot spawn")
+
+  monkeypatch.setattr(preview.subprocess, "Popen", fail_spawn)
+  with tempfile.TemporaryDirectory() as directory:
+    assert preview.detach_run(directory, "failed", ["true"]) is False
+    record = json.loads(
+      (Path(directory) / "runs" / "failed.json").read_text(encoding="utf-8")
+    )
+    assert record["exit"] == 1
+    assert record["verdict"] == "routed child failed to start; rerun the gate"
+    assert record["finished_at"] and record["announced"] is False
+
+
+def test_an_orphaned_route_becomes_terminal_and_can_restart(capsys, monkeypatch):
+  """A dead child cannot reserve a route name forever."""
+  with tempfile.TemporaryDirectory() as directory:
+    path = preview.write_detached_placeholder(directory, "orphan", ["true"])
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record.update({"pid": 999_999, "pid_started_at": "gone"})
+    path.write_text(json.dumps(record), encoding="utf-8")
+    monkeypatch.setattr(preview, "process_start_identity", lambda pid: None)
+    assert preview.live_runs(directory) == []
+    assert preview.run_notices(directory, show_running=True) == 1
+    notice = capsys.readouterr().out
+    assert "run orphan done: exit 1" in notice
+    record = json.loads(path.read_text(encoding="utf-8"))
+    assert (
+      record["verdict"]
+      == "routed child exited without recording a verdict; rerun the gate"
+    )
+    monkeypatch.setenv(preview.DETACH_DRY_RUN, "1")
+    assert preview.detach_run(directory, "orphan", ["true"])
+    restarted = json.loads(path.read_text(encoding="utf-8"))
+    assert restarted["exit"] is None and restarted["verdict"] is None
+
+
 def test_a_second_line_keeps_the_standing_wait(monkeypatch):
   # One live wait per name: a family that already runs keeps its record, so a repeated
   # line cannot restart the same suite.
@@ -3786,7 +3837,9 @@ def test_route_starts_the_run_detached(tmp_path, monkeypatch):
       break
     time.sleep(0.2)
   assert marker.is_file(), "the detached child never ran"
-  assert json.loads(record.read_text(encoding="utf-8"))["exit"] == 0
+  finished = json.loads(record.read_text(encoding="utf-8"))
+  assert finished["exit"] == 0
+  assert isinstance(finished["pid"], int) and finished["pid_started_at"]
 
 
 def test_worktree_gate_flow():
@@ -3815,7 +3868,7 @@ def test_worktree_gate_flow():
     git("commit", "-m", "base")
     state_dir = Path(directory) / "state"
     preview.Store(state_dir, create=True)
-    preview.write_detached_placeholder(state_dir, "task-a", ["bash", "-c", "pytest"])
+    live_detached_placeholder(state_dir, "task-a", ["bash", "-c", "pytest"])
     worktree = Path(directory) / "task-b"
     script = str(Path(preview.__file__))
     environment = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state_dir)}
@@ -3928,6 +3981,19 @@ def test_worktree_gate_flow():
     assert waiting.returncode == 1 and "still running" in waiting.stderr
     run_path = state_dir / "runs" / "task-a.json"
     run = json.loads(run_path.read_text(encoding="utf-8"))
+    run["pid_started_at"] = "orphaned"
+    run_path.write_text(json.dumps(run), encoding="utf-8")
+    orphaned = subprocess.run(
+      [sys.executable, script, "worktree", "collect", "task-b"],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert orphaned.returncode == 1 and "did not pass" in orphaned.stderr
+    run = json.loads(run_path.read_text(encoding="utf-8"))
+    assert run["exit"] == 1 and "without recording" in run["verdict"]
     run.update({"exit": 0, "seconds": 1, "verdict": "passed"})
     run_path.write_text(json.dumps(run), encoding="utf-8")
     (worktree / "allowed" / "change.txt").write_text("after\n", encoding="utf-8")
@@ -3962,7 +4028,7 @@ def test_worktree_gate_flow():
 def test_a_detached_run_prints_one_status_line_per_call(capsys):
   """A detached wait reads as alive: one status line per gate call, none in a poll."""
   with tempfile.TemporaryDirectory() as detached_dir:
-    preview.write_detached_placeholder(
+    live_detached_placeholder(
       detached_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
     )
     assert preview.run_notices(detached_dir) == 0
@@ -3984,12 +4050,8 @@ def test_a_detached_run_prints_one_status_line_per_call(capsys):
 
 def test_a_hook_prints_only_one_routed_run_notice(capsys):
   with tempfile.TemporaryDirectory() as detached_dir:
-    preview.write_detached_placeholder(
-      detached_dir, "alpha", ["bash", "-c", "gh pr checks 7"]
-    )
-    preview.write_detached_placeholder(
-      detached_dir, "bravo", ["bash", "-c", "gh pr checks 8"]
-    )
+    live_detached_placeholder(detached_dir, "alpha", ["bash", "-c", "gh pr checks 7"])
+    live_detached_placeholder(detached_dir, "bravo", ["bash", "-c", "gh pr checks 8"])
     preview.run_command(detached_dir, "bravo", ["--", "true"])
     capsys.readouterr()
     assert preview.run_notices(detached_dir, show_running=True) == 1
@@ -4006,7 +4068,7 @@ def test_the_reminder_carries_the_running_status_line():
   """The hook reminder runs after every call, so the heartbeat reaches the agent."""
   with tempfile.TemporaryDirectory() as heartbeat_dir:
     preview.Store(heartbeat_dir, create=True)
-    preview.write_detached_placeholder(
+    live_detached_placeholder(
       heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
     )
     result = subprocess.run(
@@ -4034,7 +4096,7 @@ def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
   with tempfile.TemporaryDirectory() as heartbeat_dir:
     store = preview.Store(heartbeat_dir, create=True)
     store.note("owner-note", "Read this first")
-    preview.write_detached_placeholder(
+    live_detached_placeholder(
       heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
     )
     result = subprocess.run(
@@ -4052,7 +4114,7 @@ def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
 def test_reminder_reports_a_finished_run_without_a_second_line(capsys):
   with tempfile.TemporaryDirectory() as heartbeat_dir:
     preview.Store(heartbeat_dir, create=True)
-    preview.write_detached_placeholder(
+    live_detached_placeholder(
       heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
     )
     preview.run_command(heartbeat_dir, "pr-checks", ["--", "true"])
@@ -5035,9 +5097,7 @@ def test_a_live_run_holds_the_skip_poll_press():
     saved = (preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS)
     try:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
-      preview.write_detached_placeholder(
-        hold_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
-      )
+      live_detached_placeholder(hold_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"])
       store.request_skip_poll()
       assert preview.live_runs(hold_dir) == ["pr-checks"]
       assert preview.skip_poll_ready(store) is False

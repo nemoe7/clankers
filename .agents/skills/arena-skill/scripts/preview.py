@@ -566,6 +566,27 @@ GATE_NOISE='tail','grep','head'
 RUN_NAME=re.compile('[A-Za-z0-9._-]{1,64}')
 RUN_TAIL_LINES=40
 def run_record_path(state_dir,name):return Path(state_dir)/'runs'/f"{name}.json"
+ROUTE_START_FAILED='routed child failed to start; rerun the gate'
+ROUTE_CHILD_EXITED='routed child exited without recording a verdict; rerun the gate'
+def write_run_record(path,record):
+	path=Path(path);path.parent.mkdir(parents=True,exist_ok=True);descriptor,temporary=tempfile.mkstemp(prefix=f".{path.name}.",dir=path.parent,text=True)
+	try:
+		with os.fdopen(descriptor,'w',encoding='utf-8')as file:file.write(json.dumps(record,ensure_ascii=False,indent=1)+'\n');file.flush();os.fsync(file.fileno())
+		os.replace(temporary,path)
+	except OSError:
+		try:Path(temporary).unlink()
+		except OSError:pass
+		raise
+def process_start_identity(pid):
+	if isinstance(pid,bool)or not isinstance(pid,int)or pid<1:return None
+	try:stat=(Path('/proc')/str(pid)/'stat').read_text(encoding='utf-8')
+	except OSError:return None
+	close=stat.rfind(')');fields=stat[close+2:].split()if close>=0 else[];return fields[19]if len(fields)>19 else None
+def routed_child_matches(record):pid=record.get('pid');started=record.get('pid_started_at');return isinstance(pid,int)and not isinstance(pid,bool)and isinstance(started,str)and bool(started)and process_start_identity(pid)==started
+def terminal_route_failure(path,record,verdict):failed=dict(record);elapsed=detached_seconds(failed.get('started_at'));failed.update({'exit':1,'seconds':elapsed if elapsed is not None else 0,'finished_at':now(),'verdict':verdict,'tail':[verdict],'announced':False});write_run_record(path,failed);return failed
+def reconcile_routed_record(path,record):
+	if record.get('detached')and record.get('exit')is None and not routed_child_matches(record):return terminal_route_failure(path,record,ROUTE_CHILD_EXITED)
+	return record
 WORKTREE_DIR='worktrees'
 WORKTREE_ACTIONS={'gate':'a gate','commit':'a commit','push':'a push'}
 def worktree_record_path(state_dir,name):return Path(state_dir)/WORKTREE_DIR/f"{name}.json"
@@ -575,9 +596,9 @@ def json_record(path):
 	return record if isinstance(record,dict)else None
 def routed_record(state_dir,name):
 	if not RUN_NAME.fullmatch(name or''):raise ValueError('Gate names take 1 to 64 letters, digits, dots, dashes or underscores.')
-	record=json_record(run_record_path(state_dir,name))
+	path=run_record_path(state_dir,name);record=json_record(path)
 	if record is None:raise ValueError(f"No routed gate named {name}.")
-	return record
+	return reconcile_routed_record(path,record)
 def git_worktree(cwd,*args,input=None,allowed=(0,)):
 	try:result=subprocess.run(['git',*args],cwd=str(cwd),input=input,capture_output=True,text=True,check=False)
 	except OSError as error:raise ValueError(f"Cannot run Git: {error}")from None
@@ -649,15 +670,16 @@ def run_command(state_dir,name,argv):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2
 	if argv[:1]==['--']:argv=argv[1:]
 	if not argv:print('arena-preview route: name a command after --, for example: route gates -- make check',flush=True);return 2
-	started=time.monotonic();completed=subprocess.run(argv,capture_output=True,text=True,check=False);seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=output[-RUN_TAIL_LINES:];verdict=tail[-1]if tail else'(no output)';record={'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};path=run_record_path(state_dir,name);path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
+	started=time.monotonic();completed=subprocess.run(argv,capture_output=True,text=True,check=False);seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=output[-RUN_TAIL_LINES:];verdict=tail[-1]if tail else'(no output)';path=run_record_path(state_dir,name);existing=json_record(path)or{};record={**existing,'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};write_run_record(path,record)
 	for line in tail:print(line,flush=True)
 	print(f"run {name} done: exit {completed.returncode} {seconds}s {verdict}",flush=True);return completed.returncode
 def live_runs(state_dir):
 	names=[];runs=Path(state_dir)/'runs'
 	if not runs.is_dir():return names
 	for path in sorted(runs.glob('*.json')):
-		try:record=json.loads(path.read_text(encoding='utf-8'))
-		except(OSError,ValueError):continue
+		record=json_record(path)
+		if record is None:continue
+		record=reconcile_routed_record(path,record)
 		if record.get('detached')and record.get('exit')is None:names.append(record.get('name')or path.stem)
 	return names
 def skip_poll_ready(store):return store.skip_poll_requested()and not live_runs(store.path.parent)
@@ -666,11 +688,11 @@ def run_notices(state_dir,show_running=False):
 	if not runs.is_dir():return 0
 	records=[]
 	for path in sorted(runs.glob('*.json')):
-		try:records.append((path,json.loads(path.read_text(encoding='utf-8'))))
-		except(OSError,ValueError):continue
+		record=json_record(path)
+		if record is not None:records.append((path,reconcile_routed_record(path,record)))
 	for(path,record)in records:
 		if record.get('exit')is None or record.get('announced'):continue
-		print(f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s {record.get('verdict')}",flush=True);record['announced']=True;path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8');return 1
+		print(f"run {record.get('name')} done: exit {record.get('exit')} {record.get('seconds')}s {record.get('verdict')}",flush=True);record['announced']=True;write_run_record(path,record);return 1
 	if not show_running:return 0
 	for(_,record)in records:
 		if record.get('exit')is not None or not record.get('detached'):continue
@@ -745,7 +767,11 @@ def detached_seconds(started_at):
 		if started.tzinfo is None:started=started.replace(tzinfo=timezone.utc)
 		return max(0,int((datetime.now(timezone.utc)-started).total_seconds()))
 	except(TypeError,ValueError):return None
-def write_detached_placeholder(state_dir,name,argv):path=run_record_path(state_dir,name);path.parent.mkdir(parents=True,exist_ok=True);record={'name':name,'argv':list(argv),'exit':None,'seconds':None,'started_at':now(),'finished_at':None,'verdict':None,'tail':[],'detached':True,'announced':False};path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8');return path
+def write_detached_placeholder(state_dir,name,argv,pid=None,pid_started_at=None):
+	path=run_record_path(state_dir,name);record={'name':name,'argv':list(argv),'exit':None,'seconds':None,'started_at':now(),'finished_at':None,'verdict':None,'tail':[],'detached':True,'announced':False}
+	if isinstance(pid,int)and not isinstance(pid,bool)and pid>0:record['pid']=pid
+	if isinstance(pid_started_at,str)and pid_started_at:record['pid_started_at']=pid_started_at
+	write_run_record(path,record);return path
 PR_CHECK_OTHER=0
 PR_CHECK_RUNS=1
 PR_CHECK_REFUSED=2
@@ -767,16 +793,19 @@ def pr_check_wait(state_dir,line):
 	if not detach_run(state_dir,name,['bash','-c',line]):print(DETACHED_BLOCK.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	print(DETACHED_NOTICE.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_RUNS
 def detach_run(state_dir,name,argv):
-	path=run_record_path(state_dir,name)
-	if path.is_file():
-		try:standing=json.loads(path.read_text(encoding='utf-8'))
-		except(OSError,ValueError):standing=None
-		if standing and standing.get('exit')is None:return True
-	write_detached_placeholder(state_dir,name,argv)
-	if os.environ.get(DETACH_DRY_RUN):return True
-	child_env={key:value for(key,value)in os.environ.items()if key not in('BASH_ENV',DETACH_DRY_RUN,'ARENA_PREVIEW_ROUTE')};child_env['ARENA_PREVIEW_ROUTE']='1'
-	try:subprocess.Popen([sys.executable,str(Path(__file__).resolve()),'route-run',name,'--',*argv],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=child_env,start_new_session=True,close_fds=True)
-	except OSError:return False
+	path=run_record_path(state_dir,name);standing=json_record(path)
+	if standing is not None:
+		standing=reconcile_routed_record(path,standing)
+		if standing.get('exit')is None:return True
+	if os.environ.get(DETACH_DRY_RUN):pid=os.getpid();write_detached_placeholder(state_dir,name,argv,pid,process_start_identity(pid));return True
+	path=write_detached_placeholder(state_dir,name,argv);child_env={key:value for(key,value)in os.environ.items()if key not in('BASH_ENV',DETACH_DRY_RUN,'ARENA_PREVIEW_ROUTE')};child_env['ARENA_PREVIEW_ROUTE']='1'
+	try:child=subprocess.Popen([sys.executable,str(Path(__file__).resolve()),'route-run',name,'--',*argv],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,env=child_env,start_new_session=True,close_fds=True)
+	except OSError:terminal_route_failure(path,json_record(path)or{},ROUTE_START_FAILED);return False
+	record=json_record(path)
+	if record is not None and record.get('exit')is None:
+		record['pid']=child.pid;started=process_start_identity(child.pid)
+		if started:record['pid_started_at']=started
+		write_run_record(path,record)
 	return True
 def route_command(state_dir,name,argv):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2

@@ -1588,6 +1588,86 @@ def run_record_path(state_dir, name):
   return Path(state_dir) / "runs" / f"{name}.json"
 
 
+ROUTE_START_FAILED = "routed child failed to start; rerun the gate"
+ROUTE_CHILD_EXITED = "routed child exited without recording a verdict; rerun the gate"
+
+
+def write_run_record(path, record):
+  """Atomically replace one routed-run record."""
+  path = Path(path)
+  path.parent.mkdir(parents=True, exist_ok=True)
+  descriptor, temporary = tempfile.mkstemp(
+    prefix=f".{path.name}.", dir=path.parent, text=True
+  )
+  try:
+    with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+      file.write(json.dumps(record, ensure_ascii=False, indent=1) + "\n")
+      file.flush()
+      os.fsync(file.fileno())
+    os.replace(temporary, path)
+  except OSError:
+    try:
+      Path(temporary).unlink()
+    except OSError:
+      pass
+    raise
+
+
+def process_start_identity(pid):
+  """Return Linux's stable process-start tick for a live process, or None."""
+  if isinstance(pid, bool) or not isinstance(pid, int) or pid < 1:
+    return None
+  try:
+    stat = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
+  except OSError:
+    return None
+  close = stat.rfind(")")
+  fields = stat[close + 2 :].split() if close >= 0 else []
+  return fields[19] if len(fields) > 19 else None
+
+
+def routed_child_matches(record):
+  """True when a pending record still names its original child process."""
+  pid = record.get("pid")
+  started = record.get("pid_started_at")
+  return (
+    isinstance(pid, int)
+    and not isinstance(pid, bool)
+    and isinstance(started, str)
+    and bool(started)
+    and process_start_identity(pid) == started
+  )
+
+
+def terminal_route_failure(path, record, verdict):
+  """Write a terminal routed failure without replaying its command."""
+  failed = dict(record)
+  elapsed = detached_seconds(failed.get("started_at"))
+  failed.update(
+    {
+      "exit": 1,
+      "seconds": elapsed if elapsed is not None else 0,
+      "finished_at": now(),
+      "verdict": verdict,
+      "tail": [verdict],
+      "announced": False,
+    }
+  )
+  write_run_record(path, failed)
+  return failed
+
+
+def reconcile_routed_record(path, record):
+  """Turn a vanished routed child into a terminal failure record."""
+  if (
+    record.get("detached")
+    and record.get("exit") is None
+    and not routed_child_matches(record)
+  ):
+    return terminal_route_failure(path, record, ROUTE_CHILD_EXITED)
+  return record
+
+
 WORKTREE_DIR = "worktrees"
 WORKTREE_ACTIONS = {"gate": "a gate", "commit": "a commit", "push": "a push"}
 
@@ -1609,10 +1689,11 @@ def routed_record(state_dir, name):
     raise ValueError(
       "Gate names take 1 to 64 letters, digits, dots, dashes or underscores."
     )
-  record = json_record(run_record_path(state_dir, name))
+  path = run_record_path(state_dir, name)
+  record = json_record(path)
   if record is None:
     raise ValueError(f"No routed gate named {name}.")
-  return record
+  return reconcile_routed_record(path, record)
 
 
 def git_worktree(cwd, *args, input=None, allowed=(0,)):
@@ -1826,7 +1907,10 @@ def run_command(state_dir, name, argv):
   output = (completed.stdout + completed.stderr).splitlines()
   tail = output[-RUN_TAIL_LINES:]
   verdict = tail[-1] if tail else "(no output)"
+  path = run_record_path(state_dir, name)
+  existing = json_record(path) or {}
   record = {
+    **existing,
     "name": name,
     "argv": argv,
     "exit": completed.returncode,
@@ -1836,11 +1920,7 @@ def run_command(state_dir, name, argv):
     "tail": tail,
     "announced": False,
   }
-  path = run_record_path(state_dir, name)
-  path.parent.mkdir(parents=True, exist_ok=True)
-  path.write_text(
-    json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-  )
+  write_run_record(path, record)
   for line in tail:
     print(line, flush=True)
   # One stream: the agent reads both, so a duplicate line only costs tokens.
@@ -1861,10 +1941,10 @@ def live_runs(state_dir):
   if not runs.is_dir():
     return names
   for path in sorted(runs.glob("*.json")):
-    try:
-      record = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    record = json_record(path)
+    if record is None:
       continue
+    record = reconcile_routed_record(path, record)
     if record.get("detached") and record.get("exit") is None:
       names.append(record.get("name") or path.stem)
   return names
@@ -1887,10 +1967,9 @@ def run_notices(state_dir, show_running=False):
     return 0
   records = []
   for path in sorted(runs.glob("*.json")):
-    try:
-      records.append((path, json.loads(path.read_text(encoding="utf-8"))))
-    except (OSError, ValueError):
-      continue
+    record = json_record(path)
+    if record is not None:
+      records.append((path, reconcile_routed_record(path, record)))
   for path, record in records:
     if record.get("exit") is None or record.get("announced"):
       continue
@@ -1900,9 +1979,7 @@ def run_notices(state_dir, show_running=False):
       flush=True,
     )
     record["announced"] = True
-    path.write_text(
-      json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-    )
+    write_run_record(path, record)
     return 1
   if not show_running:
     return 0
@@ -2103,10 +2180,9 @@ def detached_seconds(started_at):
     return None
 
 
-def write_detached_placeholder(state_dir, name, argv):
+def write_detached_placeholder(state_dir, name, argv, pid=None, pid_started_at=None):
   """Write the record a detached run carries while it runs, and return its path."""
   path = run_record_path(state_dir, name)
-  path.parent.mkdir(parents=True, exist_ok=True)
   record = {
     "name": name,
     "argv": list(argv),
@@ -2119,9 +2195,11 @@ def write_detached_placeholder(state_dir, name, argv):
     "detached": True,
     "announced": False,
   }
-  path.write_text(
-    json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-  )
+  if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0:
+    record["pid"] = pid
+  if isinstance(pid_started_at, str) and pid_started_at:
+    record["pid_started_at"] = pid_started_at
+  write_run_record(path, record)
   return path
 
 
@@ -2189,16 +2267,16 @@ def detach_run(state_dir, name, argv):
   the spawn.
   """
   path = run_record_path(state_dir, name)
-  if path.is_file():
-    try:
-      standing = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-      standing = None
-    if standing and standing.get("exit") is None:
+  standing = json_record(path)
+  if standing is not None:
+    standing = reconcile_routed_record(path, standing)
+    if standing.get("exit") is None:
       return True
-  write_detached_placeholder(state_dir, name, argv)
   if os.environ.get(DETACH_DRY_RUN):
+    pid = os.getpid()
+    write_detached_placeholder(state_dir, name, argv, pid, process_start_identity(pid))
     return True
+  path = write_detached_placeholder(state_dir, name, argv)
   # A plain `bash -c` reads no login profile, so a child never meets the gate that started it.
   # The marker covers a shell that sources the gate anyway, and BASH_ENV leaves with it.
   child_env = {
@@ -2208,7 +2286,7 @@ def detach_run(state_dir, name, argv):
   }
   child_env["ARENA_PREVIEW_ROUTE"] = "1"
   try:
-    subprocess.Popen(
+    child = subprocess.Popen(
       [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -2225,7 +2303,15 @@ def detach_run(state_dir, name, argv):
       close_fds=True,
     )
   except OSError:
+    terminal_route_failure(path, json_record(path) or {}, ROUTE_START_FAILED)
     return False
+  record = json_record(path)
+  if record is not None and record.get("exit") is None:
+    record["pid"] = child.pid
+    started = process_start_identity(child.pid)
+    if started:
+      record["pid_started_at"] = started
+    write_run_record(path, record)
   return True
 
 
