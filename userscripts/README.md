@@ -44,11 +44,11 @@ Both bundles log under one tag, `[NemoUtils]`. The devtools console filter shows
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
-The bar serves a session. On a new chat the composer's own repository chip names the repository, and the tab title answers when neither is rendered.
+The bar serves a session. On a new chat the composer's own repository chip names the repository. If neither component renders, the tab title provides the repository name.
 
 A selected diff branch wears the same owner/repo shape as the repository chip. The read skips a platform session branch, written `arena/<id>-<repo>`, and takes the repository beside it.
 
-The fill fetches `userscripts/arena-prompt-fill.txt` once from this repository. It waits for that text before writing, and leaves the composer unchanged if the fetch fails. The `rules/ARENA.md` fetch remains optional and is appended when it succeeds.
+The fill fetches `userscripts/arena-prompt-fill.txt` once from this repository. It waits for that text before writing, and leaves the composer unchanged if the fetch fails. The fill optionally fetches `rules/ARENA.md` and appends it when that fetch succeeds.
 
 The template signals a potentially long, complex feature set and calls for a high-context model. It says work can continue indefinitely, and each final poll waits up to 1,800 seconds or until skipped.
 
