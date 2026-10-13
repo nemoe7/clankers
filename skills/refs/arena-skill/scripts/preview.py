@@ -179,7 +179,8 @@ TURN_ENDED_META = "turn_ended_at"
 # A removal deletes rows, so group stamps can move back. The state stamp also reads this mark.
 # The save stamp trigger rewrites a file that still has a removed report.
 REMOVED_META = "state_removed_at"
-# The unpublish guard holds until seen, not a timed view window.
+# Agent report changes wait this long after a recorded owner view.
+REPORT_CHANGE_VIEW_SECONDS = 60
 AGENT_KEY_RE = re.compile(r"[A-Za-z0-9_-]{20,64}\Z")
 # The proxy host, one HTTPS origin with no path, as the userscript saves it.
 AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
@@ -2595,9 +2596,8 @@ class FetchChanged(ValueError):
   pass
 
 
-# A removal the owner's own live state holds: an unseen answer ack or a fresh view. The API
-# reads it as a conflict with that state rather than bad input.
-class UnpublishHeld(ValueError):
+# A report change can conflict with a new answer, its unseen acknowledgement, or a fresh view.
+class ReportHeld(ValueError):
   pass
 
 
@@ -4478,6 +4478,29 @@ class Store:
           "INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,)
         )
 
+  def guard_report_change(self, db, report_id, report):
+    """Hold an agent change while an answer, acknowledgement, or view is unread."""
+    unread = db.execute(
+      "SELECT 1 FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL LIMIT 1",
+      (report_id,),
+    ).fetchone()
+    if unread is not None:
+      raise ReportHeld("The report has an unacknowledged answer.")
+    acknowledged = db.execute(
+      "SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?",
+      (report_id,),
+    ).fetchone()[0]
+    if acknowledged and not at_or_after(report["ack_seen_at"], acknowledged):
+      raise ReportHeld(
+        "The report waits for the owner: its answer acknowledgement is unseen."
+      )
+    age = seconds_since(report["viewed_at"])
+    if age is not None and 0 <= age < REPORT_CHANGE_VIEW_SECONDS:
+      remaining = max(1, int(REPORT_CHANGE_VIEW_SECONDS - age))
+      raise ReportHeld(
+        f"The owner is reading this report: retry after {remaining} s without a view."
+      )
+
   def publish(self, report_id, title, source):
     identifier(report_id)
     if not isinstance(title, str) or not title.strip() or len(title) > 200:
@@ -4493,15 +4516,20 @@ class Store:
     # Reject invalid fields before publication so the error names the field and preserves the report and connection.
     fields = parse_fields(text)[1]
     with self.transaction() as db:
-      # Sent answers live in the owner's browser under this report ID, so a republish would
-      # reload them pre-filled against fields that no longer match. A new ID starts clean.
-      answered = db.execute(
-        "SELECT count(*) FROM submissions WHERE report_id = ?", (report_id,)
-      ).fetchone()[0]
-      if answered:
-        raise ValueError(
-          f"Report {report_id} has submitted answers; publish the update under a new ID"
-        )
+      report = db.execute(
+        "SELECT ack_seen_at, viewed_at FROM reports WHERE id = ?", (report_id,)
+      ).fetchone()
+      if report is not None:
+        self.guard_report_change(db, report_id, report)
+      else:
+        # Answers survive an unpublish, so their old ID cannot name a new report.
+        answered = db.execute(
+          "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
+        ).fetchone()
+        if answered is not None:
+          raise ValueError(
+            f"Report {report_id} has submitted answers; publish the update under a new ID"
+          )
       self.refuse_shared_id(db, "reports", "tasks", report_id)
       highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
       db.execute(
@@ -4515,23 +4543,17 @@ class Store:
     return len(fields)
 
   def unpublish(self, report_id, dismissed_by_owner=False):
-    """Remove only the report tab row. Keep answers and the Markdown source. Let a page dismissal create an inbox
-    note. Keep the CLI form silent."""
+    """Remove only the report tab row. Keep answers and the Markdown source."""
     identifier(report_id)
     with self.transaction() as db:
       row = db.execute(
-        "SELECT title, seen_at, ack_seen_at, viewed_at FROM reports WHERE id = ?",
+        "SELECT title, ack_seen_at, viewed_at FROM reports WHERE id = ?",
         (report_id,),
       ).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
-      # Hold an unseen report until the owner opens it.
-      # Then close the Reports tab on the front end.
-      if not row["seen_at"]:
-        raise UnpublishHeld(
-          "The report waits for the owner: it has not been seen yet. "
-          "Open it to clear the wait."
-        )
+      if not dismissed_by_owner:
+        self.guard_report_change(db, report_id, row)
       db.execute("DELETE FROM reports WHERE id = ?", (report_id,))
       # The state stamp reads this mark, so the save's own stamp trigger rewrites a file that
       # still carries the removed report.
@@ -5224,7 +5246,7 @@ def handler(store):
         for key in ("at", "acknowledged_at", "ack_edited_at", "seen_at"):
           note[key] = clip_stamp(note[key])
         self.reply(201, json.dumps(note, ensure_ascii=False))
-      except (ReportChanged, FetchChanged, UnpublishHeld) as error:
+      except (ReportChanged, FetchChanged, ReportHeld) as error:
         # A held removal is a conflict with the owner's live state, not bad input.
         self.problem(409, error)
       except FileNotFoundError as error:

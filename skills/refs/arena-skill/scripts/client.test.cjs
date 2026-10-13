@@ -2026,7 +2026,7 @@ test('preview client', async (t) => {
     const keptSelect = get('#report-select').value;
     state.reports = [
       { id: 'keep1', title: 'Keep', updated_at: '2026-09-25T10:00:00', seen_at: '2026-09-25T10:05:00' },
-      { id: 'gone1', title: 'Gone', updated_at: '2026-09-25T10:00:00', seen_at: '2026-09-25T10:05:00' }
+      { id: 'gone1', title: 'Gone', updated_at: '2026-09-25T10:00:00', seen_at: null }
     ];
     get('#reports-tab').events.click();
     await new Promise(resolve => setTimeout(resolve, 0));
@@ -2057,8 +2057,9 @@ test('preview client', async (t) => {
     assert.equal(get('#unpublish-report').dataset.state, '');
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(state.reports.some(report => report.id === 'gone1'), false, 'the server dropped the row');
-    assert.ok(statusLines.some(line => /^Report gone1 · Deleted · /.test(line)),
-      `the delete receipt flashed; flow wrote: ${statusLines.join(' | ')}`);
+    assert.ok(statusLines.some(line => (
+      /^Report gone1 · Deleted · /.test(line) && !line.includes('hides when seen')
+    )), `the delete receipt must not wait for a read; flow wrote: ${statusLines.join(' | ')}`);
     delete statusNode.textContent;
     state.reports = keptReports;
     unpublished.length = 0;
@@ -2067,7 +2068,7 @@ test('preview client', async (t) => {
     get('#report-select').value = keptSelect;
   });
 
-  await t.test("The delete press stamps the open first, so the server's hold clears", async () => {
+  await t.test("The delete press stamps its acknowledgement before removal", async () => {
     // The receipt appears atop the panel that the owner deletes from. The page stamps its acknowledgement before removal.
     // The ack time sits past every stamp, so the tab's own open cannot clear it.
     const keptReports = state.reports;

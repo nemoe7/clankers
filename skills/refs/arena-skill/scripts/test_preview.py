@@ -308,11 +308,7 @@ def test_report_unpublish():
     )
     store.publish("pick", "Pick one", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
-    # The owner's dismissal prunes the tab row only, after seen.
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
-      )
+    # The owner can dismiss an unseen report even while its answer remains unacknowledged.
     store.unpublish("pick", dismissed_by_owner=True)
     assert store.state()["reports"] == []
     try:
@@ -332,20 +328,32 @@ def test_report_unpublish():
       raise AssertionError("Republishing over sent answers was accepted")
     except ValueError:
       pass
-    # The CLI form stays silent on an open report: the agent already knows what it
-    # removed. The new guard holds until seen.
+    # The agent CLI can unpublish an unseen report and writes no dismissal note.
     store.publish("plain", "Pick one", source)
-    store.mark_report_read = getattr(store, "mark_report_read", None) or (
-      lambda x: store._mark_seen_for_test(x)
+    allowed = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "unpublish", "plain"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
     )
-    # Mark as seen via seen_at
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain")
-      )
-    store.unpublish("plain")
+    assert allowed.returncode == 0, allowed.stderr
+    assert "Unpublished plain." in allowed.stdout
     assert store.state()["reports"] == []
     assert len(store.state()["notes"]) == 1, "the CLI unpublish writes no note"
+    # An unacknowledged answer still holds the agent CLI path.
+    store.publish("blocked", "Pick one", source)
+    store.submission("answer-2", "blocked", "REPORT blocked: one")
+    held = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "unpublish", "blocked"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
+    )
+    assert held.returncode == 1
+    assert "unacknowledged answer" in held.stderr
+    assert [report["id"] for report in store.state()["reports"]] == ["blocked"]
 
 
 def test_stale_report_reminder():
@@ -826,8 +834,7 @@ def test_http_boundaries():
       prune.write_text("# Prune\n\nA report the tab outgrew.\n", encoding="utf-8")
       store.publish("prune", "Prune", prune)
       assert request("GET", "/api/reports/prune/html")[0] == 200
-      # Mark seen before unpublish (new guard holds until seen)
-      assert request("POST", "/api/reports/prune/seen", "{}", auth)[0] == 200
+      # Owner API dismissal can remove an unseen report immediately.
       status, _, removed = request("POST", "/api/reports/prune/unpublish", "{}", auth)
       assert status == 200 and json.loads(removed) == {"unpublished": "prune"}
       dismissed = [
@@ -4833,11 +4840,30 @@ def test_report_unread_markers():
     assert marker_store.state()["reports"][0]["needs_answer"] is False
     try:
       marker_store.publish("form", "Form", marker_source)
-      raise AssertionError("An answered report accepted a republish")
-    except ValueError as error:
-      assert "submitted answers" in str(error)
+      raise AssertionError("An unanswered report accepted a republish")
+    except preview.ReportHeld as error:
+      assert "unacknowledged answer" in str(error)
     marker_store.publish("form-2", "Form", marker_source)
     assert len(marker_store.state()["reports"]) == 2
+    # The agent CLI can revise an unread report with no held answer or active view.
+    allowed = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "publish",
+        str(marker_source),
+        "--id",
+        "form-2",
+        "--title",
+        "Revised form",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
+    )
+    assert allowed.returncode == 0, allowed.stderr
+    assert "Published form-2" in allowed.stdout
     result = subprocess.run(
       [
         sys.executable,
@@ -4855,7 +4881,7 @@ def test_report_unread_markers():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": marker_dir},
     )
     assert result.returncode == 1
-    assert "submitted answers" in result.stderr
+    assert "unacknowledged answer" in result.stderr
     assert preview.Store(marker_dir).state()["reports"][0]["needs_answer"] is False
     with marker_store.connect() as db, db:
       db.execute(
@@ -6083,8 +6109,8 @@ def test_unpublish_moves_the_state_stamp():
     assert after and after > before, "the removal left the state stamp still"
 
 
-def test_unpublish_waits_for_the_owner_to_see_the_ack():
-  "An unseen report blocks removal until the owner views it. The guard uses a view stamp, not a timer."
+def test_report_changes_hold_unseen_answers_and_acknowledgements():
+  """Agent changes wait for an unacknowledged answer or acknowledgement."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -6092,68 +6118,61 @@ def test_unpublish_waits_for_the_owner_to_see_the_ack():
       "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
     store.publish("pick", "Pick one", source)
+    source.write_text(
+      "# Revised\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
     store.submission("answer-1", "pick", "REPORT pick: one")
-    store.acknowledge(["answer-1"], "reply", "Read it")
-    # Publish a plain report and test seen hold
-    store.publish("plain", "Plain", source)
-    try:
-      store.unpublish("plain")
-      raise AssertionError("An unseen report did not hold")
-    except preview.UnpublishHeld as error:
-      assert "seen" in str(error).lower() or "not been seen" in str(error)
-    assert store.state()["reports"], "the report stayed"
-    # Mark as seen and unpublish
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "plain")
-      )
-    store.unpublish("plain")
-    # Owner dismissal of answered report still needs seen? For this test, mark answered report seen too
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
-      )
-    store.unpublish("pick", dismissed_by_owner=True)
+    for change in (
+      lambda: store.publish("pick", "Pick revised", source),
+      lambda: store.unpublish("pick"),
+    ):
+      try:
+        change()
+        raise AssertionError("An unseen answer allowed an agent report change")
+      except preview.ReportHeld as error:
+        assert "unacknowledged answer" in str(error)
+    store.acknowledge(["answer-1"], "reply", "Received")
+    for change in (
+      lambda: store.publish("pick", "Pick revised", source),
+      lambda: store.unpublish("pick"),
+    ):
+      try:
+        change()
+        raise AssertionError("An unseen acknowledgement allowed an agent report change")
+      except preview.ReportHeld as error:
+        assert "acknowledgement" in str(error)
+    store.mark_report_ack_seen("pick")
+    store.publish("pick", "Pick revised", source)
+    store.unpublish("pick")
     assert store.state()["reports"] == []
 
 
-def test_unpublish_waits_out_a_fresh_view():
-  "The agent cannot remove a fresh report until the owner views it. A view stamp releases the guard."
+def test_report_changes_hold_a_fresh_owner_view():
+  """Agent changes wait while the owner has a fresh report view."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
-    source.write_text(
-      "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
-    )
-    store.publish("pick", "Pick one", source)
-    # Not seen yet, so hold
-    try:
+    source.write_text("# Pick\n", encoding="utf-8")
+    store.publish("pick", "Pick", source)
+    store.mark_report_viewed("pick")
+    with patch.object(preview, "seconds_since", return_value=0):
+      for change in (
+        lambda: store.publish("pick", "Pick revised", source),
+        lambda: store.unpublish("pick"),
+      ):
+        try:
+          change()
+          raise AssertionError("A fresh view allowed an agent report change")
+        except preview.ReportHeld as error:
+          assert "reading" in str(error)
+    with patch.object(preview, "seconds_since", return_value=60):
+      store.publish("pick", "Pick revised", source)
       store.unpublish("pick")
-      raise AssertionError("An unseen report did not hold")
-    except preview.UnpublishHeld as error:
-      assert "seen" in str(error).lower()
-    # Owner dismissal should also hold until seen in new logic
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "pick")
-      )
-    store.unpublish("pick", dismissed_by_owner=True)
-    assert store.state()["reports"] == []
-    store.publish("later", "Pick one again", source)
-    with store.connect() as db, db:
-      db.execute(
-        "UPDATE reports SET seen_at = ? WHERE id = ?", ("2026-01-01T00:00:00", "later")
-      )
-    store.unpublish("later")
     assert store.state()["reports"] == []
 
 
-def test_unpublish_route_holds_and_the_view_route_stamps():
-  """POST /unpublish conflicts while unseen, and POST /view stamps the look.
-
-  A held removal is a conflict with the owner's live state rather than bad input, so the API
-  answers 409 and the page shows the reason. The view route stamps the look, and seen route clears seen hold.
-  """
+def test_unpublish_route_allows_owner_to_remove_unseen_report():
+  """The owner can remove a report before anyone sees it or its answer."""
   global app
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(Path(directory) / "arena-preview", create=True)
@@ -6165,19 +6184,7 @@ def test_unpublish_route_holds_and_the_view_route_stamps():
       "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
     store.publish("pick", "Pick one", source)
-    # Not seen yet, so hold
-    status, _, body = request("POST", "/api/reports/pick/unpublish", "{}", headers)
-    assert status == 409
-    assert "seen" in json.loads(body)["error"].lower()
-    assert [report["id"] for report in store.state()["reports"]] == ["pick"]
-    status, _, body = request("POST", "/api/reports/pick/view", "{}", headers)
-    assert status == 200
-    stamped = json.loads(body)
-    assert stamped["id"] == "pick" and stamped["viewed_at"]
-    # A view of a report that is not there is a 404 rather than a silent stamp.
-    assert request("POST", "/api/reports/none/view", "{}", headers)[0] == 404
-    # Mark seen via API
-    assert request("POST", "/api/reports/pick/seen", "{}", headers)[0] == 200
+    store.submission("answer-1", "pick", "REPORT pick: one")
     status, _, body = request("POST", "/api/reports/pick/unpublish", "{}", headers)
     assert status == 200
     assert json.loads(body) == {"unpublished": "pick"}
