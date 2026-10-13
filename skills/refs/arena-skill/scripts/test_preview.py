@@ -1718,7 +1718,10 @@ def test_read_attaches_reply_threads():
     child = listing["pending"][0]
     assert [record["id"] for record in child["thread"]] == ["root", "middle"]
     rendered = preview.format_read(listing)
-    assert "`root`\nhello\n`middle`\nRE: root\nfrom the middle\n`child`\nRE: middle\nworld" in rendered
+    assert (
+      "`root`\nhello\n`middle`\nRE: root\nfrom the middle\n`child`\nRE: middle\nworld"
+      in rendered
+    )
     store.note("pending", "already pending")
     store.note("duplicate", "RE: pending\nno duplicate")
     store.note("missing", "RE: absent\nno parent")

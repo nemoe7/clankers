@@ -1228,7 +1228,9 @@ def format_pending_record(item):
 
 def format_pending_item(item):
   thread = item.get("thread") or []
-  return "\n".join([*(format_pending_record(record) for record in thread), format_pending_record(item)])
+  return "\n".join(
+    [*(format_pending_record(record) for record in thread), format_pending_record(item)]
+  )
 
 
 def format_read(listing):
@@ -1604,7 +1606,9 @@ def json_record(path):
 
 def routed_record(state_dir, name):
   if not RUN_NAME.fullmatch(name or ""):
-    raise ValueError("Gate names take 1 to 64 letters, digits, dots, dashes or underscores.")
+    raise ValueError(
+      "Gate names take 1 to 64 letters, digits, dots, dashes or underscores."
+    )
   record = json_record(run_record_path(state_dir, name))
   if record is None:
     raise ValueError(f"No routed gate named {name}.")
@@ -1679,7 +1683,9 @@ def worktree_warning(state_dir, action, cwd=None):
 
 def checked_worktree_name(name):
   if not RUN_NAME.fullmatch(name or ""):
-    raise ValueError("Worktree names take 1 to 64 letters, digits, dots, dashes or underscores.")
+    raise ValueError(
+      "Worktree names take 1 to 64 letters, digits, dots, dashes or underscores."
+    )
   return name
 
 
@@ -1691,7 +1697,9 @@ def start_worktree(state_dir, name, destination, gate, allowed, cwd=None):
   current = Path(cwd or Path.cwd()).resolve()
   registered = worktree_at(state_dir, current)
   if registered is not None:
-    raise ValueError(f"Start a worktree from the registered root: {registered.get('root')}.")
+    raise ValueError(
+      f"Start a worktree from the registered root: {registered.get('root')}."
+    )
   root = git_worktree_root(current)
   if current != root:
     raise ValueError("Start a worktree from the repository root.")
@@ -1720,7 +1728,9 @@ def start_worktree(state_dir, name, destination, gate, allowed, cwd=None):
   }
   try:
     record_path.parent.mkdir(parents=True, exist_ok=True)
-    record_path.write_text(json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    record_path.write_text(
+      json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
   except OSError as error:
     subprocess.run(
       ["git", "worktree", "remove", "--force", str(destination)],
@@ -1756,12 +1766,16 @@ def collect_worktree(state_dir, name, cwd=None):
   if gate.get("exit") != 0:
     raise ValueError(f"Gate {record.get('gate')} did not pass.")
   allowed = record.get("allow")
-  if not isinstance(allowed, list) or not all(isinstance(pattern, str) for pattern in allowed):
+  if not isinstance(allowed, list) or not all(
+    isinstance(pattern, str) for pattern in allowed
+  ):
     raise ValueError(f"Worktree {name} has no valid allowed paths.")
   paths = worktree_paths(worktree)
   if not paths:
     raise ValueError(f"Worktree {name} has no changes.")
-  outside = [path for path in paths if not any(fnmatchcase(path, pattern) for pattern in allowed)]
+  outside = [
+    path for path in paths if not any(fnmatchcase(path, pattern) for pattern in allowed)
+  ]
   if outside:
     raise ValueError("Worktree changes outside allowed paths: " + ", ".join(outside))
   patch = git_worktree(worktree, "diff", "--binary", "--no-ext-diff", "HEAD")
@@ -5144,8 +5158,12 @@ def main():
     "start", help="Create a detached worktree while a named root gate runs"
   )
   worktree_start.add_argument("name", help="A short worktree name")
-  worktree_start.add_argument("destination", type=Path, help="A new path outside the root")
-  worktree_start.add_argument("--gate", required=True, help="The running root gate name")
+  worktree_start.add_argument(
+    "destination", type=Path, help="A new path outside the root"
+  )
+  worktree_start.add_argument(
+    "--gate", required=True, help="The running root gate name"
+  )
   worktree_start.add_argument(
     "--allow", action="append", default=[], help="A path glob task work may change"
   )
