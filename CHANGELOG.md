@@ -25,6 +25,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - State import now accepts older backups. Its CLI no longer has `--force`.
 - Agent report changes now wait only for an unacknowledged answer, an owner-unseen acknowledgement, or a recent report view. An owner can unpublish an unseen report at once.
 - Finished tasks record their first completion time. The preview shows the newest first, clears the time on reopen, and saves it with task state.
+- A routed run now names the worktree step and its command. The agent reads the exact `arena-preview worktree start` line in the notice, on an automatic detach and a manual `route`.
 
 #### workflows
 
