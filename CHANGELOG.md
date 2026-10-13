@@ -64,6 +64,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill moves the gate and worktree rules out of Setup into their own section. The worktree trigger now names the declared path globs.
 - The preview reference lists `logs`, `worktree`, `download-request` and `stale-reports`, and requires the bare `arena-preview` call form for every command. A test compares its commands table with the CLI parser.
 
+#### userscripts
+
+- The Arena tab title takes the question mark for an action row that reads `Generating questions…`, beside the `ask_user` card.
+- The Arena bundle moves to 1.10.33.
+
 ## 2026-10-12
 
 ### Added

@@ -116,7 +116,7 @@ On `/agent/*`, ON reads the repository name from the GitHub link in the session 
 | 💭 | the reasoning row, the `not-prose` block |
 | 💤 | wait, and a row whose command runs the preview poll |
 | 💬 | the newest chat message, the `prose` body |
-| ❓ | an `ask_user` question card |
+| ❓ | an `ask_user` question card, or an action row generating questions |
 | 🛡️ | the security check |
 | ⏳ | the model at work with no row mark |
 | ⚙️ | anything else |

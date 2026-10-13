@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.32
+// @name         Arena.ai | NemoUtils | v1.10.33
 // @namespace    https://github.com/nemoe7/clankers
 // @version      1.10.32
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
@@ -2741,6 +2741,7 @@
       ["thought", "\uD83D\uDCAD"],
       ["wait", "\uD83D\uDCA4"],
       ["process_output", "\uD83D\uDCDC"],
+      ["generating question", QUESTION_EMOJI],
     ];
     var ACTION_FALLBACK = "\u2699\uFE0F";
     var EMOJI_HOLD_MS = 5000;

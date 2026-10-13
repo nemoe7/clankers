@@ -919,6 +919,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     stop = true;
     sync();
     assert.equal(page.title, "Arena | clankers \uD83D\uDDA5\uFE0F", `The bash row raises its mark: ${page.title}`);
+    // The generating-questions action row takes the question mark, like the card.
+    roots = [agentRoot([labelRow("Generating questions\u2026", "")])];
+    sync();
+    assert.equal(page.title, "Arena | clankers \u2753", `The question row raises the mark: ${page.title}`);
     // The title line names the row kind and the anchors, and the speech read is gone.
     const titleLines = logged.filter((line) => line.indexOf("[title]") !== -1);
     assert.ok(titleLines.length > 0, "the title path logs a line");
