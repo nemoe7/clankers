@@ -56,10 +56,12 @@ TASK_REMINDER='{remaining} tasks left.'
 def fill_reminder(tail,remaining):
 	if'{remaining}'in tail and remaining==0:return None
 	count=f"{remaining} task"if remaining==1 else f"{remaining} tasks";return tail.replace('{remaining} tasks',count)
-def reminder_tail(cursor,remaining):
+def reminder_tail(cursor,remaining,stale=0):
 	for step in range(len(REMINDERS)):
 		tail=fill_reminder(REMINDERS[(cursor+step)%len(REMINDERS)],remaining)
-		if tail:return tail
+		if tail:
+			if tail=='Unpublish stale reports.'and stale:return f"Unpublish {stale} stale report{'s'if stale!=1 else''}."
+			return tail
 	return REMINDERS[cursor%len(REMINDERS)]
 REMINDERS='Refresh: ARENA.md, SKILL.md.','`task-list` at turn start. Update it as work changes.','Take the smallest open task next.','Always push.','`ask_user` on GH_TOKEN failure.','Keep docs terse but clear.','Ask questions ASAP in reports.','Publish your reports.','Never end a turn with unblocked tasks.','Unpublish stale reports.','End the turn with `poll`.','Grep-verify each edit.',TASK_REMINDER,'Rebase `origin/main` before pushing; empty checks mean it moved.',"Check the PR's CI before ending a pushed turn; read the run's verdict on a later call, never a loop in the call.",'Run `arena-preview`, not the full path.'
 REMINDER_CURSOR='reminder_cursor'
@@ -1331,7 +1333,7 @@ class Store:
 		with closing(self.connect())as db,db:
 			uploads=db.execute('SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL').fetchone()[0];notes=db.execute('SELECT count(*) FROM notes WHERE acknowledged_at IS NULL').fetchone()[0]-uploads;reports=db.execute('SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL').fetchone()[0];remaining=db.execute("SELECT count(*) FROM tasks WHERE status <> 'finished'").fetchone()[0];published=db.execute('SELECT count(*) FROM reports WHERE published_at IS NOT NULL').fetchone()[0];stale=self.stale_report_ids(db)if published>=STALE_REPORT_THRESHOLD else[];cursor=meta_number(db,REMINDER_CURSOR);polls=0 if advance and not notes+reports+uploads else meta_number(db,POLLS_SINCE_MESSAGE)+(1 if advance else 0);blocked=bool(gate_pending_count(db))and polls>=GATE_THRESHOLD;db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(REMINDER_CURSOR,str(cursor+1)))
 			if advance:db.execute('INSERT OR REPLACE INTO meta VALUES (?, ?)',(POLLS_SINCE_MESSAGE,str(polls)))
-		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=['blocked']if blocked else[f"calls {polls}"]if polls and counts else[];tail=f"Unpublish {len(stale)} stale report{'s'if len(stale)!=1 else''}."if stale else reminder_tail(cursor,remaining);parts=[' '.join([*head,*unacked]).strip(),tail];return' | '.join(parts).strip(' |')
+		counts=[f"{count} {kind}{'s'if count!=1 else''}"for(count,kind)in((notes,'note'),(reports,'answer'),(uploads,'upload'))if count];unacked=[f"unacked {', '.join(counts)}"]if counts else[];head=['blocked']if blocked else[f"calls {polls}"]if polls and counts else[];tail=reminder_tail(cursor,remaining,len(stale));parts=[' '.join([*head,*unacked]).strip(),tail];return' | '.join(parts).strip(' |')
 	def calls_since_message(self):
 		with closing(self.connect())as db:return meta_number(db,POLLS_SINCE_MESSAGE)
 	def gate(self,threshold=GATE_THRESHOLD,pending_only=False):
