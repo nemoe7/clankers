@@ -19,6 +19,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Gemini release packer uses exact-token binary search for ordered chunks. It splits only an oversized evidence item. The log shows the final plan and its probe total instead of each probe.
 - The Gemini release workflow now reads a target-owned evidence policy. It sends selected paths only, skips exact `Release-note: skip` commits and stops unknown paths before a Gemini call. Its log lists the selected and omitted commits.
 
+#### rules
+
+- Unavoidable assumptions now appear in the acknowledgement before work starts.
+
 #### maintenance
 
 - The measurements, minify and publish test harnesses now run through pytest. Product gates stay runnable as scripts.

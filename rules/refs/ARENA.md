@@ -87,7 +87,7 @@
 - When the task list is not empty and a task is blocked on user intervention or approval, MUST publish a report form for that task, tell the user in one line, and continue with the other tasks instead of stalling.
 - A report-only task's report MUST carry a text input for the owner's further instructions and MUST include an option for no further instruction.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; when a report form awaits answers and no unblocked work remains, run `poll`.
-- If an assumption is unavoidable, make the most reasonable one and state it immediately; NEVER use an assumption to bypass material ambiguity.
+- If an assumption is unavoidable, state it in the acknowledgement before work starts, make the most reasonable one, and NEVER use it to bypass material ambiguity.
 
 ## Engineering
 
