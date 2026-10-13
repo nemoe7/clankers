@@ -3942,6 +3942,38 @@ def test_run_records_the_exit_and_announces_it_once(capsys):
     assert preview.run_command(directory, "empty", ["--"]) == 2
 
 
+def test_a_logs_call_reads_the_routed_run_status_and_output():
+  """A routed run reads back through the logs command, live and finished."""
+  with tempfile.TemporaryDirectory() as log_dir:
+    live_detached_placeholder(log_dir, "watch", ["bash", "-c", "make check"])
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": log_dir}
+
+    def cli(*arguments):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    live = cli("logs", "watch")
+    assert live.returncode == 0, live.stderr
+    assert live.stdout.startswith("run watch running "), live.stdout
+    preview.run_command(
+      log_dir,
+      "watch",
+      ["--", sys.executable, "-c", "print('first'); raise SystemExit(3)"],
+    )
+    done = cli("logs", "watch")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.startswith("run watch done: exit 3 "), done.stdout
+    assert "first" in done.stdout, done.stdout
+    missing = cli("logs", "nothing")
+    assert missing.returncode == 1, missing.stdout
+    assert "No routed gate named nothing." in missing.stdout + missing.stderr
+
+
 def test_a_failed_background_start_keeps_the_refusal(capsys, monkeypatch):
   # A spawn that never left must not read as a running wait: the tick refuses the line
   # and names the route command that takes it.

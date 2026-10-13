@@ -2372,6 +2372,20 @@ def route_command(state_dir, name, argv):
   return 0
 
 
+def run_log_report(state_dir, name):
+  """Print one routed run's recorded status and its output tail."""
+  record = routed_record(state_dir, name)
+  if record.get("exit") is None:
+    elapsed = detached_seconds(record.get("started_at"))
+    age = f" {elapsed}s" if elapsed is not None else ""
+    print(f"run {name} running{age}")
+    return 0
+  print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
+  for line in record.get("tail") or []:
+    print(line)
+  return 0
+
+
 def poll_inbox(store, sleeper=None):
   if sleeper is None:
     sleeper = time.sleep
@@ -5307,6 +5321,10 @@ def main():
   route_run.add_argument(
     "command_args", nargs=argparse.REMAINDER, help="The command, after --"
   )
+  logs = commands.add_parser(
+    "logs", help="Print a routed run's status and its recorded output tail"
+  )
+  logs.add_argument("name", help="The run name to read")
   worktree = commands.add_parser(
     "worktree", help="Create or collect a detached task worktree beside a root gate"
   )
@@ -5558,6 +5576,8 @@ def main():
         print(warning, file=sys.stderr)
         return 1
       return run_command(state_dir, args.name, args.command_args)
+    if args.command == "logs":
+      return run_log_report(state_dir, args.name)
     if args.command == "ack-tick":
       warning = tick_warning(args.line)
       if warning:
