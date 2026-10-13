@@ -43,6 +43,11 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Rule violations now go through preview reports.
 - The Arena Workspace freeze now covers the root tree only. A queued task that edits other files starts a worktree while the root gate runs, and read-only tracing is not its waiting mode.
 - The Arena Workspace run-wait line now bans the mid-task `arena-preview poll` as a run wait. The verdict arrives on the next call, and the turn-end poll keeps its rule.
+- The Arena read set now names the arena-skill `SKILL.md` only. The reference stays supplementary, with no end-to-end read.
+- The Arena merge rule is now a single never-merge clause. The separate rebase-merge clause is gone.
+- The Arena constitution drops two mechanical rules. The Git section keeps the commit-list rule, and the post-edit grep rule moves to Verification.
+- Two Arena rules now use preferences: several passes with a re-check, and the shortest atomic history.
+- The house AGENTS.md splits the CHANGELOG bullet into four rules. It restores the reports list marker and drops the history and measurement background that `maintenance/README.md` already carries.
 
 #### maintenance
 
@@ -56,6 +61,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill sends workaround and bypass violations through preview reports.
 - The Arena skill requires task details to include a landed commit subject and short hash.
 - The Arena skill now states the waiting mode for a queued file task with non-overlapping paths. It works in the worktree while the gate runs, never read-only.
+- The Arena skill moves the gate and worktree rules out of Setup into their own section. The worktree trigger now names the declared path globs.
+- The preview reference lists `logs`, `worktree`, `download-request` and `stale-reports`, and requires the bare `arena-preview` call form for every command. A test compares its commands table with the CLI parser.
 
 ## 2026-10-12
 

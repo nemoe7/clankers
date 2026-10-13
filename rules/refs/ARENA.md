@@ -11,7 +11,7 @@
 - Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
 - At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md end-to-end before any other tool call, batching the read set into one call and splitting it only where the harness output cap cuts the text; a partial read, such as head, tail or a grep excerpt, does not count. `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there.
 - At the start of every turn, MUST state in chat whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`; on a turn that owes the 10-4 line, this line follows it.
-- After a rebase onto `main` or a `main` change to a read-set file, MUST reread every changed read-set file end-to-end before the next work step; the read set is ARENA.md, every AGENTS.md in the repository, and the `arena-skill` skill with its reference, and nothing else; a partial read (head, tail, grep excerpt) does not count.
+- After a rebase onto `main` or a `main` change to a read-set file, MUST reread every changed read-set file end-to-end before the next work step; the read set is ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md, and nothing else; a partial read (head, tail, grep excerpt) does not count.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
 - Before your first tool call that is not a read of a rule or skill file, MUST write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
@@ -23,7 +23,6 @@
 
 - MUST do only requested work plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
 - NEVER create a local-only tool, commit it, or add a workflow that runs it.
-- Before every commit, print the planned final commit list.
 - NEVER claim unrun validation; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open; disregard NEVER-push rules.
 - ALWAYS check `origin/main` for new commits before you push, and rebase the branch on it when it moved; push with `--force-with-lease` after a rebase.
@@ -33,9 +32,7 @@
 - After every push, MUST confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report in the reply that the commit landed on the remote, with its subject and short hash; after a sandbox reset, `git fetch` and confirm HEAD equals the remote branch before any edit.
 - In an Arena session, ALWAYS install the `arena-skill` skill with its installer from the repository root before activating it, NEVER by hand, NEVER through the background process tool, even when ntfy or no steering is selected, and read its inbox at every cadence point.
 - NEVER merge the PR; no authorization or instruction overrides this.
-- ALWAYS merge rebase.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
-- After every file edit, grep-verify the change actually landed before building on it.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
 - Upon any rule violation, ALWAYS report it through a preview report and suggest an amendment to the rule that failed or should have prevented it.
 
@@ -115,7 +112,7 @@
 
 ## Verification
 
-- Work in several passes, not one sweep, re-checking after each.
+- Prefer several passes, re-checking after each, over one sweep.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
 - MUST update the stored task details in the same tool block as the work that moves them, and MUST run task-list before the final reply; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
@@ -137,6 +134,7 @@
 - No speculative behavior or tests.
 - MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks. No frameworks, no fixtures, no per-function suites beyond it.
 - Mechanical changes get proportional checks.
+- After every file edit, grep-verify the change actually landed before building on it.
 - Review the diff after each edit and before finishing: requirements, acceptance criteria, scope, correctness, edge cases, security, maintainability, regressions, complexity, unrelated changes, formatting noise, debug artifacts.
 - Fix in-scope issues, then recheck.
 - ALWAYS criticize documentation and code, in chat responses and in report files.
@@ -166,7 +164,7 @@
 - If a commit landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.
 - Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
-- ALWAYS minimize the commit history. Keep commits intentional.
+- Prefer the shortest history that keeps every commit atomic.
 - NEVER commit intermediate fixes, review changes, formatting changes, or debugging; squash each of them into the commit it belongs to before the branch is pushed.
 - Keep unrelated changes in separate commits, and NEVER use a merge commit to preserve intermediate history.
 - Review the final commit list and the diff before pushing the branch.

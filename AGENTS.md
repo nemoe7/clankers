@@ -40,7 +40,10 @@ Read these first:
 - Deleted clause: attempt one squash and keep whichever budget is lower.
 - Use a Conventional Commit subject, no body.
 - Stage only task-related files.
-- Keep one CHANGELOG entry per date, extending it while the date holds. Use dates as versions: a date heading reads `## YYYY-MM-DD`, with no bracket and no repeated date. Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain, and omit Unreleased.
+- Keep one CHANGELOG entry per date, extending it while the date holds.
+- Use dates as versions: a date heading reads `## YYYY-MM-DD`, with no bracket and no repeated date.
+- Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
+- Omit Unreleased.
 - Omit version numbers from CHANGELOG entries.
 
 ## Repository type
@@ -57,7 +60,7 @@ Read these first:
 1. `npx --yes markdownlint-cli2` from the repository root, with no extra globs.
 2. `ruff check .` and `ruff format --diff .` at the version `ruff.toml` pins.
 3. `python3 maintenance/check.py` (`python` on Windows); add `--update` to refresh README measurements. It gates the root copy: `ARENA.md` stays byte-identical to `rules/ARENA.md`, which `.github/workflows/distribute.yml` pushes to the target repositories.
-4. Arena sandbox only: install the Python dependencies into a venv, since system `pip` refuses under PEP 668, and run `npm ci` once. Token measurement rides the npm package `gpt-tokenizer`, whose BPE ranks ship inside the package, so no cache seeding is needed even where `openaipublic.blob.core.windows.net` is unreachable. [maintenance/README.md](maintenance/README.md) has the general procedure. Steering now uses `skills/arena-skill` and its local preview inbox for messages and reports. The former ntfy and local-report-commit workflows are historical in the `arena-skill` skill's reference. No automatic fallback is authorized.
+4. Arena sandbox only: install the Python dependencies into a venv, since system `pip` refuses under PEP 668, and run `npm ci` once. [maintenance/README.md](maintenance/README.md) has the general procedure, the token-measurement note and the steering history. Steering uses `skills/arena-skill` and its local preview inbox for messages and reports; no automatic fallback is authorized.
 
 ## Rules
 
@@ -78,7 +81,7 @@ Read these first:
 - Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line. Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote. Omit only unchanged context with `...`. Quote clauses in double quotes, NEVER backticks, in proposals, acks, and reports. Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom; put its options directly under its row, and start a new table for the next clause under the same file heading. Put it above form fields; a form without it is not a proposal. Open the report with `Status: proposal. No line lands before approval.` and a `Citation:` line naming the GUIDELINES section, and follow each table with `Decision on the amended line:` and the approve, squash, reject and custom options. Code changes need no proposal; keep them lean.
 - Proposals come before any task: in a turn that holds both, show every proposal first, then start tasks.
 - Run an amendment proposal task first, before any other queued work.
-Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
+- Only Arena agents MUST publish a proposal through the `arena-skill` skill in an ignored workspace file; its approval question is a fielded report field, and blind approval approves nothing.
 - NEVER commit or push report artifacts.
 - A report that fits in chat stays in chat; omit its Markdown artifact and reporting pipeline.
 - Ledger prose: neutral wording — actions, files, numbers; no narrative, rationale or story.

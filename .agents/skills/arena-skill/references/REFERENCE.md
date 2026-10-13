@@ -1,6 +1,6 @@
 # Preview transport: commands and recovery
 
-Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. The state directory uses `ARENA_PREVIEW_STATE_DIR` when set, and repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts. The installed wrapper finds the repository from its own path, so every CLI call works from any working directory and needs no `cd`.
+Run every command as the bare `arena-preview`; the script under the installed `arena-skill` skill is `scripts/preview.py`. The state directory uses `ARENA_PREVIEW_STATE_DIR` when set, and repository `arena-state` otherwise. Keep the same ignored, persisted directory across CLI calls and server restarts. The installed wrapper finds the repository from its own path, so every CLI call works from any working directory and needs no `cd`.
 
 ## Commands
 
@@ -13,6 +13,9 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after acknowledging the quiet note |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list for an unblocked upcoming task, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
 | `route <name> -- <command>` | The gate's helper for a detected long run, and the call a failed start names: it starts the command detached under a name and records its tail and exit, so the verdict prints on a later call as `run <name> done: exit N`, with one status line per call while it runs |
+| `logs <name>` | Print a routed run's status and its recorded output tail; it works while the run lives and after its verdict |
+| `worktree start --gate <gate-name> [--allow <glob>] <name> <destination>` | Create a detached task worktree outside the root while the named root gate runs |
+| `worktree collect <name>` | Print the allowed detached-worktree patch after a green root gate |
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line; quote it the same way |
 | `ack <id> --reply-file <path>` | Read the rendered reply from a file, so no shell quoting touches a backtick; `--note-file` reads the plain line the same way. The gate warns when an inline ack text holds a backtick inside double quotes |
@@ -20,8 +23,10 @@ Use `scripts/preview.py` relative to the actual installed `arena-skill` skill. T
 | `task ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and reject a write that leaves none; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--blocked` or `--unblocked` sets the blocked mark |
 | `task-remove ID` | Remove a task entered by mistake |
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it replaces the live notes, answers, reports and tasks unless `--merge` keeps them; `--replace-tasks` replaces only tasks |
+| `download-request <url>` | Queue one pending file download for the owner to approve in Downloads; `--allow-proxy` permits the two proxies |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
 | `unpublish <id>` | Remove a report from the tab; its answers and source survive. It refuses while the owner has an unseen answer ack, or within the minute after the owner's last look. A held call answers `409` |
+| `stale-reports` | List stale published report IDs and reasons without changing state |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token |
 
