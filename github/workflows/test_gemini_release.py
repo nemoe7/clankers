@@ -381,7 +381,7 @@ def test_release_pipeline():
     patch.object(release, "summary"),
   ):
     assert (
-      release.release_body(shared, {"phase": "version"}, "test", carrier) == "patch"
+      release.release_body(shared, {"phase": "proposal"}, "test", carrier) == "patch"
     )
   assert carried == [shared]
   selected_models = []
@@ -601,7 +601,7 @@ def test_release_pipeline():
   assert release.model_ladder(" a-1 , b.2 ") == ["a-1", "b.2"]
   fails(lambda: release.model_ladder(","), "Model ladder is empty")
   fails(lambda: release.model_ladder("a b"), "Invalid Gemini model ID: a b")
-  for phase in ("chunk", "combine", "release", "repair", "version"):
+  for phase in ("chunk", "combine", "release", "repair", "proposal"):
     with patch.object(
       release,
       "gemini_call",
@@ -616,10 +616,12 @@ def test_release_pipeline():
     ) as call:
       release.COOLDOWNS.clear()
       assert release.generate({"phase": phase}, [], "test") == "notes"
+      request = call.call_args_list[1].args[2]
+      assert request["systemInstruction"]["parts"][0]["text"] == release.PROMPTS[phase]
       assert (
-        call.call_args_list[1].args[2]["systemInstruction"]["parts"][0]["text"]
-        == release.PROMPTS[phase]
-      )
+        request.get("generationConfig", {}).get("responseMimeType")
+        == "application/json"
+      ) == (phase == "proposal")
   payload = {
     "id": 2,
     "tag_name": "v2",
@@ -786,15 +788,15 @@ def test_release_pipeline():
         lambda item=item: release.download_proposal("owner/repo", item),
         "no valid digest",
       )
-  assert release.PROMPTS["version"].startswith(
-    "Task: classify the release impact of the supplied commit messages"
+  assert release.PROMPTS["proposal"].startswith(
+    "Task: determine the release impact and write release notes"
   )
   # GUIDELINES.md section 4: one rule per line, each a bullet, boundaries in every prompt.
   for prompt in release.PROMPTS.values():
     lines = prompt.strip().splitlines()
     assert lines[0].startswith("Task: ") and all(l.startswith("- ") for l in lines[1:])
     assert release.BOUNDARY in prompt and lines[-1].startswith("- Return only")
-  assert set(release.PROMPTS) == {"chunk", "combine", "release", "repair", "version"}
+  assert set(release.PROMPTS) == {"chunk", "combine", "release", "repair", "proposal"}
   assert "style reference" in release.PROMPTS["release"]
   assert "NEVER use them as evidence" in release.PROMPTS["release"]
   assert release.TEMPLATE.startswith("## Summary\n")
@@ -948,26 +950,27 @@ def test_release_pipeline():
     notes.return_value = (
       f"## Summary\n\nnew change\n\n## Commit comparison\n\n{compare_url}\n"
     )
-    version_context = []
+    proposal_context = []
 
-    def capture_classification(_units, context, _model):
-      version_context.append(dict(context))
-      return "patch"
+    def capture_combined(_units, context, _model, on_success=None):
+      proposal_context.append(dict(context))
+      if on_success is not None:
+        on_success("test")
+      return {"impact": "patch", "body": notes.return_value}
 
     with (
       patch.dict(os.environ, {"IMPACT_OVERRIDE": "auto"}),
-      patch.object(release, "classify", side_effect=capture_classification),
+      patch.object(release, "combined_release", side_effect=capture_combined),
     ):
       release.propose("owner/repo", "main")
-    assert notes.call_args.args[1]["previous_release_notes"] == previous_notes
-    assert len(version_context) == 1
-    assert "previous_release_notes" not in version_context[0]
+    assert len(proposal_context) == 1
+    assert proposal_context[0]["previous_release_notes"] == previous_notes
     stored = json.loads(Path(directory, "proposal.json").read_text())
     assert stored["baseline_release"] == baseline_record
-  # The proposal reduces the evidence once and hands the same summaries to the
-  # classification and the release body, so no phase re-chunks the raw commits.
+  # The auto proposal reduces raw evidence once, then makes one structured request for
+  # both the SemVer impact and release body.
   shared = [{"id": "summary:0", "text": "combined"}]
-  prepared_units, classified_units, body_units = [], [], []
+  prepared_units, proposal_units = [], []
 
   def prepared_spy(
     units, context, model, generate_fn=release.generate, phase="evidence"
@@ -975,13 +978,11 @@ def test_release_pipeline():
     prepared_units.append(list(units))
     return shared
 
-  def classify_spy(units, context, model):
-    classified_units.append(list(units))
-    return "patch"
-
-  def body_spy(units, context, model, **options):
-    body_units.append(list(units))
-    return empty_feature_body
+  def proposal_spy(units, context, model, on_success=None):
+    proposal_units.append(list(units))
+    if on_success is not None:
+      on_success("test")
+    return {"impact": "patch", "body": empty_feature_body}
 
   with (
     tempfile.TemporaryDirectory() as directory,
@@ -1000,52 +1001,37 @@ def test_release_pipeline():
     patch.object(release, "releases", return_value=[]),
     patch.object(release, "remote_ref", return_value=None),
     patch.object(release, "prepared", prepared_spy),
-    patch.object(release, "classify", classify_spy),
-    patch.object(release, "release_body", body_spy),
+    patch.object(
+      release, "release_body", side_effect=AssertionError("separate body call")
+    ),
+    patch.object(release, "combined_release", proposal_spy),
   ):
     release.propose("owner/repo", "main")
   assert prepared_units == [[("id", "diff")]]
-  assert classified_units == [shared]
-  assert body_units == [shared]
-  with patch.object(release, "release_body", return_value="minor"):
-    assert release.classify([("id", "diff")], {}, "test") == "minor"
-  with patch.object(release, "release_body", return_value="maybe minor"):
-    fails(
-      lambda: release.classify([("id", "diff")], {}, "test"),
-      "invalid version classification",
-    )
-  # The classification request carries the version phase, whatever round answers it.
-  prompt_phases = []
-
-  def phase_spy(context, evidence, model):
-    prompt_phases.append(context.get("phase", "release"))
-    return "patch"
-
+  assert proposal_units == [shared]
+  structured = json.dumps({"impact": "minor", "body": empty_feature_body})
+  selected_models = []
+  with patch.object(release, "release_body", return_value=structured) as request:
+    assert release.combined_release(
+      [("id", "diff")], {}, "test", on_success=selected_models.append
+    ) == {"impact": "minor", "body": empty_feature_body}
+  assert request.call_args.args[1]["phase"] == "proposal"
+  assert request.call_args.kwargs["on_success"] is not None
+  fails(lambda: release.proposal_result("not JSON"), "invalid proposal JSON")
+  fails(
+    lambda: release.proposal_result(
+      json.dumps({"impact": "minor", "body": "x", "extra": 1})
+    ),
+    "only impact and body",
+  )
+  fails(
+    lambda: release.proposal_result('{"impact":"minor","impact":"patch","body":"x"}'),
+    "invalid proposal JSON",
+  )
   small_counts = patch.object(release, "measured", lambda model, request: 10)
-  with small_counts, patch.object(release, "summary"):
-    assert (
-      release.release_body([("id", "diff")], {"phase": "version"}, "test", phase_spy)
-      == "patch"
-    )
-  assert prompt_phases == ["version"]
-  prompt_phases.clear()
-
-  def by_chars(model, request):
-    payload = json.loads(request["contents"][0]["parts"][0]["text"])
-    return sum(len(item["text"]) for item in payload["evidence"])
-
-  with (
-    patch.object(release, "measured", by_chars),
-    patch.object(release, "CHUNK_TOKENS", 350),
-    patch.object(release, "summary"),
-  ):
-    release.release_body(
-      [(str(n), "x" * 100) for n in range(80)], {"phase": "version"}, "test", phase_spy
-    )
-  assert prompt_phases[0] == "chunk" and prompt_phases[-1] == "version"
-  # An invalid classification retries on the next rung. The run stops only when
-  # every rung refused the word.
-  answers = ["maybe minor", "minor"]
+  # An invalid structured answer retries on the next rung. The run stops only when
+  # every rung refuses the required object.
+  answers = ["not JSON", structured]
   real_release_body = release.release_body
 
   def flaky(context, evidence, model):
@@ -1055,16 +1041,17 @@ def test_release_pipeline():
     return real_release_body(units, context, model, flaky, **options)
 
   def always_invalid(units, context, model, **options):
-    return real_release_body(
-      units, context, model, lambda *args: "maybe minor", **options
-    )
+    return real_release_body(units, context, model, lambda *args: "not JSON", **options)
 
   with (
     small_counts,
     patch.object(release, "summary") as retried,
     patch.object(release, "release_body", routed),
   ):
-    assert release.classify([("id", "diff")], {}, ["first", "second"]) == "minor"
+    assert release.combined_release([("id", "diff")], {}, ["first", "second"]) == {
+      "impact": "minor",
+      "body": empty_feature_body,
+    }
   assert any(
     "retrying on the next rung" in call.args[0] for call in retried.call_args_list
   )
@@ -1074,8 +1061,8 @@ def test_release_pipeline():
     patch.object(release, "release_body", always_invalid),
   ):
     fails(
-      lambda: release.classify([("id", "diff")], {}, ["only"]),
-      "invalid version classification",
+      lambda: release.combined_release([("id", "diff")], {}, ["only"]),
+      "invalid proposal answer",
     )
   with patch.object(
     release, "api", side_effect=[{"commit": {"sha": "b" * 40}}, {"status": "diverged"}]
