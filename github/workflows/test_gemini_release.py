@@ -433,20 +433,28 @@ def test_release_pipeline():
     def __exit__(self, *_):
       self.close()
 
+  call_order = []
+
+  def record_request(*_args, **_kwargs):
+    call_order.append("request")
+    return HttpResponse(b'{"ok": true}', 200)
+
   with (
     patch.dict(os.environ, {"GEMINI_API_KEY": "AIzaSecret1"}),
+    patch.object(release.urllib.request, "urlopen", side_effect=record_request),
     patch.object(
-      release.urllib.request,
-      "urlopen",
-      return_value=HttpResponse(b'{"ok": true}', 200),
+      release,
+      "summary",
+      side_effect=lambda message: call_order.append(message),
     ),
-    patch.object(release, "summary") as status_log,
   ):
     assert release.gemini_call("gemini-3.8-flash", "generateContent", {}) == {
       "ok": True
     }
-  # A successful call is silent. The ladder prints the one line that matters.
-  assert status_log.call_args is None
+  assert call_order == [
+    "Gemini model attempt: gemini-3.8-flash (generateContent)",
+    "request",
+  ]
   with (
     patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}),
     patch("builtins.print") as print_output,

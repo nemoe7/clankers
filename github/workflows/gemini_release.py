@@ -555,6 +555,7 @@ def gemini_call(model, action, payload):
       "x-goog-api-key": os.environ["GEMINI_API_KEY"],
     },
   )
+  summary(f"Gemini model attempt: {model} ({action})")
   try:
     with urllib.request.urlopen(request, timeout=180) as response:
       return json.load(response)
