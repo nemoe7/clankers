@@ -20,6 +20,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- State import now accepts older backups. Its CLI no longer has `--force`.
 - Agent report changes now wait only for an unacknowledged answer, an owner-unseen acknowledgement, or a recent report view. An owner can unpublish an unseen report at once.
 - Finished tasks record their first completion time. The preview shows the newest first, clears the time on reopen, and saves it with task state.
 

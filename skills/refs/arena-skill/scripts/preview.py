@@ -1363,11 +1363,7 @@ def format_import_receipt(receipt):
   answers = receipt.get("answers", 0)
   reports = receipt.get("reports", 0)
   tasks = receipt.get("tasks", 0)
-  forced = receipt.get("forced")
-  base = f"Imported notes {notes}, answers {answers}, reports {reports}, tasks {tasks}"
-  if forced:
-    base += " (forced)"
-  return base
+  return f"Imported notes {notes}, answers {answers}, reports {reports}, tasks {tasks}"
 
 
 def format_clear_state(counts):
@@ -3841,33 +3837,7 @@ class Store:
     self.autosave()  # the completion wrote an inbox note. Unfinished queue rows stay only in SQLite
     return fetch_row(result, self.path.parent)
 
-  def stale_import(self, db, messages):
-    """Return the two stamps when the live state is fresher than the import.
-
-    A paste of an old copy must not write over a state that already holds newer
-    messages. Both stamps come back so the refusal can name them, and an import
-    with no messages or no live state never counts as stale.
-    """
-    newest_import = max(
-      [s for s in (import_stamp(r.get("at")) for r in messages) if s],
-      default=None,
-    )
-    newest_live = max(
-      [
-        stamp
-        for stamp in (
-          import_stamp(db.execute("SELECT MAX(at) FROM notes").fetchone()[0]),
-          import_stamp(db.execute("SELECT MAX(at) FROM submissions").fetchone()[0]),
-        )
-        if stamp
-      ],
-      default=None,
-    )
-    if newest_import and newest_live and newest_live > newest_import:
-      return newest_live, newest_import
-    return None
-
-  def import_state(self, text, replace_tasks=False, force=False, merge=False):
+  def import_state(self, text, replace_tasks=False, merge=False):
     "Import a backup. Replace live entries unless the caller requests merge."
     records = parse_state_import(text)
     reports = [r for r in records if "markdown" in r and "text" not in r]
@@ -3879,15 +3849,6 @@ class Store:
     ]
     with self.transaction(autosave=False) as db:
       db.execute("BEGIN IMMEDIATE")
-      stale = self.stale_import(db, messages)
-      if stale and not force:
-        live, older = stale
-        raise ValueError(
-          "Refuse the import: the live state is fresher"
-          f" (live {clip_stamp(live.isoformat())},"
-          f" import {clip_stamp(older.isoformat()) if older else 'none'})."
-          " Pass --force to import anyway."
-        )
       if not merge:
         for table in ("notes", "reports", "submissions", "tasks"):
           db.execute(f"DELETE FROM {table}")
@@ -3923,9 +3884,6 @@ class Store:
       "reports": len(reports),
       "tasks": len(tasks),
     }
-    if stale:
-      # The guard refused this import unless `force` asked for it, so the receipt says so.
-      receipt["forced"] = True
     return receipt
 
   def import_reports(self, records, shared=None):
@@ -5550,12 +5508,6 @@ def main():
     action="store_true",
     help="keep the live notes, answers, reports and tasks, and merge the import by ID",
   )
-  state_import.add_argument(
-    "-f",
-    "--force",
-    action="store_true",
-    help="import even when the live state holds newer messages",
-  )
   commands.add_parser(
     "clear-state",
     help="Empty every state table in place; the agent key record survives",
@@ -5886,9 +5838,7 @@ def main():
         args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
       )
       print(
-        format_import_receipt(
-          store.import_state(text, args.replace_tasks, args.force, args.merge)
-        )
+        format_import_receipt(store.import_state(text, args.replace_tasks, args.merge))
       )
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
