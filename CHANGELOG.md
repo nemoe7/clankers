@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-13
 
+### Added
+
+#### preview
+
+- The Arena preview can create a detached task worktree while a root gate runs. It blocks gate, commit and push actions there. It collects an allowed diff only after the gate passes.
+
 ### Changed
 
 #### workflows

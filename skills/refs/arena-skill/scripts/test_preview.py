@@ -3786,6 +3786,176 @@ def test_route_starts_the_run_detached(tmp_path, monkeypatch):
   assert json.loads(record.read_text(encoding="utf-8"))["exit"] == 0
 
 
+def test_worktree_gate_flow():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / "root"
+    root.mkdir()
+
+    def git(*args, cwd=root, input=None):
+      result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        input=input,
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert result.returncode == 0, result.stderr
+      return result.stdout
+
+    git("init", "-b", "main")
+    git("config", "user.name", "Check")
+    git("config", "user.email", "check@example.invalid")
+    (root / "allowed").mkdir()
+    (root / "allowed" / "change.txt").write_text("before\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-m", "base")
+    state_dir = Path(directory) / "state"
+    preview.Store(state_dir, create=True)
+    preview.write_detached_placeholder(state_dir, "task-a", ["bash", "-c", "pytest"])
+    worktree = Path(directory) / "task-b"
+    script = str(Path(preview.__file__))
+    environment = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(state_dir)}
+    invalid_gate = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "worktree",
+        "start",
+        "invalid-gate",
+        str(Path(directory) / "invalid-gate"),
+        "--gate",
+        "../gate",
+        "--allow",
+        "allowed/**",
+      ],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert invalid_gate.returncode == 1 and "Gate names" in invalid_gate.stderr
+    started = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "worktree",
+        "start",
+        "task-b",
+        str(worktree),
+        "--gate",
+        "task-a",
+        "--allow",
+        "allowed/**",
+      ],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert started.returncode == 0, started.stderr
+    nested = subprocess.run(
+      [
+        sys.executable,
+        script,
+        "worktree",
+        "start",
+        "nested",
+        str(Path(directory) / "nested"),
+        "--gate",
+        "task-a",
+        "--allow",
+        "allowed/**",
+      ],
+      cwd=worktree,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert nested.returncode == 1 and "registered root" in nested.stderr
+    assert git("branch", "--show-current", cwd=worktree).strip() == ""
+    blocked = subprocess.run(
+      [sys.executable, script, "worktree-tick", "gate"],
+      cwd=worktree,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert blocked.returncode == 1 and "WORKTREE BLOCKED" in blocked.stderr
+    for action in ("commit", "push"):
+      blocked = subprocess.run(
+        [sys.executable, script, "worktree-tick", action],
+        cwd=worktree,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert blocked.returncode == 1 and "WORKTREE BLOCKED" in blocked.stderr
+    routed = subprocess.run(
+      [sys.executable, script, "route", "task-c", "--", "true"],
+      cwd=worktree,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert routed.returncode == 1 and "WORKTREE BLOCKED" in routed.stderr
+    committed = subprocess.run(
+      [sys.executable, script, "commit-tick", "--repo", str(worktree)],
+      cwd=worktree,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert committed.returncode == 1 and "WORKTREE BLOCKED" in committed.stderr
+    waiting = subprocess.run(
+      [sys.executable, script, "worktree", "collect", "task-b"],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert waiting.returncode == 1 and "still running" in waiting.stderr
+    run_path = state_dir / "runs" / "task-a.json"
+    run = json.loads(run_path.read_text(encoding="utf-8"))
+    run.update({"exit": 0, "seconds": 1, "verdict": "passed"})
+    run_path.write_text(json.dumps(run), encoding="utf-8")
+    (worktree / "allowed" / "change.txt").write_text("after\n", encoding="utf-8")
+    (worktree / "allowed" / "new.txt").write_text("new\n", encoding="utf-8")
+    (worktree / "outside.txt").write_text("outside\n", encoding="utf-8")
+    refused = subprocess.run(
+      [sys.executable, script, "worktree", "collect", "task-b"],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert refused.returncode == 1 and "outside.txt" in refused.stderr
+    (worktree / "outside.txt").unlink()
+    collected = subprocess.run(
+      [sys.executable, script, "worktree", "collect", "task-b"],
+      cwd=root,
+      env=environment,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert collected.returncode == 0, collected.stderr
+    assert "allowed/change.txt" in collected.stdout
+    assert "allowed/new.txt" in collected.stdout
+    git("apply", "--binary", "-", input=collected.stdout)
+    assert (root / "allowed" / "change.txt").read_text(encoding="utf-8") == "after\n"
+    assert (root / "allowed" / "new.txt").read_text(encoding="utf-8") == "new\n"
+
+
 def test_a_detached_run_prints_one_status_line_per_call(capsys):
   """A detached wait reads as alive: one status line per gate call, none in a poll."""
   with tempfile.TemporaryDirectory() as detached_dir:

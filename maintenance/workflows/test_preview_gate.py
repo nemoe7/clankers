@@ -42,6 +42,9 @@ if [ "$1" = "pr-check-tick" ]; then
   export ARENA_PREVIEW_DETACH_DRY=1
   exec __PYTHON__ __PREVIEW__ pr-check-tick "$2"
 fi
+if [ "$1" = "worktree-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ worktree-tick "$2"
+fi
 if [ "$1" = "commit-tick" ]; then
   # Not a pure classifier: it reads the repository's staged diff and the session
   # database. Forwarding it would let the host repository's own staged content
@@ -429,6 +432,35 @@ def test_a_branch_behind_main_hears_the_replay_line():
     result = run("git commit --allow-empty -m four", cwd=str(repo))
     assert result.returncode == 0, result.stderr
     assert "Replay your commits over main" not in result.stderr
+
+
+def test_a_task_worktree_blocks_git_actions_and_a_gate():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    for name, command in (
+      ("commit", "git commit --allow-empty -m task"),
+      ("push", "git push origin task"),
+      ("gate", "pytest -q"),
+    ):
+      state = root / name
+      state.mkdir()
+      task_worktree = state / "task-worktree"
+      task_worktree.mkdir()
+      records = state / "worktrees"
+      records.mkdir()
+      (records / "task.json").write_text(
+        json.dumps(
+          {
+            "name": "task",
+            "root": str(state),
+            "worktree": str(task_worktree),
+          }
+        ),
+        encoding="utf-8",
+      )
+      result = run_in(command, state, cwd=str(task_worktree))
+      assert result.returncode == 130, result.stderr
+      assert "WORKTREE BLOCKED" in result.stderr, result.stderr
 
 
 def test_a_checks_line_meets_the_background_redirect():

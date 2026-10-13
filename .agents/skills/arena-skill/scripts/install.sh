@@ -262,12 +262,15 @@ _arena_preview_gate() {
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" egress-tick "\$BASH_COMMAND"
       ;;
   esac
-  # A commit that cites a session-local ID leaves a reader an ID nothing can resolve.
-  # The scan reads the staged diff against state. It ignores Git SHAs that are not session IDs. It matches full IDs and 7-character heads.
+  # A detached task worktree never commits. The ID scan then rejects session-local citations.
   # case: commit-id
   case "\$BASH_COMMAND" in
     *"git commit"*)
-      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" commit-tick --repo "$REPO_ROOT"
+      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" worktree-tick commit
+      case \$? in
+        1) exit 130 ;;
+      esac
+      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" commit-tick --repo .
       case \$? in
         1) exit 130 ;;
       esac
@@ -275,10 +278,14 @@ _arena_preview_gate() {
   esac
   # case: inert-line
   case "\$BASH_COMMAND" in *preview*|*profile*|*bashrc*|*arena-state*|gh*|sleep*|true*|:*|test*|"git status"*|"git diff"*|"git add"*|"git commit"*|*arena-workspace*|*"ss -ltn"*|*"netstat -ltn"*) return 0 ;; esac
-  # A push is a checkpoint: an unread note can change what leaves the sandbox, so it waits for an ack whatever the call count.
+  # A detached task worktree never pushes. The root push remains an inbox checkpoint.
   # case: push-checkpoint
   case "\$BASH_COMMAND" in
     *"git push"*)
+      "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" worktree-tick push
+      case \$? in
+        1) exit 130 ;;
+      esac
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" gate --push --line "\$_arena_preview_line" 2>/dev/null
       case \$? in
         1) exit 130 ;;

@@ -20,6 +20,7 @@ from contextlib import closing, contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
+from fnmatch import fnmatchcase
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, urlunsplit
@@ -1585,6 +1586,203 @@ def run_record_path(state_dir, name):
   return Path(state_dir) / "runs" / f"{name}.json"
 
 
+WORKTREE_DIR = "worktrees"
+WORKTREE_ACTIONS = {"gate": "a gate", "commit": "a commit", "push": "a push"}
+
+
+def worktree_record_path(state_dir, name):
+  return Path(state_dir) / WORKTREE_DIR / f"{name}.json"
+
+
+def json_record(path):
+  try:
+    record = json.loads(Path(path).read_text(encoding="utf-8"))
+  except (OSError, ValueError):
+    return None
+  return record if isinstance(record, dict) else None
+
+
+def routed_record(state_dir, name):
+  if not RUN_NAME.fullmatch(name or ""):
+    raise ValueError("Gate names take 1 to 64 letters, digits, dots, dashes or underscores.")
+  record = json_record(run_record_path(state_dir, name))
+  if record is None:
+    raise ValueError(f"No routed gate named {name}.")
+  return record
+
+
+def git_worktree(cwd, *args, input=None, allowed=(0,)):
+  """Run Git for a detached-worktree record and return its text output."""
+  try:
+    result = subprocess.run(
+      ["git", *args],
+      cwd=str(cwd),
+      input=input,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+  except OSError as error:
+    raise ValueError(f"Cannot run Git: {error}") from None
+  if result.returncode not in allowed:
+    detail = (result.stderr or result.stdout).strip()
+    raise ValueError(detail or f"Git {' '.join(args)} failed")
+  return result.stdout
+
+
+def git_worktree_root(cwd=None):
+  """The Git worktree root at cwd."""
+  root = git_worktree(cwd or Path.cwd(), "rev-parse", "--show-toplevel").strip()
+  return Path(root).resolve()
+
+
+def under_path(path, parent):
+  try:
+    Path(path).resolve().relative_to(Path(parent).resolve())
+  except ValueError:
+    return False
+  return True
+
+
+def stored_worktree(state_dir, name):
+  name = checked_worktree_name(name)
+  record = json_record(worktree_record_path(state_dir, name))
+  if record is None:
+    raise ValueError(f"No worktree named {name}.")
+  return record
+
+
+def worktree_at(state_dir, cwd=None):
+  current = Path(cwd or Path.cwd()).resolve()
+  directory = Path(state_dir) / WORKTREE_DIR
+  if not directory.is_dir():
+    return None
+  for path in sorted(directory.glob("*.json")):
+    record = json_record(path)
+    target = record.get("worktree") if record else None
+    if isinstance(target, str) and under_path(current, target):
+      return record
+  return None
+
+
+def worktree_warning(state_dir, action, cwd=None):
+  """Name a registered detached worktree that must not run an action."""
+  record = worktree_at(state_dir, cwd)
+  if record is None:
+    return None
+  label = WORKTREE_ACTIONS.get(action, action)
+  return (
+    f"WORKTREE BLOCKED: {record.get('name')} is detached. Do not run {label} here."
+    f" Run it from {record.get('root')}."
+  )
+
+
+def checked_worktree_name(name):
+  if not RUN_NAME.fullmatch(name or ""):
+    raise ValueError("Worktree names take 1 to 64 letters, digits, dots, dashes or underscores.")
+  return name
+
+
+def start_worktree(state_dir, name, destination, gate, allowed, cwd=None):
+  """Create one detached task worktree while a routed root gate runs."""
+  name = checked_worktree_name(name)
+  if not allowed or any(not pattern for pattern in allowed):
+    raise ValueError("Give at least one --allow path glob.")
+  current = Path(cwd or Path.cwd()).resolve()
+  registered = worktree_at(state_dir, current)
+  if registered is not None:
+    raise ValueError(f"Start a worktree from the registered root: {registered.get('root')}.")
+  root = git_worktree_root(current)
+  if current != root:
+    raise ValueError("Start a worktree from the repository root.")
+  destination = Path(destination).expanduser().resolve()
+  if destination.exists():
+    raise ValueError(f"Worktree path already exists: {destination}")
+  if under_path(destination, root):
+    raise ValueError("Put the detached worktree outside the repository root.")
+  record_path = worktree_record_path(state_dir, name)
+  if record_path.exists():
+    raise ValueError(f"A worktree named {name} is already recorded.")
+  running = routed_record(state_dir, gate)
+  if not running.get("detached") or running.get("exit") is not None:
+    raise ValueError(f"Gate {gate} is not running.")
+  base = git_worktree(root, "rev-parse", "HEAD").strip()
+  destination.parent.mkdir(parents=True, exist_ok=True)
+  git_worktree(root, "worktree", "add", "--detach", str(destination), base)
+  record = {
+    "name": name,
+    "root": str(root),
+    "worktree": str(destination),
+    "base": base,
+    "gate": gate,
+    "allow": list(allowed),
+    "created_at": now(),
+  }
+  try:
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    record_path.write_text(json.dumps(record, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+  except OSError as error:
+    subprocess.run(
+      ["git", "worktree", "remove", "--force", str(destination)],
+      cwd=str(root),
+      capture_output=True,
+      check=False,
+    )
+    raise ValueError(f"Cannot record worktree {name}: {error}") from None
+  return record
+
+
+def worktree_paths(worktree):
+  """The tracked and untracked paths that a detached worktree changed."""
+  tracked = git_worktree(worktree, "diff", "--name-only", "-z", "HEAD")
+  untracked = git_worktree(worktree, "ls-files", "--others", "--exclude-standard", "-z")
+  return sorted({path for path in (tracked + untracked).split("\0") if path})
+
+
+def collect_worktree(state_dir, name, cwd=None):
+  """Return an allowed detached-worktree patch after its root gate passes."""
+  record = stored_worktree(state_dir, name)
+  root = Path(record.get("root", "")).resolve()
+  if Path(cwd or Path.cwd()).resolve() != root:
+    raise ValueError(f"Collect worktree {name} from its root: {root}")
+  worktree = Path(record.get("worktree", "")).resolve()
+  if git_worktree_root(worktree) != worktree:
+    raise ValueError(f"Worktree path is not a Git root: {worktree}")
+  if git_worktree(worktree, "rev-parse", "HEAD").strip() != record.get("base"):
+    raise ValueError(f"Worktree {name} has a commit. Keep task changes uncommitted.")
+  gate = routed_record(state_dir, record.get("gate"))
+  if gate.get("exit") is None:
+    raise ValueError(f"Gate {record.get('gate')} is still running.")
+  if gate.get("exit") != 0:
+    raise ValueError(f"Gate {record.get('gate')} did not pass.")
+  allowed = record.get("allow")
+  if not isinstance(allowed, list) or not all(isinstance(pattern, str) for pattern in allowed):
+    raise ValueError(f"Worktree {name} has no valid allowed paths.")
+  paths = worktree_paths(worktree)
+  if not paths:
+    raise ValueError(f"Worktree {name} has no changes.")
+  outside = [path for path in paths if not any(fnmatchcase(path, pattern) for pattern in allowed)]
+  if outside:
+    raise ValueError("Worktree changes outside allowed paths: " + ", ".join(outside))
+  patch = git_worktree(worktree, "diff", "--binary", "--no-ext-diff", "HEAD")
+  for path in git_worktree(
+    worktree, "ls-files", "--others", "--exclude-standard", "-z"
+  ).split("\0"):
+    if not path:
+      continue
+    patch += git_worktree(
+      worktree,
+      "diff",
+      "--no-index",
+      "--binary",
+      "--",
+      "/dev/null",
+      path,
+      allowed=(0, 1),
+    )
+  return patch
+
+
 def run_command(state_dir, name, argv):
   """Run one command in this process, then record its exit for a later call.
 
@@ -1952,6 +2150,10 @@ def pr_check_wait(state_dir, line):
   `PR_CHECK_OTHER` and runs untouched. Each message rides stderr.
   """
   line = agent_line(line)
+  warning = worktree_warning(state_dir, "gate")
+  if warning:
+    print(warning, file=sys.stderr, flush=True)
+    return PR_CHECK_REFUSED
   name = long_run_name(line)
   if not name:
     return PR_CHECK_OTHER
@@ -4934,6 +5136,27 @@ def main():
   route_run.add_argument(
     "command_args", nargs=argparse.REMAINDER, help="The command, after --"
   )
+  worktree = commands.add_parser(
+    "worktree", help="Create or collect a detached task worktree beside a root gate"
+  )
+  worktree_action = worktree.add_subparsers(dest="worktree_action", required=True)
+  worktree_start = worktree_action.add_parser(
+    "start", help="Create a detached worktree while a named root gate runs"
+  )
+  worktree_start.add_argument("name", help="A short worktree name")
+  worktree_start.add_argument("destination", type=Path, help="A new path outside the root")
+  worktree_start.add_argument("--gate", required=True, help="The running root gate name")
+  worktree_start.add_argument(
+    "--allow", action="append", default=[], help="A path glob task work may change"
+  )
+  worktree_collect = worktree_action.add_parser(
+    "collect", help="Print the allowed detached-worktree patch after a green root gate"
+  )
+  worktree_collect.add_argument("name", help="The worktree name to collect")
+  worktree_tick = commands.add_parser(
+    "worktree-tick", help="Block a gate, commit or push from a detached task worktree"
+  )
+  worktree_tick.add_argument("action", choices=sorted(WORKTREE_ACTIONS))
   ack_tick = commands.add_parser(
     "ack-tick",
     help="Warn when an inline ack text holds a backtick the shell will substitute",
@@ -5135,9 +5358,32 @@ def main():
       parser.error("a command is required")
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
+    if args.command == "worktree-tick":
+      warning = worktree_warning(state_dir, args.action)
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
+      return 0
+    if args.command == "worktree":
+      if args.worktree_action == "start":
+        record = start_worktree(
+          state_dir, args.name, args.destination, args.gate, args.allow
+        )
+        print(f"Worktree {record['name']} at {record['worktree']}")
+        return 0
+      print(collect_worktree(state_dir, args.name), end="")
+      return 0
     if args.command == "route":
+      warning = worktree_warning(state_dir, "gate")
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
       return route_command(state_dir, args.name, args.command_args)
     if args.command == "route-run":
+      warning = worktree_warning(state_dir, "gate")
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
       return run_command(state_dir, args.name, args.command_args)
     if args.command == "ack-tick":
       warning = tick_warning(args.line)
@@ -5173,6 +5419,10 @@ def main():
       print(f"ok {kind} {old_id} -> {args.new_id}")
       return 0
     if args.command == "commit-tick":
+      warning = worktree_warning(state_dir, "commit", cwd=args.repo)
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
       try:
         store = Store(state_dir)
       except FileNotFoundError:

@@ -18,6 +18,7 @@ from contextlib import closing,contextmanager,nullcontext
 from datetime import datetime,timedelta,timezone
 from email import policy
 from email.parser import BytesParser
+from fnmatch import fnmatchcase
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs,urlsplit,urlunsplit
@@ -565,6 +566,85 @@ GATE_NOISE='tail','grep','head'
 RUN_NAME=re.compile('[A-Za-z0-9._-]{1,64}')
 RUN_TAIL_LINES=40
 def run_record_path(state_dir,name):return Path(state_dir)/'runs'/f"{name}.json"
+WORKTREE_DIR='worktrees'
+WORKTREE_ACTIONS={'gate':'a gate','commit':'a commit','push':'a push'}
+def worktree_record_path(state_dir,name):return Path(state_dir)/WORKTREE_DIR/f"{name}.json"
+def json_record(path):
+	try:record=json.loads(Path(path).read_text(encoding='utf-8'))
+	except(OSError,ValueError):return None
+	return record if isinstance(record,dict)else None
+def routed_record(state_dir,name):
+	if not RUN_NAME.fullmatch(name or''):raise ValueError('Gate names take 1 to 64 letters, digits, dots, dashes or underscores.')
+	record=json_record(run_record_path(state_dir,name))
+	if record is None:raise ValueError(f"No routed gate named {name}.")
+	return record
+def git_worktree(cwd,*args,input=None,allowed=(0,)):
+	try:result=subprocess.run(['git',*args],cwd=str(cwd),input=input,capture_output=True,text=True,check=False)
+	except OSError as error:raise ValueError(f"Cannot run Git: {error}")from None
+	if result.returncode not in allowed:detail=(result.stderr or result.stdout).strip();raise ValueError(detail or f"Git {' '.join(args)} failed")
+	return result.stdout
+def git_worktree_root(cwd=None):root=git_worktree(cwd or Path.cwd(),'rev-parse','--show-toplevel').strip();return Path(root).resolve()
+def under_path(path,parent):
+	try:Path(path).resolve().relative_to(Path(parent).resolve())
+	except ValueError:return False
+	return True
+def stored_worktree(state_dir,name):
+	name=checked_worktree_name(name);record=json_record(worktree_record_path(state_dir,name))
+	if record is None:raise ValueError(f"No worktree named {name}.")
+	return record
+def worktree_at(state_dir,cwd=None):
+	current=Path(cwd or Path.cwd()).resolve();directory=Path(state_dir)/WORKTREE_DIR
+	if not directory.is_dir():return None
+	for path in sorted(directory.glob('*.json')):
+		record=json_record(path);target=record.get('worktree')if record else None
+		if isinstance(target,str)and under_path(current,target):return record
+	return None
+def worktree_warning(state_dir,action,cwd=None):
+	record=worktree_at(state_dir,cwd)
+	if record is None:return None
+	label=WORKTREE_ACTIONS.get(action,action);return f"WORKTREE BLOCKED: {record.get('name')} is detached. Do not run {label} here. Run it from {record.get('root')}."
+def checked_worktree_name(name):
+	if not RUN_NAME.fullmatch(name or''):raise ValueError('Worktree names take 1 to 64 letters, digits, dots, dashes or underscores.')
+	return name
+def start_worktree(state_dir,name,destination,gate,allowed,cwd=None):
+	name=checked_worktree_name(name)
+	if not allowed or any(not pattern for pattern in allowed):raise ValueError('Give at least one --allow path glob.')
+	current=Path(cwd or Path.cwd()).resolve();registered=worktree_at(state_dir,current)
+	if registered is not None:raise ValueError(f"Start a worktree from the registered root: {registered.get('root')}.")
+	root=git_worktree_root(current)
+	if current!=root:raise ValueError('Start a worktree from the repository root.')
+	destination=Path(destination).expanduser().resolve()
+	if destination.exists():raise ValueError(f"Worktree path already exists: {destination}")
+	if under_path(destination,root):raise ValueError('Put the detached worktree outside the repository root.')
+	record_path=worktree_record_path(state_dir,name)
+	if record_path.exists():raise ValueError(f"A worktree named {name} is already recorded.")
+	running=routed_record(state_dir,gate)
+	if not running.get('detached')or running.get('exit')is not None:raise ValueError(f"Gate {gate} is not running.")
+	base=git_worktree(root,'rev-parse','HEAD').strip();destination.parent.mkdir(parents=True,exist_ok=True);git_worktree(root,'worktree','add','--detach',str(destination),base);record={'name':name,'root':str(root),'worktree':str(destination),'base':base,'gate':gate,'allow':list(allowed),'created_at':now()}
+	try:record_path.parent.mkdir(parents=True,exist_ok=True);record_path.write_text(json.dumps(record,ensure_ascii=False,indent=1)+'\n',encoding='utf-8')
+	except OSError as error:subprocess.run(['git','worktree','remove','--force',str(destination)],cwd=str(root),capture_output=True,check=False);raise ValueError(f"Cannot record worktree {name}: {error}")from None
+	return record
+def worktree_paths(worktree):tracked=git_worktree(worktree,'diff','--name-only','-z','HEAD');untracked=git_worktree(worktree,'ls-files','--others','--exclude-standard','-z');return sorted({path for path in(tracked+untracked).split('\x00')if path})
+def collect_worktree(state_dir,name,cwd=None):
+	record=stored_worktree(state_dir,name);root=Path(record.get('root','')).resolve()
+	if Path(cwd or Path.cwd()).resolve()!=root:raise ValueError(f"Collect worktree {name} from its root: {root}")
+	worktree=Path(record.get('worktree','')).resolve()
+	if git_worktree_root(worktree)!=worktree:raise ValueError(f"Worktree path is not a Git root: {worktree}")
+	if git_worktree(worktree,'rev-parse','HEAD').strip()!=record.get('base'):raise ValueError(f"Worktree {name} has a commit. Keep task changes uncommitted.")
+	gate=routed_record(state_dir,record.get('gate'))
+	if gate.get('exit')is None:raise ValueError(f"Gate {record.get('gate')} is still running.")
+	if gate.get('exit')!=0:raise ValueError(f"Gate {record.get('gate')} did not pass.")
+	allowed=record.get('allow')
+	if not isinstance(allowed,list)or not all(isinstance(pattern,str)for pattern in allowed):raise ValueError(f"Worktree {name} has no valid allowed paths.")
+	paths=worktree_paths(worktree)
+	if not paths:raise ValueError(f"Worktree {name} has no changes.")
+	outside=[path for path in paths if not any(fnmatchcase(path,pattern)for pattern in allowed)]
+	if outside:raise ValueError('Worktree changes outside allowed paths: '+', '.join(outside))
+	patch=git_worktree(worktree,'diff','--binary','--no-ext-diff','HEAD')
+	for path in git_worktree(worktree,'ls-files','--others','--exclude-standard','-z').split('\x00'):
+		if not path:continue
+		patch+=git_worktree(worktree,'diff','--no-index','--binary','--','/dev/null',path,allowed=(0,1))
+	return patch
 def run_command(state_dir,name,argv):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2
 	if argv[:1]==['--']:argv=argv[1:]
@@ -680,7 +760,9 @@ def agent_line(line):
 	else:return line or''
 	return' '.join(rest).strip()or(line or'')
 def pr_check_wait(state_dir,line):
-	line=agent_line(line);name=long_run_name(line)
+	line=agent_line(line);warning=worktree_warning(state_dir,'gate')
+	if warning:print(warning,file=sys.stderr,flush=True);return PR_CHECK_REFUSED
+	name=long_run_name(line)
 	if not name:return PR_CHECK_OTHER
 	if not detach_run(state_dir,name,['bash','-c',line]):print(DETACHED_BLOCK.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_REFUSED
 	print(DETACHED_NOTICE.format(name=name),file=sys.stderr,flush=True);return PR_CHECK_RUNS
@@ -1543,7 +1625,7 @@ def ensure_installed():
 			except OSError:pass
 			return
 def main():
-	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('-r','--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve the preview page; -p names the port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port to bind (default: {DEFAULT_PORT})");commands.add_parser('init',help='Create the state directory and its database');commands.add_parser('read',help='Print every pending note, answer and upload');note_reread=commands.add_parser('note',help='Reread a stored note by its short or full ID');note_reread.add_argument('id',help='Six or all characters of a note ID');commands.add_parser('key',help='Print the recorded agent key, host and use line');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');route=commands.add_parser('route',help='Start a command detached, keep its output tail, and show the exit on a later call');route.add_argument('name',help='A short name for the run, for example gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');route_run=commands.add_parser('route-run',help='Run one command here and record its exit for a later call');route_run.add_argument('name',help='The run name the caller already recorded');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');ack_tick=commands.add_parser('ack-tick',help='Warn when an inline ack text holds a backtick the shell will substitute');ack_tick.add_argument('line',help='The command line, as the hook read it');serve_tick=commands.add_parser('serve-tick',help='Warn when a serve names a port other than the default');serve_tick.add_argument('line',help='The command line, as the hook read it');pr_check_tick=commands.add_parser('pr-check-tick',help='Refuse a bash line that runs a PR-check wait the background tool must take');pr_check_tick.add_argument('line',help='The command line, as the hook read it');egress_tick=commands.add_parser('egress-tick',help='Warn when a line fetches a host the sandbox egress filter blocks');egress_tick.add_argument('line',help='The command line, as the hook read it');rename=commands.add_parser('rename',help='Move a note, answer, report or task to a new ID');rename.add_argument('old_id',help='The stored ID, or a prefix that names one record');rename.add_argument('new_id',help='The ID to move the record to');commit_tick=commands.add_parser('commit-tick',help='Block a commit whose staged lines cite a session-local ID');commit_tick.add_argument('--repo',default='.',help='The repository to read the staged diff from');gate=commands.add_parser('gate',help='Read the inbox gate; -p blocks on any unacked note, -l names the blocked line');gate.add_argument('-p','--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');gate.add_argument('-l','--line',default='',help='The command line, as the hook read it; a blocked call then names the commands to drop');commands.add_parser('poll',help='Block until the owner answers or a gate run finishes');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click; -a allows the proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer a note; a bare call answers the one pending item; -r replies, -n notes, -R and -N read the answer from a file');ack.add_argument('ids',nargs='*');ack.add_argument('-r','--reply',help='Markdown answer shown in the message log');ack.add_argument('-n','--note',help='Short plain answer shown in the message log');ack.add_argument('-R','--reply-file',type=Path,help='Read the Markdown answer from this file');ack.add_argument('-N','--note-file',type=Path,help='Read the plain answer from this file');publish=commands.add_parser('publish',help='Publish a report; -i names the ID, -t the title');publish.add_argument('source',type=Path);publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);unpublish=commands.add_parser('unpublish',help='Withdraw a published report by its ID');unpublish.add_argument('report_id');task=commands.add_parser('task',help='Write or update a task; TASK-ID alone prints the stored row; -s status, -o order, -d details, -m note, -r report, -b blocked, -u unblocked, -a amend');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details','--task-details',dest='task_details',action='append',help='One step per line, 120 characters or fewer, repeatable; an empty string clears the list');task.add_argument('-b','--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('-m','--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Report this task waits on; its answer clears the blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-o','--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove',help='Delete a task by its ID');task_remove.add_argument('task_id');task_list=commands.add_parser('task-list',help='List the tasks; -f includes the finished ones');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');state_import=commands.add_parser('import-state',help='Import an NDJSON backup; replaces the live state unless --merge; -f forces');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_import.add_argument('--merge',action='store_true',help='keep the live notes, answers, reports and tasks, and merge the import by ID');state_import.add_argument('-f','--force',action='store_true',help='import even when the live state holds newer messages');commands.add_parser('clear-state',help='Empty every state table in place; the agent key record survives');args=parser.parse_args();state_dir=resolve_state_dir();fresh_state=not(Path(state_dir).resolve()/'state.sqlite3').is_file()
+	parser=argparse.ArgumentParser(description=CLI_DESCRIPTION);parser.add_argument('-r','--reminder',action='store_true',help='Print the unacked-count reminder line and exit');commands=parser.add_subparsers(dest='command',required=False);serve=commands.add_parser('serve',help='Serve the preview page; -p names the port');serve.add_argument('-p','--port',type=int,default=DEFAULT_PORT,help=f"Port to bind (default: {DEFAULT_PORT})");commands.add_parser('init',help='Create the state directory and its database');commands.add_parser('read',help='Print every pending note, answer and upload');note_reread=commands.add_parser('note',help='Reread a stored note by its short or full ID');note_reread.add_argument('id',help='Six or all characters of a note ID');commands.add_parser('key',help='Print the recorded agent key, host and use line');inbox_line=commands.add_parser('inbox-line',help='Report whether a command line that names an inbox call runs nothing else');inbox_line.add_argument('line',help='The command line, as the hook read it');route=commands.add_parser('route',help='Start a command detached, keep its output tail, and show the exit on a later call');route.add_argument('name',help='A short name for the run, for example gates');route.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');route_run=commands.add_parser('route-run',help='Run one command here and record its exit for a later call');route_run.add_argument('name',help='The run name the caller already recorded');route_run.add_argument('command_args',nargs=argparse.REMAINDER,help='The command, after --');worktree=commands.add_parser('worktree',help='Create or collect a detached task worktree beside a root gate');worktree_action=worktree.add_subparsers(dest='worktree_action',required=True);worktree_start=worktree_action.add_parser('start',help='Create a detached worktree while a named root gate runs');worktree_start.add_argument('name',help='A short worktree name');worktree_start.add_argument('destination',type=Path,help='A new path outside the root');worktree_start.add_argument('--gate',required=True,help='The running root gate name');worktree_start.add_argument('--allow',action='append',default=[],help='A path glob task work may change');worktree_collect=worktree_action.add_parser('collect',help='Print the allowed detached-worktree patch after a green root gate');worktree_collect.add_argument('name',help='The worktree name to collect');worktree_tick=commands.add_parser('worktree-tick',help='Block a gate, commit or push from a detached task worktree');worktree_tick.add_argument('action',choices=sorted(WORKTREE_ACTIONS));ack_tick=commands.add_parser('ack-tick',help='Warn when an inline ack text holds a backtick the shell will substitute');ack_tick.add_argument('line',help='The command line, as the hook read it');serve_tick=commands.add_parser('serve-tick',help='Warn when a serve names a port other than the default');serve_tick.add_argument('line',help='The command line, as the hook read it');pr_check_tick=commands.add_parser('pr-check-tick',help='Refuse a bash line that runs a PR-check wait the background tool must take');pr_check_tick.add_argument('line',help='The command line, as the hook read it');egress_tick=commands.add_parser('egress-tick',help='Warn when a line fetches a host the sandbox egress filter blocks');egress_tick.add_argument('line',help='The command line, as the hook read it');rename=commands.add_parser('rename',help='Move a note, answer, report or task to a new ID');rename.add_argument('old_id',help='The stored ID, or a prefix that names one record');rename.add_argument('new_id',help='The ID to move the record to');commit_tick=commands.add_parser('commit-tick',help='Block a commit whose staged lines cite a session-local ID');commit_tick.add_argument('--repo',default='.',help='The repository to read the staged diff from');gate=commands.add_parser('gate',help='Read the inbox gate; -p blocks on any unacked note, -l names the blocked line');gate.add_argument('-p','--push',action='store_true',help='Block while any note or answer awaits an ack, whatever the call count');gate.add_argument('-l','--line',default='',help='The command line, as the hook read it; a blocked call then names the commands to drop');commands.add_parser('poll',help='Block until the owner answers or a gate run finishes');download=commands.add_parser('download-request',help='Request an HTTPS browser download, pending a preview Approve click; -a allows the proxy fallback');download.add_argument('url',help='One HTTPS URL without embedded credentials');download.add_argument('-a','--allow-proxy',action='store_true',help='Let the owner opt in to AllOrigins and CodeTabs fallback for this request');ack=commands.add_parser('ack',help='Answer a note; a bare call answers the one pending item; -r replies, -n notes, -R and -N read the answer from a file');ack.add_argument('ids',nargs='*');ack.add_argument('-r','--reply',help='Markdown answer shown in the message log');ack.add_argument('-n','--note',help='Short plain answer shown in the message log');ack.add_argument('-R','--reply-file',type=Path,help='Read the Markdown answer from this file');ack.add_argument('-N','--note-file',type=Path,help='Read the plain answer from this file');publish=commands.add_parser('publish',help='Publish a report; -i names the ID, -t the title');publish.add_argument('source',type=Path);publish.add_argument('-i','--id',required=True);publish.add_argument('-t','--title',required=True);unpublish=commands.add_parser('unpublish',help='Withdraw a published report by its ID');unpublish.add_argument('report_id');task=commands.add_parser('task',help='Write or update a task; TASK-ID alone prints the stored row; -s status, -o order, -d details, -m note, -r report, -b blocked, -u unblocked, -a amend');task.add_argument('id_arg',nargs='?',metavar='TASK-ID');task.add_argument('title_arg',nargs='?',metavar='TASK-TITLE');task.add_argument('detail_arg',nargs='*',metavar='TASK-DETAIL');task.add_argument('-d','--details','--task-details',dest='task_details',action='append',help='One step per line, 120 characters or fewer, repeatable; an empty string clears the list');task.add_argument('-b','--blocked',dest='blocked',action='store_true',default=None,help='Mark the task blocked, so a poll may wait');task.add_argument('-u','--unblocked',dest='blocked',action='store_false',help='Clear the blocked mark');task.add_argument('-m','--msg-id',help='Message this task answers; marks that message as having a task');task.add_argument('-r','--report',metavar='REPORT-ID',help='Report this task waits on; its answer clears the blocked mark');task.add_argument('-a','--amend',metavar='PREV-ID',help='Rename the task stored under this ID to the one given');task.add_argument('-s','--status',choices=TASK_STATUSES,default=None);task.add_argument('-o','--order',type=int,default=None,help='1-based place in its div, not the end');task_remove=commands.add_parser('task-remove',help='Delete a task by its ID');task_remove.add_argument('task_id');task_list=commands.add_parser('task-list',help='List the tasks; -f includes the finished ones');task_list.add_argument('-f','--full',action='store_true',help='print every task, finished included');state_import=commands.add_parser('import-state',help='Import an NDJSON backup; replaces the live state unless --merge; -f forces');state_import.add_argument('source',nargs='?',type=Path);state_import.add_argument('-r','--replace-tasks',action='store_true');state_import.add_argument('--merge',action='store_true',help='keep the live notes, answers, reports and tasks, and merge the import by ID');state_import.add_argument('-f','--force',action='store_true',help='import even when the live state holds newer messages');commands.add_parser('clear-state',help='Empty every state table in place; the agent key record survives');args=parser.parse_args();state_dir=resolve_state_dir();fresh_state=not(Path(state_dir).resolve()/'state.sqlite3').is_file()
 	try:
 		if args.reminder:
 			store=Store(state_dir,create=False);require_server(store);reminder=store.reminder(advance=True);store.set_meta(AGENT_CALL_ENDED_META,now())
@@ -1551,8 +1633,21 @@ def main():
 			return 0
 		if not args.command:parser.error('a command is required')
 		if args.command=='inbox-line':return 0 if quiet_inbox_line(args.line)else 1
-		if args.command=='route':return route_command(state_dir,args.name,args.command_args)
-		if args.command=='route-run':return run_command(state_dir,args.name,args.command_args)
+		if args.command=='worktree-tick':
+			warning=worktree_warning(state_dir,args.action)
+			if warning:print(warning,file=sys.stderr);return 1
+			return 0
+		if args.command=='worktree':
+			if args.worktree_action=='start':record=start_worktree(state_dir,args.name,args.destination,args.gate,args.allow);print(f"Worktree {record['name']} at {record['worktree']}");return 0
+			print(collect_worktree(state_dir,args.name),end='');return 0
+		if args.command=='route':
+			warning=worktree_warning(state_dir,'gate')
+			if warning:print(warning,file=sys.stderr);return 1
+			return route_command(state_dir,args.name,args.command_args)
+		if args.command=='route-run':
+			warning=worktree_warning(state_dir,'gate')
+			if warning:print(warning,file=sys.stderr);return 1
+			return run_command(state_dir,args.name,args.command_args)
 		if args.command=='ack-tick':
 			warning=tick_warning(args.line)
 			if warning:print(warning,file=sys.stderr)
@@ -1574,6 +1669,8 @@ def main():
 			except ValueError as error:print(error);return 1
 			print(f"ok {kind} {old_id} -> {args.new_id}");return 0
 		if args.command=='commit-tick':
+			warning=worktree_warning(state_dir,'commit',cwd=args.repo)
+			if warning:print(warning,file=sys.stderr);return 1
 			try:store=Store(state_dir)
 			except FileNotFoundError:return 0
 			report=commit_id_report(staged_session_id_hits(store,args.repo))
