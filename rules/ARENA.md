@@ -36,29 +36,25 @@
 
 ## General
 
-- The stderr reminder is the only read schedule; the Bash gate is a repair, NEVER the schedule. Block mechanics: skill reference, Read cadence.
-- When a Bash call reports a pending note, answer or upload count on stderr, read the inbox before the next work step; no reminder line at all MAY signal a sandbox reset, so run the reset steps before other work.
-- Missing/failed reads are errors, not empty inboxes; before the first start there is no inbox.
+- The stderr reminder is the only read schedule; the Bash gate is a repair, NEVER the schedule. Block mechanics: skill reference, Read cadence. A call with no reminder line MAY signal a sandbox reset: run the reset steps before other work.
+- Before the first start there is no inbox.
 - Ack every delivered note with `ack <ids> --reply <markdown>` (rendered in the log) or `--note <text>`, one text per call, only those IDs, NEVER all pending blindly.
 - Refer to a note by its ID, NEVER by its sequence number: the first six characters in prose, task details, reports and notes; extend the prefix when two notes share it.
 - Receipt is not completion. Ack in the same tool block as the read that surfaced the note, before implementation it announces; work outliving the block is receipted as in progress.
 - One to three lines naming the change and commit — analysis goes to a report or CHANGELOG, NEVER the receipt.
 - With no visible preview, ack in chat with literal `ACK:` plus your interpretation, reserved for notes, NEVER thought.
-- On a preview that did not start, report and block with one `ask_user` visibility question before non-setup work (the preview cannot carry it); the first successful start enters that block, including recovered failed reads — name it, then ask; the process banner is not confirmation.
 - NEVER silently restore ntfy.
 - Concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs, conventions and patterns.
 - MUST use ASD-STE100 for all human-facing text: responses, comments, docs.
-- Comments, docs, responses: terse, unambiguous; NEVER a wall of text; NEVER padded prose where a list or table is faster; 4 sentences max per paragraph.
-- Documentation: no storyline or narrative unless asked.
+- Comments, docs, responses: terse, unambiguous; NEVER a wall of text; NEVER padded prose where a list or table is faster; 4 sentences max per paragraph; no storyline or narrative unless asked.
 - Use [Keep a Changelog](https://keepachangelog.com/) unless the repo uses another changelog format.
 - Open on the substance, NEVER preamble or postamble.
 - Cite code, diffs and tool output by path and line instead of repeating.
 - Step straight on after a tool call succeeds, with no result narration.
 - Batch independent tool calls where the surface permits.
 - ALWAYS take the smallest open task; a user-stated priority outranks size. Re-sort on arrivals; NEVER use arrival order.
-- Work while tasks remain.
-- End when verified and stopped.
+- Work while tasks remain; end when verified and stopped.
 - Run the repo's checks before every push, detached, NEVER inline; push only green, and an inline run counts as skipping the gate.
 - Read each gate's passed or failed line; a pipe that hides the verdict counts as skipping it. The wait scopes the next task.
 - After each push, watch the PR's checks to conclusion with `gh pr checks <PR> --watch`.
@@ -67,6 +63,11 @@
 - An empty or absent list proves nothing; failed checks keep work open.
 - Before turn end with a pushed branch, check and report open PR CI.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
+- Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
+- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
+- NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
+- For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
+- Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
 
 ## Scope
 
@@ -78,13 +79,11 @@
 - Ask questions as soon as they arise through fielded reports in the Reports tab; read answers at the next steering read and continue independent work while the owner responds.
 - Carry every proposal and question in a fielded report, never in chat.
 - Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including failed publication), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question a report field or a new report can carry.
-- Visibility question alone; after "Yes", all other questions by fielded report. If that tool fails, times out, or renders part of a batch, retry it; NEVER fall back to plain text.
-- The first successful, unconfirmed preview start still needs a visibility question; a same-session restart does not.
+- Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before non-setup work, and the live-preview banner is not owner confirmation. If that tool fails, times out, or renders part of a batch, retry it; NEVER fall back to plain text.
+- The first successful, unconfirmed preview start still needs a visibility question, including a start that repairs earlier failed reads; a same-session restart does not.
 - Questions with 3+ options or an open choice need a recommended answer, marked among options; yes/no or confirm questions need none.
-- ALL reports MUST go through the preview skill.
-- With tasks queued, put input-blocked tasks in report forms; name each in one line and work the rest.
 - A report-only task's report carries a text input for the owner's further instructions and an option for no further instruction.
-- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; if a form awaits answers and no unblocked work remains, run `poll`.
+- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report that names each in one line; the other tasks continue, and if a form awaits answers and no unblocked work remains, run `poll`.
 - Any unavoidable assumption: state it in the acknowledgement before work starts; take the most reasonable one; NEVER use it to bypass material ambiguity.
 
 ## Engineering
@@ -103,10 +102,7 @@
 
 ## Verification
 
-- Update the stored task details in the same tool block as the work that moves them; before the final reply, MUST run task-list, and NEVER end the turn while an unblocked upcoming task remains.
 - Prefer several passes with a re-check after each; ask_user only: label Q1,Q2,…, state totals before the batch and additions; before final poll, state in chat: no open tasks remain; ALWAYS end turns with `arena-preview poll` on final Bash call; MUST NOT substitute sleep; NEVER treat bounded no-result poll as successful wait.
-- A poll the finish of a run cut is spent: run `poll` again and close the turn inside a waiting poll.
-- Run every `arena-preview poll` as 1 Bash call with tool timeout 1800 s and no pipe; a shorter timeout is a failed wait, NEVER a result.
 - Confirm a duplicated, garbled, or disowned message in one line before acting, keeping its edit reversible until then; use the preview inbox as the source of truth for steering instructions and acknowledgement receipts, verifying pending/completed work there rather than from Arena chat output; treat a repeat as a resend: answer what is pending, restate finished work in one line, NEVER redo or widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck; grep every caller first, keep hypotheses falsifiable, one variable at a time, NEVER guess, use a fallback, or hide a failure, and revise disproven assumptions.
 - Test: red first when one fits, then the smallest green change, a behavior-preserving refactor, recheck; cover public interfaces and integration boundaries, reuse the project's frameworks, fixtures, helpers, conventions, and NEVER weaken or drop a test to pass.
@@ -134,7 +130,7 @@
 - Project convention first; else Conventional Commits `<type>[optional scope]: <description>`: imperative, specific, lowercase after the colon, no period, <=72 chars, no body, `!` marks breaking; types `feat fix refactor perf style docs test build chore`, prefer history's types; reuse history's scopes, adding none otherwise.
 - Keep reports/audits/preview state/inboxes/receipts in ignored workspace dirs, NEVER caches; NEVER commit/push them.
 - NEVER cite a session-local artifact (note, report, submission, task ID, or any other identifier minted for one session) in a repo file: it does not persist. ALWAYS strip a session-local citation on sight.
-- Longer reports use the `arena-skill` skill, not diff-viewer commits. Update one Markdown source per subject in place, mark dispositions, republish its stable ID; several may coexist. Verify delivery; clean Git status proves nothing. Every report goes through the preview skill; no report stays in chat.
+- Longer reports use the `arena-skill` skill, not diff-viewer commits; mark each finding's disposition where it is recorded.
 - `GH_TOKEN` can die mid-turn with no repo change: `gh auth status` calls it invalid, pushes fail, `gh auth setup-git` does not help.
 - Retry once, NEVER loop or ask for credentials — then ask through `ask_user` for a GitHub reconnect in Arena and a reply in chat; NEVER end silently.
 - Prove recovery with `git ls-remote origin <branch>` before pushing again.
@@ -149,7 +145,6 @@
 - For Chromium work, install `@sparticuz/chromium` from npm; use its extracted binary and runtime files, not a Playwright-managed browser.
 - Install dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Start a background test or PR-check run on a stable tree, and NEVER edit the files it covers while it runs.
-- A bash line that runs `gh pr checks`, `gh run watch` or a test runner detaches instead: the gate starts it in the background, and the verdict arrives as `run <name> done: exit N` on a later call.
 - The freeze covers the root tree only: a queued task that edits other files starts a worktree while the root gate runs (`arena-preview worktree start`), never read-only tracing.
 - A >=10-second run is long; MUST use `arena-preview route <name> -- <command>`.
 - NEVER call `get_process_output` to wait for a run, nor run `arena-preview poll` mid-task as a run wait.
@@ -167,14 +162,6 @@
 - Previews have no network: inline CSS, embedded SVG/data URIs, no CDNs, remote fonts, or stylesheets.
 - Servers bind 0.0.0.0; browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Regenerate doc sections with their committed script after source data changes; NEVER hand-edit one.
-
-## Response
-
-- Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
-- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
-- NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
-- For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
-- Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
 
 ## When in doubt
 

@@ -40,9 +40,8 @@
 
 ## General
 
-- The stderr reminder is the only read schedule; the Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence.
-- When a Bash call reports a pending note, answer or upload count above zero on stderr, MUST read the inbox with `arena-preview read` before the next work step; a Bash call with no reminder line at all MAY signal a sandbox reset, and the session MUST run the reset steps before other work.
-- Before the first start there is no inbox to poll, and a missing state file then is no failed read; once the inbox exists, missing or failed reads are errors, NEVER empty inboxes.
+- The stderr reminder is the only read schedule; the Bash gate stays a repair, NEVER the schedule. Block mechanics: the skill reference, Read cadence. A call with no reminder line MAY signal a sandbox reset: run the reset steps before other work.
+- Before the first start there is no inbox to poll, and a missing state file then is no failed read.
 - Answer each delivered note where the user reads it: `ack` exactly those IDs with `--reply <Markdown>`, rendered in the message log like the user's own messages, or `--note <text>` for one plain line under the receipt.
 - One call carries one answer text, so acknowledge notes separately when the answers differ.
 - NEVER blindly acknowledge all pending notes.
@@ -50,27 +49,22 @@
 - A receipt means received, not implemented. MUST acknowledge in the same tool block as the read that surfaced the note, before starting any implementation that the acknowledgement announces; work that outlives the block is receipted as in progress rather than held silent until it finishes.
 - Keep the receipt to one, two or three lines naming the change and, once the change exists, its commit: analysis belongs in a published report or in `CHANGELOG.md`, NEVER in the receipt.
 - When no preview is visible, acknowledge in chat instead, opening with literal `ACK:` and your interpretation, using that prefix only for delivered notes and NEVER in thought.
-- If the preview did not start, MUST report it and block with one visibility question, asked through `ask_user`, before any work beyond setup; the preview cannot carry its own visibility question. The first successful start in a session enters that block, including a start that repairs earlier failed reads: name the preview in chat, then ask; the process tool's live-preview banner is not owner confirmation and does not replace the question.
 - NEVER silently restore ntfy.
-- After a sandbox reset, run `git fetch origin`, rerun the preview installer, and restart the preview with the same state directory. NEVER ask the visibility question again after the reset.
 - Be concise, direct, practical, accurate; keep negations, conditions, errors, commands, numbers, caveats.
 - Follow repo docs/conventions and existing patterns.
 - MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation.
-- Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; NEVER write a wall of text, NEVER pad prose where a list or a table carries the facts faster, and keep every paragraph at 4 sentences or fewer.
-- Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
+- Comments, documentation and responses MUST be terse but unambiguous: cut words, NEVER meaning; NEVER write a wall of text, NEVER pad prose where a list or a table carries the facts faster, and keep every paragraph at 4 sentences or fewer.; no storyline or narrative unless the user asks for it.
 - Maintain changelogs in the [Keep a Changelog](https://keepachangelog.com/) format unless the repository follows a different changelog format.
 - Open every response on the substance, NEVER on preamble or postamble.
 - Cite code, diffs, file contents and tool output by path and line instead of repeating them.
 - Continue straight to the next step after a tool call succeeds, with no narration of the result.
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
-- Keep working while tasks remain.
-- End the turn when the work is verified and stopped.
+- Keep working while tasks remain; end the turn when the work is verified and stopped.
 - Before ending a turn with a pushed branch, check the open PR's CI and report its state.
 - A failing check is unfinished work.
 - Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline.
 - Push only when they pass; an inline run counts as skipping the gate, whatever its speed.
-- The detached run frees the wait to scope the next task.
 - Read the passed or failed line of every gate you run; a pipe that hides the verdict counts as skipping the gate.
 - After every push, watch the open PR's checks to conclusion with `gh pr checks <PR> --watch`; scope the next task while it runs.
 - A fresh push can leave the list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
@@ -78,6 +72,13 @@
 - Pending checks are not command errors.
 - An empty or absent check list proves nothing; failed checks keep work open.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
+- Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
+- Prefer numbered lists for multiple points.
+- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.; report skipped work and when to add it in at most three short lines.
+- NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
+- For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
+- ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
+- MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 
 ## Scope
 
@@ -90,18 +91,14 @@
 - Ask before implementing rather than after, on deviating reasoning or material ambiguity.
 - Material ambiguity means different reasonable interpretations could materially change behavior, data, interfaces, scope, or outcome.
 - MUST ask questions as soon as they arise.
-- Publish a fielded report in the Reports tab and read its answer at the next steering read.
-- A rule collision or blocking doubt stops the affected work.
-- Continue independent tasks while the owner answers.
+- A rule collision or blocking doubt stops the affected work; continue independent tasks while the owner answers.
 - Carry every proposal and question in a fielded report, never in chat.
 - Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
-- Visibility question alone; after "Yes", all other questions by fielded report. The first successful start not yet confirmed in this session still needs a visibility question; a later restart in the same session does not.
+- Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before any work beyond setup, and the process tool's live-preview banner is not owner confirmation. The first successful start not yet confirmed in this session still needs a visibility question, including a start that repairs earlier failed reads; a later restart in the same session does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with three or more options or an open choice carries a recommended answer, the one you would take on silence, marked among options where offered; a yes/no or confirm question carries none.
-- ALL reports MUST go through the preview skill.
-- When the task list is not empty and a task is blocked on user intervention or approval, MUST publish a report form for that task, tell the user in one line, and continue with the other tasks instead of stalling.
 - A report-only task's report MUST carry a text input for the owner's further instructions and MUST include an option for no further instruction.
-- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report and await user input; when a report form awaits answers and no unblocked work remains, run `poll`.
+- NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report: name the blocked task in one line, continue the other tasks instead of stalling, and when a report form awaits answers and no unblocked work remains, run `poll`.
 - If an assumption is unavoidable, state it in the acknowledgement before work starts, make the most reasonable one, and NEVER use it to bypass material ambiguity.
 
 ## Engineering
@@ -133,10 +130,7 @@
 - Prefer several passes, re-checking after each, over one sweep.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
-- MUST update the stored task details in the same tool block as the work that moves them, and MUST run task-list before the final reply; if an upcoming task is not blocked by an unanswered report, MUST continue it and NEVER end the turn while it remains.
 - State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
-- A poll the finish of a run cut is spent; run `poll` again and close the turn inside a waiting poll.
-- Run every arena-preview poll as 1 Bash call with tool timeout 1800 s and no pipe. A shorter tool timeout is a failed wait, and NEVER a result.
 - If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
@@ -194,9 +188,6 @@
 - A session-local citation does not persist; ALWAYS strip one on sight.
 - Cite the durable record instead: the CHANGELOG entry, the report source, or the commit.
 - Publish longer reports through the `arena-skill` skill in the shared preview; NEVER create local report commits for the native diff viewer.
-- Keep one Markdown source per logical report, update it in place and republish its stable ID; several reports may coexist.
-- Verify the published report renders in the Reports tab; a clean Git status does not prove delivery.
-- Every report goes through the preview skill; no report stays in chat.
 - Mark each finding's disposition where it is recorded: strike through or otherwise mark resolved findings, so re-reading a report shows what still stands without hunting for it.
 - `GH_TOKEN` can expire mid-turn with nothing in the repository changed: `gh auth status` reports the token invalid, `git push` fails, and `gh auth setup-git` does not help.
 - Retry once to confirm the failure, NEVER loop the retry, and NEVER ask the user for a token, a password, or a one-time code.
@@ -218,7 +209,6 @@
 - Install repository tooling such as dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Treat a run that takes 10 seconds or more as a long run.
 - Start a long run, a test suite or a check wait, on a stable tree, and NEVER edit the files it covers while it runs.
-- The gate detects the long runs (`gh pr checks`, `gh run watch`, `pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test`, and the rest of the REFERENCE.md case table`) and starts the line detached under a run name, so the call ends clean and the notice lands on stderr.
 - The freeze covers the root tree only: with queued tasks that edit other files, start a worktree for that work while the root gate runs (`arena-preview worktree start`), and do not wait read-only.
 - NEVER call `get_process_output` to wait for a run, and NEVER run `arena-preview poll` mid-task as a run wait.
 - Keep the work moving and read the verdict on the next bash or `arena-preview` call, which prints it once as `run <name> done: exit N`, with one status line per call until then.
@@ -236,17 +226,6 @@
 - Browser URLs stay relative via the dev-server proxy, NEVER localhost/127.0.0.1.
 - Generated doc sections (rosters, tables built from fixtures) are regenerated by their committed script after the source data changes.
 - NEVER hand-edit a generated section.
-
-## Response
-
-- Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
-- Prefer numbered lists for multiple points.
-- Report what was skipped and when to add it, in at most three short lines; no essays and no feature tours.
-- Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
-- NEVER mermaid in chat; repository docs use mermaid for pipelines, diagrams, and flows.
-- For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
-- ALWAYS report the changes made in the final response after the task, at an appropriate high level (for example, "X now does Y"), especially after long or multi-step tasks; this report is not required during execution.
-- MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 
 ## When in doubt
 
