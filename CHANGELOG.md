@@ -70,6 +70,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The Arena skill moves the gate and worktree rules out of Setup into their own section. The worktree trigger now names the declared path globs.
 - The preview reference lists `logs`, `worktree`, `download-request` and `stale-reports`, and requires the bare `arena-preview` call form for every command. A test compares its commands table with the CLI parser.
 - The arena skill carries the inbox, ack, task, external-channel, read-cadence and publish-reports paragraphs as lists.
+- The preview view guard applies only to an answered report, and a hidden page clears the view stamp.
+- The preview page stamps a report view only while the browser shows it, and clears the stamp on leaving.
 - The arena skill drops the fixed limit numbers for chunks and reports. An over-limit value fails with the tool's own error.
 
 #### userscripts

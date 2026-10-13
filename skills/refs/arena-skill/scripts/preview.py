@@ -4449,7 +4449,11 @@ class Store:
         )
 
   def guard_report_change(self, db, report_id, report):
-    """Hold an agent change while an answer, acknowledgement, or view is unread."""
+    """Hold an agent change while an answer, acknowledgement, or fresh view is unread.
+
+    The view hold applies to an answered report only: a report nobody answered has nothing to
+    disturb, so a look at it never blocks a change.
+    """
     unread = db.execute(
       "SELECT 1 FROM submissions WHERE report_id = ? AND acknowledged_at IS NULL LIMIT 1",
       (report_id,),
@@ -4464,8 +4468,13 @@ class Store:
       raise ReportHeld(
         "The report waits for the owner: its answer acknowledgement is unseen."
       )
+    answered = db.execute(
+      "SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1", (report_id,)
+    ).fetchone()
     age = seconds_since(report["viewed_at"])
-    if age is not None and 0 <= age < REPORT_CHANGE_VIEW_SECONDS:
+    if (
+      answered is not None and age is not None and 0 <= age < REPORT_CHANGE_VIEW_SECONDS
+    ):
       remaining = max(1, int(REPORT_CHANGE_VIEW_SECONDS - age))
       raise ReportHeld(
         f"The owner is reading this report: retry after {remaining} s without a view."
@@ -4600,19 +4609,21 @@ class Store:
         db.execute("SELECT * FROM reports WHERE id = ?", (report_id,)).fetchone()
       )
 
-  def mark_report_viewed(self, report_id):
+  def mark_report_viewed(self, report_id, active=True):
     """Stamp the moment the owner's page shows a report, for the unpublish guard.
 
     The stamp moves on every look, because the guard reads how fresh the last one is rather
-    than when the report was first read. The write skips the autosave:
-    a view is not saved state, so it neither changes the save file nor the state stamp.
+    than when the report was first read. A page that hides the report, or a browser that hides
+    the page, clears the stamp, so a background look never holds an agent change. The write
+    skips the autosave: a view is not saved state, so it neither changes the save file nor the
+    state stamp.
     """
     identifier(report_id)
     with closing(self.connect()) as db, db:
       row = db.execute("SELECT 1 FROM reports WHERE id = ?", (report_id,)).fetchone()
       if row is None:
         raise FileNotFoundError("Report not found")
-      stamp = now()
+      stamp = now() if active else None
       db.execute("UPDATE reports SET viewed_at = ? WHERE id = ?", (stamp, report_id))
     return {"id": report_id, "viewed_at": clip_stamp(stamp)}
 
@@ -5172,12 +5183,15 @@ def handler(store):
           self.reply(200, json.dumps(report, ensure_ascii=False))
           return
         if report_view:
-          # The page stamps a look while it shows a report, so the owner's unpublish guard
-          # reads a fresh view rather than a first read.
+          # The page stamps a look while it shows a report, and clears on leaving, so the
+          # unpublish guard reads a fresh view rather than a first read.
           self.reply(
             200,
             json.dumps(
-              store.mark_report_viewed(report_view.group(1)), ensure_ascii=False
+              store.mark_report_viewed(
+                report_view.group(1), payload.get("active", True)
+              ),
+              ensure_ascii=False,
             ),
           )
           return

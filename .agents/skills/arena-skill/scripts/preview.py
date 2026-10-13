@@ -1419,8 +1419,8 @@ class Store:
 		if unread is not None:raise ReportHeld('The report has an unacknowledged answer.')
 		acknowledged=db.execute('SELECT MAX(acknowledged_at) FROM submissions WHERE report_id = ?',(report_id,)).fetchone()[0]
 		if acknowledged and not at_or_after(report['ack_seen_at'],acknowledged):raise ReportHeld('The report waits for the owner: its answer acknowledgement is unseen.')
-		age=seconds_since(report['viewed_at'])
-		if age is not None and 0<=age<REPORT_CHANGE_VIEW_SECONDS:remaining=max(1,int(REPORT_CHANGE_VIEW_SECONDS-age));raise ReportHeld(f"The owner is reading this report: retry after {remaining} s without a view.")
+		answered=db.execute('SELECT 1 FROM submissions WHERE report_id = ? LIMIT 1',(report_id,)).fetchone();age=seconds_since(report['viewed_at'])
+		if answered is not None and age is not None and 0<=age<REPORT_CHANGE_VIEW_SECONDS:remaining=max(1,int(REPORT_CHANGE_VIEW_SECONDS-age));raise ReportHeld(f"The owner is reading this report: retry after {remaining} s without a view.")
 	def publish(self,report_id,title,source):
 		identifier(report_id)
 		if not isinstance(title,str)or not title.strip()or len(title)>200:raise ValueError('Report title must contain 1–200 characters')
@@ -1464,12 +1464,12 @@ class Store:
 			row=db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
 			db.execute('UPDATE reports SET ack_seen_at = ? WHERE id = ?',(now(),report_id));return dict(db.execute('SELECT * FROM reports WHERE id = ?',(report_id,)).fetchone())
-	def mark_report_viewed(self,report_id):
+	def mark_report_viewed(self,report_id,active=True):
 		identifier(report_id)
 		with closing(self.connect())as db,db:
 			row=db.execute('SELECT 1 FROM reports WHERE id = ?',(report_id,)).fetchone()
 			if row is None:raise FileNotFoundError('Report not found')
-			stamp=now();db.execute('UPDATE reports SET viewed_at = ? WHERE id = ?',(stamp,report_id))
+			stamp=now()if active else None;db.execute('UPDATE reports SET viewed_at = ? WHERE id = ?',(stamp,report_id))
 		return{'id':report_id,'viewed_at':clip_stamp(stamp)}
 	def report(self,report_id,shared=None):
 		identifier(report_id)
@@ -1643,7 +1643,7 @@ def handler(store):
 					report=store.mark_report_seen(report_seen.group(1))
 					for key in('updated_at','seen_at'):report[key]=clip_stamp(report[key])
 					self.reply(200,json.dumps(report,ensure_ascii=False));return
-				if report_view:self.reply(200,json.dumps(store.mark_report_viewed(report_view.group(1)),ensure_ascii=False));return
+				if report_view:self.reply(200,json.dumps(store.mark_report_viewed(report_view.group(1),payload.get('active',True)),ensure_ascii=False));return
 				if report_ack_seen:
 					report=store.mark_report_ack_seen(report_ack_seen.group(1))
 					for key in('updated_at','seen_at','ack_seen_at'):report[key]=clip_stamp(report[key])

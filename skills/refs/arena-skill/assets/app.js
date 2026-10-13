@@ -1545,28 +1545,31 @@ async function markAckSeen(id) {
   }
   foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at || new Date().toISOString());
 }
-// The owner's view stamps the look, so agent changes do not update an open report.
+// The owner's view stamps the look, so agent changes do not update an open report. Only a page
+// the owner can see stamps: a report left open in a background tab clears its stamp, because a
+// look needs the screen.
 const REPORT_VIEW_MS = 30 * 1000;
 const reportView = { id: null, at: 0 };
-async function markReportViewed(id) {
-  const now = Date.now();
-  if (reportView.id === id && now - reportView.at < REPORT_VIEW_MS) return;
+async function markReportViewed(id, active = true) {
+  if (active && reportView.id === id && Date.now() - reportView.at < REPORT_VIEW_MS) return;
   reportView.id = id;
-  reportView.at = now;
+  reportView.at = active ? Date.now() : 0;
   try {
     await (await request(`/api/reports/${encodeURIComponent(id)}/view`, {
-      method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+      method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({active})
     })).json();
   } catch (error) {
     // A view stamp the owner never sees costs them nothing. The next look retries.
   }
 }
+function shownReportId() {
+  const panel = $('#reports-panel');
+  return panel.hidden ? null : $('#report-select').value || null;
+}
 function checkReportRead() {
   const panel = $('#reports-panel');
-  if (!panel.hidden) {
-    const shown = $('#report-select').value;
-    if (shown) void markReportViewed(shown);
-  }
+  const shown = shownReportId();
+  if (shown && !document.hidden) void markReportViewed(shown);
   const id = panel.hidden ? null : unseenReportId();
   const viewport = panel.clientHeight;
   // A panel with no height yet has no report in it to read, and a report still being fetched is
@@ -1583,7 +1586,17 @@ function checkReportRead() {
   readPending = { id, timer: setTimeout(() => markReportRead(id), REPORT_READ_DWELL) };
 }
 $('#reports-panel').addEventListener('scroll', checkReportRead);
+// A hidden page is not a pair of eyes: leaving the report, or hiding the page, clears the view.
+document.addEventListener('visibilitychange', () => {
+  const shown = shownReportId();
+  if (document.hidden) {
+    if (shown) void markReportViewed(shown, false);
+  } else {
+    checkReportRead();
+  }
+});
 function showTab(tab) {
+  const left = tab === tabs[1] ? null : shownReportId();
   for (const item of tabs) {
     const selected = tab === item;
     item.setAttribute('aria-selected', String(selected));
@@ -1597,6 +1610,7 @@ function showTab(tab) {
     loadReport();
   } else {
     clearReadTimer();
+    if (left) void markReportViewed(left, false);
   }
 }
 function followReference(type, id) {
