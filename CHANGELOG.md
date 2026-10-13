@@ -12,6 +12,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The Gemini release packer uses exact-token binary search for ordered chunks. It splits only an oversized evidence item. The log shows the final plan and its probe total instead of each probe.
 
+#### skills
+
+- The Arena skill tells agents to suggest a verified improvement or fix when its behavior shows a gap.
+
 ## 2026-10-12
 
 ### Added

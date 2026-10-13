@@ -167,6 +167,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 - Call the backend through `fetch_page`, never through a shell command.
 - NEVER use this skill outside Arena.ai. It serves Arena Agent Mode only.
 - Relay the `hint` field of an error to the owner.
+- Suggest a verified improvement or fix to this skill when its behavior shows a gap.
 - Use the smallest read that answers the question: `per_page` and `state` filters on GitHub, `mode=text` when the bytes are text, and one chunk when a file is partly needed.
 - Prefer a workflow that writes alerts or logs into a pull request comment when a read must repeat many times.
 
