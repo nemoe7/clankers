@@ -2558,6 +2558,46 @@ test('preview client', async (t) => {
     assert.equal(get('#copy-state').dataset.state, 'good');
   });
 
+  await t.test('Seeing an edited acknowledgement keeps the log where its jump landed', async () => {
+    // The seen receipt changes the note state and makes the next poll re-render the log. Browser
+    // layout clamps a replaced scroll list before the rows return, so preserve the reply's place.
+    state = {
+      notes: [
+        { id: 'edited-scroll', text: 'Earlier question', at: '2026-10-13T03:00:00',
+          acknowledged_at: '2026-10-13T03:01:00', ack_kind: 'reply', ack_text: 'First answer',
+          ack_edited_at: '2026-10-13T03:02:00', ack_edited_seen_count: 0,
+          replies: [{ kind: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] },
+        { id: 'newer-scroll', text: 'Later question', at: '2026-10-13T03:03:00' }
+      ],
+      reports: [], tasks: { upcoming: [], finished: [] }, fetch_jobs: [], last_check: null
+    };
+    const history = get('#history');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
+    await refresh();
+    const node = history.children.find(item => item.children[2].children[0].dataset.full === 'edited-scroll');
+    const answer = node.children[1];
+    history.scrollHeight = 900;
+    history.clientHeight = 300;
+    history.scrollTop = 600;
+    history.events.scroll();
+    const scrollIntoView = answer.scrollIntoView.bind(answer);
+    answer.scrollIntoView = () => { scrollIntoView(); history.scrollTop = 240; };
+    const replaceChildren = history.replaceChildren.bind(history);
+    history.replaceChildren = (...children) => { replaceChildren(...children); history.scrollTop = 0; };
+    try {
+      const before = replySeenCalls.length;
+      await get('#log-edited').events.click();
+      assert.equal(history.scrollTop, 240, 'the new-reply jump lands on its answer');
+      await refresh();
+      assert.equal(history.scrollTop, 240, 'the seen-state refresh keeps the answer in view');
+      assert.equal(replySeenCalls.length, before + 1, 'the reply receipt reaches the server');
+    } finally {
+      history.replaceChildren = replaceChildren;
+      answer.scrollIntoView = scrollIntoView;
+    }
+  });
+
   await t.test('Acknowledgement IDs link to matching messages, reports, and tasks', async () => {
     state = {
       notes: [

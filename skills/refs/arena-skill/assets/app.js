@@ -481,6 +481,7 @@ function showHistory(notes) {
   const references = referenceTypes(lastState || {notes});
   if (notes.length) note.placeholder = clipPlaceholder(notes[notes.length - 1].text);
   const history = $('#history');
+  const place = history.scrollTop;
   if (messageNodes.size) logPinned = historyAtEnd(history);
   for (const item of notes) {
     let node = messageNodes.get(item.id);
@@ -580,7 +581,7 @@ function showHistory(notes) {
   renderHistoryWindow(notes);
   updateEdits(notes);
   applyLogSearch();
-  if (logPinned) history.scrollTop = history.scrollHeight;
+  history.scrollTop = logPinned ? history.scrollHeight : place;
   updateLogJump();
 }
 

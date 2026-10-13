@@ -5752,12 +5752,26 @@ def test_report_sources_ride_in_the_saved_state():
       "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
     )
     store.publish("pick", "Pick one", source)
+    with patch.object(preview, "now", return_value="2026-10-13T03:12:00+00:00"):
+      store.mark_report_seen("pick")
+    with patch.object(preview, "now", return_value="2026-10-13T03:13:00+00:00"):
+      store.mark_report_ack_seen("pick")
+    with store.connect() as db, db:
+      db.execute(
+        "UPDATE reports SET agent_seen_at = ?, viewed_at = ? WHERE id = ?",
+        ("2026-10-13T03:14:00+00:00", "2026-10-13T03:15:00+00:00", "pick"),
+      )
     store.save_state({"notes": store.state()["notes"], "tasks": store.tasks()})
     lines = [json.loads(line) for line in store.save_path.read_text().splitlines()]
     saved = next(line for line in lines if line.get("id") == "pick")
     assert saved["title"] == "Pick one"
     assert "Choice? {#pick}" in saved["markdown"]
     assert saved["published_at"]
+    assert saved["seen_at"] == "2026-10-13T03:12:00+00:00"
+    assert all(
+      key not in saved
+      for key in ("ever_seen", "ack_seen_at", "agent_seen_at", "viewed_at")
+    )
 
     restored_dir = Path(directory) / "restored"
     restored_dir.mkdir()
@@ -5768,6 +5782,10 @@ def test_report_sources_ride_in_the_saved_state():
     assert report["title"] == "Pick one"
     assert "Choice? {#pick}" in report["markdown"]
     assert report["published_at"]
+    assert report["seen_at"] == "2026-10-13T03:12:00+00:00"
+    assert report["ever_seen"] == 1
+    assert report["ack_seen_at"] is None
+    assert report["agent_seen_at"] is None and report["viewed_at"] is None
 
 
 def test_removed_report_leaves_nothing_in_the_save():

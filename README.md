@@ -46,12 +46,12 @@ Latest measurements as of 2026-10-13. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,732 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,674 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 3,598 `tok` |
-| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 51,395 `B` |
+| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 51,408 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 10,466 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,941 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 14,906 `B` |
-| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 140,931 `B` |
+| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 141,375 `B` |
 | `skills/squash/SKILL.md` | `o200k_base` | 1,377 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |
 | `workflows/init-docs.md` | `o200k_base` | 4,503 `tok` |

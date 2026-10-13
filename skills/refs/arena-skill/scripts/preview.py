@@ -874,7 +874,7 @@ SUBMISSION_LINE_KEYS = (
   "seen_at",
   "task_id",
 )
-REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at")
+REPORT_LINE_KEYS = ("id", "title", "markdown", "published_at", "seen_at")
 
 
 def task_row(row):
@@ -912,7 +912,7 @@ def saved_answer_line(record):
 
 
 def saved_report_line(record):
-  """Return the keys a saved report line carries, so a restore keeps the source."""
+  """Return source and the owner's first-read stamp for one report save line."""
   if not isinstance(record, dict):
     raise TypeError("Every saved report is an object")
   return {key: record.get(key) for key in REPORT_LINE_KEYS}
@@ -2852,7 +2852,7 @@ class Store:
       return [
         dict(row)
         for row in db.execute(
-          "SELECT id, title, markdown, published_at FROM reports ORDER BY seq, id"
+          "SELECT id, title, markdown, published_at, seen_at FROM reports ORDER BY seq, id"
         )
       ]
 
@@ -3809,17 +3809,36 @@ class Store:
       published_at = record.get("published_at")
       if published_at is not None and not isinstance(published_at, str):
         raise ValueError("A saved publish stamp is text")
-      prepared.append((report_id, title, markdown, published_at))
+      seen_at = record.get("seen_at")
+      if seen_at is not None and not isinstance(seen_at, str):
+        raise ValueError("A saved seen stamp is text")
+      if seen_at is not None:
+        when(seen_at)
+      prepared.append(
+        (report_id, title, markdown, published_at, seen_at, seen_at is not None)
+      )
     with self.transaction(shared) as db:
-      for report_id, title, markdown, published_at in prepared:
+      for report_id, title, markdown, published_at, seen_at, ever_seen in prepared:
         highest = db.execute("SELECT COALESCE(MAX(seq), 0) FROM reports").fetchone()[0]
         db.execute(
-          """INSERT INTO reports (id, title, markdown, updated_at, published_at, seq)
-             VALUES (?, ?, ?, ?, ?, ?)
+          """INSERT INTO reports
+             (id, title, markdown, updated_at, published_at, seq, seen_at, ever_seen)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT(id) DO UPDATE SET title = excluded.title,
                markdown = excluded.markdown, updated_at = excluded.updated_at,
-               published_at = COALESCE(reports.published_at, excluded.published_at)""",
-          (report_id, title, markdown, now(), published_at, highest + 1),
+               published_at = COALESCE(reports.published_at, excluded.published_at),
+               seen_at = COALESCE(reports.seen_at, excluded.seen_at),
+               ever_seen = MAX(reports.ever_seen, excluded.ever_seen)""",
+          (
+            report_id,
+            title,
+            markdown,
+            now(),
+            published_at,
+            highest + 1,
+            seen_at,
+            ever_seen,
+          ),
         )
     return len(prepared)
 
