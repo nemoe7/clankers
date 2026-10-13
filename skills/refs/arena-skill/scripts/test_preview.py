@@ -6202,13 +6202,16 @@ def test_report_changes_hold_unseen_answers_and_acknowledgements():
     assert store.state()["reports"] == []
 
 
-def test_report_changes_hold_a_fresh_owner_view():
-  """Agent changes wait while the owner has a fresh report view."""
+def test_report_changes_hold_a_fresh_view_of_an_answered_report():
+  """Agent changes wait while the owner has a fresh view of a report with an answer."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
     source.write_text("# Pick\n", encoding="utf-8")
     store.publish("pick", "Pick", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.acknowledge(["answer-1"], "reply", "Received")
+    store.mark_report_ack_seen("pick")
     store.mark_report_viewed("pick")
     with patch.object(preview, "seconds_since", return_value=0):
       for change in (
@@ -6223,6 +6226,40 @@ def test_report_changes_hold_a_fresh_owner_view():
     with patch.object(preview, "seconds_since", return_value=60):
       store.publish("pick", "Pick revised", source)
       store.unpublish("pick")
+    assert store.state()["reports"] == []
+
+
+def test_report_changes_ignore_a_fresh_view_of_an_unanswered_report():
+  """A report nobody answered has nothing to disturb, so a view never holds a change."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text("# Pick\n", encoding="utf-8")
+    store.publish("pick", "Pick", source)
+    store.mark_report_viewed("pick")
+    with patch.object(preview, "seconds_since", return_value=0):
+      store.publish("pick", "Pick revised", source)
+      store.unpublish("pick")
+    assert store.state()["reports"] == []
+
+
+def test_report_view_active_false_clears_the_stamp():
+  """The page clears the stamp when it hides the report, so a background look holds nothing."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text("# Pick\n", encoding="utf-8")
+    store.publish("pick", "Pick", source)
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    store.acknowledge(["answer-1"], "reply", "Received")
+    store.mark_report_ack_seen("pick")
+    store.mark_report_viewed("pick")
+    cleared = store.mark_report_viewed("pick", active=False)
+    assert cleared["viewed_at"] is None
+    # Real time, because the cleared stamp is what skips the view hold: a patched clock would
+    # report an age even for a clear.
+    store.publish("pick", "Pick revised", source)
+    store.unpublish("pick")
     assert store.state()["reports"] == []
 
 
