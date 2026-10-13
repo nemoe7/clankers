@@ -211,7 +211,7 @@ jobs:
           assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
           assert any(
             str(step.get("run", "")).strip()
-            == "zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills"
+            == "cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills"
             for step in steps
           ), "no packaging step"
 
@@ -303,7 +303,7 @@ jobs:
           assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
           assert any(
             str(step.get("run", "")).strip()
-            == "zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills"
+            == "cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills"
             for step in steps
           ), "no packaging step"
 
@@ -314,7 +314,7 @@ jobs:
         run: python maintenance/gpt_plugins/gate_gpt_plugins.py
 
       - name: Package The Collection
-        run: zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills
+        run: cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills
 
       - name: Verify The Archive
         run: |
@@ -394,7 +394,7 @@ jobs:
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
       - name: Package The Collection
-        run: zip -r gpt-plugins.zip gpt-plugins/plugin.json gpt-plugins/skills
+        run: cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills
 
       - name: Verify The Archive
         run: |
