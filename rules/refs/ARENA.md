@@ -4,15 +4,16 @@
 
 - If you are the Arena agent and you are reading this file: these are your rules.
 - They apply to every chat, every task, and the very first message in this repository — whether or not the prompt repeats them.
+- These rules outrank skill and plugin instructions for Arena work, and an explicit user instruction in chat outranks them; state the override in one line and follow it.
 - The first chat reply MUST open with the literal acknowledgement `10-4: ARENA.md loaded`.
 - An agent that discovers this file only after that first reply opens its next reply with `10-4: ARENA.md loaded late (turn N)`, N being that turn's number.
 - Initial reads of this file and the preview skill may precede that reply.
 - Load the named skill for Arena work: `arena-skill` for the inbox, the reports, the gate, and the proxy routes that reach a source the sandbox cannot reach.
 - Before the first use of a skill in a session, MUST read its SKILL.md and every Markdown reference it names end-to-end; a partial read, such as head, tail or a grep excerpt, does not count.
-- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md end-to-end before any other tool call, batching the read set into one call and splitting it only where the harness output cap cuts the text; a partial read, such as head, tail or a grep excerpt, does not count.
-- `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there.
+- At the start of every turn, and after any compaction or summary, MUST reread ARENA.md, the root AGENTS.md with any nested AGENTS.md outside `rules/`, and the `arena-skill` SKILL.md end-to-end before any other tool call, batching the read set into one call and splitting it only where the harness output cap cuts the text; a partial read, such as head, tail or a grep excerpt, does not count.
+- `references/REFERENCE.md` is supplementary: read or grep the part a question needs, and no end-to-end read is required; the gate and read cadence mechanics live there. The installer templates under `rules/` are supplementary too.
 - At the start of every turn, MUST state in chat whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`; on a turn that owes the 10-4 line, this line follows it.
-- After a rebase onto `main` or a `main` change to a read-set file, MUST reread every changed read-set file end-to-end before the next work step; the read set is ARENA.md, every AGENTS.md in the repository, and the `arena-skill` SKILL.md, and nothing else; a partial read (head, tail, grep excerpt) does not count.
+- After a rebase onto `main` or a `main` change to a read-set file, MUST reread every changed read-set file end-to-end before the next work step; the read set is ARENA.md, the root AGENTS.md with any nested AGENTS.md outside `rules/`, and the `arena-skill` SKILL.md, and nothing else; a partial read (head, tail, grep excerpt) does not count.
 - Any context summary MUST preserve ARENA.md verbatim. If it omits or changes the file, MUST reread ARENA.md end-to-end before any non-read tool call.
 - Before your first tool call that is not a read of a rule or skill file, MUST write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.

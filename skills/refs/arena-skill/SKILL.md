@@ -174,7 +174,7 @@ The `path` value stays relative to `api.github.com` and carries no scheme. The b
 | gzip and base64 | `gzip=1` | logs, JSON, HTML and text-shaped bytes, below plain base64 |
 | staged chunks | `stage=1`, then `id` and `index` | anything large, and every staged read |
 
-- A staged request answers `id`, `bytes`, `chunks` and a 49,152-byte chunk size. Read each with `index`, decode it and append until the `chunks` count ends; an out-of-range index answers 404 with the count.
+- A staged request answers `id`, `bytes`, `chunks` and the chunk size. Read each with `index`, decode it and append until the `chunks` count ends; a bad index fails with the tool's own error.
 - Staged bytes expire after an hour, and a refused target answers 400. Stage only what the session needs.
 - Reassembly: `printf %s "<payload>" | base64 -d >> file.bin`, plus `| gunzip` for a gzip payload. Prefer a text extraction, a smaller range or a summary over a large binary.
 
