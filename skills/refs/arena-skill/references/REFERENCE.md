@@ -85,6 +85,7 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 | Case | Trigger | Answer |
 | --- | --- | --- |
 | `shell-shape` | a caller that is not `bash`, `sh`, `dash`, `ksh` or `zsh` | pass, so a hosted process keeps its shell |
+| `shell-line` | every gated shell | the command line is read once per shell, so a command costs no read |
 | `platform-shell` | the platform's probe or its own hosted process | pass, and mark the shell once |
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
 | `main-moved` | `git commit` or `git push` while the branch trails `origin/main` | the rebase notice once per shell, then the line runs |

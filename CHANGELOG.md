@@ -27,6 +27,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - An agent unpublish lands at once, even while the owner reads. The page keeps that report and its row on screen until the owner clicks away.
 - Finished tasks record their first completion time. The preview shows the newest first, clears the time on reopen, and saves it with task state.
 - A routed run now names the worktree step and its command. The agent reads the exact `arena-preview worktree start` line in the notice, on an automatic detach and a manual `route`.
+- The gate reads the shell command line once per shell, not once per command. After the first command a command costs about 0.3 ms, not 11 ms.
 
 #### workflows
 
