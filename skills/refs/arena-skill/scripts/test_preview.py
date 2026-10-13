@@ -5666,28 +5666,45 @@ def test_unified_import_atomicity():
     ) == backup
 
 
-def test_import_refuses_a_snapshot_older_than_the_state():
-  """A paste of an old copy must not write over newer messages."""
+def test_import_accepts_a_snapshot_older_than_the_state():
+  """A paste of an old copy can merge with newer live messages."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("live", "Newest message", at="2026-10-04T15:00:00+00:00")
     older = json.dumps(
       [{"id": "old", "text": "Old message", "at": "2026-10-04T11:42:48"}]
     )
-    try:
-      store.import_state(older)
-      raise AssertionError("An older snapshot was accepted")
-    except ValueError as error:
-      assert "live state is fresher" in str(error)
-      assert "--force" in str(error)
-    assert {note["id"] for note in store.state()["notes"]} == {"live"}
-    receipt = store.import_state(older, force=True, merge=True)
-    assert receipt["forced"] is True
+    receipt = store.import_state(older, merge=True)
+    assert receipt == {"notes": 1, "answers": 0, "reports": 0, "tasks": 0}
     assert {note["id"] for note in store.state()["notes"]} == {"live", "old"}
 
 
+def test_import_state_has_no_force_option():
+  """The command no longer exposes a freshness override."""
+  with tempfile.TemporaryDirectory() as directory:
+    source = Path(directory) / "state.json"
+    source.write_text(
+      json.dumps([{"id": "old", "text": "Old message"}]), encoding="utf-8"
+    )
+    result = subprocess.run(
+      [
+        sys.executable,
+        str(Path(preview.__file__)),
+        "import-state",
+        str(source),
+        "--force",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
+    )
+    assert result.returncode == 2
+    assert "unrecognized arguments: --force" in result.stderr
+
+
 def test_import_accepts_a_newer_snapshot():
-  """A save newer than the live state lands without the flag."""
+  """A save newer than the live state lands."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("live", "Older message", at="2026-10-04T11:42:48")
@@ -5695,7 +5712,6 @@ def test_import_accepts_a_newer_snapshot():
       [{"id": "new", "text": "Newer message", "at": "2026-10-04T15:00:00+00:00"}]
     )
     assert store.import_state(newer, merge=True)["notes"] == 1
-    assert "forced" not in store.import_state(newer, merge=True)
     assert {note["id"] for note in store.state()["notes"]} == {"live", "new"}
 
 
