@@ -1386,8 +1386,8 @@ def require_server(store):
 
 
 def print_read(store):
-  """Print pending entries, then mark delivered IDs as seen. Mark IDs after the write so a failed write leaves each
-  entry pending. A seen entry stays pending until acknowledgement."""
+  """Print pending entries, then mark delivered IDs as seen. A failed print leaves each entry pending.
+  Seen nonquiet entries still need acknowledgement."""
   listing = store.read()
   print(format_read(listing), flush=True)
   if listing["pending"]:
@@ -4283,8 +4283,10 @@ class Store:
     return not (pending and polls >= threshold)
 
   def read(self, include_quiet=True):
-    """The unacknowledged items. A poll passes False, so a quiet note never wakes it."""
-    quiet_filter = "" if include_quiet else " AND quiet = 0"
+    """Unacknowledged work and unseen quiet notes. Polls exclude quiet notes."""
+    quiet_filter = (
+      " AND (quiet = 0 OR seen_at IS NULL)" if include_quiet else " AND quiet = 0"
+    )
     with self.transaction(autosave=False) as db:
       pending = [
         message_row(row) | {"kind": "note"}
@@ -4303,10 +4305,7 @@ class Store:
       for row in db.execute("SELECT * FROM notes ORDER BY at, seq"):
         record = message_row(row)
         notes[record["id"]] = record
-      pending_note_ids = {
-        row["id"]
-        for row in db.execute("SELECT id FROM notes WHERE acknowledged_at IS NULL")
-      }
+      pending_note_ids = {item["id"] for item in pending if item["kind"] == "note"}
       attachments = {}
       for row in db.execute("SELECT * FROM uploads ORDER BY seq"):
         record = upload_row(row, self.path.parent)

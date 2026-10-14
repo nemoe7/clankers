@@ -33,6 +33,9 @@ Reports keep Markdown snapshots. The renderer parses field markers from each sna
 The report API returns JSON with rendered HTML, not raw HTML.
 Each answer POST carries the rendered report revision. A missing revision returns HTTP 400.
 A stale revision returns HTTP 409. The revision check and answer write use one transaction.
+
+Routine inbox reads show quiet notes once. Note-ID lookups and reply-thread context still include them.
+
 Report answers live in a separate `submissions` table and appear as `kind: report` in CLI reads.
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.

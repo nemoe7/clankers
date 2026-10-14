@@ -71,6 +71,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Routine inbox reads now show quiet notes only until their Seen receipt. History, reply context, ordinary acknowledgements, and polling remain available.
+
 - Ready tasks follow their set order. Only blocked tasks keep report-link priority.
 
 - Report deletion now requires consecutive button clicks. Other clicks cancel confirmation, and a new confirmation uses its own timeout.

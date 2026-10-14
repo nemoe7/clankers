@@ -5876,13 +5876,18 @@ def test_quiet_notes_need_no_ack():
       assert "No pending note" in str(error)
     else:
       raise AssertionError("A quiet note requires no acknowledgement")
+    pending = store.read()["pending"]
+    assert [item["id"] for item in pending] == [upload["id"]]
+    assert "quiet (no ack required)" in preview.format_read(store.read())
     store.mark_seen([upload["id"]])
-    for _ in range(2):
-      pending = store.read()["pending"]
-      assert [item["id"] for item in pending] == [upload["id"]]
-      assert pending[0]["acknowledged_at"] is None
-      assert "quiet (no ack required)" in preview.format_read(store.read())
-    store.note("owner-note", "Work")
+    assert store.read()["pending"] == []
+    retained = store.notes_matching(upload["id"])[0]
+    assert retained["acknowledged_at"] is None and retained["seen_at"] is not None
+    store.note("owner-note", "RE: " + upload["id"] + "\nWork")
+    store.mark_seen(["owner-note"])
+    pending = store.read()["pending"]
+    assert [item["id"] for item in pending] == ["owner-note"]
+    assert pending[0]["thread"][0]["id"] == upload["id"]
     assert store.pending_ack() == "owner-note"
     assert "unacked 1 note" in store.reminder(advance=True)
     store.note("quiet-later", "More information", quiet=True)
@@ -6103,7 +6108,10 @@ def test_expired_agent_key_tells_the_agent_once():
     # A fresh record is silent, and its own stamp lets a later expiry speak again.
     store.set_agent_key("new-key-0123456789abcdef", "https://h.example")
     assert store.notice_expired_key() is None
-    assert len(store.read()["pending"]) == 1
+    assert store.read()["pending"] == []
+    retained = store.notes_matching(first["id"])[0]
+    assert retained["quiet"] == 1 and retained["seen_at"] is not None
+    assert retained["acknowledged_at"] is None
 
 
 def test_agent_seen_at_is_stamped_by_the_cli():
