@@ -6566,6 +6566,59 @@ def test_task_detail_steps():
     assert "wall" not in {item["id"] for item in preview.Store(tasks_dir).list_tasks()}
 
 
+def test_task_details_append_keeps_replacement_and_limits():
+  script = str(Path(preview.__file__))
+  with tempfile.TemporaryDirectory() as tasks_dir:
+    store = preview.Store(tasks_dir, create=True)
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": tasks_dir}
+
+    def cli(*args):
+      return subprocess.run(
+        [sys.executable, script, *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    assert cli("task", "append-task", "Append", "one").returncode == 0
+    result = cli("task", "append-task", "--append", "--details", "two\nthree")
+    assert result.returncode == 0, result.stderr
+    assert store.task_record("append-task")["details"] == ["one", "two", "three"]
+    assert cli("task", "append-task", "-A", "-d", "four").returncode == 0
+    assert store.task_record("append-task")["details"] == [
+      "one",
+      "two",
+      "three",
+      "four",
+    ]
+    assert cli("task", "append-task", "Renamed", "replacement").returncode == 0
+    assert cli("task", "append-task", "--status", "finished").returncode == 0
+    assert store.task_record("append-task")["details"] == ["replacement"]
+    for args in [
+      ("--append",),
+      ("--append", "--details", ""),
+      ("--append", "--details", "x" * 121),
+      ("--append", "--details", "lost", "--msg-id", "aaaaaa"),
+    ]:
+      assert cli("task", "append-task", *args).returncode != 0
+      assert store.task_record("append-task")["details"] == ["replacement"]
+    store.note("bbbbbb", "Request")
+    assert (
+      cli(
+        "task", "append-task", "--append", "--details", "linked", "--msg-id", "bbbbbb"
+      ).returncode
+      == 0
+    )
+    assert store.task_record("append-task")["details"] == ["replacement", "linked"]
+    assert store.notes_matching("bbbbbb")[0]["task_id"] == "append-task"
+    store.write_task("append-task", details=["kept"] * 40)
+    assert (
+      cli("task", "append-task", "--append", "--details", "overflow").returncode != 0
+    )
+    assert store.task_record("append-task")["details"] == ["kept"] * 40
+
+
 def test_download_header_name_is_safe():
   """A CR, LF or quote in a download name never reaches the response header."""
   assert preview.header_filename('a\nb\rc"d') == "a_b_c_d"

@@ -3195,15 +3195,20 @@ class Store:
     report_id=None,
     completed_at=None,
     shared=None,
+    append_details=False,
   ):
     """Insert or update a task and return it. Keep omitted title and detail values. Use a supplied transaction so
     imports remain atomic."""
     details = [str(item) for item in details if str(item).strip()] if details else None
+    if append_details and not details:
+      raise ValueError("Appending requires at least one task detail")
     check_task(task_id, title, details)
     if status is not None and status not in TASK_STATUSES:
       raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
     stamp = now()
     with self.transaction(shared) as db:
+      if append_details and not db.in_transaction:
+        db.execute("BEGIN IMMEDIATE")
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
       ).fetchone()
@@ -3213,7 +3218,10 @@ class Store:
       if stored is None:
         self.refuse_shared_id(db, "tasks", "reports", task_id)
       title = title if title is not None else stored["title"]
-      if details is None:
+      if append_details:
+        details = (stored["details"] if stored else []) + details
+        check_task(task_id, title, details)
+      elif details is None:
         details = stored["details"] if stored else []
       if not details:
         # A task with no detail is a title alone, and the queue works from its steps.
@@ -5519,6 +5527,13 @@ def main():
     help="One step per line, 120 characters or fewer, repeatable; an empty string clears the list",
   )
   task.add_argument(
+    "-A",
+    "--append",
+    dest="append_details",
+    action="store_true",
+    help="Append provided details instead of replacing stored details",
+  )
+  task.add_argument(
     "-b",
     "--blocked",
     dest="blocked",
@@ -5853,6 +5868,7 @@ def main():
         args.title_arg is None
         and not args.detail_arg
         and args.task_details is None
+        and not args.append_details
         and args.status is None
         and args.order is None
         and args.blocked is None
@@ -5895,6 +5911,7 @@ def main():
             args.blocked,
             args.report,
             shared=shared,
+            append_details=args.append_details,
           )
           store.mark_task(args.msg_id, task_id, shared=shared)
       else:
@@ -5906,6 +5923,7 @@ def main():
           args.order,
           args.blocked,
           args.report,
+          append_details=args.append_details,
         )
       print(format_task(record))
     elif args.command == "task-remove":

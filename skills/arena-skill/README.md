@@ -46,6 +46,8 @@ The eye button marks all report acknowledgement receipts seen. It leaves message
 
 Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
 
+The task CLI appends supplied details with `--append` (`-A`). Without that flag, supplied details replace the stored list. Existing limits still apply.
+
 The task CLI blocks a task linked with `--report` unless that report already has an answer. An explicit `--unblocked` overrides this default.
 
 Finished tasks show newest completion first. Upcoming tasks keep their stored order. Only blocked tasks with report links have priority.

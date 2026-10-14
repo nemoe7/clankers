@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-15
 
+### Added
+
+#### preview
+
+- Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
+
 ### Fixed
 
 #### userscripts
