@@ -52,6 +52,7 @@ class Element {
   }
   get innerHTML() { return this.inner; }
   querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
+  contains(node) { return this === node || this.children.some(child => child instanceof Element && child.contains(node)); }
   get lastElementChild() { return this.children.at(-1); }
   focus() { this.focused = true; }
   scrollIntoView() { this.scrolledIntoView = true; }
@@ -63,6 +64,7 @@ class Element {
 }
 const elements = new Map();
 const documentEvents = {};
+const documentCaptureEvents = {};
 const intervals = [];
 const windowEvents = {};
 const copied = [];
@@ -143,7 +145,7 @@ const context = {
       addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
     }),
   },
-  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback) => { documentEvents[name] = callback; }, execCommand: () => execCommandResult },
+  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
   navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
   localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
   crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
@@ -2108,6 +2110,52 @@ test('preview client', async (t) => {
     get('#reports-tab').events.click();
     await new Promise(resolve => setTimeout(resolve, 0));
     get('#report-select').value = keptSelect;
+  });
+
+  await t.test("Only consecutive delete clicks confirm, including clicks on the icon", async () => {
+    const keptReports = state.reports;
+    const keptSelect = get('#report-select').value;
+    const button = get('#unpublish-report');
+    const children = button.children.slice();
+    const icon = new Element();
+    const shape = new Element();
+    icon.append(shape);
+    button.append(icon);
+    const press = async (target, onButton) => {
+      const click = event({ target });
+      documentCaptureEvents.click?.(click);
+      if (onButton) await button.events.click(click);
+      documentEvents.click(click);
+      await tick();
+    };
+    unpublished.length = 0;
+    try {
+      state.reports = ['outside', 'nested'].map(id => ({
+        id, title: id, updated_at: '2026-09-25T10:00:00', seen_at: '2026-09-25T10:05:00'
+      }));
+      await refresh();
+      get('#report-select').value = 'outside';
+      await press(button, true);
+      assert.equal(button.dataset.state, 'bad');
+      await press(new Element(), false);
+      assert.equal(button.dataset.state, '', 'an intervening click clears the arm');
+      await press(button, true);
+      assert.deepEqual(unpublished, [], 'a click after cancellation must arm again');
+      await press(button, true);
+      assert.deepEqual(unpublished, ['outside']);
+      get('#report-select').value = 'nested';
+      await press(shape, true);
+      assert.equal(button.dataset.state, 'bad', 'the icon click must not cancel its own arm');
+      assert.deepEqual(unpublished, ['outside']);
+      await press(shape, true);
+      assert.deepEqual(unpublished, ['outside', 'nested']);
+    } finally {
+      button.replaceChildren(...children);
+      state.reports = keptReports;
+      unpublished.length = 0;
+      await refresh();
+      get('#report-select').value = keptSelect;
+    }
   });
 
   await t.test("The delete press stamps its acknowledgement before removal", async () => {

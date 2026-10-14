@@ -1966,6 +1966,19 @@ $('#refresh-report').addEventListener('click', () => { refreshState(); loadRepor
 // and the arm expires so a stray first click does not sit armed forever. The server keeps the
 // report's answers and its source file. Only the tab row goes.
 let unpublishArmed = null;
+let unpublishTimer = null;
+function clearUnpublishArm() {
+  clearTimeout(unpublishTimer);
+  unpublishTimer = null;
+  unpublishArmed = null;
+  $('#unpublish-report').dataset.state = '';
+}
+document.addEventListener('click', event => {
+  if (unpublishArmed && !$('#unpublish-report').contains(event.target)) {
+    clearUnpublishArm();
+    $('#report-status').textContent = 'Delete canceled.';
+  }
+}, true);
 // A report the agent unpublished leaves the page when the owner clicks away, not before.
 function releaseHeldReport(nextId) {
   if (!heldReport || heldReport.id === nextId) return;
@@ -1999,16 +2012,15 @@ $('#unpublish-report').addEventListener('click', async () => {
   if (!id) return;
   const button = $('#unpublish-report');
   if (unpublishArmed !== id) {
+    clearUnpublishArm();
     unpublishArmed = id;
     button.dataset.state = 'bad';
     $('#report-status').textContent = `Delete ${id}? Click ✕ again to confirm.`;
-    setTimeout(() => {
-      if (unpublishArmed === id) { unpublishArmed = null; button.dataset.state = ''; }
-    }, 8000);
+    unpublishTimer = setTimeout(clearUnpublishArm, 8000);
     return;
   }
   if (button.disabled) return;
-  unpublishArmed = null;
+  clearUnpublishArm();
   button.disabled = true;
   try {
     const report = ((lastState && lastState.reports) || []).find(item => item.id === id);
