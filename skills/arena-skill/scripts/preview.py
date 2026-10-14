@@ -492,7 +492,9 @@ def require_server(store):
 		probe.settimeout(1)
 		if probe.connect_ex(('127.0.0.1',int(port)))==0:return
 	raise ValueError(f"preview server is down; start it before polling: arena-preview serve --port {port}")
-def print_read(store):listing=store.read();print(format_read(listing),flush=True);store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
+def print_read(store):
+	listing=store.read();print(format_read(listing),flush=True)
+	if listing['pending']:store.mark_seen([item['id']for item in listing['pending']]);store.mark_reports_agent_seen([item.get('report_id')for item in listing['pending']])
 POLL_INTERVAL=1
 POLL_MAX_LOOPS=1800
 POLLING_META='polling_at'
@@ -1348,7 +1350,7 @@ class Store:
 		return not(pending and polls>=threshold)
 	def read(self,include_quiet=True):
 		quiet_filter=''if include_quiet else' AND quiet = 0'
-		with self.transaction()as db:
+		with self.transaction(autosave=False)as db:
 			pending=[message_row(row)|{'kind':'note'}for row in db.execute(f"SELECT * FROM notes WHERE acknowledged_at IS NULL{quiet_filter} ORDER BY at, seq")];pending+=[message_row(row)|{'kind':'report'}for row in db.execute('SELECT * FROM submissions WHERE acknowledged_at IS NULL ORDER BY at, seq')];notes={}
 			for row in db.execute('SELECT * FROM notes ORDER BY at, seq'):record=message_row(row);notes[record['id']]=record
 			pending_note_ids={row['id']for row in db.execute('SELECT id FROM notes WHERE acknowledged_at IS NULL')};attachments={}

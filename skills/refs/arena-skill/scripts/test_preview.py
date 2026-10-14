@@ -2439,6 +2439,34 @@ def test_autosave_export():
     )
 
 
+def test_empty_reads_do_not_autosave(tmp_path, monkeypatch):
+  store = preview.Store(tmp_path, create=True)
+  saves = []
+  save = store.autosave
+
+  def record_save():
+    saves.append(True)
+    save()
+
+  monkeypatch.setattr(store, "autosave", record_save)
+  preview.print_read(store)
+  assert saves == [], "an empty CLI read wrote the export"
+  assert store.meta_value("last_check")
+  assert store.read(include_quiet=False)["pending"] == []
+  assert saves == [], "an idle poll read wrote the export"
+  store.note("saved-note", "Keep content saves")
+  assert saves
+  saves.clear()
+  preview.print_read(store)
+  assert saves, "delivery must save the Seen receipt"
+  assert json.loads(store.save_path.read_text().splitlines()[0])["seen_at"]
+  store.acknowledge(["saved-note"], "note", "Keep receipts")
+  assert "Keep receipts" in store.save_path.read_text()
+  saves.clear()
+  preview.print_read(store)
+  assert saves == [], "an empty read with note history wrote the export"
+
+
 def test_ndjson_omits_quiet_notes():
   """Quiet notes stay in live state but do not cross an NDJSON save and restore."""
   with tempfile.TemporaryDirectory() as directory:

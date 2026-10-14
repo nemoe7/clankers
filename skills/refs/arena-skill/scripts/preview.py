@@ -1390,8 +1390,11 @@ def print_read(store):
   entry pending. A seen entry stays pending until acknowledgement."""
   listing = store.read()
   print(format_read(listing), flush=True)
-  store.mark_seen([item["id"] for item in listing["pending"]])
-  store.mark_reports_agent_seen([item.get("report_id") for item in listing["pending"]])
+  if listing["pending"]:
+    store.mark_seen([item["id"] for item in listing["pending"]])
+    store.mark_reports_agent_seen(
+      [item.get("report_id") for item in listing["pending"]]
+    )
 
 
 POLL_INTERVAL = 1
@@ -4263,7 +4266,7 @@ class Store:
   def read(self, include_quiet=True):
     """The unacknowledged items. A poll passes False, so a quiet note never wakes it."""
     quiet_filter = "" if include_quiet else " AND quiet = 0"
-    with self.transaction() as db:
+    with self.transaction(autosave=False) as db:
       pending = [
         message_row(row) | {"kind": "note"}
         for row in db.execute(
