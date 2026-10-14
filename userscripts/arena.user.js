@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.39
+// @name         Arena.ai | NemoUtils | v1.10.40
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.39
+// @version      1.10.40
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2440,10 +2440,10 @@
         card.id = STATE_PANEL_ID;
         card.setAttribute("role", "status");
         card.style.cssText =
-          "position:fixed;right:16px;bottom:16px;z-index:2147483647;max-width:320px;" +
-          "padding:12px 14px;border-radius:10px;background:#1f2430;color:#f2f4f8;" +
+          "position:fixed;right:16px;top:16px;z-index:2147483647;max-width:320px;" +
+          "padding:12px 14px;border-radius:10px;background:#2c2b28;color:#f0ede8;" +
           "font:13px/1.45 system-ui,-apple-system,sans-serif;" +
-          "box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid #3a4152";
+          "box-shadow:0 6px 24px rgba(0,0,0,.35);border:1px solid #56504a";
         var text = document.createElement("div");
         text.textContent = message;
         card.appendChild(text);
@@ -2454,8 +2454,8 @@
           go.type = "button";
           go.textContent = actionLabel;
           go.style.cssText =
-            "cursor:pointer;border:0;border-radius:6px;padding:5px 10px;" +
-            "background:#4f7cff;color:#fff;font:inherit";
+            "cursor:pointer;border:1px solid #56504a;border-radius:6px;padding:5px 10px;" +
+            "background:#2c2b28;color:#f0ede8;font:inherit";
           go.addEventListener("click", function () {
             removeStatePanel();
             action();
@@ -2466,7 +2466,7 @@
         close.type = "button";
         close.textContent = "Dismiss";
         close.style.cssText =
-          "cursor:pointer;border:1px solid #3a4152;border-radius:6px;padding:5px 10px;" +
+          "cursor:pointer;border:1px solid #56504a;border-radius:6px;padding:5px 10px;" +
           "background:transparent;color:inherit;font:inherit";
         close.addEventListener("click", removeStatePanel);
         row.appendChild(close);
