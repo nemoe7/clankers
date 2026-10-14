@@ -7,7 +7,7 @@
 - Initial file/skill reads may precede the first reply.
 - Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
 - Before the first skill use in a session, read its SKILL.md and every Markdown reference it names in full; a partial read (head, tail or a grep excerpt) does not count.
-- At session start and after compaction or summary, MUST read ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md in full before any other tool call; batch reads, splitting only at the harness output cap; a partial read (head, tail or grep excerpt) does not count.
+- At session start and after compaction or summary, MUST read ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md in full before any other tool call; batch reads, splitting only at the harness output cap; a partial read (head, tail or grep excerpt) does not count. Complete these reads before queued work or a pending push.
 - `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md. A template copy kept for installation is supplementary too.
 - Each turn start: MUST state in chat whether reasoning is on, as `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line.
 - When summarizing or compacting context, MUST list a full read of ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md as the next immediate step before any non-read tool call; no verbatim ARENA.md copy is required.
