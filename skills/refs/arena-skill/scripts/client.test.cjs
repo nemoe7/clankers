@@ -2751,6 +2751,33 @@ test('preview client', async (t) => {
     assert.equal(cached.notes.length, 2, 'the cached state keeps the quiet note');
   });
 
+  await t.test('Loading older filtered messages never inserts quiet-note placeholders', async () => {
+    const keptNotes = state.notes;
+    const history = get('#history');
+    try {
+      state.notes = Array.from({ length: 80 }, (_, index) => ({
+        id: `scroll-${index}`, text: `mark ${index}`, at: '2026-10-05T05:00:00', quiet: index % 2
+      }));
+      await refresh();
+      get('#log-search').value = 'mark';
+      get('#log-search').events.input();
+      history.scrollHeight = 1000;
+      history.clientHeight = 100;
+      history.scrollTop = 0;
+      history.events.scroll();
+      assert.ok(history.children.every(node => node instanceof Element),
+        'every rendered item must be a message row, never undefined');
+      assert.ok(history.children.every(node => Number(node.children[2].children[0].dataset.full.split('-')[1]) % 2 === 0),
+        'quiet notes must stay out of older pages');
+      assert.equal(JSON.parse(storage.get('arena-preview-v1:state-cache')).notes.length, 80);
+    } finally {
+      get('#log-search').value = '';
+      get('#log-search').events.input();
+      state.notes = keptNotes;
+      await refresh();
+    }
+  });
+
   await t.test('Skip poll toggles one flag, and a poll consumes the arm', async () => {
     // The press must write no note: the agent reads the flag, ends its wait, and no stale
     // "skip poll" line waits in the log for a later turn to misread.

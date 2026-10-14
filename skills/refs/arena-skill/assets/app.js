@@ -588,7 +588,7 @@ function renderHistoryWindow(notes) {
 }
 
 function loadOlderMessages() {
-  const notes = (lastState && lastState.notes) || [];
+  const notes = ((lastState && lastState.notes) || []).filter(item => !item.quiet);
   if (notes.length <= historyShown) return;
   const history = $('#history');
   const before = history.scrollHeight;

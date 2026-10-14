@@ -59,6 +59,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Older message pages now exclude quiet notes before pagination. Search and scrolling no longer show undefined placeholders.
+
 - The CLI reference now documents reply sources, task reads, report-removal holds, and CLI-only state reads in all copies.
 
 - Empty inbox reads no longer write the state export. Content and receipt changes still save.
