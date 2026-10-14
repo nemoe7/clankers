@@ -2993,3 +2993,16 @@ test('a wide table scrolls sideways on its own and keeps its words whole', () =>
     assert.ok(rule && rule[0].includes('overflow-wrap: normal'), `${cells.source} keeps words whole`);
   }
 });
+
+test('the report eye shares toolbar control sizes at both widths', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  for (const size of [44, 36]) {
+    const rule = rules.find(match => match[1].includes('#copy-report')
+      && new RegExp(`width:\\s*${size}px`).test(match[2]));
+    assert.ok(rule, `the toolbar has a ${size}px size rule`);
+    assert.ok(rule[1].split(',').map(selector => selector.trim()).includes('#mark-report-acks-seen'),
+      `the eye belongs to the ${size}px toolbar rule`);
+    assert.match(rule[2], new RegExp(`height:\\s*${size}px`));
+  }
+});
