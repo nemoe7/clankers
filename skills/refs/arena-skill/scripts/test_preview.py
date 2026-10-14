@@ -7109,3 +7109,16 @@ def test_reference_commands_table_lists_every_agent_facing_command():
   )
   missing = sorted(actual - internal - documented)
   assert not missing, f"CLI commands missing from the table: {missing}"
+
+
+def test_poll_label_reports_live_routed_waits(monkeypatch):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    monkeypatch.setattr(preview, "live_runs", lambda path: ["gate"])
+    assert store.state()["waiting_for_gates"] is False
+    store.start_poll()
+    assert store.state()["waiting_for_gates"] is True
+    monkeypatch.setattr(preview, "live_runs", lambda path: [])
+    assert store.state()["waiting_for_gates"] is False
+    store.clear_polling()
+    assert store.state()["waiting_for_gates"] is False

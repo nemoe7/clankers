@@ -1088,6 +1088,12 @@ test('preview client', async (t) => {
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
     await tick();
     assert.match(get('#connection-text').textContent, /^Polling… 1m 0[5-9]s$/);
+    state.waiting_for_gates = true;
+    await refresh();
+    assert.match(get('#connection-text').textContent, /^Waiting for gates\.\.\. /);
+    state.waiting_for_gates = false;
+    await refresh();
+    assert.match(get('#connection-text').textContent, /^Polling… /);
     // A wait outlives the idle window: the live heartbeat keeps the wait text, not the gone mark.
     state.agent_seen_at = new Date(Date.now() - 600_000).toISOString().slice(0, 19);
     await refresh();

@@ -14,6 +14,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### preview
+
+- The preview header shows `Waiting for gates...` during polling with active routed work. Other polls keep `Polling…`.
+
 #### userscripts
 
 - Successful state saves clear persistent failure notices. Failed saves retain them, and temporary success messages keep their timeout.

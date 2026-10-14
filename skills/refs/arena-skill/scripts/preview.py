@@ -3092,6 +3092,7 @@ class Store:
         for item in tasks["finished"] + tasks["upcoming"]:
           item["updated_at"] = clip_stamp(item["updated_at"])
         tasks["updated_at"] = clip_stamp(tasks["updated_at"])
+      polling = self.polling()
       return {
         "notes": notes,
         "reports": reports,
@@ -3100,11 +3101,10 @@ class Store:
         "fetch_jobs": fetch_jobs,
         "workspace": workspace_usage(),
         "last_check": clip_stamp(meta.get("last_check")),
-        "polling": self.polling(),
+        "polling": polling,
+        "waiting_for_gates": polling and bool(live_runs(self.path.parent)),
         # The wait start rides the heartbeat, so a stale stamp never shows.
-        "polling_since": (
-          clip_stamp(meta.get(POLL_SINCE_META)) if self.polling() else None
-        ),
+        "polling_since": (clip_stamp(meta.get(POLL_SINCE_META)) if polling else None),
         # The page paints its Skip poll button from this stamp until a poll consumes it.
         "skip_poll": clip_stamp(meta.get(SKIP_POLL_META)),
         # The message log header names the bash calls since the owner's last message.
