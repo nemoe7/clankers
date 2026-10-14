@@ -2260,13 +2260,13 @@ test('preview client', async (t) => {
     assert.equal(get('#send-status').textContent, 'empty.bin is empty.');
     picker.files = [{ name: 'big.bin', size: 50_000_001, type: 'application/octet-stream' }];
     picker.events.change();
-    assert.equal(get('#send-status').textContent, 'Staged 1 file. Send note to save them together.');
+    assert.equal(get('#send-status').textContent, 'Staged 1 file. Send message to save them together.');
     assert.deepEqual(chips(), ['big.bin'], 'a large file has no ceiling');
     get('#staged-files').children[0].children[1].events.click();
     tooMany = Array.from({ length: 6 }, (_, n) => ({ name: `file-${n}.bin`, size: 1, type: '' }));
     picker.files = tooMany;
     picker.events.change();
-    assert.equal(get('#send-status').textContent, 'Staged 6 files. Send note to save them together.');
+    assert.equal(get('#send-status').textContent, 'Staged 6 files. Send message to save them together.');
     assert.equal(get('#staged-files').children.length, 6, 'no count cap stages six files');
     assert.equal(uploadCalls.length, 0, 'choosing files does not upload them yet');
     while (get('#staged-files').children.length) {

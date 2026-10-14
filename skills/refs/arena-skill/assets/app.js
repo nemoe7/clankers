@@ -271,7 +271,7 @@ function stageFiles(files) {
   stagedFiles.push(...files);
   picker.value = '';
   renderStagedFiles();
-  status.textContent = `Staged ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}. Send note to save them together.`;
+  status.textContent = `Staged ${stagedFiles.length} file${stagedFiles.length === 1 ? '' : 's'}. Send message to save them together.`;
 }
 $('#attach-file').addEventListener('click', () => picker.click());
 picker.addEventListener('change', () => stageFiles(Array.from(picker.files || [])));
@@ -857,7 +857,7 @@ $('#form').addEventListener('submit', async event => {
   const former = pendingFiles();
   if (pending && pending.text === text && former.length &&
       JSON.stringify(former) !== JSON.stringify(attachments)) {
-    status.textContent = `Reselect the ${former.length} original files in order to retry this note ID, or edit the draft to start a new note.`;
+    status.textContent = `Reselect the ${former.length} original files in order to retry this message ID, or edit the draft to start a new message.`;
     return;
   }
   if (!pending || pending.text !== text || JSON.stringify(former) !== JSON.stringify(attachments)) {
@@ -865,7 +865,7 @@ $('#form').addEventListener('submit', async event => {
   }
   save('pending', JSON.stringify(pending));
   send.disabled = picker.disabled = $('#attach-file').disabled = true;
-  status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with note…` : 'Sending…';
+  status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : 'Sending…';
   try {
     let response;
     if (stagedFiles.length) {
@@ -884,7 +884,7 @@ $('#form').addEventListener('submit', async event => {
         // A dropped connection arrives as a TypeError, with no status to read. The same note ID,
         // text and file set replay safely, so one retry covers a blip that lost the body.
         if (!error || error.name !== 'TypeError') throw error;
-        status.textContent = 'The upload dropped once; retrying the same note ID…';
+        status.textContent = 'The upload dropped once; retrying the same message ID…';
         response = await postFiles();
       }
     } else response = await request('/api/notes', {
@@ -906,8 +906,8 @@ $('#form').addEventListener('submit', async event => {
   } catch (error) {
     const total = stagedFiles.reduce((sum, file) => sum + file.size, 0);
     const hint = stagedFiles.length > 1 && error && error.name === 'TypeError'
-      ? ` The combined upload is ${bytes(total)}; if it fails again, send fewer files per note.` : '';
-    status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same note ID.${hint}`;
+      ? ` The combined upload is ${bytes(total)}; if it fails again, send fewer files per message.` : '';
+    status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same message ID.${hint}`;
   }
   finally { send.disabled = picker.disabled = $('#attach-file').disabled = false; }
 });

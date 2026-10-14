@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Workspace · Notes & reports</title>
+  <title>Workspace · Messages & reports</title>
   <style>__STYLE__</style>
 </head>
 <body data-token="__TOKEN__">
@@ -43,7 +43,7 @@
           </div>
           <p id="log-empty" class="receipt" role="status" hidden></p>
         </section>
-        <section class="card compose" id="compose" aria-label="Send a steer">
+        <section class="card compose" id="compose" aria-label="Send a message">
           <form id="form">
             <div class="row composer-heading">
               <span class="composer-label"><label for="note">Your message</label><span id="staged-files" role="status" hidden></span></span>
@@ -56,7 +56,7 @@
                 <small><span id="send-hint">Enter sends · Shift+Enter: new line · </span><span id="agent-key" class="key-line" role="status">No key recorded.</span></small>
                 <p id="send-status" role="status" aria-live="polite">Nothing sent yet.</p>
               </div>
-              <button id="send" type="submit">Send note</button>
+              <button id="send" type="submit">Send message</button>
             </div>
           </form>
         </section>
@@ -79,7 +79,7 @@
           <button id="report-submit" type="submit" hidden>Send answers</button>
         </form>
         <p id="report-agent-ack-footer" class="receipt" hidden></p>
-        <small>Answers reach the agent inbox as one note; resending makes a new one.</small>
+        <small>Answers reach the agent inbox as one submission; resending makes a new one.</small>
       </div>
     </section>
     <section id="tasks-panel" role="tabpanel" aria-labelledby="tasks-tab" hidden>

@@ -15,7 +15,7 @@ SQLite transactions write notes, receipts, tasks, report snapshots, answers, upl
 `read` prints pending items before it stamps only those delivered IDs Seen. A failed output leaves them unseen.
 `ack` records one reply or plain note and keeps the first acknowledgement time on later edits.
 Quiet notes do not affect reminders or bare acknowledgement selection. Explicit acknowledgements remain optional.
-A changed answer sets `ack_edited_at`. A report answer stays outside the Notes log.
+A changed answer sets `ack_edited_at`. A report answer stays outside the message log.
 
 New reply clears its indicator on click while the seen write runs. Failed writes restore it, and newer replies stay unread. A stale state poll cannot undo a successful receipt.
 Reports keep their first-publish sequence. Schema migrations add nullable columns and backfill sequence IDs.
