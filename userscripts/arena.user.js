@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.35
+// @name         Arena.ai | NemoUtils | v1.10.36
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.35
+// @version      1.10.36
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -35,18 +35,98 @@
   }
 
   var LOG_TAG = "[NemoUtils]";
+  var LOG_LEVEL_KEY = "clankers-arena-log-level";
+  var LOG_LEVELS = ["debug", "info", "warn", "error"];
+  var LOG_EVENTS = {
+    logging: ["level", "setting-failed"],
+    menu: ["run"],
+    pause: ["change"],
+    feature: ["change"],
+    fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
+    trim: ["removed"],
+    state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-picker", "requested", "picker-closed"],
+    wake: ["refused", "unavailable"],
+    title: ["changed", "restored", "conditions"],
+  };
+  var LOG_VALUES = {
+    feature: ["prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "hide-composer", "state-download", "keep-awake", "tab-title"],
+    group: ["note", "task"],
+    verdict: ["older", "same", "forward"],
+    kind: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
+    route: ["link", "manager", "stamped"],
+    emoji: ["", "💬", "💭", "🖥️", "📖", "✏️", "🔍", "💤", "📜", "❓", "⚙️", "⏳", "🛡️"],
+    level: LOG_LEVELS,
+    code: ["unknown", "manager-download", "copy-state", "missing-branch", "older-history", "wrong-file", "write", "file-api", "NotAllowedError", "AbortError", "NotFoundError", "SecurityError", "TypeError", "Error"],
+  };
+  var logMenuEntry = null;
 
-  function logEvent(module, event, detail) {
-    var line = LOG_TAG + "[" + module + "] " + event;
+  function getLogLevel() {
     try {
-      if (detail === undefined) {
-        console.log(line);
-      } else {
-        console.log(line, detail);
-      }
+      var level = GM_getValue(LOG_LEVEL_KEY, "info");
+      return LOG_LEVELS.indexOf(level) === -1 ? "info" : level;
     } catch (err) {
-      return;
+      return "info";
     }
+  }
+
+  function setLogLevel(level) {
+    if (LOG_LEVELS.indexOf(level) === -1) return false;
+    try {
+      GM_setValue(LOG_LEVEL_KEY, level);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function logEvent(module, event, fields, level) {
+    try {
+      level = level || "info";
+      var current = getLogLevel();
+      if (LOG_LEVELS.indexOf(level) === -1 || LOG_LEVELS.indexOf(level) < LOG_LEVELS.indexOf(current)) return false;
+      if (!Object.prototype.hasOwnProperty.call(LOG_EVENTS, module) || LOG_EVENTS[module].indexOf(event) === -1) return false;
+      var data = {};
+      var own = Object.prototype.hasOwnProperty;
+      fields = fields || {};
+      ["count", "removed", "kept", "status"].forEach(function (key) {
+        if (own.call(fields, key) && typeof fields[key] === "number" && isFinite(fields[key])) data[key] = fields[key];
+      });
+      ["ok", "matched", "enabled", "paused", "captcha", "question", "live"].forEach(function (key) {
+        if (own.call(fields, key) && typeof fields[key] === "boolean") data[key] = fields[key];
+      });
+      Object.keys(LOG_VALUES).forEach(function (key) {
+        if (own.call(fields, key) && LOG_VALUES[key].indexOf(fields[key]) !== -1) data[key] = fields[key];
+      });
+      if (current === "debug") {
+        ["repo", "filename"].forEach(function (key) {
+          if (own.call(fields, key) && typeof fields[key] === "string") data[key] = fields[key];
+        });
+      }
+      var line = LOG_TAG + "[" + module + "][" + level + "] " + event;
+      var method = level === "warn" || level === "error" ? level : "log";
+      if (Object.keys(data).length) console[method](line, data);
+      else console[method](line);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function registerLogMenu() {
+    if (logMenuEntry) return logMenuEntry;
+    logMenuEntry = menuAdd(function () {
+      return "Userscript — log level (" + getLogLevel().toUpperCase() + ")";
+    }, function () {
+      var order = ["info", "debug", "warn", "error"];
+      var next = order[(order.indexOf(getLogLevel()) + 1) % order.length];
+      if (setLogLevel(next)) {
+        logEvent("logging", "level", { level: next });
+        menuRefresh();
+      } else {
+        logEvent("logging", "setting-failed", null, "warn");
+      }
+    });
+    return logMenuEntry;
   }
 
   var MENU_ORDER = [
@@ -115,13 +195,15 @@
       menuAdd(function () {
         return label;
       }, function () {
-        logEvent("menu", label);
+        logEvent("menu", "run");
         run();
       }),
     );
   }
 
-  exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG, menuItem: menuItem });
+  exposeChecks("logging", { logEvent: logEvent, LOG_TAG: LOG_TAG, menuItem: menuItem,
+    getLogLevel: getLogLevel, setLogLevel: setLogLevel, registerLogMenu: registerLogMenu });
+  if (typeof document !== "undefined") registerLogMenu();
 
   var BAR_SELECTOR =
     "div.relative.z-10.w-full.md\\:absolute.md\\:left-0.md\\:top-full";
@@ -211,7 +293,7 @@
       }
     });
     menuRefresh();
-    logEvent("pause", "all: " + (next ? "PAUSED" : "RESUMED"));
+    logEvent("pause", "change", { paused: next });
   }
 
   var HTTP_JITTER_MS = 15000;
@@ -242,7 +324,7 @@
     var fallback = defaultOn !== false;
     var enabled = GM_getValue(key, fallback) !== false;
     var stop = null;
-    logEvent("feature", label + ": " + (enabled ? "ON" : "OFF"));
+    logEvent("feature", "change", { feature: key, enabled: enabled });
 
     function storedOn() {
       return GM_getValue(key, fallback) !== false;
@@ -266,7 +348,7 @@
     function toggle() {
       var next = GM_getValue(key, fallback) === false;
       GM_setValue(key, next);
-      logEvent("feature", label + ": " + (next ? "ON" : "OFF"));
+      logEvent("feature", "change", { feature: key, enabled: next });
       halt();
       if (next && !pauseStored()) start();
       menuRefresh();
@@ -561,7 +643,6 @@
     var arenaMdCache = null;
     var heldKey = null;
     var promptResourcesTried = false;
-    var promptFillFailureLogged = false;
     var pendingFetch = null;
     var keyTried = false;
     var keyFetch = null;
@@ -775,8 +856,6 @@
 
     var lastSlug = null;
     var filledSlug = null;
-    var slugLogged = false;
-    var composerLogged = null;
 
     function setComposerText(el, text) {
       el.focus();
@@ -787,7 +866,7 @@
       selection.addRange(range);
       var ok = document.execCommand("insertText", false, text);
       var matched = String(el.innerText || "").trim() === text;
-      logEvent("fill", "insertText ok=" + ok + " matched=" + matched + " class=" + el.className);
+      logEvent("fill", "inserted", { ok: ok, matched: matched }, "debug");
       if (!ok || !matched) {
         while (el.firstChild) {
           el.removeChild(el.firstChild);
@@ -806,12 +885,7 @@
             data: text,
           }),
         );
-        logEvent(
-          "fill",
-          "fallback wrote " + lines.length + " paragraphs, now=" +
-            JSON.stringify(String(el.innerText || "").trim().slice(0, 40)) +
-            " class=" + el.className,
-        );
+        logEvent("fill", "rebuilt", { count: lines.length }, "debug");
       }
     }
 
@@ -825,10 +899,7 @@
       }
       var slug = readSlug(document);
       if (!slug) {
-        if (!slugLogged) {
-          slugLogged = true;
-          logEvent("fill", "no repo detected");
-        }
+        logEvent("fill", "no-repo", null, "debug");
         var emptyComposer = document.querySelector(COMPOSER_SELECTOR);
         if (emptyComposer && emptyComposer.getAttribute("aria-disabled") !== "true") {
           var emptyText = String(emptyComposer.innerText || "").trim();
@@ -839,7 +910,6 @@
         lastSlug = null;
         return;
       }
-      slugLogged = false;
       rememberSlug(slug);
       if (!promptResourcesTried) {
         ensureFetch();
@@ -848,14 +918,10 @@
       }
       var composer = document.querySelector(COMPOSER_SELECTOR);
       if (!composer || composer.getAttribute("aria-disabled") === "true") {
-        if (composerLogged !== slug) {
-          composerLogged = slug;
-          logEvent("fill", "no composer detected for " + slug);
-        }
+        logEvent("fill", "no-composer", { repo: slug }, "debug");
         lastSlug = slug;
         return;
       }
-      composerLogged = null;
       var current = composer.innerText || "";
       if (!shouldWrite(current, slug, lastSlug, filledSlug)) {
         lastSlug = slug;
@@ -865,16 +931,13 @@
       }
       var prompt = promptForSlug(slug, promptFillCache, arenaMdCache);
       if (!prompt) {
-        if (!promptFillFailureLogged) {
-          promptFillFailureLogged = true;
-          logEvent("fill", "prompt template unavailable");
-        }
+        logEvent("fill", "no-template", null, "warn");
         lastSlug = slug;
         ensureAgentKey();
         return;
       }
       setComposerText(composer, prompt);
-      logEvent("fill", "filled composer for " + slug);
+      logEvent("fill", "filled", { repo: slug });
       lastSlug = slug;
       filledSlug = slug;
       ensureAgentKey();
@@ -1337,12 +1400,6 @@
       );
     }
 
-    function trimMessage(removed, keep) {
-      return (
-        "removed " + removed + " " + (removed === 1 ? "row" : "rows") + " (kept " + keep + ")"
-      );
-    }
-
     function messageRoots(doc) {
       var logs = doc.querySelectorAll(LOG_SELECTOR);
       var roots = [];
@@ -1484,7 +1541,6 @@
       normalizePlan: normalizePlan,
       planParts: planParts,
       countLabel: countLabel,
-      trimMessage: trimMessage,
       messageRoots: messageRoots,
       rowsOfRoot: rowsOfRoot,
       trimPlan: trimPlan,
@@ -1632,7 +1688,7 @@
       var removed = trimPlan(document, keep);
       if (removed) {
         trimmedTotal += removed;
-        logEvent("trim", trimMessage(removed, keep));
+        logEvent("trim", "removed", { removed: removed, kept: planParts(keep).rows });
         refreshLabel();
       }
       return removed;
@@ -1906,7 +1962,7 @@
 
   function stateDownload(repo, branch, stamp, counts, remembered, pair, force) {
     if (!stamp) {
-      logEvent("state", "compare stamp: none, no stamp to compare");
+      logEvent("state", "no-stamp", null, "debug");
       return {
         kind: "error",
         message: "The state carries no stamp; the next save names it.",
@@ -1923,15 +1979,12 @@
       var now = pair && pair[key] ? String(pair[key]) : "";
       if (!was || !now) continue;
       if (force) {
-        logEvent(
-          "state",
-          "updating " + key + " stamp from " + stampHash(was) + " to " + stampHash(now),
-        );
+        logEvent("state", "force-stamp", { group: key }, "debug");
         continue;
       }
       var verdict = now < was ? "older" : now === was ? "same" : "forward";
       if (verdict === "older") held.push(key);
-      logEvent("state", key + " - " + verdict + " - " + stampHash(now) + " vs " + stampHash(was));
+      logEvent("state", "compare", { group: key, verdict: verdict }, "debug");
     }
     if (!force && memory.stamp && memory.stamp === stamp) {
       return {
@@ -1973,11 +2026,6 @@
       (Boolean(branch) && Boolean(rememberedBranch) && branch !== rememberedBranch);
   }
 
-  function stateMoveLine(storedBase, base, storedBranch, branch) {
-    return "save moved: preview URL stored=" + (storedBase || "(none)") + " read=" + (base || "(none)") +
-      "; branch stored=" + (storedBranch || "(none)") + " read=" + (branch || "(none)");
-  }
-
   function overwriteAsk(moved, plan, hasHandle, force) {
     return !force && Boolean(moved) && hasHandle && plan.kind === "download";
   }
@@ -2005,14 +2053,6 @@
     return getLine(status, base + "/api/copy-state");
   }
 
-  function noopLine(repo, base) {
-    return "NOOP " + repo + " " + base;
-  }
-
-  function writeLine(repo, name) {
-    return "WRITE " + repo + " state to " + name;
-  }
-
   function writeFailLine(err) {
     return (
       "write failed (" + ((err && err.name) || "unknown") +
@@ -2022,18 +2062,6 @@
 
   function managerFailLine(err) {
     return "manager download failed (" + ((err && err.error) || "unknown") + "); using the link";
-  }
-
-  function stampHash(value) {
-    var text = String(value || "");
-    if (!text) return "none";
-    var hash = 2166136261;
-    var i;
-    for (i = 0; i < text.length; i += 1) {
-      hash ^= text.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-    return ("0000000" + (hash >>> 0).toString(16)).slice(-7);
   }
 
   var STATE_LINES = {
@@ -2161,10 +2189,7 @@
     if (exposeChecks("stateDownload", {
       STATE_LINES: STATE_LINES,
       copyLine: copyLine,
-      stampHash: stampHash,
       getLine: getLine,
-      noopLine: noopLine,
-      writeLine: writeLine,
       writeFailLine: writeFailLine,
       managerFailLine: managerFailLine,
       stateError: stateError,
@@ -2179,7 +2204,6 @@
       writtenName: writtenName,
       handleMatchesScope: handleMatchesScope,
       saveMoved: saveMoved,
-      stateMoveLine: stateMoveLine,
       overwriteAsk: overwriteAsk,
       overwriteLine: overwriteLine,
       stateScope: stateScope,
@@ -2225,7 +2249,6 @@
     var staleWarned = false;
     var picked = null;
     var pickedKey = null;
-    var frameLogged = false;
 
     function previewBase(doc) {
       var frames = doc.querySelectorAll("iframe[title]");
@@ -2386,17 +2409,17 @@
       }
     }
 
-    function stateError(line, actionLabel, action) {
-      logEvent("state", line);
-      statePanel(line, actionLabel, action);
+    function stateError(line, actionLabel, action, code, status, showPanel) {
+      logEvent("state", "failed", { code: code || "unknown", status: status }, code === "file-api" ? "warn" : "error");
+      if (showPanel !== false) statePanel(line, actionLabel, action);
     }
 
     function hintStateFile(manual) {
       var shown = GM_getValue(STATE_HINT_KEY, false);
       if (!shown) {
         GM_setValue(STATE_HINT_KEY, true);
-        logEvent("state", STATE_LINES.hint);
       }
+      logEvent("state", "file-needed", null, "warn");
       if (panelNeeded(manual, shown)) {
         statePanel(
           "No save file is set, so state saves are blocked.",
@@ -2439,7 +2462,7 @@
       );
       var route = stateDownloadRoute();
       if (route === "link") {
-        logEvent("state", "link download: " + name);
+        logEvent("state", "download", { route: "link", filename: name });
         linkDownload(url, name);
         setTimeout(function () {
           URL.revokeObjectURL(url);
@@ -2451,11 +2474,11 @@
         name: name,
         saveAs: false,
         onload: function () {
-          logEvent("state", "manager download saved: " + name);
+          logEvent("state", "saved", { route: "manager", filename: name });
           URL.revokeObjectURL(url);
         },
         onerror: function (err) {
-          stateError(managerFailLine(err));
+          stateError(managerFailLine(err), null, null, "manager-download");
           linkDownload(url, name);
           setTimeout(function () {
             URL.revokeObjectURL(url);
@@ -2467,21 +2490,18 @@
     function fetchStateFile(manual, force) {
       var base = previewBase(document);
       if (!base) {
-        if (!frameLogged) {
-          frameLogged = true;
-          logEvent("state", STATE_LINES.noPreview);
-        }
+        logEvent("state", "no-preview", null, "debug");
         return;
       }
       getJson(base + "/api/copy-state", function (status, body) {
         if (status !== 200 || !body) {
-          stateError(copyLine(status, base));
+          stateError(copyLine(status, base), null, null, "copy-state", status);
           return;
         }
         var scope = stateScope(document);
         var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
         if (!scope.branch && !lastScope && !force) {
-          stateError(STATE_LINES.noBranch);
+          stateError(STATE_LINES.noBranch, null, null, "missing-branch");
           return;
         }
         var storeKey = scope.branch
@@ -2492,11 +2512,11 @@
         var rememberedBranch = GM_getValue(branchKey(storedKey), "");
         var moved = saveMoved(scope.branch, rememberedBase, base, lastScope, rememberedBranch);
         if (moved) {
-          logEvent("state", stateMoveLine(rememberedBase, base, rememberedBranch || lastScope, scope.branch));
+          logEvent("state", "moved", { repo: scope.repo });
         }
         var memory = stateRemembered(GM_getValue(stampKey(storeKey), ""));
         if (force) {
-          logEvent("state", "forced save");
+          logEvent("state", "forced");
         }
         var plan = stateDownload(
           scope.repo,
@@ -2508,10 +2528,8 @@
           force,
         );
         if (plan.kind === "stale") {
-          if (!staleWarned) {
-            staleWarned = true;
-            stateError(STATE_LINES.history);
-          }
+          stateError(STATE_LINES.history, null, null, "older-history", undefined, !staleWarned);
+          staleWarned = true;
           return;
         }
         var hasPicker = Boolean(pagePicker());
@@ -2523,11 +2541,12 @@
             stateError(
               "handle out of scope: " + handle.name + " is not " +
                 stateFileName(scope.repo, scope.branch, "", null),
+              null, null, "wrong-file",
             );
             handle = null;
           }
           if (overwriteAsk(moved, plan, Boolean(handle), force)) {
-            if (manual) logEvent("state", "no write: " + handle.name + " awaits confirmation");
+            logEvent("state", "confirmation", { filename: handle.name });
             askOverwrite(handle, storeKey, manual);
             return;
           }
@@ -2535,12 +2554,11 @@
           pickedKey = handle ? storeKey : null;
           var action = stateAction(stateDelivery(plan, Boolean(handle), hasPicker), manual);
           if (action === "unchanged") {
-            if (manual) logEvent("state", "no write: " + plan.kind);
-            else logEvent("state", noopLine(scope.repo, base));
+            logEvent("state", "no-write", { kind: plan.kind, repo: scope.repo }, "debug");
             return;
           }
           if (action === "error") {
-            if (manual) logEvent("state", "no write: " + plan.kind);
+            logEvent("state", "no-write", { kind: plan.kind }, "debug");
             return;
           }
           if (action === "block") {
@@ -2549,11 +2567,11 @@
           }
           if (action === "hint") {
             hintStateFile(manual);
-            logEvent("state", "no picker from a deferred save; press the choose entry");
+            logEvent("state", "deferred-picker", null, "warn");
             return;
           }
           if (action === "write") {
-            logEvent("state", getLine(status, base));
+            logEvent("state", "requested", { status: status }, "debug");
             writeToHandle(handle, body.text).then(
               function () {
                 rememberState(
@@ -2564,7 +2582,7 @@
                   body.stamp,
                   body.stamps,
                 );
-                logEvent("state", writeLine(scope.repo, writtenName(handle, plan.name)));
+                logEvent("state", "saved", { repo: scope.repo, filename: writtenName(handle, plan.name) });
                 if (force) {
                   statePanel("Force save wrote " + writtenName(handle, plan.name) + ".", null, null, true);
                 }
@@ -2573,12 +2591,12 @@
                 picked = null;
                 pickedKey = null;
                 hintStateFile(true);
-                stateError(writeFailLine(err), "Choose file", chooseStateFile);
+                stateError(writeFailLine(err), "Choose file", chooseStateFile, "write");
               },
             );
             return;
           }
-          logEvent("state", "stamped download: " + plan.name);
+          logEvent("state", "download", { route: "stamped", filename: plan.name });
           if (force) {
             statePanel("Force save downloaded " + plan.name + ".", null, null, true);
           }
@@ -2598,7 +2616,7 @@
     function chooseStateFile() {
       var pick = pagePicker();
       if (!pick) {
-        stateError("this browser cannot write files; the stamped download is used");
+        stateError("this browser cannot write files; the stamped download is used", null, null, "file-api");
         return;
       }
       pick({
@@ -2626,7 +2644,7 @@
           });
         })
         .catch(function () {
-          logEvent("state", STATE_LINES.pickerClosed);
+          logEvent("state", "picker-closed", null, "debug");
         });
     }
 
@@ -2658,7 +2676,6 @@
     }
     var lock = null;
     var pending = false;
-    var unsupportedLogged = false;
 
     function generating() {
       return Boolean(isSessionUrl(location.href) && findStopGeneratingButton(document));
@@ -2686,17 +2703,14 @@
         },
         function (err) {
           pending = false;
-          logEvent("wake", "lock refused: " + ((err && err.name) || "unknown"));
+          logEvent("wake", "refused", { code: err && LOG_VALUES.code.indexOf(err.name) !== -1 ? err.name : "unknown" }, "warn");
         },
       );
     }
 
     function sync() {
       if (typeof navigator === "undefined" || !navigator.wakeLock) {
-        if (!unsupportedLogged) {
-          unsupportedLogged = true;
-          logEvent("wake", "no screen wake lock in this browser");
-        }
+        logEvent("wake", "unavailable", null, "warn");
         return;
       }
       var plan = wakeLockPlan(
@@ -2725,7 +2739,7 @@
     var LABEL_SPAN_SELECTOR = "span.body-sm";
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
-    var VERSION = "1.10.26";
+    var VERSION = "1.10.27";
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var REASONING_EMOJI = "\uD83D\uDCAD";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -2970,22 +2984,6 @@
       return panel ? String(panel.textContent || "") : "";
     }
 
-    function rowSource(row) {
-      var kind = rowKind(row);
-      if (kind === "chat") {
-        return "chat row";
-      }
-      if (kind === "reasoning") {
-        return "reasoning row";
-      }
-      var label = liveLabel(row);
-      var text = String(label || "").replace(/\s+/g, " ").trim().slice(0, 40);
-      if (POLL_RE.test(rowCommand(row).toLowerCase())) {
-        return "poll command" + (text ? " (" + text + ")" : "");
-      }
-      return "action row" + (text ? " (" + text + ")" : "");
-    }
-
     function emojiForRow(row) {
       if (!row) {
         titleRowKind = "none";
@@ -3063,28 +3061,25 @@
     }
 
     function heldEmojiFor(doc) {
-      titleRowSource = null;
       titleRowKind = null;
       var captcha = captchaSignal(doc);
-      titleTrace = "captcha=" + (captcha ? 1 : 0);
+      titleConditions = { captcha: captcha };
       if (captcha) {
-        titleReason = "security check";
         heldEmoji = CAPTCHA_EMOJI;
         heldEmojiAt = Date.now();
         heldEmojiNeedsTurn = false;
         return CAPTCHA_EMOJI;
       }
       var question = questionSignal(doc);
-      titleTrace += " question=" + (question ? 1 : 0);
+      titleConditions.question = question;
       if (question) {
-        titleReason = "question card";
         heldEmoji = QUESTION_EMOJI;
         heldEmojiAt = Date.now();
         heldEmojiNeedsTurn = false;
         return QUESTION_EMOJI;
       }
       var live = stopSignal(doc);
-      titleTrace += " live=" + (live ? 1 : 0);
+      titleConditions.live = live;
       var needsTurn = false;
       var row = null;
       var emoji = null;
@@ -3096,14 +3091,11 @@
         }
         emoji = emojiForRow(row);
         if (emoji) {
-          titleReason = rowSource(row);
-          titleRowSource = titleReason;
           needsTurn = true;
         }
       }
       if (!emoji && live && waitingSignal(doc)) {
         emoji = HOURGLASS_EMOJI;
-        titleReason = "waiting line";
         needsTurn = true;
       }
       if (emoji) {
@@ -3117,13 +3109,10 @@
         Date.now() - heldEmojiAt < EMOJI_HOLD_MS &&
         (!heldEmojiNeedsTurn || live)
       ) {
-        titleReason = "hold";
         return heldEmoji;
       }
       heldEmoji = null;
       heldEmojiNeedsTurn = false;
-      titleReason = null;
-      titleRowSource = null;
       return null;
     }
 
@@ -3133,67 +3122,40 @@
         return null;
       }
       var emoji = heldEmojiFor(doc);
+      titleEmoji = emoji || "";
       var base = TITLE_PREFIX + name;
       return emoji ? base + " " + emoji : base;
     }
 
+    var titleEmoji = "";
     var appliedTitle = null;
     var priorTitle = null;
-    var titleReason = null;
-    var titleRowSource = null;
-    var titleTrace = null;
+    var titleConditions = {};
     var titleRowKind = null;
     var lastRepo = null;
     var lastPath = null;
-    var TITLE_LOG_MS = 1000;
-    var lastTitleLine = "";
-    var lastTitleLineAt = 0;
-
-    function titleLog(reason, anchors) {
-      var now = Date.now();
-      if (reason === lastTitleLine && now - lastTitleLineAt < TITLE_LOG_MS) {
-        return;
-      }
-      lastTitleLine = reason;
-      lastTitleLineAt = now;
-      logEvent("title", reason, anchors);
-    }
-
-    function titleAnchors(doc) {
-      var rowText = titleRowSource;
-      var kind = titleRowKind || "none";
-      if (!rowText) {
-        var root = lastRoot(doc);
-        var row = root && !userRoot(root) ? newestRow(root) : null;
-        rowText = row ? rowSource(row) : "none";
-        if (row) {
-          emojiForRow(row);
-          kind = titleRowKind;
-        }
-      }
-      return (
-        "repo=" + (repoForTitle(doc) || "none") +
-        " row=" + rowText +
-        " kind=" + kind +
-        (titleTrace ? " " + titleTrace : "")
-      );
-    }
-
     function syncTitle(doc) {
       var desired = desiredTitle(doc);
       if (desired) {
         if (doc.title === desired) return false;
-        titleLog((titleReason || "title") + " -> " + desired, titleAnchors(doc));
+        logEvent("title", "changed", { kind: titleRowKind || "none", emoji: titleEmoji, repo: repoForTitle(doc) });
+        logEvent("title", "conditions", titleConditions, "debug");
         appliedTitle = desired;
         doc.title = desired;
         return true;
       }
-      if (appliedTitle && doc.title === appliedTitle) {
+      return restoreTitle(doc);
+    }
+
+    function restoreTitle(doc) {
+      if (!appliedTitle || doc.title !== appliedTitle) return false;
+      var changed = doc.title !== priorTitle;
+      if (changed) {
         doc.title = priorTitle;
-        appliedTitle = null;
-        return true;
+        logEvent("title", "restored");
       }
-      return false;
+      appliedTitle = null;
+      return changed;
     }
 
     if (exposeChecks("tabTitle", {
@@ -3201,6 +3163,7 @@
       repoForTitle: repoForTitle,
       desiredTitle: desiredTitle,
       syncTitle: syncTitle,
+      restoreTitle: restoreTitle,
       liveLabel: liveLabel,
       stopSignal: stopSignal,
       classOf: classOf,
@@ -3238,7 +3201,6 @@
       QUESTION_EMOJI: QUESTION_EMOJI,
       questionSignal: questionSignal,
       openDialog: openDialog,
-      rowSource: rowSource,
       expireHold: function () { heldEmojiAt = Date.now() - EMOJI_HOLD_MS - 1; },
       forgetPath: function () { lastPath = "/elsewhere"; },
       setPriorTitle: function (value) { priorTitle = value; },
@@ -3331,9 +3293,7 @@
       }
       observer.disconnect();
       window.removeEventListener("popstate", onRoute);
-      if (appliedTitle && document.title === appliedTitle) {
-        document.title = priorTitle;
-      }
+      restoreTitle(document);
       appliedTitle = null;
     };
   });

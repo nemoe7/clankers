@@ -26,8 +26,8 @@ const bundles = {
     // The keep-rows plan, the trim cap and the trim-now press stay on the menu whatever
     // the switch says.
     alwaysMenus: { "transcript-trim": 3 },
-    // One entry stands outside the feature switches: the global pause.
-    globalMenus: 1,
+    // Logging and global pause stay outside the feature switches.
+    globalMenus: 2,
     countMenu: "Transcript — keep ",
     countKey: "clankers-arena-trim-keep",
     baseObservers: 1,
@@ -81,6 +81,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
   function load() {
     const menus = new Map();
+    const logs = [];
+    const intervals = [];
     const active = { observers: 0, intervals: 0, clicks: 0 };
     let nextId = 1;
     const pill = {
@@ -88,7 +90,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       click() { active.clicks += 1; },
     };
     const context = {
-      console, URL,
+      console: Object.fromEntries(["log", "warn", "error"].map((level) => [level, (...args) => logs.push(args)])), URL,
       location: { href: `https://${domain === "arena" ? "arena.ai/agent" : "chatgpt.com/"}`, pathname: "/agent" },
       document: {
         documentElement: {},
@@ -107,6 +109,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
           `An interval stays inside the 1 s to 60 s owner range or the 15 min key rotation, not ${ms} ms`,
         );
         active.intervals += 1;
+        intervals.push(callback);
       },
       clearInterval() { active.intervals -= 1; },
       setTimeout() { throw new Error("No steering button should schedule a click"); },
@@ -129,7 +132,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       GM_unregisterMenuCommand(id) { assert.ok(menus.delete(id)); },
     };
     vm.runInNewContext(source, context, { filename: `${domain}.user.js` });
-    return { menus, active };
+    return { menus, active, logs, intervals };
   }
 
   const moduleSwitch = bundle.moduleSwitch === true;
@@ -165,6 +168,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Page — keep awake (ON)",
       "Page — tab title (ON)",
       "Tab title — every 1 s",
+      "Userscript — log level (INFO)",
       "Userscript — pause all",
     ];
     assert.deepEqual(
@@ -197,6 +201,32 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.deepEqual(page.active, defaults.active, "The default state returns");
     assert.ok(reads(menuFor(page, key).label, startsOn));
     assert.deepEqual(load().active, defaults.active, "Reload must apply the saved switch");
+  }
+
+  if (domain === "arena") {
+    stored.clear();
+    const loggingPage = load();
+    const wakeLines = () => loggingPage.logs.filter((args) => args[0] === "[NemoUtils][wake][warn] unavailable").length;
+    const initialWake = wakeLines();
+    assert.equal(initialWake, 0);
+    const wakeTick = loggingPage.intervals.find((callback) => callback.name === "sync");
+    assert.ok(wakeTick);
+    wakeTick(); wakeTick();
+    assert.equal(wakeLines(), initialWake + 2, "repeated events must not be suppressed");
+    const loggingMenu = [...loggingPage.menus.values()].find((item) => item.label === "Userscript — log level (INFO)");
+    assert.ok(loggingMenu);
+    loggingMenu.callback();
+    assert.equal(stored.get("clankers-arena-log-level"), "debug");
+    assert.deepEqual(loggingPage.active, defaults.active, "Logging settings must not change feature activity");
+    assert.ok([...load().menus.values()].some((item) => item.label === "Userscript — log level (DEBUG)"));
+    refuseWrite = true;
+    try {
+      assert.doesNotThrow(() => loggingMenu.callback());
+      assert.equal(stored.get("clankers-arena-log-level"), "debug");
+    } finally {
+      refuseWrite = false;
+    }
+    stored.clear();
   }
 
   if (countMenu) {
@@ -245,6 +275,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Page — keep awake (ON)",
         "Page — tab title (ON)",
         "Tab title — every 1 s",
+        "Userscript — log level (INFO)",
         "Userscript — pause all",
       ],
       "The keep-rows line sits in the Transcript group",
@@ -555,7 +586,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     };
     const logged = [];
     const context = {
-      console: { log: (...args) => logged.push(args.join(" ")) },
+      console: Object.fromEntries(["log", "warn", "error"].map((level) => [level, (...args) => logged.push(args)])),
       URL,
       location: { href: "https://arena.ai/agent", pathname: "/agent" },
       document: {
@@ -685,12 +716,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     popstates.forEach((fn) => fn());
     flush();
     await settle();
-    // The fill names the repo it filled, so one filter shows which page wrote
-    // the composer.
-    assert.ok(
-      logged.includes("[NemoUtils][fill] filled composer for clankers"),
-      `the fill line names the repo it filled: ${logged.join(" | ")}`,
-    );
+    assert.ok(logged.some(([line]) => line === "[NemoUtils][fill][info] filled"));
+    assert.doesNotMatch(JSON.stringify(logged), /clankers|master-secret|testkey-testkey-test|REMOTE PROMPT TEMPLATE/);
     assert.ok(composer.innerText.startsWith("clankers read ARENA.md"), "The fill returns when the check clears");
     assert.ok(composer.innerText.includes(promptFillResponse), "The fill uses the text fetched from the prompt file");
     assert.equal(fetches.filter((url) => url === promptFillUrl).length, 1, "The prompt file loads once");
@@ -732,6 +759,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   test("tab title row mark", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const page = { title: "" };
+    const titleMenus = new Map();
     const logged = [];
     const intervals = [];
     const timeouts = new Map();
@@ -848,7 +876,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     let roots = [agentRoot([chatRow()])];
     let stop = true;
     const context = {
-      console: { log: (...args) => logged.push(args.join(" ")) },
+      console: Object.fromEntries(["log", "warn", "error"].map((level) => [level, (...args) => logged.push(args)])),
       URL,
       location: { href: "https://arena.ai/c/one", pathname: "/c/one" },
       document: {
@@ -891,8 +919,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       prompt() { return null; },
       GM_getValue(key, fallback) { return fallback; },
       GM_setValue() {},
-      GM_registerMenuCommand(label) { return label; },
-      GM_unregisterMenuCommand() {},
+      GM_registerMenuCommand(label, callback) { titleMenus.set(label, callback); return label; },
+      GM_unregisterMenuCommand(label) { titleMenus.delete(label); },
       GM_xmlhttpRequest() {},
     };
     vm.runInNewContext(source, context, { filename: "arena.user.js" });
@@ -923,17 +951,17 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     roots = [agentRoot([labelRow("Generating questions\u2026", "")])];
     sync();
     assert.equal(page.title, "Arena | clankers \u2753", `The question row raises the mark: ${page.title}`);
-    // The title line names the row kind and the anchors, and the speech read is gone.
-    const titleLines = logged.filter((line) => line.indexOf("[title]") !== -1);
+    const titleLines = logged.filter(([line]) => line.startsWith("[NemoUtils][title]"));
     assert.ok(titleLines.length > 0, "the title path logs a line");
-    assert.ok(
-      titleLines.some((line) => line.indexOf("kind=action") !== -1),
-      `the title log carries the row kind: ${titleLines.join(" | ")}`,
-    );
-    assert.ok(
-      titleLines.some((line) => line.indexOf("speech=") === -1),
-      `the speech read is gone from the trace: ${titleLines.join(" | ")}`,
-    );
+    assert.ok(titleLines.some(([line, data]) => line === "[NemoUtils][title][info] changed" && data.kind === "action"));
+    assert.ok(titleLines.every(([, data]) => !("speech" in data) && !("repo" in data)));
+    assert.doesNotMatch(JSON.stringify(titleLines), /Bash sleep|npm test|Generating questions|clankers/);
+    const count = titleLines.length;
+    sync();
+    assert.equal(logged.filter(([line]) => line.startsWith("[NemoUtils][title]")).length, count);
+    titleMenus.get("Page — tab title (ON)")();
+    assert.equal(page.title, "", "disabling the feature restores the original title");
+    assert.equal(logged.filter(([line]) => line === "[NemoUtils][title][info] restored").length, 1);
     console.log("ok tab title row mark: last root, row kind, turn bound");
   });
 }

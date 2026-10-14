@@ -15,6 +15,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### userscripts
+
+- Arena logs now use fixed events and allowed fields, with saved level controls. Debug mode alone includes repository and file names. Repeated events remain, and title logs require a change.
+
 #### preview
 
 - A full poll delivery now counts as the inbox read. The agent acknowledges those IDs without another read.

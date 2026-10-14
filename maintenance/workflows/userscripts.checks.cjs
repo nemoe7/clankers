@@ -20,7 +20,10 @@ function loadChecks(file) {
   };
   // The manager menu keeps every registered command, so a case can press one by hand.
   const menus = [];
+  const values = {};
   const context = {
+    GM_getValue: (key, fallback) => Object.hasOwn(values, key) ? values[key] : fallback,
+    GM_setValue: (key, value) => { values[key] = value; },
     console,
     URL,
     sessionStorage: session,
@@ -34,6 +37,67 @@ function loadChecks(file) {
   };
   vm.runInNewContext(source, context, { filename: file });
   return { checks: context.CLANKERS_CHECKS, session, menus };
+}
+
+function checkArenaLogging(api, menus) {
+  assert.equal(typeof api.setLogLevel, "function");
+  assert.equal(api.getLogLevel(), "info");
+  const lines = [];
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  for (const method of Object.keys(original)) {
+    console[method] = (...args) => lines.push({ method, text: JSON.stringify(args) });
+  }
+  try {
+    const fields = {
+      count: 2, repo: "private-repo", filename: "private.ndjson",
+      key: "secret-key", message: "secret-message", url: "secret-url", error: "raw-error",
+    };
+    api.logEvent("state", "saved", fields);
+    api.logEvent("state", "saved", fields);
+    assert.equal(lines.length, 2, "identical events must remain visible");
+    assert.match(lines[0].text, /\[NemoUtils\]\[state\]\[info\] saved/);
+    assert.match(lines[0].text, /count/);
+    assert.doesNotMatch(lines[0].text, /private|secret|raw-error/);
+    api.logEvent("state", "compare", fields, "debug");
+    assert.equal(lines.length, 2, "debug must be off by default");
+    assert.equal(api.setLogLevel("debug"), true);
+    api.logEvent("state", "compare", fields, "debug");
+    assert.match(lines.at(-1).text, /private-repo/);
+    assert.match(lines.at(-1).text, /private.ndjson/);
+    assert.doesNotMatch(lines.at(-1).text, /secret|raw-error/);
+    const safeCount = lines.length;
+    assert.equal(api.logEvent("state", "secret-message", fields), false);
+    assert.equal(lines.length, safeCount, "unknown event names must not reach the console");
+    api.logEvent("state", "saved", Object.create({ repo: "secret-message", filename: "secret-key", count: 666 }));
+    assert.doesNotMatch(lines.at(-1).text, /secret|666/);
+    api.logEvent("state", "saved", { count: "secret-message", code: "raw-error" });
+    assert.doesNotMatch(lines.at(-1).text, /secret|raw-error/);
+    assert.equal(api.setLogLevel("warn"), true);
+    const count = lines.length;
+    api.logEvent("state", "saved", fields);
+    api.logEvent("state", "failed", fields, "warn");
+    api.logEvent("state", "failed", fields, "error");
+    assert.equal(lines.length, count + 2);
+    assert.equal(lines.at(-2).method, "warn");
+    assert.equal(lines.at(-1).method, "error");
+    assert.equal(api.setLogLevel("invalid"), false);
+    assert.equal(api.getLogLevel(), "warn");
+    api.setLogLevel("info");
+    let ran = false;
+    api.menuItem([], "State — secret-message", () => { ran = true; });
+    menus.findLast((entry) => entry.label === "State — secret-message").run();
+    assert.equal(ran, true);
+    assert.doesNotMatch(lines.at(-1).text, /secret-message/);
+    api.registerLogMenu();
+    menus.findLast((entry) => entry.label.startsWith("Userscript — log level")).run();
+    assert.equal(api.getLogLevel(), "debug");
+    for (const method of Object.keys(original)) console[method] = () => { throw Error("closed"); };
+    assert.doesNotThrow(() => api.logEvent("state", "failed", fields, "error"));
+  } finally {
+    Object.assign(console, original);
+    api.setLogLevel("info");
+  }
+  console.log("ok arena logging");
 }
 
 function checkLogging(api, menus) {
@@ -434,7 +498,6 @@ function checkTranscriptTrim(api) {
   var rowsOfRoot = api.rowsOfRoot;
   var trimPlan = api.trimPlan;
   var trimRows = api.trimRows;
-  var trimMessage = api.trimMessage;
   var isSettled = api.isSettled;
   var quietReady = api.quietReady;
   var ACTION_SELECTOR = api.ACTION_SELECTOR;
@@ -602,8 +665,6 @@ function checkTranscriptTrim(api) {
     [MIN_ROWS, 20],
     [countLabel("50", 0), "Transcript \u2014 keep 50 rows"],
     [countLabel("50", 3), "Transcript \u2014 keep 50 rows (3 removed)"],
-    [trimMessage(12, "50"), "removed 12 rows (kept 50)"],
-    [trimMessage(1, "20"), "removed 1 row (kept 20)"],
     [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
@@ -791,7 +852,7 @@ function checkHideComposer(api) {
   console.log("ok hide composer " + cases.length);
 }
 
-function checkTabTitle(api) {
+function checkTabTitle(api, logging) {
   // The bundle hooks change its state. The cases compare the call result to null.
   function expireHold() {
     api.expireHold();
@@ -823,7 +884,6 @@ function checkTabTitle(api) {
   var waitingSignal = api.waitingSignal;
   var emojiForRow = api.emojiForRow;
   var actionEmoji = api.actionEmoji;
-  var rowSource = api.rowSource;
   var TITLE_PREFIX = api.TITLE_PREFIX;
   var vtag = "";
   var VERSION = api.VERSION;
@@ -1234,6 +1294,8 @@ function checkTabTitle(api) {
   var bashLogLine = loggedTitleLine(bashPage);
   var chatLogLine = loggedTitleLine(chatPage);
   var questionsLogLine = loggedTitleLine(questionsPage);
+  var reasoningLogLine = loggedTitleLine(reasoningPage);
+  var pollLogLine = loggedTitleLine(pollPage);
   var syncChatPage = page([agentRoot([chatRow()])]);
   var directChat = chatRow();
   var directReasoning = reasoningRow();
@@ -1338,15 +1400,15 @@ function checkTabTitle(api) {
     [expireHold(), null],
     [summaryCard(summaryRow()), true],
     [desiredTitle(summaryPage), TITLE_PREFIX + "clankers" + vtag],
-    // Direct row reads: the emoji picker and the source line name the kind.
+    // The emoji picker and structured logs identify the row kind.
     [emojiForRow(directChat), AGENT_EMOJI],
     [emojiForRow(directReasoning), REASONING_EMOJI],
     [emojiForRow(directPoll), "\uD83D\uDCA4"],
     [emojiForRow(null), null],
-    [rowSource(directChat), "chat row"],
-    [rowSource(directReasoning), "reasoning row"],
-    [rowSource(directAction), "action row (Bash sleep 25)"],
-    [rowSource(directPoll), "poll command (running Bash)"],
+    [chatLogLine.data.kind, "chat"],
+    [reasoningLogLine.data.kind, "reasoning"],
+    [bashLogLine.data.kind, "action"],
+    [pollLogLine.data.kind, "poll"],
     // The hold bridges the gaps inside a turn and dies with the stop control.
     [expireHold(), null],
     [desiredTitle(chatPage), TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
@@ -1435,27 +1497,25 @@ function checkTabTitle(api) {
     [expireHold(), null],
     [syncTitle(quietPage), true],
     [quietPage.title, TITLE_PREFIX + "clankers" + vtag],
-    [bashLogLine.split(" repo=")[0],
-      "[NemoUtils][title] action row (Bash sleep 25) -> " + TITLE_PREFIX + "clankers" + vtag + " " + BASH_EMOJI],
-    ["repo=" + bashLogLine.split(" repo=")[1],
-      "repo=clankers row=action row (Bash sleep 25) kind=action captcha=0 question=0 live=1"],
-    [chatLogLine.split(" repo=")[0],
-      "[NemoUtils][title] chat row -> " + TITLE_PREFIX + "clankers" + vtag + " " + AGENT_EMOJI],
-    ["repo=" + chatLogLine.split(" repo=")[1],
-      "repo=clankers row=chat row kind=chat captcha=0 question=0 live=1"],
-    [questionsLogLine.split(" repo=")[0],
-      "[NemoUtils][title] action row (Generating questions\u2026) -> " + TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
-    ["repo=" + questionsLogLine.split(" repo=")[1],
-      "repo=clankers row=action row (Generating questions\u2026) kind=action captcha=0 question=0 live=1"],
-    [VERSION, "1.10.26"],
+    [bashLogLine.text, "[NemoUtils][title][info] changed"],
+    [bashLogLine.data.kind, "action"],
+    [bashLogLine.data.emoji, BASH_EMOJI],
+    [bashLogLine.data.repo, undefined],
+    [chatLogLine.text, "[NemoUtils][title][info] changed"],
+    [chatLogLine.data.kind, "chat"],
+    [chatLogLine.data.emoji, AGENT_EMOJI],
+    [questionsLogLine.text, "[NemoUtils][title][info] changed"],
+    [questionsLogLine.data.kind, "action"],
+    [questionsLogLine.data.emoji, QUESTION_EMOJI],
+    [VERSION, "1.10.27"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.
   function loggedTitle(doc) {
     var lines = [];
     var original = console.log;
-    console.log = function () {
-      lines.push(Array.prototype.join.call(arguments, " "));
+    console.log = function (text, data) {
+      lines.push({ text: text, data: JSON.parse(JSON.stringify(data || {})) });
     };
     try {
       doc.title = "ChatGPT";
@@ -1463,10 +1523,12 @@ function checkTabTitle(api) {
     } finally {
       console.log = original;
     }
-    return lines.length ? lines[lines.length - 1] : "";
+    return lines;
   }
   function loggedTitleLine(doc) {
-    return loggedTitle(doc);
+    var lines = loggedTitle(doc);
+    assert.equal(lines.length, 1, "normal title output must omit debug conditions");
+    return lines[0];
   }
 
   function polls(text) {
@@ -1483,6 +1545,25 @@ function checkTabTitle(api) {
   if (failed) {
     throw new Error(failed + " checks failed");
   }
+  api.setPriorTitle(quietPage.title);
+  var restoreLines = [];
+  var restoreConsole = console.log;
+  console.log = (...args) => restoreLines.push(args);
+  try {
+    assert.equal(api.restoreTitle(quietPage), false);
+    assert.equal(restoreLines.length, 0, "restoring an equal title must stay silent");
+    quietPage.title = "External title";
+    api.syncTitle(quietPage);
+    api.setPriorTitle("Original title");
+    restoreLines.length = 0;
+    assert.equal(api.restoreTitle(quietPage), true);
+    assert.equal(quietPage.title, "Original title");
+    assert.equal(restoreLines.length, 1);
+    assert.equal(restoreLines[0][0], "[NemoUtils][title][info] restored");
+    api.syncTitle(quietPage);
+  } finally {
+    console.log = restoreConsole;
+  }
   // One line per change stays, and the plain unchanged line is gone: a second
   // sync with the title already in place writes nothing at all.
   var quiet = [];
@@ -1491,16 +1572,29 @@ function checkTabTitle(api) {
     quiet.push(Array.prototype.join.call(arguments, " "));
   };
   try {
-    // The line carried a one-second throttle while it existed, and the module keeps its own
-    // Date, so the check waits the window out before the second sync.
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1100);
+    api.syncTitle(quietPage);
+    logging.setLogLevel("debug");
     api.syncTitle(quietPage);
   } finally {
     console.log = louder;
+    logging.setLogLevel("info");
   }
   if (quiet.length) {
     console.error("check fail", "unchanged title line", quiet.join(" | "));
     throw new Error("the unchanged title line still fires: " + quiet.join(" | "));
+  }
+  logging.setLogLevel("debug");
+  try {
+    expireHold();
+    var firstChange = loggedTitle(bashPage);
+    var secondChange = loggedTitle(bashPage);
+    assert.equal(firstChange.length, 2);
+    assert.equal(secondChange.length, 2, "real title changes must not use a time throttle");
+    assert.equal(firstChange[1].text, "[NemoUtils][title][debug] conditions");
+    assert.deepEqual(firstChange[1].data, { captcha: false, question: false, live: true });
+    assert.doesNotMatch(JSON.stringify(firstChange), /Bash sleep|row=/);
+  } finally {
+    logging.setLogLevel("info");
   }
   console.log("ok tab title " + cases.length);
 }
@@ -1785,14 +1879,13 @@ function run(name, check) {
   }
 }
 
-function checkStateDownload(api, session) {
+function checkStateDownload(api, session, logging) {
   var stateFileName = api.stateFileName;
   var stateDownload = api.stateDownload;
   var stateMemory = api.stateMemory;
   var stateRemembered = api.stateRemembered;
   var stateDelivery = api.stateDelivery;
   var saveMoved = api.saveMoved;
-  var stateMoveLine = api.stateMoveLine;
   var overwriteAsk = api.overwriteAsk;
   var overwriteLine = api.overwriteLine;
   var stateAction = api.stateAction;
@@ -1808,10 +1901,7 @@ function checkStateDownload(api, session) {
   var writtenName = api.writtenName;
   var STATE_LINES = api.STATE_LINES;
   var copyLine = api.copyLine;
-  var stampHash = api.stampHash;
   var getLine = api.getLine;
-  var noopLine = api.noopLine;
-  var writeLine = api.writeLine;
   var writeFailLine = api.writeFailLine;
   var managerFailLine = api.managerFailLine;
   var stateError = api.stateError;
@@ -2169,9 +2259,6 @@ function checkStateDownload(api, session) {
   assert.equal(panelNeeded(false, false), true);
   assert.equal(panelNeeded(false, true), false);
   assert.equal(stateAction("unchanged", false), "unchanged");
-  // The owner's line shapes: the fetch on a write, the no-op on a quiet tick, and short
-  // stamp hashes in place of the long stamps.
-  assert.equal(writeLine("clankers", "clankers.ndjson"), "WRITE clankers state to clankers.ndjson");
   // The failure lines name the error and the way on, and each heads the corner card too.
   assert.equal(
     writeFailLine({ name: "NotAllowedError" }),
@@ -2186,27 +2273,20 @@ function checkStateDownload(api, session) {
     "manager download failed (NETWORK); using the link",
   );
   assert.equal(managerFailLine(null), "manager download failed (unknown); using the link");
-  // The card does not replace the console line: the same words reach both, and a card-less
-  // run (the checks) still logs.
+  // The panel keeps its text, but the console carries only the error code and status.
   var errorLines = [];
-  var restoreLog = console.log;
-  console.log = function () {
-    errorLines.push(Array.prototype.join.call(arguments, " "));
-  };
+  var restoreLog = console.error;
+  console.error = function () { errorLines.push(JSON.stringify(Array.from(arguments))); };
   try {
-    stateError("GET 500 http://localhost:8000/api/copy-state");
+    stateError("GET 500 http://localhost:8000/api/copy-state", null, null, "copy-state", 500);
   } finally {
-    console.log = restoreLog;
+    console.error = restoreLog;
   }
-  assert.ok(
-    errorLines.indexOf("[NemoUtils][state] GET 500 http://localhost:8000/api/copy-state") !== -1,
-    errorLines.join("\n"),
-  );
-  assert.equal(noopLine("clankers", "http://localhost:8000"), "NOOP clankers http://localhost:8000");
+  assert.match(errorLines[0], /\[NemoUtils\]\[state\]\[error\] failed/);
+  assert.match(errorLines[0], /copy-state/);
+  assert.match(errorLines[0], /500/);
+  assert.doesNotMatch(errorLines[0], /localhost|api\/copy-state/);
   assert.equal(getLine(200, "http://localhost:8000"), "GET 200 http://localhost:8000");
-  assert.match(stampHash("2026-10-06T09:45:05+00:00"), /^[0-9a-f]{7}$/);
-  assert.equal(stampHash(""), "none");
-  assert.equal(stampHash("2026-10-06T09:45:05+00:00"), stampHash("2026-10-06T09:45:05+00:00"));
   // The owner's line texts: the no-file hint names the dialog it launches, a
   // stale state reads as a history mismatch, and a closed picker reads as a plain no-file line.
   assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
@@ -2220,10 +2300,11 @@ function checkStateDownload(api, session) {
   );
   // Every comparison in the save path writes its own line, so one filter shows which test
   // refused a write.
+  logging.setLogLevel("debug");
   var compared = [];
   var originalLog = console.log;
   console.log = function () {
-    compared.push(Array.prototype.join.call(arguments, " "));
+    compared.push(JSON.stringify(Array.from(arguments)));
   };
   try {
     stateDownload(repo, branch, "2026-10-06T06:12:33", counts, "2026-10-06T06:12:33");
@@ -2247,61 +2328,23 @@ function checkStateDownload(api, session) {
     }, { note: "2026-10-06T05:00:00", task: "2026-10-06T06:00:00" }, true);
   } finally {
     console.log = originalLog;
+    logging.setLogLevel("info");
   }
-  function comparedLine(expected) {
-    return compared.indexOf("[NemoUtils][state] " + expected) !== -1;
+  function comparedLine(event, fields) {
+    return compared.some(function (line) {
+      var parts = JSON.parse(line);
+      return parts[0] === "[NemoUtils][state][debug] " + event &&
+        JSON.stringify(parts[1] || {}) === JSON.stringify(fields || {});
+    });
   }
-  assert.ok(
-    comparedLine(
-      "note - older - " + stampHash("2026-10-06T05:00:00") + " vs " + stampHash("2026-10-06T05:30:00"),
-    ),
-    compared.join("\n"),
-  );
-  assert.ok(
-    comparedLine(
-      "task - forward - " + stampHash("2026-10-06T06:00:00") + " vs " + stampHash("2026-10-06T05:00:00"),
-    ),
-    compared.join("\n"),
-  );
-  assert.ok(comparedLine("compare stamp: none, no stamp to compare"), compared.join("\n"));
-  // A quiet tick with the pair at rest shows both lines as `same`.
-  assert.ok(
-    comparedLine(
-      "note - same - " + stampHash("2026-10-06T06:12:33") + " vs " + stampHash("2026-10-06T06:12:33"),
-    ),
-    compared.join("\n"),
-  );
-  assert.ok(
-    comparedLine(
-      "task - same - " + stampHash("2026-10-06T06:12:33") + " vs " + stampHash("2026-10-06T06:12:33"),
-    ),
-    compared.join("\n"),
-  );
-  // A forced save announces the update from the old stamp to the new one.
-  assert.ok(
-    comparedLine(
-      "updating note stamp from " + stampHash("2026-10-06T05:30:00") + " to " + stampHash("2026-10-06T05:00:00"),
-    ),
-    compared.join("\n"),
-  );
-  assert.ok(
-    comparedLine(
-      "updating task stamp from " + stampHash("2026-10-06T05:00:00") + " to " + stampHash("2026-10-06T06:00:00"),
-    ),
-    compared.join("\n"),
-  );
-  // The long stamp lines and the route words are gone from the state watch.
-  var leftovers = compared.filter(function (line) {
-    return (
-      line.indexOf("[NemoUtils][state] tick ") !== -1 ||
-      line.indexOf("[NemoUtils][state] route ") !== -1 ||
-      line.indexOf("[NemoUtils][state] download: ") !== -1 ||
-      line.indexOf("[NemoUtils][state] saved ") !== -1 ||
-      line.indexOf("[NemoUtils][state] compare stamp") !== -1 &&
-        line.indexOf("no stamp to compare") === -1
-    );
-  });
-  assert.deepEqual(leftovers, [], compared.join("\n"));
+  assert.ok(comparedLine("compare", { group: "note", verdict: "older" }));
+  assert.ok(comparedLine("compare", { group: "task", verdict: "forward" }));
+  assert.ok(comparedLine("no-stamp"));
+  assert.ok(comparedLine("compare", { group: "note", verdict: "same" }));
+  assert.ok(comparedLine("compare", { group: "task", verdict: "same" }));
+  assert.ok(comparedLine("force-stamp", { group: "note" }));
+  assert.ok(comparedLine("force-stamp", { group: "task" }));
+  assert.doesNotMatch(compared.join("\n"), /2026-|http|private/);
   assert.equal(handleMatchesScope({ name: "clankers-main.ndjson" }, "clankers", "main"), true);
   assert.equal(
     handleMatchesScope({ name: "clankers-main-20261006T061233-n12-t4.ndjson" }, "clankers", "main"),
@@ -2335,10 +2378,7 @@ function checkStateDownload(api, session) {
     true,
     "A new branch still moves the save",
   );
-  assert.equal(
-    stateMoveLine("https://p.example", "https://q.example", "arena/x", "arena/y"),
-    "save moved: preview URL stored=https://p.example read=https://q.example; branch stored=arena/x read=arena/y",
-  );
+
   assert.equal(overwriteAsk(true, { kind: "download" }, true, false), true);
   assert.equal(overwriteAsk(true, { kind: "download" }, true, true), false, "A forced save writes");
   assert.equal(overwriteAsk(false, { kind: "download" }, true, false), false);
@@ -2384,13 +2424,13 @@ const assert = require("node:assert/strict");
 const arenaModule = loadChecks("arena.user.js");
 const arena = arenaModule.checks;
 test("prompt fill", () => checkPromptFill(arena.promptFill));
-run("arena logging", () => checkLogging(arena.logging, arenaModule.menus));
+run("arena logging", () => checkArenaLogging(arena.logging, arenaModule.menus));
 run("open steering", () => checkOpenSteering(arena.openSteering));
 run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
 run("hide composer", () => checkHideComposer(arena.hideComposer));
-run("tab title", () => checkTabTitle(arena.tabTitle));
-run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session));
+run("tab title", () => checkTabTitle(arena.tabTitle, arena.logging));
+run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session, arena.logging));
 run("keep awake", () => checkKeepAwake(arena.keepAwake));
 
 const chatgpt = loadChecks("chatgpt.user.js").checks;

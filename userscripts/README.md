@@ -38,9 +38,11 @@ The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 ## Console log
 
-Both bundles use `[NemoUtils]`. Arena logs feature changes, prompt fills, trim counts, state saves, wake failures, and title changes. State checks and changing title reasons can repeat. The helper has no shared rate limit.
+Arena uses `[NemoUtils][module][level] event` with allowlisted fields. Default `info` includes warnings and errors. `Userscript — log level` cycles `info`, `debug`, `warn`, and `error`, saves the setting, and applies it immediately.
 
-Arena logs can include repository names, preview addresses, filenames, and up to 40 characters of action labels. Chat and reasoning rows use fixed labels.
+Only debug mode includes repository names and filenames. Keys, message text, page labels, URLs, and raw error text stay out. The logger does not suppress repeated events, save records, or send records.
+
+Title logs require a title or emoji change. Debug adds decision conditions for that change. ChatGPT keeps its existing `[NemoUtils]` output.
 
 ## Arena Prompt Fill
 
