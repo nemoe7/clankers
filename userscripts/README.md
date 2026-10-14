@@ -113,7 +113,9 @@ The script saves the pause, so a reload keeps it. Each feature switch stays in t
 
 ## Arena Tab Title
 
-On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. While the agent works, the title reads the newest row of the last message root. It finds the body after a message header and keeps the previous lookup as a fallback.
+On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. If the link is absent, it reads a valid repository name before ` read ` in the session title button. State-file naming uses the same fallback before a stale tab title.
+
+While the agent works, the title reads the newest row of the last message root. It finds the body after a message header and keeps the previous lookup as a fallback.
 
 The row kind picks the mark, and an action row's status label names its emoji, such as `Arena | clankers 🖥️`. A running row answers with its shimmer, and a buttonless row read takes its `body-sm` span, with a fetch URL's anchor text dropped.
 

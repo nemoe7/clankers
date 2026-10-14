@@ -1385,6 +1385,19 @@ function checkTabTitle(api, logging) {
   expireHold();
   assert.equal(desiredTitle(page([headerShape])), TITLE_PREFIX + "clankers " + AGENT_EMOJI);
 
+  var promptPage = docWith(null, "Arena");
+  promptPage.location = { href: "https://arena.ai/agent/session" };
+  promptPage.querySelectorAll = function (selector) {
+    return selector.includes('aria-haspopup')
+      ? [{ textContent: "daedalus read ARENA.md AGENTS.md in full" }]
+      : [];
+  };
+  assert.equal(repoForTitle(promptPage), "daedalus");
+  promptPage.querySelector = function (selector) {
+    return selector === REPO_LINK_SELECTOR ? repoLink : null;
+  };
+  assert.equal(repoForTitle(promptPage), "clankers");
+
   var cases = [
     // The repo name still reads off the GitHub link, and the memory answers while the
     // path holds.
@@ -2165,6 +2178,25 @@ function checkStateDownload(api, session, logging) {
   assert.equal(stateRepo(bareDoc), "daedalus");
   assert.equal(readSlug(bareDoc), "daedalus");
   assert.equal(stateScope(bareDoc).repo, "daedalus");
+  var promptDoc = {
+    location: { href: "https://arena.ai/agent/session" },
+    title: "Arena | previous",
+    querySelector: function () { return null; },
+    querySelectorAll: function (selector) {
+      return selector.includes('aria-haspopup')
+        ? [{ textContent: "daedalus read ARENA.md AGENTS.md in full before your first edit" }]
+        : [];
+    },
+  };
+  assert.equal(readSlug(promptDoc), "daedalus");
+  assert.equal(stateRepo(promptDoc), "daedalus");
+  promptDoc.location.href = "https://arena.ai/agent";
+  assert.equal(readSlug(promptDoc), "previous");
+  promptDoc.location.href = "https://arena.ai/agent/session";
+  promptDoc.querySelectorAll = function () {
+    return [{ textContent: "not a repo read ARENA.md" }];
+  };
+  assert.equal(readSlug(promptDoc), "previous");
   // A new chat on /agent has no session bar, so the composer's own picker row carries the
   // repository chip ahead of the branch chip, and the fill reads it there.
   var composerDoc = {

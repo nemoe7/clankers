@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.38
+// @name         Arena.ai | NemoUtils | v1.10.39
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.38
+// @version      1.10.39
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2159,7 +2159,23 @@
       }
       if (bare) return bare;
     }
-    return chipRepo(doc) || titleRepo(doc);
+    return chipRepo(doc) || promptRepo(doc) || titleRepo(doc);
+  }
+
+  function promptRepo(doc) {
+    if (!doc || typeof doc.querySelectorAll !== "function") return "";
+    var href = (doc.location && doc.location.href) ||
+      (typeof location !== "undefined" ? location.href : "");
+    if (!isSessionUrl(href)) return "";
+    var spans = doc.querySelectorAll(CHIP_SPAN_SELECTOR);
+    for (var i = 0; i < spans.length; i += 1) {
+      var text = String(spans[i].textContent || "");
+      var marker = text.indexOf(" read ");
+      if (marker < 0) continue;
+      var repo = slugFromBare(text.slice(0, marker));
+      if (repo) return repo;
+    }
+    return "";
   }
 
   function chipRepo(doc) {
@@ -3068,7 +3084,7 @@
     }
 
     function repoForTitle(doc) {
-      var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR));
+      var name = repoFromLink(doc.querySelector(REPO_LINK_SELECTOR)) || promptRepo(doc);
       var path = currentPath();
       if (name) {
         lastRepo = name;
