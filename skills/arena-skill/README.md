@@ -39,7 +39,7 @@ The UI shows whether the agent answered the latest submission, not just an earli
 
 Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
 
-Finished tasks show newest completion first. Upcoming tasks keep their stored order.
+Finished tasks show newest completion first. Upcoming tasks keep their stored order. Only blocked tasks with report links have priority.
 
 ## Note attachments
 

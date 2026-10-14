@@ -839,7 +839,7 @@ TASK_COLUMNS = (
 )
 TASK_ORDER = (
   "status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC,"
-  " CASE WHEN status = 'finished' THEN id END DESC, (report_id IS NULL), position, id"
+  " CASE WHEN status = 'finished' THEN id END DESC, (blocked = 0 OR report_id IS NULL), position, id"
 )
 # Each kind has its own table and ID columns. No foreign keys or cascades change these rows.
 # A rename repoints them by hand.

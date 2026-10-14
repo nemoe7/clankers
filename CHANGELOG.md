@@ -61,6 +61,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Ready tasks follow their set order. Only blocked tasks keep report-link priority.
+
 - Report deletion now requires consecutive button clicks. Other clicks cancel confirmation, and a new confirmation uses its own timeout.
 
 - Older message pages now exclude quiet notes before pagination. Search and scrolling no longer show undefined placeholders.

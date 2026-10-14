@@ -3287,19 +3287,28 @@ def test_task_report_link_unblocks_on_answer():
 
 
 def test_report_linked_task_sorts_ahead_in_its_status():
-  # A report-linked task sorts before unlinked tasks in its status, ahead of position.
+  # A report link has priority only while its task waits for an answer.
   with tempfile.TemporaryDirectory() as sort_dir:
     sort_store = preview.Store(sort_dir, create=True)
     source = Path(sort_dir) / "pick.md"
     source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
     sort_store.publish("pick", "Pick one", source)
     sort_store.write_task("plain", "Plain", ["Step one"], order=1)
-    sort_store.write_task("linked", "Linked", ["Step one"], order=2, report_id="pick")
+    sort_store.write_task(
+      "linked", "Linked", ["Step one"], order=2, report_id="pick", blocked=True
+    )
     upcoming = [
       item["id"] for item in sort_store.list_tasks() if item["status"] == "upcoming"
     ]
     assert upcoming == ["linked", "plain"], "the report link outranks position"
     assert sort_store.tasks()["upcoming"][0]["id"] == "linked"
+    revision = sort_store.report("pick")["updated_at"]
+    sort_store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
+    assert [item["id"] for item in sort_store.tasks()["upcoming"]] == [
+      "plain",
+      "linked",
+    ]
+    assert sort_store.tasks()["upcoming"][1]["report_id"] == "pick"
 
 
 def test_task_report_link_refuses_missing_report():
