@@ -14,7 +14,7 @@ The state directory holds `state.sqlite3`, `saved-state.ndjson`, report sources,
 SQLite transactions write notes, receipts, tasks, report snapshots, answers, uploads, and fetch jobs.
 `read` prints pending items before it stamps only those delivered IDs Seen. A failed output leaves them unseen.
 `ack` records one reply or plain note and keeps the first acknowledgement time on later edits.
-Quiet notes remain in later reads, but reminders and bare acknowledgements exclude them. Explicit acknowledgements remain optional.
+Quiet notes do not affect reminders or bare acknowledgement selection. Explicit acknowledgements remain optional.
 A changed answer sets `ack_edited_at`. A report answer stays outside the Notes log.
 
 New reply clears its indicator on click while the seen write runs. Failed writes restore it, and newer replies stay unread. A stale state poll cannot undo a successful receipt.
