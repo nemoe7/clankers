@@ -2157,6 +2157,9 @@ def long_run_name(line):
         or "=" in tokens[index]
         or tokens[index].rstrip("smhd").isdigit()
       ):
+        if head == "command" and re.fullmatch(r"-[pVv]*[Vv][pVv]*", tokens[index]):
+          index = len(tokens)
+          break
         index += 1
     if index >= len(tokens):
       continue
@@ -2253,7 +2256,7 @@ def agent_line(line):
   return " ".join(rest).strip() or (line or "")
 
 
-def pr_check_wait(state_dir, line):
+def pr_check_wait(state_dir, line, command=None):
   """Detach the wait one line names, and say how the call must end.
 
   A wait that started returns `PR_CHECK_RUNS`: the hook ends its shell clean, because
@@ -2269,6 +2272,15 @@ def pr_check_wait(state_dir, line):
   name = long_run_name(line)
   if not name:
     return PR_CHECK_OTHER
+  if command is not None and line.strip() != command.strip():
+    print(
+      "RUN BLOCKED: automatic routing would replay a mixed shell line."
+      f" Use `arena-preview route {name} -- <remaining command>`;"
+      " do not repeat completed commands.",
+      file=sys.stderr,
+      flush=True,
+    )
+    return PR_CHECK_REFUSED
   if not detach_run(state_dir, name, ["bash", "-c", line]):
     print(DETACHED_BLOCK.format(name=name), file=sys.stderr, flush=True)
     return PR_CHECK_REFUSED
@@ -5379,6 +5391,9 @@ def main():
     help="Refuse a bash line that runs a PR-check wait the background tool must take",
   )
   pr_check_tick.add_argument("line", help="The command line, as the hook read it")
+  pr_check_tick.add_argument(
+    "--command", dest="current_command", help="The command the DEBUG trap reached"
+  )
   egress_tick = commands.add_parser(
     "egress-tick",
     help="Warn when a line fetches a host the sandbox egress filter blocks",
@@ -5608,7 +5623,7 @@ def main():
         print(warning, file=sys.stderr)
       return 0
     if args.command == "pr-check-tick":
-      return pr_check_wait(state_dir, args.line)
+      return pr_check_wait(state_dir, args.line, args.current_command)
     if args.command == "rename":
       try:
         old_id = Store(state_dir).resolve_id(args.old_id)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -40,7 +41,7 @@ fi
 if [ "$1" = "pr-check-tick" ]; then
   # The dry run writes the record and skips the real spawn, so the suite starts no wait.
   export ARENA_PREVIEW_DETACH_DRY=1
-  exec __PYTHON__ __PREVIEW__ pr-check-tick "$2"
+  exec __PYTHON__ __PREVIEW__ "$@"
 fi
 if [ "$1" = "worktree-tick" ]; then
   exec __PYTHON__ __PREVIEW__ worktree-tick "$2"
@@ -188,6 +189,9 @@ def run_in(
     '. "'
     + str(gate_file)
     + '"\n'
+    + "_arena_preview_line="
+    + shlex.quote(command)
+    + "\n"
     + "trap '_arena_preview_gate : # arena-preview-gate' DEBUG\n"
     + command
     + "\n"
@@ -224,6 +228,27 @@ def test_the_reference_table_holds_every_gate_case() -> None:
     f"table rows without a case: {sorted(rows - labels)}; "
     f"cases without a row: {sorted(labels - rows)}"
   )
+
+
+def test_command_lookup_does_not_start_a_run():
+  for flag in ("-v", "-V", "-pv", "-pV"):
+    line = f"command {flag} pytest"
+    assert preview_module.long_run_name(line) is None, line
+    result = run(f"{line}; printf lookup-complete")
+    assert result.returncode == 130, result.stderr
+    assert "RUN DETACHED" not in result.stderr, result.stderr
+    assert "lookup-complete" not in result.stdout
+  assert preview_module.long_run_name("command -p pytest") == "pytest"
+  assert preview_module.long_run_name("command -v pytest; pytest -q") == "pytest"
+
+
+def test_the_gate_refuses_to_replay_a_mixed_line():
+  with tempfile.TemporaryDirectory() as directory:
+    result = run("true; npm test", state=Path(directory))
+    assert result.returncode == 130, result.stderr
+    assert "RUN BLOCKED" in result.stderr, result.stderr
+    assert "arena-preview route" in result.stderr, result.stderr
+    assert not (Path(directory) / "runs").exists()
 
 
 def test_the_gate_reaches_the_tick_for_a_named_runner():

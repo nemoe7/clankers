@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-14
+
+### Fixed
+
+#### preview
+
+- Command lookups no longer start background test runs. The DEBUG trap refuses to replay a mixed shell line and directs the remaining work to an explicit route.
+
 ## 2026-10-13
 
 ### Added
