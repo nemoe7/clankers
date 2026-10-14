@@ -17,21 +17,25 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `logs <name>` | Print a routed run's status and its recorded output tail; it works while the run lives and after its verdict |
 | `worktree start --gate <gate-name> [--allow <glob>] <name> <destination>` | Create a detached task worktree outside the root while the named root gate runs |
 | `worktree collect <name>` | Print the allowed detached-worktree patch after a green root gate |
+| `ack --reply <markdown>` | With exactly one non-quiet pending note or report answer, IDs are optional. Supply exactly one reply/note source; with multiple pending items, supply the ID |
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line; quote it the same way |
 | `ack <id> --reply-file <path>` | Read the rendered reply from a file, so no shell quoting touches a backtick; `--note-file` reads the plain line the same way. The gate warns when an inline ack text holds a backtick inside double quotes |
-| `task-list` | List tasks and their stored status, order and details |
+| `task-list [-f]` | List upcoming task IDs, order, status and report links; -f adds finished tasks. Read details with task ID |
+| `task ID` | Print a stored task's title, status, order, report link, blocked mark and all details |
 | `task ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and reject a write that leaves none; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--blocked` or `--unblocked` sets the blocked mark |
 | `task-remove ID` | Remove a task entered by mistake |
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it replaces the live notes, answers, reports and tasks unless `--merge` keeps them; `--replace-tasks` replaces only tasks |
 | `download-request <url>` | Queue one pending file download for the owner to approve in Downloads; `--allow-proxy` permits the two proxies |
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
-| `unpublish <id>` | Remove a report from the tab; its answers and source survive. It refuses while the owner has an unseen answer ack, or within the minute after the owner's last look. A held call answers `409` |
+| `unpublish <id>` | Remove a report from the tab, keeping answers and source. Unacknowledged answers or unseen answer receipts return 409; a fresh owner view does not block agent unpublish. The page keeps an open report until the owner clicks away |
 | `stale-reports` | List stale published report IDs and reasons without changing state |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token |
 
 - Use complete IDs in CLI calls; cite their first six characters in prose.
+- Read notes, answers and tasks only through CLI `read`, `note ID`, `note-list`, `task ID` and `task-list`; use report HTTP endpoints only for required publication checks.
+- Keep `state.sqlite3` as storage, never a read path.
 - `read` does not acknowledge an item.
 - Supply one of `--reply` or `--note` to `ack`; use separate calls for different answers.
 - A repeated `ack` on an ID appends one more reply block and keeps the earlier ones.

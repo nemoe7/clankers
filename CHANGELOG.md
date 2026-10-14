@@ -43,6 +43,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- The CLI reference now documents reply sources, task reads, report-removal holds, and CLI-only state reads in all copies.
+
 - Empty inbox reads no longer write the state export. Content and receipt changes still save.
 - Command lookups no longer start background test runs. The DEBUG trap refuses to replay a mixed shell line and directs the remaining work to an explicit route.
 
