@@ -67,7 +67,7 @@
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
-- Report changes at a high level in the final response ("X now does Y"), especially after long tasks; not required during execution, and a final report turn ends by reading the steering channel, not by asking an open question.
+- Task completion alone needs no report; MUST update its status and retain required verification and landed commit details in its task record. Requested reports and required assessment, question, blocked-task, and rule-violation reports remain required.
 
 ## Scope
 
