@@ -487,8 +487,12 @@ function checkTranscriptTrim(api) {
     var element = {
       children: pageRows,
       closest: function (selector) {
-        if (selector !== BOX) return null;
-        return nested || element;
+        return selector === BOX ? element : null;
+      },
+      parentElement: {
+        closest: function (selector) {
+          return selector === BOX ? nested || null : null;
+        },
       },
     };
     return element;
@@ -548,6 +552,12 @@ function checkTranscriptTrim(api) {
     messageRoot([rowBox(globalRows[2])], [globalActions[2]]),
   ];
   var globalRemoved = trimPlan(logDoc(globalNodes, true), "40");
+  var sparseRows = [rows(30), rows(1)];
+  var sparseRoots = sparseRows.map(function (items) {
+    return messageRoot([rowBox(items)]);
+  });
+  assert.equal(trimPlan(logDoc(sparseRoots, true), "50"), 0);
+  assert.equal(cleared(sparseRows[0][29]), false);
   var staleRows = rows(3);
   var staleAction = actionContainer();
   var k;
@@ -570,6 +580,8 @@ function checkTranscriptTrim(api) {
   // One pass cuts at most the cap, so a large backlog drains in steps instead
   // of one blocking burst the page must reconcile at once.
   var cappedTrim = trimRows(rows(300), 50);
+  var outerBox = rowBox(rows(1));
+  var nestedBox = rowBox(rows(2), outerBox);
   var cases = [
     [trimRows(rows(5), 3), 2],
     [trimRows(rows(3), 3), 0],
@@ -595,7 +607,8 @@ function checkTranscriptTrim(api) {
     [ACTION_SELECTOR, ":scope > div > div > div.mt-3.flex.flex-col.gap-3"],
     [QUESTION_SELECTOR, '[role="radiogroup"]'],
     [rowsOfRoot(messageRoot([rowBox(rows(3))])).length, 3],
-    [rowsOfRoot(messageRoot([rowBox(rows(2), true)])).length, 0],
+    [rowsOfRoot(messageRoot([outerBox, nestedBox])).length, 1],
+    [rowsOfRoot(messageRoot([rowBox(rows(2), outerBox)])).length, 2],
     [messageRoots(logDoc([messageRoot([])], true)).length, 1],
     [messageRoots(logDoc([messageRoot([])], false)).length, 1],
     [messageRoots(logDoc([], true)).length, 0],
@@ -623,16 +636,16 @@ function checkTranscriptTrim(api) {
     [emptyAction.removed, false],
     [emptyRoot.hiddenClass, false],
     [emptyRoot.parentElement !== null, true],
-    // Two older roots empty and hide. The newest keeps all of its 25 rows.
-    [globalRemoved, 45],
+    // The newest root keeps 25 rows, and the previous root keeps 15.
+    [globalRemoved, 30],
     [cleared(globalRows[0][24]), true],
     [globalNodes[0].hiddenClass, true],
     [cleared(globalRows[1][4]), true],
-    [globalNodes[1].hiddenClass, true],
+    [globalNodes[1].hiddenClass, false],
     [cleared(globalRows[2][0]), false],
     [globalNodes[2].hiddenClass, false],
     [globalActions[0].removed, true],
-    [globalActions[1].removed, true],
+    [globalActions[1].removed, false],
     [globalActions[2].removed, false],
     [staleRemoved, 0],
     [staleAction.removed, false],

@@ -21,6 +21,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The Arena tab title finds rows after a message header and keeps the previous row lookup as a fallback.
+- Transcript trim keeps the newest rows across messages within one total limit. Nested row boxes no longer count twice.
 
 ## 2026-10-13
 

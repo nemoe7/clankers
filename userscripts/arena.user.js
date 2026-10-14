@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.34
+// @name         Arena.ai | NemoUtils | v1.10.35
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.34
+// @version      1.10.35
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -1361,7 +1361,9 @@
       var rows = [];
       var i;
       for (i = 0; i < boxes.length; i += 1) {
-        if (boxes[i].closest && boxes[i].closest(ROW_BOX_SELECTOR) !== boxes[i]) continue;
+        var parent = boxes[i].parentElement;
+        var outer = parent && parent.closest(ROW_BOX_SELECTOR);
+        if (outer && Array.prototype.indexOf.call(boxes, outer) !== -1) continue;
         rows = rows.concat(Array.prototype.slice.call(boxes[i].children));
       }
       return rows;
@@ -1400,17 +1402,18 @@
       var removed = 0;
       var holder = budgetRoot(roots);
       var i;
-      for (i = 0; i < roots.length; i += 1) {
+      for (i = roots.length - 1; i >= 0; i -= 1) {
         if (roots[i].isConnected === false) continue;
         var newest = i === holder;
         var rows = rowsOfRoot(roots[i]);
-        var removedFromRoot = trimRows(rows, newest ? keep : 0);
+        var removedFromRoot = trimRows(rows, keep);
         removed += removedFromRoot;
         var attached = 0;
         var j;
         for (j = 0; j < rows.length; j += 1) {
           if (rowLive(rows[j])) attached += 1;
         }
+        keep = Math.max(0, keep - attached);
         if (removedFromRoot && !attached) removeActionSibling(roots[i]);
         if (holder !== -1 && !newest && !attached && typeof roots[i].classList !== "undefined") {
           roots[i].classList.add("hidden");
