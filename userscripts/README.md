@@ -18,6 +18,8 @@ To migrate, disable or remove the five old scripts before enabling the bundles. 
 
 Each bundle has its own version and raw GitHub update URL. A saved feature setting belongs to its bundle.
 
+The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt` uses meaning-preserving compression with an `o200k_base` token budget.
+
 ## Feature switches
 
 Nine switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
@@ -54,7 +56,7 @@ A selected diff branch wears the same owner/repo shape as the repository chip. T
 
 The fill fetches `userscripts/arena-prompt-fill.txt` once from this repository. It waits for that text before writing, and leaves the composer unchanged if the fetch fails. The fill optionally fetches `rules/ARENA.md` and appends it when that fetch succeeds.
 
-The template signals a potentially long, complex feature set and calls for a high-context model. It says work can continue indefinitely, and each final poll waits up to 1,800 seconds or until skipped.
+The template requests strong reasoning and context retention for a potentially long, complex task, not model selection. It says work can continue indefinitely, and each final poll waits up to 1,800 seconds or until skipped.
 
 ```mermaid
 flowchart TB
@@ -71,13 +73,13 @@ The message then carries a six-step checklist:
 1. Read the task, grep every caller of the code it touches, and trace the flow end to end.
 2. Name the requirements and the constraints, and follow the conventions in the code.
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
-4. Write the failing check before new behavior, and reproduce a bug before the fix.
+4. Write the failing check before new or changed executable behavior, and reproduce a bug before the fix.
 5. Keep the behavior, interfaces, validation and security that stand.
 6. Run the project\'s own gate, and read the result before the report.
 
 Six rules follow the checklist:
 
-- red first for new behavior
+- red first for new executable behavior. Prose uses existing lint and structural checks, with exact-text tests only for executable interface or protocol contracts.
 - a root-cause fix for a bug, with no repeated failed approach
 - stated assumptions
 - no claim of an unrun check

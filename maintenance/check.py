@@ -36,6 +36,7 @@ EXPECTED_SKILL_FIELDS = {
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 EXPECTED_BUDGETS = {
+  "userscripts/arena-prompt-fill.txt": "o200k_base",
   "rules/AGENTS.md": "o200k_base",
   "rules/ARENA.md": "UTF-8 file size",
   "rules/CHATGPT-CUSTOM.txt": "Unicode chars",

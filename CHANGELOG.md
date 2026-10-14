@@ -21,6 +21,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- The prompt template now has a refs baseline and token measurements. It requests strong reasoning without model selection and keeps prose edits outside behavior-test requirements.
+
 - Arena logs now use fixed events and allowed fields, with saved level controls. Debug mode alone includes repository and file names. Repeated events remain, and title logs require a change.
 
 #### preview
