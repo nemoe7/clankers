@@ -87,6 +87,8 @@ ALWAYS report a reproducible skill defect or unresolved skill failure through a 
 - Mark a task `--status finished` only after verification.
 - For a task that waits on a report, add `--report <report-id>`; the owner's answer clears its blocked mark, and until then the task sorts first in its group.
 
+- Write task details as actual work text; NEVER use report section headers or aliases as task details.
+
 When a task creates a commit, MUST add the landed commit's subject and short hash to its task details.
 
 ## Publish reports and forms

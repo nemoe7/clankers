@@ -51,6 +51,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- Task details now require actual work text instead of report section headers or aliases.
+
 - Unrelated findings now require a fielded report with a suggested next action. Only blocking findings permit an immediate fix.
 
 - ARENA now defines its read set once and reuses it in startup, changed-file, and summary clauses.
