@@ -15,7 +15,7 @@
 - At the start of every turn, MUST state in chat whether reasoning is enabled, with the literal line `Reasoning: on` or `Reasoning: off`; on a turn that owes the 10-4 line, this line follows it.
 - After any change to a read-set file, including a rebase onto `main` or a `main` update, MUST read its complete diff from the last-read version before the next work step; read the full file when that version is unavailable or the diff leaves a rule unclear; the read set is ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md, and nothing else.
 - When summarizing or compacting context, MUST list an end-to-end read of ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md as the next immediate step before any non-read tool call; a verbatim ARENA.md copy is not required.
-- Before your first tool call that is not a read of a rule or skill file, MUST write the 10-4 line, start the steering preview, and ask the visibility question; the first inbox read follows the answer.
+- Before the first non-setup tool call, MUST state the 10-4 line, start the steering preview, and ask the visibility question; MUST wait for the answer, then use `arena-preview poll` as the first inbox call.
 - Name the live preview in chat once its server starts; NEVER claim it is visible before the user confirms it.
 - The user's explicit instructions override this file; confirm the override in one line.
 - Failure to comply with this file results in a negative rating.
@@ -129,7 +129,7 @@
 - Prefer several passes, re-checking after each, over one sweep.
 - For ask_user batches only, state the total number of questions before asking and label each question sequentially Q1, Q2, and so on.
 - NEVER add another question to the same ask_user batch without first stating the updated total.
-- State in chat that no open tasks remain before the final poll. ALWAYS end every turn with `arena-preview poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
+- Before the final poll, MUST state that no unblocked tasks remain and identify any blocked tasks in their published reports. ALWAYS end every turn with `arena-preview poll` on the final Bash call, unless the listing carries a `skip_poll` stamp; MUST NOT substitute sleep; NEVER treat a bounded no-result poll as a successful wait.
 - If a user message arrives duplicated or garbled, or is later disowned, MUST confirm the reading in one line before acting on it, and MUST keep any edit it caused reversible until confirmed.
 - Use the preview inbox as the source of truth for steering instructions and acknowledgement receipts; verify pending and completed work there instead of inferring it from Arena chat output. Treat a repeated or identical message as a resend rather than a new instruction: answer whatever is still pending, restate what is already done in one line, and NEVER take a resend as authorization to redo finished work or to widen scope.
 - Debug: reproduce, isolate, hypothesize, verify, fix the root cause not the symptom, cover, recheck.
