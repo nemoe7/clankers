@@ -16,6 +16,8 @@ SQLite transactions write notes, receipts, tasks, report snapshots, answers, upl
 `ack` records one reply or plain note and keeps the first acknowledgement time on later edits.
 Quiet notes remain in later reads, but reminders and bare acknowledgements exclude them. Explicit acknowledgements remain optional.
 A changed answer sets `ack_edited_at`. A report answer stays outside the Notes log.
+
+New reply clears its indicator on click while the seen write runs. Failed writes restore it, and newer replies stay unread. A stale state poll cannot undo a successful receipt.
 Reports keep their first-publish sequence. Schema migrations add nullable columns and backfill sequence IDs.
 
 The NDJSON file tracks notes, tasks, and report answers. It does not contain report snapshots,

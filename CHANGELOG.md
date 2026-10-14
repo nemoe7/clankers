@@ -79,6 +79,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- New reply clears its indicator immediately on click. Failed writes restore it, while stale polls cannot undo a successful receipt.
+
 - Linking a task to an unanswered report now blocks it by default. An explicit unblocked flag or an existing answer keeps it ready.
 
 - Routine inbox reads now show quiet notes only until their Seen receipt. History, reply context, ordinary acknowledgements, and polling remain available.

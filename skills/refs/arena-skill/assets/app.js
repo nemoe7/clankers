@@ -410,12 +410,18 @@ function clockTime(value) {
   return `${parts.month} ${parts.day}${year}, ${parts.hour}:${parts.minute}`;
 }
 let unreadEdits = [];
+const localReplySeen = new Map();
 // SQLite stores the number of reply blocks the page marked as viewed. Counts distinguish two
 // replies with the same second-level timestamp, and survive a page reload.
 function updateEdits(notes) {
-  unreadEdits = notes.filter(item =>
-    item.ack_edited_at && Number(item.ack_edited_seen_count || 0) < (item.replies || []).length
-  );
+  const ids = new Set(notes.map(item => item.id));
+  for (const id of localReplySeen.keys()) if (!ids.has(id)) localReplySeen.delete(id);
+  unreadEdits = notes.filter(item => {
+    const local = localReplySeen.get(item.id);
+    let seen = Math.max(Number(item.ack_edited_seen_count || 0), local?.confirmed || 0);
+    for (const pending of local?.pending || []) seen = Math.max(seen, pending.count);
+    return item.ack_edited_at && seen < (item.replies || []).length;
+  });
   $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
   $('#log-edited').textContent = unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
 }
@@ -451,8 +457,13 @@ $('#log-edited').addEventListener('click', async () => {
   answer.scrollIntoView({block: 'center'});
   answer.setAttribute('tabindex', '-1');
   answer.focus({preventScroll: true});
+  const replyCount = (item.replies || []).length;
+  const local = localReplySeen.get(item.id) || { confirmed: 0, pending: new Set() };
+  const pending = { count: replyCount };
+  local.pending.add(pending);
+  localReplySeen.set(item.id, local);
+  updateEdits(lastState.notes);
   try {
-    const replyCount = (item.replies || []).length;
     const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
       method: 'POST',
       headers: writeHeaders('application/json'),
@@ -462,10 +473,15 @@ $('#log-edited').addEventListener('click', async () => {
     if (receipt.id !== item.id || !Number.isInteger(receipt.ack_edited_seen_count)) {
       throw new Error('The viewed-reply receipt was invalid');
     }
-    item.ack_edited_seen_count = receipt.ack_edited_seen_count;
-    updateEdits(lastState.notes);
+    local.confirmed = Math.max(local.confirmed, receipt.ack_edited_seen_count);
   } catch (error) {
     status.textContent = `Could not save reply status: ${error.message}`;
+  } finally {
+    local.pending.delete(pending);
+    if (!local.confirmed && !local.pending.size && localReplySeen.get(item.id) === local) {
+      localReplySeen.delete(item.id);
+    }
+    updateEdits(lastState.notes);
   }
 });
 function showHistory(notes) {

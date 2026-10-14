@@ -113,6 +113,8 @@ const viewCalls = [];
 const viewActive = [];
 const skipCalls = [];
 const replySeenCalls = [];
+let replySeenWait = null;
+let replySeenError = false;
 const unpublished = [];
 const uploadCalls = [];
 let loseUploadResponse = false;
@@ -332,6 +334,8 @@ const context = {
       return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
     }
     if (url.startsWith('/api/messages/') && url.endsWith('/replies/seen')) {
+      if (replySeenWait) await replySeenWait;
+      if (replySeenError) return response({ error: 'Write failed' }, false);
       const id = decodeURIComponent(url.split('/')[3]);
       const count = JSON.parse(options.body).count;
       const item = [...(state.notes || []), ...(state.submissions || [])].find(record => record.id === id);
@@ -2707,6 +2711,56 @@ test('preview client', async (t) => {
     assert.equal(copied.length, copiesBeforeNotesOnly + 1, 'copy a session before its first task');
     assert.match(copied.at(-1), /"id":"notes-only"/);
     assert.equal(get('#copy-state').dataset.state, 'good');
+  });
+
+  await t.test('A reply click clears immediately, survives refresh, and restores a failed write', async () => {
+    const keptNotes = state.notes;
+    let release = () => {};
+    let pendingWrite = null;
+    try {
+      state.notes = [{ id: 'optimistic-reply', text: 'Question', at: '2026-10-13T03:00:00',
+        acknowledged_at: '2026-10-13T03:01:00', ack_kind: 'reply', ack_text: 'First answer',
+        ack_edited_at: '2026-10-13T03:02:00', ack_edited_seen_count: 0,
+        replies: [{ kind: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] }];
+      await refresh();
+      replySeenWait = new Promise(resolve => { release = resolve; });
+      pendingWrite = get('#log-edited').events.click();
+      assert.equal(get('#log-edited').hidden, true, 'do not wait for the server receipt');
+      assert.equal(get('#notes-pip').hidden, true);
+      await refresh();
+      assert.equal(get('#log-edited').hidden, true, 'a pending write survives a refresh');
+      state.notes[0].replies.push({ kind: 'reply', text: 'Newer answer', at: '2026-10-13T03:03:00' });
+      state.notes[0].ack_edited_at = '2026-10-13T03:03:00';
+      await refresh();
+      assert.equal(get('#log-edited').hidden, false, 'a newer reply stays unread');
+      release();
+      await pendingWrite;
+      replySeenWait = null;
+      assert.equal(get('#log-edited').hidden, false, 'the old receipt cannot clear a newer reply');
+      replySeenError = true;
+      const failed = get('#log-edited').events.click();
+      assert.equal(get('#log-edited').hidden, true);
+      await failed;
+      assert.equal(get('#log-edited').hidden, false, 'a failed write restores the indicator');
+      assert.match(get('#send-status').textContent, /Could not save reply status/);
+      replySeenError = false;
+      await get('#log-edited').events.click();
+      assert.equal(get('#log-edited').hidden, true);
+      state.notes[0].ack_edited_seen_count = 1;
+      await refresh();
+      assert.equal(get('#log-edited').hidden, true, 'a stale poll cannot undo a successful receipt');
+      state.notes[0].ack_edited_seen_count = 2;
+      await refresh();
+      assert.equal(get('#log-edited').hidden, true);
+
+    } finally {
+      replySeenWait = null;
+      replySeenError = false;
+      release();
+      if (pendingWrite) await pendingWrite;
+      state.notes = keptNotes;
+      await refresh();
+    }
   });
 
   await t.test('Seeing an edited acknowledgement keeps the log where its jump landed', async () => {
