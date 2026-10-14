@@ -49,7 +49,7 @@ arena-preview read
 arena-preview poll
 ```
 
-- When a Bash call's stderr names a pending count, `read` now.
+- When a Bash call's stderr names a pending count, run `read` unless that call already printed those items in full; acknowledge the delivered IDs before another read.
 - It prints full pending notes and report answers; a failed or missing inbox is an error, not an empty inbox.
 - Do not mark count-only, truncated, or failed deliveries Seen.
 - A pending item repeats until acknowledged.

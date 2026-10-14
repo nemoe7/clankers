@@ -14,6 +14,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### preview
+
+- A full poll delivery now counts as the inbox read. The agent acknowledges those IDs without another read.
+
 #### arena
 
 - Code-scanning alert review no longer blocks pull request creation. Reading and addressing open alerts remain required.

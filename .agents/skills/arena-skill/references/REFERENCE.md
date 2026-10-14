@@ -60,11 +60,11 @@ When an acknowledgement refers to a report or task, use `ack --reply` and put it
 
 ## Read cadence
 
-- Read the inbox when a Bash call reports a pending note, answer or upload count on stderr, before the next work step; that reminder is the schedule.
+- Read the inbox when a Bash call reports a pending note, answer or upload count on stderr, before the next work step, unless that call already printed those items in full; acknowledge the delivered IDs before another read.
 - NEVER wait for the Bash gate to block before a read.
 - When ending a turn or a report form awaits answers, run `poll`.
 - NEVER set or export `_arena_preview_platform`; repair a blocked gate, NEVER bypass it.
-- A blocking-only call needs its read after return.
+- After a blocking-only call, run `read` if it did not print the pending items in full; a `poll` that printed them counts as the read, so acknowledge those IDs without a second read.
 - Initial discovery may precede the first read; startup MUST.
 - A blocked call that runs `tail`, `head` or `grep` hears which commands to drop.
 - A call that spells the preview path hears the bare `arena-preview` form once a shell.
