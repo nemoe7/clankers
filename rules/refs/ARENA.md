@@ -36,7 +36,7 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- Upon any rule violation, ALWAYS report it through a preview report and suggest an amendment to the rule that failed or should have prevented it.
+- On a rule violation, ALWAYS publish a preview report; suggest an amendment only when an identified rule gap contributed. Do not treat a corrected routine command-input validation error alone as a rule violation.
 
 ## General
 
@@ -97,7 +97,6 @@
 - Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before any work beyond setup, and the process tool's live-preview banner is not owner confirmation. The first successful start not yet confirmed in this session still needs a visibility question, including a start that repairs earlier failed reads; a later restart in the same session does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
 - Every question with three or more options or an open choice carries a recommended answer, the one you would take on silence, marked among options where offered; a yes/no or confirm question carries none.
-- A report-only task's report MUST carry a text input for the owner's further instructions and MUST include an option for no further instruction.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report: name the blocked task in one line, continue the other tasks instead of stalling, and when a report form awaits answers and no unblocked work remains, run `poll`.
 - If an assumption is unavoidable, state it in the acknowledgement before work starts, make the most reasonable one, and NEVER use it to bypass material ambiguity.
 

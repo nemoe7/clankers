@@ -21,6 +21,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- Routine input errors need brief notices after a fix, not separate reports or rule proposals. Mandatory reports remain for qualifying violations, risks, defects, and unresolved failures. Informational reports no longer require further-instruction forms.
+
 - Post-summary rule reads now explicitly precede queued work and pending pushes.
 
 - Bypass and dead-end reports now include a suggested fix. Agents no longer print planned commit lists or CI-status notices. CI checks and remote commit confirmation remain required.
