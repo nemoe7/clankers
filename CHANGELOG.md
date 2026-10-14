@@ -19,6 +19,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### house rules
+
+- Unchanged third-party skill copies no longer need clause proposals or approval. First-party skill text retains those requirements.
+
 #### prompts
 
 - Prose-only rule edits use existing lint and structural checks, not new wording tests. Executable interface and protocol contracts retain exact-text tests.
