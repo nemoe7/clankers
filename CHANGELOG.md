@@ -35,6 +35,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- Chromium setup now extracts the runtime archive, sets library and font paths, and repeats capture with the packaged binary.
+
 - Initial setup now polls after visibility confirmation. Final polling permits only reported blocked tasks to remain.
 
 - Routine input errors need brief notices after a fix, not separate reports or rule proposals. Mandatory reports remain for qualifying violations, risks, defects, and unresolved failures. Informational reports no longer require further-instruction forms.
