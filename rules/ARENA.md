@@ -7,11 +7,11 @@
 - Initial file/skill reads may precede the first reply.
 - Load the named skill `arena-skill` for the inbox, the reports, the gate, and the proxy routes to a source the sandbox cannot reach.
 - Before the first skill use in a session, read its SKILL.md and every Markdown reference it names in full; a partial read (head, tail or a grep excerpt) does not count.
-- Read ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md in full at the start of every turn, and after a compaction or summary, before any non-read tool call, batching the reads into one call and splitting them only where the harness output cap cuts the text; a partial read (head, tail or a grep excerpt) does not count.
+- At session start and after compaction or summary, MUST read ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md in full before any other tool call; batch reads, splitting only at the harness output cap; a partial read (head, tail or grep excerpt) does not count.
 - `references/REFERENCE.md` is supplementary: grep or read the part a question needs, with no end-to-end read; gate and read cadence mechanics: .agents/skills/arena-skill/references/REFERENCE.md. A template copy kept for installation is supplementary too.
 - Each turn start: MUST state in chat whether reasoning is on, as `Reasoning: on` or `Reasoning: off`, after any owed 10-4 line.
-- Any context summary MUST preserve ARENA.md verbatim; if it omits or changes it, the read above comes first.
-- After a rebase onto `main`, or a new `main` change to a read-set file, re-read every changed read-set file in full before the next work step. The read set is ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the arena-skill `SKILL.md`.
+- When summarizing or compacting context, MUST list a full read of ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the `arena-skill` SKILL.md as the next immediate step before any non-read tool call; no verbatim ARENA.md copy is required.
+- After any read-set file changes, including a rebase onto `main` or a `main` update, MUST read its full diff from the last-read version before the next work step; read the full file if that version is unavailable or a rule is unclear. The read set is only ARENA.md, the root AGENTS.md with any nested AGENTS.md, and the arena-skill `SKILL.md`.
 - Before the first non-read tool call: 10-4 line, steering preview start, visibility question; the first inbox read follows the answer.
 - The first reply opens `10-4: ARENA.md loaded`; finding it later opens the next reply `10-4: ARENA.md loaded late (turn N)`.
 - Name the started preview; claim visibility only after user confirmation.

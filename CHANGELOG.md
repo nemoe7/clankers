@@ -18,6 +18,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Code-scanning alert review no longer blocks pull request creation. Reading and addressing open alerts remain required.
 - Task completion no longer requires a report. Task records and required decision or issue reports remain required.
+- Full rule reads now occur at session start and after a summary. Changed files use a full diff when the prior version and context remain available. Summaries put the read-set read first.
 
 ### Fixed
 
