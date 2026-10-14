@@ -48,8 +48,8 @@ Latest measurements as of 2026-10-14. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/README.md` | `o200k_base` | 1,706 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,022 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 52,439 `B` |
-| `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 10,466 `B` |
-| `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,941 `B` |
+| `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 10,470 `B` |
+| `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 13,982 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,066 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 147,941 `B` |

@@ -681,10 +681,15 @@ def test_http_boundaries():
       assert re.search(
         r'<input[^>]*id="upload-file"[^>]*type="file"[^>]*multiple', page
       )
-      # The jump bar carries Lucide's arrow-down geometry in currentColor, so it follows
-      # the theme rather than a hard white.
-      assert 'id="log-newest"' in page and 'stroke="currentColor"' in page
-      assert 'd="M12 5v14"' in page and 'd="m19 12-7 7-7-7"' in page
+      # Check the arrow inside the scroll button, not an unrelated page icon.
+      jump = re.search(
+        r'<button[^>]*id="log-newest"[^>]*>(.*?)</button>', page, re.DOTALL
+      )
+      assert jump is not None
+      arrow = jump.group(1)
+      assert 'width="14" height="14"' in arrow
+      assert 'stroke="currentColor"' in arrow and 'stroke-width="1.5"' in arrow
+      assert 'd="M12 3L12 21M12 21L20.5 12.5M12 21L3.5 12.5"' in arrow
       # The search box says what it does without a visible label: the placeholder names the
       # gesture and the aria-label carries it for the screen reader.
       assert re.search(

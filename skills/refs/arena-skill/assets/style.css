@@ -146,17 +146,17 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
 .log-newest {
   /* Use the compact arrow from the Arena UI reference. The log keeps its scroll state. */
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-  display: inline-flex; align-items: center; justify-content: center;
-  min-height: 0; padding: 4px 12px; font-size: 12px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
+  min-height: 0; padding: 4px 12px; font-size: 12px; font-weight: 400; border-radius: 4px;
   border-color: var(--tab-border); background: var(--panel);
   background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--accent);
-  box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(8px);
+  box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(12px);
   transition: color .15s, background-color .15s, border-color .15s;
 }
 .log-newest svg { pointer-events: none; flex: none; }
-.log-newest:hover { color: var(--text); border-color: var(--muted); }
+.log-newest:hover { color: var(--text); }
 .log-newest:active { color: var(--muted); }
-.log-newest:focus-visible { box-shadow: 0 0 0 2px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
+.log-newest:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
 .message:last-child { margin-bottom: 0; }
 .message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0 0 8px; }

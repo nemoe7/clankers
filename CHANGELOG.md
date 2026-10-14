@@ -23,6 +23,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### preview
+
+- The scroll-to-bottom button has a compact translucent background and a 14-pixel arrow. Scroll behavior stays unchanged.
+
 #### house rules
 
 - Unchanged third-party skill copies no longer need clause proposals or approval. First-party skill text retains those requirements.
