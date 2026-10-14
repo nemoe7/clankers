@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### userscripts
+
+- An independent Transcript trim switch hides matching red alerts during generation and restores its own `display` changes afterward. The switch defaults to On and does not depend on Auto trim.
+
 #### preview
 
 - The note-list CLI lists stored note IDs by page, newest first, including acknowledged and quiet notes. It leaves receipts and state exports unchanged.

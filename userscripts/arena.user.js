@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.36
+// @name         Arena.ai | NemoUtils | v1.10.37
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.36
+// @version      1.10.37
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -49,7 +49,7 @@
     title: ["changed", "restored", "conditions"],
   };
   var LOG_VALUES = {
-    feature: ["prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "hide-composer", "state-download", "keep-awake", "tab-title"],
+    feature: ["prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "transcript-alerts", "hide-composer", "state-download", "keep-awake", "tab-title"],
     group: ["note", "task"],
     verdict: ["older", "same", "forward"],
     kind: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
@@ -1727,6 +1727,59 @@
       trim();
     });
   })();
+
+  runFeature("transcript-alerts", "Transcript — hide generation alerts", function () {
+    var ALERT_SELECTOR = '[role="alert"][class~="border-red-500/30"][class~="bg-red-500/10"]';
+
+    function alertVisibility(doc) {
+      var hidden = new Map();
+      function hasHiddenStyle(node) {
+        return node.style.getPropertyValue("display") === "none" && node.style.getPropertyPriority("display") === "important";
+      }
+      function restore(node, prior) {
+        if (hasHiddenStyle(node)) {
+          if (prior.value) node.style.setProperty("display", prior.value, prior.priority);
+          else node.style.removeProperty("display");
+        }
+        hidden.delete(node);
+      }
+      return function (generating) {
+        hidden.forEach(function (prior, node) {
+          if (!generating || node.isConnected === false || !node.matches(ALERT_SELECTOR)) restore(node, prior);
+          else if (!hasHiddenStyle(node)) hidden.delete(node);
+        });
+        if (!generating) return;
+        var alerts = doc.querySelectorAll(ALERT_SELECTOR);
+        for (var i = 0; i < alerts.length; i += 1) {
+          var node = alerts[i];
+          if (hidden.has(node) || node.isConnected === false || !renderedNode(node)) continue;
+          hidden.set(node, {
+            value: node.style.getPropertyValue("display"),
+            priority: node.style.getPropertyPriority("display"),
+          });
+          node.style.setProperty("display", "none", "important");
+        }
+      };
+    }
+
+    if (exposeChecks("transcriptAlerts", { ALERT_SELECTOR: ALERT_SELECTOR, alertVisibility: alertVisibility })) return;
+    var sync = alertVisibility(document);
+    function update() {
+      sync(Boolean(findStopGeneratingButton(document)));
+    }
+    var observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "role", "class", "hidden", "style"],
+    });
+    update();
+    return function () {
+      observer.disconnect();
+      sync(false);
+    };
+  });
 
   runFeature("hide-composer", "Composer — hide", function () {
 

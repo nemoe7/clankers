@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 const bundles = {
   arena: {
-    features: { "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
+    features: { "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
     labels: {
       "prompt-fill": "Composer — fill",
       "open-steering": "Steering — open",
@@ -13,6 +13,7 @@ const bundles = {
       "hide-composer": "Composer — hide",
       "auto-scroll": "Transcript — auto-scroll",
       "transcript-trim": "Transcript — auto trim",
+      "transcript-alerts": "Transcript — hide generation alerts",
       "tab-title": "Page — tab title",
       "state-download": "State — download",
       "keep-awake": "Page — keep awake",
@@ -162,6 +163,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       "Transcript — keep 50 rows",
       "Transcript — trim cap 200 rows",
       "Transcript — trim now",
+      "Transcript — hide generation alerts (ON)",
       "State — download (ON)",
       "State — choose the file",
       "State — force save",
@@ -268,6 +270,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
         "Transcript — keep 50 rows",
         "Transcript — trim cap 200 rows",
         "Transcript — trim now",
+        "Transcript — hide generation alerts (ON)",
         "Transcript — auto trim interval 5 s",
         "State — download (ON)",
         "State — choose the file",
@@ -964,4 +967,68 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(logged.filter(([line]) => line === "[NemoUtils][title][info] restored").length, 1);
     console.log("ok tab title row mark: last root, row kind, turn bound");
   });
+}
+
+{
+  const saved = new Map();
+  const menus = new Map();
+  const observers = [];
+  let generating = false;
+  let display = "flex";
+  let priority = "";
+  const alert = {
+    isConnected: true,
+    matches() { return true; },
+    getClientRects() { return display === "none" ? [] : [{}]; },
+    style: {
+      getPropertyValue() { return display; },
+      getPropertyPriority() { return priority; },
+      setProperty(key, value, rank) { display = value; priority = rank; },
+      removeProperty() { display = ""; priority = ""; },
+    },
+  };
+  const context = {
+    console, URL,
+    document: {
+      documentElement: {},
+      querySelector() { return null; },
+      querySelectorAll(selector) {
+        if (selector === "button[aria-label]") return generating ? [{ getAttribute() { return "Stop generating"; } }] : [];
+        if (selector.startsWith('[role="alert"]')) return [alert];
+        return [];
+      },
+    },
+    GM_getValue(key, fallback) {
+      if (saved.has(key)) return saved.get(key);
+      return ["transcript-alerts", "clankers-arena-userscript-paused", "clankers-arena-log-level"].includes(key) ? fallback : false;
+    },
+    GM_setValue(key, value) { saved.set(key, value); },
+    GM_registerMenuCommand(label, callback) { menus.set(label, callback); return label; },
+    GM_unregisterMenuCommand(label) { menus.delete(label); },
+    MutationObserver: class {
+      constructor(callback) { this.callback = callback; observers.push(this); }
+      observe(target, options) { this.active = true; this.options = options; }
+      disconnect() { this.active = false; }
+    },
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8"), context);
+  const notify = () => observers.filter((o) => o.active).forEach((o) => o.callback());
+  const toggle = () => menus.get("Transcript — hide generation alerts (" + (saved.get("transcript-alerts") === false ? "OFF" : "ON") + ")")();
+  assert.ok(menus.has("Transcript — hide generation alerts (ON)"));
+  assert.ok(menus.has("Transcript — auto trim (OFF)"));
+  assert.equal(display, "flex");
+  generating = true; notify();
+  assert.equal(display, "none", "alert hiding must not require auto trim");
+  assert.ok(observers.some((o) => o.active && o.options.attributes && o.options.attributeFilter.includes("aria-label")));
+  toggle();
+  assert.equal(saved.get("transcript-alerts"), false);
+  assert.equal(display, "flex");
+  toggle();
+  assert.equal(display, "none");
+  menus.get("Userscript — pause all")();
+  assert.equal(display, "flex");
+  menus.get("Userscript — resume all")();
+  assert.equal(display, "none");
+  generating = false; notify();
+  assert.equal(display, "flex");
 }

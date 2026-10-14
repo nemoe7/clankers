@@ -160,6 +160,67 @@ function checkLogging(api, menus) {
   console.log("ok logging 3");
 }
 
+function checkTranscriptAlerts(api) {
+  assert.ok(api, "the independent alert submodule must be exposed");
+  const selector = '[role="alert"][class~="border-red-500/30"][class~="bg-red-500/10"]';
+  assert.equal(api.ALERT_SELECTOR, selector);
+  function alert(value = "", priority = "", visible = true) {
+    return {
+      isConnected: true,
+      target: true,
+      hidden: false,
+      getClientRects() { return visible ? [{}] : []; },
+      matches(s) { assert.equal(s, selector); return this.target; },
+      style: {
+        getPropertyValue() { return value; },
+        getPropertyPriority() { return priority; },
+        setProperty(key, next, rank) { assert.equal(key, "display"); value = next; priority = rank; },
+        removeProperty(key) { assert.equal(key, "display"); value = ""; priority = ""; },
+      },
+    };
+  }
+  const first = alert("flex", "important");
+  const priorHidden = alert("none", "", false);
+  const unrelated = alert(); unrelated.target = false;
+  let nodes = [first, priorHidden, unrelated];
+  const sync = api.alertVisibility({
+    querySelectorAll(s) { assert.equal(s, selector); return nodes.filter((n) => n.target); },
+  });
+  sync(false);
+  assert.equal(first.style.getPropertyValue("display"), "flex");
+  sync(true);
+  assert.equal(first.style.getPropertyValue("display"), "none");
+  assert.equal(first.style.getPropertyPriority("display"), "important");
+  assert.equal(priorHidden.style.getPropertyPriority("display"), "");
+  assert.equal(unrelated.style.getPropertyValue("display"), "");
+  const later = alert(); nodes.push(later);
+  first.textContent = "A different error message";
+  sync(true); sync(true);
+  assert.equal(later.style.getPropertyValue("display"), "none");
+  sync(false);
+  assert.equal(first.style.getPropertyValue("display"), "flex");
+  assert.equal(first.style.getPropertyPriority("display"), "important");
+  assert.equal(later.style.getPropertyValue("display"), "");
+  assert.equal(priorHidden.style.getPropertyValue("display"), "none");
+  const externalHidden = alert("inline", "");
+  nodes.push(externalHidden);
+  sync(true);
+  externalHidden.style.setProperty("display", "none", "");
+  sync(false);
+  assert.equal(externalHidden.style.getPropertyValue("display"), "none");
+  assert.equal(externalHidden.style.getPropertyPriority("display"), "");
+  nodes = nodes.filter((n) => n !== externalHidden);
+  sync(true);
+  later.style.setProperty("display", "grid", "");
+  first.target = false;
+  sync(true);
+  assert.equal(first.style.getPropertyValue("display"), "flex");
+  sync(false);
+  assert.equal(later.style.getPropertyValue("display"), "grid", "preserve an external style change");
+  sync(true); later.isConnected = false; sync(true);
+  assert.equal(later.style.getPropertyValue("display"), "grid");
+}
+
 function checkPromptFill(api) {
   var isComposerUrl = api.isComposerUrl;
   var slugFromOwnerRepo = api.slugFromOwnerRepo;
@@ -2428,6 +2489,7 @@ run("arena logging", () => checkArenaLogging(arena.logging, arenaModule.menus));
 run("open steering", () => checkOpenSteering(arena.openSteering));
 run("transcript auto-scroll", () => checkAutoScrollToggle(arena.autoScrollToggle));
 run("transcript trim", () => checkTranscriptTrim(arena.transcriptTrim));
+run("transcript alerts", () => checkTranscriptAlerts(arena.transcriptAlerts));
 run("hide composer", () => checkHideComposer(arena.hideComposer));
 run("tab title", () => checkTabTitle(arena.tabTitle, arena.logging));
 run("state download", () => checkStateDownload(arena.stateDownload, arenaModule.session, arena.logging));
