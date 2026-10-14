@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.41
+// @name         Arena.ai | NemoUtils | v1.10.42
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.41
+// @version      1.10.42
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -42,7 +42,7 @@
     menu: ["run"],
     pause: ["change"],
     feature: ["change"],
-    "auto-wake": ["clicked"],
+    "auto-wake": ["clicked", "filled"],
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
     state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-picker", "requested", "picker-closed"],
@@ -386,6 +386,7 @@
     return null;
   }
 
+  var GENERATION_ALERT_SELECTOR = '[role="alert"][class~="border-red-500/30"][class~="bg-red-500/10"]';
   var CAPTCHA_SELECTOR = '.recaptcha-v2-container, iframe[title="reCAPTCHA"]';
 
   function openDialog(node) {
@@ -436,6 +437,45 @@
     }
     return false;
   }
+
+  function lastMessageRoot(doc) {
+    var roots = typeof doc.querySelectorAll === "function"
+      ? doc.querySelectorAll("[data-agent-transcript-message]") : [];
+    return roots.length ? roots[roots.length - 1] : null;
+  }
+
+  function setComposerText(el, text) {
+    el.focus();
+    var selection = window.getSelection();
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    var ok = document.execCommand("insertText", false, text);
+    var matched = String(el.innerText || "").trim() === text;
+    logEvent("fill", "inserted", { ok: ok, matched: matched }, "debug");
+    if (!ok || !matched) {
+      while (el.firstChild) {
+        el.removeChild(el.firstChild);
+      }
+      var lines = text.split("\n");
+      for (var j = 0; j < lines.length; j += 1) {
+        var paragraph = document.createElement("p");
+        paragraph.textContent = lines[j];
+        el.appendChild(paragraph);
+      }
+      el.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          cancelable: true,
+          inputType: "insertText",
+          data: text,
+        }),
+      );
+      logEvent("fill", "rebuilt", { count: lines.length }, "debug");
+    }
+  }
+
 
   runFeature("prompt-fill", "Composer — fill", function () {
 
@@ -857,38 +897,6 @@
 
     var lastSlug = null;
     var filledSlug = null;
-
-    function setComposerText(el, text) {
-      el.focus();
-      var selection = window.getSelection();
-      var range = document.createRange();
-      range.selectNodeContents(el);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      var ok = document.execCommand("insertText", false, text);
-      var matched = String(el.innerText || "").trim() === text;
-      logEvent("fill", "inserted", { ok: ok, matched: matched }, "debug");
-      if (!ok || !matched) {
-        while (el.firstChild) {
-          el.removeChild(el.firstChild);
-        }
-        var lines = text.split("\n");
-        for (var j = 0; j < lines.length; j += 1) {
-          var paragraph = document.createElement("p");
-          paragraph.textContent = lines[j];
-          el.appendChild(paragraph);
-        }
-        el.dispatchEvent(
-          new InputEvent("input", {
-            bubbles: true,
-            cancelable: true,
-            inputType: "insertText",
-            data: text,
-          }),
-        );
-        logEvent("fill", "rebuilt", { count: lines.length }, "debug");
-      }
-    }
 
     function sync() {
       if (captchaSignal(document)) return;
@@ -1730,7 +1738,6 @@
   })();
 
   runFeature("transcript-alerts", "Transcript — hide generation alerts", function () {
-    var ALERT_SELECTOR = '[role="alert"][class~="border-red-500/30"][class~="bg-red-500/10"]';
 
     function alertVisibility(doc) {
       var hidden = new Map();
@@ -1746,11 +1753,11 @@
       }
       return function (generating) {
         hidden.forEach(function (prior, node) {
-          if (!generating || node.isConnected === false || !node.matches(ALERT_SELECTOR)) restore(node, prior);
+          if (!generating || node.isConnected === false || !node.matches(GENERATION_ALERT_SELECTOR)) restore(node, prior);
           else if (!hasHiddenStyle(node)) hidden.delete(node);
         });
         if (!generating) return;
-        var alerts = doc.querySelectorAll(ALERT_SELECTOR);
+        var alerts = doc.querySelectorAll(GENERATION_ALERT_SELECTOR);
         for (var i = 0; i < alerts.length; i += 1) {
           var node = alerts[i];
           if (hidden.has(node) || node.isConnected === false || !renderedNode(node)) continue;
@@ -1763,7 +1770,7 @@
       };
     }
 
-    if (exposeChecks("transcriptAlerts", { ALERT_SELECTOR: ALERT_SELECTOR, alertVisibility: alertVisibility })) return;
+    if (exposeChecks("transcriptAlerts", { ALERT_SELECTOR: GENERATION_ALERT_SELECTOR, alertVisibility: alertVisibility })) return;
     var sync = alertVisibility(document);
     function update() {
       sync(Boolean(findStopGeneratingButton(document)));
@@ -1971,6 +1978,7 @@
   });
 
   var autoWakeSentFor = null;
+  var autoWakeRoots = new Set();
   runFeature("auto-wake", "Composer — auto-send wake up", function () {
     if (typeof document === "undefined") return function () {};
     var timer = null;
@@ -1986,13 +1994,19 @@
     function target() {
       var editor = document.querySelector('div.tiptap.ProseMirror[contenteditable="true"]');
       if (!editor) return null;
-      if (String(editor.innerText || "") !== "wake up") {
-        autoWakeSentFor = null;
-        return null;
-      }
+      if (String(editor.innerText || "") !== "wake up") autoWakeSentFor = null;
       if ((!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
           composing || captchaSignal(document) || !renderedNode(editor) ||
-          editor.getAttribute("aria-disabled") === "true" || autoWakeSentFor === location.href) return null;
+          editor.getAttribute("aria-disabled") === "true") return null;
+      if (editor.textContent === "") {
+        var message = lastMessageRoot(document);
+        if (!message || !message.id || autoWakeRoots.has(message.id) ||
+            !message.querySelector(GENERATION_ALERT_SELECTOR)) return null;
+        autoWakeRoots.add(message.id);
+        setComposerText(editor, "wake up");
+        if (String(editor.innerText || "") === "wake up") logEvent("auto-wake", "filled");
+      }
+      if (String(editor.innerText || "") !== "wake up" || autoWakeSentFor === location.href) return null;
       var box = editor.closest(".editor-content");
       var root = box && box.parentElement;
       var button = root && root.querySelector('button[aria-label="Send message"]');
@@ -2024,7 +2038,7 @@
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
       subtree: true, childList: true, characterData: true, attributes: true,
-      attributeFilter: ["disabled", "aria-disabled", "style", "class"],
+      attributeFilter: ["disabled", "aria-disabled", "aria-label", "role", "hidden", "style", "class"],
     });
     window.addEventListener("input", sync, true);
     window.addEventListener("compositionstart", compositionStart, true);
@@ -2965,12 +2979,6 @@
       return current;
     }
 
-    function lastRoot(doc) {
-      var roots =
-        typeof doc.querySelectorAll === "function" ? doc.querySelectorAll(MESSAGE_SELECTOR) : [];
-      return roots.length ? roots[roots.length - 1] : null;
-    }
-
     function userRoot(root) {
       var card = childChain(root, 3);
       if (!card || !classOf(card, "relative") || !classOf(card, "overflow-hidden")) {
@@ -3224,7 +3232,7 @@
       var needsTurn = false;
       var row = null;
       var emoji = null;
-      var root = live ? lastRoot(doc) : null;
+      var root = live ? lastMessageRoot(doc) : null;
       if (root && !userRoot(root)) {
         row = newestRow(root);
         if (row && summaryCard(row)) {
@@ -3309,7 +3317,7 @@
       stopSignal: stopSignal,
       classOf: classOf,
       childChain: childChain,
-      lastRoot: lastRoot,
+      lastRoot: lastMessageRoot,
       userRoot: userRoot,
       rowContainer: rowContainer,
       newestRow: newestRow,

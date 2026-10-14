@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- Auto-wake fills an empty visible composer when the latest message root has a generation error, including a trim-hidden banner. It preserves other drafts and limits each root ID to one recovery attempt.
+
 - The saved auto-wake switch sends an exact wake up draft after a random 0–5 second delay. It checks visibility, input composition, security holds, and the send control before clicking.
 
 - An independent Transcript trim switch hides matching red alerts during generation and restores its own `display` changes afterward. The switch defaults to On and does not depend on Auto trim.

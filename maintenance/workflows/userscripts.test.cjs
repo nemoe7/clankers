@@ -1049,6 +1049,10 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     let clicks = 0;
     let captcha = false;
     let present = true;
+    let alerts = [];
+    let roots = [];
+    const messageRoot = (id, hasError) => ({ id, querySelector() { return hasError ? errorBanner : null; } });
+    const errorBanner = { hidden: false, getClientRects() { return this.hidden ? [] : [{}]; } };
     const button = {
       disabled: false, hidden: false, ariaDisabled: null,
       getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
@@ -1060,6 +1064,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     } } };
     const editor = {
       innerText: "wake up", hidden: false, ariaDisabled: null,
+      focus() {},
       get textContent() { return this.innerText; },
       getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
       getClientRects() { return this.hidden ? [] : [{}]; },
@@ -1079,12 +1084,17 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       location: { href: "https://arena.ai/agent/session", pathname: "/agent/session" },
       document: {
         documentElement: {},
+        createRange() { return { selectNodeContents() {} }; },
+        execCommand(command, ui, text) { assert.equal(command, "insertText"); editor.innerText = text; return true; },
         querySelector(selector) { return present && selector.includes("tiptap") ? editor : null; },
         querySelectorAll(selector) {
+          if (selector === "[data-agent-transcript-message]") return roots;
+          if (selector.includes("border-red-500")) return alerts;
           return captcha && selector.includes("recaptcha-v2") ? [{ getAttribute() { return null; } }] : [];
         },
       },
       window: {
+        getSelection() { return { removeAllRanges() {}, addRange() {} }; },
         addEventListener(name, callback) {
           if (!listeners.has(name)) listeners.set(name, new Set());
           listeners.get(name).add(callback);
@@ -1165,5 +1175,44 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(clicks, 2);
     fire(); flush();
     assert.equal(clicks, 2);
+    alerts = [errorBanner];
+    roots = [messageRoot("old-root", true), messageRoot("latest-root", false)];
+    editor.innerText = "";
+    fire(); flush();
+    assert.equal(editor.innerText, "", "errors in older roots must not trigger recovery");
+    assert.equal(clicks, 2);
+    roots = [messageRoot("old-root", true), messageRoot("latest-root", true)];
+    errorBanner.hidden = true;
+    editor.innerText = "Keep this draft";
+    fire(); flush();
+    assert.equal(editor.innerText, "Keep this draft");
+    assert.equal(clicks, 2);
+    editor.innerText = "";
+    editor.hidden = true;
+    fire();
+    assert.equal(editor.innerText, "", "hidden composers must not be filled");
+    editor.hidden = false;
+    captcha = true;
+    fire();
+    assert.equal(editor.innerText, "", "captcha holds error recovery too");
+    captcha = false;
+    emit("compositionstart");
+    fire();
+    assert.equal(editor.innerText, "", "IME holds error recovery too");
+    emit("compositionend");
+    assert.equal(editor.innerText, "wake up", "the latest-root error triggers even when trim hides its banner");
+    assert.equal(timers.size, 1);
+    flush();
+    assert.equal(clicks, 3);
+    editor.innerText = "";
+    fire(); flush();
+    assert.equal(editor.innerText, "", "an unchanged error cannot create a retry loop");
+    assert.equal(clicks, 3);
+    roots = [messageRoot("latest-root", true)];
+    fire(); flush();
+    assert.equal(clicks, 3, "the same root ID cannot repeat after a remount");
+    roots = [messageRoot("newest-root", true)];
+    fire(); flush();
+    assert.equal(clicks, 4, "a new latest root permits one recovery");
   });
 }
