@@ -221,11 +221,7 @@ def reset_poll_count(db):
   landing on an unacked pile keeps the tally running instead of zeroing the backlog's age.
   The arriving item is already written when this runs, so a fresh backlog counts one.
   """
-  unacked = db.execute(
-    "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL)"
-    " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
-  ).fetchone()[0]
-  if unacked == 1:
+  if gate_pending_count(db) == 1:
     db.execute("INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,))
 
 
@@ -1231,6 +1227,8 @@ def format_pending_record(item):
   header = "`" + str(item.get("id", ""))[:6] + "`"
   if display_kind != "note":
     header += f" {display_kind}"
+  if item.get("quiet"):
+    header += " quiet (no ack required)"
   if item.get("report_id"):
     header += f" report {item['report_id']}"
   lines = [header]
@@ -2910,7 +2908,8 @@ class Store:
           1 if quiet else 0,
         ),
       )
-      reset_poll_count(db)
+      if not quiet:
+        reset_poll_count(db)
       clear_skip_poll(db)
       return message_row(
         db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)).fetchone()
@@ -4194,11 +4193,12 @@ class Store:
     backlog, and `read` does not."""
     with closing(self.connect()) as db, db:
       uploads = db.execute(
-        "SELECT count(*) FROM notes JOIN uploads USING (id) WHERE acknowledged_at IS NULL"
+        "SELECT count(*) FROM notes JOIN uploads USING (id)"
+        " WHERE acknowledged_at IS NULL AND quiet = 0"
       ).fetchone()[0]
       notes = (
         db.execute(
-          "SELECT count(*) FROM notes WHERE acknowledged_at IS NULL"
+          "SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0"
         ).fetchone()[0]
         - uploads
       )
@@ -4391,7 +4391,7 @@ class Store:
     """
     with self.connect() as db:
       rows = db.execute(
-        "SELECT id, at FROM notes WHERE acknowledged_at IS NULL"
+        "SELECT id, at FROM notes WHERE acknowledged_at IS NULL AND quiet = 0"
         " UNION ALL SELECT id, at FROM submissions WHERE acknowledged_at IS NULL"
         " ORDER BY at"
       ).fetchall()
@@ -4446,12 +4446,7 @@ class Store:
       # The header labels one stamp as the last read or ack, so an ack writes it too.
       db.execute("INSERT OR REPLACE INTO meta VALUES ('last_check', ?)", (stamp,))
       # An emptied inbox resets the tally now, not at the next hook poll.
-      if not any(
-        db.execute(
-          f"SELECT 1 FROM {table} WHERE acknowledged_at IS NULL LIMIT 1"
-        ).fetchone()
-        for table in ("notes", "submissions")
-      ):
+      if not gate_pending_count(db):
         db.execute(
           "INSERT OR REPLACE INTO meta VALUES (?, '0')", (POLLS_SINCE_MESSAGE,)
         )

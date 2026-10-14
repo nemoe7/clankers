@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-14
 
+### Added
+
+#### preview
+
+- Quiet notes remain in later reads without required acknowledgements or reminder counts. Ordinary notes and report answers keep their receipt checks.
+
 ### Fixed
 
 #### preview

@@ -5826,6 +5826,41 @@ def test_agent_key_route_records_the_key_for_the_page():
     assert json.loads(request("GET", "/api/state")[2])["agent_key"]["key"] == key
 
 
+def test_quiet_notes_need_no_ack():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    upload = store.save_upload("quiet.txt", "text/plain", b"Information")
+    store.note(upload["id"], "Information", quiet=True)
+    assert "unacked" not in store.reminder(advance=True)
+    assert store.calls_since_message() == 0
+    try:
+      store.pending_ack()
+    except ValueError as error:
+      assert "No pending note" in str(error)
+    else:
+      raise AssertionError("A quiet note requires no acknowledgement")
+    store.mark_seen([upload["id"]])
+    for _ in range(2):
+      pending = store.read()["pending"]
+      assert [item["id"] for item in pending] == [upload["id"]]
+      assert pending[0]["acknowledged_at"] is None
+      assert "quiet (no ack required)" in preview.format_read(store.read())
+    store.note("owner-note", "Work")
+    assert store.pending_ack() == "owner-note"
+    assert "unacked 1 note" in store.reminder(advance=True)
+    store.note("quiet-later", "More information", quiet=True)
+    assert store.calls_since_message() == 1
+    store.acknowledge(["owner-note"], "note", "Done")
+    assert store.calls_since_message() == 0
+    assert "unacked" not in store.reminder()
+    assert store.gate(pending_only=True)
+    store.submission("owner-answer", "form", "Decision")
+    assert store.pending_ack() == "owner-answer"
+    assert "unacked 1 answer" in store.reminder(advance=True)
+    store.acknowledge(["owner-answer"], "note", "Done")
+    assert store.calls_since_message() == 0
+
+
 def test_quiet_note_never_wakes_the_poll():
   """A quiet note is readable and unacknowledged, yet it wakes nothing and stops nothing."""
   with tempfile.TemporaryDirectory() as quiet_dir:
