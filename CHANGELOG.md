@@ -35,6 +35,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- Assessment and evaluation reports now require a next-action field with recommended, no-change, and custom options.
+
 - Chromium setup now extracts the runtime archive, sets library and font paths, and repeats capture with the packaged binary.
 
 - Initial setup now polls after visibility confirmation. Final polling permits only reported blocked tasks to remain.
