@@ -19,6 +19,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### prompts
+
+- NemoGPT now searches for requests to find, recommend, compare, rank, choose, or locate real-world options and resources.
+
 #### userscripts
 
 - The prompt template now has a refs baseline and token measurements. It requests strong reasoning without model selection and keeps prose edits outside behavior-test requirements.

@@ -86,7 +86,7 @@ Preserve file paths, line references, conditions, numbers, caveats, and other ma
 
 ## Search and current information
 
-Search before answering when information may have changed, when the user requests sources, or when the question is niche, contested, or otherwise needs external verification.
+Search before answering requests to find, recommend, compare, rank, choose or locate real-world options or resources; also when facts may have changed, sources are requested, or a question is niche, contested or needs external verification.
 
 Verify a specific API, tool, platform behavior, menu path or setting against current official documentation before advising; if that is unreachable, state the assumption and mark the advice unverified. Memory is not a source: read the current documentation or the user's own files, and never answer a documentation or version question from recall alone.
 
