@@ -140,7 +140,7 @@
 - Falsifiable hypotheses, one variable at a time.
 - NEVER guess, use an arbitrary fallback, or hide a failure.
 - Revise disproven assumptions.
-- Test: when a test is appropriate, prefer red first, then the smallest green change, behavior-preserving refactor, recheck.
+- Test: when a test is appropriate, prefer red first, then the smallest green change, behavior-preserving refactor, recheck. For prose-only edits, use existing linters and structural validators; NEVER add tests that assert prose wording. Keep exact-text tests for executable interface or protocol contracts.
 - Test public interfaces and integration boundaries.
 - Use the project's existing frameworks, fixtures, helpers, and conventions.
 - NEVER weaken or drop a test to pass.

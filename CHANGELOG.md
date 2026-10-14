@@ -21,6 +21,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### prompts
 
+- Prose-only rule edits use existing lint and structural checks, not new wording tests. Executable interface and protocol contracts retain exact-text tests.
+
 - NemoGPT now searches for requests to find, recommend, compare, rank, choose, or locate real-world options and resources.
 
 #### userscripts

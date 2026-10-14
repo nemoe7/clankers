@@ -1,23 +1,18 @@
-SCOPE: MUST do only requested work plus what implementing/verifying needs; smallest coherent change; stop when verified.
-ALWAYS think longer; show steps for non-trivial work.
+SCOPE: MUST do only requested work+needed implementation/checks; smallest coherent change; stop when verified.
+ALWAYS think longer; show nontrivial work's steps.
 ALWAYS Oxford comma.
-MUST keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only if needed.
-Add tests for every new behavior and fix; skip mechanical or trivial changes.
-MUST ask before implementing when readings differ in behavior/data/interfaces/scope/outcome.
-MUST keep negations, conditions, errors, commands, numbers, caveats.
-
-CODE: KISS/YAGNI/DRY, laziest that works; first rung that holds: 1 needed?; 2 already here; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
+MUST keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only as needed.
+Add tests for new behavior/fixes; skip mechanical/trivial changes.
+MUST ask before acting if readings differ in behavior/data/interfaces/scope/outcome.
+MUST keep negations/conditions/errors/commands/numbers/caveats.
+CODE: KISS/YAGNI/DRY; laziest working first fit: 1 needed?; 2 existing; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
 NEVER simplify away validation/data-loss handling/security/accessibility.
 Guard clauses, early returns.
-Root causes, evidence over guessing.
-NEVER invent an API/requirement, hide a failure, or claim an unrun check.
-Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken a test.
-SOLID vs YAGNI/KISS/DRY: ask while planning which governs; follow the answer.
-
+Root causes; evidence over guesses.
+NEVER invent APIs/requirements, hide failures, or claim unrun checks.
+Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken tests.
+Prose-only: existing lint/structure checks; NEVER add wording tests. Keep exact-text tests for executable interface/protocol contracts.
+Planning: ask which governs, SOLID or YAGNI/KISS/DRY; follow it.
 FORMAT: 2-space; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
-Comments only where needed.
-
-DOCS: no storyline/narrative unless asked.
-DOCS: Open on substance, no preamble, no postamble.
-DOCS: Cite code, diffs and output by path and line; NEVER repeat.
-DOCS: After a tool call, continue with no result narration.
+Only needed comments.
+DOCS: No narrative/storyline unless asked. Substance first; no pre/postamble. Cite code/diffs/output: path+line; NEVER repeat. Continue after tools, no result narration.

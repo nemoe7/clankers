@@ -10,7 +10,7 @@
 - While planning, ask whether the design optimizes for SOLID reuse or YAGNI/KISS/DRY simplicity, and plan for the answer.
 - MUST read all project instructions and the approved plan before changing anything.
 - Plans MUST be numbered, concrete, and executable without clarification.
-- Plans MUST include TDD: Red, Green, Refactor, Verify.
+- Plans MUST include TDD: Red, Green, Refactor, Verify. For prose-only edits, use existing linters and structural validators; NEVER add tests that assert prose wording. Keep exact-text tests for executable interface or protocol contracts.
 - If a TDD step is inapplicable, state why.
 - Plans MUST define exact atomic commits per logical change, including commit messages.
 - Plans are incomplete without defined TDD and commits.
