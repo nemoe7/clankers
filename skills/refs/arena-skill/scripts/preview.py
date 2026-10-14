@@ -5880,6 +5880,8 @@ def main():
           store.report(args.report)
         except FileNotFoundError:
           raise ValueError(f"No report is stored under {args.report}") from None
+        if args.blocked is None:
+          args.blocked = True
       if args.msg_id:
         # One transaction: a message ID that matches nothing takes the task with it, rather than
         # leaving a task whose marker never landed.

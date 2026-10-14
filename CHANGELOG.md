@@ -77,6 +77,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Linking a task to an unanswered report now blocks it by default. An explicit unblocked flag or an existing answer keeps it ready.
+
 - Routine inbox reads now show quiet notes only until their Seen receipt. History, reply context, ordinary acknowledgements, and polling remain available.
 
 - Ready tasks follow their set order. Only blocked tasks keep report-link priority.

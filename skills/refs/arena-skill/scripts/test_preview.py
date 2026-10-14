@@ -3316,6 +3316,48 @@ def test_report_linked_task_sorts_ahead_in_its_status():
     assert sort_store.tasks()["upcoming"][1]["report_id"] == "pick"
 
 
+def test_task_report_flag_waits_for_an_answer_by_default():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    source = Path(directory) / "pick.md"
+    source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+    store.publish("pick", "Pick one", source)
+    store.write_task("waiting", "Waiting", ["Keep this detail"])
+
+    def link(*args):
+      return subprocess.run(
+        [
+          sys.executable,
+          str(Path(preview.__file__)),
+          "task",
+          "waiting",
+          "--report",
+          "pick",
+          *args,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
+      )
+
+    result = link()
+    assert result.returncode == 0, result.stderr
+    assert store.task_record("waiting")["blocked"] is True
+    assert store.task_record("waiting")["details"] == ["Keep this detail"]
+    assert link("--unblocked").returncode == 0
+    assert store.task_record("waiting")["blocked"] is False
+    assert link("--msg-id", "aaaaaa").returncode != 0
+    assert store.task_record("waiting")["blocked"] is False
+    assert link().returncode == 0
+    assert store.task_record("waiting")["blocked"] is True
+    revision = store.report("pick")["updated_at"]
+    store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
+    assert store.task_record("waiting")["blocked"] is False
+    assert link().returncode == 0
+    assert store.task_record("waiting")["blocked"] is False
+
+
 def test_task_report_link_refuses_missing_report():
   with tempfile.TemporaryDirectory() as cli_dir:
     cli_store = preview.Store(cli_dir, create=True)
