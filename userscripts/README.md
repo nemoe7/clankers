@@ -38,7 +38,9 @@ The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu re
 
 ## Console log
 
-Both bundles log under one tag, `[NemoUtils]`. The devtools console filter shows the page\'s story: feature switches on load and on toggle, the prompt fill write, and each state save. A log line never carries a loop, so a busy page stays quiet. No key or message text ever reaches the log.
+Both bundles use `[NemoUtils]`. Arena logs feature changes, prompt fills, trim counts, state saves, wake failures, and title changes. State checks and changing title reasons can repeat. The helper has no shared rate limit.
+
+Arena logs can include repository names, preview addresses, filenames, and up to 40 characters of action labels. Chat and reasoning rows use fixed labels.
 
 ## Arena Prompt Fill
 
@@ -84,7 +86,7 @@ Six rules follow the checklist:
 
 This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. The row limit cannot fall below `20`.
 
-The trim also removes the sibling action container from each message that loses rows or holds no row node. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree.
+The trim removes a message's sibling action container only when that pass removes rows and leaves no live row. It keeps each message root because Arena crashes if a `#chat-message-*` root leaves its tree.
 
 The menu command reads `Transcript — keep 50 rows`. After a trim it adds the running row count, such as `Transcript — keep 50 rows (12 removed)`. A trim that removes rows also writes one console line.
 
