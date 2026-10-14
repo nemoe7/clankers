@@ -40,6 +40,8 @@ Report answers live in a separate `submissions` table and appear as `kind: repor
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.
 
+The eye button marks all report acknowledgement receipts seen. It leaves message receipts and report-body read state unchanged.
+
 Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
 
 The task CLI blocks a task linked with `--report` unless that report already has an answer. An explicit `--unblocked` overrides this default.

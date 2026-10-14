@@ -1491,6 +1491,7 @@ function reportsSignature(reports) {
 function reportLabel(report, position) {
   return `${position + 1}.${!report.seen_at || ackUnread(report) ? ' *' : ''} ${report.title}`;
 }
+let ackBatchPending = false;
 function updateReportPip(reports) {
   const pip = $('#report-pip');
   // A report nobody opened, or one whose answer carries an ack the owner has not opened since,
@@ -1500,6 +1501,7 @@ function updateReportPip(reports) {
   pip.hidden = unseen.length === 0;
   pip.title = unseen.length ? 'A report is unread' : 'No unread reports';
   pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread reports');
+  $('#mark-report-acks-seen').disabled = ackBatchPending || !reports.some(ackUnread);
 }
 // A report counts as read when the browser has shown it: scrolled to its end, or, for a report
 // that fits the panel with nothing to scroll, held in view for one second on owner direction,
@@ -1559,6 +1561,24 @@ async function markAckSeen(id) {
   }
   foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at || new Date().toISOString());
 }
+$('#mark-report-acks-seen').addEventListener('click', async () => {
+  if (ackBatchPending) return;
+  const reports = lastState?.reports || [];
+  const unread = reports.filter(ackUnread);
+  if (!unread.length) return;
+  ackBatchPending = true;
+  updateReportPip(reports);
+  try {
+    await Promise.all(unread.map(report => markAckSeen(report.id)));
+    const remaining = (lastState?.reports || []).filter(ackUnread).length;
+    $('#report-status').textContent = remaining
+      ? `${remaining} report acknowledgement${remaining === 1 ? ' remains' : 's remain'} unseen.`
+      : 'Report acknowledgements marked seen.';
+  } finally {
+    ackBatchPending = false;
+    updateReportPip(lastState?.reports || []);
+  }
+});
 // The owner's view stamps the look, so agent changes do not update an open report. Only a page
 // the owner can see stamps: a report left open in a background tab clears its stamp, because a
 // look needs the screen.

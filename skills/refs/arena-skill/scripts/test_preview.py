@@ -657,6 +657,7 @@ def test_http_boundaries():
         "unpublish-report",
         "copy-report",
         "refresh-report",
+        "mark-report-acks-seen",
       ):
         block = page[page.index(f'id="{control}"') :]
         assert "title=" in block[: block.index(">")]

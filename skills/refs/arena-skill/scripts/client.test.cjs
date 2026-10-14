@@ -108,6 +108,7 @@ let reportSubmitWait = null;
 const sent = [];
 const readStamps = [];
 const ackSeenCalls = [];
+const ackSeenFailures = new Set();
 const viewCalls = [];
 const viewActive = [];
 const skipCalls = [];
@@ -354,6 +355,7 @@ const context = {
       const id = decodeURIComponent(url.split('/')[3]);
       const stamp = new Date().toISOString();
       ackSeenCalls.push(url);
+      if (ackSeenFailures.has(id)) return response({ error: 'Write failed' }, false);
       // The stamp is the reply's alone: the client folds it into the state it holds.
       // A shared fixture let a late reply light marks in the next case. That made the suite flaky.
       return response({ id, ack_seen_at: stamp });
@@ -2063,6 +2065,58 @@ test('preview client', async (t) => {
     assert.equal(get('#copy-report').dataset.state, 'bad');
     assert.equal(get('#copy-report').title, 'There is no report to copy');
     get('#report-select').value = selectBefore;
+  });
+
+  await t.test('The bulk eye marks only unread report acknowledgements once', async () => {
+    const keptReports = state.reports;
+    const notesBefore = JSON.stringify(state.notes);
+    get('#notes-tab').events.click();
+    state.reports = [
+      { id: 'ack-one', title: 'One', updated_at: '2026-09-25T10:00:00', seen_at: null,
+        latest_answer_acknowledged_at: '2026-09-25T10:01:00', ack_seen_at: null },
+      { id: 'ack-two', title: 'Two', updated_at: '2026-09-25T10:00:00', seen_at: null,
+        latest_answer_acknowledged_at: '2026-09-25T10:02:00', ack_seen_at: null },
+      { id: 'ack-old', title: 'Old', updated_at: '2026-09-25T10:00:00', seen_at: null,
+        latest_answer_acknowledged_at: '2026-09-25T10:01:00', ack_seen_at: '2026-09-25T10:03:00' }
+    ];
+    await refresh();
+    const readCount = readStamps.length;
+    const replyCount = replySeenCalls.length;
+    ackSeenCalls.length = 0;
+    try {
+      const button = get('#mark-report-acks-seen');
+      assert.equal(typeof button.events.click, 'function');
+      const first = button.events.click();
+      const repeated = button.events.click();
+      await Promise.all([first, repeated]);
+      assert.deepEqual(ackSeenCalls.slice().sort(), [
+        '/api/reports/ack-one/ack-seen', '/api/reports/ack-two/ack-seen'
+      ]);
+      await button.events.click();
+      assert.equal(ackSeenCalls.length, 2, 'seen acknowledgements need no second write');
+      assert.equal(readStamps.length, readCount, 'report bodies stay unread');
+      assert.equal(replySeenCalls.length, replyCount, 'message replies stay unchanged');
+      assert.equal(JSON.stringify(state.notes), notesBefore);
+      assert.ok(state.reports.every(report => report.seen_at === null));
+      const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+      assert.match(html, /<button[^>]+id="mark-report-acks-seen"/);
+      state.reports = [{ id: 'ack-failed', title: 'Retry', updated_at: '2026-09-25T10:00:00',
+        seen_at: null, latest_answer_acknowledged_at: '2026-09-25T10:01:00', ack_seen_at: null }];
+      ackSeenFailures.add('ack-failed');
+      await refresh();
+      await button.events.click();
+      assert.equal(button.disabled, false, 'a failed acknowledgement remains available to retry');
+      ackSeenFailures.clear();
+      await button.events.click();
+      assert.equal(button.disabled, true, 'success clears the remaining acknowledgement');
+      assert.equal(readStamps.length, readCount);
+      assert.equal(replySeenCalls.length, replyCount);
+    } finally {
+      ackSeenFailures.clear();
+      state.reports = keptReports;
+      ackSeenCalls.length = 0;
+      await refresh();
+    }
   });
 
   await t.test("A report delete asks for a second click against the same selection, then leaves the tab", async () => {
