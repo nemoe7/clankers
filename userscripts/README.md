@@ -121,6 +121,12 @@ One entry, `Userscript — pause all`, stops every feature where it stands: the 
 
 The script saves the pause, so a reload keeps it. Each feature switch stays in the menu while paused.
 
+## Arena State Save Notices
+
+Persistent state notices clear after a successful file close or download-manager callback. Failed saves keep their notices. Temporary success messages keep their existing timeout.
+
+A browser-link download has no completion callback, so it does not clear a failure notice.
+
 ## Arena Tab Title
 
 On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. If the link is absent, it reads a valid repository name before ` read ` in the session title button. State-file naming uses the same fallback before a stale tab title.

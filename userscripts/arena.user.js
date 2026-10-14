@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.42
+// @name         Arena.ai | NemoUtils | v1.10.43
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.42
+// @version      1.10.43
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2341,6 +2341,9 @@
   }
 
   runFeature("state-download", "State — download", function () {
+    var STATE_PANEL_ID = "clankers-state-panel";
+    var STATE_PANEL_MS = 6000;
+
     if (exposeChecks("stateDownload", {
       STATE_LINES: STATE_LINES,
       copyLine: copyLine,
@@ -2369,6 +2372,8 @@
       pagePicker: pagePicker,
       downloadRoute: downloadRoute,
       stateDownloadRoute: stateDownloadRoute,
+      writeToHandle: writeToHandle,
+      writeStateDownload: writeStateDownload,
       STATE_WATCH_MS: STATE_WATCH_MS,
     })) {
       return function () {};
@@ -2498,21 +2503,21 @@
       return handle.createWritable().then(function (writable) {
         return writable.write(text).then(function () {
           return writable.close();
-        });
+        }).then(function () { removeStatePanel(true); });
       });
     }
-
-    var STATE_PANEL_ID = "clankers-state-panel";
-    var STATE_PANEL_MS = 6000;
 
     function panelNeeded(manual, shown) {
       return Boolean(manual) || !shown;
     }
 
-    function removeStatePanel() {
+    function removeStatePanel(keepAutoHide) {
       try {
         var node = document.getElementById ? document.getElementById(STATE_PANEL_ID) : null;
-        if (node && node.parentNode) node.parentNode.removeChild(node);
+        if (node && node.parentNode &&
+            (keepAutoHide !== true || node.getAttribute("data-auto-hide") !== "true")) {
+          node.parentNode.removeChild(node);
+        }
       } catch (err) {
         return;
       }
@@ -2525,6 +2530,7 @@
         var card = document.createElement("div");
         card.id = STATE_PANEL_ID;
         card.setAttribute("role", "status");
+        card.setAttribute("data-auto-hide", String(Boolean(autoHide)));
         card.style.cssText =
           "position:fixed;right:16px;top:16px;z-index:2147483647;max-width:320px;" +
           "padding:12px 14px;border-radius:10px;background:#2c2b28;color:#f0ede8;" +
@@ -2629,6 +2635,7 @@
         name: name,
         saveAs: false,
         onload: function () {
+          removeStatePanel(true);
           logEvent("state", "saved", { route: "manager", filename: name });
           URL.revokeObjectURL(url);
         },

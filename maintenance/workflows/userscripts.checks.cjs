@@ -36,7 +36,7 @@ function loadChecks(file) {
     fetch: (...args) => globalThis.fetch(...args),
   };
   vm.runInNewContext(source, context, { filename: file });
-  return { checks: context.CLANKERS_CHECKS, session, menus };
+  return { checks: context.CLANKERS_CHECKS, session, menus, context };
 }
 
 function checkArenaLogging(api, menus) {
@@ -2531,3 +2531,39 @@ const chatgpt = loadChecks("chatgpt.user.js").checks;
 run("hide elements", () => checkHideElements(chatgpt.hideElements));
 run("chatgpt logging", () => checkLogging(chatgpt.logging));
 run("auto think", () => checkAutoThink(chatgpt.autoThink));
+
+
+require("node:test").test("successful state saves clear stale failure notices", async () => {
+  const loaded = loadChecks("arena.user.js");
+  const api = loaded.checks.stateDownload;
+  let panel;
+  const reset = (autoHide = false) => {
+    panel = {
+      getAttribute(name) { return name === "data-auto-hide" ? String(autoHide) : null; },
+      parentNode: { removeChild(node) { assert.equal(node, panel); panel = null; } },
+    };
+  };
+  loaded.context.document = {
+    getElementById(id) { assert.equal(id, "clankers-state-panel"); return panel; },
+  };
+  const handle = fail => ({ createWritable: async () => ({
+    write: async () => {},
+    close: async () => { if (fail) throw new Error("close failed"); },
+  }) });
+  reset();
+  await api.writeToHandle(handle(false), "state");
+  assert.equal(panel, null, "a successful file close clears the old failure");
+  reset();
+  await assert.rejects(api.writeToHandle(handle(true), "state"), /close failed/);
+  assert.ok(panel, "an unsuccessful save keeps the failure notice");
+  let download;
+  loaded.context.Blob = Blob;
+  loaded.context.GM_download = options => { download = options; };
+  api.writeStateDownload("state", "state.ndjson");
+  assert.ok(panel, "starting a download is not a successful save");
+  download.onload();
+  assert.equal(panel, null, "manager completion clears the old failure");
+  reset(true);
+  await api.writeToHandle(handle(false), "state");
+  assert.ok(panel, "a transient success message keeps its existing timeout");
+});

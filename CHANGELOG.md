@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-15
+
+### Fixed
+
+#### userscripts
+
+- Successful state saves clear persistent failure notices. Failed saves retain them, and temporary success messages keep their timeout.
+
 ## 2026-10-14
 
 ### Added
