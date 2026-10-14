@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.40
+// @name         Arena.ai | NemoUtils | v1.10.41
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.40
+// @version      1.10.41
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -42,6 +42,7 @@
     menu: ["run"],
     pause: ["change"],
     feature: ["change"],
+    "auto-wake": ["clicked"],
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
     state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-picker", "requested", "picker-closed"],
@@ -49,7 +50,7 @@
     title: ["changed", "restored", "conditions"],
   };
   var LOG_VALUES = {
-    feature: ["prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "transcript-alerts", "hide-composer", "state-download", "keep-awake", "tab-title"],
+    feature: ["auto-wake", "prompt-fill", "open-steering", "preview-sandbox", "auto-scroll", "transcript-trim", "transcript-alerts", "hide-composer", "state-download", "keep-awake", "tab-title"],
     group: ["note", "task"],
     verdict: ["older", "same", "forward"],
     kind: ["none", "chat", "reasoning", "poll", "play", "action", "error", "unchanged", "stale", "download"],
@@ -1966,6 +1967,77 @@
         }
       });
       spacerStyles.clear();
+    };
+  });
+
+  var autoWakeSentFor = null;
+  runFeature("auto-wake", "Composer — auto-send wake up", function () {
+    if (typeof document === "undefined") return function () {};
+    var timer = null;
+    var timerFor = null;
+    var composing = false;
+
+    function cancel() {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      timerFor = null;
+    }
+
+    function target() {
+      var editor = document.querySelector('div.tiptap.ProseMirror[contenteditable="true"]');
+      if (!editor) return null;
+      if (String(editor.innerText || "") !== "wake up") {
+        autoWakeSentFor = null;
+        return null;
+      }
+      if ((!isComposerUrl(location.href) && !isSessionUrl(location.href)) ||
+          composing || captchaSignal(document) || !renderedNode(editor) ||
+          editor.getAttribute("aria-disabled") === "true" || autoWakeSentFor === location.href) return null;
+      var box = editor.closest(".editor-content");
+      var root = box && box.parentElement;
+      var button = root && root.querySelector('button[aria-label="Send message"]');
+      if (!button || button.disabled || button.getAttribute("aria-disabled") === "true" ||
+          !renderedNode(button)) return null;
+      return { button: button, url: location.href };
+    }
+
+    function sync(event) {
+      if (event && event.isComposing) composing = true;
+      var next = target();
+      if (!next) { cancel(); return; }
+      if (timer !== null && timerFor === next.url) return;
+      cancel();
+      timerFor = next.url;
+      timer = setTimeout(function () {
+        timer = null;
+        timerFor = null;
+        var current = target();
+        if (!current || current.url !== next.url) return;
+        autoWakeSentFor = current.url;
+        current.button.click();
+        logEvent("auto-wake", "clicked");
+      }, Math.floor(Math.random() * 5001));
+    }
+
+    function compositionStart() { composing = true; cancel(); }
+    function compositionEnd() { composing = false; sync(); }
+    var observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, {
+      subtree: true, childList: true, characterData: true, attributes: true,
+      attributeFilter: ["disabled", "aria-disabled", "style", "class"],
+    });
+    window.addEventListener("input", sync, true);
+    window.addEventListener("compositionstart", compositionStart, true);
+    window.addEventListener("compositionend", compositionEnd, true);
+    window.addEventListener("popstate", sync);
+    sync();
+    return function () {
+      cancel();
+      observer.disconnect();
+      window.removeEventListener("input", sync, true);
+      window.removeEventListener("compositionstart", compositionStart, true);
+      window.removeEventListener("compositionend", compositionEnd, true);
+      window.removeEventListener("popstate", sync);
     };
   });
 

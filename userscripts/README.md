@@ -4,7 +4,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 | Bundle | Features |
 | --- | --- |
-| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
+| [arena.user.js](arena.user.js) | Prompt fill, Open Steering, Hide composer, Auto-send wake up, Transcript auto-scroll, Transcript trim, Preview state download, Tab title, Keep awake |
 | [chatgpt.user.js](chatgpt.user.js) | Hide elements, Auto Think |
 
 ## Install
@@ -22,7 +22,7 @@ The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt`
 
 ## Feature switches
 
-Nine switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+Ten switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
 Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module\'s entries stay together. The modules sit in one order:
 
@@ -86,6 +86,12 @@ Six rules follow the checklist:
 - screenshots and corrections through the steering channel, with each image read directly
 - a closing report of the change, the checks and the open items
 
+## Arena Auto-send Wake Up
+
+`Composer — auto-send wake up` defaults to On. On Arena composer and session pages, it clicks Send message after a random 0–5 second delay. The whole composer text must equal `wake up`. Case changes, whitespace, and other text do not match.
+
+The feature checks the draft and controls again before the click. A hidden composer, disabled control, security check, IME composition, or global pause prevents the click. Disabling cancels the timer and listeners. An unchanged draft triggers at most one click in the current page runtime.
+
 ## Arena Transcript Trim
 
 This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. The row limit cannot fall below `20`.
@@ -103,7 +109,7 @@ The command takes one row limit:
 
 ## Arena Security Check Hold
 
-While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait. The held work is the prompt fill, the Open Steering click and the proxy key posts. Each tab reads its own page. The held work resumes when the check clears.
+While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait. The held work is the prompt fill, the Open Steering click, the auto-wake click, and the proxy key posts. Each tab reads its own page. The held work resumes when the check clears.
 
 ## Arena Userscript Pause
 

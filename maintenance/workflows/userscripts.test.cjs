@@ -5,8 +5,9 @@ const vm = require("node:vm");
 
 const bundles = {
   arena: {
-    features: { "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
+    features: { "auto-wake": 1, "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
     labels: {
+      "auto-wake": "Composer — auto-send wake up",
       "prompt-fill": "Composer — fill",
       "open-steering": "Steering — open",
       "preview-sandbox": "Steering — new tabs and downloads",
@@ -153,6 +154,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const expected = [
       "Composer — fill (ON)",
       "Composer — hide (ON)",
+      "Composer — auto-send wake up (ON)",
       "Proxy — host",
       "Proxy — master key",
       "Proxy — post key now",
@@ -260,6 +262,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       [
         "Composer — fill (ON)",
         "Composer — hide (ON)",
+        "Composer — auto-send wake up (ON)",
         "Proxy — host",
         "Proxy — master key",
         "Proxy — post key now",
@@ -1031,4 +1034,136 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(display, "none");
   generating = false; notify();
   assert.equal(display, "flex");
+}
+
+{
+  const { test } = require("node:test");
+  test("auto wake sends an exact visible draft once after a cancellable delay", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const saved = new Map(Object.keys(bundles.arena.features).filter(key => key !== "auto-wake").map(key => [key, false]));
+    const timers = new Map();
+    const menus = new Map();
+    const listeners = new Map();
+    const observers = [];
+    let next = 0;
+    let clicks = 0;
+    let captcha = false;
+    let present = true;
+    const button = {
+      disabled: false, hidden: false, ariaDisabled: null,
+      getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
+      getClientRects() { return this.hidden ? [] : [{}]; },
+      click() { clicks += 1; },
+    };
+    const box = { parentElement: { querySelector(selector) {
+      return selector === 'button[aria-label="Send message"]' ? button : null;
+    } } };
+    const editor = {
+      innerText: "wake up", hidden: false, ariaDisabled: null,
+      get textContent() { return this.innerText; },
+      getAttribute(name) { return name === "aria-disabled" ? this.ariaDisabled : null; },
+      getClientRects() { return this.hidden ? [] : [{}]; },
+      closest(selector) { return selector === ".editor-content" ? box : null; },
+    };
+    const emit = (name, event = {}) => {
+      for (const callback of [...(listeners.get(name) || [])]) callback(event);
+    };
+    const fire = () => { for (const observer of observers) if (observer.active) observer.callback([]); };
+    const flush = () => {
+      const pending = [...timers.values()];
+      timers.clear();
+      for (const timer of pending) timer.callback();
+    };
+    const context = {
+      console: { log() {}, warn() {}, error() {} }, URL,
+      location: { href: "https://arena.ai/agent/session", pathname: "/agent/session" },
+      document: {
+        documentElement: {},
+        querySelector(selector) { return present && selector.includes("tiptap") ? editor : null; },
+        querySelectorAll(selector) {
+          return captcha && selector.includes("recaptcha-v2") ? [{ getAttribute() { return null; } }] : [];
+        },
+      },
+      window: {
+        addEventListener(name, callback) {
+          if (!listeners.has(name)) listeners.set(name, new Set());
+          listeners.get(name).add(callback);
+        },
+        removeEventListener(name, callback) { listeners.get(name)?.delete(callback); },
+      },
+      sessionStorage: { getItem() { return null; } },
+      MutationObserver: class {
+        constructor(callback) { this.callback = callback; this.active = false; observers.push(this); }
+        observe() { this.active = true; }
+        disconnect() { this.active = false; }
+      },
+      setTimeout(callback, ms) { const id = ++next; timers.set(id, { callback, ms }); return id; },
+      clearTimeout(id) { timers.delete(id); },
+      setInterval() {}, clearInterval() {},
+      GM_getValue(key, fallback) { return saved.has(key) ? saved.get(key) : fallback; },
+      GM_setValue(key, value) { saved.set(key, value); },
+      GM_registerMenuCommand(label, callback) { const id = ++next; menus.set(id, { label, callback }); return id; },
+      GM_unregisterMenuCommand(id) { menus.delete(id); },
+    };
+    vm.runInNewContext(source, context);
+    assert.equal(timers.size, 1, "default On schedules the matching draft");
+    assert.ok([...timers.values()].every(timer => timer.ms >= 0 && timer.ms <= 5000));
+    fire(); fire();
+    assert.equal(timers.size, 1, "mutations do not schedule duplicate sends");
+    for (const text of ["wake upwake up", "Wake up", " wake up", "wake up ", "wake up\n", "other"]) {
+      editor.innerText = text;
+      emit("input", { isComposing: false });
+      fire(); flush();
+      assert.equal(clicks, 0, text);
+      assert.equal(editor.innerText, text, "other drafts are not changed");
+    }
+    editor.innerText = "wake up";
+    fire();
+    editor.hidden = true;
+    fire();
+    assert.equal(timers.size, 0, "the composer-hide state cancels a pending send");
+    editor.hidden = false;
+    fire();
+    button.disabled = true;
+    flush();
+    assert.equal(clicks, 0, "the timer checks the live button again");
+    button.disabled = false;
+    button.ariaDisabled = "true";
+    fire();
+    assert.equal(timers.size, 0);
+    button.ariaDisabled = null;
+    fire(); flush();
+    assert.equal(clicks, 1);
+    fire(); flush();
+    assert.equal(clicks, 1, "one unchanged draft sends once");
+    present = false; fire();
+    present = true; fire(); flush();
+    assert.equal(clicks, 1, "remounting the unchanged composer must not send again");
+    editor.innerText = "";
+    fire();
+    captcha = true;
+    editor.innerText = "wake up";
+    fire();
+    assert.equal(timers.size, 0, "captcha holds automatic sends");
+    captcha = false;
+    fire();
+    emit("compositionstart");
+    flush();
+    assert.equal(clicks, 1, "IME composition cancels the pending send");
+    emit("compositionend");
+    const toggle = () => [...menus.values()].find(item => item.label.startsWith("Composer — auto-send wake up")).callback();
+    toggle();
+    fire(); flush();
+    assert.equal(clicks, 1, "Off cancels the timer and observers");
+    assert.equal(saved.get("auto-wake"), false);
+    toggle();
+    [...menus.values()].find(item => item.label === "Userscript — pause all").callback();
+    flush();
+    assert.equal(clicks, 1, "global pause cancels the send");
+    [...menus.values()].find(item => item.label === "Userscript — resume all").callback();
+    flush();
+    assert.equal(clicks, 2);
+    fire(); flush();
+    assert.equal(clicks, 2);
+  });
 }
