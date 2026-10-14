@@ -61,7 +61,7 @@
 - A fresh push can leave the checks list empty for up to 30 seconds: wait once, briefly, then watch, and NEVER poll by hand.
 - Stop and report HTTP 401 or any other command/API error; pending checks are not command errors.
 - An empty or absent list proves nothing; failed checks keep work open.
-- Before turn end with a pushed branch, check and report open PR CI.
+- Before turn end with a pushed branch, check open PR CI.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
 - Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
@@ -122,8 +122,6 @@
 ## Git
 
 - The sandbox clone may be shallow: check it with `git rev-parse --is-shallow-repository`, and run `git fetch --unshallow` before work that needs full history.
-- **Before every commit, without exception, print the planned final commit list first** — every commit and fix folded into one timeline, one message per logical change, keeping the PR title and body matching it.
-- If one landed unlisted, print the corrected timeline first.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Prefer the shortest history that keeps every commit atomic.
 - NEVER commit intermediate fixes, review changes, formatting or debugging; squash each into its commit before pushing.

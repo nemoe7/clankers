@@ -21,6 +21,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- Bypass and dead-end reports now include a suggested fix. Agents no longer print planned commit lists or CI-status notices. CI checks and remote commit confirmation remain required.
+
 - Code-scanning alert review no longer blocks pull request creation. Reading and addressing open alerts remain required.
 - Task completion no longer requires a report. Task records and required decision or issue reports remain required.
 - Full rule reads now occur at session start and after a summary. Changed files use a full diff when the prior version and context remain available. Summaries put the read-set read first.

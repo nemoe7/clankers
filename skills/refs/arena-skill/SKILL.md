@@ -76,9 +76,9 @@ arena-preview ack <id> --reply 'a reply with `backticks`'
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-ALWAYS report every workaround or bypass found during Arena skill work through a preview report immediately as a violation.
+ALWAYS report every workaround or bypass found during Arena skill work through a preview report immediately as a violation, with a suggested fix.
 
-ALWAYS report every dead end found during Arena skill work to the owner as an upstream bug to fix.
+ALWAYS report every dead end found during Arena skill work to the owner as an upstream bug, with a suggested fix.
 
 - Run `task-list` at turn start.
 - Before implementation, record approved work with `task <kebab-title-id> "<title>" [details ...]`, put the current item first with `--order 1`, and update its status (`upcoming` or `finished`, no other value) and details as work changes; in every ack, put the task ID in backticks so the log links it.

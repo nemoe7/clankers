@@ -61,7 +61,7 @@
 - Batch independent tool calls into one block whenever the surface permits.
 - When several tasks are open, ALWAYS start with the smallest one and keep taking the smallest one that remains, unless the user states a priority; a stated priority outranks size. Re-sort the queue every time a task arrives, so arrival order NEVER decides it and a large task NEVER blocks a small one.
 - Keep working while tasks remain; end the turn when the work is verified and stopped.
-- Before ending a turn with a pushed branch, check the open PR's CI and report its state.
+- Before ending a turn with a pushed branch, check the open PR's CI.
 - A failing check is unfinished work.
 - Before every push, run the repository's own checks locally (lint, tests, validation entrypoints) detached, NEVER inline.
 - Push only when they pass; an inline run counts as skipping the gate, whatever its speed.
@@ -170,8 +170,6 @@
 ## Git
 
 - The sandbox clone may be shallow: check it with `git rev-parse --is-shallow-repository`, and run `git fetch --unshallow` before work that needs full history.
-- **Before every commit, without exception, print the planned final commit list first**: every local commit and fix folded into a clean timeline, one message per logical change, the list you intend to land, updated as work lands.
-- If a commit landed unlisted, print the corrected timeline before the next.
 - MUST stage only task-related changes, leaving unrelated and user-owned changes unstaged.
 - Commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Prefer the shortest history that keeps every commit atomic.
