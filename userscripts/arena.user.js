@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.33
+// @name         Arena.ai | NemoUtils | v1.10.34
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.33
+// @version      1.10.34
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2722,7 +2722,7 @@
     var LABEL_SPAN_SELECTOR = "span.body-sm";
     var SUMMARY_LABEL = "Summary";
     var TITLE_PREFIX = "Arena | ";
-    var VERSION = "1.10.25";
+    var VERSION = "1.10.26";
     var AGENT_EMOJI = "\uD83D\uDCAC";
     var REASONING_EMOJI = "\uD83D\uDCAD";
     var BASH_EMOJI = "\uD83D\uDDA5\uFE0F";
@@ -2823,7 +2823,8 @@
     }
 
     function rowContainer(root) {
-      var node = childChain(root, 3);
+      var node = root && root.querySelector(":scope > div > div.px-3.pb-3 > div.flex.flex-col.gap-2");
+      node = node || childChain(root, 3);
       if (!node || !classOf(node, "flex") || !classOf(node, "flex-col") || !classOf(node, "gap-2")) {
         return null;
       }

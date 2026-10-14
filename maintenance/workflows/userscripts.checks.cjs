@@ -1230,6 +1230,24 @@ function checkTabTitle(api) {
   var twoRowRoot = agentRoot(twoRows);
   var agentShape = agentRoot([]);
   var userShape = userRootNode();
+  var headerChat = chatRow();
+  var headerShape = agentRoot([headerChat, node("div", "flex w-fit items-center", [])]);
+  var headerCard = headerShape.firstElementChild;
+  var headerBody = headerCard.firstElementChild;
+  var header = node("div", "flex min-h-[40px] items-center", [node("div", "flex size-4", [])]);
+  header.parentElement = headerCard;
+  headerCard.children.unshift(header);
+  var originalHeaderQuery = headerShape.querySelector;
+  headerShape.querySelector = function (selector) {
+    if (selector === ":scope > div > div.px-3.pb-3 > div.flex.flex-col.gap-2") {
+      return headerBody.firstElementChild;
+    }
+    return originalHeaderQuery(selector);
+  };
+  assert.equal(rowContainer(headerShape), headerBody.firstElementChild);
+  assert.equal(newestRow(headerShape), headerChat);
+  expireHold();
+  assert.equal(desiredTitle(page([headerShape])), TITLE_PREFIX + "clankers " + AGENT_EMOJI);
 
   var cases = [
     // The repo name still reads off the GitHub link, and the memory answers while the
@@ -1416,7 +1434,7 @@ function checkTabTitle(api) {
       "[NemoUtils][title] action row (Generating questions\u2026) -> " + TITLE_PREFIX + "clankers" + vtag + " " + QUESTION_EMOJI],
     ["repo=" + questionsLogLine.split(" repo=")[1],
       "repo=clankers row=action row (Generating questions\u2026) kind=action captcha=0 question=0 live=1"],
-    [VERSION, "1.10.25"],
+    [VERSION, "1.10.26"],
   ];
   // The title writes through syncTitle, which logs the signal that won. The capture keeps
   // the host console clean and returns the last line.

@@ -12,6 +12,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Command lookups no longer start background test runs. The DEBUG trap refuses to replay a mixed shell line and directs the remaining work to an explicit route.
 
+#### userscripts
+
+- The Arena tab title finds rows after a message header and keeps the previous row lookup as a fallback.
+
 ## 2026-10-13
 
 ### Added
