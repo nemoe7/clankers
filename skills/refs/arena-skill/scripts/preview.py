@@ -2843,6 +2843,25 @@ class Store:
       f"{token} matches {len(matches)} records: {listed}. Give the full ID of one"
     )
 
+  def list_note_ids(self, page, page_size):
+    """List stored note IDs without note text or receipt changes."""
+    if page < 1 or not 1 <= page_size <= 100:
+      raise ValueError("Page must be at least 1; page size must be 1 to 100")
+    with closing(self.connect()) as db:
+      db.execute("BEGIN")
+      total = db.execute("SELECT count(*) FROM notes").fetchone()[0]
+      offset = (page - 1) * page_size
+      ids = []
+      if offset < total:
+        ids = [
+          row[0]
+          for row in db.execute(
+            "SELECT id FROM notes ORDER BY at DESC, seq DESC LIMIT ? OFFSET ?",
+            (page_size, offset),
+          )
+        ]
+    return ids, total
+
   def notes_matching(self, token):
     """The reread takes the short or the full ID, and a short ID that matches
     several notes prints every match, newest first, so a saved note is never
@@ -5313,6 +5332,14 @@ def main():
   )
   commands.add_parser("init", help="Create the state directory and its database")
   commands.add_parser("read", help="Print every pending note, answer and upload")
+  note_list = commands.add_parser(
+    "note-list",
+    help="List stored note IDs by page, newest first, including acknowledged notes",
+  )
+  note_list.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
+  note_list.add_argument(
+    "--page-size", type=int, default=20, help="IDs per page, 1 to 100 (default: 20)"
+  )
   note_reread = commands.add_parser(
     "note",
     help="Reread a stored note by its short or full ID",
@@ -5716,7 +5743,7 @@ def main():
       state_dir,
       create=args.command in {"serve", "init", "import-state"},
     )
-    read_only = args.command == "stale-reports"
+    read_only = args.command in {"stale-reports", "note-list"}
     if not read_only:
       print(store.reminder(), file=sys.stderr, flush=True)
     if args.command != "serve" and not read_only:
@@ -5736,6 +5763,12 @@ def main():
       require_server(store)
       store.notice_expired_key()
       print_read(store)
+    elif args.command == "note-list":
+      ids, total = store.list_note_ids(args.page, args.page_size)
+      pages = max(1, (total + args.page_size - 1) // args.page_size)
+      print(f"Notes page {args.page}/{pages} ({total} total; newest first)")
+      for note_id in ids:
+        print(note_id)
     elif args.command == "note":
       # The read lists the pending notes. This one reaches the acked history, so
       # a note stays open to the agent after its answer lands.

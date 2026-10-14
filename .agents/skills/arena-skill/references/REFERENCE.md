@@ -9,6 +9,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `init` | Create a missing state database without starting the server |
 | `serve --port 8000` | Start the shared preview with `start_process`. The gate warns when a serve names a port other than 8000 |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
+| `note-list [--page N] [--page-size N]` | List stored note IDs, including acknowledged and quiet notes, newest first; default page 1, 20 IDs per page, maximum 100; leave receipts and exports unchanged |
 | `note <id>` | Reread a stored note by its six or full characters; a short ID that matches several notes prints every match |
 | `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after acknowledging the quiet note |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list for an unblocked upcoming task, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |

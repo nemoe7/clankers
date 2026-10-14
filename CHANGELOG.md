@@ -10,6 +10,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- The note-list CLI lists stored note IDs by page, newest first, including acknowledged and quiet notes. It leaves receipts and state exports unchanged.
 - Quiet notes remain in later reads without required acknowledgements or reminder counts. Ordinary notes and report answers keep their receipt checks.
 
 ### Changed

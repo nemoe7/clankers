@@ -6558,6 +6558,63 @@ def test_ack_stamps_the_read_line():
       assert store.state()["last_check"] == "2026-09-22T12:05:00"
 
 
+def test_note_list_pages(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  for index in (1, 2, 0):
+    store.note(
+      f"history-{index}",
+      "Do not print note text",
+      at="2026-10-13T00:00:00" if index == 0 else "2026-10-14T00:00:00",
+      quiet=index == 1,
+    )
+  store.acknowledge(["history-2"], "note", "Already answered")
+  before = store.state()["notes"]
+  saved = store.save_path.stat().st_mtime_ns
+
+  def run(*argv):
+    return subprocess.run(
+      [sys.executable, preview.__file__, "note-list", *argv],
+      capture_output=True,
+      text=True,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+      check=False,
+    )
+
+  first = run("--page-size", "2")
+  assert first.returncode == 0, first.stderr
+  assert first.stdout.splitlines() == [
+    "Notes page 1/2 (3 total; newest first)",
+    "history-2",
+    "history-1",
+  ]
+  second = run("--page", "2", "--page-size", "2")
+  assert second.returncode == 0
+  assert second.stdout.splitlines() == [
+    "Notes page 2/2 (3 total; newest first)",
+    "history-0",
+  ]
+  last = run("--page", "3", "--page-size", "2")
+  assert last.returncode == 0
+  assert last.stdout.splitlines() == ["Notes page 3/2 (3 total; newest first)"]
+  default = run()
+  assert default.returncode == 0
+  assert len(default.stdout.splitlines()) == 4
+  for flags in [("--page", "0"), ("--page-size", "0"), ("--page-size", "101")]:
+    assert run(*flags).returncode != 0
+  assert store.state()["notes"] == before
+  assert store.save_path.stat().st_mtime_ns == saved
+  store.clear_state()
+  empty = run()
+  assert empty.returncode == 0
+  assert empty.stdout.splitlines() == ["Notes page 1/1 (0 total; newest first)"]
+  for index in range(21):
+    store.note(f"page-{index}", "Stored note")
+  default = run()
+  assert default.returncode == 0
+  assert default.stdout.splitlines()[0] == "Notes page 1/2 (21 total; newest first)"
+  assert len(default.stdout.splitlines()) == 21
+
+
 def test_note_reread_prints_every_match():
   """The reread takes the short or the full ID, and a short ID that matches
   several notes prints every match, so an acked note stays open to the agent.
