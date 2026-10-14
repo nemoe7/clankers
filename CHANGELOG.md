@@ -43,6 +43,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- Unrelated findings now require a fielded report with a suggested next action. Only blocking findings permit an immediate fix.
+
 - ARENA now defines its read set once and reuses it in startup, changed-file, and summary clauses.
 
 - Assessment and evaluation reports now require a next-action field with recommended, no-change, and custom options.
