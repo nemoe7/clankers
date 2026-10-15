@@ -58,6 +58,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A click that names a task lifts a hiding type filter or search query, so the row asked for is the row shown.
 
+- A report answer receipt now carries its question. Each flattened line pairs the field prompt with its id and answer, so the task row reads whole without opening the report.
+
 - A task row's type badge sits beside the title, ahead of the details collapse, and the operations badge reads Ops.
 
 - The task panel header carries a search input beside the type filter. Rows narrow on title, ID, type and detail text as the query changes, case-insensitive. The head seat follows the filtered list.
