@@ -3027,6 +3027,18 @@ test('preview client', async (t) => {
     const taskTitle = get('#tasks-current-body').children[0].children[0];
     assert.equal(taskTitle.scrolledIntoView, true);
     assert.equal(taskTitle.focused, true);
+    const arrivedRow = get('#tasks-current-body').children[0];
+    assert.equal(arrivedRow.dataset.highlight, 'true', 'the destination row lights up');
+    // Leaving the tab clears the mark at once, before its timer runs.
+    get('#notes-tab').events.click();
+    assert.equal(arrivedRow.dataset.highlight, undefined,
+      'navigating away clears the highlight');
+    // A fresh arrival clears itself after the short delay as well.
+    follow('task', 'task-ref');
+    assert.equal(get('#tasks-current-body').children[0].dataset.highlight, 'true');
+    await new Promise(resolve => setTimeout(resolve, 2600));
+    assert.equal(get('#tasks-current-body').children[0].dataset.highlight, undefined,
+      'the highlight clears after the delay without touching the row');
   });
 
   await t.test("The composer footer names the key and its hour, and the tooltip keeps the host", async () => {
