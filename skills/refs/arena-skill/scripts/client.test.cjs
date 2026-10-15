@@ -892,7 +892,7 @@ test('preview client', async (t) => {
   await t.test("A message that became a task says so, so a line that was read is never mistaken for one th", async () => {
     state.notes[0].task_id = 'dots-in-receipt';
     await refresh();
-    assert.match(get('#history').children[0].children[2].textContent, / · Task added$/);
+    assert.match(get('#history').children[0].children[2].textContent, / · Task dots-in-receipt added$/);
     assert.equal(part(get('#history').children[0].children[2], 'receipt-task').title, 'Task dots-in-receipt');
     delete state.notes[0].task_id;
     await refresh();

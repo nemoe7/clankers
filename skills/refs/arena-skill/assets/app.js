@@ -533,10 +533,11 @@ function showHistory(notes) {
     separator.className = 'receipt-sep';
     separator.textContent = ' · ';
     // A message that became a task says so, so a line that was read is never mistaken for a line
-    // that was dropped. The task ID rides in the title. The owner named the marker `Task added`.
+    // that was dropped. The task ID rides in the marker and in its title. The owner named the
+    // marker with the ID between `Task` and `added`.
     const receiptTask = document.createElement('span');
     receiptTask.className = 'receipt-task';
-    receiptTask.textContent = ' · Task added';
+    receiptTask.textContent = item.task_id ? ` · Task ${item.task_id} added` : ' · Task added';
     receiptTask.title = item.task_id ? `Task ${item.task_id}` : '';
     const receiptFile = document.createElement('span');
     receiptFile.className = 'receipt-file';
