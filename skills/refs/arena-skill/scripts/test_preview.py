@@ -567,8 +567,8 @@ def test_http_boundaries():
       linked.count('target="_blank"') == 1 and 'rel="noopener noreferrer"' in linked
     )
     assert "<s>" in preview.render("~~gone~~")
-    # With `breaks`, markdown-it turns a newline into `<br>`. The owner rejected it beside the message log.
-    # `white-space: pre-wrap` needs no tag and avoids an airy paragraph.
+    # Keep source newlines as text, even when the caller sets breaks.
+    # CSS pre-wrap supplies the line breaks in the message log.
     chat = preview.render("line one\nline two", breaks=True)
     assert "<br" not in chat and "\n" in chat and chat.count("<p>") == 1
     css = compact((preview.ASSETS / "style.css").read_text())
@@ -605,8 +605,8 @@ def test_http_boundaries():
       css_px(caret[1], name) for name in ("right", "border-left", "border-right")
     )
     assert css_px(select[1], "padding-right") > caret_space
-    # The green send flash is gone (owner: the footnote under the report covers it), so neither the
-    # page nor the client script carries report-receipt. The footnote element stays.
+    # The page and client script have no report-receipt flash.
+    # Keep the report acknowledgement element.
     page = (preview.ASSETS / "index.html").read_text()
     script = (preview.ASSETS / "app.js").read_text()
     assert "report-receipt" not in page and "report-receipt" not in script
@@ -617,7 +617,6 @@ def test_http_boundaries():
     # A break outside a paragraph, in a list item for one, stays exactly as markdown-it wrote it.
     assert "<br" in preview.render("- a\n  b", breaks=True)
     # The log uses pre-wrap paragraphs without breaks. A `<br>` would double each newline gap.
-    # That doubling is what the owner removed by hand in the browser.
     logged = preview.render("line one\nline two")
     assert "<br" not in logged and "\n" in logged and logged.count("<p>") == 1
     escaped = preview.render("before\n\\```\ncode\n\\```\nafter")

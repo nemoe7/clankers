@@ -18,6 +18,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Pill and scroll-button comments describe placement and theme colors.
 
+- HTTP test comments describe newline rendering and report acknowledgement elements.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
