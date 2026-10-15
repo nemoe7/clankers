@@ -28,6 +28,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Code-scanning alert reads now occur on the initial turn and when origin/main moves. Findings still need handling without blocking PR creation.
 
+- Rule-violation reports publish only for material, repeated, or not-yet-fixed violations. A routine slip that the agent fixes at once takes one receipt line. A new rule bars blocking open or queued tasks while such a report waits.
+
 ### Fixed
 
 #### preview

@@ -33,7 +33,8 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file or the preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
-- On a rule violation, ALWAYS publish a preview report; suggest amendments only for an identified contributing rule gap. Corrected routine command-input validation errors alone are not rule violations.
+- On a rule violation, publish a preview report when the violation is material, repeated, or uncorrected; a corrected routine no-impact slip takes one short receipt line instead. Suggest amendments only for an identified contributing rule gap. Corrected routine command-input or process slips, such as a late read, alone are not rule violations.
+- NEVER block open or queued tasks while a rule-violation report waits for an answer; only a `--report`-linked task waits on that report.
 
 ## General
 
