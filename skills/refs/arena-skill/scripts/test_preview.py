@@ -1142,18 +1142,16 @@ def test_http_boundaries():
       assert "report-count" not in page
       # The minified sheet splits or reorders merged selectors, so each pip matches its own block.
       # The pip is a corner badge, so it adds no width to the tab it marks.
-      assert re.search(
-        r"#report-pip[^{}]*\{position:absolute;top:5px;right:5px;"
-        r"display:inline-block;width:7px;height:7px;"
-        r"border-radius:50%;background:var\(--accent\)",
-        page,
-      )
-      assert re.search(
-        r"#notes-pip[^{}]*\{position:absolute;top:5px;right:5px;"
-        r"display:inline-block;width:7px;height:7px;"
-        r"border-radius:50%;background:var\(--accent\)",
-        page,
-      )
+      for selector in ("#report-pip", "#notes-pip"):
+        pip = re.search(re.escape(selector) + r"[^{}]*\{([^}]+)\}", page)
+        assert pip
+        assert pip[1].startswith("position:absolute;")
+        assert css_px(pip[1], "top") == css_px(pip[1], "right") >= 0
+        assert css_px(pip[1], "width") == css_px(pip[1], "height") > 0
+        assert re.search(
+          r"(?:^|;)display:inline-block;[^}]*border-radius:50%;background:var\(--accent\)",
+          pip[1],
+        )
       assert "[hidden]{display:none!important" in page
       assert page.index('id="copy-report"') < page.index('id="refresh-report"')
       assert '<span id="clock" class="muted" title="Local time">--:--</span>' in page

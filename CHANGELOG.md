@@ -18,6 +18,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Quoted task titles keep the task ID tooltip.
 
+- Tab pip checks compare square sizes and corner offsets without fixed values.
+
 ## 2026-10-15
 
 ### Added
