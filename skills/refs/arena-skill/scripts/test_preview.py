@@ -684,7 +684,12 @@ def test_http_boundaries():
       assert 'aria-label="Scroll to bottom"' in page
       assert '<svg width="14" height="14" viewBox="0 0 24 24"' in page
       assert "↓ Latest message" not in page
-      assert re.search(r"\.log-newest\s*\{[^}]*border-radius:\s*4px", page)
+      newest = re.search(r"\.log-newest\s*\{([^}]+)\}", compact(page))
+      edited = re.search(r"\.log-edited\s*\{([^}]+)\}", compact(page))
+      assert newest and edited
+      assert (
+        css_px(newest[1], "border-radius") == css_px(edited[1], "border-radius") > 0
+      )
       # The bar hugs its label rather than spanning the pane.
       assert "translateX(-50%)" in page
       # The reply pill floats above the log, so it cannot meet the placement pill.
@@ -692,7 +697,6 @@ def test_http_boundaries():
       assert re.search(r"\.log-edited\s*\{[^}]*position:\s*absolute", page)
       assert re.search(r"\.log-edited\s*\{[^}]*top:\s*20px", page)
       assert re.search(r"\.log-edited\s*\{[^}]*color:\s*var\(--text\)", page)
-      assert re.search(r"\.log-edited\s*\{[^}]*border-radius:\s*4px", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
       # The save button sits in the top bar after the theme button rather than in the log's own row.
       # The log's own copy and the tasks' copy are gone, and one copy button carries the state to the clipboard.
