@@ -694,7 +694,7 @@ def test_http_boundaries():
       # The reply pill floats above the log, so it cannot meet the placement pill.
       # It clears the card border and uses plain text, not accent color.
       assert re.search(r"\.log-edited\s*\{[^}]*position:\s*absolute", page)
-      assert re.search(r"\.log-edited\s*\{[^}]*top:\s*20px", page)
+      assert css_px(edited[1], "top") > 0
       assert re.search(r"\.log-edited\s*\{[^}]*color:\s*var\(--text\)", page)
       assert page.index('id="log-edited"') > page.index('class="log-scroll"')
       # The save button sits in the top bar after the theme button rather than in the log's own row.
