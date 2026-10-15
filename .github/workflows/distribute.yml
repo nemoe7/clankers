@@ -1,4 +1,4 @@
-# Dispatch-only distribution of ARENA.md, the skills and the Gemini release workflow. One job walks the union of the two target lists and leaves exactly one commit per target repository. The lists stay independent: the Arena files reach only the Arena targets, and the Gemini workflow reaches only the Gemini targets.
+# Distribute ARENA.md, the skills, and the Gemini release workflow. One job walks the union of the two target lists and leaves exactly one commit per target repository. The lists stay independent: the Arena files reach only the Arena targets, and the Gemini workflow reaches only the Gemini targets.
 # CLANKERS_DIST_PAT needs Contents read/write on every Arena target, plus Workflows write on the Gemini targets. Delivery is not activation: each session must start its own preview, and GitHub activates a copied workflow on the target default branch.
 name: Distribute
 on:
