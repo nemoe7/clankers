@@ -139,6 +139,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Render pending messages with the local Markdown parser before the write returns. Keep the server message style, source text, link guards, and code-copy controls.
+
 - Clear the submitted composer before the pending message renders. Restore the draft after a failed write only if no new input changed it.
 
 - Reports removed while another tab is open no longer stay selected. Returning to Reports selects the oldest unanswered report, or no report when the list is empty.

@@ -55,6 +55,8 @@ EXPECTED_BUDGETS = {
   # This table lists the arena suite except proxies. Minify budgets reject asset and script growth until a table update.
   # This script ignores byte-identical `.agents/skills/` twins.
   "skills/arena-skill/assets/app.js": "UTF-8 file size",
+  "skills/arena-skill/assets/markdown-it.min.js": "UTF-8 file size",
+  "skills/arena-skill/assets/message-markdown.js": "UTF-8 file size",
   "skills/arena-skill/assets/index.html": "UTF-8 file size",
   "skills/arena-skill/assets/style.css": "UTF-8 file size",
   "skills/arena-skill/scripts/arena-preview": "UTF-8 file size",

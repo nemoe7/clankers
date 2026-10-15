@@ -51,6 +51,8 @@ test('preview client', async (t) => {
     // hit: the harness does the same, so a missing restore shows up as a jump to the top here exactly as it does on screen.
     set innerHTML(value) {
       this.inner = value; this.renders = (this.renders || 0) + 1;
+      this.text = value.replace(/<[^>]*>/g, '');
+      this.children = [];
       const panel = elements.get('#reports-panel');
       if (this.id === 'report' && panel) panel.scrollTop = 0;
     }
@@ -163,6 +165,7 @@ test('preview client', async (t) => {
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
     AbortController,
+    atob,
     Blob,
     File,
     FormData: FormDataStub,
@@ -521,6 +524,8 @@ test('preview client', async (t) => {
   let copiesBeforeNotesOnly;
 
   await t.test("load the client", async () => {
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/markdown-it.min.js'), 'utf8'), context);
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/message-markdown.js'), 'utf8'), context);
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
     await tick();
   });
@@ -3574,6 +3579,21 @@ test('preview client', async (t) => {
       failedWrites.add('/api/notes');
       release(); await writing;
       assert.equal(get('#note').value, '', 'failure does not restore over an intentionally cleared new draft');
+      pendingWrites.clear(); failedWrites.clear();
+
+      const markdownDraft = '> A pending quote\n\n**Bold text**';
+      get('#note').value = markdownDraft;
+      hold('/api/notes');
+      writing = get('#form').events.submit(event({}));
+      const markdownRow = get('#history').children.find(row => row.textContent.includes('A pending quote'));
+      const markdownBody = part(markdownRow, 'message-text');
+      assert.ok(markdownBody, 'pending and confirmed messages use the same body style');
+      assert.ok(markdownBody.innerHTML.includes('<blockquote>'));
+      assert.ok(markdownBody.innerHTML.includes('<strong>'));
+      assert.equal(get('#note').value, '');
+      failedWrites.add('/api/notes');
+      release(); await writing;
+      assert.equal(get('#note').value, markdownDraft, 'Markdown rendering leaves the recovered source unchanged');
       pendingWrites.clear(); failedWrites.clear();
 
       state.reports[0].updated_at = reportRevision;

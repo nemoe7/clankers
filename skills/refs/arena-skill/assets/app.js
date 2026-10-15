@@ -943,6 +943,7 @@ $('#form').addEventListener('submit', async event => {
     note.value = '';
     save('draft', '');
     writeMode();
+    sending.html = renderMessageMarkdown(text);
     const result = await optimisticWrite(apply, async () => {
       let response;
       if (stagedFiles.length) {

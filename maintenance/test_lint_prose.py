@@ -118,6 +118,17 @@ def test_vendored_agent_skills_stay_out_of_code_targets():
   )
 
 
+def test_markdown_bundle_is_vendored_without_excluding_first_party_assets():
+  for root in (
+    Path("skills/refs/arena-skill"),
+    Path("skills/arena-skill"),
+    Path(".agents/skills/arena-skill"),
+  ):
+    assert extract_prose.is_vendored(root / "assets/markdown-it.min.js")
+    assert not extract_prose.is_vendored(root / "assets/app.js")
+    assert not extract_prose.is_vendored(root / "assets/message-markdown.js")
+
+
 def test_strict_lint_checks_synonyms_across_sections():
   assert (
     lint_prose.strict_lint(

@@ -32,7 +32,12 @@ HASH_SUFFIXES = {".ini", ".sh", ".toml", ".yml"}
 SPECIAL_CODE_NAMES = {"Dockerfile", "arena-preview"}
 AGENT_SKILLS = Path(".agents/skills")
 FIRST_PARTY_AGENT_SKILL = AGENT_SKILLS / "arena-skill"
-VENDORED_PARTS = (Path(".agents/skills/asd-ste100"),)
+VENDORED_PARTS = (
+  Path(".agents/skills/asd-ste100"),
+  Path("skills/refs/arena-skill/assets/markdown-it.min.js"),
+  Path("skills/arena-skill/assets/markdown-it.min.js"),
+  Path(".agents/skills/arena-skill/assets/markdown-it.min.js"),
+)
 
 
 def prose(path: Path) -> str:
@@ -450,10 +455,12 @@ def comment_lines(path: Path, source: str) -> set[int]:
 
 
 def is_vendored(path: Path) -> bool:
-  """Return whether a tracked code path belongs to vendored skill content."""
+  """Return whether a tracked code path belongs to vendored content."""
+  if any(path.is_relative_to(part) for part in VENDORED_PARTS):
+    return True
   if path.is_relative_to(AGENT_SKILLS):
     return not path.is_relative_to(FIRST_PARTY_AGENT_SKILL)
-  return any(path.is_relative_to(part) for part in VENDORED_PARTS)
+  return False
 
 
 def code_targets() -> list[Path]:

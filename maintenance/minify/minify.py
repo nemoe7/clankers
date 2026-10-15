@@ -20,10 +20,12 @@ TARGETS = (
 BIN = ROOT / "node_modules/.bin"
 PYTHON_MINIFIER_VERSION = "3.3.0"
 PYTHON_SCRIPTS = ("scripts/preview.py",)
+COPIED_ASSETS = ("assets/markdown-it.min.js", "assets/markdown-it.LICENSE")
 
 # One job per npm build: the file name, the pinned minifier, and the flags that produce the build.
 JOBS = (
   ("assets/app.js", "terser", ("--compress", "--mangle")),
+  ("assets/message-markdown.js", "terser", ("--compress", "--mangle")),
   ("assets/style.css", "clean-css", ()),
   (
     "assets/index.html",
@@ -154,9 +156,11 @@ def check_markup(source: str, built: str) -> None:
   if missing:
     raise RuntimeError(f"minified HTML lost these ids: {missing}")
 
-  if "__STYLE__" not in built or "__SCRIPT__" not in built:
+  if any(
+    marker not in built for marker in ("__STYLE__", "__MARKDOWN_SCRIPT__", "__SCRIPT__")
+  ):
     raise RuntimeError(
-      "minified HTML lost a placeholder; the server inlines both assets"
+      "minified HTML lost a placeholder; the server inlines the assets"
     )
 
   def words(markup: str) -> list[str]:
@@ -195,7 +199,13 @@ def build() -> dict[str, tuple[str, str]]:
     source = path.read_text(encoding="utf-8")
     sources[name] = (source, minify_python(source, name))
 
+  for name in COPIED_ASSETS:
+    source = (SOURCE / name).read_text(encoding="utf-8")
+    sources[name] = (source, source)
+
+  check_javascript(sources["assets/markdown-it.min.js"][1])
   check_javascript(sources["assets/app.js"][1])
+  check_javascript(sources["assets/message-markdown.js"][1])
   check_stylesheet(sources["assets/style.css"][1])
   check_markup(*sources["assets/index.html"])
   return sources

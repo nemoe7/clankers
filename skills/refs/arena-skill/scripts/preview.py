@@ -5202,7 +5202,14 @@ def handler(store):
             "__STYLE__", (ASSETS / "style.css").read_text(encoding="utf-8")
           )
           page = page.replace(
-            "__SCRIPT__", (ASSETS / "app.js").read_text(encoding="utf-8")
+            "__MARKDOWN_SCRIPT__",
+            (ASSETS / "markdown-it.min.js").read_text(encoding="utf-8"),
+          )
+          page = page.replace(
+            "__SCRIPT__",
+            (ASSETS / "message-markdown.js").read_text(encoding="utf-8")
+            + "\n"
+            + (ASSETS / "app.js").read_text(encoding="utf-8"),
           )
           self.reply(200, page.replace("__TOKEN__", token), "text/html; charset=utf-8")
           return

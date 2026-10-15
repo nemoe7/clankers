@@ -313,12 +313,18 @@ def test_compact_copies_drift_and_runtime():
   sources = minify.build()
   assert set(sources) == {
     "assets/app.js",
+    "assets/message-markdown.js",
+    "assets/markdown-it.min.js",
+    "assets/markdown-it.LICENSE",
     "assets/style.css",
     "assets/index.html",
     "scripts/preview.py",
   }
   for relative, (source, compact) in sources.items():
-    assert len(compact.encode()) < len(source.encode()), relative
+    if relative in {"assets/markdown-it.min.js", "assets/markdown-it.LICENSE"}:
+      assert compact == source, relative
+    else:
+      assert len(compact.encode()) < len(source.encode()), relative
     for target in minify.TARGETS:
       assert (target / relative).read_bytes() == compact.encode(), target / relative
 
@@ -380,9 +386,10 @@ def test_compact_copies_drift_and_runtime():
       page = response.read().decode()
       assert response.status == 200
       assert "__STYLE__" not in page and "__SCRIPT__" not in page
+      assert "__MARKDOWN_SCRIPT__" not in page
       assert 'id="notes-panel"' in page and 'id="reports-panel"' in page
       token = re.search(r'data-token="([^"]+)"', page)[1]
-      for name in ("app.js", "style.css"):
+      for name in ("app.js", "message-markdown.js", "markdown-it.min.js", "style.css"):
         asset = (minify.TARGETS[0] / "assets" / name).read_text()
         assert asset.replace("__TOKEN__", token).strip() in page
     finally:
