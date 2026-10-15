@@ -34,6 +34,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### maintenance
+
+- The contract job installs the validation dependencies, so the version gates it now runs find their imports.
+
 #### arena
 
 - Code-scanning alert reads now occur on the initial turn and when origin/main moves. Findings still need handling without blocking PR creation.
