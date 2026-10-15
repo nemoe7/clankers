@@ -18,6 +18,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 from unittest.mock import patch
 
@@ -690,9 +691,8 @@ def test_http_boundaries():
       # The Skip poll button carries Lucide's skip-forward geometry, vendored inline.
       assert 'd="M21 4v16"' in page and "M6.029 4.285" in page
       assert 'id="copy-log"' not in page and 'id="copy-tasks"' not in page
-      assert "Copy the log, answers and tasks to the clipboard as NDJSON" in page
       # Every icon button carries a title that repeats its accessible name.
-      for control in (
+      controls = (
         "copy-state",
         "attach-file",
         "unpublish-report",
@@ -701,9 +701,19 @@ def test_http_boundaries():
         "mark-report-acks-seen",
         "next-report",
         "report-top",
-      ):
-        block = page[page.index(f'id="{control}"') :]
-        assert "title=" in block[: block.index(">")]
+      )
+      labels = {}
+
+      class IconLabels(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+          attrs = dict(attrs)
+          if tag == "button" and attrs.get("id") in controls:
+            labels[attrs["id"]] = attrs
+
+      IconLabels().feed(page)
+      for control in controls:
+        assert labels[control]["title"].strip()
+        assert labels[control]["title"] == labels[control]["aria-label"]
       # A note owns staged file chips and a native multi-file picker. Backend records remain,
       # but no saved-files list crowds the composer. Downloads alone keeps the remaining tab.
       assert 'id="downloads-tab" aria-controls="downloads-panel"' in page

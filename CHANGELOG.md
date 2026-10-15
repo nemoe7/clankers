@@ -141,6 +141,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Check icon-button titles against their accessible names, without a fixed copy-tooltip sentence. Require nonempty names.
+
 - Remove the repeated report-state row from the command table. Reject repeated command signatures.
 
 - Print CLI argument errors without the full usage header. Keep validation, error text, exit status, and full help output.
