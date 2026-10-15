@@ -228,7 +228,7 @@ function connectionText() {
   // The tally ends every shape of the line: a poll, a finished call and the quiet line are all
   // read while the count climbs.
   if (pollSince !== null) {
-    const label = lastState?.waiting_for_gates ? 'Waiting for gates...' : 'Polling…';
+    const label = getState()?.waiting_for_gates ? 'Waiting for gates...' : 'Polling…';
     return `${label} ${duration(Date.now() - pollSince)}${tail}${callTally}`;
   }
   if (callEndStamp !== null) return `Bash ${time(callEndStamp)}${tail}${callTally}`;
@@ -550,7 +550,7 @@ function showHistory(notes) {
   const signature = JSON.stringify(notes);
   if (signature === historySignature) return;
   historySignature = signature;
-  const references = referenceTypes(lastState || {notes});
+  const references = referenceTypes(getState() || {notes});
   if (notes.length) note.placeholder = clipPlaceholder(notes[notes.length - 1].text);
   const history = $('#history');
   const place = history.scrollTop;
@@ -922,7 +922,7 @@ async function refreshState() {
   } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
     stateBusy = false;
-    if (queueReady && (lastState.fetch_jobs || []).some(item => item.approval === 'approved'
+    if (queueReady && (getState()?.fetch_jobs || []).some(item => item.approval === 'approved'
       && (item.status === 'queued'
         || (item.status === 'fetching' && Date.parse(item.lease_until) <= Date.now())))) {
       void pumpFetchQueue();
@@ -1344,7 +1344,7 @@ function submissionReceipt(report) {
   return [stamp, separator(), dot, separator(), when];
 }
 function renderReportAcknowledgement() {
-  const report = lastState?.reports.find(item => item.id === $('#report-select').value);
+  const report = getState()?.reports.find(item => item.id === $('#report-select').value);
   const receipt = $('#report-agent-ack');
   receipt.replaceChildren(...submissionReceipt(report));
   receipt.hidden = !receipt.children.length;
@@ -1352,7 +1352,7 @@ function renderReportAcknowledgement() {
   footer.replaceChildren(...submissionReceipt(report));
   footer.hidden = receipt.hidden;
   const history = $('#report-ack-history');
-  const references = referenceTypes(lastState || {});
+  const references = referenceTypes(getState() || {});
   const blocks = [];
   for (const ack of report?.acknowledgements || []) {
     for (const reply of [{text: ack.ack_text, html: ack.ack_html, at: ack.acknowledged_at}, ...(ack.replies || [])]) {
@@ -1412,7 +1412,7 @@ async function loadReport(force = false) {
   const id = $('#report-select').value;
   // A report the agent unpublished keeps its body until the owner clicks away.
   if (id && heldReport && heldReport.id === id &&
-      !(lastState?.reports || []).some(report => report.id === id)) return;
+      !(getState()?.reports || []).some(report => report.id === id)) return;
   const sequence = ++reportRequest;
   // The reports panel is the element that scrolls, and replacing the report collapses its content, so
   // the browser clamps the panel to the top before the new HTML arrives. An update to the report being
@@ -1423,7 +1423,7 @@ async function loadReport(force = false) {
   const updating = $('#report').dataset.reportId === id;
   const keepEntries = () => updating && force !== true && (reportDirty || $('#report-submit').disabled);
   if (keepEntries()) return;
-  const revision = lastState?.reports.find(report => report.id === id)?.updated_at || '';
+  const revision = getState()?.reports.find(report => report.id === id)?.updated_at || '';
   if (!updating || !id) {
     $('#report').replaceChildren();
     $('#report-submit').hidden = true;
@@ -1447,7 +1447,7 @@ async function loadReport(force = false) {
       applyAnswers($('#report'), saved.answers);
     }
     $('#report-form').dataset.fields = result.fields;
-    const report = lastState?.reports.find(item => item.id === id);
+    const report = getState()?.reports.find(item => item.id === id);
     // One date stamp at a time: a republished report shows Edited and drops the Published
     // line, so the owner reads the newest event, not both. Owner's note on the feature.
     const stampSource = result.edited && result.published && result.edited !== result.published
@@ -1869,7 +1869,7 @@ function markTaskHighlight(row) {
 function followReference(type, id) {
   if (!ACK_REFERENCE_PANELS[type] || !lastState) return;
   if (type === 'note') {
-    if (!(lastState.notes || []).some(item => item.id === id)) return;
+    if (!(getState()?.notes || []).some(item => item.id === id)) return;
     showTab($('#notes-tab'));
     clearLogSearch();
     const row = messageNodes.get(id);
@@ -1881,7 +1881,7 @@ function followReference(type, id) {
   }
   if (type === 'report') {
     const select = $('#report-select');
-    if (!(lastState.reports || []).some(item => item.id === id)) return;
+    if (!(getState()?.reports || []).some(item => item.id === id)) return;
     select.value = id;
     renderReportAcknowledgement();
     showTab($('#reports-tab'));
@@ -1890,7 +1890,7 @@ function followReference(type, id) {
   }
   const groups = ['upcoming', 'finished'];
   const target = groups
-    .map(group => (lastState.tasks?.[group] || []).find(item => item.id === id))
+    .map(group => (getState().tasks?.[group] || []).find(item => item.id === id))
     .find(Boolean);
   if (!target) return;
   // A click that names a task brings the task with it: a hiding filter moves to the target
@@ -2284,7 +2284,7 @@ $('#unpublish-report').addEventListener('click', async () => {
   clearUnpublishArm();
   button.disabled = true;
   try {
-    const report = ((lastState && lastState.reports) || []).find(item => item.id === id);
+    const report = ((getState()?.reports) || []).find(item => item.id === id);
     if (report && ackUnread(report)) await markAckSeen(id);
     await request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {
       method: 'POST', headers: writeHeaders('application/json'), body: '{}'
