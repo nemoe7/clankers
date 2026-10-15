@@ -29,14 +29,14 @@ The repository holds the source. `server.js` is the proxy, and `assets/` holds t
 - Chrome offers that install when the worker controls the viewer root and the manifest carries a 192px and a 512px PNG icon.
  The package ships both beside the scalable icon, and the worker registers on the root scope.
 - When the request names no preview, the viewer root answers its own page: the manifest link, the worker registration and a URL box. A rejected URL answers the same page with the reason, so the page never loses its manifest.
-- The chooser lists the last 10 previews opened from its URL box or its list, newest first. Each entry opens its preview in one tap, and its × button deletes it. The list lives in the browser's storage, so the server still keeps no memory, and a share or a link adds no entry.
+- The chooser lists the last 10 previews opened from its URL box, its list or a share, newest first. Each entry opens its preview in one tap, and its × button deletes it. The list lives in the browser's storage, so the server still keeps no memory, and a plain link adds no entry.
 - The proxy accepts only HTTPS roots on `sbx-*.arena.site`: no other host, no credentials, no port, no subpath. Write methods reach the selected preview only, and the proxy never forges the browser's `Origin`.
 - A strict `Content-Security-Policy` on the preview page can suppress the manifest. The preview keeps working either way.
 
 ## Links and the share sheet
 
 - A web app cannot capture `https://` links on another host, so tapping a raw `sbx-*.arena.site` link never opens this app directly. That dialog belongs to native apps.
-- A share does reach the app: the manifest registers `share_target`, so the Android share sheet lists the installed app. The app then opens the shared preview at once.
+- A share does reach the app: the manifest registers `share_target`, so the Android share sheet lists the installed app. The share lands on the chooser, which saves the shared root among the ten most recent and then opens the preview.
 - A link inside the preview keeps its own behavior: the proxy adds no click interception.
 
 ## Tailnet notes

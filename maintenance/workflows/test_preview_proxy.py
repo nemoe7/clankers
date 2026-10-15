@@ -330,3 +330,100 @@ def test_the_chooser_keeps_the_last_ten_previews():
     *[root(i) for i in range(9)],
   ], "a stored list drops junk and duplicates and keeps ten entries"
   assert result["notList"] == [], result["notList"]
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+  """Refuse redirects so a share response shows its own status and Location header."""
+
+  def redirect_request(self, req, fp, code, msg, headers, newurl):
+    return None
+
+
+def test_a_share_rides_through_the_chooser_into_the_recent_list():
+  """A share target lands on the chooser, which saves the root before the preview opens.
+
+  The share sheet jumps straight into a preview, so the chooser never sees the open and the
+  root joins no recent list. The share endpoint now redirects to the chooser with the root in
+  a `shared` parameter. The chooser script checks that parameter, saves the root among the
+  ten most recent, and replaces the page with the preview URL. The preview itself still loads
+  no chooser list.
+  """
+  port = free_port()
+  server = subprocess.Popen(
+    ["node", "server.js"],
+    cwd=str(SERVER.parent),
+    env={
+      "PATH": "/usr/local/bin:/usr/bin:/bin",
+      "PORT": str(port),
+    },
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+  )
+  try:
+    deadline = time.time() + 15
+    while time.time() < deadline:
+      try:
+        if get(port, "/healthz")[0] == 200:
+          break
+      except OSError:
+        time.sleep(0.1)
+    else:
+      raise AssertionError(f"The proxy never answered: {server.stdout.read()}")
+
+    opener = urllib.request.build_opener(_NoRedirect)
+
+    def share(path):
+      try:
+        with opener.open(f"http://127.0.0.1:{port}{path}", timeout=10) as answer:
+          return answer.status, answer.headers.get("location", "")
+      except urllib.error.HTTPError as error:
+        return error.code, error.headers.get("location", "")
+
+    # A shared URL answers with a redirect that carries the root to the chooser.
+    status, location = share("/pwa/share?url=https%3A%2F%2Fsbx-shared.arena.site%2F")
+    assert status == 302, status
+    assert location == "/?shared=https%3A%2F%2Fsbx-shared.arena.site%2F", location
+    # The share can also carry the link inside its text field.
+    status, location = share(
+      "/pwa/share?text=See+https%3A%2F%2Fsbx-text.arena.site%2F+now"
+    )
+    assert status == 302, status
+    assert location == "/?shared=https%3A%2F%2Fsbx-text.arena.site%2F", location
+    # The landing request keeps the chooser: `shared` names no proxy target.
+    status, kind, body = get(port, location)
+    assert status == 200 and "text/html" in kind, (status, kind)
+    assert 'name="url"' in body, "the shared landing opens the chooser"
+    assert RECENT in body, "the shared landing carries the recent list"
+    # A rejected share still answers with its plain-text refusal.
+    status, _ = share("/pwa/share?url=https%3A%2F%2Fexample.com%2F")
+    assert status == 400, status
+  finally:
+    server.terminate()
+    server.wait(timeout=10)
+
+  # The chooser script reads a valid root from `shared`, refuses junk, and builds the
+  # preview URL the form uses. A plain preview link carries `url` and adds no entry.
+  script = (
+    "const recent = require('./assets/recent.js');"
+    "const roots = n => Array.from({ length: n }, (_, i) => `https://sbx-p${i}.arena.site`);"
+    "const out = {};"
+    "out.fromShared = recent.fromShare('?shared=https%3A%2F%2Fsbx-shared.arena.site%2F');"
+    "out.fromJunk = recent.fromShare('?shared=javascript%3Aalert(1)');"
+    "out.fromLink = recent.fromShare('?url=https%3A%2F%2Fsbx-shared.arena.site%2F');"
+    "out.href = recent.viewerHref('https://sbx-shared.arena.site');"
+    "out.joined = recent.remember(roots(10).reduce(recent.remember, []),"
+    " recent.fromShare('?shared=https%3A%2F%2Fsbx-shared.arena.site%2F'));"
+    "console.log(JSON.stringify(out));"
+  )
+  result = json.loads(node(script))
+  assert result["fromShared"] == "https://sbx-shared.arena.site", result["fromShared"]
+  assert result["fromJunk"] is None, result["fromJunk"]
+  assert result["fromLink"] is None, "a plain preview link still adds no entry"
+  assert result["href"] == "/?url=https%3A%2F%2Fsbx-shared.arena.site%2F", result[
+    "href"
+  ]
+  assert result["joined"] == [
+    "https://sbx-shared.arena.site",
+    *[f"https://sbx-p{i}.arena.site" for i in range(9, 0, -1)],
+  ], "the shared root joins the ten stored roots at the top"

@@ -236,8 +236,10 @@ function sharePreview(incoming, res) {
   } catch {
     return sendText(res, 400, 'Share an Arena preview link: https://sbx-*.arena.site/');
   }
+  // The chooser saves the root into the recent list, then opens the preview itself. A
+  // straight jump to the preview would skip that save, because the preview runs no chooser code.
   res.writeHead(302, {
-    location: `/?url=${encodeURIComponent(`${selected.origin}/`)}`,
+    location: `/?shared=${encodeURIComponent(`${selected.origin}/`)}`,
     'cache-control': 'no-store'
   });
   return res.end();

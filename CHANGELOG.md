@@ -40,6 +40,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The preview header shows `Waiting for gates...` during polling with active routed work. Other polls keep `Polling…`.
 
+#### proxy
+
+- A shared preview link now saves its root among the ten most recent. The share target lands on the chooser, which records the root and then opens the preview.
+
 #### userscripts
 
 - Successful state saves clear persistent failure notices. Failed saves retain them, and temporary success messages keep their timeout.
