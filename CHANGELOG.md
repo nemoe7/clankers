@@ -68,6 +68,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The composer flash no longer replaces a task row tooltip. The hover keeps the task ID.
 
+- Receipt ages repaint every 30s from their stored stamps, so a long-open page never keeps a stale minute count.
+
 ### Fixed
 
 #### preview

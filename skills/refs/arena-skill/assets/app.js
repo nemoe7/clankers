@@ -527,6 +527,8 @@ function showHistory(notes) {
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}` +
       (item.ack_edited_at ? ` · Replied again ${time(item.ack_edited_at)}` : '');
+    receiptState.dataset.at = item.at;
+    if (item.ack_edited_at) receiptState.dataset.ackEditedAt = item.ack_edited_at;
     // The line reads as parts separated by the same ASCII dot: ID · state · time · filename · task.
     // The owner asked for the dot after the ID by name.
     const separator = document.createElement('span');
@@ -2222,3 +2224,15 @@ refreshState();
 setInterval(refreshState, 3000);
 // The wait timer repaints between state refreshes, so the seconds move without a fetch.
 setInterval(paintConnection, 1000);
+// Render mints each age label once, so a long-open page keeps a stale minute count.
+// A half-minute timer repaints every receipt age from its stored stamp.
+function repaintReceiptAges() {
+  for (const row of messageNodes.values()) {
+    const receipt = row.children[2];
+    const stamp = receipt && receipt.children[3];
+    if (!stamp || !stamp.dataset.at) continue;
+    stamp.textContent = ` · ${time(stamp.dataset.at)}` +
+      (stamp.dataset.ackEditedAt ? ` · Replied again ${time(stamp.dataset.ackEditedAt)}` : '');
+  }
+}
+setInterval(repaintReceiptAges, 30000);
