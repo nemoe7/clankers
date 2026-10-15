@@ -2222,7 +2222,7 @@ LONG_RUN_WORDS = (
 )
 WORKTREE_STEP = (
   "NEXT TASK: a queued task that edits files continues in a worktree while this runs:"
-  " `arena-preview worktree start <name> -- <command line>`."
+  " `arena-preview worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`."
 )
 DETACHED_NOTICE = (
   "RUN DETACHED: `{name}` runs in the background, so the call ends clean;"
@@ -2518,6 +2518,7 @@ def run_log_report(state_dir, name):
     elapsed = detached_seconds(record.get("started_at"))
     age = f" {elapsed}s" if elapsed is not None else ""
     print(f"run {name} running{age}")
+    print(WORKTREE_STEP)
     return 0
   print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
   for line in record.get("tail") or []:
