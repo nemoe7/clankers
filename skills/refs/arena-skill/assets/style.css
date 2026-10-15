@@ -198,7 +198,7 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 #report-ack-history .reply-block + .reply-block { margin-top: 8px; padding-top: 8px; }
 #report-ack-history .reply-block > p:first-child { margin-top: 0; }
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
-.report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
 /* The report select takes the log filter's own chevron instead of the native arrow, on owner note: both selects now read as one control. */
 /* Position sits on the wrap, which also holds the label, so the triangle anchors to the bottom half where the select box lives. */
@@ -310,7 +310,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-title[data-blocked="true"] { color: var(--muted); }
 .task[data-highlight="true"] { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 /* Details sit under the title in the muted face as a real list, and repeat in the row hover. */
-.tasks-layout > .row.tight { border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.tasks-layout > .row.tight { align-items: end; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .task-details { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
 .task-details > summary { cursor: pointer; list-style-position: inside; }
 .task-detail-list { margin: 2px 0 0; padding-left: 18px; }
@@ -319,7 +319,10 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-answer time { margin-left: 6px; font-size: 12px; }
 .task-answer-text { margin: 2px 0 0; white-space: pre-wrap; }
 .task-type { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--muted); border-radius: 8px; font-size: 11px; color: var(--muted); vertical-align: middle; }
-.task-filter { margin-left: 0; }
+.task-filter { flex: 0 1 auto; max-width: 200px; margin-left: 0; }
+/* The header keeps one line: the Type label rides beside its select, not above it. */
+.task-filter label { display: inline; margin: 0 6px 0 0; vertical-align: middle; }
+.task-filter select { display: inline-block; width: auto; vertical-align: middle; }
 #tasks-status { margin: 0; }
 .report .question { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; }
 .question-id { display: block; margin-bottom: 4px; }
