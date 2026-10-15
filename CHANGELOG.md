@@ -36,6 +36,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The quiet-note client test no longer describes cached state as Copy state.
 
+- The shipped client test matches the source tooltip check and cache comment.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
