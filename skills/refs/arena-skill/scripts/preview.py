@@ -4532,6 +4532,9 @@ class Store:
     if len(data) > MAX_REPORT:
       raise ValueError("Report exceeds the 2 MB limit; split it into reports")
     text = data.decode("utf-8")
+    # Embedding runs here, at publication, so the stored text carries every local
+    # image and the renderer later reads no file.
+    text = embed_report_images(text, source.resolve().parent)
     # Reject invalid fields before publication so the error names the field and preserves the report and connection.
     fields = parse_fields(text)[1]
     with self.transaction() as db:
@@ -5326,8 +5329,12 @@ def ensure_installed():
       return
 
 
-def image_data_uri(path: Path) -> str:
-  """Read one image file and return Markdown text that carries it as a data URI."""
+def image_payload(path: Path) -> tuple:
+  """Check one local image and return its MIME type and Base64 bytes.
+
+  Publication and the CLI helper share these checks, so a pasted or published
+  image meets the same type rules and the same 2 MiB cap.
+  """
   if not path.is_file():
     raise ValueError(f"{path} is not a file")
   size = path.stat().st_size
@@ -5352,7 +5359,52 @@ def image_data_uri(path: Path) -> str:
       f"{path} is not a supported image; the allowed types are PNG, JPEG, GIF and WebP"
     )
   encoded = base64.b64encode(data).decode("ascii")
+  return mime, encoded
+
+
+def image_data_uri(path: Path) -> str:
+  """Read one image file and return Markdown text that carries it as a data URI."""
+  mime, encoded = image_payload(path)
   return f"![{path.stem}](data:{mime};base64,{encoded})"
+
+
+# An inline image destination, with the optional title or ` =WxH` suffix that follows it.
+IMAGE_IN_MARKDOWN = re.compile(r"!\[([^\]\n]*)\]\(\s*(<[^>]+>|[^)\s]+)([^)\n]*)\)")
+
+
+def embed_report_images(markdown, report_dir):
+  """Rewrite report images for publication: local bytes become data URIs.
+
+  The owner boundary allows any readable local image, including absolute paths
+  and parent directories. A remote source becomes a hint, because publication
+  fetches nothing. Publication skips a local file that fails the shared checks.
+  Plain links and data URIs keep their original text, and the renderer reads no
+  file: the stored text already carries the bytes.
+  """
+
+  def swap(match):
+    alt, destination, suffix = match.groups()
+    source = destination[1:-1] if destination.startswith("<") else destination
+    if source.startswith("data:"):
+      return match.group(0)
+    if source.startswith("//") or re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", source):
+      return (
+        f"Publication skips remote image {source}. Fetch it locally, then embed"
+        " it with arena-preview image-data-uri."
+      )
+    path = Path(source)
+    if not path.is_absolute():
+      path = report_dir / path
+    try:
+      mime, encoded = image_payload(path)
+    except ValueError as error:
+      return (
+        f"Publication skips local image {source}: {error}. Run"
+        " arena-preview image-data-uri for the helper."
+      )
+    return f"![{alt}](data:{mime};base64,{encoded}{suffix})"
+
+  return IMAGE_IN_MARKDOWN.sub(swap, markdown)
 
 
 def main():

@@ -7263,3 +7263,99 @@ def test_poll_label_reports_live_routed_waits(monkeypatch):
     assert store.state()["waiting_for_gates"] is False
     store.clear_polling()
     assert store.state()["waiting_for_gates"] is False
+
+
+def test_publish_embeds_a_local_image_at_publication():
+  """Publication stores a local image as a data URI so the renderer reads nothing."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    root = Path(image_dir)
+    store = preview.Store(root, create=True)
+    raw = b"\x89PNG\r\n\x1a\n" + b"payload"
+    (root / "shot.png").write_bytes(raw)
+    source = root / "report.md"
+    source.write_text("# Report\n\n![shot](shot.png)\n", encoding="utf-8")
+    store.publish("images", "Images", source)
+    stored = store.report("images")["markdown"]
+    payload = base64.b64encode(raw).decode("ascii")
+    assert f"![shot](data:image/png;base64,{payload})" in stored
+    # The stored text carries the bytes, so the renderer needs no file.
+    (root / "shot.png").unlink()
+    source.unlink()
+    html, _ = preview.render_report(stored)
+    assert f"data:image/png;base64,{payload}" in html
+
+
+def test_publish_rejects_remote_images_and_keeps_links():
+  """A remote image URL leaves the report as a hint while a plain link stays."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    root = Path(image_dir)
+    store = preview.Store(root, create=True)
+    source = root / "report.md"
+    source.write_text(
+      "[doc](https://example.com/doc) ![pic](https://example.com/pic.png)\n",
+      encoding="utf-8",
+    )
+    store.publish("remote", "Remote", source)
+    stored = store.report("remote")["markdown"]
+    assert "https://example.com/doc" in stored
+    assert "![pic](https://example.com/pic.png)" not in stored
+    assert "Publication skips remote image" in stored
+    assert "arena-preview image-data-uri" in stored
+
+
+def test_publish_skips_local_images_that_fail_the_checks():
+  """Publication skips a local image that is missing or wrong, with the helper hint."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    root = Path(image_dir)
+    store = preview.Store(root, create=True)
+    (root / "notes.txt").write_text("plain words", encoding="utf-8")
+    source = root / "report.md"
+    source.write_text("![gone](missing.png)\n\n![txt](notes.txt)\n", encoding="utf-8")
+    store.publish("skips", "Skips", source)
+    stored = store.report("skips")["markdown"]
+    assert "![gone](" not in stored and "![txt](" not in stored
+    assert "Publication skips local image" in stored
+    assert "image-data-uri" in stored
+
+
+def test_publish_embeds_parent_and_absolute_paths():
+  """The boundary answer allows parent-directory and absolute local image paths."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    base = Path(image_dir)
+    up_raw = b"\x89PNG\r\n\x1a\n" + b"outer"
+    (base / "outer.png").write_bytes(up_raw)
+    report_dir = base / "nested"
+    report_dir.mkdir()
+    store = preview.Store(report_dir, create=True)
+    abs_raw = b"\x89PNG\r\n\x1a\n" + b"abs"
+    absolute = base / "abs.png"
+    absolute.write_bytes(abs_raw)
+    source = report_dir / "report.md"
+    source.write_text(
+      "![up](../outer.png)\n\n![abs](" + str(absolute) + ")\n\n"
+      "![in](data:image/gif;base64,R0lGOD)\n",
+      encoding="utf-8",
+    )
+    store.publish("paths", "Paths", source)
+    stored = store.report("paths")["markdown"]
+    up_payload = base64.b64encode(up_raw).decode("ascii")
+    abs_payload = base64.b64encode(abs_raw).decode("ascii")
+    assert "../outer.png" not in stored
+    assert f"data:image/png;base64,{up_payload}" in stored
+    assert f"data:image/png;base64,{abs_payload}" in stored
+    assert "![in](data:image/gif;base64,R0lGOD)" in stored
+
+
+def test_publish_keeps_the_size_suffix_on_an_embedded_image():
+  """The sized-image syntax keeps its pixel suffix after the source becomes a data URI."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    root = Path(image_dir)
+    store = preview.Store(root, create=True)
+    raw = b"\x89PNG\r\n\x1a\n" + b"sized"
+    (root / "tile.png").write_bytes(raw)
+    source = root / "report.md"
+    source.write_text("![tile](tile.png =32x)\n", encoding="utf-8")
+    store.publish("sized", "Sized", source)
+    stored = store.report("sized")["markdown"]
+    payload = base64.b64encode(raw).decode("ascii")
+    assert f"![tile](data:image/png;base64,{payload} =32x)" in stored

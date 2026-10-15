@@ -28,7 +28,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it replaces the live notes, answers, reports and tasks unless `--merge` keeps them; `--replace-tasks` replaces only tasks |
 | `download-request <url>` | Queue one pending file download for the owner to approve in Downloads; `--allow-proxy` permits the two proxies |
 | `image-data-uri <path>` | Print one Markdown line carrying a local PNG, JPEG, GIF or WebP file as a data URI; the command checks the type and a 2 MiB size cap before encoding |
-| `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report |
+| `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report. Publication embeds readable local images as data URIs, skips remote sources with a helper hint, and keeps links and data URIs |
 | `unpublish <id>` | Remove a report from the tab, keeping answers and source. Unacknowledged answers or unseen answer receipts return 409; a fresh owner view does not block agent unpublish. The page keeps an open report until the owner clicks away |
 | `stale-reports` | List stale published report IDs and reasons without changing state |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
