@@ -56,6 +56,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The violation-report trigger line for material, repeated, or uncorrected violations also adds MUST.
 
+#### preview
+
+- The log jump pill and the report scroll-to-top button now rest in the theme's white text color, and the accent marks their hover.
+
 ### Fixed
 
 #### preview

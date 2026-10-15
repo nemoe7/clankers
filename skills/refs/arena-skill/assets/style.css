@@ -150,12 +150,13 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
   min-height: 0; padding: 4px 12px; font-size: 12px; font-weight: 400; border-radius: 4px;
   border-color: var(--tab-border); background: var(--panel);
-  background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--accent);
+  background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--text);
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(12px);
   transition: color .15s, background-color .15s, border-color .15s;
 }
+/* The resting arrow reads white against the log, and the accent marks the hover. */
 .log-newest svg { pointer-events: none; flex: none; }
-.log-newest:hover { color: var(--text); }
+.log-newest:hover { color: var(--accent); }
 .log-newest:active { color: var(--muted); }
 .log-newest:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
