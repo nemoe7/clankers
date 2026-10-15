@@ -30,6 +30,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The dependency changelog entry names `requirements.txt` as the version source.
 
+- Compressed skill copies require a live server for the key command, as the source guide does.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.

@@ -16,7 +16,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 1. Run `<skill>/scripts/install.sh` from the repository root, once per session.
 2. Start the preview as Setup step 3 describes.
 3. Read the inbox with `arena-preview read`; answer with `arena-preview ack`.
-4. When a call needs the recorded agent key, run `arena-preview key`; it prints the key, the host and the stamp and needs no server.
+4. When a call needs the recorded key after a 401 or an owner question, run `arena-preview key` to print the key, host, and stamp. With no live preview server, it fails with the restart line.
 5. When a read cannot leave the sandbox, use [proxy routes](#proxy-access) through `fetch_page`.
 
 ## Setup
