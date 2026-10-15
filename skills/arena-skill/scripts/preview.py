@@ -762,7 +762,7 @@ PR_CHECK_WRAPPERS='env','command','timeout','xargs','nice','nohup','stdbuf','sud
 PR_CHECK_NAMES=('pr','checks','pr-checks'),('run','watch','run-watch')
 LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest','tox':'tox','nox':'nox'}
 LONG_RUN_WORDS=(('npm','test'),'npm-tests'),(('npm','run','test*'),'npm-tests'),(('yarn','test'),'yarn-tests'),(('pnpm','test'),'pnpm-tests'),(('make','test'),'make-tests'),(('npx','jest'),'npx-tests'),(('npx','vitest'),'npx-tests'),(('npx','mocha'),'npx-tests'),(('npx','ava'),'npx-tests'),(('go','test'),'go-tests'),(('cargo','test'),'cargo-tests'),(('dotnet','test'),'dotnet-tests'),(('mvn','test'),'mvn-tests'),(('mvnw','test'),'mvn-tests'),(('gradle','test'),'gradle-tests'),(('gradlew','test'),'gradle-tests')
-WORKTREE_STEP='NEXT TASK: a queued task that edits files continues in a worktree while this runs: `arena-preview worktree start <name> -- <command line>`.'
+WORKTREE_STEP='NEXT TASK: a queued task that edits files continues in a worktree while this runs: `arena-preview worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`.'
 DETACHED_NOTICE='RUN DETACHED: `{name}` runs in the background, so the call ends clean; its verdict prints on a later call. '+WORKTREE_STEP
 DETACHED_BLOCK='RUN BLOCKED: the background start failed, so the wait never left. Run `arena-preview route {name} -- <the same line>` instead.'
 DETACHED_STATUS_SECONDS=7200
@@ -858,7 +858,7 @@ def route_command(state_dir,name,argv):
 	print(f"routed {name}: the run continues in the background, and its verdict prints on a later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
 def run_log_report(state_dir,name):
 	record=routed_record(state_dir,name)
-	if record.get('exit')is None:elapsed=detached_seconds(record.get('started_at'));age=f" {elapsed}s"if elapsed is not None else'';print(f"run {name} running{age}");return 0
+	if record.get('exit')is None:elapsed=detached_seconds(record.get('started_at'));age=f" {elapsed}s"if elapsed is not None else'';print(f"run {name} running{age}");print(WORKTREE_STEP);return 0
 	print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
 	for line in record.get('tail')or[]:print(line)
 	return 0

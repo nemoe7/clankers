@@ -21,6 +21,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import preview
+import pytest
 
 _GUARD_LISTENER = None
 _GUARD_PORT = None
@@ -7611,3 +7612,37 @@ def test_a_routed_line_that_is_not_a_check_wait_skips_discovery(capsys):
     assert not [call for call in calls if call[0] == "gh"], (
       "no discovery read ran for either line"
     )
+
+
+def test_the_worktree_reminder_shows_the_installed_start_form():
+  reference = Path(__file__).resolve().parent.parent / "references" / "REFERENCE.md"
+  if not reference.exists():
+    pytest.skip("the compact runtime copy ships without the references directory")
+  lines = reference.read_text(encoding="utf-8").splitlines()
+  row = next(line for line in lines if line.startswith("| `worktree start"))
+  usage = row.split("`")[1]
+  assert usage in preview.WORKTREE_STEP, (
+    "the reminder must show the parser's own start form"
+  )
+
+
+def test_logs_repeats_the_worktree_step_while_a_run_is_still_going(tmp_path, capsys):
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  pid = os.getpid()
+  record = {
+    "name": "gate-one",
+    "detached": True,
+    "exit": None,
+    "started_at": None,
+    "tail": [],
+    "pid": pid,
+    "pid_started_at": preview.process_start_identity(pid),
+  }
+  (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
+  assert preview.run_log_report(tmp_path, "gate-one") == 0
+  out = capsys.readouterr().out
+  assert "run gate-one running" in out
+  assert preview.WORKTREE_STEP in out, (
+    "a live run repeats the worktree step on every logs call"
+  )
