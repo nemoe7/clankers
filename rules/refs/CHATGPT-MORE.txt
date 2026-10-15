@@ -2,6 +2,7 @@ An explicit user instruction in chat outranks these instructions; state the over
 MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. Look up its rules when needed.
 
 RESPONSE: Terse yet clear, numbered lists; detail when asked.
+ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 Open with the result and skip restating the task.
 Give the detail the task requires or the user requests.
 State what changed/was found, checks and results, open issues, assumptions, limits.
