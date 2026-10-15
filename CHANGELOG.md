@@ -16,6 +16,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A recent-preview entry takes a label: its edit button renames the row while the stored root and its links keep the preview origin. An entry without a label shows its host.
 
+#### userscripts
+
+- The `State — reset-window overwrite` switch ships On. Within 150 seconds either side of 02:00, 08:00, 14:00 or 20:00 PHT, a preview URL that changed writes without the overwrite prompt. A branch change or an hour outside the window keeps the prompt.
+
 #### preview
 
 - Reports have a floating scroll-to-top control with the message jump-button style.

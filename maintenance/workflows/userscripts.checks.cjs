@@ -2477,6 +2477,60 @@ function checkStateDownload(api, session, logging) {
   assert.equal(overwriteAsk(false, { kind: "download" }, true, false), false);
   assert.equal(overwriteAsk(true, { kind: "unchanged" }, true, false), false, "Nothing to write");
   assert.equal(overwriteAsk(true, { kind: "download" }, false, false), false, "No file to protect");
+
+  // The reset window accepts a URL-only move within 150 seconds either side of the four PHT
+  // boundaries. A branch move, a missing branch and an outside-window clock still ask.
+  var previousBoundary = api.previousBoundary;
+  var inResetWindow = api.inResetWindow;
+  var resetWindowAccepts = api.resetWindowAccepts;
+  assert.equal(api.resetWindowOn(), true, "the reset-window switch ships on");
+  assert.equal(
+    previousBoundary(new Date("2026-10-15T06:59:00Z")).toISOString(),
+    "2026-10-15T06:00:00.000Z",
+    "14:59 PHT sits after the 14:00 boundary",
+  );
+  assert.equal(
+    previousBoundary(new Date("2026-10-14T17:30:00Z")).toISOString(),
+    "2026-10-14T12:00:00.000Z",
+    "01:30 PHT falls back to the previous 20:00 boundary",
+  );
+  assert.equal(inResetWindow(new Date("2026-10-15T06:02:30Z")), true, "150 seconds after 14:00 PHT");
+  assert.equal(inResetWindow(new Date("2026-10-15T05:57:30Z")), true, "150 seconds before 14:00 PHT");
+  assert.equal(inResetWindow(new Date("2026-10-15T06:02:31Z")), false, "151 seconds after leaves");
+  assert.equal(inResetWindow(new Date("2026-10-15T05:57:29Z")), false, "151 seconds before leaves");
+  assert.equal(inResetWindow(new Date("2026-10-15T00:30:00Z")), false, "08:30 PHT waits");
+  var atWindow = new Date("2026-10-15T06:01:00Z");
+  var outside = new Date("2026-10-15T02:00:00Z");
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "main", "https://old.arena.site", "https://new.arena.site", "main"),
+    true,
+    "an in-window URL-only move writes without the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, false, "main", "https://old.arena.site", "https://new.arena.site", "main"),
+    false,
+    "the switch off keeps the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(outside, true, "main", "https://old.arena.site", "https://new.arena.site", "main"),
+    false,
+    "outside the window the prompt stands",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "dev", "https://old.arena.site", "https://new.arena.site", "main"),
+    false,
+    "a branch mismatch keeps the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "", "https://old.arena.site", "https://new.arena.site", ""),
+    false,
+    "a missing branch keeps the prompt",
+  );
+  assert.equal(
+    resetWindowAccepts(atWindow, true, "main", "https://new.arena.site", "https://new.arena.site", "main"),
+    false,
+    "a URL that did not move needs no acceptance",
+  );
   assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson with this state\?$/);
   console.log("ok state download 32");
   // The session bar names an unpushed branch in a titled span. A pushed branch also has an
