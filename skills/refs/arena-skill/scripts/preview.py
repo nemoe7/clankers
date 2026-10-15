@@ -142,7 +142,10 @@ def reminder_tail(cursor, remaining, stale=0):
 
 
 REMINDERS = (
-  "Refresh: ARENA.md, SKILL.md.",
+  (
+    "Context check: ARENA.md, SKILL.md, and all repository AGENTS.md files. "
+    "Read only files whose current text is absent from context."
+  ),
   "`task-list` at turn start. Update it as work changes.",
   "Take the smallest open task next.",
   "Always push.",

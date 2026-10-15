@@ -4940,8 +4940,7 @@ def test_reminder_rotation():
     rotate_store = preview.Store(rotate_dir, create=True)
     rotate_store.set_meta("port", guard_port())
     rotate_script = str(Path(preview.__file__))
-    # The reference left the required reads, so the reminder names the two governing files.
-    assert "Refresh: ARENA.md, SKILL.md." in preview.REMINDERS
+    assert len(preview.REMINDERS) == len(set(preview.REMINDERS))
     assert "Ask questions ASAP in reports." in preview.REMINDERS
     assert "`ask_user` on GH_TOKEN failure." in preview.REMINDERS
     assert "Unpublish stale reports." in preview.REMINDERS

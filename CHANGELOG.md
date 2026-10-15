@@ -49,6 +49,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: The read reminder names all repository AGENTS.md files and asks for reads only when current text is absent from context.
+
 - Preview: Group task search and type controls at the right, without a visible Type label. Keep the phone update age above them.
 
 - House: The root guide names the compressed live Kilo mode files.
