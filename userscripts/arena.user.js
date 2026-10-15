@@ -45,7 +45,7 @@
     "auto-wake": ["clicked", "filled"],
     fill: ["inserted", "rebuilt", "no-repo", "no-composer", "no-template", "filled"],
     trim: ["removed"],
-    state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-picker", "requested", "picker-closed"],
+    state: ["no-stamp", "compare", "force-stamp", "failed", "file-needed", "download", "saved", "no-preview", "moved", "forced", "confirmation", "no-write", "deferred-picker", "requested", "picker-closed", "reset-accept"],
     wake: ["refused", "unavailable"],
     title: ["changed", "restored", "conditions"],
   };
@@ -2173,6 +2173,49 @@
     return "Preview URL or branch changed. Overwrite " + name + " with this state?";
   }
 
+  var RESET_WINDOW_MS = 150 * 1000;
+  var RESET_BOUNDARY_HOURS = [2, 8, 14, 20];
+  var RESET_WINDOW_KEY = "clankers-arena-state-reset-window";
+
+  // The window spans 150 seconds either side of 02:00, 08:00, 14:00 or 20:00 PHT, and PHT
+  // holds UTC+8 all year, so the boundary math runs on fixed offsets.
+  function previousBoundary(when) {
+    var SHIFT = 8 * 3600000;
+    var DAY = 86400000;
+    var HOUR = 3600000;
+    var shifted = when.getTime() + SHIFT;
+    var dayStart = Math.floor(shifted / DAY) * DAY;
+    var hourOfDay = Math.floor((shifted - dayStart) / HOUR);
+    var boundary = null;
+    for (var i = 0; i < RESET_BOUNDARY_HOURS.length; i += 1) {
+      if (RESET_BOUNDARY_HOURS[i] <= hourOfDay) {
+        boundary = dayStart + RESET_BOUNDARY_HOURS[i] * HOUR;
+      }
+    }
+    if (boundary === null) boundary = dayStart - 4 * HOUR;
+    return new Date(boundary - SHIFT);
+  }
+
+  function inResetWindow(when) {
+    var prev = previousBoundary(when).getTime();
+    var at = when.getTime();
+    return at - prev <= RESET_WINDOW_MS || prev + 6 * 3600000 - at <= RESET_WINDOW_MS;
+  }
+
+  // Only a URL-only move qualifies: a branch mismatch or a missing branch keeps the prompt,
+  // and a switch set to off keeps it at every hour.
+  function resetWindowAccepts(when, on, branch, remembered, base, rememberedBranch) {
+    if (!on) return false;
+    if (!inResetWindow(when)) return false;
+    if (!branch || !remembered || remembered === base) return false;
+    if (rememberedBranch && branch !== rememberedBranch) return false;
+    return true;
+  }
+
+  function resetWindowOn() {
+    return GM_getValue(RESET_WINDOW_KEY, true) !== false;
+  }
+
   function stateDelivery(plan, hasHandle, hasPicker) {
     if (plan.kind !== "download") return plan.kind;
     if (hasHandle) return "write";
@@ -2364,6 +2407,10 @@
       saveMoved: saveMoved,
       overwriteAsk: overwriteAsk,
       overwriteLine: overwriteLine,
+      previousBoundary: previousBoundary,
+      inResetWindow: inResetWindow,
+      resetWindowAccepts: resetWindowAccepts,
+      resetWindowOn: resetWindowOn,
       stateScope: stateScope,
       stateRepo: stateRepo,
       stateBranch: stateBranch,
@@ -2707,7 +2754,23 @@
             );
             handle = null;
           }
-          if (overwriteAsk(moved, plan, Boolean(handle), force)) {
+          var asks = overwriteAsk(moved, plan, Boolean(handle), force);
+          // Inside the reset window a URL-only move writes through, because the sandbox moves
+          // near the boundary. A branch move or an hour outside the window still asks.
+          var accepted =
+            asks &&
+            resetWindowAccepts(
+              new Date(),
+              resetWindowOn(),
+              scope.branch,
+              rememberedBase,
+              base,
+              rememberedBranch,
+            );
+          if (accepted) {
+            logEvent("state", "reset-accept", { repo: scope.repo });
+          }
+          if (asks && !accepted) {
             logEvent("state", "confirmation", { filename: handle.name });
             askOverwrite(handle, storeKey, manual);
             return;
@@ -2815,6 +2878,24 @@
     menuItem(menus, "State — force save", function () {
       fetchStateFile(true, true);
     });
+    menus.push(
+      menuAdd(
+        function () {
+          return (
+            "State — reset-window overwrite (" + (resetWindowOn() ? "ON" : "OFF") + ")"
+          );
+        },
+        function () {
+          logEvent("menu", "run");
+          GM_setValue(RESET_WINDOW_KEY, !resetWindowOn());
+          logEvent("feature", "change", {
+            feature: "state-download",
+            enabled: resetWindowOn(),
+          });
+          menuRefresh();
+        },
+      ),
+    );
 
     fetchStateFile(false);
     var stopStateWatch = jitteredTimer(function () {

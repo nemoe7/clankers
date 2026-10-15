@@ -22,7 +22,7 @@ The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt`
 
 ## Feature switches
 
-Ten switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
+Eleven switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
 Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module\'s entries stay together. The modules sit in one order:
 
@@ -126,6 +126,10 @@ The script saves the pause, so a reload keeps it. Each feature switch stays in t
 Persistent state notices clear after a successful file close or download-manager callback. Failed saves keep their notices. Temporary success messages keep their existing timeout.
 
 A browser-link download has no completion callback, so it does not clear a failure notice.
+
+## Arena State Reset Window
+
+The `State — reset-window overwrite` switch ships On. Within 150 seconds either side of 02:00, 08:00, 14:00 and 20:00 PHT, a preview URL that changed writes to the file without the overwrite prompt. A branch change, a missing branch and every hour outside that window keep the prompt.
 
 ## Arena Tab Title
 
