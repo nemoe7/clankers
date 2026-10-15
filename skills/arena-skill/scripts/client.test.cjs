@@ -3531,6 +3531,7 @@ test('preview client', async (t) => {
       get('#note').value = 'Pending draft stays safe';
       hold('/api/notes');
       writing = get('#form').events.submit(event({}));
+      assert.equal(get('#note').value, '', 'submission clears before the pending message renders');
       assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
       await refresh();
       assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
@@ -3538,6 +3539,41 @@ test('preview client', async (t) => {
       release(); await writing;
       assert.equal(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')), false);
       assert.equal(get('#note').value, 'Pending draft stays safe', 'failure keeps the message draft');
+      pendingWrites.clear(); failedWrites.clear();
+
+      const nextDraft = 'A new draft while a message is pending';
+      get('#note').value = 'The first message';
+      hold('/api/notes');
+      writing = get('#form').events.submit(event({}));
+      assert.equal(get('#note').value, '');
+      get('#note').value = nextDraft;
+      get('#note').events.input();
+      failedWrites.add('/api/notes');
+      release(); await writing;
+      assert.equal(get('#note').value, nextDraft, 'failure does not replace a new draft');
+      pendingWrites.clear(); failedWrites.clear();
+
+      const repeatedDraft = 'The same text typed as a new draft';
+      get('#note').value = repeatedDraft;
+      hold('/api/notes');
+      writing = get('#form').events.submit(event({}));
+      assert.equal(get('#note').value, '');
+      get('#note').value = repeatedDraft;
+      get('#note').events.input();
+      release(); await writing;
+      assert.equal(get('#note').value, repeatedDraft, 'confirmation keeps a newly typed identical draft');
+      pendingWrites.clear(); failedWrites.clear();
+
+      get('#note').value = 'The submitted draft';
+      hold('/api/notes');
+      writing = get('#form').events.submit(event({}));
+      get('#note').value = 'A replacement draft';
+      get('#note').events.input();
+      get('#note').value = '';
+      get('#note').events.input();
+      failedWrites.add('/api/notes');
+      release(); await writing;
+      assert.equal(get('#note').value, '', 'failure does not restore over an intentionally cleared new draft');
       pendingWrites.clear(); failedWrites.clear();
 
       state.reports[0].updated_at = reportRevision;

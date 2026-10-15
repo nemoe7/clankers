@@ -72,6 +72,7 @@ function newId() {
 }
 let historySignature = '';
 let draftPreviewSequence = 0;
+let draftVersion = 0;
 let fetchSignature = '';
 let fetchBusy = false;
 const messageNodes = new Map();
@@ -248,6 +249,7 @@ grow();
 try { pending = JSON.parse(stored('pending') || 'null'); }
 catch { status.textContent = 'Stored retry data is invalid. Draft retained; check the log before resending.'; }
 note.addEventListener('input', () => {
+  draftVersion++;
   grow();
   if (!save('draft', note.value)) status.textContent = 'Browser storage unavailable. Keep this page open.';
 });
@@ -915,6 +917,7 @@ $('#form').addEventListener('submit', async event => {
   event.preventDefault();
   if (send.disabled || (!note.value.trim() && !stagedFiles.length)) return;
   const draft = note.value;
+  const submittedVersion = draftVersion;
   const names = stagedFiles.map(file => file.name);
   const text = draft.trim() ? draft : names.length === 1 ? `File: ${names[0]}` : `Files: ${names.join(', ')}`;
   const attachments = stagedFiles.map(attachmentInfo);
@@ -937,6 +940,9 @@ $('#form').addEventListener('submit', async event => {
     else if (result) state.notes[position] = result;
   };
   try {
+    note.value = '';
+    save('draft', '');
+    writeMode();
     const result = await optimisticWrite(apply, async () => {
       let response;
       if (stagedFiles.length) {
@@ -969,13 +975,13 @@ $('#form').addEventListener('submit', async event => {
     pending = null;
     save('pending', 'null');
     clearStagedFiles();
-    if (note.value === draft) {
-      note.value = '';
-      save('draft', '');
-      writeMode();
-    }
     refreshState();
   } catch (error) {
+    if (draftVersion === submittedVersion && !note.value) {
+      note.value = draft;
+      save('draft', draft);
+      writeMode();
+    }
     const total = stagedFiles.reduce((sum, file) => sum + file.size, 0);
     const hint = stagedFiles.length > 1 && error && error.name === 'TypeError'
       ? ` The combined upload is ${bytes(total)}; if it fails again, send fewer files per message.` : '';
