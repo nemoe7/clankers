@@ -309,7 +309,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - The ARENA.md gate clauses drop the tool name. The refs line reads detached, and the two copies read the same way, so the rule names no harness call.
 - The PR-check reminder drops the tool name too. The line names the later call that carries the verdict, and the test string follows.
 - The ARENA.md gate clause names the wait: `arena-preview poll` breaks when the run finishes, so the agent never parks a `get_process_output` read. The refs line and the live mirror carry the same sentence.
-- The ARENA.md Workspace clause adds the PR-check refusal: a bash line that runs `gh pr checks` or `gh run watch` is refused by the gate.
+- The ARENA.md Workspace clause adds the PR-check refusal: the gate refuses a bash line that runs `gh pr checks` or `gh run watch`.
 - REFERENCE.md gains "The gate's cases": one row per labelled case of the profile gate and its hook. A test compares the table with the labels in `install.sh`.
 - The ARENA.md read clause batches the required reads into one call and splits them only where the harness output cap cuts the text. The refs baseline, the live mirror and the root copy carry the same rule.
 - The ARENA.md question rule names the bar for `ask_user`. It never carries a question the report path can carry, and a report with answers takes the follow-up as a new report. The refs line, the live mirror and the root copy carry the clause.
@@ -355,7 +355,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - The composer page renders no session bar, so the prompt fill read no repository and wrote nothing. The composer's repository chip now answers, and a second chip in the same owner/repo form stays ambiguous, so the tab title decides.
-- The waiting line is read by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark.
+- Arena reads the waiting line by its text span alone, never by its words. Arena rotates and empties that text, so a blank frame between two rotations now keeps the hourglass instead of losing the mark.
 - The tab title read a chat body that kept growing to raise the balloon, so a re-render could pass for new words. The read now starts at the last message root and takes its newest row.
 - The newest row's kind picks the mark: a `prose` body raises 💬, a `not-prose` reasoning block raises 💭, and a user root raises none. An action row keeps its label emoji, and every mark ends with the stop control.
 - The fetch and lone-search rows carry no button, so the label read found nothing and the mark fell to the plain title. The read now takes the row's `body-sm` span and drops a fetch URL's anchor text.
@@ -390,12 +390,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
-- Python dependencies are pinned in `requirements.txt`, and the workflows install from it.
+- The workflows pin Python dependencies in `requirements.txt` and install from that file.
 - The AGENTS.md version clause requires a bump of each module's version after its edits.
 - The rule files write never, must and always as NEVER, MUST and ALWAYS.
 - Rule clauses write NEVER in place of "do not".
 - Hard rule clauses take MUST, NEVER or ALWAYS.
-- Duplicate Arena wording is removed: the installer step, the serve step, the note-ID rule and the check-reading rule each keep one copy.
+- Maintenance removes duplicate Arena wording: the installer step, the serve step, the note-ID rule and the check-reading rule each keep one copy.
 - The ARENA.md gate clause: a gate run MUST use `arena-preview run <name> -- <command>` under `start_process`, and NEVER uses `get_process_output` to wait. The verdict prints in the start_process log and on the next call.
 - `pytest.ini` carries `addopts = -n auto`, and the CI test job drops its own `-n auto`. Every run now splits across the workers, and the full gate drops from 89.7 s to 21.0 s.
 
@@ -413,14 +413,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### preview
 
 - The CLI prints readable text instead of JSON, and drops dead metadata.
-- Unused helpers `cli_json` and `note_with_upload` are removed, and `format_task` drops two unused parameters.
+- The preview drops unused helpers `cli_json` and `note_with_upload`. `format_task` drops two unused parameters.
 - A blocked call names the command part that blocked it, without the shell wrapper.
 - The message search marks matched text inside rendered answers too, not only in plain messages.
 - The message search marks a longer query that spans text an earlier query split. The mark has no horizontal padding, so the text does not shift.
 - The stderr reminder labels the pending count `Unacked:`, so the call count is not read as a note count.
 - `arena-preview run <name> -- <command>` prints the verdict and the time to stdout and stderr. The next gate call shows each finished run once, with its verdict.
 - `arena-preview poll` ends when a gate run finishes and prints its verdict, as well as on a new note or task.
-- An answered report no longer refuses the agent's unpublish. The owner's dismissal path is unchanged.
+- An answered report no longer refuses the agent's unpublish. The owner's dismissal path does not change.
 - The poll-hold test bounds its loop at two turns, so the suite no longer pays 39 s for 1800 idle turns.
 - `arena-preview task-list` prints the upcoming tasks only and names the head of the queue `current`. `--full` prints every task, finished included.
 - The task flags drop the redundant `--task-` head: `--details` is the name, and `--task-details` stays an alias. Every flag also takes a short form.
@@ -435,7 +435,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### maintenance
 
-- Gate scripts are renamed to `gate_*`, and sit in six domain directories.
+- The maintenance update renames gate scripts to `gate_*` files in six domain directories.
 - Proxy files no longer count toward the tracked instruction budgets.
 - The proxy test fixture starts both stub servers with `poll_interval=0.01`, which removes 1 s of shutdown wait from each test.
 
