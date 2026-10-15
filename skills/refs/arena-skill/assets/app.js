@@ -1153,19 +1153,25 @@ function quoteNoteId(code) {
 }
 // The report ID rides the status line as a code element that quotes the report to the composer,
 // the one gesture the log's note IDs and the task titles carry too.
-function reportStatusLine(text, id) {
+function reportStatusLine(text, id, answerId = null) {
   const status = $('#report-status');
   if (!id) {
     status.textContent = text;
     return;
   }
-  const code = document.createElement('code');
-  code.className = 'note-id';
-  code.textContent = id;
-  code.dataset.full = id;
-  code.dataset.quote = 'full';
-  code.title = id;
-  status.replaceChildren(text, ' · ', code);
+  const parts = text ? [text] : [];
+  for (const [value, full] of [[answerId, false], [id, true]]) {
+    if (!value) continue;
+    const code = document.createElement('code');
+    code.className = 'note-id';
+    code.textContent = full ? value : value.slice(0, 6);
+    code.dataset.full = value;
+    if (full) code.dataset.quote = 'full';
+    code.title = value;
+    if (parts.length) parts.push(' · ');
+    parts.push(code);
+  }
+  status.replaceChildren(...parts);
 }
 function quoteTaskId(title) {
   quoteId(title.dataset.taskId, title);
@@ -1440,11 +1446,7 @@ async function loadReport(force = false) {
     const stampSource = result.edited && result.published && result.edited !== result.published
       ? `Edited ${time(result.edited)}`
       : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
-    reportStatusLine(
-      `Report · ${result.fields} field${result.fields === 1 ? '' : 's'}` +
-      (stampSource ? ` · ${stampSource}` : '') + submissionParts(report),
-      id,
-    );
+    reportStatusLine(stampSource, id, report?.latest_answer_at ? report.latest_answer_id : null);
     // Opening the report is the gesture that clears an unread ack: the receipt sits at the top
     // of the panel, so the mark goes out on this visit rather than on a later scroll.
     if (report && ackUnread(report)) void markAckSeen(id);
@@ -1489,10 +1491,7 @@ $('#report-form').addEventListener('submit', async event => {
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
     // The report ID keeps its chip after a send: the plain text assignment
     // dropped it, so the loaded line and the sent line disagreed.
-    reportStatusLine(
-      `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 6)}`,
-      id,
-    );
+    reportStatusLine('', id, result.id);
     void refreshState();
   } catch (error) {
     if ($('#report').dataset.reportId === id) {

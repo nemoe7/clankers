@@ -49,6 +49,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: Remove report status labels, and make the submission ID a composer link.
+
 #### house
 
 - The root license text moves to the nemoe7 Noncommercial and Public-Interest License 1.2.0, fetched verbatim from nemoe7/license.

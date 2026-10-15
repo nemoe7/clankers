@@ -1466,7 +1466,7 @@ test('preview client', async (t) => {
     assert.equal(get('#report-select').children[0].textContent, '1. * Fielded',
       'a report with no read stamp carries the asterisk in the select');
     assert.equal(get('#report-submit').hidden, false);
-    assert.match(get('#report-status').textContent, /3 fields/);
+    assert.equal(Number(get('#report-form').dataset.fields), reportFields);
     assert.equal(textInput.value, 'ada');
     const restored = textInput.style.height;
     assert.ok(px(restored) > 0, 'restored answers expand the textarea');
@@ -1511,7 +1511,7 @@ test('preview client', async (t) => {
     await get('#report-form').events.submit(event({}));
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     assert.equal(sent.at(-1).revision, reportRevision, 'send the revision that supplied the form');
-    assert.match(get('#report-status').textContent, /^Report · /);
+    assert.equal(get('#report-status').children[0].dataset.full, sent.at(-1).id);
     assert.doesNotMatch(get('#report-status').textContent, /Sent |Read |Awaiting ack|Acked /,
       'the stamps live on the receipt, not the status line');
     const sentReceipt = get('#report-agent-ack');
@@ -1525,13 +1525,13 @@ test('preview client', async (t) => {
     assert.deepEqual(JSON.parse(storage.get('arena-preview-v1:answers:r1')).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Other: make it red' });
     await get('#refresh-report').events.click();
     await tick();
-    assert.match(get('#report-status').textContent, /^Report · 3 fields · Published /,
+    assert.match(get('#report-status').textContent, /^Published /,
       'a report never republished shows the publish stamp');
-    assert.match(get('#report-status').textContent, /· Submission /);
+    assert.ok(get('#report-status').textContent.includes(sent.at(-1).id.slice(0, 6)));
     assert.doesNotMatch(get('#report-status').textContent, /Sent /);
     // The ID is on show, a click quotes it like a note ID, and a ctrl-click is the same gesture.
     // The quote opens in Messages with a regrown box. A hidden-panel measurement collapsed the textarea and clipped it.
-    const reportCode = part(get('#report-status'), 'note-id');
+    const reportCode = get('#report-status').children.find(child => child.dataset?.full === 'r1');
     assert.equal(reportCode.textContent, 'r1', 'the loaded report shows its ID');
     assert.equal(reportCode.dataset.full, 'r1');
     const copiedBeforeReport = copied.length;
@@ -1565,7 +1565,8 @@ test('preview client', async (t) => {
     assert.deepEqual(sent.at(-1).answers, { name: 'ada lovelace', areas: ['ui', 'api'], verdict: 'Ship it' });
     // The report ID stays on show after a send: the status line carried the chip
     // on load and dropped it on the sent answer.
-    assert.equal(part(get('#report-status'), 'note-id').textContent, 'r1',
+    assert.equal(get('#report-status').children.find(child => child.dataset?.quote === 'full').textContent,
+      get('#report').dataset.reportId,
       'a sent answer keeps the report ID on show');
     await get('#refresh-report').events.click();
     await tick();
@@ -2311,6 +2312,16 @@ test('preview client', async (t) => {
     documentEvents.click({ target: code, ctrlKey: true });
     assert.equal(get('#note').value, 'RE: summarize-stops\n');
     assert.equal(get('#note').hidden, false, 'the quote opens the composer');
+    const answer = 'abcdef012345';
+    const report = 'summarize-stops';
+    context.reportStatusLine('', report, answer);
+    const codes = get('#report-status').children.filter(child => child.className === 'note-id');
+    assert.deepEqual(codes.map(code => code.dataset.full), [answer, report]);
+    const answerCode = codes.find(code => code.dataset.full === answer);
+    assert.equal(answerCode.textContent, answer.slice(0, 6));
+    get('#note').value = '';
+    documentEvents.click({ target: answerCode });
+    assert.equal(get('#note').value, `RE: ${answerCode.textContent}\n`);
   });
 
   await t.test("The report copies its Markdown source, fetched on the click rather than riding the poll", async () => {
