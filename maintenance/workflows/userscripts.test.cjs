@@ -1218,3 +1218,87 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     assert.equal(clicks, 4, "a new latest root permits one recovery");
   });
 }
+
+{
+  const { test } = require("node:test");
+  test("a healthy auto save cycle closes a lingering get error popup", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
+    const saved = new Map();
+    const menus = new Map();
+    const timers = [];
+    const requests = [];
+    const stamp = "2026-10-15T09:00:00+00:00";
+    const base = "https://preview.example";
+    saved.set("clankers-arena-state-scope-o.r", "o.r");
+    saved.set("clankers-arena-state-base-o.r", base);
+    saved.set("clankers-arena-state-branch-o.r", "");
+    saved.set("clankers-arena-state-ask-o.r", false);
+    saved.set("clankers-arena-state-stamp-o.r", JSON.stringify({ stamp, note: "", task: "" }));
+    const makeElement = (tag) => ({
+      tagName: tag,
+      children: [],
+      style: {},
+      attributes: {},
+      listeners: {},
+      textContent: "",
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      getAttribute(name) { return name in this.attributes ? this.attributes[name] : null; },
+      appendChild(child) { child.parentNode = this; this.children.push(child); return child; },
+      removeChild(child) { this.children = this.children.filter((item) => item !== child); return child; },
+      addEventListener(name, callback) { this.listeners[name] = callback; },
+    });
+    const body = makeElement("body");
+    const iframe = { getAttribute: (name) => (name === "title" ? "App preview on port 8000" : null), src: base + "/" };
+    const documentFake = {
+      body,
+      visibilityState: "visible",
+      createElement: makeElement,
+      getElementById: (id) => body.children.find((child) => child.id === id) || null,
+      querySelectorAll: (selector) => (selector === "iframe[title]" ? [iframe] : []),
+      querySelector: () => null,
+      addEventListener: () => {},
+    };
+    const context = {
+      document: documentFake,
+      location: { href: "https://arena.ai/c/o/r", pathname: "/c/o/r", search: "" },
+      navigator: {},
+      sessionStorage: { getItem: (key) => (key === "clankers-arena-agent-slug" ? "o.r" : null), setItem: () => {} },
+      localStorage: { getItem: () => null, setItem: () => {} },
+      MutationObserver: class { observe() {} disconnect() {} },
+      setInterval: (callback) => { timers.push(callback); return timers.length; },
+      clearInterval: () => {},
+      setTimeout: () => 0,
+      clearTimeout: () => {},
+      fetch: () => Promise.reject(new Error("offline")),
+      Blob: class { constructor(parts) { this.parts = parts; } },
+      URL: { createObjectURL: () => "blob:x", revokeObjectURL: () => {} },
+      console: { log: () => {}, warn: () => {}, error: () => {}, debug: () => {}, info: () => {} },
+      GM_getValue: (key, fallback) => (saved.has(key) ? saved.get(key) : fallback),
+      GM_setValue: (key, value) => { saved.set(key, value); },
+      GM_deleteValue: (key) => { saved.delete(key); },
+      GM_registerMenuCommand: (label, callback) => { menus.set(label, callback); return label; },
+      GM_unregisterMenuCommand: (label) => { menus.delete(label); },
+      GM_xmlhttpRequest: (options) => { requests.push(options); },
+      GM_addStyle: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+    };
+    context.window = context;
+    context.self = context;
+    vm.runInNewContext(source, context, { filename: "arena.user.js" });
+    const respond = (index, status, text) => requests[index].onload({ status, responseText: text });
+    const panel = () => body.children.find((child) => child.id === "clankers-state-panel") || null;
+    const healthy = JSON.stringify({ stamp, counts: null, stamps: null, text: "{}" });
+    assert.equal(requests.length, 1, "the boot cycle reads the copy state once");
+    respond(0, 200, healthy);
+    assert.equal(panel(), null, "an unchanged boot cycle shows no popup");
+    timers.forEach((tick) => tick());
+    const get = requests.length - 1;
+    respond(get, 502, "");
+    assert.ok(panel(), "the failed get raises its error popup");
+    timers.forEach((tick) => tick());
+    respond(requests.length - 1, 200, healthy);
+    assert.equal(panel(), null, "the next healthy auto save cycle closes the error popup");
+  });
+}
