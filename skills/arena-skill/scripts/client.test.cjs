@@ -49,8 +49,7 @@ test('preview client', async (t) => {
       }
     }
     replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
-    // A browser clamps a scroll container when the content inside it collapses, and replacing the report is the case the owner
-    // hit: the harness does the same, so a missing restore shows up as a jump to the top here exactly as it does on screen.
+    // Reset report scroll when replacing content, as browser layout does.
     set innerHTML(value) {
       this.inner = value; this.renders = (this.renders || 0) + 1;
       this.text = '';
@@ -378,8 +377,7 @@ test('preview client', async (t) => {
         return response({ id, seen_at });
       }
       if (url.startsWith('/api/reports/') && url.endsWith('/view')) {
-        // The view stamp is the reader's side of the unpublish guard: a report the panel shows
-        // must not vanish under the owner.
+        // An active view stamp preserves an unpublished report while the panel shows it.
         viewCalls.push(url);
         viewActive.push(options && options.body ? JSON.parse(options.body).active : true);
         return response({ id: decodeURIComponent(url.split('/')[3]), viewed_at: new Date().toISOString() });
@@ -1159,7 +1157,7 @@ test('preview client', async (t) => {
     }
   });
 
-  await t.test("A message the agent wrote used to say so through an origin tag; that key is gone from the", async () => {
+  await t.test('Message receipts omit the origin tag and retain rendered or raw text', async () => {
     assert.equal(get('#history').children[0].children[0].className, 'raw-message',
       'a message the server sent without rendered HTML keeps the raw class');
     state.notes.push({
@@ -1418,8 +1416,7 @@ test('preview client', async (t) => {
     state.calls_since_message = 1;
     await refresh(); await tick();
     assert.equal(get('#connection-text').textContent, '3 messages saved · 1 call');
-    // The tally rides every line the header shows, not just the quiet one: a poll and a finished
-    // call are the lines the owner watches while the count climbs.
+    // Poll and completed-call status retain the call count.
     state.polling = true;
     state.polling_since = new Date(Date.now() - 65000).toISOString().slice(0, 19);
     await refresh(); await tick();

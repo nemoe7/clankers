@@ -40,6 +40,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Client test comments describe current behavior, and three test titles are complete.
 
+- Client fixture comments describe scroll reset, report view stamps, and call counts.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
