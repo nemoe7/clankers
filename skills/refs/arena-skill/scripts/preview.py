@@ -5043,8 +5043,6 @@ class Store:
             f"{field_id}: pick options only: " + ", ".join(field["options"])
           )
         rendered = ", ".join(value) if value else "(skipped)"
-      # The question rides with the answer, on owner note: the receipt reads whole
-      # without opening the report itself.
       lines.append(f"  {field['prompt']} ({field_id}): {rendered}")
     return self.submission(note_id, report_id, "\n".join(lines), shared=shared)
 

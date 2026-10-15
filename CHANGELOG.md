@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - HTTP test comments describe newline rendering and report acknowledgement elements.
 
+- Report submission code omits request-history comments.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
