@@ -130,10 +130,9 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
 /* The log scroll area leaves space for its jump bar.
    Show the bar only away from the log end. */
 .log-scroll { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
-/* The new-reply pill floats at the log's top, mirroring the jump bar at its foot: the placement
-   says where the reply waits, and the two pills can never meet. */
+/* Keep the reply pill at the log top and the jump bar at the bottom. */
 .log-edited {
-  /* The screenshot showed an 8px clip at the card border. The label uses neutral white, not the accent. */
+  /* Offset the pill from the card border and use the theme's text color. */
   position: absolute; left: 50%; top: 20px; transform: translateX(-50%);
   z-index: 1;
   min-height: 0; padding: 4px 12px; font-size: 12px; border-radius: 4px;
@@ -145,7 +144,7 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
 .log-edited:hover { color: var(--muted); border-color: var(--muted); }
 .log-edited:focus-visible { box-shadow: 0 0 0 2px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 .log-newest {
-  /* Use the compact arrow from the Arena UI reference. The log keeps its scroll state. */
+  /* Keep the compact arrow and the log's scroll state. */
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
   min-height: 0; padding: 4px 12px; font-size: 12px; font-weight: 400; border-radius: 4px;
@@ -154,12 +153,12 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(12px);
   transition: color .15s, background-color .15s, border-color .15s;
 }
-/* The resting arrow reads white against the log, and the accent marks the hover. */
+/* Use the theme's text color at rest and the accent color on hover. */
 .log-newest svg { pointer-events: none; flex: none; }
 .log-newest:hover { color: var(--accent); }
 .log-newest:active { color: var(--muted); }
 .log-newest:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
-/* The report's own arrow pins to the top of that frame, since going up is its job. */
+/* Keep the report scroll-to-top button at the top of its frame. */
 #report-top { top: 8px; bottom: auto; }
 .message { margin-bottom: 14px; background: var(--bubble); padding: 8px 14px; border-radius: 8px; }
 .message:last-child { margin-bottom: 0; }

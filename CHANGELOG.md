@@ -16,6 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Clock, composer, copy, and report status comments describe the code.
 
+- Pill and scroll-button comments describe placement and theme colors.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
