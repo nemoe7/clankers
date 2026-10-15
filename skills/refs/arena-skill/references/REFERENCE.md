@@ -31,6 +31,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `publish <source.md> --id <id> --title <title>` | Publish or update a rendered report. Publication embeds readable local images as data URIs, skips remote sources with a helper hint, and keeps links and data URIs |
 | `unpublish <id>` | Remove a report from the tab, retaining answers and source. Unacknowledged answers or unseen answer receipts block the call with 409. A fresh owner view does not block agent unpublish, and the page retains the open report until the owner clicks away |
 | `stale-reports` | List stale published report IDs and reasons without changing state |
+| `report-state` | Print publication, owner view stamp and answer visibility for one report or all |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
 | `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token and recorded port |
 
