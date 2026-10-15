@@ -1289,8 +1289,11 @@ def test_http_boundaries():
         row for row in store.state()["notes"] if row["text"].startswith("REPORT")
       ]
       answered = store.submissions()[-1]["text"]
-      assert "Fielded:" in answered and "name: ada" in answered
-      assert "severity: high" in answered and "notes: (skipped)" in answered
+      assert "Fielded:" in answered and "Name (name): ada" in answered
+      assert (
+        "Severity (severity): high" in answered
+        and "Notes (notes): (skipped)" in answered
+      )
       for broken in (
         [],
         [{"id": "a", "type": "text", "prompt": "x"}] * 51,
@@ -1372,10 +1375,10 @@ def test_http_boundaries():
       answered = pending[-1]["text"]
       assert (
         "Fielded:" in answered
-        and "name: it broke" in answered
-        and "severity: high" in answered
-        and "pick-the-areas: ui" in answered
-        and "notes: (skipped)" in answered
+        and "Name (name): it broke" in answered
+        and "Severity (severity): high" in answered
+        and "Pick the areas (pick-the-areas): ui" in answered
+        and "Notes (notes): (skipped)" in answered
       )
       assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
       assert len(store.submissions()) == len(sent) + 1
@@ -1421,7 +1424,9 @@ def test_http_boundaries():
         "sub-custom",
         {"verdict": "Other: make it blue"},
       )
-      assert "verdict: Other: make it blue" in record["text"]
+      assert "Verdict (verdict): Other: make it blue" in record["text"], (
+        "the flattened answer carries its question"
+      )
       for bad in (
         {"verdict": "Other: "},
         {"verdict": "nope"},

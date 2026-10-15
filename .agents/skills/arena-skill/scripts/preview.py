@@ -1600,7 +1600,7 @@ class Store:
 			else:
 				if not isinstance(value,list)or len({item for item in value if isinstance(item,str)})!=len(value)or any(item not in field['options']and not custom_answer(field,item)for item in value):raise ValueError(f"{field_id}: pick options only: "+', '.join(field['options']))
 				rendered=', '.join(value)if value else'(skipped)'
-			lines.append(f"  {field_id}: {rendered}")
+			lines.append(f"  {field['prompt']} ({field_id}): {rendered}")
 		return self.submission(note_id,report_id,'\n'.join(lines),shared=shared)
 def open_link(renderer,tokens,index,options,env):
 	token=tokens[index];href=token.attrGet('href')or''
