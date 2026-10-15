@@ -121,6 +121,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview: Put client DOM, state, and fetch mocks in the parent Node test context.
+
 #### preview
 
 - Report acknowledgement writes retain the server receipt. Failed bulk writes remain available for retry.

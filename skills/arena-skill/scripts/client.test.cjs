@@ -10,406 +10,405 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { File } = require('node:buffer');
 
-class Element {
-  // textContent reads through to children, the way a browser does, so a receipt built from two elements still asserts as one string.
-  // Setting it clears the children, as in a browser. A bare string child is a text node, the way replaceChildren takes one.
-  get textContent() {
-    return this.children.length
-      ? this.children.map(child => (typeof child === 'string' ? child : child.textContent)).join('')
-      : this.text;
-  }
-  set textContent(value) {
-    this.text = value;
-    this.children = [];
-  }
-  constructor() {
-    this.value = '';
-    this.text = '';
-    this.hidden = false;
-    this.disabled = false;
-    this.children = [];
-    this.attributes = {};
-    this.dataset = {};
-    this.style = {};
-    this.events = {};
-    this.scrollTop = 0;
-    this.scrollHeight = 0;
-    this.clientHeight = 0;
-  }
-  setAttribute(name, value) { this.attributes[name] = value; }
-  getAttribute(name) { return this.attributes[name]; }
-  addEventListener(name, callback) { this.events[name] = callback; }
-  append(...children) {
-    for (const child of children) {
-      this.children = this.children.filter(item => item !== child);
-      this.children.push(child);
-    }
-  }
-  replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
-  // A browser clamps a scroll container when the content inside it collapses, and replacing the report is the case the owner
-  // hit: the harness does the same, so a missing restore shows up as a jump to the top here exactly as it does on screen.
-  set innerHTML(value) {
-    this.inner = value; this.renders = (this.renders || 0) + 1;
-    const panel = elements.get('#reports-panel');
-    if (this.id === 'report' && panel) panel.scrollTop = 0;
-  }
-  get innerHTML() { return this.inner; }
-  querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
-  contains(node) { return this === node || this.children.some(child => child instanceof Element && child.contains(node)); }
-  get lastElementChild() { return this.children.at(-1); }
-  focus() { this.focused = true; }
-  scrollIntoView() { this.scrolledIntoView = true; }
-  select() { this.selected = true; }
-  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
-  remove() { this.removed = true; }
-  requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
-  click() { this.clicks = (this.clicks || 0) + 1; }
-}
-const elements = new Map();
-const documentEvents = {};
-const documentCaptureEvents = {};
-const intervals = [];
-const windowEvents = {};
-const copied = [];
-let clipboardFails = false;
-let execCommandResult = true;
-const get = id => {
-  if (!elements.has(id)) {
-    const element = new Element();
-    // A stub element knows its own id, so the parts of the browser a stub has to model can key on it:
-    // the scroll clamp below fires for `#report` and nothing else.
-    if (id.startsWith('#')) element.id = id.slice(1);
-    elements.set(id, element);
-  }
-  return elements.get(id);
-};
-// The first shape of a control's icon: a control holds one SVG, and its shapes sit in draw
-// order, so the same index reads the same shape however many the icon carries.
-const shapeOf = element => element.children.at(-1).children[0];
-get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
-get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
-get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
-get('#downloads-tab').setAttribute('aria-controls', 'downloads-panel');
-get('#reports-panel').hidden = true;
-get('#tasks-panel').hidden = true;
-get('#downloads-panel').hidden = true;
-get('#upload-file').files = [];
-get('#note').placeholder = 'What should happen next?';
-const storage = new Map();
-const root = { dataset: {} };
-let counter = 0;
-let sendHandler;
-let state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
-let stateFails = false;
-let stateResponseWait = null;
-let stateGatewayBody = null;
-let reportFields = 0;
-let reportRevision = '2026-09-22T12:00:00.100000+00:00';
-let reportPublished = '2026-09-22T12:00:00.100000+00:00';
-let reportConflict = false;
-let reportHtmlWait = null;
-let reportSubmitWait = null;
-const sent = [];
-const readStamps = [];
-const ackSeenCalls = [];
-const ackSeenFailures = new Set();
-const viewCalls = [];
-const viewActive = [];
-const skipCalls = [];
-const replySeenCalls = [];
-let replySeenWait = null;
-let replySeenError = false;
-const unpublished = [];
-const uploadCalls = [];
-let loseUploadResponse = false;
-let dropUploadOnce = false;
-class FormDataStub {
-  constructor() { this.fields = new Map(); }
-  append(name, value) { this.fields.set(name, [...(this.fields.get(name) || []), value]); }
-  get(name) { return (this.fields.get(name) || [])[0]; }
-  getAll(name) { return this.fields.get(name) || []; }
-}
-const queuedCalls = [];
-const dropped = [];
-const remoteCalls = [];
-const remoteBehaviors = new Map();
-const resultCalls = [];
-const failedCalls = [];
-let enqueueResponseLost = false;
-let staleToken = false;
-let servedToken = 'token-one';
-let pageFetches = 0;
-const writeTokens = [];
-const response = (value, ok = true) => {
-  const body = JSON.stringify(value);
-  return { ok, status: ok ? 200 : 503, json: async () => JSON.parse(body), text: async () => body };
-};
-let coarsePointer = false;
-const pointerListeners = [];
-const pendingWrites = new Map();
-const failedWrites = new Set();
-const context = {
-  window: {
-    addEventListener: (name, callback) => { windowEvents[name] = callback; },
-    matchMedia: query => ({
-      // A live getter: the client reads the query once and the pointer may change later.
-      get matches() { return query === '(pointer: coarse)' && coarsePointer; },
-      addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
-    }),
-  },
-  document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
-  navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
-  localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
-  crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
-  AbortController,
-  Blob,
-  File,
-  FormData: FormDataStub,
-  URL,
-  setTimeout,
-  clearTimeout,
-  setInterval: callback => { intervals.push(callback); return 1; },
-  clearInterval: () => {},
-  fetch: async (url, options) => {
-    if (pendingWrites.has(url)) await pendingWrites.get(url);
-    if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
-    if (url === '/api/state') {
-      // A gateway in front of a dead server answers with its own page, not the app's JSON.
-      if (stateGatewayBody !== null) return { ok: false, status: 502, statusText: 'Bad Gateway', json: async () => ({}), text: async () => stateGatewayBody };
-      const snapshot = stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
-      if (stateResponseWait) await stateResponseWait;
-      return snapshot;
-    }
-    if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
-    if (url === '/api/report-sources') return response(state.reportSources || []);
-    if (url === '/api/copy-state') {
-      // The route serves the save-file text and its counts. The harness projects the same keys.
-      if (state.copyStateFails) return response({ error: 'no route' }, false);
-      const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-      const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
-      const project = (record, keys) => {
-        const line = {};
-        for (const key of keys) line[key] = record[key] ?? null;
-        return line;
-      };
-      const tasks = state.tasks || {};
-      const taskLines = [...(tasks.upcoming || []), ...(tasks.finished || [])];
-      const lines = [
-        ...(state.notes || []).map(record => project(record, noteKeys)),
-        ...taskLines.map(record => project(record, taskKeys)),
-        ...(state.submissions || []),
-        ...(state.reportSources || []),
-      ];
-      return response({
-        text: lines.map(line => JSON.stringify(line)).join('\n') + '\n',
-        counts: { notes: (state.notes || []).length, tasks: taskLines.length,
-          answers: (state.submissions || []).length, reports: (state.reportSources || []).length },
-        stamp: '2026-10-06T09:00:00',
-        repo: 'clankers',
-        branch: 'main',
-      });
-    }
-    if (url === '/api/skip-poll') {
-      // The press toggles one flag and writes no note, so the harness records the call alone.
-      const posted = JSON.parse(options.body || '{}');
-      skipCalls.push(posted);
-      state.skip_poll = posted.skip === false ? null : '2026-10-06T09:00:00';
-      return response({ skip_poll: state.skip_poll });
-    }
-    if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
-    if (url === '/api/notes') {
-      // A note send is the write the retry tests drive, now that no save route exists.
-      writeTokens.push(options.headers['X-Preview-Token']);
-      if (staleToken && options.headers['X-Preview-Token'] !== servedToken) {
-        return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
-      }
-      const note = JSON.parse(options.body);
-      sent.push(note);
-      return sendHandler(note);
-    }
-    if (url.startsWith('/api/reports/') && url.endsWith('/submit')) {
-      const submission = JSON.parse(options.body);
-      sent.push(submission);
-      if (reportSubmitWait) await reportSubmitWait;
-      if (reportConflict) return {ok:false, status:409, text:async () => JSON.stringify({error:'Report changed. Copy entries before refreshing.'})};
-      const at = new Date().toISOString();
-      const report = state.reports.find(item => item.id === decodeURIComponent(url.split('/')[3]));
-      if (report) Object.assign(report, {
-        latest_answer_id: submission.id, latest_answer_at: at, latest_answer_acknowledged_at: null
-      });
-      return response({ ...submission, at });
-    }
-    if (url === '/api/notes/with-file') {
-      const id = options.body.get('id');
-      const text = options.body.get('text');
-      const files = options.body.getAll('file');
-      uploadCalls.push({ id, text, files, token: options.headers['X-Preview-Token'],
-        contentType: options.headers['Content-Type'] });
-      let saved = state.notes.find(note => note.id === id);
-      if (!saved) {
-        const records = files.map((file, index) => {
-          const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
-          const stored = `${id}${files.length > 1 ? `-${index + 1}` : ''}${ext}`;
-          return { id: index ? `${id}-file-${index}` : id, note_id: id, name: file.name,
-            type: file.type, size: file.size, sha256: 'c'.repeat(64),
-            file: stored, path: `uploads/${stored}`, present: true,
-            at: '2026-09-21T00:00:00+00:00' };
-        });
-        saved = { id, text, attachment_name: files[0].name, attachment_path: records[0].path,
-          attachments: records, at: '2026-09-21T00:00:00+00:00', acknowledged_at: null };
-        state.notes = [...state.notes, saved];
-        state.uploads = [...(state.uploads || []), ...records];
-      }
-      if (loseUploadResponse) { loseUploadResponse = false; throw new Error('response lost after commit'); }
-      if (dropUploadOnce) {
-        dropUploadOnce = false;
-        const drop = new Error('Failed to fetch');
-        drop.name = 'TypeError';
-        throw drop;
-      }
-      return response(saved);
-    }
-    if (url === '/api/fetch-jobs') {
-      const payload = JSON.parse(options.body);
-      const record = {
-        id: `fetch-${queuedCalls.length + 1}`, url: payload.url, allow_proxy: payload.allow_proxy,
-        status: 'queued', approval: 'approved', origin: 'owner', source: null, error: null, name: null, size: null, sha256: null,
-        file: null, present: false, at: '2026-09-22T00:00:00+00:00'
-      };
-      queuedCalls.push({ ...record });
-      state.fetch_jobs = [record, ...(state.fetch_jobs || [])];
-      if (enqueueResponseLost) { enqueueResponseLost = false; throw new Error('response lost after commit'); }
-      return response(record);
-    }
-    if (url === '/api/fetch-jobs/claim') {
-      const record = [...state.fetch_jobs].reverse().find(item => item.status === 'queued' && item.approval === 'approved');
-      if (!record) return response({ job: null });
-      record.status = 'fetching';
-      return response({ job: { ...record, claim: `claim-${record.id}` } });
-    }
-    if (url.startsWith('/api/fetch-jobs/')) {
-      const [, , , id, actionWithQuery] = url.split('/');
-      const action = actionWithQuery.split('?')[0];
-      const record = state.fetch_jobs.find(item => item.id === id);
-      if (!record) return response({ error: 'No queued download' }, false);
-      if (action === 'approve' || action === 'deny') {
-        if (record.approval !== 'pending' || record.status !== 'queued') {
-          return response({ error: 'Request already decided' }, false);
-        }
-        record.approval = action === 'approve' ? 'approved' : 'denied';
-        if (action === 'deny') { record.status = 'failed'; record.error = 'Denied in the preview'; }
-        return response(record);
-      }
-      if (action === 'drop') {
-        dropped.push({ url, id });
-        state.fetch_jobs = state.fetch_jobs.filter(item => item.id !== id);
-        return response({ dropped: id });
-      }
-      if (action === 'result') {
-        resultCalls.push({ url, body: options.body, source: options.headers['X-Fetch-Source'] });
-        record.status = 'saved';
-        record.source = options.headers['X-Fetch-Source'];
-        record.name = decodeURIComponent(url.split('?name=')[1]);
-        record.type = options.headers['Content-Type'];
-        record.size = options.body.size;
-        record.sha256 = 'd'.repeat(64);
-        record.file = id + (record.name.includes('.') ? record.name.slice(record.name.lastIndexOf('.')) : '');
-        record.present = true;
-        return response(record);
-      }
-      if (action === 'fail') {
-        record.status = 'failed';
-        record.error = JSON.parse(options.body).error;
-        failedCalls.push({ id, error: record.error });
-      } else if (action === 'retry') {
-        if (record.approval !== 'approved') return response({ error: 'Only approved downloads can be retried' }, false);
-        record.status = 'queued';
-        record.error = null;
-      }
-      return response(record);
-    }
-    if (url.startsWith('https://')) {
-      remoteCalls.push({ url, options });
-      const behavior = remoteBehaviors.get(url) || {};
-      if (behavior.error) throw new Error(behavior.error);
-      const chunks = behavior.chunks || [Uint8Array.from([1, 2, 3])];
-      let position = 0;
-      return {
-        ok: behavior.ok !== false, status: behavior.status || 200, url: behavior.finalURL || url,
-        headers: { get: name => name === 'content-length'
-          ? behavior.declared == null ? null : String(behavior.declared)
-          : behavior.type || 'application/octet-stream' },
-        body: { getReader: () => ({
-          read: async () => position < chunks.length ? { done: false, value: chunks[position++] } : { done: true },
-          cancel: async () => { behavior.cancelled = true; }
-        }) }
-      };
-    }
-    if (url === '/') {
-      // A fresh page carries the token the restarted server accepts, so the retry has one to take. The token rides an HTML attribute, the way the served page carries it.
-      // The minified script did not include this text. Save presses after a reset then failed.
-      pageFetches += 1;
-      return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
-    }
-    if (url.startsWith('/api/messages/') && url.endsWith('/replies/seen')) {
-      if (replySeenWait) await replySeenWait;
-      if (replySeenError) return response({ error: 'Write failed' }, false);
-      const id = decodeURIComponent(url.split('/')[3]);
-      const count = JSON.parse(options.body).count;
-      const item = [...(state.notes || []), ...(state.submissions || [])].find(record => record.id === id);
-      if (!item) return response({ error: 'Message not found' }, false);
-      item.ack_edited_seen_count = Math.max(Number(item.ack_edited_seen_count || 0), count);
-      replySeenCalls.push({ url, count });
-      return response({ id, ack_edited_seen_count: item.ack_edited_seen_count });
-    }
-    if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
-      readStamps.push(url);
-      const id = decodeURIComponent(url.split('/')[3]);
-      const seen_at = new Date().toISOString();
-      const report = state.reports.find(item => item.id === id);
-      if (report) report.seen_at = seen_at;
-      return response({ id, seen_at });
-    }
-    if (url.startsWith('/api/reports/') && url.endsWith('/view')) {
-      // The view stamp is the reader's side of the unpublish guard: a report the panel shows
-      // must not vanish under the owner.
-      viewCalls.push(url);
-      viewActive.push(options && options.body ? JSON.parse(options.body).active : true);
-      return response({ id: decodeURIComponent(url.split('/')[3]), viewed_at: new Date().toISOString() });
-    }
-    if (url.startsWith('/api/reports/') && url.endsWith('/ack-seen')) {
-      const id = decodeURIComponent(url.split('/')[3]);
-      const stamp = new Date().toISOString();
-      ackSeenCalls.push(url);
-      if (ackSeenFailures.has(id)) return response({ error: 'Write failed' }, false);
-      const report = state.reports.find(item => item.id === id);
-      if (report) report.ack_seen_at = stamp;
-      return response({ id, ack_seen_at: stamp });
-    }
-    if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
-      const target = decodeURIComponent(url.split('/')[3]);
-      unpublished.push(target);
-      writeTokens.push(options.headers['X-Preview-Token']);
-      state.reports = state.reports.filter(report => report.id !== target);
-      return response({ unpublished: target });
-    }
-    if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
-    const renderedRevision = reportRevision;
-    if (reportHtmlWait) await reportHtmlWait;
-    return response({
-      html: '<h1>Report</h1>', fields: reportFields, revision: renderedRevision,
-      published: reportPublished, edited: renderedRevision
-    });
-  }
-};
-const tick = () => new Promise(resolve => setImmediate(resolve));
-// The page's own poll timer is the test's refresh: the toolbar button it used to share that work with is gone with the state select.
-// The reload test loads a second client into the same document, and its timer is the live one, so the last refresh wins.
-const refresh = () => intervals.filter(callback => callback.name === 'refreshState').at(-1)();
-const part = (node, cls) => node.children.find(child => (child.className || '') === cls);
-const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
-
 test('preview client', async (t) => {
+  class Element {
+    // textContent reads through to children, the way a browser does, so a receipt built from two elements still asserts as one string.
+    // Setting it clears the children, as in a browser. A bare string child is a text node, the way replaceChildren takes one.
+    get textContent() {
+      return this.children.length
+        ? this.children.map(child => (typeof child === 'string' ? child : child.textContent)).join('')
+        : this.text;
+    }
+    set textContent(value) {
+      this.text = value;
+      this.children = [];
+    }
+    constructor() {
+      this.value = '';
+      this.text = '';
+      this.hidden = false;
+      this.disabled = false;
+      this.children = [];
+      this.attributes = {};
+      this.dataset = {};
+      this.style = {};
+      this.events = {};
+      this.scrollTop = 0;
+      this.scrollHeight = 0;
+      this.clientHeight = 0;
+    }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    getAttribute(name) { return this.attributes[name]; }
+    addEventListener(name, callback) { this.events[name] = callback; }
+    append(...children) {
+      for (const child of children) {
+        this.children = this.children.filter(item => item !== child);
+        this.children.push(child);
+      }
+    }
+    replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
+    // A browser clamps a scroll container when the content inside it collapses, and replacing the report is the case the owner
+    // hit: the harness does the same, so a missing restore shows up as a jump to the top here exactly as it does on screen.
+    set innerHTML(value) {
+      this.inner = value; this.renders = (this.renders || 0) + 1;
+      const panel = elements.get('#reports-panel');
+      if (this.id === 'report' && panel) panel.scrollTop = 0;
+    }
+    get innerHTML() { return this.inner; }
+    querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
+    contains(node) { return this === node || this.children.some(child => child instanceof Element && child.contains(node)); }
+    get lastElementChild() { return this.children.at(-1); }
+    focus() { this.focused = true; }
+    scrollIntoView() { this.scrolledIntoView = true; }
+    select() { this.selected = true; }
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
+    remove() { this.removed = true; }
+    requestSubmit() { this.submissions = (this.submissions || 0) + 1; }
+    click() { this.clicks = (this.clicks || 0) + 1; }
+  }
+  const elements = new Map();
+  const documentEvents = {};
+  const documentCaptureEvents = {};
+  const intervals = [];
+  const windowEvents = {};
+  const copied = [];
+  let clipboardFails = false;
+  let execCommandResult = true;
+  const get = id => {
+    if (!elements.has(id)) {
+      const element = new Element();
+      // A stub element knows its own id, so the parts of the browser a stub has to model can key on it:
+      // the scroll clamp below fires for `#report` and nothing else.
+      if (id.startsWith('#')) element.id = id.slice(1);
+      elements.set(id, element);
+    }
+    return elements.get(id);
+  };
+  // The first shape of a control's icon: a control holds one SVG, and its shapes sit in draw
+  // order, so the same index reads the same shape however many the icon carries.
+  const shapeOf = element => element.children.at(-1).children[0];
+  get('#notes-tab').setAttribute('aria-controls', 'notes-panel');
+  get('#reports-tab').setAttribute('aria-controls', 'reports-panel');
+  get('#tasks-tab').setAttribute('aria-controls', 'tasks-panel');
+  get('#downloads-tab').setAttribute('aria-controls', 'downloads-panel');
+  get('#reports-panel').hidden = true;
+  get('#tasks-panel').hidden = true;
+  get('#downloads-panel').hidden = true;
+  get('#upload-file').files = [];
+  get('#note').placeholder = 'What should happen next?';
+  const storage = new Map();
+  const root = { dataset: {} };
+  let counter = 0;
+  let sendHandler;
+  let state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
+  let stateFails = false;
+  let stateResponseWait = null;
+  let stateGatewayBody = null;
+  let reportFields = 0;
+  let reportRevision = '2026-09-22T12:00:00.100000+00:00';
+  let reportPublished = '2026-09-22T12:00:00.100000+00:00';
+  let reportConflict = false;
+  let reportHtmlWait = null;
+  let reportSubmitWait = null;
+  const sent = [];
+  const readStamps = [];
+  const ackSeenCalls = [];
+  const ackSeenFailures = new Set();
+  const viewCalls = [];
+  const viewActive = [];
+  const skipCalls = [];
+  const replySeenCalls = [];
+  let replySeenWait = null;
+  let replySeenError = false;
+  const unpublished = [];
+  const uploadCalls = [];
+  let loseUploadResponse = false;
+  let dropUploadOnce = false;
+  class FormDataStub {
+    constructor() { this.fields = new Map(); }
+    append(name, value) { this.fields.set(name, [...(this.fields.get(name) || []), value]); }
+    get(name) { return (this.fields.get(name) || [])[0]; }
+    getAll(name) { return this.fields.get(name) || []; }
+  }
+  const queuedCalls = [];
+  const dropped = [];
+  const remoteCalls = [];
+  const remoteBehaviors = new Map();
+  const resultCalls = [];
+  const failedCalls = [];
+  let enqueueResponseLost = false;
+  let staleToken = false;
+  let servedToken = 'token-one';
+  let pageFetches = 0;
+  const writeTokens = [];
+  const response = (value, ok = true) => {
+    const body = JSON.stringify(value);
+    return { ok, status: ok ? 200 : 503, json: async () => JSON.parse(body), text: async () => body };
+  };
+  let coarsePointer = false;
+  const pointerListeners = [];
+  const pendingWrites = new Map();
+  const failedWrites = new Set();
+  const context = {
+    window: {
+      addEventListener: (name, callback) => { windowEvents[name] = callback; },
+      matchMedia: query => ({
+        // A live getter: the client reads the query once and the pointer may change later.
+        get matches() { return query === '(pointer: coarse)' && coarsePointer; },
+        addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
+      }),
+    },
+    document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
+    navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
+    localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
+    crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
+    AbortController,
+    Blob,
+    File,
+    FormData: FormDataStub,
+    URL,
+    setTimeout,
+    clearTimeout,
+    setInterval: callback => { intervals.push(callback); return 1; },
+    clearInterval: () => {},
+    fetch: t.mock.fn(async (url, options) => {
+      if (pendingWrites.has(url)) await pendingWrites.get(url);
+      if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
+      if (url === '/api/state') {
+        // A gateway in front of a dead server answers with its own page, not the app's JSON.
+        if (stateGatewayBody !== null) return { ok: false, status: 502, statusText: 'Bad Gateway', json: async () => ({}), text: async () => stateGatewayBody };
+        const snapshot = stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+        if (stateResponseWait) await stateResponseWait;
+        return snapshot;
+      }
+      if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
+      if (url === '/api/report-sources') return response(state.reportSources || []);
+      if (url === '/api/copy-state') {
+        // The route serves the save-file text and its counts. The harness projects the same keys.
+        if (state.copyStateFails) return response({ error: 'no route' }, false);
+        const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
+        const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
+        const project = (record, keys) => {
+          const line = {};
+          for (const key of keys) line[key] = record[key] ?? null;
+          return line;
+        };
+        const tasks = state.tasks || {};
+        const taskLines = [...(tasks.upcoming || []), ...(tasks.finished || [])];
+        const lines = [
+          ...(state.notes || []).map(record => project(record, noteKeys)),
+          ...taskLines.map(record => project(record, taskKeys)),
+          ...(state.submissions || []),
+          ...(state.reportSources || []),
+        ];
+        return response({
+          text: lines.map(line => JSON.stringify(line)).join('\n') + '\n',
+          counts: { notes: (state.notes || []).length, tasks: taskLines.length,
+            answers: (state.submissions || []).length, reports: (state.reportSources || []).length },
+          stamp: '2026-10-06T09:00:00',
+          repo: 'clankers',
+          branch: 'main',
+        });
+      }
+      if (url === '/api/skip-poll') {
+        // The press toggles one flag and writes no note, so the harness records the call alone.
+        const posted = JSON.parse(options.body || '{}');
+        skipCalls.push(posted);
+        state.skip_poll = posted.skip === false ? null : '2026-10-06T09:00:00';
+        return response({ skip_poll: state.skip_poll });
+      }
+      if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
+      if (url === '/api/notes') {
+        // A note send is the write the retry tests drive, now that no save route exists.
+        writeTokens.push(options.headers['X-Preview-Token']);
+        if (staleToken && options.headers['X-Preview-Token'] !== servedToken) {
+          return { ok: false, status: 403, text: async () => JSON.stringify({ error: 'Bad or missing token' }) };
+        }
+        const note = JSON.parse(options.body);
+        sent.push(note);
+        return sendHandler(note);
+      }
+      if (url.startsWith('/api/reports/') && url.endsWith('/submit')) {
+        const submission = JSON.parse(options.body);
+        sent.push(submission);
+        if (reportSubmitWait) await reportSubmitWait;
+        if (reportConflict) return {ok:false, status:409, text:async () => JSON.stringify({error:'Report changed. Copy entries before refreshing.'})};
+        const at = new Date().toISOString();
+        const report = state.reports.find(item => item.id === decodeURIComponent(url.split('/')[3]));
+        if (report) Object.assign(report, {
+          latest_answer_id: submission.id, latest_answer_at: at, latest_answer_acknowledged_at: null
+        });
+        return response({ ...submission, at });
+      }
+      if (url === '/api/notes/with-file') {
+        const id = options.body.get('id');
+        const text = options.body.get('text');
+        const files = options.body.getAll('file');
+        uploadCalls.push({ id, text, files, token: options.headers['X-Preview-Token'],
+          contentType: options.headers['Content-Type'] });
+        let saved = state.notes.find(note => note.id === id);
+        if (!saved) {
+          const records = files.map((file, index) => {
+            const ext = file.name.includes('.') ? file.name.slice(file.name.lastIndexOf('.')) : '';
+            const stored = `${id}${files.length > 1 ? `-${index + 1}` : ''}${ext}`;
+            return { id: index ? `${id}-file-${index}` : id, note_id: id, name: file.name,
+              type: file.type, size: file.size, sha256: 'c'.repeat(64),
+              file: stored, path: `uploads/${stored}`, present: true,
+              at: '2026-09-21T00:00:00+00:00' };
+          });
+          saved = { id, text, attachment_name: files[0].name, attachment_path: records[0].path,
+            attachments: records, at: '2026-09-21T00:00:00+00:00', acknowledged_at: null };
+          state.notes = [...state.notes, saved];
+          state.uploads = [...(state.uploads || []), ...records];
+        }
+        if (loseUploadResponse) { loseUploadResponse = false; throw new Error('response lost after commit'); }
+        if (dropUploadOnce) {
+          dropUploadOnce = false;
+          const drop = new Error('Failed to fetch');
+          drop.name = 'TypeError';
+          throw drop;
+        }
+        return response(saved);
+      }
+      if (url === '/api/fetch-jobs') {
+        const payload = JSON.parse(options.body);
+        const record = {
+          id: `fetch-${queuedCalls.length + 1}`, url: payload.url, allow_proxy: payload.allow_proxy,
+          status: 'queued', approval: 'approved', origin: 'owner', source: null, error: null, name: null, size: null, sha256: null,
+          file: null, present: false, at: '2026-09-22T00:00:00+00:00'
+        };
+        queuedCalls.push({ ...record });
+        state.fetch_jobs = [record, ...(state.fetch_jobs || [])];
+        if (enqueueResponseLost) { enqueueResponseLost = false; throw new Error('response lost after commit'); }
+        return response(record);
+      }
+      if (url === '/api/fetch-jobs/claim') {
+        const record = [...state.fetch_jobs].reverse().find(item => item.status === 'queued' && item.approval === 'approved');
+        if (!record) return response({ job: null });
+        record.status = 'fetching';
+        return response({ job: { ...record, claim: `claim-${record.id}` } });
+      }
+      if (url.startsWith('/api/fetch-jobs/')) {
+        const [, , , id, actionWithQuery] = url.split('/');
+        const action = actionWithQuery.split('?')[0];
+        const record = state.fetch_jobs.find(item => item.id === id);
+        if (!record) return response({ error: 'No queued download' }, false);
+        if (action === 'approve' || action === 'deny') {
+          if (record.approval !== 'pending' || record.status !== 'queued') {
+            return response({ error: 'Request already decided' }, false);
+          }
+          record.approval = action === 'approve' ? 'approved' : 'denied';
+          if (action === 'deny') { record.status = 'failed'; record.error = 'Denied in the preview'; }
+          return response(record);
+        }
+        if (action === 'drop') {
+          dropped.push({ url, id });
+          state.fetch_jobs = state.fetch_jobs.filter(item => item.id !== id);
+          return response({ dropped: id });
+        }
+        if (action === 'result') {
+          resultCalls.push({ url, body: options.body, source: options.headers['X-Fetch-Source'] });
+          record.status = 'saved';
+          record.source = options.headers['X-Fetch-Source'];
+          record.name = decodeURIComponent(url.split('?name=')[1]);
+          record.type = options.headers['Content-Type'];
+          record.size = options.body.size;
+          record.sha256 = 'd'.repeat(64);
+          record.file = id + (record.name.includes('.') ? record.name.slice(record.name.lastIndexOf('.')) : '');
+          record.present = true;
+          return response(record);
+        }
+        if (action === 'fail') {
+          record.status = 'failed';
+          record.error = JSON.parse(options.body).error;
+          failedCalls.push({ id, error: record.error });
+        } else if (action === 'retry') {
+          if (record.approval !== 'approved') return response({ error: 'Only approved downloads can be retried' }, false);
+          record.status = 'queued';
+          record.error = null;
+        }
+        return response(record);
+      }
+      if (url.startsWith('https://')) {
+        remoteCalls.push({ url, options });
+        const behavior = remoteBehaviors.get(url) || {};
+        if (behavior.error) throw new Error(behavior.error);
+        const chunks = behavior.chunks || [Uint8Array.from([1, 2, 3])];
+        let position = 0;
+        return {
+          ok: behavior.ok !== false, status: behavior.status || 200, url: behavior.finalURL || url,
+          headers: { get: name => name === 'content-length'
+            ? behavior.declared == null ? null : String(behavior.declared)
+            : behavior.type || 'application/octet-stream' },
+          body: { getReader: () => ({
+            read: async () => position < chunks.length ? { done: false, value: chunks[position++] } : { done: true },
+            cancel: async () => { behavior.cancelled = true; }
+          }) }
+        };
+      }
+      if (url === '/') {
+        // A fresh page carries the token the restarted server accepts, so the retry has one to take. The token rides an HTML attribute, the way the served page carries it.
+        // The minified script did not include this text. Save presses after a reset then failed.
+        pageFetches += 1;
+        return { ok: true, status: 200, text: async () => `<body data-token="${servedToken}">` };
+      }
+      if (url.startsWith('/api/messages/') && url.endsWith('/replies/seen')) {
+        if (replySeenWait) await replySeenWait;
+        if (replySeenError) return response({ error: 'Write failed' }, false);
+        const id = decodeURIComponent(url.split('/')[3]);
+        const count = JSON.parse(options.body).count;
+        const item = [...(state.notes || []), ...(state.submissions || [])].find(record => record.id === id);
+        if (!item) return response({ error: 'Message not found' }, false);
+        item.ack_edited_seen_count = Math.max(Number(item.ack_edited_seen_count || 0), count);
+        replySeenCalls.push({ url, count });
+        return response({ id, ack_edited_seen_count: item.ack_edited_seen_count });
+      }
+      if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
+        readStamps.push(url);
+        const id = decodeURIComponent(url.split('/')[3]);
+        const seen_at = new Date().toISOString();
+        const report = state.reports.find(item => item.id === id);
+        if (report) report.seen_at = seen_at;
+        return response({ id, seen_at });
+      }
+      if (url.startsWith('/api/reports/') && url.endsWith('/view')) {
+        // The view stamp is the reader's side of the unpublish guard: a report the panel shows
+        // must not vanish under the owner.
+        viewCalls.push(url);
+        viewActive.push(options && options.body ? JSON.parse(options.body).active : true);
+        return response({ id: decodeURIComponent(url.split('/')[3]), viewed_at: new Date().toISOString() });
+      }
+      if (url.startsWith('/api/reports/') && url.endsWith('/ack-seen')) {
+        const id = decodeURIComponent(url.split('/')[3]);
+        const stamp = new Date().toISOString();
+        ackSeenCalls.push(url);
+        if (ackSeenFailures.has(id)) return response({ error: 'Write failed' }, false);
+        const report = state.reports.find(item => item.id === id);
+        if (report) report.ack_seen_at = stamp;
+        return response({ id, ack_seen_at: stamp });
+      }
+      if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
+        const target = decodeURIComponent(url.split('/')[3]);
+        unpublished.push(target);
+        writeTokens.push(options.headers['X-Preview-Token']);
+        state.reports = state.reports.filter(report => report.id !== target);
+        return response({ unpublished: target });
+      }
+      if (url.endsWith('/source')) return { ok: true, text: async () => '# Report source\n' };
+      const renderedRevision = reportRevision;
+      if (reportHtmlWait) await reportHtmlWait;
+      return response({
+        html: '<h1>Report</h1>', fields: reportFields, revision: renderedRevision,
+        published: reportPublished, edited: renderedRevision
+      });
+    })
+  };
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  // The page's own poll timer is the test's refresh: the toolbar button it used to share that work with is gone with the state select.
+  // The reload test loads a second client into the same document, and its timer is the live one, so the last refresh wins.
+  const refresh = () => intervals.filter(callback => callback.name === 'refreshState').at(-1)();
+  const part = (node, cls) => node.children.find(child => (child.className || '') === cls);
+  const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
   let copyIcon;
   let normalTimeout;
   let finishCopy;
