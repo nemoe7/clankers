@@ -5059,12 +5059,14 @@ def open_link(renderer, tokens, index, options, env):
 
 
 def render_image(renderer, tokens, index, options, env):
-  """Retain escaped punctuation in image alt text before the default renderer runs."""
+  """Retain image alt text before the default renderer runs."""
   pending = list(tokens[index].children or [])
   while pending:
     token = pending.pop()
-    if token.type == "text_special":
+    if token.type in {"text_special", "code_inline"}:
       token.type = "text"
+    elif token.type == "hardbreak":
+      token.type = "softbreak"
     pending.extend(token.children or [])
   return renderer.image(tokens, index, options, env)
 

@@ -2813,6 +2813,23 @@ def test_render_image_retains_escaped_alt_text(source, expected):
   assert "<script>" not in rendered
 
 
+@pytest.mark.parametrize(
+  ("source", "expected"),
+  [
+    (f"![`{text}`](https://example.test/image.png)", text)
+    for text in ("inline code", '"]<script>&', r"a\b")
+  ]
+  + [
+    ("![first  \nsecond](https://example.test/image.png)", "first\nsecond"),
+    ("![first\nsecond](https://example.test/image.png)", "first\nsecond"),
+  ],
+)
+def test_render_image_alt_retains_plain_text(source, expected):
+  rendered = preview.render(source)
+  assert f'alt="{html.escape(expected, quote=True)}"' in rendered
+  assert "<script>" not in rendered
+
+
 def test_image_data_uri_marks_down_a_png():
   """A local PNG becomes one Markdown line that carries its bytes as a data URI."""
   with tempfile.TemporaryDirectory() as image_dir:

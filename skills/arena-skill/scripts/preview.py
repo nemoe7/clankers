@@ -1625,7 +1625,8 @@ def render_image(renderer,tokens,index,options,env):
 	pending=list(tokens[index].children or[])
 	while pending:
 		token=pending.pop()
-		if token.type=='text_special':token.type='text'
+		if token.type in{'text_special','code_inline'}:token.type='text'
+		elif token.type=='hardbreak':token.type='softbreak'
 		pending.extend(token.children or[])
 	return renderer.image(tokens,index,options,env)
 def require_renderer():
