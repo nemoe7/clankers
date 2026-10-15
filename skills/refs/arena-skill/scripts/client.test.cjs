@@ -3346,7 +3346,6 @@ test('preview client', async (t) => {
     const texts = get('#history').children.map(node => node.children[0].textContent);
     assert.deepEqual(texts, ['Owner-facing line'], 'the quiet note never renders');
     assert.match(get('#connection-text').textContent, /^1 messages saved/, 'the tally counts the log');
-    // The copy state still carries it: the quiet note rides the cache, not the log.
     const cached = JSON.parse(storage.get('arena-preview-v1:state-cache'));
     assert.equal(cached.notes.length, 2, 'the cached state keeps the quiet note');
   });
