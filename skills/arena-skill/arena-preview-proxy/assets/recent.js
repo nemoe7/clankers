@@ -4,8 +4,10 @@
 // Every proxy page can write this storage. Keep valid preview roots only. Render the list as text, not HTML.
 const KEY = 'arena-preview-recent';
 const NAME_KEY = 'arena-preview-recent-names';
+const RESET_KEY = 'arena-preview-recent-reset';
 const LIMIT = 10;
 const MAX_LABEL = 48;
+const BOUNDARY_HOURS = [2, 8, 14, 20];
 const ROOT = /^https:\/\/sbx-[a-z0-9-]+\.arena\.site$/i;
 
 function previewRoot(raw) {
@@ -79,6 +81,29 @@ function displayName(names, root) {
   return label || new URL(root).host;
 }
 
+// The list resets at 02:00, 08:00, 14:00 or 20:00 PHT, and PHT holds UTC+8 all year, so the
+// boundary math runs on fixed offsets. Before 02:00 the previous one lands at 20:00 the day before.
+function previousBoundary(when) {
+  const SHIFT = 8 * 3600000;
+  const DAY = 86400000;
+  const HOUR = 3600000;
+  const shifted = when.getTime() + SHIFT;
+  const dayStart = Math.floor(shifted / DAY) * DAY;
+  const hourOfDay = Math.floor((shifted - dayStart) / HOUR);
+  let boundary = null;
+  for (const hour of BOUNDARY_HOURS) {
+    if (hour <= hourOfDay) boundary = dayStart + hour * HOUR;
+  }
+  if (boundary === null) boundary = dayStart - 4 * HOUR;
+  return new Date(boundary - SHIFT);
+}
+
+// A stamp behind the boundary clears the list, even when the app missed one or several
+// boundaries while closed. No stamp is a first open, and it keeps whatever the list holds.
+function needsReset(stamped, boundary) {
+  return stamped !== null && typeof stamped === 'number' && stamped < boundary;
+}
+
 function load() {
   try {
     return clean(JSON.parse(localStorage.getItem(KEY) || '[]'));
@@ -122,6 +147,13 @@ function show(box, list, names) {
 }
 
 function start() {
+  const boundary = previousBoundary(new Date()).getTime();
+  const stamped = readReset();
+  if (needsReset(stamped, boundary)) {
+    save([]);
+    writeNames({});
+  }
+  if (stamped === null || stamped < boundary) writeReset(boundary);
   const shared = fromShare(location.search);
   if (shared) {
     // Save before the jump: the preview page runs no part of this list.
@@ -204,11 +236,30 @@ function writeNames(names) {
   }
 }
 
+function readReset() {
+  try {
+    const raw = localStorage.getItem(RESET_KEY);
+    const value = Number(raw);
+    return raw === null || !Number.isFinite(value) ? null : value;
+  } catch {
+    return null;
+  }
+}
+
+function writeReset(boundary) {
+  try {
+    localStorage.setItem(RESET_KEY, String(boundary));
+  } catch {
+    // Storage is off or full: the next open runs the boundary check again.
+  }
+}
+
 // The checks load the pure helpers in Node. The chooser page runs the list.
 if (typeof module === 'object' && module.exports) {
   module.exports = {
     previewRoot, remember, forget, clean, fromShare, viewerHref,
-    named, applyName, cleanNames, displayName, LIMIT
+    named, applyName, cleanNames, displayName,
+    previousBoundary, needsReset, LIMIT
   };
 } else {
   start();
