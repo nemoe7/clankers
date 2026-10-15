@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.44
+// @name         Arena.ai | NemoUtils | v1.10.45
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.44
+// @version      1.10.45
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2570,6 +2570,19 @@
       }
     }
 
+    // A healthy cycle retires an earlier get failure notice, and prompts with a button stay.
+    function clearErrorPanel() {
+      try {
+        var node = document.getElementById ? document.getElementById(STATE_PANEL_ID) : null;
+        if (node && node.parentNode && node.getAttribute("data-action") === "false" &&
+            node.getAttribute("data-auto-hide") !== "true") {
+          node.parentNode.removeChild(node);
+        }
+      } catch (err) {
+        return;
+      }
+    }
+
     function statePanel(message, actionLabel, action, autoHide) {
       try {
         if (typeof document === "undefined" || typeof document.createElement !== "function" || !document.body) return;
@@ -2577,6 +2590,7 @@
         var card = document.createElement("div");
         card.id = STATE_PANEL_ID;
         card.setAttribute("role", "status");
+        card.setAttribute("data-action", String(Boolean(actionLabel && typeof action === "function")));
         card.setAttribute("data-auto-hide", String(Boolean(autoHide)));
         card.style.cssText =
           "position:fixed;right:16px;top:16px;z-index:2147483647;max-width:320px;" +
@@ -2707,6 +2721,7 @@
           stateError(copyLine(status, base), null, null, "copy-state", status);
           return;
         }
+        clearErrorPanel();
         var scope = stateScope(document);
         var lastScope = GM_getValue(lastScopeKey(scope.repo), "");
         if (!scope.branch && !lastScope && !force) {

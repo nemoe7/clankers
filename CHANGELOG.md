@@ -20,11 +20,13 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### userscripts
 
+- A healthy state cycle closes a lingering failure popup. Prompts that carry a button wait for their answer.
+
 - The `State — reset-window overwrite` switch ships On. Within 150 seconds either side of 02:00, 08:00, 14:00 or 20:00 PHT, a preview URL that changed writes without the overwrite prompt. A branch change or an hour outside the window keeps the prompt.
 
 #### preview
 
-- A task row shows the answers linked to it: each entry names its answer ID, its time and its field text. The block is read-only, so the manual details keep every edit.
+- A task row shows the answers linked to it: each entry names its answer ID, its time and its field text. The answer block takes no edits, so the manual details stay the record.
 
 - Reports have a floating scroll-to-top control with the message jump-button style.
 
