@@ -60,6 +60,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The log jump pill and the report scroll-to-top button now rest in the theme's white text color, and the accent marks their hover.
 
+- The report's scroll-to-top arrow pins to the top of the reports frame instead of its foot.
+
 ### Fixed
 
 #### preview
