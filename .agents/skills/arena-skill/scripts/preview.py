@@ -947,7 +947,7 @@ class ReportHeld(ValueError):pass
 def format_report_state(rows):
 	lines=[]
 	for row in rows:
-		lines.append(f"{row['id']} {row['title']}");lines.append(f"  published: {row['published_at']or'never'}");lines.append(f"  updated: {row['updated_at']}");lines.append(f"  stale: {'yes'if row['stale']else'no'}");lines.append(f"  viewed: {row['viewed_at']or'never'}")
+		lines.append(f"{row['id']} {row['title']}");lines.append(f"  published: {local_stamp(row['published_at'])or'never'}");lines.append(f"  updated: {local_stamp(row['updated_at'])}");lines.append(f"  stale: {'yes'if row['stale']else'no'}");lines.append(f"  viewed: {local_stamp(row['viewed_at'])or'never'}")
 		if not row['answers']:lines.append('  answers: none')
 		for answer in row['answers']:lines.append(f"  answers: {answer['id']} acknowledged {'yes'if answer['acknowledged']else'no'}, agent-seen {'yes'if answer['seen']else'no'}")
 	return'\n'.join(lines)+('\n'if lines else'')

@@ -7686,6 +7686,19 @@ def test_cli_stamps_print_in_the_display_zone_while_storage_stays_utc(monkeypatc
     .splitlines()[0]
     .startswith("Inbox 2026-10-15T08:39:00+08:00:")
   )
+  row = {
+    "id": "zone",
+    "title": "Zone",
+    "published_at": stamp,
+    "updated_at": stamp,
+    "viewed_at": stamp,
+    "stale": False,
+    "answers": [],
+  }
+  text = preview.format_report_state([row])
+  for label in ("published", "updated", "viewed"):
+    assert f"{label}: {preview.local_stamp(stamp)}" in text
+  assert {row[key] for key in ("published_at", "updated_at", "viewed_at")} == {stamp}
 
 
 def test_report_state_cli_reads_publication_and_answers(tmp_path):
