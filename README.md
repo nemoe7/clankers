@@ -61,7 +61,7 @@ Latest measurements as of 2026-10-15. `maintenance/check.py --update` rebuilds t
 | `gpt-plugins/skills/gpt-planning/SKILL.md` | `o200k_base` | 359 `tok` |
 | `gpt-plugins/skills/gpt-github/SKILL.md` | `o200k_base` | 433 `tok` |
 | `gpt-plugins/skills/gpt-display/SKILL.md` | `o200k_base` | 1,659 `tok` |
-| `gpt-plugins/skills/gpt-question/SKILL.md` | `o200k_base` | 148 `tok` |
+| `gpt-plugins/skills/gpt-question/SKILL.md` | `o200k_base` | 162 `tok` |
 
 `rules/ARENA.md` and the shipped preview assets and scripts measure by UTF-8 file size, the two ChatGPT fields by Unicode characters, and every other file by `o200k_base` tokens. `maintenance/minify/minify.py` builds the minified files from readable refs, and their recorded sizes are their budgets. Measurements cover complete files, including whitespace and markup.
 

@@ -36,6 +36,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
 
+#### skills
+
+- The gpt-question skill gives every choice group its own Custom answer option and free-text input. The always-visible form-level field retires, and the mixed example enforces one, two and one-or-more selections.
+
 #### house
 
 - The repository root carries the nemoe7 Noncommercial License 1.0.0 text, copied verbatim from nemoe7/license.
