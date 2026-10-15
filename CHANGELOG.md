@@ -141,6 +141,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Print CLI argument errors without the full usage header. Keep validation, error text, exit status, and full help output.
+
 - Escape brackets and backslashes in image-data-uri alt text so filenames render as images. Keep the image types, payload bytes, and 2 MiB cap unchanged. Retain escaped punctuation, inline code, and line breaks in image alt text to match the browser parser.
 
 - Render pending messages with the local Markdown parser before the write returns. Keep the server message style, source text, link guards, and code-copy controls.

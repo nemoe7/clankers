@@ -7279,6 +7279,53 @@ def test_egress_warning_covers_wget_and_git_clone():
   )
 
 
+@pytest.mark.parametrize(
+  "args",
+  [
+    [],
+    ["not-a-command"],
+    ["serve", "--port"],
+    ["task", "demo", "--type", "not-a-type"],
+  ],
+)
+def test_cli_argument_errors_omit_usage(args):
+  cli = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), *args],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert cli.returncode == 2
+  assert not cli.stdout
+  assert "error:" in cli.stderr
+  assert "usage:" not in cli.stderr.casefold()
+  if args and args[-1].startswith("not-"):
+    assert args[-1] in cli.stderr
+
+
+def test_cli_missing_task_id_keeps_validation(tmp_path, monkeypatch, capsys):
+  preview.Store(tmp_path, create=True)
+  monkeypatch.setattr(preview, "resolve_state_dir", lambda: tmp_path)
+  monkeypatch.setattr(preview, "require_server", lambda store: None)
+  monkeypatch.setattr(sys, "argv", ["preview.py", "task"])
+  assert preview.main() == 1
+  output = capsys.readouterr()
+  assert not output.out
+  assert "A task needs an ID" in output.err
+  assert "usage:" not in output.err.casefold()
+
+
+def test_cli_help_keeps_usage():
+  cli = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "--help"],
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  assert "usage:" in cli.stdout.casefold()
+  assert not cli.stderr
+
+
 def test_reference_commands_table_lists_every_agent_facing_command():
   """The commands table in the reference matches the CLI parser, internal commands aside."""
   reference = Path(__file__).parents[1] / "references" / "REFERENCE.md"

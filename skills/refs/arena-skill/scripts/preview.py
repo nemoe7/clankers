@@ -5706,8 +5706,13 @@ def embed_report_images(markdown, report_dir):
   return IMAGE_IN_MARKDOWN.sub(swap, markdown)
 
 
+class PreviewArgumentParser(argparse.ArgumentParser):
+  def print_usage(self, file=None):
+    pass
+
+
 def main():
-  parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
+  parser = PreviewArgumentParser(description=CLI_DESCRIPTION)
   parser.add_argument(
     "-r",
     "--reminder",
