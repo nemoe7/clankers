@@ -6,7 +6,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 
 | Command | Use |
 | --- | --- |
-| `init` | Create a missing state database without starting the server |
+| `init [--tz <zone>]` | Create a missing state database without starting the server. A zone names where CLI stamps print, and the TZ env wins |
 | `serve --port 8000` | Start the shared preview with `start_process`. The gate warns when a serve names a port other than 8000 |
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
 | `note-list [--page N] [--page-size N]` | List stored note IDs, including acknowledged and quiet notes, newest first; default page 1, 20 IDs per page, maximum 100; leave receipts and exports unchanged |

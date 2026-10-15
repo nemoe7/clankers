@@ -25,6 +25,7 @@ from fnmatch import fnmatchcase
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo
 
 try:
   import markdown_it  # noqa: F401
@@ -189,6 +190,40 @@ AGENT_HOST_RE = re.compile(r"https://[A-Za-z0-9.-]+\Z")
 
 def now():
   return datetime.now(timezone.utc).isoformat()
+
+
+TIMEZONE_META = "display_tz"
+DISPLAY_ZONE = None
+
+
+def zone_exists(name):
+  """True when the system tzdata knows an IANA zone name."""
+  try:
+    ZoneInfo(name)
+    return True
+  except (KeyError, ValueError, OSError):
+    return False
+
+
+def resolve_display_zone(store):
+  """The zone CLI stamps print in: the TZ env first, then the zone init stored."""
+  name = os.environ.get("TZ") or (store.meta_value(TIMEZONE_META) if store else None)
+  if not name or not zone_exists(name):
+    return None
+  return ZoneInfo(name)
+
+
+def local_stamp(value):
+  """Print one stored UTC stamp in the set zone. Storage and exports keep UTC."""
+  if not value or DISPLAY_ZONE is None:
+    return value
+  try:
+    parsed = datetime.fromisoformat(value)
+  except ValueError:
+    return value
+  if parsed.tzinfo is None:
+    parsed = parsed.replace(tzinfo=timezone.utc)
+  return parsed.astimezone(DISPLAY_ZONE).isoformat()
 
 
 def workspace_branch(root=None):
@@ -1361,7 +1396,7 @@ def format_read(listing):
   pending = listing.get("pending") or []
   count = len(pending)
   if checked_at:
-    first = f"Inbox {checked_at}: {count} pending"
+    first = f"Inbox {local_stamp(checked_at)}: {count} pending"
   else:
     first = f"Inbox: {count} pending"
   if count == 0:
@@ -1442,7 +1477,7 @@ def format_key(record):
     # Naming the tool here stops a session from retrying the read through bash.
     lines.append(f"use fetch_page on {record['host']}/v1/<route>?key=<key>, never bash")
   if record.get("at"):
-    lines.append(f"at {record['at']}")
+    lines.append(f"at {local_stamp(record['at'])}")
   return "\n".join(lines) if lines else ""
 
 
@@ -5600,7 +5635,10 @@ def main():
     default=DEFAULT_PORT,
     help=f"Port to bind (default: {DEFAULT_PORT})",
   )
-  commands.add_parser("init", help="Create the state directory and its database")
+  init = commands.add_parser("init", help="Create the state directory and its database")
+  init.add_argument(
+    "--tz", help="An IANA zone for CLI stamps. The TZ env still wins"
+  )
   commands.add_parser("read", help="Print every pending note, answer and upload")
   note_list = commands.add_parser(
     "note-list",
@@ -6042,6 +6080,8 @@ def main():
       state_dir,
       create=args.command in {"serve", "init", "import-state"},
     )
+    global DISPLAY_ZONE
+    DISPLAY_ZONE = resolve_display_zone(store)
     # Every state command breaks while no preview answers. Only the setup pair
     # stays open so the recovery command itself always runs.
     if args.command not in {"serve", "init"}:
@@ -6080,9 +6120,11 @@ def main():
         print(f"No note matches {args.id}.", file=sys.stderr)
         return 1
       for row in rows:
-        head = f"note {row['id']} at {row['at']}"
+        head = f"note {row['id']} at {local_stamp(row['at'])}"
         head += (
-          f" acked {row['acknowledged_at']}" if row["acknowledged_at"] else " unacked"
+          f" acked {local_stamp(row['acknowledged_at'])}"
+          if row["acknowledged_at"]
+          else " unacked"
         )
         print(head)
         print(row["text"])
@@ -6232,6 +6274,12 @@ def main():
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
     elif args.command == "init":
+      if args.tz:
+        if not zone_exists(args.tz):
+          print(f"Unknown zone {args.tz}.", file=sys.stderr)
+          return 1
+        store.set_meta(TIMEZONE_META, args.tz)
+        DISPLAY_ZONE = resolve_display_zone(store)
       # The command reports what it did, so a reader can tell a fresh state from a
       # re-used one without looking at the directory.
       print(f"state {store.path} {'created' if fresh_state else 'present'}")
