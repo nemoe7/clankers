@@ -36,6 +36,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
 
+#### house
+
+- The repository root carries the nemoe7 Noncommercial License 1.0.0 text, copied verbatim from nemoe7/license.
+
 ### Changed
 
 #### maintenance
