@@ -3225,6 +3225,34 @@ test('preview client', async (t) => {
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
     assert.equal(get('#skip-poll').dataset.state, '');
   });
+  await t.test("Quoting a task title leaves the row tooltip on the task ID", async () => {
+    const priorTasks = state.tasks;
+    state.tasks = {
+      upcoming: [
+        { id: 'head-filler', title: 'Head filler', details: [], status: 'upcoming',
+          order: 1, updated_at: new Date().toISOString() },
+        { id: 'hover-stays', title: 'Hover stays', details: [], status: 'upcoming',
+          order: 2, updated_at: new Date().toISOString() }
+      ],
+      finished: [],
+      updated_at: new Date().toISOString()
+    };
+    await refresh();
+    try {
+      const body = get('#tasks-upcoming-body');
+      const row = body.children.find(item => item.title === 'hover-stays');
+      const title = row.children[0];
+      assert.equal(title.className, 'task-title');
+      documentEvents.click({ target: title, preventDefault: () => {} });
+      assert.equal(get('#note').value.startsWith('RE: hover-stays'), true, 'the quote still lands');
+      assert.equal(title.title, '', 'the quote flash never replaces the row tooltip');
+      assert.equal(row.title, 'hover-stays', 'the row keeps the task ID as its tooltip');
+    } finally {
+      state.tasks = priorTasks;
+      get('#note').value = '';
+      await refresh();
+    }
+  });
 });
 
 test('the phone footer keeps Send beside a long status', () => {
