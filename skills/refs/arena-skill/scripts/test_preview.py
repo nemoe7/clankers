@@ -1082,7 +1082,7 @@ def test_http_boundaries():
       assert (
         ".log-card>.row:first-child>.stack{flex:0 1 auto;}"
         ".log-card>.row>.row.tight{flex:1 1 0;min-width:0;}"
-        "#log-search{min-width:5em;}" in page
+        "#log-search,#task-search{min-width:5em;}" in page
       )
       assert (
         ".report-toolbar{gap:8px;}"
@@ -1142,7 +1142,9 @@ def test_http_boundaries():
       )
       # The log's search box draws its own box like the icon buttons beside it: the same 34px
       # height, and no native search decoration to fight the row.
-      assert re.search(r"#log-search\{[^}]*height:34px;[^}]*min-height:0;", page)
+      assert re.search(
+        r"#log-search,#task-search\{[^}]*height:34px;[^}]*min-height:0;", page
+      )
       assert 'button,select,textarea,input[type="url"],input[type="search"]{' in page, (
         "the search box shares the form controls' border and radius"
       )
