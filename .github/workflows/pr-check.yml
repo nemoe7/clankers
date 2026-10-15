@@ -32,6 +32,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Validation Dependencies
+        run: python -m pip install -r requirements.txt
+
       - name: Check The Commits, The Title And The Body
         env:
           # The values reach the script through the environment, never through the script text.
