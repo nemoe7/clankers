@@ -524,7 +524,7 @@ $('#log-edited').addEventListener('click', async () => {
   const pending = { count: replyCount };
   local.pending.add(pending);
   localReplySeen.set(item.id, local);
-  updateEdits(lastState.notes);
+  updateEdits(getState().notes);
   try {
     const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
       method: 'POST',
@@ -543,7 +543,7 @@ $('#log-edited').addEventListener('click', async () => {
     if (!local.confirmed && !local.pending.size && localReplySeen.get(item.id) === local) {
       localReplySeen.delete(item.id);
     }
-    updateEdits(lastState.notes);
+    updateEdits(getState().notes);
   }
 });
 function showHistory(notes) {
@@ -683,7 +683,8 @@ function renderHistoryWindow(notes) {
 }
 
 function loadOlderMessages() {
-  const notes = ((lastState && lastState.notes) || []).filter(item => !item.quiet);
+  const state = getState();
+  const notes = ((state && state.notes) || []).filter(item => !item.quiet);
   if (notes.length <= historyShown) return;
   const history = $('#history');
   const before = history.scrollHeight;
@@ -1696,7 +1697,8 @@ function clearReadTimer() {
   if (readPending) { clearTimeout(readPending.timer); readPending = null; }
 }
 function unseenReportId() {
-  const reports = (lastState && lastState.reports) || [];
+  const state = getState();
+  const reports = (state && state.reports) || [];
   const report = reports.find(item => item.id === $('#report-select').value);
   return report && !report.seen_at ? report.id : null;
 }
@@ -1705,7 +1707,8 @@ function unseenReportId() {
 // owner's place in a long report. The server's own stamp is stored and the signature is moved
 // with it, so the next poll matches this state and renders nothing.
 function foldReportStamp(id, key, value) {
-  const reports = (lastState && lastState.reports) || [];
+  const state = getState();
+  const reports = (state && state.reports) || [];
   const report = reports.find(item => item.id === id);
   if (!report) return;
   report[key] = value;
