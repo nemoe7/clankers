@@ -501,6 +501,50 @@ def test_recent_root_writes_prune_stored_labels():
   assert result["empty"] == {}
 
 
+def test_an_open_recent_list_resets_and_rearms_at_the_boundary():
+  """Clear stored roots, labels, and rendered rows when the boundary callback runs."""
+  script = (
+    "const fs = require('node:fs'), vm = require('node:vm');"
+    "const root = 'https://sbx-a.arena.site';"
+    "const first = Date.parse('2026-10-15T17:59:00Z'); let at = first;"
+    "const boundary = Date.parse('2026-10-15T18:00:00Z');"
+    "const values = new Map(); let timer, rendered, scheduled = 0;"
+    "class Clock extends Date {"
+    " constructor(...args) { super(...(args.length ? args : [at])); }"
+    " static now() { return at; } }"
+    "const target = { addEventListener() {} };"
+    "const context = { URL, URLSearchParams, Date: Clock, module: { exports: {} },"
+    " location: { search: '' }, document: {"
+    " getElementById: () => target, querySelector: () => target },"
+    " setTimeout: (callback, delay) => { timer = { callback, delay }; scheduled++; },"
+    " localStorage: { getItem: key => values.get(key) ?? null,"
+    " setItem: (key, value) => values.set(key, value) } };"
+    "vm.runInNewContext(fs.readFileSync('assets/recent.js', 'utf8'), context);"
+    "context.show = () => { rendered = context.load(); };"
+    "context.save([root]); context.writeNames({ [root]: 'A' });"
+    "context.start();"
+    "const before = { roots: context.load(), delay: timer.delay, scheduled };"
+    "at = boundary; timer.callback();"
+    "const after = { roots: context.load(), names: context.readNames(), rendered,"
+    " stamp: Number(values.get('arena-preview-recent-reset')), scheduled };"
+    "context.save([root]); at = Date.parse('2026-10-16T12:01:00Z');"
+    "timer.callback();"
+    "const missed = { roots: context.load(), rendered,"
+    " stamp: Number(values.get('arena-preview-recent-reset')), delay: timer.delay };"
+    "console.log(JSON.stringify({ root, first, boundary, before, after, missed }));"
+  )
+  result = json.loads(node(script))
+  assert result["before"]["roots"] == [result["root"]]
+  assert result["before"]["delay"] == result["boundary"] - result["first"]
+  assert result["after"]["roots"] == result["after"]["rendered"] == []
+  assert result["after"]["names"] == {}
+  assert result["after"]["stamp"] == result["boundary"]
+  assert result["after"]["scheduled"] > result["before"]["scheduled"]
+  assert result["missed"]["roots"] == result["missed"]["rendered"] == []
+  assert result["missed"]["stamp"] > result["after"]["stamp"]
+  assert result["missed"]["delay"] > 0
+
+
 def test_the_recent_list_clears_at_pht_reset_boundaries():
   """A boundary at 02:00, 08:00, 14:00 or 20:00 PHT clears the stored list once crossed.
 

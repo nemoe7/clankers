@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Recent-preview list writes remove stored labels for roots no longer in the list.
 
+- Open recent-preview lists clear at each PHT reset boundary.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.

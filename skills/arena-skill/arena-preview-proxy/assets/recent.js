@@ -147,7 +147,7 @@ function show(box, list, names) {
   box.hidden = list.length === 0;
 }
 
-function start() {
+function resetRecent() {
   const boundary = previousBoundary(new Date()).getTime();
   const stamped = readReset();
   if (needsReset(stamped, boundary)) {
@@ -155,6 +155,10 @@ function start() {
     writeNames({});
   }
   if (stamped === null || stamped < boundary) writeReset(boundary);
+}
+
+function start() {
+  resetRecent();
   const shared = fromShare(location.search);
   if (shared) {
     // Save before the jump: the preview page runs no part of this list.
@@ -168,7 +172,15 @@ function start() {
   const freshNames = () => cleanNames(load(), readNames());
   let names = freshNames();
   const render = () => show(box, load(), names);
-  render();
+  const refreshAtBoundary = () => {
+    resetRecent();
+    names = freshNames();
+    render();
+    const when = new Date();
+    const next = previousBoundary(when).getTime() + 6 * 3600000;
+    setTimeout(refreshAtBoundary, next - when.getTime());
+  };
+  refreshAtBoundary();
   form.addEventListener('submit', () => {
     const root = previewRoot(form.elements.url.value);
     if (root) save(remember(load(), root));
