@@ -4,6 +4,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-16
+
+### Fixed
+
+#### preview
+
+- Search checks compare input height with the shared icon square and its minimum height.
+
 ## 2026-10-15
 
 ### Added

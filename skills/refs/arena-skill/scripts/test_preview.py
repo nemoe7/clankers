@@ -1166,10 +1166,14 @@ def test_http_boundaries():
         "pre{padding:10px;border-radius:6px;overflow-x:auto;background:var(--bg)"
         in page
       )
-      # The log's search box draws its own box like the icon buttons beside it: the same 34px
-      # height, and no native search decoration to fight the row.
-      assert re.search(
-        r"#log-search,#task-search\{[^}]*height:34px;[^}]*min-height:0;", page
+      # Search boxes match the icon square and its minimum height.
+      search = re.search(r"#log-search,#task-search\{([^}]+)\}", page)
+      icon = re.search(r"\.icon-button\{([^}]+)\}", page)
+      assert search and icon
+      height = css_px(icon[1], "height")
+      assert css_px(search[1], "height") == height == css_px(icon[1], "width") > 0
+      assert (
+        0 <= css_px(search[1], "min-height") == css_px(icon[1], "min-height") <= height
       )
       assert 'button,select,textarea,input[type="url"],input[type="search"]{' in page, (
         "the search box shares the form controls' border and radius"
