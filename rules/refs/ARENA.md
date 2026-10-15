@@ -147,6 +147,7 @@
 - Use the project's existing frameworks, fixtures, helpers, and conventions.
 - NEVER weaken or drop a test to pass.
 - No speculative behavior or tests.
+- NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
 - MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks. No frameworks, no fixtures, no per-function suites beyond it.
 - Mechanical changes get proportional checks.
 - After every file edit, grep-verify the change actually landed before building on it.
