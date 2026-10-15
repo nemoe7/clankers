@@ -3144,14 +3144,40 @@ class Store:
       }
 
   def tasks(self):
-    "Return ordered task records for both page divs. Return None when no task exists."
+    """Return ordered task records for both page divs. Return None when no task exists.
+
+    Each task carries its linked answers for the page's read-only block: every answer of its
+    report plus any answer that names the task, one entry per submission ID. A task with no
+    link keeps the shape it had before the block existed."""
     with closing(self.connect()) as db:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
+      links = db.execute(
+        "SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq"
+      ).fetchall()
     records = [task_row(row) for row in rows]
     if not records:
       return None
+    answers = [
+      {
+        "id": link["id"],
+        "at": clip_stamp(link["at"]),
+        "text": link["text"],
+        "report_id": link["report_id"],
+        "task_id": link["task_id"],
+      }
+      for link in links
+    ]
+    for item in records:
+      linked = [
+        {"id": answer["id"], "at": answer["at"], "text": answer["text"]}
+        for answer in answers
+        if answer["task_id"] == item["id"]
+        or (answer["report_id"] and answer["report_id"] == item.get("report_id"))
+      ]
+      if linked:
+        item["answers"] = linked
     return {
       "finished": [item for item in records if item["status"] == "finished"],
       "upcoming": [item for item in records if item["status"] == "upcoming"],
@@ -3459,7 +3485,8 @@ class Store:
 
   def state_lines(self, notes, tasks):
     """Build save-file lines and counts for one state snapshot. Include note receipts, read stamps, task markers,
-    task order, answers, and report Markdown. Omit quiet notes and answers for unpublished reports."""
+    task order, answers, and report Markdown. Omit quiet notes. Keep an answer a task still
+    references, even after its report row is gone."""
     if not isinstance(notes, list) or not isinstance(tasks, dict):
       raise TypeError("Save a state object with notes and tasks")
     saved_notes = [record for record in notes if not record.get("quiet")]
@@ -3469,10 +3496,19 @@ class Store:
         lines.append(saved_task_line(record))
     sources = self.report_sources()
     live = {record["id"] for record in sources}
+    task_ids = set()
+    task_reports = set()
+    for status in TASK_STATUSES:
+      for record in (tasks.get(status) if tasks is not None else None) or []:
+        task_ids.add(record.get("id"))
+        if record.get("report_id"):
+          task_reports.add(record["report_id"])
     answers = [
       saved_answer_line(record)
       for record in self.submissions()
       if record.get("report_id") in live
+      or record.get("task_id") in task_ids
+      or record.get("report_id") in task_reports
     ]
     lines.extend(answers)
     reports = [saved_report_line(record) for record in sources]

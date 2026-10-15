@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- A task row shows the answers linked to it: each entry names its answer ID, its time and its field text. The block is read-only, so the manual details keep every edit.
+
 - Reports have a floating scroll-to-top control with the message jump-button style.
 
 - A report navigation button selects the next list entry and stops at the end.

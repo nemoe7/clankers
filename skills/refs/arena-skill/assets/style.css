@@ -313,6 +313,10 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 .task-details { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
 .task-details > summary { cursor: pointer; list-style-position: inside; }
 .task-detail-list { margin: 2px 0 0; padding-left: 18px; }
+.task-answers { margin-top: 4px; padding-left: 8px; border-left: 2px solid var(--muted); color: var(--muted); font-size: 13px; }
+.task-answer { margin-top: 4px; }
+.task-answer time { margin-left: 6px; font-size: 12px; }
+.task-answer-text { margin: 2px 0 0; white-space: pre-wrap; }
 .task-type { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--muted); border-radius: 8px; font-size: 11px; color: var(--muted); vertical-align: middle; }
 .task-filter { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; font-size: 13px; color: var(--muted); }
 #tasks-status { margin: 0; }

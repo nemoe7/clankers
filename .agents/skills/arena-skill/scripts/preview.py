@@ -998,9 +998,13 @@ class Store:
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
 			polling=self.polling();return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':polling and bool(live_runs(self.path.parent)),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META))}
 	def tasks(self):
-		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall()
+		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();links=db.execute('SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq').fetchall()
 		records=[task_row(row)for row in rows]
 		if not records:return None
+		answers=[{'id':link['id'],'at':clip_stamp(link['at']),'text':link['text'],'report_id':link['report_id'],'task_id':link['task_id']}for link in links]
+		for item in records:
+			linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text']}for answer in answers if answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id')]
+			if linked:item['answers']=linked
 		return{'finished':[item for item in records if item['status']=='finished'],'upcoming':[item for item in records if item['status']=='upcoming'],'updated_at':max(item['updated_at']for item in records)}
 	def list_tasks(self):
 		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall()
@@ -1095,7 +1099,12 @@ class Store:
 		saved_notes=[record for record in notes if not record.get('quiet')];lines=[saved_note_line(record)for record in saved_notes]
 		for status in TASK_STATUSES:
 			for record in tasks.get(status)or[]:lines.append(saved_task_line(record))
-		sources=self.report_sources();live={record['id']for record in sources};answers=[saved_answer_line(record)for record in self.submissions()if record.get('report_id')in live];lines.extend(answers);reports=[saved_report_line(record)for record in sources];lines.extend(reports);return lines,{'notes':len(saved_notes),'tasks':len(lines)-len(saved_notes)-len(answers)-len(reports),'answers':len(answers),'reports':len(reports)}
+		sources=self.report_sources();live={record['id']for record in sources};task_ids=set();task_reports=set()
+		for status in TASK_STATUSES:
+			for record in(tasks.get(status)if tasks is not None else None)or[]:
+				task_ids.add(record.get('id'))
+				if record.get('report_id'):task_reports.add(record['report_id'])
+		answers=[saved_answer_line(record)for record in self.submissions()if record.get('report_id')in live or record.get('task_id')in task_ids or record.get('report_id')in task_reports];lines.extend(answers);reports=[saved_report_line(record)for record in sources];lines.extend(reports);return lines,{'notes':len(saved_notes),'tasks':len(lines)-len(saved_notes)-len(answers)-len(reports),'answers':len(answers),'reports':len(reports)}
 	def newest_stamps(self):
 		groups=('note','notes',('at','acknowledged_at','ack_edited_at','seen_at')),('answer','submissions',('at','acknowledged_at','seen_at')),('report','reports',('updated_at','published_at','seen_at','agent_seen_at')),('upload','uploads',('at',)),('task','tasks',('updated_at',));stamps={}
 		with closing(self.connect())as db:
