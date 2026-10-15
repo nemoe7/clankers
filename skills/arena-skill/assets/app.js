@@ -1486,7 +1486,7 @@ $('#report-form').addEventListener('submit', async event => {
     save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
     // An accepted answer is proof the owner read the report, so the read stamps with the send, and
     // a report already stamped keeps its earlier stamp.
-    const answered = lastState?.reports.find(item => item.id === id);
+    const answered = getState()?.reports.find(item => item.id === id);
     if (answered && !answered.seen_at) void markReportRead(id);
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
@@ -1496,7 +1496,7 @@ $('#report-form').addEventListener('submit', async event => {
       `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 6)}`,
       id,
     );
-    const report = lastState?.reports.find(item => item.id === id);
+    const report = getState()?.reports.find(item => item.id === id);
     if (report) {
       report.latest_answer_id = result.id;
       report.latest_answer_at = result.at;
