@@ -5636,9 +5636,7 @@ def main():
     help=f"Port to bind (default: {DEFAULT_PORT})",
   )
   init = commands.add_parser("init", help="Create the state directory and its database")
-  init.add_argument(
-    "--tz", help="An IANA zone for CLI stamps. The TZ env still wins"
-  )
+  init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
   commands.add_parser("read", help="Print every pending note, answer and upload")
   note_list = commands.add_parser(
     "note-list",
