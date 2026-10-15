@@ -102,14 +102,15 @@ const options = [
   "Compare options",
   "Create a plan"
 ];
-const canSubmit = Boolean(choice || customAnswer.trim());
+const customChosen = choice === "Custom answer";
+const canSubmit = Boolean(choice) && (!customChosen || Boolean(customAnswer.trim()));
 }
 <form
   gap={3}
   onSubmit={() => GenUI.issueNewTurn([
     "Question: What would you like help with?",
     `Selected option: ${choice || "(none)"}`,
-    `Custom answer: ${customAnswer.trim() || "(not provided)"}`
+    ...(customChosen ? [`Custom answer: ${customAnswer.trim()}`] : [])
   ].join("\n"))}
 >
   <radio-group
@@ -120,13 +121,16 @@ const canSubmit = Boolean(choice || customAnswer.trim());
     {#each options as option}
       <radio value={option}>{option}</radio>
     {/each}
+    <radio value="Custom answer">Custom answer</radio>
   </radio-group>
-  <textarea
-    value={customAnswer}
-    onChange={setCustomAnswer}
-    placeholder="Custom answer (optional)"
-    rows={3}
-  />
+  {#if customChosen}
+    <textarea
+      value={customAnswer}
+      onChange={setCustomAnswer}
+      placeholder="Custom answer"
+      rows={3}
+    />
+  {/if}
   <button
     block
     submit={true}
@@ -150,6 +154,7 @@ const options = [
   "Create a plan",
   "Troubleshoot a problem"
 ];
+const customChosen = selected.includes("Custom answer");
 const toggleOption = (option, checked) => {
   setSelected(
     checked
@@ -157,7 +162,7 @@ const toggleOption = (option, checked) => {
       : selected.filter(item => item !== option)
   );
 };
-const canSubmit = selected.length > 0 || Boolean(customAnswer.trim());
+const canSubmit = selected.length > 0 && (!customChosen || Boolean(customAnswer.trim()));
 }
 <form
   gap={3}
@@ -167,7 +172,7 @@ const canSubmit = selected.length > 0 || Boolean(customAnswer.trim());
     ...(selected.length
       ? selected.map(option => `- ${option}`)
       : ["- None selected"]),
-    `Custom answer: ${customAnswer.trim() || "(not provided)"}`
+    ...(customChosen ? [`Custom answer: ${customAnswer.trim()}`] : [])
   ].join("\n"))}
 >
   {#each options as option}
@@ -178,12 +183,139 @@ const canSubmit = selected.length > 0 || Boolean(customAnswer.trim());
       {option}
     </checkbox>
   {/each}
-  <textarea
-    value={customAnswer}
-    onChange={setCustomAnswer}
-    placeholder="Custom answer (optional)"
-    rows={3}
+  <checkbox
+    checked={customChosen}
+    onChange={checked => toggleOption("Custom answer", checked)}
+  >
+    Custom answer
+  </checkbox>
+  {#if customChosen}
+    <textarea
+      value={customAnswer}
+      onChange={setCustomAnswer}
+      placeholder="Custom answer"
+      rows={3}
+    />
+  {/if}
+  <button
+    block
+    submit={true}
+    disabled={!canSubmit}
+    label="Submit answers"
   />
+</form>
+```
+
+## Reference pattern: mixed selection limits in one form
+
+Use this pattern when one form carries questions with different selection counts. Each question keeps its own state, custom option, custom text and validation, and the submit button waits for every question.
+
+```jsx
+{@body
+const [pick, setPick] = DIL.useState("");
+const [pickCustom, setPickCustom] = DIL.useState("");
+const [pair, setPair] = DIL.useState([]);
+const [pairCustom, setPairCustom] = DIL.useState("");
+const [any, setAny] = DIL.useState([]);
+const [anyCustom, setAnyCustom] = DIL.useState("");
+const pickOptions = ["Speed", "Cost"];
+const pairOptions = ["Retry", "Alert"];
+const anyOptions = ["Logs", "Metrics"];
+const pickCustomChosen = pick === "Custom answer";
+const pairCustomChosen = pair.includes("Custom answer");
+const anyCustomChosen = any.includes("Custom answer");
+const toggle = (list, setList) => (option, checked) => {
+  setList(
+    checked
+      ? [...list, option]
+      : list.filter(item => item !== option)
+  );
+};
+const togglePair = toggle(pair, setPair);
+const toggleAny = toggle(any, setAny);
+const pickValid = Boolean(pick) && (!pickCustomChosen || Boolean(pickCustom.trim()));
+const pairValid = pair.length === 2 && (!pairCustomChosen || Boolean(pairCustom.trim()));
+const anyValid = any.length >= 1 && (!anyCustomChosen || Boolean(anyCustom.trim()));
+const canSubmit = pickValid && pairValid && anyValid;
+}
+<form
+  gap={3}
+  onSubmit={() => GenUI.issueNewTurn([
+    "Question 1, exactly one: Which goal leads?",
+    `Selected option: ${pick || "(none)"}`,
+    ...(pickCustomChosen ? [`Custom answer: ${pickCustom.trim()}`] : []),
+    "Question 2, exactly two: Which safeguards run?",
+    "Selected options:",
+    ...pair.map(option => `- ${option}`),
+    ...(pairCustomChosen ? [`Custom answer: ${pairCustom.trim()}`] : []),
+    "Question 3, one or more: Which signals stay on?",
+    "Selected options:",
+    ...any.map(option => `- ${option}`),
+    ...(anyCustomChosen ? [`Custom answer: ${anyCustom.trim()}`] : [])
+  ].join("\n"))}
+>
+  <radio-group
+    value={pick}
+    onChange={setPick}
+    label="Choose exactly one"
+  >
+    {#each pickOptions as option}
+      <radio value={option}>{option}</radio>
+    {/each}
+    <radio value="Custom answer">Custom answer</radio>
+  </radio-group>
+  {#if pickCustomChosen}
+    <textarea
+      value={pickCustom}
+      onChange={setPickCustom}
+      placeholder="Custom answer"
+      rows={2}
+    />
+  {/if}
+  {#each pairOptions as option}
+    <checkbox
+      checked={pair.includes(option)}
+      onChange={checked => togglePair(option, checked)}
+    >
+      {option}
+    </checkbox>
+  {/each}
+  <checkbox
+    checked={pairCustomChosen}
+    onChange={checked => togglePair("Custom answer", checked)}
+  >
+    Custom answer
+  </checkbox>
+  {#if pairCustomChosen}
+    <textarea
+      value={pairCustom}
+      onChange={setPairCustom}
+      placeholder="Custom answer"
+      rows={2}
+    />
+  {/if}
+  {#each anyOptions as option}
+    <checkbox
+      checked={any.includes(option)}
+      onChange={checked => toggleAny(option, checked)}
+    >
+      {option}
+    </checkbox>
+  {/each}
+  <checkbox
+    checked={anyCustomChosen}
+    onChange={checked => toggleAny("Custom answer", checked)}
+  >
+    Custom answer
+  </checkbox>
+  {#if anyCustomChosen}
+    <textarea
+      value={anyCustom}
+      onChange={setAnyCustom}
+      placeholder="Custom answer"
+      rows={2}
+    />
+  {/if}
   <button
     block
     submit={true}
