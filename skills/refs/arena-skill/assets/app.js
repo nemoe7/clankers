@@ -537,7 +537,21 @@ function showHistory(notes) {
     // marker with the ID between `Task` and `added`.
     const receiptTask = document.createElement('span');
     receiptTask.className = 'receipt-task';
-    receiptTask.textContent = item.task_id ? ` · Task ${item.task_id} added` : ' · Task added';
+    // The ID rides in a code element, linked like an ack reference,
+    // so the receipt jump opens the Tasks tab on that row.
+    if (item.task_id) {
+      const link = document.createElement('a');
+      link.className = 'ack-reference';
+      link.href = `#${ACK_REFERENCE_PANELS.task}`;
+      link.dataset.referenceType = 'task';
+      link.dataset.referenceId = item.task_id;
+      const code = document.createElement('code');
+      code.textContent = item.task_id;
+      link.append(code);
+      receiptTask.append(' · Task ', link, ' added');
+    } else {
+      receiptTask.textContent = ' · Task added';
+    }
     receiptTask.title = item.task_id ? `Task ${item.task_id}` : '';
     const receiptFile = document.createElement('span');
     receiptFile.className = 'receipt-file';
