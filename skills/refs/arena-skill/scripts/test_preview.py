@@ -1,5 +1,6 @@
 """Pytest checks for the preview runtime. Run with the reporting venv's Python."""
 
+import base64
 import builtins
 import hashlib
 import http.client
@@ -2745,6 +2746,52 @@ def test_clear_state():
     assert "notes 1" in cli.stdout
     assert store.state()["notes"] == []
     assert store.path.is_file(), "the clear keeps the database file"
+
+
+def test_image_data_uri_marks_down_a_png():
+  """A local PNG becomes one Markdown line that carries its bytes as a data URI."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    png = Path(image_dir) / "shot.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"payload")
+    cli = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "image-data-uri", str(png)],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert cli.returncode == 0, cli.stderr
+    payload = base64.b64encode(png.read_bytes()).decode("ascii")
+    assert cli.stdout.strip() == f"![shot](data:image/png;base64,{payload})"
+
+
+def test_image_data_uri_refuses_a_non_image():
+  """The command refuses a file with no image magic before any encoding work."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    other = Path(image_dir) / "notes.txt"
+    other.write_text("plain words", encoding="utf-8")
+    cli = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "image-data-uri", str(other)],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert cli.returncode == 1, cli.stdout
+    assert "not a supported image" in cli.stdout
+
+
+def test_image_data_uri_refuses_a_file_over_the_cap():
+  """The size check runs on a valid image before the command encodes the bytes."""
+  with tempfile.TemporaryDirectory() as image_dir:
+    big = Path(image_dir) / "big.png"
+    big.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * preview.IMAGE_DATA_URI_MAX_BYTES)
+    cli = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "image-data-uri", str(big)],
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+    assert cli.returncode == 1, cli.stdout
+    assert "cap" in cli.stdout
 
 
 def test_legacy_note_import():

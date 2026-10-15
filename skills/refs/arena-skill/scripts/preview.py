@@ -1,6 +1,7 @@
 """Shared preview runtime. Steering uses only Python's standard library."""
 
 import argparse
+import base64
 import hashlib
 import html
 import json
@@ -40,6 +41,8 @@ MAX_REPORT = 2_000_000
 # without GitHub. One session reported 512 MB. Downloads use 80% of the documented figure.
 SNAPSHOT_CAP_BYTES = 128_000_000
 MAX_FETCH = SNAPSHOT_CAP_BYTES * 80 // 100
+# A data URI lands inside a Markdown message row, so the cap keeps one pasted image sane.
+IMAGE_DATA_URI_MAX_BYTES = 2 * 1024 * 1024
 WORKSPACE_SKIP = {
   ".arena",
   ".cache",
@@ -5320,6 +5323,35 @@ def ensure_installed():
       return
 
 
+def image_data_uri(path: Path) -> str:
+  """Read one image file and return Markdown text that carries it as a data URI."""
+  if not path.is_file():
+    raise ValueError(f"{path} is not a file")
+  size = path.stat().st_size
+  if size > IMAGE_DATA_URI_MAX_BYTES:
+    raise ValueError(
+      f"{path} is {size} bytes; the data URI cap is {IMAGE_DATA_URI_MAX_BYTES} bytes"
+    )
+  try:
+    data = path.read_bytes()
+  except OSError as error:
+    raise ValueError(f"Cannot read {path}: {error.strerror or error}") from None
+  if data.startswith(b"\x89PNG\r\n\x1a\n"):
+    mime = "image/png"
+  elif data.startswith(b"\xff\xd8\xff"):
+    mime = "image/jpeg"
+  elif data.startswith((b"GIF87a", b"GIF89a")):
+    mime = "image/gif"
+  elif data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+    mime = "image/webp"
+  else:
+    raise ValueError(
+      f"{path} is not a supported image; the allowed types are PNG, JPEG, GIF and WebP"
+    )
+  encoded = base64.b64encode(data).decode("ascii")
+  return f"![{path.stem}](data:{mime};base64,{encoded})"
+
+
 def main():
   parser = argparse.ArgumentParser(description=CLI_DESCRIPTION)
   parser.add_argument(
@@ -5352,6 +5384,13 @@ def main():
     help="Reread a stored note by its short or full ID",
   )
   note_reread.add_argument("id", help="Six or all characters of a note ID")
+  image_uri = commands.add_parser(
+    "image-data-uri",
+    help="Print Markdown text that carries one local image as a data URI",
+  )
+  image_uri.add_argument(
+    "path", type=Path, help="One local PNG, JPEG, GIF or WebP file up to 2 MiB"
+  )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
   inbox_line = commands.add_parser(
     "inbox-line",
@@ -5617,6 +5656,13 @@ def main():
       parser.error("a command is required")
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
+    if args.command == "image-data-uri":
+      try:
+        print(image_data_uri(args.path))
+      except ValueError as error:
+        print(error)
+        return 1
+      return 0
     if args.command == "worktree-tick":
       warning = worktree_warning(state_dir, args.action)
       if warning:
