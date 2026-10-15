@@ -226,7 +226,7 @@ function paintConnection() {
     setConnection('idle', connectionText());
   }
 }
-// The hide-composer control went with the log's other spare buttons: the composer stays open, so nothing carries a closed state any more.
+// The composer stays open and has no closed state.
 // A placeholder is a hint rather than a draft: past three lines it keeps two and an ellipsis.
 function clipPlaceholder(text) {
   const lines = String(text).split('\n');
@@ -437,7 +437,7 @@ function time(value) {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 function clockTime(value) {
-  // The header clock keeps the absolute face the stamps once wore, with the owner's zone.
+  // The header clock shows absolute time in the browser's local zone.
   const date = stampDate(value);
   const parts = Object.fromEntries(new Intl.DateTimeFormat(undefined, {
     month: 'short', day: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
@@ -1228,7 +1228,7 @@ document.addEventListener('keydown', event => {
   event.preventDefault();
   quoteTaskId(target);
 });
-// The header clock is the log's own face with seconds appended, so the two never disagree.
+// Append seconds to the header's local clock.
 function showClock() {
   const now = new Date();
   const clock = $('#clock');
@@ -1239,11 +1239,10 @@ function showClock() {
 }
 showClock();
 setInterval(showClock, 1000);
-// Copy state exports notes, tasks and report answers for `import-state`. The server
-// builds the NDJSON and one request carries the copy.
+// Copy state exports notes, tasks, and report answers for `import-state`.
+// One request carries the server's NDJSON, which matches the save file.
 const copyStateButton = $('#copy-state');
 copyStateButton.addEventListener('click', async () => {
-  // The server holds the same NDJSON the save file carries, so one request carries the copy.
   let payload = null;
   try { payload = await (await request('/api/copy-state')).json(); }
   catch { payload = null; }
@@ -1474,8 +1473,7 @@ $('#report-form').addEventListener('submit', async event => {
     if (answered && !answered.seen_at) void markReportRead(id);
     if ($('#report').dataset.reportId !== id || $('#report').dataset.revision !== revision) return;
     reportDirty = JSON.stringify(collect($('#report'))) !== JSON.stringify(answers);
-    // The report ID keeps its chip after a send: the plain text assignment
-    // dropped it, so the loaded line and the sent line disagreed.
+    // Keep the report ID chip after a send, matching the loaded status line.
     reportStatusLine('', id, result.id);
     void refreshState();
   } catch (error) {
