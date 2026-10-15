@@ -26,6 +26,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Browser owner actions use one pending-state overlay. Polls retain pending changes, failed writes restore the prior state, and successful reply receipts survive stale polls. Download workers ignore pending approvals.
+
 - A task row shows the answers linked to it: each entry names its answer ID, its time and its field text. The answer block takes no edits, so the manual details stay the record.
 
 - Reports have a floating scroll-to-top control with the message jump-button style.

@@ -101,6 +101,7 @@ let counter = 0;
 let sendHandler;
 let state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
 let stateFails = false;
+let stateResponseWait = null;
 let stateGatewayBody = null;
 let reportFields = 0;
 let reportRevision = '2026-09-22T12:00:00.100000+00:00';
@@ -145,6 +146,8 @@ const response = (value, ok = true) => {
 };
 let coarsePointer = false;
 const pointerListeners = [];
+const pendingWrites = new Map();
+const failedWrites = new Set();
 const context = {
   window: {
     addEventListener: (name, callback) => { windowEvents[name] = callback; },
@@ -168,10 +171,14 @@ const context = {
   setInterval: callback => { intervals.push(callback); return 1; },
   clearInterval: () => {},
   fetch: async (url, options) => {
+    if (pendingWrites.has(url)) await pendingWrites.get(url);
+    if (failedWrites.has(url)) return response({ error: 'Write failed' }, false);
     if (url === '/api/state') {
       // A gateway in front of a dead server answers with its own page, not the app's JSON.
       if (stateGatewayBody !== null) return { ok: false, status: 502, statusText: 'Bad Gateway', json: async () => ({}), text: async () => stateGatewayBody };
-      return stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+      const snapshot = stateFails ? response({ error: 'server gone' }, false) : response({ ...state, token: servedToken });
+      if (stateResponseWait) await stateResponseWait;
+      return snapshot;
     }
     if (url === '/api/submissions') return response((state.submissions || []).filter(record => (state.reports || []).some(report => report.id === record.report_id)));
     if (url === '/api/report-sources') return response(state.reportSources || []);
@@ -3384,6 +3391,150 @@ test('preview client', async (t) => {
       assert.match(stamp.textContent, /21 mins ago/);
     } finally {
       state.notes = priorNotes;
+      await refresh();
+    }
+  });
+  await t.test('Browser writes keep pending state through polls and restore failed changes', async () => {
+    const keptState = state;
+    const paths = ['/api/reports/pending-ack/ack-seen', '/api/skip-poll', '/api/fetch-jobs/pending-drop/drop'];
+    let release = () => {};
+    let writing;
+    let polling;
+    let releaseState = () => {};
+    const hold = path => pendingWrites.set(path, new Promise(resolve => { release = resolve; }));
+    try {
+      get('#notes-tab').events.click();
+      state = { notes: [], reports: [{ id: 'pending-ack', title: 'Pending receipt',
+        updated_at: '2026-10-13T03:00:00', seen_at: '2026-10-13T03:00:00',
+        latest_answer_acknowledged_at: '2026-10-13T03:01:00', ack_seen_at: null }],
+        fetch_jobs: [{ id: 'pending-drop', url: 'https://example.test/saved.txt',
+          approval: 'approved', status: 'saved', present: true, file: 'saved.txt',
+          size: 1, sha256: 'a'.repeat(64) }], tasks: { upcoming: [], finished: [] } };
+      await refresh();
+      hold(paths[0]);
+      writing = get('#mark-report-acks-seen').events.click();
+      assert.equal(get('#report-pip').hidden, true, 'the receipt clears before the write answers');
+      await refresh();
+      assert.equal(get('#report-pip').hidden, true, 'a poll cannot undo the pending receipt');
+      failedWrites.add(paths[0]);
+      release(); await writing;
+      assert.equal(get('#report-pip').hidden, false, 'a failed write restores the receipt');
+      assert.equal(get('#mark-report-acks-seen').disabled, false, 'the failed action can be retried');
+      pendingWrites.clear(); failedWrites.clear();
+
+      hold(paths[1]);
+      writing = get('#skip-poll').events.click();
+      assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'true');
+      await refresh();
+      assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'true', 'pending toggles survive polls');
+      failedWrites.add(paths[1]);
+      release(); await writing;
+      assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
+      pendingWrites.clear(); failedWrites.clear();
+
+      hold(paths[2]);
+      const row = get('#fetch-list').children.find(row => row.textContent.includes('saved.txt'));
+      const drop = row.children.find(child => child.className === 'icon-button fetch-drop');
+      await drop.events.click();
+      writing = drop.events.click();
+      assert.equal(get('#fetch-list').children.some(row => row.textContent.includes('saved.txt')), false);
+      await refresh();
+      assert.equal(get('#fetch-list').children.some(row => row.textContent.includes('saved.txt')), false);
+      failedWrites.add(paths[2]);
+      release(); await writing;
+      assert.equal(get('#fetch-list').children.some(row => row.textContent.includes('saved.txt')), true);
+      pendingWrites.clear(); failedWrites.clear();
+
+      state.fetch_jobs.push({ id: 'pending-approval', url: 'https://example.test/approval.txt',
+        status: 'queued', approval: 'pending', origin: 'agent' });
+      await refresh();
+      const remoteCount = remoteCalls.length;
+      hold('/api/fetch-jobs/pending-approval/approve');
+      const approval = get('#fetch-approvals').children.find(row => row.textContent.includes('approval.txt'));
+      writing = approval.children.find(child => child.className === 'row tight fetch-decisions')
+        .children.find(button => button.textContent === 'Approve').events.click();
+      assert.equal(get('#fetch-approvals').children.some(row => row.textContent.includes('approval.txt')), false,
+        'approval projects into history before the response');
+      await refresh();
+      assert.equal(remoteCalls.length, remoteCount, 'pending approval never authorizes a remote fetch');
+      failedWrites.add('/api/fetch-jobs/pending-approval/approve');
+      release(); await writing;
+      assert.equal(get('#fetch-approvals').children.some(row => row.textContent.includes('approval.txt')), true);
+      pendingWrites.clear(); failedWrites.clear();
+
+      get('#fetch-url').value = 'https://example.test/new-job.txt';
+      hold('/api/fetch-jobs');
+      writing = get('#fetch-form').events.submit(event({}));
+      assert.ok(get('#fetch-list').children.some(row => row.textContent.includes('new-job.txt')));
+      await refresh();
+      assert.equal(remoteCalls.length, remoteCount, 'a pending enqueue is not a claimed server job');
+      failedWrites.add('/api/fetch-jobs');
+      release(); await writing;
+      assert.equal(get('#fetch-list').children.some(row => row.textContent.includes('new-job.txt')), false);
+      assert.equal(get('#fetch-url').value, 'https://example.test/new-job.txt', 'failure keeps the URL');
+      pendingWrites.clear(); failedWrites.clear();
+
+      get('#note').value = 'Pending draft stays safe';
+      hold('/api/notes');
+      writing = get('#form').events.submit(event({}));
+      assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
+      await refresh();
+      assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
+      failedWrites.add('/api/notes');
+      release(); await writing;
+      assert.equal(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')), false);
+      assert.equal(get('#note').value, 'Pending draft stays safe', 'failure keeps the message draft');
+      pendingWrites.clear(); failedWrites.clear();
+
+      state.reports[0].updated_at = reportRevision;
+      state.reports[0].latest_answer_acknowledged_at = null;
+      reportFields = 3;
+      get('#report').fields = [text, picks, verdict];
+      await refresh();
+      get('#report-select').value = 'pending-ack';
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+      textInput.value = 'Pending report entry';
+      hold('/api/reports/pending-ack/submit');
+      writing = get('#report-form').events.submit(event({}));
+      assert.equal(get('#report-agent-ack').hidden, false, 'a pending answer has a receipt');
+      await refresh();
+      assert.equal(get('#report-agent-ack').hidden, false, 'polls keep the pending answer receipt');
+      failedWrites.add('/api/reports/pending-ack/submit');
+      release(); await writing;
+      assert.equal(get('#report-agent-ack').hidden, true, 'a failed answer restores the old receipt');
+      assert.equal(textInput.value, 'Pending report entry', 'failure keeps the form entries');
+      pendingWrites.clear(); failedWrites.clear();
+
+      hold('/api/reports/pending-ack/unpublish');
+      await get('#unpublish-report').events.click();
+      writing = get('#unpublish-report').events.click();
+      assert.equal(get('#report-select').children.some(option => option.value === 'pending-ack'), false);
+      await refresh();
+      assert.equal(get('#report-select').children.some(option => option.value === 'pending-ack'), false);
+      failedWrites.add('/api/reports/pending-ack/unpublish');
+      release(); await writing;
+      assert.ok(get('#report-select').children.some(option => option.value === 'pending-ack'));
+      pendingWrites.clear(); failedWrites.clear();
+      get('#notes-tab').events.click();
+      await tick();
+      hold('/api/skip-poll');
+      writing = get('#skip-poll').events.click();
+      stateResponseWait = new Promise(resolve => { releaseState = resolve; });
+      polling = refresh();
+      await tick();
+      release(); await writing;
+      releaseState(); await polling;
+      assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'true',
+        'a poll captured before confirmation cannot undo the confirmed write');
+
+    } finally {
+      release(); releaseState();
+      if (writing) await writing;
+      if (polling) await polling;
+      stateResponseWait = null;
+      pendingWrites.clear(); failedWrites.clear();
+      state = keptState;
       await refresh();
     }
   });

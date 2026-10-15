@@ -13,67 +13,40 @@ let stateBusy = false;
 let reportRequest = 0;
 let listSignature = '';
 let lastState = null;
-// The overlay keeps pending changes until the server answers.
-const optimisticState = {
-  reports: new Map(),
-  tasks: new Map(),
-  notes: new Map(),
-};
-
+// Pending writes project over the latest poll, without changing its trusted server records.
+const optimisticState = new Map();
+let pollCommits = null;
 function getState() {
-  if (!lastState) return null;
-  // Merge optimistic changes over real state
-  const merged = { ...lastState };
-  
-  // Apply report updates
-  if (optimisticState.reports.size > 0 && merged.reports) {
-    merged.reports = merged.reports.map(report => {
-      const optimistic = optimisticState.reports.get(report.id);
-      return optimistic ? { ...report, ...optimistic.updates } : report;
-    });
-  }
-  
-  // Apply task updates
-  if (optimisticState.tasks.size > 0 && merged.tasks) {
-    merged.tasks = merged.tasks.map(task => {
-      const optimistic = optimisticState.tasks.get(task.id);
-      return optimistic ? { ...task, ...optimistic.updates } : task;
-    });
-  }
-  
-  // Apply note updates
-  if (optimisticState.notes.size > 0 && merged.notes) {
-    merged.notes = merged.notes.map(note => {
-      const optimistic = optimisticState.notes.get(note.id);
-      return optimistic ? { ...note, ...optimistic.updates } : note;
-    });
-  }
-  
-  return merged;
+  if (!lastState || !optimisticState.size) return lastState;
+  const state = JSON.parse(JSON.stringify(lastState));
+  for (const entry of optimisticState.values()) entry.apply(state);
+  return state;
 }
-
-function setOptimistic(collection, id, updates, rollback) {
-  optimisticState[collection].set(id, {
-    updates,
-    rollback,
-    timestamp: Date.now()
-  });
-  render(); // Re-render with optimistic state
-}
-
-function clearOptimistic(collection, id) {
-  optimisticState[collection].delete(id);
-  render(); // Re-render with real state
-}
-
-function rollbackOptimistic(collection, id) {
-  const optimistic = optimisticState[collection].get(id);
-  if (optimistic && optimistic.rollback) {
-    optimistic.rollback();
+async function optimisticWrite(apply, write, commit = apply, echo = null) {
+  const key = {};
+  const entry = { apply };
+  optimisticState.set(key, entry);
+  try {
+    renderState();
+    const result = await write();
+    if (lastState) commit(lastState, result);
+    if (pollCommits) pollCommits.push(state => commit(state, result));
+    if (echo) {
+      entry.apply = state => commit(state, result);
+      entry.echo = state => echo(state, result);
+    }
+    return result;
+  } finally {
+    if (!entry.echo) optimisticState.delete(key);
+    renderState();
   }
-  clearOptimistic(collection, id);
 }
-
+function updateJob(id, updates) {
+  return (state, result) => {
+    const job = (state.fetch_jobs || []).find(item => item.id === id);
+    if (job) Object.assign(job, result || updates);
+  };
+}
 // Polls refresh the write token.
 // A save after a server restart works without a browser refresh.
 const pageToken = () => (document.body.dataset || {}).token || '__TOKEN__';
@@ -472,18 +445,11 @@ function clockTime(value) {
   return `${parts.month} ${parts.day}${year}, ${parts.hour}:${parts.minute}`;
 }
 let unreadEdits = [];
-const localReplySeen = new Map();
 // SQLite stores the number of reply blocks the page marked as viewed. Counts distinguish two
 // replies with the same second-level timestamp, and survive a page reload.
 function updateEdits(notes) {
-  const ids = new Set(notes.map(item => item.id));
-  for (const id of localReplySeen.keys()) if (!ids.has(id)) localReplySeen.delete(id);
-  unreadEdits = notes.filter(item => {
-    const local = localReplySeen.get(item.id);
-    let seen = Math.max(Number(item.ack_edited_seen_count || 0), local?.confirmed || 0);
-    for (const pending of local?.pending || []) seen = Math.max(seen, pending.count);
-    return item.ack_edited_at && seen < (item.replies || []).length;
-  });
+  unreadEdits = notes.filter(item => item.ack_edited_at
+    && Number(item.ack_edited_seen_count || 0) < (item.replies || []).length);
   $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
   $('#log-edited').textContent = unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
 }
@@ -520,30 +486,27 @@ $('#log-edited').addEventListener('click', async () => {
   answer.setAttribute('tabindex', '-1');
   answer.focus({preventScroll: true});
   const replyCount = (item.replies || []).length;
-  const local = localReplySeen.get(item.id) || { confirmed: 0, pending: new Set() };
-  const pending = { count: replyCount };
-  local.pending.add(pending);
-  localReplySeen.set(item.id, local);
-  updateEdits(getState().notes);
+  const apply = (state, receipt) => {
+    const message = state.notes.find(note => note.id === item.id);
+    if (message) message.ack_edited_seen_count = Math.max(
+      Number(message.ack_edited_seen_count || 0), receipt?.ack_edited_seen_count ?? replyCount);
+  };
   try {
-    const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
-      method: 'POST',
-      headers: writeHeaders('application/json'),
-      body: JSON.stringify({count: replyCount})
+    await optimisticWrite(apply, async () => {
+      const response = await request(`/api/messages/${encodeURIComponent(item.id)}/replies/seen`, {
+        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({count: replyCount})
+      });
+      const receipt = await response.json();
+      if (receipt.id !== item.id || !Number.isInteger(receipt.ack_edited_seen_count)) {
+        throw new Error('The viewed-reply receipt was invalid');
+      }
+      return receipt;
+    }, apply, (state, receipt) => {
+      const message = state.notes.find(note => note.id === item.id);
+      return !message || Number(message.ack_edited_seen_count || 0) >= receipt.ack_edited_seen_count;
     });
-    const receipt = await response.json();
-    if (receipt.id !== item.id || !Number.isInteger(receipt.ack_edited_seen_count)) {
-      throw new Error('The viewed-reply receipt was invalid');
-    }
-    local.confirmed = Math.max(local.confirmed, receipt.ack_edited_seen_count);
   } catch (error) {
     status.textContent = `Could not save reply status: ${error.message}`;
-  } finally {
-    local.pending.delete(pending);
-    if (!local.confirmed && !local.pending.size && localReplySeen.get(item.id) === local) {
-      localReplySeen.delete(item.id);
-    }
-    updateEdits(getState().notes);
   }
 });
 function showHistory(notes) {
@@ -583,8 +546,8 @@ function showHistory(notes) {
     receiptDot.className = 'state-dot';
     receiptDot.dataset.state = state;
     receiptDot.setAttribute('role', 'img');
-    receiptDot.setAttribute('aria-label', STATE_WORDS[state]);
-    receiptDot.title = STATE_WORDS[state];
+    receiptDot.setAttribute('aria-label', item.pending ? 'Sending' : STATE_WORDS[state]);
+    receiptDot.title = item.pending ? 'Sending' : STATE_WORDS[state];
     const receiptState = document.createElement('span');
     receiptState.textContent = ` · ${time(item.at)}` +
       (item.ack_edited_at ? ` · Replied again ${time(item.ack_edited_at)}` : '');
@@ -823,106 +786,121 @@ $('#log-search').addEventListener('input', () => {
   logQuery = $('#log-search').value;
   applyLogSearch();
 });
+function renderState() {
+  const state = getState();
+  if (!state) return;
+  if (state.token) writeToken = state.token;
+  // The page keeps its own copy of what the poll delivered, so the save button still has something
+  // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
+  // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
+  save('state-cache', JSON.stringify({ notes: lastState.notes, tasks: lastState.tasks }));
+  // A quiet note informs the agent, not the log: it stays in the cache and the copy state
+  // while the log and its tally carry the owner-facing messages only.
+  const logNotes = state.notes.filter(item => !item.quiet);
+  const confirmed = logNotes.filter(item => !item.pending).length;
+  const saved = confirmed ? `${confirmed} messages saved` : 'No messages yet';
+  // The header carries the same tally the gate keeps, so the owner sees the call count
+  // the stderr banner names without leaving the page.
+  const calls = state.calls_since_message || 0;
+  // The tally names the calls since the owner's first unread message and says Blocked once
+  // the count reaches ten.
+  callTally = calls
+    ? calls >= 10
+      ? ' · Blocked'
+      : ` · ${calls} call${calls === 1 ? '' : 's'}`
+    : '';
+  pollSince = state.polling ? stampMs(state.polling_since) : null;
+  agentSeenAt = stampMs(state.agent_seen_at);
+  agentSeenStamp = state.agent_seen_at;
+  turnEndedAt = stampMs(state.turn_ended_at);
+  turnEndedStamp = state.turn_ended_at || null;
+  callEndAt = stampMs(state.agent_call_ended_at);
+  callEndStamp = state.agent_call_ended_at || null;
+  connectionBase = saved;
+  setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
+  if (state.rendering_error) {
+    connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
+    paintConnection();
+  }
+  // The ack writes the same stamp as a read does, so the label is true.
+  $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
+  showHistory(logNotes);
+  renderTasksIfChanged(state.tasks);
+  renderFetchIfChanged(state.fetch_jobs || []);
+  renderAgentKey(state.agent_key);
+  paintSkipPoll(state.skip_poll);
+  showWorkspace(state.workspace);
+  const signature = reportsSignature(state.reports);
+  if (signature !== listSignature) {
+    listSignature = signature;
+    const select = $('#report-select');
+    const selected = select.value || stored('report');
+    const shown = $('#report').dataset.reportId;
+    // Held only while the shown report is really gone: a republished ID releases it.
+    heldReport = shown && !state.pending_report_deletes?.includes(shown)
+      && !state.reports.some(report => report.id === shown) && !$('#reports-panel').hidden
+      ? { id: shown, title: reportTitles.get(shown) || shown }
+      : null;
+    select.replaceChildren();
+    state.reports.forEach((report, position) => {
+      reportTitles.set(report.id, report.title);
+      const option = document.createElement('option');
+      option.value = report.id;
+      option.textContent = reportLabel(report, position);
+      select.append(option);
+    });
+    if (heldReport && !state.reports.some(report => report.id === heldReport.id)) {
+      const option = document.createElement('option');
+      option.value = heldReport.id;
+      option.textContent = `${heldReport.title} · unpublished`;
+      select.append(option);
+    }
+    if (!state.reports.length && !heldReport) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No reports published yet';
+      select.append(option);
+    } else if (state.reports.some(report => report.id === selected)) select.value = selected;
+    else if (heldReport && heldReport.id === selected) select.value = selected;
+    const selectedReport = state.reports.find(report => report.id === select.value);
+    if (!$('#reports-panel').hidden &&
+        ($('#report').dataset.reportId !== select.value ||
+         $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
+    // A panel already showing the report is the open, so an ack that lands in view stamps at
+    // once rather than waiting for a tab switch the owner has no reason to make.
+    else if (!$('#reports-panel').hidden && ackUnread(selectedReport)) void markAckSeen(select.value);
+  }
+  // The pip tracks reports never opened. An edited report keeps its star alone. The separate
+  // receipt tracks the selected report's latest answer.
+  for (const option of $('#report-select').children) {
+    const position = state.reports.findIndex(report => report.id === option.value);
+    if (position >= 0) option.textContent = reportLabel(state.reports[position], position);
+  }
+  updateReportPip(state.reports);
+  updateReportNavigation();
+  updateReportTop();
+  renderReportAcknowledgement();
+  // The panel can show a report's end while its last scroll event was lost (a re-render moved the
+  // panel, or the event landed a pixel short), so the poll takes the same look the tab click does.
+  checkReportRead();
+}
 async function refreshState() {
   if (stateBusy) return;
   stateBusy = true;
   let queueReady = false;
+  pollCommits = [];
   try {
     const state = await (await request('/api/state')).json();
+    for (const [key, entry] of optimisticState) if (entry.echo?.(state)) optimisticState.delete(key);
+    for (const commit of pollCommits) commit(state);
     lastState = state;
-    if (state.token) writeToken = state.token;
-    // The page keeps its own copy of what the poll delivered, so the save button still has something
-    // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
-    // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
-    save('state-cache', JSON.stringify({ notes: state.notes, tasks: state.tasks }));
-    // A quiet note informs the agent, not the log: it stays in the cache and the copy state
-    // while the log and its tally carry the owner-facing messages only.
-    const logNotes = state.notes.filter(item => !item.quiet);
-    const saved = logNotes.length ? `${logNotes.length} messages saved` : 'No messages yet';
-    // The header carries the same tally the gate keeps, so the owner sees the call count
-    // the stderr banner names without leaving the page.
-    const calls = state.calls_since_message || 0;
-    // The tally names the calls since the owner's first unread message and says Blocked once
-    // the count reaches ten.
-    callTally = calls
-      ? calls >= 10
-        ? ' · Blocked'
-        : ` · ${calls} call${calls === 1 ? '' : 's'}`
-      : '';
-    pollSince = state.polling ? stampMs(state.polling_since) : null;
-    agentSeenAt = stampMs(state.agent_seen_at);
-    agentSeenStamp = state.agent_seen_at;
-    turnEndedAt = stampMs(state.turn_ended_at);
-    turnEndedStamp = state.turn_ended_at || null;
-    callEndAt = stampMs(state.agent_call_ended_at);
-    callEndStamp = state.agent_call_ended_at || null;
-    connectionBase = saved;
-    setConnection(state.polling ? 'polling' : agentIdle() ? 'idle' : 'ok', connectionText());
-    if (state.rendering_error) {
-      connectionBase += ` · Markdown log unavailable; raw text shown: ${state.rendering_error}`;
-      paintConnection();
-    }
-    // The ack writes the same stamp as a read does, so the label is true.
-    $('#last-check').textContent = state.last_check ? `Last read/ack: ${time(state.last_check)}` : 'No read or ack yet.';
-    showHistory(logNotes);
-    renderTasksIfChanged(state.tasks);
-    renderFetchIfChanged(state.fetch_jobs || []);
-    renderAgentKey(state.agent_key);
-    paintSkipPoll(state.skip_poll);
-    showWorkspace(state.workspace);
+    renderState();
     queueReady = true;
-    const signature = reportsSignature(state.reports);
-    if (signature !== listSignature) {
-      listSignature = signature;
-      const select = $('#report-select');
-      const selected = select.value || stored('report');
-      const shown = $('#report').dataset.reportId;
-      // Held only while the shown report is really gone: a republished ID releases it.
-      heldReport = shown && !state.reports.some(report => report.id === shown) && !$('#reports-panel').hidden
-        ? { id: shown, title: reportTitles.get(shown) || shown }
-        : null;
-      select.replaceChildren();
-      state.reports.forEach((report, position) => {
-        reportTitles.set(report.id, report.title);
-        const option = document.createElement('option');
-        option.value = report.id;
-        option.textContent = reportLabel(report, position);
-        select.append(option);
-      });
-      if (heldReport && !state.reports.some(report => report.id === heldReport.id)) {
-        const option = document.createElement('option');
-        option.value = heldReport.id;
-        option.textContent = `${heldReport.title} · unpublished`;
-        select.append(option);
-      }
-      if (!state.reports.length && !heldReport) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'No reports published yet';
-        select.append(option);
-      } else if (state.reports.some(report => report.id === selected)) select.value = selected;
-      else if (heldReport && heldReport.id === selected) select.value = selected;
-      const selectedReport = state.reports.find(report => report.id === select.value);
-      if (!$('#reports-panel').hidden &&
-          ($('#report').dataset.reportId !== select.value ||
-           $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
-      // A panel already showing the report is the open, so an ack that lands in view stamps at
-      // once rather than waiting for a tab switch the owner has no reason to make.
-      else if (!$('#reports-panel').hidden && ackUnread(selectedReport)) void markAckSeen(select.value);
-    }
-    // The pip tracks reports never opened. An edited report keeps its star alone. The separate
-    // receipt tracks the selected report's latest answer.
-    updateReportPip(state.reports);
-    updateReportNavigation();
-    updateReportTop();
-    renderReportAcknowledgement();
-    // The panel can show a report's end while its last scroll event was lost (a re-render moved the
-    // panel, or the event landed a pixel short), so the poll takes the same look the tab click does.
-    checkReportRead();
   } catch (error) { pollSince = null; setConnection('down', `Connection failed: ${error.message}. Draft kept; history may be stale.`); }
   finally {
     stateBusy = false;
-    if (queueReady && (getState()?.fetch_jobs || []).some(item => item.approval === 'approved'
+    pollCommits = null;
+    if (queueReady && (lastState?.fetch_jobs || []).some(item => item.approval === 'approved'
       && (item.status === 'queued'
         || (item.status === 'fetching' && Date.parse(item.lease_until) <= Date.now())))) {
       void pumpFetchQueue();
@@ -948,31 +926,39 @@ $('#form').addEventListener('submit', async event => {
   save('pending', JSON.stringify(pending));
   send.disabled = picker.disabled = $('#attach-file').disabled = true;
   status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : 'Sending…';
+  const sending = { id: pending.id, text, at: new Date().toISOString(), pending: true };
+  const apply = (state, result) => {
+    const position = state.notes.findIndex(item => item.id === sending.id);
+    if (position < 0) state.notes.push(result || sending);
+    else if (result) state.notes[position] = result;
+  };
   try {
-    let response;
-    if (stagedFiles.length) {
-      const body = new FormData();
-      body.append('id', pending.id);
-      body.append('text', text);
-      for (const file of stagedFiles) body.append('file', file, file.name);
-      // The same note ID, text and file set twice is safe: the server answers with the first
-      // record, so one retry after a dropped connection cannot duplicate the note.
-      const postFiles = () => request('/api/notes/with-file', {
-        method: 'POST', headers: { 'X-Preview-Token': writeToken }, body,
-        timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
+    const result = await optimisticWrite(apply, async () => {
+      let response;
+      if (stagedFiles.length) {
+        const body = new FormData();
+        body.append('id', pending.id);
+        body.append('text', text);
+        for (const file of stagedFiles) body.append('file', file, file.name);
+        // The same note ID, text and file set twice is safe: the server answers with the first
+        // record, so one retry after a dropped connection cannot duplicate the note.
+        const postFiles = () => request('/api/notes/with-file', {
+          method: 'POST', headers: { 'X-Preview-Token': writeToken }, body,
+          timeoutMs: BINARY_TIMEOUT, retryOnFailure: false
+        });
+        try { response = await postFiles(); }
+        catch (error) {
+          // A dropped connection arrives as a TypeError, with no status to read. The same note ID,
+          // text and file set replay safely, so one retry covers a blip that lost the body.
+          if (!error || error.name !== 'TypeError') throw error;
+          status.textContent = 'The upload dropped once; retrying the same message ID…';
+          response = await postFiles();
+        }
+      } else response = await request('/api/notes', {
+        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(pending)
       });
-      try { response = await postFiles(); }
-      catch (error) {
-        // A dropped connection arrives as a TypeError, with no status to read. The same note ID,
-        // text and file set replay safely, so one retry covers a blip that lost the body.
-        if (!error || error.name !== 'TypeError') throw error;
-        status.textContent = 'The upload dropped once; retrying the same message ID…';
-        response = await postFiles();
-      }
-    } else response = await request('/api/notes', {
-      method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(pending)
+      return response.json();
     });
-    const result = await response.json();
     note.placeholder = clipPlaceholder(result.text);
     status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.'
       : `Saved ${time(result.at)} · Message sent${attachments.length ? ` with ${attachments.length} file${attachments.length === 1 ? '' : 's'}` : ''}.`;
@@ -1310,6 +1296,7 @@ function ackUnread(report) {
     (!report.ack_seen_at || report.ack_seen_at < report.latest_answer_acknowledged_at));
 }
 function submissionStateWord(report) {
+  if (report.pending_answer) return 'Sending';
   if (report.latest_answer_acknowledged_at) return `Acked ${time(report.latest_answer_acknowledged_at)}`;
   return submissionSeenAt(report) ? 'Awaiting ack' : 'Sent';
 }
@@ -1477,12 +1464,22 @@ $('#report-form').addEventListener('submit', async event => {
   reportDirty = true;
   button.disabled = true;
   $('#report-status').textContent = 'Sending…';
+  const answer = { id: newId(), answers, revision };
+  const original = getState()?.reports.find(report => report.id === id)?.updated_at;
+  const at = new Date().toISOString();
+  const apply = (state, result) => {
+    const report = state.reports.find(item => item.id === id);
+    if (!report || report.updated_at !== original) return;
+    Object.assign(report, { latest_answer_id: answer.id, latest_answer_at: result?.at || at,
+      latest_answer_acknowledged_at: null, needs_answer: false });
+    if (result) delete report.pending_answer;
+    else report.pending_answer = true;
+  };
   try {
-    const result = await (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
-      method: 'POST',
-      headers: writeHeaders('application/json'),
-      body: JSON.stringify({ id: newId(), answers, revision })
-    })).json();
+    const result = await optimisticWrite(apply, async () =>
+      (await request(`/api/reports/${encodeURIComponent(id)}/submit`, {
+        method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify(answer)
+      })).json());
     save(`answers:${id}`, JSON.stringify({ answers, at: result.at }));
     // An accepted answer is proof the owner read the report, so the read stamps with the send, and
     // a report already stamped keeps its earlier stamp.
@@ -1496,13 +1493,6 @@ $('#report-form').addEventListener('submit', async event => {
       `Report · ${$('#report-form').dataset.fields} fields · Submission ${result.id.slice(0, 6)}`,
       id,
     );
-    const report = getState()?.reports.find(item => item.id === id);
-    if (report) {
-      report.latest_answer_id = result.id;
-      report.latest_answer_at = result.at;
-      report.latest_answer_acknowledged_at = null;
-      renderReportAcknowledgement();
-    }
     void refreshState();
   } catch (error) {
     if ($('#report').dataset.reportId === id) {
@@ -1702,44 +1692,41 @@ function unseenReportId() {
   const report = reports.find(item => item.id === $('#report-select').value);
   return report && !report.seen_at ? report.id : null;
 }
-// The stamp is folded into the state rather than fetched again. A poll after it would see a
-// changed reports signature, rebuild the select and re-fetch the report, which loses the
-// owner's place in a long report. The server's own stamp is stored and the signature is moved
-// with it, so the next poll matches this state and renders nothing.
-function foldReportStamp(id, key, value) {
-  const state = getState();
-  const reports = (state && state.reports) || [];
-  const report = reports.find(item => item.id === id);
-  if (!report) return;
-  report[key] = value;
-  listSignature = reportsSignature(reports);
-  updateReportPip(reports);
-  const option = [...$('#report-select').children].find(item => item.value === id);
-  if (option) option.textContent = reportLabel(report, reports.indexOf(report));
-}
 async function markReportRead(id) {
   clearReadTimer();
-  let stamped;
+  const original = getState()?.reports.find(report => report.id === id)?.updated_at;
+  const at = new Date().toISOString();
+  const apply = (state, result) => {
+    const report = state.reports.find(item => item.id === id);
+    if (report && report.updated_at === original) report.seen_at = result?.seen_at || at;
+  };
   try {
-    stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/seen`, {
-      method: 'POST',
-      headers: writeHeaders('application/json'),
-      body: '{}'
-    })).json();
+    await optimisticWrite(apply, async () =>
+      (await request(`/api/reports/${encodeURIComponent(id)}/seen`, {
+        method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+      })).json());
   } catch (error) {
-    // A stamp that fails costs the owner nothing they have to act on, and the next look retries.
-    return;
+    // A later look retries a failed read stamp.
   }
-  foldReportStamp(id, 'seen_at', stamped.seen_at || new Date().toISOString());
 }
 // An agent ack holds a star and the tab dot until the owner opens the report. The open is the
 // gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
 async function markAckSeen(id) {
+  const original = getState()?.reports.find(item => item.id === id);
+  if (!original) return false;
+  const { latest_answer_id, latest_answer_acknowledged_at } = original;
+  const at = new Date().toISOString();
+  const apply = (state, result) => {
+    const report = state.reports.find(item => item.id === id);
+    if (report && report.latest_answer_id === latest_answer_id
+        && report.latest_answer_acknowledged_at === latest_answer_acknowledged_at) {
+      report.ack_seen_at = result?.ack_seen_at || at;
+    }
+  };
   try {
-    const stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
+    await optimisticWrite(apply, async () => (await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
       method: 'POST', headers: writeHeaders('application/json'), body: '{}'
-    })).json();
-    foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at);
+    })).json());
     return true;
   } catch (error) {
     return false;
@@ -1956,9 +1943,10 @@ function downloadRow(item) {
       retry.addEventListener('click', async () => {
         retry.disabled = true;
         try {
-          await request(`/api/fetch-jobs/${item.id}/retry`, {
-            method: 'POST', headers: writeHeaders('application/json'), body: '{}'
-          });
+          await optimisticWrite(updateJob(item.id, { status: 'queued', error: null }), async () =>
+            (await request(`/api/fetch-jobs/${item.id}/retry`, {
+              method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+            })).json());
           $('#fetch-status').textContent = `Queued ${item.url} again.`;
           await refreshState();
         } catch (failure) { $('#fetch-status').textContent = `Retry failed: ${failure.message}`; }
@@ -1976,7 +1964,7 @@ function downloadRow(item) {
   }
   // The owner's ✕ drops a record and the bytes it staged. It arms on the first click the way
   // the report delete does, so a stray click never removes a download.
-  if (item.approval !== 'pending') {
+  if (item.approval !== 'pending' && !item.pending) {
     const drop = document.createElement('button');
     drop.type = 'button';
     drop.className = 'icon-button fetch-drop';
@@ -1995,9 +1983,11 @@ function downloadRow(item) {
       delete drop.dataset.armed;
       drop.disabled = true;
       try {
-        await request(`/api/fetch-jobs/${item.id}/drop`, {
+        await optimisticWrite(state => {
+          state.fetch_jobs = (state.fetch_jobs || []).filter(job => job.id !== item.id);
+        }, () => request(`/api/fetch-jobs/${item.id}/drop`, {
           method: 'POST', headers: writeHeaders('application/json'), body: '{}'
-        });
+        }));
         $('#fetch-status').textContent = `Deleted ${item.url}.`;
         await refreshState();
       } catch (failure) { $('#fetch-status').textContent = `Delete failed: ${failure.message}`; }
@@ -2026,9 +2016,13 @@ function approvalRow(item) {
     button.addEventListener('click', async () => {
       buttons.forEach(control => { control.disabled = true; });
       try {
-        await request(`/api/fetch-jobs/${item.id}/${action}`, {
+        await optimisticWrite(updateJob(item.id, {
+          approval: action === 'approve' ? 'approved' : 'denied',
+          status: action === 'approve' ? 'queued' : 'failed',
+          error: action === 'approve' ? null : 'Denied in the preview'
+        }), async () => (await request(`/api/fetch-jobs/${item.id}/${action}`, {
           method: 'POST', headers: writeHeaders('application/json'), body: '{}', retryOnFailure: false
-        });
+        })).json());
         $('#fetch-status').textContent = action === 'approve'
           ? `Approved ${item.url}; queued for browser download.`
           : `Denied ${item.url}; this request will not be downloaded.`;
@@ -2194,11 +2188,16 @@ $('#fetch-form').addEventListener('submit', async event => {
   }
   button.disabled = true;
   try {
-    const job = await (await request('/api/fetch-jobs', {
+    const local = { id: newId(), url: field.value.trim(), status: 'queueing',
+      approval: 'approved', pending: true };
+    const job = await optimisticWrite(state => {
+      state.fetch_jobs = [local, ...(state.fetch_jobs || [])];
+    }, async () => (await request('/api/fetch-jobs', {
       method: 'POST', headers: writeHeaders('application/json'),
-      body: JSON.stringify({ url: field.value.trim(), allow_proxy: true }),
-      retryOnFailure: false
-    })).json();
+      body: JSON.stringify({ url: local.url, allow_proxy: true }), retryOnFailure: false
+    })).json(), (state, job) => {
+      state.fetch_jobs = [job, ...(state.fetch_jobs || []).filter(item => item.id !== job.id)];
+    });
     $('#fetch-status').textContent = `Queued ${job.url}. Tries direct, AllOrigins, CodeTabs.`;
     field.value = '';
     await refreshState();
@@ -2281,12 +2280,19 @@ $('#unpublish-report').addEventListener('click', async () => {
   try {
     const report = ((getState()?.reports) || []).find(item => item.id === id);
     if (report && ackUnread(report)) await markAckSeen(id);
-    await request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {
+    saveReportDraft();
+    const remove = state => { state.reports = state.reports.filter(report => report.id !== id); };
+    await optimisticWrite(state => {
+      remove(state);
+      state.pending_report_deletes = [...(state.pending_report_deletes || []), id];
+    }, () => request(`/api/reports/${encodeURIComponent(id)}/unpublish`, {
       method: 'POST', headers: writeHeaders('application/json'), body: '{}'
-    });
+    }), remove);
     button.dataset.state = '';
     clearReportPanel(id);
   } catch (error) {
+    const select = $('#report-select');
+    if (!select.value || select.value === id) { select.value = id; await loadReport(true); }
     $('#report-status').textContent = `Delete failed: ${error.message}`;
   } finally { button.disabled = false; }
 });
@@ -2304,18 +2310,21 @@ function paintSkipPoll(skipPoll) {
 }
 $('#skip-poll').addEventListener('click', async () => {
   const button = $('#skip-poll');
+  if (button.disabled) return;
+  button.disabled = true;
   // The painted button carries the server's own answer, so the press always flips what the
   // poll last reported and a stale view cannot re-arm a flag the owner just cleared.
   const arm = button.getAttribute('aria-pressed') !== 'true';
   try {
-    const answer = await (await request('/api/skip-poll', {
+    const answer = await optimisticWrite(state => { state.skip_poll = arm ? new Date().toISOString() : null; }, async () => (await request('/api/skip-poll', {
       method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({ skip: arm })
-    })).json();
+    })).json(), (state, answer) => { state.skip_poll = answer.skip_poll; });
     paintSkipPoll(answer.skip_poll);
     status.textContent = answer.skip_poll
       ? 'Skip poll armed; the agent ends its wait now.'
       : 'Skip poll cleared; the agent keeps waiting.';
   } catch (error) { status.textContent = `Skip poll failed: ${error.message}.`; }
+  finally { button.disabled = false; }
 });
 refreshState();
 setInterval(refreshState, 3000);
