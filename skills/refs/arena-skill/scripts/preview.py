@@ -5058,6 +5058,17 @@ def open_link(renderer, tokens, index, options, env):
   return renderer.renderToken(tokens, index, options, env)
 
 
+def render_image(renderer, tokens, index, options, env):
+  """Retain escaped punctuation in image alt text before the default renderer runs."""
+  pending = list(tokens[index].children or [])
+  while pending:
+    token = pending.pop()
+    if token.type == "text_special":
+      token.type = "text"
+    pending.extend(token.children or [])
+  return renderer.image(tokens, index, options, env)
+
+
 def require_renderer():
   if not HAS_RENDERER:
     raise SystemExit(
@@ -5151,6 +5162,7 @@ def render(markdown, breaks=False):
     ["table", "strikethrough"]
   )
   parser.add_render_rule("link_open", open_link)
+  parser.add_render_rule("image", render_image)
   tagged, images = hold_out(
     markdown, SIZED_IMAGE, lambda match: sized_image(match, validateLink), "image"
   )
@@ -5649,7 +5661,8 @@ def image_payload(path: Path) -> tuple:
 def image_data_uri(path: Path) -> str:
   """Read one image file and return Markdown text that carries it as a data URI."""
   mime, encoded = image_payload(path)
-  return f"![{path.stem}](data:{mime};base64,{encoded})"
+  alt = path.stem.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+  return f"![{alt}](data:{mime};base64,{encoded})"
 
 
 # An inline image destination, with the optional title or ` =WxH` suffix that follows it.

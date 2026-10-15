@@ -3588,6 +3588,8 @@ test('preview client', async (t) => {
       assert.equal(get('#note').value, '', 'failure does not restore over an intentionally cleared new draft');
       pendingWrites.clear(); failedWrites.clear();
 
+      const nestedImage = context.renderMessageMarkdown('![outer ![shot\\]](https://example.test/inner.png)](https://example.test/outer.png)');
+      assert.ok(nestedImage.includes('alt="outer shot]"'), 'nested image alt text retains escaped punctuation');
       const markdownDraft = '> A pending quote\n\n**Bold text**';
       get('#note').value = markdownDraft;
       hold('/api/notes');

@@ -3,6 +3,7 @@
 import base64
 import builtins
 import hashlib
+import html
 import http.client
 import json
 import os
@@ -2795,6 +2796,23 @@ def test_clear_state():
     assert store.path.is_file(), "the clear keeps the database file"
 
 
+@pytest.mark.parametrize(
+  ("source", "expected"),
+  [
+    (r"![shot\]](https://example.test/image.png)", "shot]"),
+    (
+      r"![outer ![shot\]](https://example.test/inner.png)](https://example.test/outer.png)",
+      "outer shot]",
+    ),
+    (r"![shot\"\]\<script\>](https://example.test/image.png)", 'shot"]<script>'),
+  ],
+)
+def test_render_image_retains_escaped_alt_text(source, expected):
+  rendered = preview.render(source)
+  assert f'alt="{html.escape(expected, quote=True)}"' in rendered
+  assert "<script>" not in rendered
+
+
 def test_image_data_uri_marks_down_a_png():
   """A local PNG becomes one Markdown line that carries its bytes as a data URI."""
   with tempfile.TemporaryDirectory() as image_dir:
@@ -2809,6 +2827,24 @@ def test_image_data_uri_marks_down_a_png():
     assert cli.returncode == 0, cli.stderr
     payload = base64.b64encode(png.read_bytes()).decode("ascii")
     assert cli.stdout.strip() == f"![shot](data:image/png;base64,{payload})"
+
+
+def test_image_data_uri_preserves_brackets_in_image_names():
+  with tempfile.TemporaryDirectory() as image_dir:
+    for name in ("shot].png", "shot[.png", "shot[1].png"):
+      png = Path(image_dir) / name
+      png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"payload")
+      cli = subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "image-data-uri", str(png)],
+        capture_output=True,
+        text=True,
+        check=False,
+      )
+      assert cli.returncode == 0, cli.stderr
+      rendered = preview.render(cli.stdout)
+      payload = base64.b64encode(png.read_bytes()).decode("ascii")
+      assert f'src="data:image/png;base64,{payload}"' in rendered
+      assert f'alt="{png.stem}"' in rendered
 
 
 def test_image_data_uri_refuses_a_non_image():

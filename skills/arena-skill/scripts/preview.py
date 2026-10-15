@@ -1621,6 +1621,13 @@ def open_link(renderer,tokens,index,options,env):
 	token=tokens[index];href=token.attrGet('href')or''
 	if href and not href.startswith('#'):token.attrSet('target','_blank');token.attrSet('rel','noopener noreferrer')
 	return renderer.renderToken(tokens,index,options,env)
+def render_image(renderer,tokens,index,options,env):
+	pending=list(tokens[index].children or[])
+	while pending:
+		token=pending.pop()
+		if token.type=='text_special':token.type='text'
+		pending.extend(token.children or[])
+	return renderer.image(tokens,index,options,env)
 def require_renderer():
 	if not HAS_RENDERER:raise SystemExit("serve needs markdown-it-py: install it in the preview venv with `python -m pip install markdown-it-py`, then start the server with that venv's Python. read, ack and publish work without it.")
 CODE_BLOCK=re.compile('<pre>(.*?)</pre>',re.DOTALL)
@@ -1641,7 +1648,7 @@ def sized_image(match,validate):
 def render(markdown,breaks=False):
 	try:from markdown_it import MarkdownIt;from markdown_it.common.normalize_url import validateLink
 	except ImportError as error:raise RuntimeError("Markdown rendering needs markdown-it-py. Install it in the preview's venv and restart the server with that venv's Python; steering still works.")from error
-	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);parser.add_render_rule('link_open',open_link);tagged,images=hold_out(markdown,SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
+	parser=MarkdownIt('commonmark',{'html':False,'breaks':breaks}).enable(['table','strikethrough']);parser.add_render_rule('link_open',open_link);parser.add_render_rule('image',render_image);tagged,images=hold_out(markdown,SIZED_IMAGE,lambda match:sized_image(match,validateLink),'image');rendered=drop_paragraph_breaks(parser.render(unescape_fences(tagged)));return add_copy_buttons(put_back(rendered,images,'image'))
 def handler(store):
 	token=secrets.token_urlsafe(32)
 	class Handler(BaseHTTPRequestHandler):
@@ -1790,7 +1797,7 @@ def image_payload(path:Path)->tuple:
 	elif data.startswith(b'RIFF')and data[8:12]==b'WEBP':mime='image/webp'
 	else:raise ValueError(f"{path} is not a supported image; the allowed types are PNG, JPEG, GIF and WebP")
 	encoded=base64.b64encode(data).decode('ascii');return mime,encoded
-def image_data_uri(path:Path)->str:mime,encoded=image_payload(path);return f"![{path.stem}](data:{mime};base64,{encoded})"
+def image_data_uri(path:Path)->str:mime,encoded=image_payload(path);alt=path.stem.replace('\\','\\\\').replace('[','\\[').replace(']','\\]');return f"![{alt}](data:{mime};base64,{encoded})"
 IMAGE_IN_MARKDOWN=re.compile('!\\[([^\\]\\n]*)\\]\\(\\s*(<[^>]+>|[^)\\s]+)([^)\\n]*)\\)')
 def embed_report_images(markdown,report_dir):
 	def swap(match):

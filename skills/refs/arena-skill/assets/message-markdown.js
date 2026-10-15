@@ -9,6 +9,16 @@ messageMarkdown.renderer.rules.link_open = (tokens, index, options, env, rendere
   }
   return renderer.renderToken(tokens, index, options, env);
 };
+const renderMessageImage = messageMarkdown.renderer.rules.image;
+messageMarkdown.renderer.rules.image = (tokens, index, options, env, renderer) => {
+  const pending = (tokens[index].children || []).slice();
+  while (pending.length) {
+    const token = pending.pop();
+    if (token.type === 'text_special') token.type = 'text';
+    for (const child of token.children || []) pending.push(child);
+  }
+  return renderMessageImage(tokens, index, options, env, renderer);
+};
 function renderMessageMarkdown(source) {
   const attribute = value => messageMarkdown.utils.escapeHtml(value).replaceAll("'", '&#x27;');
   const images = [];
