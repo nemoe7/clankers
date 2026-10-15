@@ -27,8 +27,8 @@ on:
 permissions:
   contents: read
 env:
-  REPOS_ARENA: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki nemoe7/f360"
-  REPOS_GEMINI: "nemoe7/daedalus"
+  REPOS_ARENA: "nemoe7/clankers nemoe7/daedalus nemoe7/asset-tracker nemoe7/wiki nemoe7/f360 nemoe7/request-tracker"
+  REPOS_GEMINI: "nemoe7/daedalus nemoe7/request-tracker"
 jobs:
   distribute:
     name: Distribute
