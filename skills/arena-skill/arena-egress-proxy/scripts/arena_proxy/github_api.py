@@ -45,7 +45,7 @@ def request(
 def log_tail(data, cap=LOG_CAP_BYTES, lines=LOG_TAIL_LINES, only_failed=False):
   """Return the tail of a run log zip as text, or None when the bytes are not a zip.
 
-  With `only_failed`, keep whole only the step files that carry an error marker.
+  With `only_failed`, keep the tails of step files that contain an error marker.
   """
   try:
     archive = zipfile.ZipFile(io.BytesIO(data))
@@ -57,15 +57,17 @@ def log_tail(data, cap=LOG_CAP_BYTES, lines=LOG_TAIL_LINES, only_failed=False):
       if not name.endswith(".txt"):
         continue
       block = bytearray()
+      has_error = False
       with archive.open(name) as handle:
         while True:
           chunk = handle.read(65536)
           if not chunk:
             break
           block += chunk
+          has_error = has_error or b"##[error]" in block
           if len(block) > cap:
             del block[: len(block) - cap]
-      if only_failed and b"##[error]" not in block:
+      if only_failed and not has_error:
         continue
       buffer += f"\n===== {name} =====\n".encode()
       buffer += block

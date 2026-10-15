@@ -285,6 +285,20 @@ def test_gh_failed_param_keeps_only_the_error_steps(tmp_path):
     assert all("failed" not in seen["path"] for seen in handle.stub.seen)
 
 
+def test_log_filter_keeps_early_errors_after_tail_truncation():
+  stream = io.BytesIO()
+  failed_tail = b"failed step tail\n"
+  healthy_tail = b"healthy step tail\n"
+  with zipfile.ZipFile(stream, "w") as archive:
+    archive.writestr("1_failed.txt", b"##[error]early failure\n" + failed_tail * 100)
+    archive.writestr("2_healthy.txt", healthy_tail * 100)
+  text = github_api.log_tail(
+    stream.getvalue(), cap=len(failed_tail) * 2, only_failed=True
+  )
+  assert failed_tail.decode().strip() in text
+  assert healthy_tail.decode().strip() not in text
+
+
 def test_fetch_returns_text_for_text_bytes(tmp_path):
   with backend(tmp_path) as handle:
     status, body = call(handle.port, f"/v1/fetch?key={KEY}&url={handle.stub_url}/text")

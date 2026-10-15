@@ -121,6 +121,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Proxy: Keep error log tails when their error marker is outside the saved tail.
+
 - Preview: Print report-state timestamps in the configured CLI zone, and keep stored UTC values.
 
 - Preview: Put client DOM, state, and fetch mocks in the parent Node test context.
