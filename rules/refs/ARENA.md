@@ -152,7 +152,7 @@
 - Fix in-scope issues, then recheck.
 - ALWAYS criticize documentation and code, in chat responses and in report files.
 - Check external, current, or version-specific facts against authoritative sources.
-- MUST read the open code-scanning alerts and address each without blocking PR creation.
+- MUST read the open code-scanning alerts on the initial turn and whenever origin/main moves, and address each without blocking PR creation.
 - Before finishing, MUST run the repo's own validation entrypoints (test suite, config validators).
 - Parse every generated config the change touches.
 

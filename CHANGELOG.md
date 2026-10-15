@@ -18,6 +18,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
 
+### Changed
+
+#### arena
+
+- Code-scanning alert reads now occur on the initial turn and when origin/main moves. Findings still need handling without blocking PR creation.
+
 ### Fixed
 
 #### preview
