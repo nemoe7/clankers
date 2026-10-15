@@ -472,3 +472,40 @@ def test_renaming_a_recent_entry_changes_its_label_only():
   assert result["href"] == "/?url=https%3A%2F%2Fsbx-a.arena.site%2F", (
     "the destination URL never carries a label"
   )
+
+
+def test_the_recent_list_clears_at_pht_reset_boundaries():
+  """A boundary at 02:00, 08:00, 14:00 or 20:00 PHT clears the stored list once crossed.
+
+  The reset stamps the boundary it cleared, so a boundary passed with the app closed clears on
+  the next open and several missed boundaries still clear once. PHT holds UTC+8 all year, so the
+  boundary math runs in fixed offsets.
+  """
+  script = (
+    "const recent = require('./assets/recent.js');"
+    "const out = {};"
+    # 14:59 PHT sits after the 14:00 boundary.
+    "out.after14 = recent.previousBoundary(new Date('2026-10-15T06:59:00Z'));"
+    # Exactly 14:00 PHT counts as having reached that boundary.
+    "out.at14 = recent.previousBoundary(new Date('2026-10-15T06:00:00Z'));"
+    # 01:30 PHT falls back to the previous day's 20:00 boundary.
+    "out.before02 = recent.previousBoundary(new Date('2026-10-14T17:30:00Z'));"
+    # 04:00 PHT sits after 02:00 the same PHT day.
+    "out.after02 = recent.previousBoundary(new Date('2026-10-14T20:00:00Z'));"
+    "out.missed = recent.needsReset(0, 1000);"
+    "out.fresh = recent.needsReset(null, 1000);"
+    "out.same = recent.needsReset(1000, 1000);"
+    "out.ahead = recent.needsReset(2000, 1000);"
+    "console.log(JSON.stringify(out));"
+  )
+  result = json.loads(node(script))
+  assert result["after14"] == "2026-10-15T06:00:00.000Z", result["after14"]
+  assert result["at14"] == "2026-10-15T06:00:00.000Z", result["at14"]
+  assert result["before02"] == "2026-10-14T12:00:00.000Z", result["before02"]
+  assert result["after02"] == "2026-10-14T18:00:00.000Z", result["after02"]
+  assert result["missed"] is True, "a boundary behind the stamp clears the list"
+  assert result["fresh"] is False, "a first open without a stamp keeps the list"
+  assert result["same"] is False, (
+    "the boundary the stamp already recorded clears nothing"
+  )
+  assert result["ahead"] is False, "a clock behind the stamp clears nothing"

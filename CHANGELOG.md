@@ -32,6 +32,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Code-scanning alert reads now occur on the initial turn and when origin/main moves. Findings still need handling without blocking PR creation.
 
+#### proxy
+
+- The recent list clears at 02:00, 08:00, 14:00 and 20:00 PHT. A boundary that passes with the app shut clears the list on the next open, and several missed boundaries clear once.
+
 - Rule-violation reports publish only for material, repeated, or not-yet-fixed violations. A routine slip that the agent fixes at once takes one receipt line. A new rule bars blocking open or queued tasks while such a report waits.
 
 - The unrelated-findings reporting rule now starts with MUST, which marks the report as required.
