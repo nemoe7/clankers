@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Search checks compare input height with the shared icon square and its minimum height.
 
+- Receipt comments name middle dots and one report date. Task comments keep stored order and both copy sections.
+
 ## 2026-10-15
 
 ### Added

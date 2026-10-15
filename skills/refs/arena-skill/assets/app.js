@@ -554,8 +554,7 @@ function showHistory(notes) {
       (item.ack_edited_at ? ` · Replied again ${time(item.ack_edited_at)}` : '');
     receiptState.dataset.at = item.at;
     if (item.ack_edited_at) receiptState.dataset.ackEditedAt = item.ack_edited_at;
-    // The line reads as parts separated by the same ASCII dot: ID · state · time · filename · task.
-    // The owner asked for the dot after the ID by name.
+    // Separate the receipt ID, state, time, filenames, and task with middle dots.
     const separator = document.createElement('span');
     separator.className = 'receipt-sep';
     separator.textContent = ' · ';
@@ -1428,8 +1427,7 @@ async function loadReport(force = false) {
     }
     $('#report-form').dataset.fields = result.fields;
     const report = getState()?.reports.find(item => item.id === id);
-    // One date stamp at a time: a republished report shows Edited and drops the Published
-    // line, so the owner reads the newest event, not both. Owner's note on the feature.
+    // Show one date: Edited for a republished report, or Published.
     const stampSource = result.edited && result.published && result.edited !== result.published
       ? `Edited ${time(result.edited)}`
       : result.published || result.edited ? `Published ${time(result.published || result.edited)}` : '';
@@ -1604,8 +1602,8 @@ function renderTasks(tasks) {
   const visible = task =>
     (taskTypeFilter === 'all' || (task.type || 'unspecified') === taskTypeFilter)
     && (!taskSearch || taskHaystack(task).includes(taskSearch));
-  // Show the first unblocked upcoming task separately so the agent can identify its next action. Report-blocked tasks may sort first in the stored list.
-  // Keep the task in Upcoming too, preserving authoritative order and the copy button's two stored sections.
+  // Show the first unblocked upcoming task separately. Report-blocked tasks may sort first in the stored list.
+  // Preserve stored order and the copy button's two stored sections.
   const shownUpcoming = tasks.upcoming.filter(visible);
   const head = shownUpcoming.find(task => !task.blocked);
   $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
