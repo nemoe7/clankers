@@ -42,6 +42,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The contract job installs the validation dependencies, so the version gates it now runs find their imports.
 
+#### workflows
+
+- The distribute target lists add nemoe7/request-tracker, so the Arena suite and the Gemini release workflow both reach it.
+
 #### arena
 
 - A detached check wait finds the first check before it watches, polling the pinned branch head every five seconds for up to 120. A window that runs out, a moved head or a gh fault fails the run.
