@@ -181,8 +181,7 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 .state-dot[data-state="seen"] { background: var(--dot-seen); }
 .state-dot[data-state="said"] { background: var(--dot-said); }
 .answer { margin-top: 8px; }
-/* Only replies use the bar and muted colour. Messages stay plain. */
-/* Only the reply carries the bar, the muted colour and the smaller size: prose costs log space. */
+/* Only replies use the bar, muted color, and smaller font size to save log space. Messages stay plain. */
 .answer.reply { border-left: 2px solid rgb(199, 194, 188); padding-left: 12px; color: var(--muted); font-size: 13px; }
 .answer > p:last-child { margin-bottom: 0; }
 /* Each later acknowledgement adds a block below the first answer.
@@ -200,7 +199,7 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 /* The rule under the toolbar sits 12px below it and 12px above #report-form. */
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
-/* The report select takes the log filter's own chevron instead of the native arrow, on owner note: both selects now read as one control. */
+/* Both selects share the drawn chevron. The native arrow stays hidden. */
 /* Position sits on the wrap, which also holds the label, so the triangle anchors to the bottom half where the select box lives. */
 .select-wrap::after {
   content: ""; position: absolute; right: 10px; bottom: 17px; transform: translateY(50%);

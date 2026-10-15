@@ -141,6 +141,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Remove request attribution and repeated reply-style text from CSS comments. Keep all declarations unchanged.
+
 - Compare select padding with caret width and offset, without fixed pixel values.
 
 - Check icon-button titles against their accessible names, without a fixed copy-tooltip sentence. Require nonempty names.
