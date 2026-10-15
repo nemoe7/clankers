@@ -758,6 +758,59 @@ test('preview client', async (t) => {
     await refresh();
   });
 
+  await t.test("A task carries its linked answers in a read-only block below the details", async () => {
+    const prior = state.tasks;
+    state.tasks = {
+      finished: [],
+      upcoming: [
+        { id: 'filler-task', title: 'Filler', details: [], status: 'upcoming',
+          order: 1, updated_at: new Date().toISOString() },
+        { id: 'answered-task', title: 'Answered work', details: ['read it'], status: 'upcoming',
+          order: 2, updated_at: new Date().toISOString(),
+          answers: [
+            { id: 'answer-abc123', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#pick}\n- (x) yes' },
+            { id: 'answer-def456', at: '2026-10-15T06:00:00.000Z', text: 'Approved: ship it' },
+          ] },
+      ],
+      updated_at: new Date().toISOString(),
+    };
+    await refresh();
+    const row = get('#tasks-upcoming-body').children[0];
+    assert.equal(row.title, 'answered-task', 'the filler holds the head seat');
+    assert.equal(row.children.length, 3, 'the answer block sits after the details');
+    const answers = row.children[2];
+    assert.equal(answers.className, 'task-answers');
+    assert.equal(answers.children.length, 2, 'one entry per submission ID');
+    const first = answers.children[0];
+    assert.equal(first.className, 'task-answer');
+    assert.equal(first.children[0].tagName, 'code');
+    assert.equal(first.children[0].textContent, 'answer-abc123', 'the entry names its answer');
+    assert.equal(first.children[1].tagName, 'time');
+    assert.equal(first.children[1].textContent, '2026-10-15T05:44:00.000Z', 'the entry carries its time');
+    assert.match(first.children[2].textContent, /\(x\) yes/, 'the field and value text shows');
+    // The row builds this block from the record, so hostile answer text stays text.
+    state.tasks = {
+      finished: [],
+      upcoming: [
+        { id: 'filler-task', title: 'Filler', details: [], status: 'upcoming',
+          order: 1, updated_at: new Date().toISOString() },
+        { id: 'hostile-task', title: 'Hostile', details: [], status: 'upcoming',
+          order: 2, updated_at: new Date().toISOString(),
+          answers: [{ id: 'answer-z', at: '2026-10-15T06:10:00.000Z', text: '<img onerror=alert(1)>' }] },
+      ],
+      updated_at: new Date().toISOString(),
+    };
+    await refresh();
+    const host = get('#tasks-upcoming-body').children[0];
+    assert.equal(host.title, 'hostile-task', 'the filler still holds the head seat');
+    assert.equal(host.children.length, 2, 'a task with no details takes title then answers');
+    const hostileText = host.children[1].children[0].children[2];
+    assert.equal(hostileText.tagName, 'p', 'the answer text lands in a paragraph, not markup');
+    assert.equal(hostileText.textContent, '<img onerror=alert(1)>', 'answer text stays text');
+    state.tasks = prior;
+    await refresh();
+  });
+
   await t.test("A hostile title is text in the current row, because a row is built with textContent", async () => {
     currentBody = get('#tasks-current-body');
     assert.equal(get('#tasks-current').hidden, false);

@@ -1471,6 +1471,26 @@ function taskRow(task) {
     details.replaceChildren(summary, list);
     rows.push(details);
   }
+  if (task.answers && task.answers.length) {
+    // The row builds this block from the record, so hostile answer text stays text. The block
+    // is read-only, and the manual details above keep every edit the CLI writes.
+    const answers = document.createElement('div');
+    answers.className = 'task-answers';
+    answers.replaceChildren(...task.answers.map((answer) => {
+      const entry = document.createElement('div');
+      entry.className = 'task-answer';
+      const answerId = document.createElement('code');
+      answerId.textContent = answer.id;
+      const stamp = document.createElement('time');
+      stamp.textContent = answer.at;
+      const text = document.createElement('p');
+      text.className = 'task-answer-text';
+      text.textContent = answer.text;
+      entry.replaceChildren(answerId, stamp, text);
+      return entry;
+    }));
+    rows.push(answers);
+  }
   // The badge sits last, so the title and details keep the child positions the tests pin.
   // An Unspecified task carries no badge, so old rows keep the shape they had.
   if (task.type && task.type !== 'unspecified') {

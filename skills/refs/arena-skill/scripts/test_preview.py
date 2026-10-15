@@ -7412,3 +7412,48 @@ def test_task_type_cli_flag_and_print():
     assert "type docs" in bare.stdout
     unknown = cli("other-task", "Other", "Step", "--task-type", "mixed")
     assert unknown.returncode != 0
+
+
+def test_tasks_carry_their_linked_answers():
+  """A task carries its linked answers for a read-only block under its details: the report link and a named
+  link both count, one entry holds per submission ID, and the entries outlive the report row. The export
+  keeps an answer a task still references once its report is gone."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    source = Path(directory) / "linked.md"
+    source.write_text(
+      "# Linked\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
+    )
+    store.publish("linked", "Linked pick", source)
+    store.write_task(
+      "linked-task", "Track the pick", ["Read the answer"], report_id="linked"
+    )
+    store.write_task(
+      "named-task", "Answer named directly", ["Read it"], report_id="linked"
+    )
+    store.write_task("bare-task", "No link", ["Step one"])
+    store.submission("answer-one", "linked", "REPORT linked: one")
+    store.submission("answer-two", "linked", "REPORT linked: two", task_id="named-task")
+    upcoming = store.state()["tasks"]["upcoming"]
+    by_id = {row["id"]: row for row in upcoming}
+    linked = by_id["linked-task"]["answers"]
+    assert [entry["id"] for entry in linked] == ["answer-one", "answer-two"], linked
+    assert linked[0]["text"] == "REPORT linked: one"
+    assert linked[0]["at"], "the entry carries its answer time"
+    # The named answer matches both links and still appears once.
+    named = by_id["named-task"]["answers"]
+    assert [entry["id"] for entry in named] == ["answer-one", "answer-two"], named
+    assert "answers" not in by_id["bare-task"], "an unlinked task keeps its old shape"
+    store.unpublish("linked", dismissed_by_owner=True)
+    after = {row["id"]: row for row in store.state()["tasks"]["upcoming"]}
+    assert [entry["id"] for entry in after["linked-task"]["answers"]] == [
+      "answer-one",
+      "answer-two",
+    ], "the answers outlive their report row"
+    lines, counts = store.state_lines(store.state()["notes"], store.tasks())
+    kept = {line.get("id") for line in lines if line.get("report_id") is not None}
+    assert {"answer-one", "answer-two"} <= kept, (
+      "a referenced answer stays in the export"
+    )
+    assert counts["answers"] == 2, counts
