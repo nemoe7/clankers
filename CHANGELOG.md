@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Tab pip checks compare square sizes and corner offsets without fixed values.
 
+- Record task-link highlights: a destination row is marked for 2.5 seconds or until another tab opens.
+
 ## 2026-10-15
 
 ### Added
