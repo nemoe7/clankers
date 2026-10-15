@@ -311,3 +311,51 @@ def test_main_exit_codes(tmp_path: Path, capsys):
   bad.write_text("## Summary\n\nText.\n", encoding="utf-8")
   assert gate_pr.main(["--body-file", str(bad)]) == 1
   assert "contract violation" in capsys.readouterr().out
+
+
+def test_the_contract_runs_the_version_bump_checks(tmp_path: Path, monkeypatch):
+  """A changed userscript without a higher version fails the contract.
+
+  The pull request's Version Bumps job checks the versioned modules and then requires a
+  bumped version for every changed one. The contract runs both, so a local pass matches the
+  remote verdict instead of missing it."""
+  base = tmp_path / "arena.user.js"
+  base.write_text(
+    "// ==UserScript==\n// @name         x | v99.0.0\n// @version      99.0.0\n"
+    "// ==/UserScript==\n",
+    encoding="utf-8",
+  )
+  seen = []
+
+  def fake_git(*arguments: str) -> str:
+    seen.append(arguments)
+    if arguments[0] == "diff":
+      return "userscripts/arena.user.js\n"
+    if arguments[0] == "show":
+      return base.read_text(encoding="utf-8")
+    raise AssertionError(f"unexpected git call: {arguments}")
+
+  monkeypatch.setattr(gate_pr, "_git", fake_git)
+  failures = gate_pr.run_version_checks("base..HEAD")
+  assert any("99.0.0" in str(failure) for failure in failures), failures
+  assert any(call[0] == "diff" for call in seen), seen
+
+
+def test_the_contract_accepts_a_bumped_userscript(tmp_path: Path, monkeypatch):
+  """A change whose version rises above the base passes the same check."""
+  base = tmp_path / "arena.user.js"
+  base.write_text(
+    "// ==UserScript==\n// @name         x | v1.0.0\n// @version      1.0.0\n"
+    "// ==/UserScript==\n",
+    encoding="utf-8",
+  )
+
+  def fake_git(*arguments: str) -> str:
+    if arguments[0] == "diff":
+      return "userscripts/arena.user.js\n"
+    if arguments[0] == "show":
+      return base.read_text(encoding="utf-8")
+    raise AssertionError(f"unexpected git call: {arguments}")
+
+  monkeypatch.setattr(gate_pr, "_git", fake_git)
+  assert gate_pr.run_version_checks("base..HEAD") == []
