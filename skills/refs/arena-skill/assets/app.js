@@ -1164,8 +1164,8 @@ function reportStatusLine(text, id, answerId = null) {
 }
 function quoteTaskId(title) {
   quoteId(title.dataset.taskId, title);
-  // The row tooltip is the task ID, and the quote flash must not replace it on hover.
-  title.title = '';
+  // Keep the task ID tooltip after quoting.
+  title.title = title.dataset.taskId;
 }
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
 async function copyFrom(button, text, what, glyph = 'copy') {

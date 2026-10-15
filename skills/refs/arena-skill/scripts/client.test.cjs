@@ -3432,7 +3432,7 @@ test('preview client', async (t) => {
       assert.equal(title.className, 'task-title');
       documentEvents.click({ target: title, preventDefault: () => {} });
       assert.equal(get('#note').value.startsWith('RE: hover-stays'), true, 'the quote still lands');
-      assert.equal(title.title, '', 'the quote flash never replaces the row tooltip');
+      assert.equal(title.title, row.title, 'the quoted title retains the task ID tooltip');
       assert.equal(row.title, 'hover-stays', 'the row keeps the task ID as its tooltip');
     } finally {
       state.tasks = priorTasks;

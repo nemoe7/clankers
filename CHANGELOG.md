@@ -16,6 +16,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Receipt dot checks compare width and height without a fixed size.
 
+- Quoted task titles keep the task ID tooltip.
+
 ## 2026-10-15
 
 ### Added
