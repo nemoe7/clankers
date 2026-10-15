@@ -32,10 +32,10 @@ Latest measurements as of 2026-10-15. `maintenance/check.py --update` rebuilds t
 | File | Measure | Current |
 | --- | --- | --- |
 | `userscripts/arena-prompt-fill.txt` | `o200k_base` | 356 `tok` |
-| `rules/AGENTS.md` | `o200k_base` | 1,593 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,794 `B` |
-| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,499 `chars` |
-| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,497 `chars` |
+| `rules/AGENTS.md` | `o200k_base` | 1,612 `tok` |
+| `rules/ARENA.md` | `UTF-8 file size` | 19,889 `B` |
+| `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 2,966 `chars` |
+| `rules/CHATGPT-MORE.txt` | `Unicode chars` | 2,735 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 444 `tok` |
 | `rules/KILO.md` | `o200k_base` | 88 `tok` |
 | `rules/kilo/code.md` | `o200k_base` | 236 `tok` |
@@ -46,13 +46,13 @@ Latest measurements as of 2026-10-15. `maintenance/check.py --update` rebuilds t
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,587 `tok` |
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,900 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,892 `tok` |
-| `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,022 `tok` |
-| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 57,293 `B` |
+| `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,394 `tok` |
+| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 104,790 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 12,348 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 14,779 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,065 `B` |
-| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 156,164 `B` |
+| `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 238,963 `B` |
 | `skills/squash/SKILL.md` | `o200k_base` | 1,377 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |
 | `workflows/init-docs.md` | `o200k_base` | 4,503 `tok` |
