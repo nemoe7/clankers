@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A shared prose extractor groups code comments and docstrings by file. The prose linter uses these groups for file-wide synonym checks. First-party code prose now uses consistent terms.
 
+- The pull request contract runs the module gates and the version-bump rule, so a local pass matches the Version Bumps job.
+
 #### proxy
 
 - A recent-preview entry takes a label: its edit button renames the row while the stored root and its links keep the preview origin. An entry without a label shows its host.

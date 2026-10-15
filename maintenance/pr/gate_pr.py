@@ -18,6 +18,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STE_LINT = ROOT / ".agents" / "skills" / "asd-ste100" / "scripts" / "ste-lint.py"
+USERSCRIPT_GATE = ROOT / "maintenance" / "userscripts" / "gate_userscripts.py"
+PLUGINS_GATE = ROOT / "maintenance" / "gpt_plugins" / "gate_gpt_plugins.py"
+# The pull request's Version Bumps job watches these paths and nothing else.
+VERSIONED_USERSCRIPTS = ("userscripts/arena.user.js", "userscripts/chatgpt.user.js")
+VERSIONED_PATHS = VERSIONED_USERSCRIPTS + (
+  "gpt-plugins/plugin.json",
+  "gpt-plugins/skills",
+)
 
 ALLOWED_TYPES = (
   "feat",
@@ -331,6 +339,65 @@ def validate_breaking_crosscheck(subjects: list[str], body: str) -> list[Failure
   return []
 
 
+def _run_gate(script: Path, *arguments: str) -> tuple[bool, str]:
+  result = subprocess.run(
+    [sys.executable, str(script), *arguments],
+    cwd=ROOT,
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  return result.returncode == 0, (result.stdout + result.stderr).strip()
+
+
+def run_version_checks(revision_range: str) -> list[Failure]:
+  """Validate the versioned modules the way the pull request's Version Bumps job does.
+
+  The job validates both module gates, then requires a higher version for every changed
+  module. A module the base does not hold skips its bump, exactly as the job skips it. The
+  contract runs both halves so a local pass matches the remote verdict."""
+  failures: list[Failure] = []
+  for script, arguments in (
+    (USERSCRIPT_GATE, ("--self-check",)),
+    (USERSCRIPT_GATE, ()),
+    (PLUGINS_GATE, ("--self-check",)),
+  ):
+    passed, output = _run_gate(script, *arguments)
+    if not passed:
+      failures.append(Failure("versioned modules", output))
+  base, _, head = revision_range.partition("..")
+  changed = _git(
+    "diff", "--name-only", f"{base}..{head}", "--", *VERSIONED_PATHS
+  ).split()
+  if not changed:
+    return failures
+  with tempfile.TemporaryDirectory() as directory:
+    for path in changed:
+      if path in VERSIONED_USERSCRIPTS:
+        try:
+          text = _git("show", f"{base}:{path}")
+        except SystemExit:
+          continue
+        base_file = Path(directory) / f"base-{Path(path).name}"
+        base_file.write_text(text, encoding="utf-8")
+        passed, output = _run_gate(
+          USERSCRIPT_GATE, "--file", path, "--base-file", str(base_file)
+        )
+        if not passed:
+          failures.append(Failure("version bumps", output))
+      elif path.startswith("gpt-plugins/"):
+        try:
+          text = _git("show", f"{base}:gpt-plugins/plugin.json")
+        except SystemExit:
+          continue
+        base_manifest = Path(directory) / "base-plugin.json"
+        base_manifest.write_text(text, encoding="utf-8")
+        passed, output = _run_gate(PLUGINS_GATE, "--base-manifest", str(base_manifest))
+        if not passed:
+          failures.append(Failure("version bumps", output))
+  return failures
+
+
 def check(
   revision_range: str | None,
   pr_title: str | None,
@@ -345,6 +412,7 @@ def check(
       lines = message.splitlines()
       subjects.append(lines[0] if lines else message)
       failures.extend(validate_commit(message, where=f"commit {sha[:7]}"))
+    failures.extend(run_version_checks(revision_range))
   if pr_title is not None:
     failures.extend(validate_subject(pr_title, "PR title"))
   if body_file is not None:
