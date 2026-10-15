@@ -25,28 +25,28 @@ Every question form MUST:
 
 1. State the question clearly.
 2. Present relevant preset answers when useful.
-3. Always display a custom-answer text field. Do not hide this field behind an "Other" checkbox or selection.
+3. Give every choice group a selectable `Custom answer` option with an associated free-text input. Show the input beside or immediately below its group when the option is selected, never in a separate form-level block.
 4. Include a submit button.
 5. Send the user's selected answers and custom answer to the conversation through `GenUI.issueNewTurn()`.
 6. Include enough context in the submitted message to identify the question and interpret the answers.
 7. Preserve the user's exact custom text, except for trimming whitespace at its boundaries.
-8. Allow custom text without a preset selection unless the task genuinely requires a preset selection.
+8. Allow a custom-only answer when the question's selection rules permit it, and count a selected custom option toward its question's selection limit.
 9. Avoid unrelated fields and unnecessary visual decoration.
 10. Use only supported component properties, state hooks, callbacks, and host actions.
 
-Label the free-text field **Custom answer (optional)** unless the user must provide custom text. Keep it visible regardless of the selected options.
+Label each group's custom option **Custom answer** and its input **Custom answer (optional)** unless the user must provide custom text. Each independent question owns its custom option, input, state and validation, so one question never reads another's.
 
 ## Choose the correct controls
 
 ### Single selection
 
-Use `radio-group` with `radio` children when the user should select one answer from a short list.
+Use `radio-group` with `radio` children when the user should select one answer from a short list. Add the group's `Custom answer` radio beside the presets.
 
 Use `select` only when its option schema is known and appropriate for the available choices.
 
 ### Multiple selection
 
-Use independent `checkbox` controls when the user can select several answers.
+Use independent `checkbox` controls when the user can select several answers. Add the group's `Custom answer` checkbox beside the presets, and count it toward any selection limit the question sets.
 
 Store the selected values in state. Update the selection when a checkbox changes.
 
@@ -54,11 +54,11 @@ Store the selected values in state. Update the selection when a checkbox changes
 
 Use `textarea` for longer or open-ended answers. Use `input` when the expected answer is short.
 
-The custom-answer field MUST remain visible, whether the user selects zero, one, or several preset answers.
+The input belongs to its choice group: it appears when the group's custom option is selected and leaves when the option is deselected. Deselecting keeps the typed text in state for a later reselect. The submission excludes it while the option is off, so no stale text rides as an active answer. A selected custom option counts toward its question's selection limit like any other option, and custom-only answers submit when the question's rules allow them.
 
 ### Other input types
 
-Use `date-picker`, `slider`, `segmented-control`, or other supported controls when their data types fit the question. Include the custom-answer field alongside them.
+Use `date-picker`, `slider`, `segmented-control`, or other supported controls when their data types fit the question. Give their choice groups the same custom option and input.
 
 For forms that need several independent values, group the related controls in one `form` and submit the answers together.
 
@@ -78,7 +78,7 @@ Do not mark an option as recommended merely to make the form look helpful. For p
 
 ## Submission behavior
 
-Use the documented DIL interaction contract:
+Use the documented DIL interactions contract:
 
 - Declare state with supported hooks inside a top-level, unconditional `{@body ...}` block.
 - Bind controlled values through the documented `value` and `onChange` properties.
@@ -92,10 +92,10 @@ The submitted message MUST include:
 
 - The original question or a clear identifier for it.
 - Every selected option.
-- The custom answer when the user provided one.
+- The custom answer when the user provided one under a selected custom option.
 - Any other entered values needed to interpret the response.
 
-Do not omit the custom answer when preset options are also selected. Do not replace the selected options with the custom answer.
+Do not omit the custom answer when preset options are also selected. Do not replace the selected options with the custom answer. Exclude a group's custom text from the submission while its custom option is deselected.
 
 ## Reference pattern: single selection plus custom answer
 
@@ -110,14 +110,15 @@ const options = [
   "Compare options",
   "Create a plan"
 ];
-const canSubmit = Boolean(choice || customAnswer.trim());
+const customChosen = choice === "Custom answer";
+const canSubmit = Boolean(choice) && (!customChosen || Boolean(customAnswer.trim()));
 }
 <form
   gap={3}
   onSubmit={() => GenUI.issueNewTurn([
     "Question: What would you like help with?",
     `Selected option: ${choice || "(none)"}`,
-    `Custom answer: ${customAnswer.trim() || "(not provided)"}`
+    ...(customChosen ? [`Custom answer: ${customAnswer.trim()}`] : [])
   ].join("\n"))}
 >
   <radio-group
@@ -128,13 +129,16 @@ const canSubmit = Boolean(choice || customAnswer.trim());
     {#each options as option}
       <radio value={option}>{option}</radio>
     {/each}
+    <radio value="Custom answer">Custom answer</radio>
   </radio-group>
-  <textarea
-    value={customAnswer}
-    onChange={setCustomAnswer}
-    placeholder="Custom answer (optional)"
-    rows={3}
-  />
+  {#if customChosen}
+    <textarea
+      value={customAnswer}
+      onChange={setCustomAnswer}
+      placeholder="Custom answer"
+      rows={3}
+    />
+  {/if}
   <button
     block
     submit={true}
@@ -158,6 +162,7 @@ const options = [
   "Create a plan",
   "Troubleshoot a problem"
 ];
+const customChosen = selected.includes("Custom answer");
 const toggleOption = (option, checked) => {
   setSelected(
     checked
@@ -165,7 +170,7 @@ const toggleOption = (option, checked) => {
       : selected.filter(item => item !== option)
   );
 };
-const canSubmit = selected.length > 0 || Boolean(customAnswer.trim());
+const canSubmit = selected.length > 0 && (!customChosen || Boolean(customAnswer.trim()));
 }
 <form
   gap={3}
@@ -175,7 +180,7 @@ const canSubmit = selected.length > 0 || Boolean(customAnswer.trim());
     ...(selected.length
       ? selected.map(option => `- ${option}`)
       : ["- None selected"]),
-    `Custom answer: ${customAnswer.trim() || "(not provided)"}`
+    ...(customChosen ? [`Custom answer: ${customAnswer.trim()}`] : [])
   ].join("\n"))}
 >
   {#each options as option}
@@ -186,12 +191,139 @@ const canSubmit = selected.length > 0 || Boolean(customAnswer.trim());
       {option}
     </checkbox>
   {/each}
-  <textarea
-    value={customAnswer}
-    onChange={setCustomAnswer}
-    placeholder="Custom answer (optional)"
-    rows={3}
+  <checkbox
+    checked={customChosen}
+    onChange={checked => toggleOption("Custom answer", checked)}
+  >
+    Custom answer
+  </checkbox>
+  {#if customChosen}
+    <textarea
+      value={customAnswer}
+      onChange={setCustomAnswer}
+      placeholder="Custom answer"
+      rows={3}
+    />
+  {/if}
+  <button
+    block
+    submit={true}
+    disabled={!canSubmit}
+    label="Submit answers"
   />
+</form>
+```
+
+## Reference pattern: mixed selection limits in one form
+
+Use this pattern when one form carries questions with different selection counts. Each question keeps its own state, custom option, custom text and validation, and the submit button waits for every question.
+
+```jsx
+{@body
+const [pick, setPick] = DIL.useState("");
+const [pickCustom, setPickCustom] = DIL.useState("");
+const [pair, setPair] = DIL.useState([]);
+const [pairCustom, setPairCustom] = DIL.useState("");
+const [any, setAny] = DIL.useState([]);
+const [anyCustom, setAnyCustom] = DIL.useState("");
+const pickOptions = ["Speed", "Cost"];
+const pairOptions = ["Retry", "Alert"];
+const anyOptions = ["Logs", "Metrics"];
+const pickCustomChosen = pick === "Custom answer";
+const pairCustomChosen = pair.includes("Custom answer");
+const anyCustomChosen = any.includes("Custom answer");
+const toggle = (list, setList) => (option, checked) => {
+  setList(
+    checked
+      ? [...list, option]
+      : list.filter(item => item !== option)
+  );
+};
+const togglePair = toggle(pair, setPair);
+const toggleAny = toggle(any, setAny);
+const pickValid = Boolean(pick) && (!pickCustomChosen || Boolean(pickCustom.trim()));
+const pairValid = pair.length === 2 && (!pairCustomChosen || Boolean(pairCustom.trim()));
+const anyValid = any.length >= 1 && (!anyCustomChosen || Boolean(anyCustom.trim()));
+const canSubmit = pickValid && pairValid && anyValid;
+}
+<form
+  gap={3}
+  onSubmit={() => GenUI.issueNewTurn([
+    "Question 1, exactly one: Which goal leads?",
+    `Selected option: ${pick || "(none)"}`,
+    ...(pickCustomChosen ? [`Custom answer: ${pickCustom.trim()}`] : []),
+    "Question 2, exactly two: Which safeguards run?",
+    "Selected options:",
+    ...pair.map(option => `- ${option}`),
+    ...(pairCustomChosen ? [`Custom answer: ${pairCustom.trim()}`] : []),
+    "Question 3, one or more: Which signals stay on?",
+    "Selected options:",
+    ...any.map(option => `- ${option}`),
+    ...(anyCustomChosen ? [`Custom answer: ${anyCustom.trim()}`] : [])
+  ].join("\n"))}
+>
+  <radio-group
+    value={pick}
+    onChange={setPick}
+    label="Choose exactly one"
+  >
+    {#each pickOptions as option}
+      <radio value={option}>{option}</radio>
+    {/each}
+    <radio value="Custom answer">Custom answer</radio>
+  </radio-group>
+  {#if pickCustomChosen}
+    <textarea
+      value={pickCustom}
+      onChange={setPickCustom}
+      placeholder="Custom answer"
+      rows={2}
+    />
+  {/if}
+  {#each pairOptions as option}
+    <checkbox
+      checked={pair.includes(option)}
+      onChange={checked => togglePair(option, checked)}
+    >
+      {option}
+    </checkbox>
+  {/each}
+  <checkbox
+    checked={pairCustomChosen}
+    onChange={checked => togglePair("Custom answer", checked)}
+  >
+    Custom answer
+  </checkbox>
+  {#if pairCustomChosen}
+    <textarea
+      value={pairCustom}
+      onChange={setPairCustom}
+      placeholder="Custom answer"
+      rows={2}
+    />
+  {/if}
+  {#each anyOptions as option}
+    <checkbox
+      checked={any.includes(option)}
+      onChange={checked => toggleAny(option, checked)}
+    >
+      {option}
+    </checkbox>
+  {/each}
+  <checkbox
+    checked={anyCustomChosen}
+    onChange={checked => toggleAny("Custom answer", checked)}
+  >
+    Custom answer
+  </checkbox>
+  {#if anyCustomChosen}
+    <textarea
+      value={anyCustom}
+      onChange={setAnyCustom}
+      placeholder="Custom answer"
+      rows={2}
+    />
+  {/if}
   <button
     block
     submit={true}
@@ -223,14 +355,16 @@ These are reference patterns. Verify each component property against the active 
 Before returning a question form, verify that:
 
 1. The controls match the allowed answer cardinality.
-2. The custom-answer field is visible without any selection.
+2. Every choice group carries its own custom option, and each input appears with its group only while selected.
 3. State and callbacks use the correct documented shapes.
-4. The submit action includes every selected option and the custom text.
+4. The submit action includes every selected option and the custom text of each selected custom option.
 5. The message identifies the question being answered.
 6. The submit button has a meaningful label.
 7. The form does not require a preset selection when custom text alone is valid.
 8. A recommendation appears only when justified.
 9. The form collects only information that matters to the task.
 10. No unsupported component, property, callback, or host action appears.
+11. Each question validates against its own selection rules alone, and the submit button stays disabled until every question is valid.
+12. A deselected custom option contributes no stale text to the submission.
 
 The purpose of this skill is to make user questions easier to answer, not to force a graphical interface into every response.
