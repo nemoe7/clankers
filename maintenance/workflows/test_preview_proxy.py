@@ -474,6 +474,33 @@ def test_renaming_a_recent_entry_changes_its_label_only():
   )
 
 
+def test_recent_root_writes_prune_stored_labels():
+  """Remove labels only after their roots leave the stored list."""
+  script = (
+    "const fs = require('node:fs');"
+    "const vm = require('node:vm');"
+    "const a = 'https://sbx-a.arena.site', b = 'https://sbx-b.arena.site';"
+    "const values = new Map(); let fail = false;"
+    "const context = { URL, module: { exports: {} }, localStorage: {"
+    " getItem: key => values.get(key) ?? null,"
+    " setItem: (key, value) => {"
+    "  if (fail) throw new Error('storage unavailable'); values.set(key, value);"
+    " } } };"
+    "vm.runInNewContext(fs.readFileSync('assets/recent.js', 'utf8'), context);"
+    "context.save([a, b]); context.writeNames({ [a]: 'A', [b]: 'B' });"
+    "fail = true; context.save([b]);"
+    "const failed = { roots: context.load(), names: context.readNames() };"
+    "fail = false; context.save([b]); const pruned = context.readNames();"
+    "context.save([]); const empty = context.readNames();"
+    "console.log(JSON.stringify({ a, b, failed, pruned, empty }));"
+  )
+  result = json.loads(node(script))
+  a, b = result["a"], result["b"]
+  assert result["failed"] == {"roots": [a, b], "names": {a: "A", b: "B"}}
+  assert result["pruned"] == {b: "B"}
+  assert result["empty"] == {}
+
+
 def test_the_recent_list_clears_at_pht_reset_boundaries():
   """A boundary at 02:00, 08:00, 14:00 or 20:00 PHT clears the stored list once crossed.
 

@@ -115,6 +115,7 @@ function load() {
 function save(list) {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
+    writeNames(cleanNames(list, readNames()));
   } catch {
     // Storage is off or full: the preview still opens, and the list keeps its old entries.
   }

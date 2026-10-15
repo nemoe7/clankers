@@ -22,6 +22,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Report submission code omits request-history comments.
 
+- Recent-preview list writes remove stored labels for roots no longer in the list.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
