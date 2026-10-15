@@ -13,6 +13,67 @@ let stateBusy = false;
 let reportRequest = 0;
 let listSignature = '';
 let lastState = null;
+// Optimistic state layer: overlays pending changes on lastState until the server confirms.
+const optimisticState = {
+  reports: new Map(), // reportId -> { updates, rollback, timestamp }
+  tasks: new Map(),   // taskId -> { updates, rollback, timestamp }
+  notes: new Map(),   // noteId -> { updates, rollback, timestamp }
+};
+
+function getState() {
+  if (!lastState) return null;
+  // Merge optimistic changes over real state
+  const merged = { ...lastState };
+  
+  // Apply report updates
+  if (optimisticState.reports.size > 0 && merged.reports) {
+    merged.reports = merged.reports.map(report => {
+      const optimistic = optimisticState.reports.get(report.id);
+      return optimistic ? { ...report, ...optimistic.updates } : report;
+    });
+  }
+  
+  // Apply task updates
+  if (optimisticState.tasks.size > 0 && merged.tasks) {
+    merged.tasks = merged.tasks.map(task => {
+      const optimistic = optimisticState.tasks.get(task.id);
+      return optimistic ? { ...task, ...optimistic.updates } : task;
+    });
+  }
+  
+  // Apply note updates
+  if (optimisticState.notes.size > 0 && merged.notes) {
+    merged.notes = merged.notes.map(note => {
+      const optimistic = optimisticState.notes.get(note.id);
+      return optimistic ? { ...note, ...optimistic.updates } : note;
+    });
+  }
+  
+  return merged;
+}
+
+function setOptimistic(collection, id, updates, rollback) {
+  optimisticState[collection].set(id, {
+    updates,
+    rollback,
+    timestamp: Date.now()
+  });
+  render(); // Re-render with optimistic state
+}
+
+function clearOptimistic(collection, id) {
+  optimisticState[collection].delete(id);
+  render(); // Re-render with real state
+}
+
+function rollbackOptimistic(collection, id) {
+  const optimistic = optimisticState[collection].get(id);
+  if (optimistic && optimistic.rollback) {
+    optimistic.rollback();
+  }
+  clearOptimistic(collection, id);
+}
+
 // Polls refresh the write token.
 // A save after a server restart works without a browser refresh.
 const pageToken = () => (document.body.dataset || {}).token || '__TOKEN__';
