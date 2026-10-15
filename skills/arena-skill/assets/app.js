@@ -15,9 +15,9 @@ let listSignature = '';
 let lastState = null;
 // Optimistic state layer: overlays pending changes on lastState until the server confirms.
 const optimisticState = {
-  reports: new Map(), // reportId -> { updates, rollback, timestamp }
-  tasks: new Map(),   // taskId -> { updates, rollback, timestamp }
-  notes: new Map(),   // noteId -> { updates, rollback, timestamp }
+  reports: new Map(),
+  tasks: new Map(),
+  notes: new Map(),
 };
 
 function getState() {
