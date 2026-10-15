@@ -1693,6 +1693,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 function showTab(tab) {
+  clearTaskHighlight();
   const left = tab === tabs[1] ? null : shownReportId();
   for (const item of tabs) {
     const selected = tab === item;
@@ -1712,6 +1713,34 @@ function showTab(tab) {
     releaseHeldReport(null);
   }
 }
+// A reference link to a task lights the row it lands on. The mark leaves on its own after a
+// short delay or the moment the reader opens another tab. Only the marker comes and goes:
+// the row, its data and its order never change.
+let taskHighlightRow = null;
+let taskHighlightTimer = 0;
+
+function clearTaskHighlight() {
+  if (taskHighlightTimer) {
+    clearTimeout(taskHighlightTimer);
+    taskHighlightTimer = 0;
+  }
+  if (taskHighlightRow) {
+    delete taskHighlightRow.dataset.highlight;
+    taskHighlightRow = null;
+  }
+}
+
+function markTaskHighlight(row) {
+  clearTaskHighlight();
+  taskHighlightRow = row;
+  row.dataset.highlight = 'true';
+  taskHighlightTimer = setTimeout(() => {
+    taskHighlightTimer = 0;
+    delete row.dataset.highlight;
+    taskHighlightRow = null;
+  }, 2500);
+}
+
 function followReference(type, id) {
   if (!ACK_REFERENCE_PANELS[type] || !lastState) return;
   if (type === 'note') {
@@ -1746,6 +1775,7 @@ function followReference(type, id) {
   if (!title) return;
   title.scrollIntoView({block: 'center'});
   title.focus({preventScroll: true});
+  markTaskHighlight(row);
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab));
