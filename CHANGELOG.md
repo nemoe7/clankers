@@ -66,6 +66,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Task-added receipts link the task ID in a code element, and the link opens the Tasks tab on that row.
 
+- The composer flash no longer replaces a task row tooltip. The hover keeps the task ID.
+
 ### Fixed
 
 #### preview
