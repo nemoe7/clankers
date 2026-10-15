@@ -28,6 +28,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Image reads enforce the byte cap when a file grows after the size check.
 
+- The dependency changelog entry names `requirements.txt` as the version source.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
@@ -563,7 +565,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### house
 
-- The workflows pin Python dependencies in `requirements.txt` and install from that file.
+- `requirements.txt` sets Python dependency versions. The workflows install from that file.
 - The AGENTS.md version clause requires a bump of each module's version after its edits.
 - The rule files write never, must and always as NEVER, MUST and ALWAYS.
 - Rule clauses write NEVER in place of "do not".
