@@ -1424,6 +1424,8 @@ def format_task_list(tasks, full=False):
   agent can start next is visible without reading down a list."""
   shown = tasks if full else [t for t in tasks if t.get("status") == "upcoming"]
   lines = [f"Tasks {len(shown)}" if full else f"Tasks {len(shown)} upcoming"]
+  if any(t.get("blocked") for t in shown):
+    lines.append("* = blocked on a report answer")
   head = None if full else current_task(shown)
   for task in shown:
     order = task.get("order")
@@ -1440,6 +1442,8 @@ def format_task_list(tasks, full=False):
     if task.get("type") and task.get("type") != TASK_UNSPECIFIED:
       line += f" type {task.get('type')}"
     lines.append(line)
+    for detail in task.get("details", []):
+      lines.append(f"    {detail}")
   return "\n".join(lines)
 
 

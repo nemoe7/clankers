@@ -508,7 +508,9 @@ def current_task(tasks):
 		if task.get('status')=='upcoming'and not task.get('blocked'):return task
 	return None
 def format_task_list(tasks,full=False):
-	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"];head=None if full else current_task(shown)
+	shown=tasks if full else[t for t in tasks if t.get('status')=='upcoming'];lines=[f"Tasks {len(shown)}"if full else f"Tasks {len(shown)} upcoming"]
+	if any(t.get('blocked')for t in shown):lines.append('* = blocked on a report answer')
+	head=None if full else current_task(shown)
 	for task in shown:
 		order=task.get('order');status=task.get('status')
 		if head is not None and task.get('id')==head.get('id'):status='current'
@@ -516,6 +518,7 @@ def format_task_list(tasks,full=False):
 		if report_id:line+=f" report {report_id}"
 		if task.get('type')and task.get('type')!=TASK_UNSPECIFIED:line+=f" type {task.get('type')}"
 		lines.append(line)
+		for detail in task.get('details',[]):lines.append(f"    {detail}")
 	return'\n'.join(lines)
 def format_task(record):
 	id_=record.get('id');order=record.get('order');status=record.get('status');report_id=record.get('report_id');blocked=record.get('blocked');title=record.get('title')or'';details=record.get('details')or[];cut=[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in details];first=f"task {id_}, order {order}, status {status}";task_type=record.get('type')
