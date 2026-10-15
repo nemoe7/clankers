@@ -7333,11 +7333,15 @@ def test_reference_commands_table_lists_every_agent_facing_command():
     return  # The generated runtime holds scripts only, so the reference is absent.
   section = reference.read_text(encoding="utf-8").split("## Commands", 1)[1]
   table = section.split("\n## ", 1)[0]
-  documented = {
+  documented_rows = [
     match.group(1)
     for line in table.splitlines()
-    if (match := re.match(r"\| `([a-z][a-z-]*)", line))
-  }
+    if (match := re.match(r"\| `([^`]+)`", line))
+  ]
+  documented = {signature.split()[0] for signature in documented_rows}
+  assert len(documented_rows) == len(set(documented_rows)), (
+    "CLI commands table repeats a signature"
+  )
   help_text = subprocess.run(
     [sys.executable, str(Path(__file__).parent / "preview.py"), "--help"],
     capture_output=True,

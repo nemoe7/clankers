@@ -141,6 +141,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Remove the repeated report-state row from the command table. Reject repeated command signatures.
+
 - Print CLI argument errors without the full usage header. Keep validation, error text, exit status, and full help output.
 
 - Escape brackets and backslashes in image-data-uri alt text so filenames render as images. Keep the image types, payload bytes, and 2 MiB cap unchanged. Retain escaped punctuation, inline code, and line breaks in image alt text to match the browser parser.
