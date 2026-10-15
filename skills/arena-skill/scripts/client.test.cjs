@@ -9,6 +9,49 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { File } = require('node:buffer');
 
+// Test state factory: each top-level test gets its own isolated state
+function createTestState() {
+  return {
+    sendHandler: null,
+    state: { notes: [], reports: [], fetch_jobs: [], last_check: null },
+    stateFails: false,
+    stateGatewayBody: null,
+    reportFields: 0,
+    reportRevision: '2026-09-22T12:00:00.100000+00:00',
+    reportPublished: '2026-09-22T12:00:00.100000+00:00',
+    reportConflict: false,
+    reportHtmlWait: null,
+    reportSubmitWait: null,
+    sent: [],
+    readStamps: [],
+    ackSeenCalls: [],
+    ackSeenFailures: new Set(),
+    viewCalls: [],
+    viewActive: [],
+    skipCalls: [],
+    replySeenCalls: [],
+    replySeenWait: null,
+    replySeenError: false,
+    unpublished: [],
+    uploadCalls: [],
+    loseUploadResponse: false,
+    dropUploadOnce: false,
+    queuedCalls: [],
+    dropped: [],
+    remoteCalls: [],
+    remoteBehaviors: new Map(),
+    resultCalls: [],
+    failedCalls: [],
+    enqueueResponseLost: false,
+    staleToken: false,
+    servedToken: 'token-one',
+    pageFetches: 0,
+    writeTokens: [],
+    coarsePointer: false,
+    pointerListeners: [],
+  };
+}
+
 class Element {
   // textContent reads through to children, the way a browser does, so a receipt built from two elements still asserts as one string.
   // Setting it clears the children, as in a browser. A bare string child is a text node, the way replaceChildren takes one.
@@ -390,6 +433,32 @@ const part = (node, cls) => node.children.find(child => (child.className || '') 
 const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
 
 test('preview client', async (t) => {
+  // Reset module-level state to isolate this test from parallel runs
+  sent.length = 0;
+  readStamps.length = 0;
+  ackSeenCalls.length = 0;
+  ackSeenFailures.clear();
+  viewCalls.length = 0;
+  viewActive.length = 0;
+  skipCalls.length = 0;
+  replySeenCalls.length = 0;
+  replySeenWait = null;
+  replySeenError = false;
+  unpublished.length = 0;
+  uploadCalls.length = 0;
+  loseUploadResponse = false;
+  dropUploadOnce = false;
+  queuedCalls.length = 0;
+  state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
+  stateFails = false;
+  stateGatewayBody = null;
+  reportFields = 0;
+  reportRevision = '2026-09-22T12:00:00.100000+00:00';
+  reportPublished = '2026-09-22T12:00:00.100000+00:00';
+  reportConflict = false;
+  reportHtmlWait = null;
+  reportSubmitWait = null;
+  
   let copyIcon;
   let normalTimeout;
   let finishCopy;
