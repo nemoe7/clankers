@@ -3253,6 +3253,26 @@ test('preview client', async (t) => {
       await refresh();
     }
   });
+  await t.test("The age timer repaints a receipt stamp that render minted earlier", async () => {
+    const priorNotes = state.notes;
+    state.notes = [{ id: 'age-note', text: 'age note',
+      at: new Date(Date.now() - 4 * 60000).toISOString(), acknowledged_at: null, ack_kind: null,
+      ack_text: null, ack_edited_at: null, replies: [], ack_edited_seen_count: 0, seen_at: null,
+      task_id: null }];
+    await refresh();
+    try {
+      const stamp = get('#history').children[0].children[2].children[3];
+      assert.match(stamp.textContent, /4 mins ago/);
+      stamp.dataset.at = new Date(Date.now() - 21 * 60000).toISOString();
+      const repaint = intervals.filter(callback => callback.name === 'repaintReceiptAges').at(-1);
+      assert.ok(repaint, 'an interval repaints the receipt ages');
+      repaint();
+      assert.match(stamp.textContent, /21 mins ago/);
+    } finally {
+      state.notes = priorNotes;
+      await refresh();
+    }
+  });
 });
 
 test('the phone footer keeps Send beside a long status', () => {
