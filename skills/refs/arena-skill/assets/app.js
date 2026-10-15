@@ -1671,18 +1671,17 @@ async function markReportRead(id) {
 // An agent ack holds a star and the tab dot until the owner opens the report. The open is the
 // gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
 async function markAckSeen(id) {
-  let stamped;
   try {
-    stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
+    await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
       method: 'POST',
       headers: writeHeaders('application/json'),
       body: '{}'
-    })).json();
+    });
   } catch (error) {
-    // A stamp that fails costs the owner nothing: the mark stays and the next open retries.
+    // A stamp that fails costs the owner nothing: the optimistic mark stays and the next open retries.
     return;
   }
-  foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at || new Date().toISOString());
+  // UI already updated optimistically by the click handler
 }
 $('#mark-report-acks-seen').addEventListener('click', async () => {
   if (ackBatchPending) return;
@@ -1690,16 +1689,17 @@ $('#mark-report-acks-seen').addEventListener('click', async () => {
   const unread = reports.filter(ackUnread);
   if (!unread.length) return;
   ackBatchPending = true;
-  updateReportPip(reports);
+  // Optimistic update: mark all as seen immediately
+  const now = new Date().toISOString();
+  unread.forEach(report => foldReportStamp(report.id, 'ack_seen_at', now));
+  updateReportPip(lastState?.reports || []);
+  $('#report-status').textContent = 'Report acknowledgements marked seen.';
   try {
     await Promise.all(unread.map(report => markAckSeen(report.id)));
-    const remaining = (lastState?.reports || []).filter(ackUnread).length;
-    $('#report-status').textContent = remaining
-      ? `${remaining} report acknowledgement${remaining === 1 ? ' remains' : 's remain'} unseen.`
-      : 'Report acknowledgements marked seen.';
+  } catch (error) {
+    // On failure, the optimistic update stays (per original behavior: "the mark stays")
   } finally {
     ackBatchPending = false;
-    updateReportPip(lastState?.reports || []);
   }
 });
 // The owner's view stamps the look, so agent changes do not update an open report. Only a page
