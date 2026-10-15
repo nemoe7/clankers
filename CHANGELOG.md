@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Reports have a floating scroll-to-top control with the message jump-button style.
+
 - A report navigation button selects the next list entry and stops at the end.
 
 - Report list entries add a caret for unanswered reports and retain their unread asterisk.

@@ -66,7 +66,8 @@ nav [aria-selected="true"] { background: var(--bubble); }
 /* The pip is a corner badge rather than an inline box, so a tab keeps one width whether the dot shows or not. */
 #report-pip, #notes-pip, #downloads-pip { position: absolute; top: 5px; right: 5px; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1450px; margin: auto; padding: 18px 5vw 20px; overflow: hidden; }
-main > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
+main > section[role="tabpanel"], .report-scroll-frame, .report-scroll-frame > section[role="tabpanel"] { flex: 1 1 auto; min-height: 0; width: 100%; }
+.report-scroll-frame { position: relative; display: flex; flex-direction: column; }
 #notes-panel, #reports-panel, #tasks-panel, #downloads-panel { overflow-y: auto; }
 .notes-layout { display: flex; flex-direction: column; gap: 14px; height: 100%; max-width: 900px; width: 100%; margin: auto; }
 /* The floor steps down on a short viewport: 500px would push the column past a small

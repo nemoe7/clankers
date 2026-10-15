@@ -48,6 +48,8 @@ The eye button marks all report acknowledgement receipts seen. It leaves message
 
 Next report selects the next list entry and stops at the last entry. An empty list leaves it disabled.
 
+The floating up button returns Reports to the top. It shares the message jump-button style and hides at the top or outside Reports.
+
 Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
 
 The task CLI appends supplied details with `--append` (`-A`). Without that flag, supplied details replace the stored list. Existing limits still apply.

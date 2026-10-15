@@ -626,6 +626,8 @@ def test_http_boundaries():
       assert 'id="composer-toggle"' not in page and "data-composer" not in page
       # The log's jump bar ships in the page, inside the wrapper that positions it over the scroll area.
       assert 'id="log-newest"' in page and 'class="log-scroll"' in page
+      assert 'id="reports-scroll-frame"' in page
+      assert re.search(r"\.report-scroll-frame\s*\{[^}]*position:\s*relative", page)
       assert 'aria-label="Scroll to bottom"' in page
       assert '<svg width="14" height="14" viewBox="0 0 24 24"' in page
       assert "↓ Latest message" not in page
@@ -660,6 +662,7 @@ def test_http_boundaries():
         "refresh-report",
         "mark-report-acks-seen",
         "next-report",
+        "report-top",
       ):
         block = page[page.index(f'id="{control}"') :]
         assert "title=" in block[: block.index(">")]

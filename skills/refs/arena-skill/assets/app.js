@@ -835,6 +835,7 @@ async function refreshState() {
     // receipt tracks the selected report's latest answer.
     updateReportPip(state.reports);
     updateReportNavigation();
+    updateReportTop();
     renderReportAcknowledgement();
     // The panel can show a report's end while its last scroll event was lost (a re-render moved the
     // panel, or the event landed a pixel short), so the poll takes the same look the tab click does.
@@ -1313,6 +1314,15 @@ function nextReportId() {
   const position = options.findIndex(option => option.value === select.value);
   return position < 0 ? '' : options[position + 1]?.value || '';
 }
+function updateReportTop() {
+  const panel = $('#reports-panel');
+  $('#reports-scroll-frame').hidden = panel.hidden;
+  $('#report-top').hidden = panel.hidden || panel.scrollTop <= 0;
+}
+$('#report-top').addEventListener('click', () => {
+  $('#reports-panel').scrollTop = 0;
+  updateReportTop();
+});
 function updateReportNavigation() {
   $('#next-report').disabled = !nextReportId();
 }
@@ -1349,6 +1359,7 @@ async function loadReport(force = false) {
     $('#report').dataset.updatedAt = revision;
     $('#report').dataset.revision = result.revision;
     panel.scrollTop = updating ? place : 0;
+    updateReportTop();
     $('#report-submit').hidden = !result.fields;
     const saved = result.fields ? savedAnswers(id) : null;
     if (saved && saved.answers) {
@@ -1648,7 +1659,7 @@ function checkReportRead() {
   clearReadTimer();
   readPending = { id, timer: setTimeout(() => markReportRead(id), REPORT_READ_DWELL) };
 }
-$('#reports-panel').addEventListener('scroll', checkReportRead);
+$('#reports-panel').addEventListener('scroll', () => { checkReportRead(); updateReportTop(); });
 // A hidden page is not a pair of eyes: leaving the report, or hiding the page, clears the view.
 document.addEventListener('visibilitychange', () => {
   const shown = shownReportId();
@@ -1666,6 +1677,7 @@ function showTab(tab) {
     item.tabIndex = selected ? 0 : -1;
     $('#' + item.getAttribute('aria-controls')).hidden = !selected;
   }
+  updateReportTop();
   if (tab === tabs[1]) {
     // Opening the tab is reading it, so the marker is written before the poll that recomputes the
     // pip: it goes out on this visit rather than surviving until the next one.

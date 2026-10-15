@@ -45,11 +45,11 @@ Latest measurements as of 2026-10-15. `maintenance/check.py --update` rebuilds t
 | `system-prompts/NEMOGPT.md` | `o200k_base` | 3,061 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,587 `tok` |
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,888 `tok` |
-| `skills/arena-skill/README.md` | `o200k_base` | 1,866 `tok` |
+| `skills/arena-skill/README.md` | `o200k_base` | 1,892 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,022 `tok` |
-| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 54,182 `B` |
-| `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 11,381 `B` |
-| `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 14,054 `B` |
+| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 54,508 `B` |
+| `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 11,841 `B` |
+| `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 14,193 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
 | `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,065 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 148,614 `B` |

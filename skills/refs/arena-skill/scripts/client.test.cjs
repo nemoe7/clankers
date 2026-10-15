@@ -2193,6 +2193,48 @@ test('preview client', async (t) => {
     }
   });
 
+  await t.test('The floating report control returns to top and hides outside Reports', async () => {
+    const keptReports = state.reports;
+    const keptSelect = get('#report-select').value;
+    const panel = get('#reports-panel');
+    try {
+      get('#notes-tab').events.click();
+      state.reports = [{ id: 'scroll-report', title: 'Scroll', updated_at: '2026-09-25T10:00:00',
+        seen_at: '2026-09-25T10:01:00' }];
+      await refresh();
+      get('#report-select').value = 'scroll-report';
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+      const button = get('#report-top');
+      assert.equal(typeof button.events.click, 'function');
+      panel.scrollHeight = 1000;
+      panel.clientHeight = 200;
+      panel.scrollTop = 240;
+      panel.events.scroll();
+      assert.equal(button.hidden, false);
+      button.events.click();
+      assert.equal(panel.scrollTop, 0);
+      assert.equal(button.hidden, true);
+      panel.scrollTop = 120;
+      panel.events.scroll();
+      get('#notes-tab').events.click();
+      assert.equal(button.hidden, true);
+      assert.equal(get('#reports-scroll-frame').hidden, true);
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+      assert.equal(get('#reports-scroll-frame').hidden, false);
+      const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
+      assert.match(html, /id="report-top"[^>]*class="log-newest"/);
+      assert.match(html, /<section id="reports-panel"[\s\S]*?<\/section>\s*<button id="report-top"/);
+    } finally {
+      get('#notes-tab').events.click();
+      state.reports = keptReports;
+      panel.scrollTop = 0;
+      await refresh();
+      get('#report-select').value = keptSelect;
+    }
+  });
+
   await t.test("A report delete asks for a second click against the same selection, then leaves the tab", async () => {
     const keptReports = state.reports;
     const keptSelect = get('#report-select').value;
