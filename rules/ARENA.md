@@ -65,7 +65,8 @@
 - An empty or absent list proves nothing; failed checks keep work open.
 - Before turn end with a pushed branch, check open PR CI.
 - Skills specialize defaults and NEVER weaken a requirement or convention; use one only for its domain.
-- Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
+- Report changes/findings, checks/results, files/decisions, open issues, assumptions, and limitations; open with the result, skip restating the task, prefer numbered lists, and report skipped work with its add-when trigger in at most three short lines.
+- ALWAYS use the Oxford comma.
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.

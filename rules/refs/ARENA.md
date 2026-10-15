@@ -74,7 +74,8 @@
 - Pending checks are not command errors.
 - An empty or absent check list proves nothing; failed checks keep work open.
 - Skills specialize defaults and NEVER weaken an explicit requirement or project conventions, and are used only when the domain fits.
-- Report changes/findings, checks/results, useful files/decisions, unresolved issues, assumptions, limitations; open with the result and skip restating the task.
+- Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, and limitations; open with the result and skip restating the task.
+- ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 - Prefer numbered lists for multiple points.
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human; report skipped work and when to add it in at most three short lines.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.

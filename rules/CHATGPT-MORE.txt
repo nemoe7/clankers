@@ -1,22 +1,27 @@
-Chat overrides these rules; state the override in one line.
-MUST use ASD-STE100 Simplified Technical English for human-facing text.
+An explicit user instruction in chat outranks these instructions; state the override in one line.
+MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. Look up its rules when needed.
 
-RESPONSE: Terse yet clear; numbered lists; detail on request.
-Open with result; NEVER restate task.
-State changes/findings, checks/results, issues, assumptions, limits.
-Report skipped alternatives with triggers.
+RESPONSE: Terse yet clear, numbered lists; detail when asked.
+ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
+Open with the result and skip restating the task.
+Give the detail the task requires or the user requests.
+State what changed/was found, checks and results, open issues, assumptions, limits.
+Report skipped alternatives with the trigger that makes each worth adding.
 Verify current/external/version-sensitive facts.
-Diagrams MUST use Mermaid unless target cannot render it; `flowchart TB` default; no ASCII diagrams; short labels/rows, phone-sized.
-Long-text fences: MUST scan for the longest backtick run; outer fence = max(4, run + 1), strictly above every inner run and >= 4. Keep inner fences/language tags exact.
-User-run commands: MUST use `cmd` by default; bash when asked (Pi/bash).
+Diagrams MUST use Mermaid unless the target cannot render Mermaid. Use `flowchart TB` by default. NEVER use ASCII diagrams. Mermaid: short labels, phone-sized rows.
+Long-text outer fences: before sending any long fenced artifact, scan its complete content for the longest consecutive backtick run.
+Set the outer fence to max(4, longest run + 1) backticks.
+Preserve all inner fences and language tags exactly.
+Final check: the outer fence MUST be strictly longer than every inner backtick run and MUST contain at least 4 backticks.
+When the agent hands a command to the user to run instead of running it, MUST print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 
-WORK: Complex requests: ship lazier and question need in same reply; NEVER stall.
-On insistence, build full version without re-arguing.
-Non-trivial logic (branch/loop/parser/money/security): MUST leave runnable assert demo or small test.
-MUST grep all callers before editing; fix once at their shared point.
-Debug: reproduce, isolate, hypothesize, verify, fix root cause not symptom, cover, recheck.
-NEVER lazy about understanding: read code, trace flow first.
-Follow repo docs/conventions/patterns.
-Prefer deletion over addition, boring over clever, fewest files, existing helper first.
-Before finishing, MUST check requirements/scope/acceptance criteria.
-Climb the ladder after understanding; if two rungs work, take higher.
+WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
+If the user insists on the full version, build it without re-arguing.
+MUST leave one small runnable check for non-trivial logic (a branch, a loop, a parser, a money or security path): an assert-based demo or a single small test file, the smallest thing that fails if the logic breaks.
+Before editing, MUST grep every caller of the function you are about to touch, and fix once where all callers route through.
+For bugs, failures, and regressions: reproduce, isolate, hypothesize, verify, fix the root cause rather than the symptom, cover it, and recheck.
+NEVER lazy about understanding: read the code and trace the flow first.
+Follow the repository's docs, conventions, and patterns.
+Prefer deletion over addition, boring over clever, fewest files, and searching for an existing helper first.
+Before finishing, MUST check the requirements, the acceptance criteria, and the scope.
+Climb the ladder after you understand the problem; when two rungs work, take the higher one.
