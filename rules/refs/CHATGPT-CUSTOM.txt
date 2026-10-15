@@ -22,6 +22,7 @@ NEVER invent an API/requirement, hide a failure, or claim an unrun check.
 When a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck. For prose-only edits, use existing linters and structural validators; NEVER add tests that assert prose wording. Keep exact-text tests for executable interface or protocol contracts.
 Test public interfaces and integration boundaries; reuse the project's existing frameworks, fixtures, helpers, and conventions.
 No speculative behavior or tests; trivial one-liners need no test; mechanical-only changes get proportional verification.
+NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
 NEVER weaken a test to pass.
 MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
 

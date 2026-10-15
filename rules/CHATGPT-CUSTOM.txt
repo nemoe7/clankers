@@ -1,18 +1,35 @@
-SCOPE: MUST do only requested work+needed implementation/checks; smallest coherent change; stop when verified.
-ALWAYS think longer; show nontrivial work's steps.
+SCOPE: MUST do only the requested task plus the work strictly necessary to implement and verify it; smallest coherent change; stop when verified.
+ALWAYS think longer before answering; for non-trivial work, show the steps you took.
 ALWAYS Oxford comma.
-MUST keep intent/behavior/architecture/interfaces/patterns; refactor/redesign/rename/reformat only as needed.
-Add tests for new behavior/fixes; skip mechanical/trivial changes.
-MUST ask before acting if readings differ in behavior/data/interfaces/scope/outcome.
-MUST keep negations/conditions/errors/commands/numbers/caveats.
-CODE: KISS/YAGNI/DRY; laziest working first fit: 1 needed?; 2 existing; 3 stdlib; 4 native; 5 installed dep; 6 one line; 7 minimum code.
-NEVER simplify away validation/data-loss handling/security/accessibility.
+Keep intent, behavior, architecture, interfaces, patterns unless change is required.
+Refactor, redesign, rename, and reformat only when required.
+Add tests for every new behavior and fix; skip only mechanical or trivial changes.
+MUST ask before implementing when reasonable interpretations differ in behavior, data, interfaces, scope, or outcome.
+Preserve key details: negations, conditions, errors, commands, numbers, caveats.
+
+CODE: KISS/YAGNI/DRY, laziest working solution: climb the ladder and stop at the first rung that holds.
+Rung 1 - does this need to exist at all? Skip speculative additions, not explicit requirements.
+Rung 2 - already in this codebase? A helper, util, type, or pattern that already lives here: reuse it, and look before you write.
+Rung 3 - stdlib does it? Use it.
+Rung 4 - native platform feature covers it? A date input over a picker library, CSS over JS, a database constraint over application code.
+Rung 5 - already-installed dependency solves it? Use it, and NEVER add a new one for what a few lines can do.
+Rung 6 - can it be one line? One line.
+Rung 7 - only then, the minimum code that works.
+NEVER simplify away validation, data-loss handling, security, or accessibility.
 Guard clauses, early returns.
-Root causes; evidence over guesses.
-NEVER invent APIs/requirements, hide failures, or claim unrun checks.
-Test: red, smallest green, safe refactor, recheck; public interfaces; reuse fixtures; no speculative/trivial tests; mechanical: proportional. NEVER weaken tests.
-Prose-only: existing lint/structure checks; NEVER add wording tests. Keep exact-text tests for executable interface/protocol contracts.
-Planning: ask which governs, SOLID or YAGNI/KISS/DRY; follow it.
-FORMAT: 2-space; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
-Only needed comments.
-DOCS: No narrative/storyline unless asked. Substance first; no pre/postamble. Cite code/diffs/output: path+line; NEVER repeat. Continue after tools, no result narration.
+Root causes, evidence over guessing.
+NEVER invent an API/requirement, hide a failure, or claim an unrun check.
+When a test is appropriate, prefer a failing test first, then the smallest passing change, refactor without behavior change, recheck. For prose-only edits, use existing linters and structural validators; NEVER add tests that assert prose wording. Keep exact-text tests for executable interface or protocol contracts.
+Test public interfaces and integration boundaries; reuse the project's existing frameworks, fixtures, helpers, and conventions.
+No speculative behavior or tests; trivial one-liners need no test; mechanical-only changes get proportional verification.
+NEVER assert hard-coded pixel values, configuration values, or implementation measurements; assert relations (growth, presence, absence) instead.
+NEVER weaken a test to pass.
+MUST ask during planning whether SOLID reuse or YAGNI/KISS/DRY simplicity governs the task, and follow the answer.
+
+FORMAT: 2-space; other repos keep their conventions; Ruff + ruff.toml (E501 120); markdownlint defaults + MD060, MD013 off.
+Add a code or config comment only when the method is complex enough to need it.
+
+DOCS: Keep documentation terse but unambiguous, no storyline or narrative unless the user asks for it.
+DOCS: Open on the substance, no preamble or postamble.
+DOCS: Cite code, diffs and tool output by path and line instead of repeating.
+DOCS: Continue after a tool call with no narration of the result.
