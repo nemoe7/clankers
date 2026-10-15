@@ -3012,7 +3012,8 @@ def test_bare_task_list_names_the_current_task():
     lines = preview.format_task_list(bare.list_tasks()).splitlines()
     assert lines[0] == "Tasks 2 upcoming"
     assert "current first" in lines[1]
-    assert "upcoming second" in lines[2]
+    assert any("upcoming second" in line for line in lines)
+    assert lines.count("    Step one") == len(bare.list_tasks()) - 1
     assert "done-one" not in "\n".join(lines)
     full = preview.format_task_list(bare.list_tasks(), full=True).splitlines()
     assert full[0] == "Tasks 3"
@@ -3020,8 +3021,9 @@ def test_bare_task_list_names_the_current_task():
     assert "current" not in "\n".join(full)
     bare.write_task("first", blocked=True)
     held = preview.format_task_list(bare.list_tasks()).splitlines()
-    assert "upcoming first" in held[1] and "*" in held[1]
-    assert "current second" in held[2]
+    assert any("upcoming first" in line and "*" in line for line in held)
+    assert any("current second" in line for line in held)
+    assert "* = blocked on a report answer" in held
     assert preview.current_task(bare.list_tasks())["id"] == "second"
     # With every upcoming task blocked, no task reads as current work.
     bare.write_task("second", blocked=True)
@@ -5368,7 +5370,7 @@ def test_poll_requires_a_closing_poll_after_a_run_verdict(capsys):
     assert preview.poll_inbox(store) == 0
     output = capsys.readouterr().out
     assert "run check done: exit 0" in output
-    assert "CLOSING POLL REQUIRED" in output
+    assert "DO NOT END TURN. POLL AGAIN." in output
 
 
 def test_poll_blocked_tasks():
@@ -6942,7 +6944,7 @@ def test_poll_breaks_on_finished_run(capsys):
     assert len(sleeps) == 1
     out = capsys.readouterr().out
     assert "run gate done: exit 0" in out
-    assert out.rstrip().endswith("CLOSING POLL REQUIRED")
+    assert out.rstrip().endswith("DO NOT END TURN. POLL AGAIN.")
     assert preview.run_notices(directory) == 0
 
 

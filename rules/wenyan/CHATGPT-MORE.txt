@@ -12,3 +12,5 @@ BUG：reproduce → isolate → hypothesize → verify → root fix → cover �
 终事须核 requirements、acceptance criteria、scope。
 报所弃 alternatives，各示其添加 trigger。
 Ladder：understand后再 climb；两 rung皆可则取高者。
+ALWAYS Oxford comma。
+Tests：NEVER pin 像素/配置/实现度量值；assert relations。

@@ -13,7 +13,7 @@ let stateBusy = false;
 let reportRequest = 0;
 let listSignature = '';
 let lastState = null;
-// Optimistic state layer: overlays pending changes on lastState until the server confirms.
+// The overlay keeps pending changes until the server answers.
 const optimisticState = {
   reports: new Map(),
   tasks: new Map(),
@@ -1736,35 +1736,30 @@ async function markReportRead(id) {
 // gesture, not the read: the receipt sits at the top of the panel, so the visit clears it.
 async function markAckSeen(id) {
   try {
-    await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
-      method: 'POST',
-      headers: writeHeaders('application/json'),
-      body: '{}'
-    });
+    const stamped = await (await request(`/api/reports/${encodeURIComponent(id)}/ack-seen`, {
+      method: 'POST', headers: writeHeaders('application/json'), body: '{}'
+    })).json();
+    foldReportStamp(id, 'ack_seen_at', stamped.ack_seen_at);
+    return true;
   } catch (error) {
-    // A stamp that fails costs the owner nothing: the optimistic mark stays and the next open retries.
-    return;
+    return false;
   }
-  // UI already updated optimistically by the click handler
 }
 $('#mark-report-acks-seen').addEventListener('click', async () => {
   if (ackBatchPending) return;
-  const state = getState();
-  const reports = state?.reports || [];
+  const reports = getState()?.reports || [];
   const unread = reports.filter(ackUnread);
   if (!unread.length) return;
   ackBatchPending = true;
-  // Optimistic update: mark all as seen immediately
-  const now = new Date().toISOString();
-  unread.forEach(report => foldReportStamp(report.id, 'ack_seen_at', now));
-  updateReportPip(getState()?.reports || []);
-  $('#report-status').textContent = 'Report acknowledgements marked seen.';
+  updateReportPip(reports);
   try {
-    await Promise.all(unread.map(report => markAckSeen(report.id)));
-  } catch (error) {
-    // On failure, the optimistic update stays (per original behavior: "the mark stays")
+    const saved = await Promise.all(unread.map(report => markAckSeen(report.id)));
+    $('#report-status').textContent = saved.every(Boolean)
+      ? 'Report acknowledgements marked seen.'
+      : 'Some acknowledgements could not be marked seen; try again.';
   } finally {
     ackBatchPending = false;
+    updateReportPip(getState()?.reports || []);
   }
 });
 // The owner's view stamps the look, so agent changes do not update an open report. Only a page

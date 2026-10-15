@@ -3,106 +3,12 @@
 const assert = require('node:assert/strict');
 // Heights ride relations, not pixels: the box must grow with its content, whatever the font measures.
 const px = (value) => parseInt(value, 10) || 0;
-const { test, beforeEach } = require('node:test');
+const { test } = require('node:test');
 const fs = require('node:fs');
 
-// Reset all module-level state before each test to isolate tests running in parallel
-beforeEach(() => {
-  elements.clear();
-  Object.keys(documentEvents).forEach(key => delete documentEvents[key]);
-  Object.keys(documentCaptureEvents).forEach(key => delete documentCaptureEvents[key]);
-  intervals.length = 0;
-  Object.keys(windowEvents).forEach(key => delete windowEvents[key]);
-  copied.length = 0;
-  clipboardFails = false;
-  execCommandResult = true;
-  storage.clear();
-  Object.keys(root.dataset).forEach(key => delete root.dataset[key]);
-  counter = 0;
-  sendHandler = undefined;
-  state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
-  stateFails = false;
-  stateGatewayBody = null;
-  reportFields = 0;
-  reportRevision = '2026-09-22T12:00:00.100000+00:00';
-  reportPublished = '2026-09-22T12:00:00.100000+00:00';
-  reportConflict = false;
-  reportHtmlWait = null;
-  reportSubmitWait = null;
-  sent.length = 0;
-  readStamps.length = 0;
-  ackSeenCalls.length = 0;
-  ackSeenFailures.clear();
-  viewCalls.length = 0;
-  viewActive.length = 0;
-  skipCalls.length = 0;
-  replySeenCalls.length = 0;
-  replySeenWait = null;
-  replySeenError = false;
-  unpublished.length = 0;
-  uploadCalls.length = 0;
-  loseUploadResponse = false;
-  dropUploadOnce = false;
-  queuedCalls.length = 0;
-  dropped.length = 0;
-  remoteCalls.length = 0;
-  remoteBehaviors.clear();
-  resultCalls.length = 0;
-  failedCalls.length = 0;
-  enqueueResponseLost = false;
-  staleToken = false;
-  servedToken = 'token-one';
-  pageFetches = 0;
-  writeTokens.length = 0;
-  coarsePointer = false;
-  pointerListeners.length = 0;
-});
 const path = require('node:path');
 const vm = require('node:vm');
 const { File } = require('node:buffer');
-
-// Test state factory: each top-level test gets its own isolated state
-function createTestState() {
-  return {
-    sendHandler: null,
-    state: { notes: [], reports: [], fetch_jobs: [], last_check: null },
-    stateFails: false,
-    stateGatewayBody: null,
-    reportFields: 0,
-    reportRevision: '2026-09-22T12:00:00.100000+00:00',
-    reportPublished: '2026-09-22T12:00:00.100000+00:00',
-    reportConflict: false,
-    reportHtmlWait: null,
-    reportSubmitWait: null,
-    sent: [],
-    readStamps: [],
-    ackSeenCalls: [],
-    ackSeenFailures: new Set(),
-    viewCalls: [],
-    viewActive: [],
-    skipCalls: [],
-    replySeenCalls: [],
-    replySeenWait: null,
-    replySeenError: false,
-    unpublished: [],
-    uploadCalls: [],
-    loseUploadResponse: false,
-    dropUploadOnce: false,
-    queuedCalls: [],
-    dropped: [],
-    remoteCalls: [],
-    remoteBehaviors: new Map(),
-    resultCalls: [],
-    failedCalls: [],
-    enqueueResponseLost: false,
-    staleToken: false,
-    servedToken: 'token-one',
-    pageFetches: 0,
-    writeTokens: [],
-    coarsePointer: false,
-    pointerListeners: [],
-  };
-}
 
 class Element {
   // textContent reads through to children, the way a browser does, so a receipt built from two elements still asserts as one string.
@@ -233,7 +139,10 @@ let staleToken = false;
 let servedToken = 'token-one';
 let pageFetches = 0;
 const writeTokens = [];
-const response = (value, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => value, text: async () => JSON.stringify(value) });
+const response = (value, ok = true) => {
+  const body = JSON.stringify(value);
+  return { ok, status: ok ? 200 : 503, json: async () => JSON.parse(body), text: async () => body };
+};
 let coarsePointer = false;
 const pointerListeners = [];
 const context = {
@@ -316,7 +225,12 @@ const context = {
       sent.push(submission);
       if (reportSubmitWait) await reportSubmitWait;
       if (reportConflict) return {ok:false, status:409, text:async () => JSON.stringify({error:'Report changed. Copy entries before refreshing.'})};
-      return response({ ...submission, at: new Date().toISOString() });
+      const at = new Date().toISOString();
+      const report = state.reports.find(item => item.id === decodeURIComponent(url.split('/')[3]));
+      if (report) Object.assign(report, {
+        latest_answer_id: submission.id, latest_answer_at: at, latest_answer_acknowledged_at: null
+      });
+      return response({ ...submission, at });
     }
     if (url === '/api/notes/with-file') {
       const id = options.body.get('id');
@@ -443,7 +357,11 @@ const context = {
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/seen')) {
       readStamps.push(url);
-      return response({ id: url.split('/')[3], seen_at: new Date().toISOString() });
+      const id = decodeURIComponent(url.split('/')[3]);
+      const seen_at = new Date().toISOString();
+      const report = state.reports.find(item => item.id === id);
+      if (report) report.seen_at = seen_at;
+      return response({ id, seen_at });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/view')) {
       // The view stamp is the reader's side of the unpublish guard: a report the panel shows
@@ -457,8 +375,8 @@ const context = {
       const stamp = new Date().toISOString();
       ackSeenCalls.push(url);
       if (ackSeenFailures.has(id)) return response({ error: 'Write failed' }, false);
-      // The stamp is the reply's alone: the client folds it into the state it holds.
-      // A shared fixture let a late reply light marks in the next case. That made the suite flaky.
+      const report = state.reports.find(item => item.id === id);
+      if (report) report.ack_seen_at = stamp;
       return response({ id, ack_seen_at: stamp });
     }
     if (url.startsWith('/api/reports/') && url.endsWith('/unpublish')) {
@@ -485,32 +403,6 @@ const part = (node, cls) => node.children.find(child => (child.className || '') 
 const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
 
 test('preview client', async (t) => {
-  // Reset module-level state to isolate this test from parallel runs
-  sent.length = 0;
-  readStamps.length = 0;
-  ackSeenCalls.length = 0;
-  ackSeenFailures.clear();
-  viewCalls.length = 0;
-  viewActive.length = 0;
-  skipCalls.length = 0;
-  replySeenCalls.length = 0;
-  replySeenWait = null;
-  replySeenError = false;
-  unpublished.length = 0;
-  uploadCalls.length = 0;
-  loseUploadResponse = false;
-  dropUploadOnce = false;
-  queuedCalls.length = 0;
-  state = { notes: [], reports: [], fetch_jobs: [], last_check: null };
-  stateFails = false;
-  stateGatewayBody = null;
-  reportFields = 0;
-  reportRevision = '2026-09-22T12:00:00.100000+00:00';
-  reportPublished = '2026-09-22T12:00:00.100000+00:00';
-  reportConflict = false;
-  reportHtmlWait = null;
-  reportSubmitWait = null;
-  
   let copyIcon;
   let normalTimeout;
   let finishCopy;
@@ -1088,6 +980,7 @@ test('preview client', async (t) => {
     state.submissions = [{ id: 'ans-1', report_id: 'r1', text: 'REPORT r1: one', at: '2026-09-22T10:00:00',
       acknowledged_at: null, ack_kind: null, ack_text: null, ack_edited_at: null, replies: null, ack_edited_seen_count: 0, seen_at: null, task_id: null }];
     copied.length = 0;
+    const statusBeforeCopy = get('#send-status').textContent;
     get('#copy-state').events.click();
     await tick();
     copiedText = copied.at(-1);
@@ -3494,6 +3387,7 @@ test('preview client', async (t) => {
       await refresh();
     }
   });
+
 });
 
 test('the phone footer keeps Send beside a long status', () => {

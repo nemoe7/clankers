@@ -121,6 +121,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Report acknowledgement writes retain the server receipt. Failed bulk writes remain available for retry.
+
+- Client checks retain their shared page state. Mock responses copy JSON data, and report writes persist their server-side stamps.
+
+- CLI checks accept task detail rows, the blocked-task legend, and the closing-poll message.
+
 - The preview header shows `Waiting for gates...` during polling with active routed work. Other polls keep `Polling…`.
 
 #### proxy
@@ -130,6 +136,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 #### userscripts
 
 - Successful state saves clear persistent failure notices. Failed saves retain them, and temporary success messages keep their timeout.
+
+#### rules
+
+- English ChatGPT fields return within their character limits. Wenyan copies include the approved Oxford-comma and test-assertion rules.
 
 ## 2026-10-14
 
