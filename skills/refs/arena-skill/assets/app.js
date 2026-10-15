@@ -1507,8 +1507,8 @@ function taskRow(task) {
   title.setAttribute('role', 'button');
   title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to quote it`);
   const rows = [title];
-  // The badge rides beside the title, ahead of the details collapse, on owner note: the kind
-  // reads on the title line. An Unspecified task carries no badge, so old rows keep their shape.
+  // The badge sits beside the title, ahead of the details collapse.
+  // An Unspecified task has no badge, so old rows keep their shape.
   if (task.type && task.type !== 'unspecified') {
     const badge = document.createElement('span');
     badge.className = 'task-type';
@@ -1840,8 +1840,8 @@ function followReference(type, id) {
     .map(group => (getState().tasks?.[group] || []).find(item => item.id === id))
     .find(Boolean);
   if (!target) return;
-  // A click that names a task brings the task with it: a hiding filter moves to the target
-  // type and a hiding query clears, on owner note, so the row asked for is the row shown.
+  // A task reference switches a type filter that hides its target to the target type.
+  // It clears a search query only when that query hides the target.
   const targetType = target.type || 'unspecified';
   if (taskTypeFilter !== 'all' && taskTypeFilter !== targetType) {
     taskTypeFilter = targetType;
