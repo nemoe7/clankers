@@ -1749,14 +1749,15 @@ async function markAckSeen(id) {
 }
 $('#mark-report-acks-seen').addEventListener('click', async () => {
   if (ackBatchPending) return;
-  const reports = lastState?.reports || [];
+  const state = getState();
+  const reports = state?.reports || [];
   const unread = reports.filter(ackUnread);
   if (!unread.length) return;
   ackBatchPending = true;
   // Optimistic update: mark all as seen immediately
   const now = new Date().toISOString();
   unread.forEach(report => foldReportStamp(report.id, 'ack_seen_at', now));
-  updateReportPip(lastState?.reports || []);
+  updateReportPip(getState()?.reports || []);
   $('#report-status').textContent = 'Report acknowledgements marked seen.';
   try {
     await Promise.all(unread.map(report => markAckSeen(report.id)));
