@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Receipt comments name middle dots and one report date. Task comments keep stored order and both copy sections.
 
+- Receipt dot checks compare width and height without a fixed size.
+
 ## 2026-10-15
 
 ### Added

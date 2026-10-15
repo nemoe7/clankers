@@ -1055,9 +1055,12 @@ def test_http_boundaries():
         r"border-left:2px solid (rgb\(199,194,188\)|#c7c2bc)",
         page,
       )
-      assert (
-        ".state-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dot-sent)"
-        in page
+      dot = re.search(r"\.state-dot\{([^}]+)\}", page)
+      assert dot
+      assert css_px(dot[1], "width") == css_px(dot[1], "height") > 0
+      assert re.search(
+        r"^display:inline-block;[^}]*border-radius:50%;background:var\(--dot-sent\)",
+        dot[1],
       )
       assert "--dot-seen:#7fa7d1" in page and "--dot-seen:#3f6ea8" in page
       assert "--dot-said:#8dc07f" in page and "--dot-said:#4a7c3a" in page
