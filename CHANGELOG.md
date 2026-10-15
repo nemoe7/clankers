@@ -49,6 +49,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- House: The root guide names the compressed live Kilo mode files.
+
 - Preview: Remove report status labels, and make the submission ID a composer link.
 
 #### house

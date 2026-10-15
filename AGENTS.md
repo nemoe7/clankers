@@ -67,7 +67,7 @@ Read these first:
 - Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
 - Baseline skill trees live in `skills/refs/`: amend them first, keep supporting files mirrored, then squash only the live `SKILL.md`; refs are not installed or distributed.
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`.
-  - They are refs-only, and each opens with a blank line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
+  - Keep compressed live copies in `rules/kilo/`, each with a blank first line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
 - Installing them via `rules/apply.py` or `apply.bat` is human maintenance, not an agent task.
 - Amend `rules/refs/` first, mirror the amendment into its live counterpart in `rules/` in compressed form, and for the ChatGPT fields also into `rules/wenyan/`, then squash only the new or affected line.
   - On a deletion, attempt one squash and keep the lower budget; refs stay uncompressed as the baseline, and copying one verbatim would exceed every budget.
