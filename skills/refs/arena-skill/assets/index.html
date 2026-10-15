@@ -90,7 +90,8 @@
       <div class="card tasks-layout">
         <div class="row tight">
           <p id="tasks-status" class="muted" role="status">No task list yet.</p>
-          <label class="task-filter">Type
+          <div class="select-wrap task-filter">
+            <label for="task-type-filter">Type</label>
             <select id="task-type-filter" aria-label="Filter tasks by type">
               <option value="all">All types</option>
               <option value="report">Report</option>
@@ -99,7 +100,7 @@
               <option value="operations">Operations</option>
               <option value="unspecified">Unspecified</option>
             </select>
-          </label>
+          </div>
         </div>
         <div id="tasks-current" class="task-div report" hidden>
           <h2 id="tasks-current-title">Current</h2>

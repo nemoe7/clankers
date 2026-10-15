@@ -3299,15 +3299,30 @@ test('a wide table scrolls sideways on its own and keeps its words whole', () =>
   }
 });
 
-test('the report eye shares toolbar control sizes at both widths', () => {
+test('the toolbar and filter controls share the ui control sizes', () => {
   const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-  for (const size of [44, 36]) {
-    const rule = rules.find(match => match[1].includes('#copy-report')
-      && new RegExp(`width:\\s*${size}px`).test(match[2]));
-    assert.ok(rule, `the toolbar has a ${size}px size rule`);
-    assert.ok(rule[1].split(',').map(selector => selector.trim()).includes('#mark-report-acks-seen'),
-      `the eye belongs to the ${size}px toolbar rule`);
-    assert.match(rule[2], new RegExp(`height:\\s*${size}px`));
+  // The report icon buttons ride the shared icon-button class, so no rule names a square for them.
+  for (const match of rules) {
+    const namesReportButton = /#(copy|refresh|mark-report-acks-seen|next-report|unpublish)-report/.test(match[1]);
+    assert.ok(!namesReportButton || !/width:\s*\d+px/.test(match[2]),
+      'no fixed square names a report button');
   }
+  for (const id of ['copy-report', 'refresh-report', 'mark-report-acks-seen', 'next-report', 'unpublish-report']) {
+    assert.match(html, new RegExp(`id="${id}" class="icon-button"`), `${id} rides the icon-button class`);
+  }
+  // A select keeps the message search's own height, so header and toolbar controls read as one row.
+  const heightOf = body => (body.match(/(?<!min-)height:\s*([^;]+);/) || [])[1];
+  const selectRule = rules.find(match => match[1].trim() === 'select');
+  const searchRule = rules.find(match => match[1].trim() === '#log-search');
+  assert.equal(heightOf(selectRule[2]), heightOf(searchRule[2]),
+    'the select height follows the message search height');
+  // The task filter joins the report select's wrap, chevron and label included.
+  assert.match(html, /class="select-wrap task-filter"/, 'the task filter rides the shared select wrap');
+  assert.match(html, /<label for="task-type-filter">/, 'the task filter label names its select');
+  // The downloads url input keeps the same single-line control height as the search and the selects.
+  const fetchRule = rules.find(match => match[1].trim() === '.fetch-controls input');
+  assert.equal(heightOf(fetchRule[2]), heightOf(searchRule[2]),
+    'the downloads input height follows the message search height');
 });
