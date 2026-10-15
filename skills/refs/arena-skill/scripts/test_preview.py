@@ -7646,3 +7646,33 @@ def test_logs_repeats_the_worktree_step_while_a_run_is_still_going(tmp_path, cap
   assert preview.WORKTREE_STEP in out, (
     "a live run repeats the worktree step on every logs call"
   )
+
+
+def test_init_tz_flag_stores_the_display_zone(tmp_path):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta(preview.TIMEZONE_META, "Asia/Manila")
+  zone = preview.resolve_display_zone(store)
+  assert zone is not None and zone.key == "Asia/Manila"
+
+
+def test_the_tz_env_beats_the_stored_zone(tmp_path, monkeypatch):
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta(preview.TIMEZONE_META, "Asia/Manila")
+  monkeypatch.setenv("TZ", "UTC")
+  zone = preview.resolve_display_zone(store)
+  assert zone is not None and zone.key == "UTC"
+
+
+def test_cli_stamps_print_in_the_display_zone_while_storage_stays_utc(monkeypatch):
+  from zoneinfo import ZoneInfo
+
+  stamp = "2026-10-15T00:39:00+00:00"
+  assert preview.local_stamp(stamp) == stamp, "no zone keeps the stored UTC stamp"
+  monkeypatch.setattr(preview, "DISPLAY_ZONE", ZoneInfo("Asia/Manila"))
+  assert preview.local_stamp(stamp) == "2026-10-15T08:39:00+08:00"
+  listing = {"checked_at": stamp, "pending": []}
+  assert (
+    preview.format_read(listing)
+    .splitlines()[0]
+    .startswith("Inbox 2026-10-15T08:39:00+08:00:")
+  )

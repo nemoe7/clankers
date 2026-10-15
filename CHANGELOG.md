@@ -70,6 +70,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Receipt ages repaint every 30s from their stored stamps, so a long-open page never keeps a stale minute count.
 
+- The init --tz flag stores the zone CLI stamps print in. The TZ env still wins, and storage keeps UTC.
+
 ### Fixed
 
 #### preview
