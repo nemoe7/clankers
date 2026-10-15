@@ -427,3 +427,48 @@ def test_a_share_rides_through_the_chooser_into_the_recent_list():
     "https://sbx-shared.arena.site",
     *[f"https://sbx-p{i}.arena.site" for i in range(9, 0, -1)],
   ], "the shared root joins the ten stored roots at the top"
+
+
+def test_renaming_a_recent_entry_changes_its_label_only():
+  """A rename stores a label beside the root and leaves the destination alone.
+
+  The chooser shows each recent root as its host. An owner label replaces that text while the
+  stored root, and every link built from it, keep the exact preview origin. Labels trim their
+  edges, drop control characters, cap at 48 characters and vanish when the root leaves the list.
+  """
+  script = (
+    "const recent = require('./assets/recent.js');"
+    "const rootA = 'https://sbx-a.arena.site';"
+    "const out = {};"
+    "out.applied = recent.applyName({}, rootA, '  My Box  ');"
+    "out.stripped = recent.applyName({}, rootA, 'bad\\u0000name\\nhere');"
+    "out.capped = recent.applyName({}, rootA, 'x'.repeat(60));"
+    "out.cleared = recent.applyName({ [rootA]: 'Box' }, rootA, '   ');"
+    "out.kept = recent.applyName({ 'https://sbx-b.arena.site': 'Other' }, rootA, 'Box');"
+    "out.pruned = recent.cleanNames([rootA], {"
+    " [rootA]: 'Box', 'https://sbx-gone.arena.site': 'Ghost',7: 'junk'});"
+    "out.labeled = recent.displayName({ [rootA]: 'My Box' }, rootA);"
+    "out.defaulted = recent.displayName({}, rootA);"
+    "out.href = recent.viewerHref(rootA);"
+    "console.log(JSON.stringify(out));"
+  )
+  result = json.loads(node(script))
+  root = "https://sbx-a.arena.site"
+  assert result["applied"] == {"https://sbx-a.arena.site": "My Box"}, result["applied"]
+  assert result["stripped"] == {"https://sbx-a.arena.site": "badnamehere"}, result[
+    "stripped"
+  ]
+  assert len(result["capped"][root]) == 48, result["capped"]
+  assert result["cleared"] == {}, "an empty label falls back to the host"
+  assert result["kept"] == {
+    "https://sbx-b.arena.site": "Other",
+    "https://sbx-a.arena.site": "Box",
+  }, "renaming one root keeps the other labels"
+  assert result["pruned"] == {"https://sbx-a.arena.site": "Box"}, (
+    "labels outside the stored list drop"
+  )
+  assert result["labeled"] == "My Box", result["labeled"]
+  assert result["defaulted"] == "sbx-a.arena.site", "an unlabeled root shows its host"
+  assert result["href"] == "/?url=https%3A%2F%2Fsbx-a.arena.site%2F", (
+    "the destination URL never carries a label"
+  )

@@ -3,7 +3,9 @@
 // The chooser keeps the last preview roots opened from it in this browser's storage, so the server keeps no memory.
 // Every proxy page can write this storage. Keep valid preview roots only. Render the list as text, not HTML.
 const KEY = 'arena-preview-recent';
+const NAME_KEY = 'arena-preview-recent-names';
 const LIMIT = 10;
+const MAX_LABEL = 48;
 const ROOT = /^https:\/\/sbx-[a-z0-9-]+\.arena\.site$/i;
 
 function previewRoot(raw) {
@@ -45,6 +47,38 @@ function viewerHref(root) {
   return `/?url=${encodeURIComponent(`${root}/`)}`;
 }
 
+// A label trims its edges, drops control characters and caps its length, so one entry cannot
+// flood the list or hide its own remove button.
+function named(value) {
+  return String(value).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_LABEL);
+}
+
+function applyName(names, root, raw) {
+  if (!previewRoot(root)) return names;
+  const next = { ...names };
+  const label = named(raw);
+  if (label) next[root] = label;
+  else delete next[root];
+  return next;
+}
+
+// Stored labels for roots the list still holds, nothing else: a root that leaves the list
+// drops its label with it, and junk types never reach the page.
+function cleanNames(list, value) {
+  const names = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return names;
+  for (const root of list) {
+    const label = named(value[root] ?? '');
+    if (label) names[root] = label;
+  }
+  return names;
+}
+
+function displayName(names, root) {
+  const label = names && typeof names[root] === 'string' ? names[root] : '';
+  return label || new URL(root).host;
+}
+
 function load() {
   try {
     return clean(JSON.parse(localStorage.getItem(KEY) || '[]'));
@@ -61,12 +95,19 @@ function save(list) {
   }
 }
 
-function show(box, list) {
+function show(box, list, names) {
   box.replaceChildren(...list.map(root => {
     const host = new URL(root).host;
     const link = document.createElement('a');
     link.href = viewerHref(root);
-    link.textContent = host;
+    link.textContent = displayName(names, root);
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.value = root;
+    rename.dataset.rename = 'true';
+    rename.textContent = '✎';
+    rename.title = `Rename ${host}`;
+    rename.setAttribute('aria-label', `Rename ${host}`);
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.value = root;
@@ -74,7 +115,7 @@ function show(box, list) {
     remove.title = `Remove ${host}`;
     remove.setAttribute('aria-label', `Remove ${host}`);
     const item = document.createElement('li');
-    item.append(link, remove);
+    item.append(link, rename, remove);
     return item;
   }));
   box.hidden = list.length === 0;
@@ -91,17 +132,53 @@ function start() {
   const box = document.getElementById('recent');
   const form = document.querySelector('form');
   if (!box || !form) return;
-  show(box, load());
+  const freshNames = () => cleanNames(load(), readNames());
+  let names = freshNames();
+  const render = () => show(box, load(), names);
+  render();
   form.addEventListener('submit', () => {
     const root = previewRoot(form.elements.url.value);
     if (root) save(remember(load(), root));
   });
   box.addEventListener('click', event => {
-    const remove = event.target.closest('button');
-    if (remove) {
-      const list = forget(load(), remove.value);
+    const button = event.target.closest('button');
+    if (button && button.dataset.rename) {
+      const root = button.value;
+      const item = button.closest('li');
+      const link = item && item.querySelector('a');
+      if (!link || !previewRoot(root)) return;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.maxLength = MAX_LABEL;
+      input.value = names[root] || '';
+      input.placeholder = new URL(root).host;
+      input.setAttribute('aria-label', `Rename ${new URL(root).host}`);
+      let cancelled = false;
+      const commit = () => {
+        if (cancelled) return;
+        names = applyName(names, root, input.value);
+        writeNames(names);
+        render();
+      };
+      input.addEventListener('keydown', press => {
+        if (press.key === 'Enter') {
+          press.preventDefault();
+          commit();
+        } else if (press.key === 'Escape') {
+          cancelled = true;
+          render();
+        }
+      });
+      input.addEventListener('blur', commit);
+      item.replaceChild(input, link);
+      input.focus();
+      return;
+    }
+    if (button) {
+      const list = forget(load(), button.value);
       save(list);
-      show(box, list);
+      names = freshNames();
+      render();
       return;
     }
     const link = event.target.closest('a');
@@ -110,9 +187,29 @@ function start() {
   });
 }
 
+// Labels live in their own key, so the root list keeps the shape every stored copy already has.
+function readNames() {
+  try {
+    return JSON.parse(localStorage.getItem(NAME_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeNames(names) {
+  try {
+    localStorage.setItem(NAME_KEY, JSON.stringify(names));
+  } catch {
+    // Storage is off or full: the list keeps its labels, and the preview still opens.
+  }
+}
+
 // The checks load the pure helpers in Node. The chooser page runs the list.
 if (typeof module === 'object' && module.exports) {
-  module.exports = { previewRoot, remember, forget, clean, fromShare, viewerHref, LIMIT };
+  module.exports = {
+    previewRoot, remember, forget, clean, fromShare, viewerHref,
+    named, applyName, cleanNames, displayName, LIMIT
+  };
 } else {
   start();
 }
