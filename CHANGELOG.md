@@ -131,6 +131,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Prose: Parse JavaScript comments and their physical lines with pinned Acorn, including regex literals and template expressions. Retain metadata exclusions and apply the existing prose rules to previously skipped App and proxy comments.
+
 - Proxy: Keep error log tails when their error marker is outside the saved tail.
 
 - Preview: Print report-state timestamps in the configured CLI zone, and keep stored UTC values.

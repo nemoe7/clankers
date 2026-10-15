@@ -184,3 +184,50 @@ def test_linter_consumes_grouped_extractor_output(tmp_path, monkeypatch):
   )
   monkeypatch.setattr(lint_prose, "markdown_targets", list)
   assert lint_prose.main() == 1
+
+
+def test_javascript_regexes_keep_later_comments_and_line_caps():
+  for prefix in (
+    'const pattern = /"/;\n',
+    "const pattern = /[/*`]/;\n",
+    "const value = total / count / scale;\n",
+  ):
+    source = prefix + "// Read the state.\n// Write the state.\n// Reset the state.\n"
+    assert extract_prose.source_sections(Path("example.js"), source) == [
+      "Read the state.",
+      "Write the state.",
+      "Reset the state.",
+    ]
+    assert lint_prose.comment_block_violations(Path("example.js"), source) == [
+      "example.js:2: comment block has 3 lines; the cap is 2"
+    ]
+
+
+def test_javascript_template_expressions_keep_real_comments():
+  source = 'const value = `text ${ /"/.test(value) /* Read the state. */ }`;\n'
+  source += "// Write the state.\n"
+  assert extract_prose.source_sections(Path("example.js"), source) == [
+    "Read the state.",
+    "Write the state.",
+  ]
+
+
+def test_javascript_script_fallback_keeps_comments_once_and_skips_hashbang():
+  source = (
+    "#!/usr/bin/env node\n// Read the state.\nwith (state) { /* Write the state. */ }\n"
+  )
+  for suffix in (".js", ".cjs"):
+    path = Path("example" + suffix)
+    assert extract_prose.source_sections(path, source) == [
+      "Read the state.",
+      "Write the state.",
+    ]
+    assert extract_prose.comment_lines(path, source) == {2, 3}
+
+
+def test_css_and_jsonc_keep_their_comment_scanner():
+  for name, source in (
+    ("example.css", "a { color: #fff; } /* Read the state. */"),
+    ("example.jsonc", '{"name": "value", /* Read the state. */ "enabled": true}'),
+  ):
+    assert extract_prose.source_sections(Path(name), source) == ["Read the state."]

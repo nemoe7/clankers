@@ -126,9 +126,8 @@ function escapeHtml(value) {
 }
 
 function viewerPage(message) {
-  // The viewer root is the main page of the installed app: it carries the manifest link and a
-  // URL box, so the page installs and opens a preview without a hand-made query string. The
-  // root once answered a bare text line, so the page had no head and no manifest landed.
+  // The installed app needs the viewer root's HTML head and manifest link.
+  // Its URL box opens a preview without a manual query string. A plain-text root cannot provide the manifest.
   const reason = message ? `<p class="reason">${escapeHtml(message)}</p>` : '';
   return `<!doctype html>
 <html lang="en">
@@ -178,9 +177,8 @@ as an app from the browser menu to reopen the preview in one tap.</p>
 }
 
 function decodeBody(buffer, encoding) {
-  // The proxy forwards the browser's Accept-Encoding, so an upstream page often arrives
-  // compressed. The rewrite reads plain HTML, so decode it here. A body that will not decode
-  // returns null and passes through untouched.
+  // Forwarding the browser's Accept-Encoding can produce compressed upstream HTML.
+  // Decode it before rewriting. Return null on decode failure so the original body passes through unchanged.
   const name = String(encoding || '').trim().toLowerCase();
   if (!name || name === 'identity') return buffer;
   try {
@@ -197,17 +195,15 @@ function manifestJson() {
   return JSON.stringify({
     name: 'Arena preview',
     short_name: 'Preview',
-    // Every launch starts on the home page: the start URL once carried the preview origin, so
-    // opening the installed app reopened a sandbox whose address had died, and the owner had to
-    // reinstall to escape it. The share sheet and the URL box pick a preview from there, and a
-    // fixed id keeps one installed app across those changes.
+    // The app opens the home page. Embedding a preview origin in `start_url` trapped the owner on a dead sandbox and forced reinstallation.
+    // The share sheet and URL box choose previews there, while a fixed id keeps the same installed app across preview changes.
     id: '/',
     start_url: '/',
     scope: '/',
     display: 'standalone',
     background_color: '#1f2430',
     theme_color: '#1f2430',
-    // A launch reuses the open window, so the preview stays in-page.
+    // Opening the app reuses the open window, so the preview stays in-page.
     launch_handler: { client_mode: 'navigate-existing' },
     // The installed app takes a shared link. Android has no per-link "open with"
     // entry for a web app, so the share sheet is the system path in.

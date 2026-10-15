@@ -412,9 +412,8 @@ function bytes(value) {
   return `${(value / 1000000).toFixed(2)} MB`;
 }
 function stampDate(value) {
-  // The state surface cuts stamps to seconds and drops the UTC offset. Date would read
-  // those digits as local time and show the server's wall clock in every zone, so a
-  // seconds-only ISO stamp is pinned to UTC before the local formatter sees it.
+  // The state omits the UTC offset and keeps seconds only. Date would interpret those digits as local time.
+  // Pin seconds-only ISO stamps to UTC before local formatting so each zone shows the correct time.
   return new Date(
     typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(value)
       ? `${value}Z`
@@ -540,8 +539,8 @@ function showHistory(notes) {
     receiptId.textContent = item.id.slice(0, 6);
     receiptId.title = item.id;
     receiptId.dataset.full = item.id;
-    // Sent until the agent reads it, Seen once an explicit receipt has stamped seen_at, Said once answered.
-    // The state is a coloured dot. The word lives in its title and aria-label instead of the line.
+    // The dot shows Sent until the agent records seen_at, Seen after that receipt, and Said after an answer.
+    // The title and aria-label carry the words. The receipt line carries the dot.
     const state = item.acknowledged_at ? 'said' : item.seen_at ? 'seen' : 'sent';
     node.dataset.state = state;
     const receiptDot = document.createElement('span');
@@ -560,9 +559,8 @@ function showHistory(notes) {
     const separator = document.createElement('span');
     separator.className = 'receipt-sep';
     separator.textContent = ' · ';
-    // A message that became a task says so, so a line that was read is never mistaken for a line
-    // that was dropped. The task ID rides in the marker and in its title. The owner named the
-    // marker with the ID between `Task` and `added`.
+    // Mark messages that become tasks so the owner can distinguish a read message from a dropped one.
+    // Put the task ID between `Task` and `added`, and include it in the marker's title.
     const receiptTask = document.createElement('span');
     receiptTask.className = 'receipt-task';
     // The ID rides in a code element, linked like an ack reference,
@@ -591,10 +589,8 @@ function showHistory(notes) {
       receiptId, separator, receiptDot, receiptState,
       ...(names.length ? [receiptFile] : []), ...(item.task_id ? [receiptTask] : [])
     );
-    // One answer style for both acknowledgement kinds: rendered HTML when the server sent it, and
-    // otherwise the text in a paragraph, which inherits pre-wrap from .message p.
-    // A second ack appends a block under the first answer instead of replacing it. Each block
-    // keeps its own kind and carries its stamp in its title.
+    // Both acknowledgement kinds use server HTML when available, or a text paragraph with .message p pre-wrap.
+    // Append later answers below earlier ones. Each block retains its kind and timestamp title.
     const answer = node.children[1];
     if (item.ack_text) {
       answer.className = item.ack_kind === 'reply' ? 'answer reply message-text' : 'answer reply';
@@ -627,9 +623,8 @@ function showHistory(notes) {
       answer.replaceChildren();
     }
   }
-  // The log renders from the notes the poll carries, so a node the state no longer holds goes with
-  // it. The filter's counts read the same map, and a stale row would answer a filter for a message
-  // that is not there any more.
+  // Remove nodes absent from the polled notes so stale rows cannot match the log filter.
+  // The filter counts read the same node map.
   const current = new Set(notes.map(item => item.id));
   for (const id of [...messageNodes.keys()]) if (!current.has(id)) messageNodes.delete(id);
   renderHistoryWindow(notes);
@@ -639,9 +634,8 @@ function showHistory(notes) {
   updateLogJump();
 }
 
-// The rendered window is the newest `historyShown` messages. Growing it is the scroll-up
-// path: the older rows land above the viewport, so the scroll offset moves down by the
-// height they add and the owner keeps the message they were reading.
+// The window shows the newest `historyShown` messages. Scrolling up adds older rows above the viewport.
+// Offset the scroll by their added height so the owner keeps the same message in view.
 function renderHistoryWindow(notes) {
   const history = $('#history');
   history.replaceChildren(...notes.slice(-historyShown).map(item => messageNodes.get(item.id)));
@@ -658,10 +652,8 @@ function loadOlderMessages() {
   applyLogSearch();
   history.scrollTop += history.scrollHeight - before;
 }
-// The log's own place: a filter change can make the view shorter, and the browser clamps the
-// scroll without putting it back, so the next filter that shows rows again would leave the owner
-// at the very first message. Being at the end is remembered and restored. Scrolled away from it,
-// the owner keeps the position they chose.
+// Filters can shorten the log and clamp its scroll position, then leave the next view at the first message.
+// Restore the end when the owner followed it. Otherwise preserve the position they chose.
 let logPinned = true;
 const historyAtEnd = history =>
   history.scrollHeight - history.scrollTop - history.clientHeight < 80;
@@ -671,9 +663,8 @@ $('#history').addEventListener('scroll', () => {
   if (history.scrollTop < 80) loadOlderMessages();
   updateLogJump();
 });
-// The jump bar is the remedy for a log that is longer than its panel: it appears only while the
-// log is scrolled away from its end, and it takes the log back there. An empty log has nothing to
-// jump to, so it stays hidden then as well.
+// Show the jump bar only when a nonempty log extends beyond its panel and the owner scrolls away from the end.
+// The jump returns to that end. An empty log has no destination.
 function updateLogJump() {
   $('#log-newest').hidden = logPinned || !messageNodes.size;
 }
@@ -703,10 +694,8 @@ function splitMatches(plain, query) {
   parts.push(plain.slice(start));
   return parts;
 }
-// The search marks the text of a row at any depth: a rendered answer keeps its markup, so its
-// words sit in nested elements. Each mark from an earlier search is unwrapped first, so a
-// changed or cleared query leaves no stale mark behind. Returns true when the node's own
-// children changed.
+// Search nested text nodes because rendered answers contain markup. Unwrap old marks before applying a changed or cleared query.
+// Return true when the node's own children change, and preserve the answer markup.
 function markNode(node, query) {
   const kids = Array.from(node.childNodes || node.children || []);
   if (!kids.length) {
@@ -750,9 +739,8 @@ function markNode(node, query) {
   return changed;
 }
 function markRowMatches(node, query) {
-  // The search keeps a row for its match, and the match itself wears a mark, so the eye
-  // lands on the word at once. The mark covers the message text, whether plain or rendered,
-  // and the receipt's ID.
+  // Keep rows that match the query, and mark the matching words so the owner can find them immediately.
+  // Search plain or rendered message text and the receipt ID.
   const receipt = node.children[2];
   markNode(node.children[0], query);
   if (receipt && receipt.children[0]) markNode(receipt.children[0], query);
@@ -792,9 +780,8 @@ function renderState() {
   const state = getState();
   if (!state) return;
   if (state.token) writeToken = state.token;
-  // The page keeps its own copy of what the poll delivered, so the save button still has something
-  // to write after a wipe has emptied the server. Notes and tasks only: reports are re-published
-  // from their sources, and the copy exports notes, tasks and report answers for the unified importer.
+  // Cache polled notes and tasks so the save button works after a server wipe. Publish reports again from their sources.
+  // The copy exports notes, tasks, and report answers for the unified importer.
   save('state-cache', JSON.stringify({ notes: lastState.notes, tasks: lastState.tasks }));
   // A quiet note informs the agent, not the log: it stays in the cache and the copy state
   // while the log and its tally carry the owner-facing messages only.
@@ -1056,9 +1043,8 @@ function collect(root) {
   }
   return answers;
 }
-// Labels come from report text, so a selector built from one can break on a
-// backslash or bracket. Equality on the dataset value needs no escaping. The
-// attribute name in the selector is a caller constant, never the label.
+// Report labels can contain backslashes or brackets, so compare dataset values instead of building selectors from labels.
+// Only the caller's constant attribute name enters the selector. Label text needs no escaping.
 function byDataAttr(root, key, value) {
   if (!root || !root.querySelectorAll) return null;
   for (const el of root.querySelectorAll(`[data-${key}]`)) {
@@ -1136,15 +1122,8 @@ async function copyCode(button) {
   button.dataset.state = words ? 'good' : 'bad';
   setTimeout(() => rest(button), 1500);
 }
-// A click quotes the note back: the composer takes a `RE: <shortid>` line and the caret lands
-// after it. A draft already written is kept below a blank line rather than lost, and a first line
-// that is already a quote is retargeted, so quoting a second note replaces the prefix instead of
-// stacking two. One gesture serves every device, so a phone with no ctrl key quotes like a desk
-// does, and no copy path sits beside it. The quote lands in the
-// composer's own tab, and the box is regrown after the value changes: measured while its panel is
-// hidden, the textarea collapses to its border and the quote shows cut off. The write mode comes
-// back for the same reason, since a preview would leave the quote off screen behind the rendered
-// draft.
+// A click inserts `RE: <shortid>`, moves the caret after it, preserves the draft below a blank line, and replaces an existing quote prefix. The same gesture serves phones and desktops without Ctrl or a separate copy action.
+// Reveal the composer's tab, restore write mode, and regrow the textarea after changes because hidden panels collapse its height and preview mode hides the quote.
 function quoteId(id, control) {
   showTab(tabs[0]);
   const rest = note.value.replace(/^RE: \S+\n/, '');
@@ -1262,10 +1241,10 @@ function showClock() {
 showClock();
 setInterval(showClock, 1000);
 // Copy state exports notes, tasks and report answers for `import-state`. The server
-// builds the NDJSON and one fetch carries the copy.
+// builds the NDJSON and one request carries the copy.
 const copyStateButton = $('#copy-state');
 copyStateButton.addEventListener('click', async () => {
-  // The server holds the same NDJSON the save file carries, so one fetch carries the copy.
+  // The server holds the same NDJSON the save file carries, so one request carries the copy.
   let payload = null;
   try { payload = await (await request('/api/copy-state')).json(); }
   catch { payload = null; }
@@ -1290,9 +1269,8 @@ function savedAnswers(id) {
   try { return JSON.parse(stored(`answers:${id}`) || 'null'); }
   catch { return null; }
 }
-// One grammar for the report lines, matching the log receipts: object, then the state dot, then
-// the time, all joined by the dot, no sentences. The receipt prints the latest of the three
-// stamps, and the earlier ones wait in the object's title.
+// Use the log's receipt grammar: object, state dot, and time, joined by dots without sentences.
+// Show the latest of the three timestamps in the receipt and retain earlier timestamps in the object's title.
 function submissionParts(report) {
   if (!report?.latest_answer_at) return '';
   return ` · Submission ${report.latest_answer_id.slice(0, 6)}`;
@@ -1306,8 +1284,8 @@ function submissionState(report) {
   if (report.latest_answer_acknowledged_at) return 'said';
   return submissionSeenAt(report) ? 'seen' : 'sent';
 }
-// An ack the owner has not opened yet: the answer carries an agent receipt, and the report has
-// not been opened since. The star and the tab dot carry it, and opening the report clears it.
+// Keep an agent reply unread until the owner opens the report after that reply.
+// The star and tab dot carry this state, and opening the report clears it.
 function ackUnread(report) {
   return Boolean(report?.latest_answer_acknowledged_at &&
     (!report.ack_seen_at || report.ack_seen_at < report.latest_answer_acknowledged_at));
@@ -1418,10 +1396,8 @@ async function loadReport(force = false) {
   if (id && heldReport && heldReport.id === id &&
       !(getState()?.reports || []).some(report => report.id === id)) return;
   const sequence = ++reportRequest;
-  // The reports panel is the element that scrolls, and replacing the report collapses its content, so
-  // the browser clamps the panel to the top before the new HTML arrives. An update to the report being
-  // read keeps the owner's place. A report the owner switched to starts at its own top. Owner's bug
-  // report, the same class as the seen stamp.
+  // Replacing report HTML collapses the scrolling panel and clamps it to the top.
+  // Preserve position for an update to the current report. Open a different report at its own top.
   const panel = $('#reports-panel');
   const place = panel.scrollTop;
   const updating = $('#report').dataset.reportId === id;
@@ -1513,8 +1489,8 @@ $('#report-form').addEventListener('submit', async event => {
     }
   } finally { button.disabled = false; }
 });
-// The Tasks tab is the agent's own status: two divs, written by the CLI, read on the same poll.
-// A row is built from the record with textContent, so a hostile title stays text.
+// The CLI writes task status, and the Tasks tab reads it on the state poll.
+// Build rows with textContent so hostile titles remain text.
 function taskRow(task) {
   const item = document.createElement('li');
   item.className = 'task';
@@ -1542,13 +1518,8 @@ function taskRow(task) {
   }
   const linked = task.answers && task.answers.length ? task.answers : null;
   if (task.details.length || linked) {
-    // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
-    // and the whole list stays scannable. Native element: no script, and keyboard reachable.
-    // The details inside it are a real <ul>, so each carries its own
-    // marker and reads as a list of separate statements rather than lines inside one block.
-    // The linked receipts ride inside the same collapse, hidden until expanded, on owner note:
-    // the row stays clean when the receipt is not needed. Their text keeps every word, because
-    // the 120 character step cap governs the manual steps alone, never a linked answer.
+    // Native <details> keeps long tasks keyboard-accessible in one collapsed row without script, and its <ul> gives each detail a separate marker. Collapse linked receipts with that row so they appear only on expansion.
+    // Keep every word in linked answers because the 120-character step cap applies only to manual steps.
     const details = document.createElement('details');
     details.className = 'task-details';
     const summary = document.createElement('summary');
@@ -1567,8 +1538,8 @@ function taskRow(task) {
       parts.push(list);
     }
     if (linked) {
-      // The row builds this block from the record, so hostile answer text stays text. The block
-      // is read-only, and the manual details above keep every edit the CLI writes.
+      // Build linked answers with textContent so hostile text remains text.
+      // This block permits no edits. The manual details above retain every CLI edit.
       const answers = document.createElement('div');
       answers.className = 'task-answers';
       answers.replaceChildren(...linked.map((answer) => {
@@ -1593,11 +1564,8 @@ function taskRow(task) {
   return item;
 }
 
-// Tasks re-render only when the payload changed, the way the report list already guards on its own
-// signature. Without this every poll rebuilds the rows and snaps an opened <details> shut, which
-// would make the collapse below useless three seconds after the owner clicked it.
-// A symbol rather than null: JSON.stringify of a missing task list is undefined, and undefined
-// normalised to null would equal a null sentinel and skip the first render entirely.
+// Guard task rendering with a payload signature because rebuilding rows on every poll closes open <details> elements.
+// Use a symbol sentinel: JSON.stringify of a missing list yields undefined, and normalizing it to null must not skip the first render.
 let taskSignature = Symbol('tasks not yet rendered');
 // The filter lives beside the payload: a change re-renders the last tasks without
 // waiting for a poll, and a later poll renders with the filter still applied.
@@ -1636,11 +1604,8 @@ function renderTasks(tasks) {
   const visible = task =>
     (taskTypeFilter === 'all' || (task.type || 'unspecified') === taskTypeFilter)
     && (!taskSearch || taskHaystack(task).includes(taskSearch));
-  // The first upcoming task no blocked mark holds gets a div of its own, so what the agent can
-  // start next is visible without reading down a list. A task waiting on a report sorts first
-  // in its group and would otherwise take that seat. It stays in Upcoming as well: removing it
-  // would leave a hole in the authoritative order, and the copy button hands both stored
-  // sections over as they are.
+  // Show the first unblocked upcoming task separately so the agent can identify its next action. Report-blocked tasks may sort first in the stored list.
+  // Keep the task in Upcoming too, preserving authoritative order and the copy button's two stored sections.
   const shownUpcoming = tasks.upcoming.filter(visible);
   const head = shownUpcoming.find(task => !task.blocked);
   $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
@@ -1661,13 +1626,8 @@ $('#task-search').addEventListener('input', () => {
   if (lastTasksPayload) renderTasks(lastTasksPayload);
 });
 const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#downloads-tab')];
-// The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
-// something there is unread, not how many reports exist. A report is unread until the owner has
-// been shown it, and that reading is stamped on the report itself rather than kept in browser
-// storage, so it survives a cleared browser, holds across browsers, and tells the agent the
-// report was read instead of leaving it to infer one.
-// The agent receipt and the ack-open stamp move on the server side while the owner reads, and a
-// moved signature would rebuild the select under them, so the signature leaves both out.
+// The tab pip shows whether any report remains unread, independently of the report count. Server-side read stamps survive browser resets, synchronize browsers, and tell the agent about each read.
+// Exclude agent receipts and ack-open stamps from the list signature so server updates cannot rebuild the select while the owner reads.
 function reportsSignature(reports) {
   return JSON.stringify(reports, (key, value) =>
     key === 'agent_seen_at' || key === 'ack_seen_at' ? undefined : value);
@@ -1688,9 +1648,8 @@ function updateReportPip(reports) {
   pip.setAttribute('aria-label', unseen.length ? 'Unread report' : 'No unread reports');
   $('#mark-report-acks-seen').disabled = ackBatchPending || !reports.some(ackUnread);
 }
-// A report counts as read when the browser has shown it: scrolled to its end, or, for a report
-// that fits the panel with nothing to scroll, held in view for one second on owner direction,
-// so a flick past it stamps nothing. Republishing clears the stamp, so changed text is unread.
+// Mark a report read at its scroll end, or after one second in view if it fits the panel. A quick pass must not mark it.
+// Republishing clears the stamp so changed text remains unread.
 const REPORT_READ_DWELL = 1000;
 let readPending = null;
 function clearReadTimer() {
@@ -1759,9 +1718,8 @@ $('#mark-report-acks-seen').addEventListener('click', async () => {
     updateReportPip(getState()?.reports || []);
   }
 });
-// The owner's view stamps the look, so agent changes do not update an open report. Only a page
-// the owner can see stamps: a report left open in a background tab clears its stamp, because a
-// look needs the screen.
+// View stamps let agent changes preserve the report while the owner reads it.
+// Clear the stamp in a background tab because only a visible page can record a view.
 const REPORT_VIEW_MS = 30 * 1000;
 const reportView = { id: null, at: 0 };
 async function markReportViewed(id, active = true) {
@@ -1786,8 +1744,7 @@ function checkReportRead() {
   if (shown && !document.hidden) void markReportViewed(shown);
   const id = panel.hidden ? null : unseenReportId();
   const viewport = panel.clientHeight;
-  // A panel with no height yet has no report in it to read, and a report still being fetched is
-  // not one either: reading is what this stamps, so it waits until there is something to look at.
+  // Wait for visible report content before recording a read. Zero-height panels and pending report requests provide nothing to read.
   if (!id || !viewport || !panel.scrollHeight) { clearReadTimer(); return; }
   if (panel.scrollHeight > viewport + 1) {
     // There is more report than panel, so reaching the end is the gesture that reads it.
@@ -1820,8 +1777,7 @@ function showTab(tab) {
   }
   updateReportTop();
   if (tab === tabs[1]) {
-    // Opening the tab is reading it, so the marker is written before the poll that recomputes the
-    // pip: it goes out on this visit rather than surviving until the next one.
+    // Record the tab visit before the poll recomputes its pip so the marker clears during this visit.
     refreshState();
     loadReport();
   } else {
@@ -1830,9 +1786,8 @@ function showTab(tab) {
     releaseHeldReport(null);
   }
 }
-// A reference link to a task lights the row it lands on. The mark leaves on its own after a
-// short delay or the moment the reader opens another tab. Only the marker comes and goes:
-// the row, its data and its order never change.
+// Highlight the task row reached through a reference link, then clear the mark after a short delay or a tab change.
+// Keep the row, its data, and its order unchanged.
 let taskHighlightRow = null;
 let taskHighlightTimer = 0;
 
@@ -1922,8 +1877,8 @@ for (const tab of tabs) {
     next.focus();
   });
 }
-// The server queues URLs, claims work and stores bytes. Only the owner's browser contacts remote
-// sites. The proxy checkbox is saved on each job, not a global preference or an automatic fallback.
+// The server queues URLs, claims work, and stores bytes. Only the owner's browser contacts remote sites.
+// Store the proxy choice per job. It supplies no global preference or automatic fallback.
 function downloadName(url) {
   const part = new URL(url).pathname.split('/').filter(Boolean).at(-1) || 'download.bin';
   let name;
@@ -1973,7 +1928,7 @@ function downloadRow(item) {
     row.append(where);
   }
   // The owner's ✕ drops a record and the bytes it staged. It arms on the first click the way
-  // the report delete does, so a stray click never removes a download.
+  // report removal does, so a stray click never removes a download.
   if (item.approval !== 'pending' && !item.pending) {
     const drop = document.createElement('button');
     drop.type = 'button';
@@ -2039,7 +1994,7 @@ function approvalRow(item) {
       } catch (error) {
         $('#fetch-status').textContent = `Decision not confirmed: ${error.message}. Check the list before trying again.`;
       } finally {
-        await refreshState(); // A lost response may still have decided the request.
+        await refreshState(); // The server can accept a decision even when its response goes missing.
         buttons.forEach(control => { control.disabled = false; });
       }
     });
@@ -2049,10 +2004,8 @@ function approvalRow(item) {
   row.append(url, meta, actions);
   return row;
 }
-// The composer footer shows the key the userscript holds, so a stale key is visible at once.
-// Seven characters name the key without printing it in full into the log, and the hour names
-// its freshness. The host and the full stamp ride the tooltip, which keeps the line inside the
-// width a phone leaves.
+// Show seven characters of the userscript key and its freshness hour so a stale key is visible without exposing the full key in the log.
+// Keep the host and full timestamp in the tooltip so the footer fits a phone.
 function renderAgentKey(record) {
   const line = $('#agent-key');
   if (!record) {
@@ -2227,9 +2180,8 @@ $('#next-report').addEventListener('click', () => {
   return reportSelectionChanged();
 });
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
-// A delete asks for a second click against the same report, the way the log's armed actions do,
-// and the arm expires so a stray first click does not sit armed forever. The server keeps the
-// report's answers and its source file. Only the tab row goes.
+// Removing a report requires a second click on that report before the arm expires, preventing a stray click from remaining armed.
+// Remove only the tab row. The server retains the answers and source file.
 let unpublishArmed = null;
 let unpublishTimer = null;
 function clearUnpublishArm() {
@@ -2306,9 +2258,8 @@ $('#unpublish-report').addEventListener('click', async () => {
     $('#report-status').textContent = `Delete failed: ${error.message}`;
   } finally { button.disabled = false; }
 });
-// The Skip poll press toggles a one-shot flag the agent's poll consumes: the wait ends at
-// once, and no note lands in the log for a later turn to misread. A second press takes the
-// skip back, so an early press never forces the wait to end.
+// Skip poll toggles a one-shot flag that ends the agent's wait without leaving a note for a later turn.
+// A second press cancels the skip, so an early press cannot force the wait to end.
 function paintSkipPoll(skipPoll) {
   const button = $('#skip-poll');
   const armed = Boolean(skipPoll);
@@ -2338,7 +2289,7 @@ $('#skip-poll').addEventListener('click', async () => {
 });
 refreshState();
 setInterval(refreshState, 3000);
-// The wait timer repaints between state refreshes, so the seconds move without a fetch.
+// The wait timer repaints between state refreshes, so the seconds move without a request.
 setInterval(paintConnection, 1000);
 // Render mints each age label once, so a long-open page keeps a stale minute count.
 // A half-minute timer repaints every receipt age from its stored stamp.

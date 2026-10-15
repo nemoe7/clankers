@@ -6,6 +6,7 @@ import io
 import json
 import subprocess
 import tokenize
+from functools import lru_cache
 from pathlib import Path
 
 USERSCRIPT_SUFFIX = ".user.js"
@@ -26,7 +27,8 @@ COMMENT_SUFFIXES = {
   ".toml",
   ".yml",
 }
-SLASH_SUFFIXES = {".cjs", ".css", ".js", ".jsonc"}
+JAVASCRIPT_SUFFIXES = {".cjs", ".js"}
+SLASH_SUFFIXES = {".css", ".jsonc"}
 HTML_SUFFIXES = {".html", ".svg"}
 HASH_SUFFIXES = {".ini", ".sh", ".toml", ".yml"}
 SPECIAL_CODE_NAMES = {"Dockerfile", "arena-preview"}
@@ -83,6 +85,33 @@ def joined_comments(comments: list[str]) -> str:
 def python_prose(source: str) -> str:
   """Collect Python comments and docstrings from source text."""
   return joined_comments(python_sections(source))
+
+
+@lru_cache(maxsize=128)
+def javascript_comments(
+  source: str, skip_metadata: bool = False
+) -> tuple[tuple[str, int, int], ...]:
+  """Collect JavaScript comments and their source lines with the parser."""
+  result = subprocess.run(
+    ["node", str(Path(__file__).with_name("javascript-comments.cjs"))],
+    input=source,
+    capture_output=True,
+    text=True,
+    check=True,
+  )
+  comments = []
+  in_metadata = False
+  for text, first, last in json.loads(result.stdout):
+    clean = "\n".join(
+      line.strip().lstrip("*").strip() for line in text.splitlines()
+    ).strip()
+    if skip_metadata and clean == USERSCRIPT_HEADER_START:
+      in_metadata = True
+    elif skip_metadata and clean == USERSCRIPT_HEADER_END:
+      in_metadata = False
+    elif not in_metadata:
+      comments.append((clean, first, last))
+  return tuple(comments)
 
 
 def slash_sections(source: str, skip_metadata: bool = False) -> list[str]:
@@ -272,8 +301,14 @@ def source_sections(path: Path, source: str) -> list[str]:
   """Collect ordinary comments and docstrings from one tracked code file."""
   if path.suffix == ".py":
     return python_sections(source)
-  if path.name.endswith(USERSCRIPT_SUFFIX):
-    return slash_sections(source, skip_metadata=True)
+  if path.suffix in JAVASCRIPT_SUFFIXES:
+    return [
+      text
+      for text, _, _ in javascript_comments(
+        source, path.name.endswith(USERSCRIPT_SUFFIX)
+      )
+      if text
+    ]
   if path.suffix in SLASH_SUFFIXES:
     return slash_sections(source)
   if path.suffix in HTML_SUFFIXES:
@@ -292,7 +327,9 @@ def source_prose(path: Path, source: str) -> str:
 
 def userscript_prose(source: str) -> str:
   """Collect non-metadata comments from one userscript source."""
-  return slash_prose(source, skip_metadata=True)
+  return joined_comments(
+    [text for text, _, _ in javascript_comments(source, True) if text]
+  )
 
 
 def slash_comment_lines(source: str, skip_metadata: bool = False) -> set[int]:
@@ -441,8 +478,14 @@ def comment_lines(path: Path, source: str) -> set[int]:
       for token in tokenize.generate_tokens(io.StringIO(source).readline)
       if token.type == tokenize.COMMENT and not token.string.startswith("#!")
     }
-  if path.name.endswith(USERSCRIPT_SUFFIX):
-    return slash_comment_lines(source, skip_metadata=True)
+  if path.suffix in JAVASCRIPT_SUFFIXES:
+    return {
+      line
+      for _, first, last in javascript_comments(
+        source, path.name.endswith(USERSCRIPT_SUFFIX)
+      )
+      for line in range(first, last + 1)
+    }
   if path.suffix in SLASH_SUFFIXES:
     return slash_comment_lines(source)
   if path.suffix in HTML_SUFFIXES:
