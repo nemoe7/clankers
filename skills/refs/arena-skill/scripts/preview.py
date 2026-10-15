@@ -5639,9 +5639,14 @@ def image_payload(path: Path) -> tuple:
       f"{path} is {size} bytes; the data URI cap is {IMAGE_DATA_URI_MAX_BYTES} bytes"
     )
   try:
-    data = path.read_bytes()
+    with path.open("rb") as image:
+      data = image.read(IMAGE_DATA_URI_MAX_BYTES + 1)
   except OSError as error:
     raise ValueError(f"Cannot read {path}: {error.strerror or error}") from None
+  if len(data) > IMAGE_DATA_URI_MAX_BYTES:
+    raise ValueError(
+      f"{path} exceeds the data URI cap of {IMAGE_DATA_URI_MAX_BYTES} bytes"
+    )
   if data.startswith(b"\x89PNG\r\n\x1a\n"):
     mime = "image/png"
   elif data.startswith(b"\xff\xd8\xff"):

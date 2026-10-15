@@ -2926,6 +2926,26 @@ def test_image_data_uri_refuses_a_file_over_the_cap():
     assert "cap" in cli.stdout
 
 
+def test_image_payload_refuses_growth_after_the_size_check(tmp_path, monkeypatch):
+  image = tmp_path / "growing.png"
+  image.write_bytes(b"\x89PNG\r\n\x1a\n")
+  original_open = Path.open
+
+  def grow_before_open(path, mode="r", *args, **kwargs):
+    if path == image and mode == "rb":
+      with original_open(path, "ab") as output:
+        output.write(b"x" * preview.IMAGE_DATA_URI_MAX_BYTES)
+    return original_open(path, mode, *args, **kwargs)
+
+  monkeypatch.setattr(Path, "open", grow_before_open)
+  try:
+    preview.image_payload(image)
+  except ValueError as error:
+    assert "cap" in str(error)
+  else:
+    raise AssertionError("Image growth bypassed the byte cap")
+
+
 def test_legacy_note_import():
 
   with tempfile.TemporaryDirectory() as legacy_dir:

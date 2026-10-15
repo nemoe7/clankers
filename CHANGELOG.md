@@ -26,6 +26,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Open recent-preview lists clear at each PHT reset boundary.
 
+- Image reads enforce the byte cap when a file grows after the size check.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
