@@ -46,6 +46,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### house
+
+- The root license text moves to the nemoe7 Noncommercial and Public-Interest License 1.2.0, fetched verbatim from nemoe7/license.
+
 #### maintenance
 
 - The contract job installs the validation dependencies, so the version gates it now runs find their imports.
