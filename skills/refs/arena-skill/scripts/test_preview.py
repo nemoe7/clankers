@@ -586,7 +586,9 @@ def test_http_boundaries():
     assert re.search(
       r"\.select-wrap::after\{[^}]*border-top:5px solid var\(--muted\)", css
     )
-    assert re.search(r"\.select-wrap select\{appearance:none;padding-right:26px;\}", css)
+    assert re.search(
+      r"\.select-wrap select\{appearance:none;padding-right:26px;\}", css
+    )
     # The green send flash is gone (owner: the footnote under the report covers it), so neither the
     # page nor the client script carries report-receipt. The footnote element stays.
     page = (preview.ASSETS / "index.html").read_text()
@@ -1084,8 +1086,7 @@ def test_http_boundaries():
       )
       assert (
         ".report-toolbar{gap:8px;}"
-        ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}}"
-        in page
+        ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}}" in page
       ), "the phone block still ends with the select wrap rule"
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page

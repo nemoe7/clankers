@@ -1540,6 +1540,9 @@ let taskSignature = Symbol('tasks not yet rendered');
 // The filter lives beside the payload: a change re-renders the last tasks without
 // waiting for a poll, and a later poll renders with the filter still applied.
 let taskTypeFilter = 'all';
+// The search reads like the filter: a keystroke re-renders the last payload,
+// and a later poll keeps both applied.
+let taskSearch = '';
 let lastTasksPayload = null;
 
 function renderTasksIfChanged(tasks) {
@@ -1547,6 +1550,11 @@ function renderTasksIfChanged(tasks) {
   if (signature === taskSignature) return;
   taskSignature = signature;
   renderTasks(tasks);
+}
+
+function taskHaystack(task) {
+  return [task.title, task.id, task.type || 'unspecified', ...(task.details || [])]
+    .join(' ').toLowerCase();
 }
 
 function renderTasks(tasks) {
@@ -1564,7 +1572,8 @@ function renderTasks(tasks) {
   }
   status.textContent = `Updated ${time(tasks.updated_at)}`;
   const visible = task =>
-    taskTypeFilter === 'all' || (task.type || 'unspecified') === taskTypeFilter;
+    (taskTypeFilter === 'all' || (task.type || 'unspecified') === taskTypeFilter)
+    && (!taskSearch || taskHaystack(task).includes(taskSearch));
   // The first upcoming task no blocked mark holds gets a div of its own, so what the agent can
   // start next is visible without reading down a list. A task waiting on a report sorts first
   // in its group and would otherwise take that seat. It stays in Upcoming as well: removing it
@@ -1583,6 +1592,10 @@ function renderTasks(tasks) {
 
 $('#task-type-filter').addEventListener('change', () => {
   taskTypeFilter = $('#task-type-filter').value;
+  if (lastTasksPayload) renderTasks(lastTasksPayload);
+});
+$('#task-search').addEventListener('input', () => {
+  taskSearch = $('#task-search').value.trim().toLowerCase();
   if (lastTasksPayload) renderTasks(lastTasksPayload);
 });
 const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#downloads-tab')];

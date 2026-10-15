@@ -667,6 +667,45 @@ test('preview client', async (t) => {
     await refresh();
   });
 
+  await t.test("A search input narrows the task rows beside the type filter", async () => {
+    const prior = state.tasks;
+    const stamp = new Date().toISOString();
+    state.tasks = {
+      finished: [],
+      upcoming: [
+        { id: 'alpha-task', title: 'Alpha wiring', details: ['trace the proxy'],
+          status: 'upcoming', order: 1, updated_at: stamp },
+        { id: 'beta-task', title: 'Beta docs', details: ['rewrite the changelog'],
+          status: 'upcoming', order: 2, updated_at: stamp },
+      ],
+      updated_at: stamp,
+    };
+    await refresh();
+    const search = get('#task-search');
+    search.value = 'proxy';
+    search.events.input();
+    assert.equal(get('#tasks-current-body').children[0].title, 'alpha-task',
+      'a detail word matches its task into the head seat');
+    assert.equal(get('#tasks-upcoming-body').children.length, 0,
+      'the filtered list shows the head only in its own div');
+    search.value = 'BETA';
+    search.events.input();
+    assert.equal(get('#tasks-current-body').children[0].title, 'beta-task',
+      'the query reads case-insensitive');
+    search.value = 'zzz';
+    search.events.input();
+    assert.equal(get('#tasks-current-body').children.length, 0, 'no match leaves the head empty');
+    assert.equal(get('#tasks-upcoming-body').children.length, 0, 'no match leaves the list empty');
+    search.value = '';
+    search.events.input();
+    assert.equal(get('#tasks-current-body').children[0].title, 'alpha-task',
+      'clearing the query restores the head');
+    assert.equal(get('#tasks-upcoming-body').children.length, 1,
+      'clearing the query restores the rest of the list');
+    state.tasks = prior;
+    await refresh();
+  });
+
   await t.test("A blocked task never takes the Current seat while another task is open", async () => {
     // A report-linked task sorts first in its group, so the head alone would hand the Current div
     // to work the agent cannot start. The first unblocked task takes the seat instead.
@@ -3326,7 +3365,9 @@ test('the toolbar and filter controls share the ui control sizes', () => {
   // A select keeps the message search's own height, so header and toolbar controls read as one row.
   const heightOf = body => (body.match(/(?<!min-)height:\s*([^;]+);/) || [])[1];
   const selectRule = rules.find(match => match[1].trim() === 'select');
-  const searchRule = rules.find(match => match[1].trim() === '#log-search');
+  const namesSelector = (match, name) =>
+    match[1].split(',').map(part => part.trim()).includes(name);
+  const searchRule = rules.find(match => namesSelector(match, '#log-search'));
   assert.equal(heightOf(selectRule[2]), heightOf(searchRule[2]),
     'the select height follows the message search height');
   // The task filter joins the report select's wrap, chevron and label included.
