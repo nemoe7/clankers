@@ -237,7 +237,7 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       [
         (name, value)
         for name, values in sorted(params.items())
-        if name not in ("key", "path")
+        if name not in ("key", "path", "failed")
         for value in values
       ]
     )
@@ -254,7 +254,8 @@ class ExtensionHandler(BaseHTTPRequestHandler):
       if status != 200:
         self._send(status, body)
         return
-      tail = github_api.log_tail(body)
+      failed = params.get("failed", [""])[0].strip().lower() in ("1", "true", "yes")
+      tail = github_api.log_tail(body, only_failed=failed)
       if tail is None:
         self._send_json(502, {"error": "the log download was not a zip archive"})
         return

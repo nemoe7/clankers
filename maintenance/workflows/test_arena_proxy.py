@@ -31,6 +31,9 @@ def log_zip():
   with zipfile.ZipFile(stream, "w") as archive:
     archive.writestr("1_Set up job.txt", "setup line one\nsetup line two\n")
     archive.writestr("2_Run tests.txt", "test line one\ntest line two\n")
+    archive.writestr(
+      "3_Run gate.txt", "gate line one\n##[error]the gate check failed\n"
+    )
   return stream.getvalue()
 
 
@@ -269,6 +272,17 @@ def test_gh_folds_the_run_log_tail_into_the_route(tmp_path):
       call(handle.port, f"/v1/gh?key={KEY}&path=repos/o/r/actions/runs/2/logs")[0]
       == 404
     )
+
+
+def test_gh_failed_param_keeps_only_the_error_steps(tmp_path):
+  with backend(tmp_path) as handle:
+    logs = f"/v1/gh?key={KEY}&failed=1&path=repos/o/r/actions/runs/1/logs"
+    status, body = call(handle.port, logs)
+    assert status == 200
+    assert "3_Run gate.txt" in body and "##[error]" in body
+    assert "1_Set up job.txt" not in body and "test line two" not in body
+    # The control parameter never reaches the GitHub query.
+    assert all("failed" not in seen["path"] for seen in handle.stub.seen)
 
 
 def test_fetch_returns_text_for_text_bytes(tmp_path):
