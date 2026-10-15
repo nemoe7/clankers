@@ -1469,45 +1469,54 @@ function taskRow(task) {
   title.setAttribute('role', 'button');
   title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to quote it`);
   const rows = [title];
-  if (task.details.length) {
+  const linked = task.answers && task.answers.length ? task.answers : null;
+  if (task.details.length || linked) {
     // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
     // and the whole list stays scannable. Native element: no script, and keyboard reachable.
     // The details inside it are a real <ul>, so each carries its own
     // marker and reads as a list of separate statements rather than lines inside one block.
+    // The linked receipts ride inside the same collapse, hidden until expanded, on owner note:
+    // the row stays clean when the receipt is not needed. Their text keeps every word, because
+    // the 120 character step cap governs the manual steps alone, never a linked answer.
     const details = document.createElement('details');
     details.className = 'task-details';
     const summary = document.createElement('summary');
-    summary.textContent = `${task.details.length} detail${task.details.length === 1 ? '' : 's'}`;
-    const list = document.createElement('ul');
-    list.className = 'task-detail-list';
-    list.replaceChildren(...task.details.map(line => {
-      const detail = document.createElement('li');
-      detail.className = 'task-detail';
-      detail.textContent = line;
-      return detail;
-    }));
-    details.replaceChildren(summary, list);
+    const count = task.details.length + (linked ? linked.length : 0);
+    summary.textContent = `${count} detail${count === 1 ? '' : 's'}`;
+    const parts = [summary];
+    if (task.details.length) {
+      const list = document.createElement('ul');
+      list.className = 'task-detail-list';
+      list.replaceChildren(...task.details.map(line => {
+        const detail = document.createElement('li');
+        detail.className = 'task-detail';
+        detail.textContent = line;
+        return detail;
+      }));
+      parts.push(list);
+    }
+    if (linked) {
+      // The row builds this block from the record, so hostile answer text stays text. The block
+      // is read-only, and the manual details above keep every edit the CLI writes.
+      const answers = document.createElement('div');
+      answers.className = 'task-answers';
+      answers.replaceChildren(...linked.map((answer) => {
+        const entry = document.createElement('div');
+        entry.className = 'task-answer';
+        const answerId = document.createElement('code');
+        answerId.textContent = answer.id;
+        const stamp = document.createElement('time');
+        stamp.textContent = answer.at;
+        const text = document.createElement('p');
+        text.className = 'task-answer-text';
+        text.textContent = answer.text;
+        entry.replaceChildren(answerId, stamp, text);
+        return entry;
+      }));
+      parts.push(answers);
+    }
+    details.replaceChildren(...parts);
     rows.push(details);
-  }
-  if (task.answers && task.answers.length) {
-    // The row builds this block from the record, so hostile answer text stays text. The block
-    // is read-only, and the manual details above keep every edit the CLI writes.
-    const answers = document.createElement('div');
-    answers.className = 'task-answers';
-    answers.replaceChildren(...task.answers.map((answer) => {
-      const entry = document.createElement('div');
-      entry.className = 'task-answer';
-      const answerId = document.createElement('code');
-      answerId.textContent = answer.id;
-      const stamp = document.createElement('time');
-      stamp.textContent = answer.at;
-      const text = document.createElement('p');
-      text.className = 'task-answer-text';
-      text.textContent = answer.text;
-      entry.replaceChildren(answerId, stamp, text);
-      return entry;
-    }));
-    rows.push(answers);
   }
   // The badge sits last, so the title and details keep the child positions the tests pin.
   // An Unspecified task carries no badge, so old rows keep the shape they had.

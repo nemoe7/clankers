@@ -578,14 +578,15 @@ def test_http_boundaries():
     )
     assert re.search(r"border-left:3px solid (rgb\(199,194,188\)|#c7c2bc)", css)
     assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
+    # The report buttons ride the shared icon-button square, so no rule names a size for them.
     assert (
-      "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:44px;height:44px;}"
-      in css
+      "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:"
+      not in css
     )
     assert re.search(
       r"\.select-wrap::after\{[^}]*border-top:5px solid var\(--muted\)", css
     )
-    assert re.search(r"#report-select\{appearance:none;padding-right:26px;\}", css)
+    assert re.search(r"\.select-wrap select\{appearance:none;padding-right:26px;\}", css)
     # The green send flash is gone (owner: the footnote under the report covers it), so neither the
     # page nor the client script carries report-receipt. The footnote element stays.
     page = (preview.ASSETS / "index.html").read_text()
@@ -1083,19 +1084,18 @@ def test_http_boundaries():
       )
       assert (
         ".report-toolbar{gap:8px;}"
-        ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}"
-        "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:36px;height:36px;}}"
+        ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}}"
         in page
-      ), "the phone block still ends with the Reports toolbar rule"
+      ), "the phone block still ends with the select wrap rule"
       # The composer's outer rows give up the space they face.
       assert "#form>div:first-child{margin-top:0;padding-top:0" in page
       assert "#form>div:last-child{margin-bottom:0;padding-bottom:0" in page
       assert '<button id="copy-report" class="icon-button"' in page
-      # The report copy button matches the boxes beside it. They were 34px against 44px.
-      # No negative assertion here: the combined rule contains the old single-selector text.
+      # The report copy button matches the boxes beside it through the icon-button class,
+      # and the shipped page carries no square rule of its own for the toolbar buttons.
       assert (
-        "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:44px;height:44px"
-        in page
+        "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:"
+        not in page
       )
       # A rule separates the tasks toolbar from the finished div, and details collapse.
       assert (
