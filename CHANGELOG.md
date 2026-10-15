@@ -135,6 +135,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Reports removed while another tab is open no longer stay selected. Returning to Reports selects the oldest unanswered report, or no report when the list is empty.
+
 - Report acknowledgement writes retain the server receipt. Failed bulk writes remain available for retry.
 
 - Client checks retain their shared page state. Mock responses copy JSON data, and report writes persist their server-side stamps.

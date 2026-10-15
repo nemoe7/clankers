@@ -836,9 +836,11 @@ function renderState() {
     const select = $('#report-select');
     const selected = select.value || stored('report');
     const shown = $('#report').dataset.reportId;
+    const pendingDelete = state.pending_report_deletes?.includes(shown);
     // Held only while the shown report is really gone: a republished ID releases it.
-    heldReport = shown && !state.pending_report_deletes?.includes(shown)
+    heldReport = shown && !pendingDelete
       && !state.reports.some(report => report.id === shown) && !$('#reports-panel').hidden
+      && reportView.id === shown && reportView.at > 0
       ? { id: shown, title: reportTitles.get(shown) || shown }
       : null;
     select.replaceChildren();
@@ -860,10 +862,12 @@ function renderState() {
       option.value = '';
       option.textContent = 'No reports published yet';
       select.append(option);
+      select.value = '';
     } else if (state.reports.some(report => report.id === selected)) select.value = selected;
     else if (heldReport && heldReport.id === selected) select.value = selected;
+    else select.value = state.reports.find(report => report.needs_answer)?.id || state.reports[0]?.id || '';
     const selectedReport = state.reports.find(report => report.id === select.value);
-    if (!$('#reports-panel').hidden &&
+    if (!$('#reports-panel').hidden && !pendingDelete &&
         ($('#report').dataset.reportId !== select.value ||
          $('#report').dataset.updatedAt !== (selectedReport?.updated_at || ''))) loadReport();
     // A panel already showing the report is the open, so an ack that lands in view stamps at
@@ -2239,7 +2243,7 @@ function releaseHeldReport(nextId) {
   const id = heldReport.id;
   heldReport = null;
   const select = $('#report-select');
-  const keep = select.children.filter(item => item.value !== id);
+  const keep = [...select.children].filter(item => item.value !== id);
   const wasSelected = select.value === id;
   select.replaceChildren(...keep);
   if (wasSelected) select.value = keep.length ? keep[0].value : '';

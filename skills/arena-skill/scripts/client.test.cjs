@@ -1942,11 +1942,48 @@ test('preview client', async (t) => {
     assert.equal(get('#report-select').value, 'gone', 'the row stays');
     assert.match(get('#report-select').children.find(item => item.value === 'gone').textContent, /unpublished/);
     get('#report-select').value = 'keep';
+    const options = get('#report-select').children;
+    get('#report-select').children = { ...options, length: options.length, [Symbol.iterator]: () => options.values() };
     get('#report-select').events.change();
     await tick(); await tick();
     assert.equal(get('#report').dataset.reportId, 'keep', 'clicking away loads the other report');
     assert.equal(get('#report-select').children.some(item => item.value === 'gone'), false,
       'the held row leaves with the click');
+  });
+
+  await t.test('A report deleted outside Reports leaves no held row on return', async () => {
+    const previous = state.reports;
+    const selected = get('#report-select').value;
+    const stamp = new Date().toISOString();
+    const remaining = [
+      { id: 'answered', title: 'Answered', updated_at: stamp, seen_at: stamp },
+      { id: 'first-unanswered', title: 'First unanswered', updated_at: stamp, seen_at: stamp, needs_answer: true },
+      { id: 'later-unanswered', title: 'Later unanswered', updated_at: stamp, seen_at: stamp, needs_answer: true }
+    ];
+    try {
+      for (const reports of [remaining, []]) {
+        state.reports = [...reports, { id: 'removed-hidden', title: 'Removed', updated_at: stamp, seen_at: stamp }];
+        await refresh();
+        get('#report-select').value = 'removed-hidden';
+        get('#reports-tab').events.click();
+        await tick(); await tick();
+        get('#notes-tab').events.click();
+        state.reports = reports;
+        get('#reports-tab').events.click();
+        await tick(); await tick();
+        const expected = reports.find(report => report.needs_answer)?.id || '';
+        assert.equal(get('#report-select').value, expected);
+        assert.equal(get('#report-select').children.some(item => item.value === 'removed-hidden'), false);
+        if (expected) assert.equal(get('#report').dataset.reportId, expected);
+        else assert.equal(get('#report-submit').hidden, true);
+      }
+    } finally {
+      state.reports = previous;
+      get('#report-select').value = selected;
+      await refresh();
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+    }
   });
 
   await t.test("The log search narrows the rows by substring and leaves the copy whole", async () => {
@@ -2508,6 +2545,9 @@ test('preview client', async (t) => {
     get('#reports-tab').events.click();
     await new Promise(resolve => setTimeout(resolve, 0));
     get('#report-select').value = 'gone1';
+    get('#report-select').events.change();
+    await tick();
+    assert.equal(get('#report').dataset.reportId, get('#report-select').value);
     const statusLines = [];
     const statusNode = get('#report-status');
     const nodeProto = Object.getPrototypeOf(statusNode);
@@ -2522,10 +2562,14 @@ test('preview client', async (t) => {
     assert.equal(get('#unpublish-report').dataset.state, 'bad', 'the armed button reads danger');
     assert.match(get('#report-status').textContent, /Click ✕ again to confirm/);
     get('#report-select').value = 'keep1';
+    get('#report-select').events.change();
+    await tick();
     get('#unpublish-report').events.click();
     await tick();
     assert.deepEqual(unpublished, [], 'a click against another selection re-arms instead of deleting');
     get('#report-select').value = 'gone1';
+    get('#report-select').events.change();
+    await tick();
     get('#unpublish-report').events.click();
     await tick();
     get('#unpublish-report').events.click();
