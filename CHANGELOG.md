@@ -83,6 +83,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A report-state call prints each report's publication stamp, owner view stamp, staleness and answer visibility, so the publication checks need no direct state read.
 
+- The composer and answer height checks assert growth relations instead of pixel values, and the badge check asserts a label, not its wording.
+
 - A detached check wait finds the first check before it watches, polling the pinned branch head every five seconds for up to 120. A window that runs out, a moved head or a gh fault fails the run.
 
 - The worktree reminder now shows the installed start form with gate, name and destination, and a logs call on a live run repeats it.
