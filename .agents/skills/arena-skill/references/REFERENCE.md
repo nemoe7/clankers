@@ -21,8 +21,8 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line; quote it the same way |
 | `ack <id> --reply-file <path>` | Read the rendered reply from a file, so no shell quoting touches a backtick; `--note-file` reads the plain line the same way. The gate warns when an inline ack text holds a backtick inside double quotes |
-| `task-list [-f]` | List upcoming task IDs, order, status and report links; -f adds finished tasks. Read details with task ID |
-| `task ID` | Print a stored task's title, status, order, report link, blocked mark and all details |
+| `task-list [-f]` | List upcoming task IDs, order, status, report links and set type marks; -f adds finished tasks. Read details with task ID |
+| `task ID` | Print a stored task's title, status, order, primary type when set, report link, blocked mark and all details |
 | `task ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and reject a write that leaves none; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--blocked` or `--unblocked` sets the blocked mark |
 | `task-remove ID` | Remove a task entered by mistake |
 | `import-state [FILE]` | Import copied NDJSON or JSON notes, tasks and report answers from a file or stdin in one transaction; it replaces the live notes, answers, reports and tasks unless `--merge` keeps them; `--replace-tasks` replaces only tasks |
@@ -112,6 +112,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 | Flag | Use |
 | --- | --- |
 | `--status upcoming` or `--status finished` | Set status; new tasks start upcoming |
+| `--task-type report\|code\|docs\|operations\|unspecified` | Set the primary deliverable type; an omitted flag keeps a stored type, and a task without one reads `unspecified` |
 | `--order N` | Set 1-based position in the task's status group |
 | Repeatable `--task-details` | Set the detail lines; the arguments replace the stored details |
 | `--task-details ""` | Clear stored details |
@@ -119,7 +120,7 @@ Task IDs have 1–64 lowercase letters, digits or hyphens and start with a lette
 | `--report <report-id>` | Link a blocked task to the report it waits on; an answer to that report clears the blocked mark |
 | `--amend <previous-task-id>` | Rename a task without losing its details or order |
 
-A task linked with `--report` stays blocked until the owner answers that report. The answer clears the mark once, and the link then only records what the wait was. The command refuses a report ID that no report holds. A report-linked task sorts ahead of unlinked tasks in its status group until an answer arrives. The `current` seat, in the listing and in the page's Current div, goes to the first upcoming task no blocked mark holds, so a task waiting on a report never reads as the work in hand.
+A task linked with `--report` stays blocked until the owner answers that report. The answer clears the mark once, and the link then only records what the wait was. The command refuses a report ID that no report holds. A report-linked task sorts ahead of unlinked tasks in its status group until an answer arrives. The `current` seat, in the listing and in the page's Current div, goes to the first upcoming task no blocked mark holds, so a task waiting on a report never reads as the work in hand. A typed task shows its type as a badge on its row, and the page's Type filter narrows every task div to one type.
 
 `import-state` replaces the live notes, answers, reports and tasks. With `--merge` it merges by ID and preserves existing message receipts. Use `--replace-tasks` only after checking the input. Never infer a finished task from a commit alone.
 
