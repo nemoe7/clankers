@@ -29,6 +29,22 @@ function clean(value) {
   return [...new Set(roots)].slice(0, LIMIT);
 }
 
+// A share lands on the chooser with its root in `shared`, so the save happens here before the
+// preview opens. A plain link carries `url` and adds no entry. `previewRoot` refuses the rest.
+function fromShare(search) {
+  let params;
+  try {
+    params = new URLSearchParams(String(search || ''));
+  } catch {
+    return null;
+  }
+  return previewRoot(params.get('shared') || '');
+}
+
+function viewerHref(root) {
+  return `/?url=${encodeURIComponent(`${root}/`)}`;
+}
+
 function load() {
   try {
     return clean(JSON.parse(localStorage.getItem(KEY) || '[]'));
@@ -49,7 +65,7 @@ function show(box, list) {
   box.replaceChildren(...list.map(root => {
     const host = new URL(root).host;
     const link = document.createElement('a');
-    link.href = `/?url=${encodeURIComponent(`${root}/`)}`;
+    link.href = viewerHref(root);
     link.textContent = host;
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -65,6 +81,13 @@ function show(box, list) {
 }
 
 function start() {
+  const shared = fromShare(location.search);
+  if (shared) {
+    // Save before the jump: the preview page runs no part of this list.
+    save(remember(load(), shared));
+    location.replace(viewerHref(shared));
+    return;
+  }
   const box = document.getElementById('recent');
   const form = document.querySelector('form');
   if (!box || !form) return;
@@ -89,7 +112,7 @@ function start() {
 
 // The checks load the pure helpers in Node. The chooser page runs the list.
 if (typeof module === 'object' && module.exports) {
-  module.exports = { previewRoot, remember, forget, clean, LIMIT };
+  module.exports = { previewRoot, remember, forget, clean, fromShare, viewerHref, LIMIT };
 } else {
   start();
 }
