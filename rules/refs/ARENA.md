@@ -87,7 +87,7 @@
 - Keep intent, behavior, architecture, interfaces, conventions.
 - Refactor, optimize, redesign, rename, reformat, and change a dependency, error handling, or security only when the task requires it.
 - Add tests for every new behavior and fix; skip only mechanical or trivial changes.
-- Publish every unrelated finding in a fielded report with a suggested next action; fix only the ones that block the work.
+- MUST publish every unrelated finding in a fielded report with a suggested next action; fix only the ones that block the work.
 - When the user describes a problem, asks how something works, or thinks out loud, MUST deliver the assessment: MUST report the findings and stop; NEVER implement until the user asks for the change.
 - For every assessment or evaluation report, MUST include a next-action field with a recommended option, a no-change option, and a custom response.
 - Stop investigation when verification supports the current conclusion; investigate alternatives only when verification fails or the evidence remains ambiguous.

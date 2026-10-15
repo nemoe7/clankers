@@ -30,6 +30,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Rule-violation reports publish only for material, repeated, or not-yet-fixed violations. A routine slip that the agent fixes at once takes one receipt line. A new rule bars blocking open or queued tasks while such a report waits.
 
+- The unrelated-findings reporting rule now starts with MUST, which marks the report as required.
+
 ### Fixed
 
 #### preview
