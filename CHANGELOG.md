@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### arena
 
+- A detached check wait finds the first check before it watches, polling the pinned branch head every five seconds for up to 120. A window that runs out, a moved head or a gh fault fails the run.
+
 - Code-scanning alert reads now occur on the initial turn and when origin/main moves. Findings still need handling without blocking PR creation.
 
 #### proxy
