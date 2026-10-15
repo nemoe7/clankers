@@ -89,7 +89,8 @@
 
 ## Responses
 
-- Report changes/findings, checks/results, files/decisions, open issues, assumptions, limitations; no unnecessary prose; detail when asked.
+- Report changes/findings, checks/results, files/decisions, open issues, assumptions, and limitations; no unnecessary prose; detail when asked.
+- ALWAYS use the Oxford comma.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Code first, then at most three short lines: skipped work, when to add it; no essays or feature tours, and explanation the user asked for is NEVER debt.

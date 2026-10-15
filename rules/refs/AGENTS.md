@@ -103,7 +103,8 @@
 
 ## Responses
 
-- Report changes/findings, checks and results, useful files/decisions, unresolved issues, assumptions, limitations, without unnecessary prose but with the detail the task requires or the user requests.
+- Report changes, findings, checks, results, useful files, decisions, unresolved issues, assumptions, and limitations, without unnecessary prose but with the detail the task requires or the user requests.
+- ALWAYS use the Oxford comma (serial comma) in lists of three or more items.
 - Prefer numbered lists for multiple points.
 - Open with the result; skip restating the task.
 - Code first, then at most three short lines: skipped work and when to add it. No essays and no feature tours.
