@@ -410,8 +410,7 @@ test('preview client', async (t) => {
     })
   };
   const tick = () => new Promise(resolve => setImmediate(resolve));
-  // The page's own poll timer is the test's refresh: the toolbar button it used to share that work with is gone with the state select.
-  // The reload test loads a second client into the same document, and its timer is the live one, so the last refresh wins.
+  // Use the newest page poll timer after a client reload.
   const refresh = () => intervals.filter(callback => callback.name === 'refreshState').at(-1)();
   const part = (node, cls) => node.children.find(child => (child.className || '') === cls);
   const event = properties => ({ preventDefault() { this.prevented = true; }, ...properties });
@@ -1115,9 +1114,7 @@ test('preview client', async (t) => {
     assert.match(get('#history').children[0].children[2].textContent, /^one ·  · (just now|\d+ (mins?|hours?) ago)$/);
   });
 
-  await t.test("The line reads ID \u00b7 who \u00b7 state \u00b7 time, and the dot after the ID is the ASCII separator th", async () => {
-    // The line reads ID · who · state · time, and the dot after the ID is the ASCII separator the
-    // owner asked for by name. The state stays a coloured dot.
+  await t.test('Receipt metadata uses a middle dot separator and a state dot', async () => {
     assert.equal(part(get('#history').children[0].children[2], 'receipt-sep').textContent, ' · ');
     assert.equal(part(get('#history').children[0].children[2], 'state-dot').dataset.state, 'sent');
   });
@@ -1897,9 +1894,8 @@ test('preview client', async (t) => {
     await tick();
   });
 
-  await t.test("Marking a report read folds the stamp into the state instead of re-rendering: the panel ke", async () => {
-    // Marking a report read folds the stamp into the state instead of re-rendering: the panel keeps its place and that report's
-    // label loses its asterisk at once, which is the bug the owner hit when reading a report threw the page back to the top.
+  await t.test('Marking a report read preserves its scroll position and clears its star', async () => {
+    // Mark the report read without replacing its content or changing its scroll position.
     state.reports = [{ id: 'r1', title: 'Long', updated_at: new Date().toISOString(), seen_at: null }];
     await refresh();
     await tick();
@@ -2228,9 +2224,8 @@ test('preview client', async (t) => {
     };
   });
 
-  await t.test("First net: the poll hands the page the token the restarted server accepts, so the write la", async () => {
-    // First net: the poll hands the page the token the restarted server accepts, so the write lands
-    // with no page fetch and no refresh, which is what the owner needed.
+  await t.test('A poll updates the server token without a page fetch', async () => {
+    // The poll supplies the new token without a page fetch or reload.
     servedToken = 'token-two';
     sendsBefore = sent.length;
     fetchesBefore = pageFetches;

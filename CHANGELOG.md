@@ -38,6 +38,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The shipped client test matches the source tooltip check and cache comment.
 
+- Client test comments describe current behavior, and three test titles are complete.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
