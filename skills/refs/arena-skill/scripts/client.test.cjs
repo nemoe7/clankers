@@ -173,7 +173,7 @@ const context = {
       // The route serves the save-file text and its counts. The harness projects the same keys.
       if (state.copyStateFails) return response({ error: 'no route' }, false);
       const noteKeys = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-      const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked'];
+      const taskKeys = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
       const project = (record, keys) => {
         const line = {};
         for (const key of keys) line[key] = record[key] ?? null;
@@ -616,6 +616,57 @@ test('preview client', async (t) => {
     assert.equal(upcomingBody.children[0].children[1].children[0].textContent, '1 detail');
   });
 
+  await t.test("A typed task carries a type badge and the type filter hides other types", async () => {
+    // One primary type per task shows as a badge, and the filter narrows every div.
+    const prior = state.tasks;
+    state.tasks = {
+      finished: [{ id: 'shipped-docs', title: 'Shipped docs', details: [], status: 'finished',
+        order: 1, type: 'docs', updated_at: new Date().toISOString() }],
+      upcoming: [
+        { id: 'code-work', title: 'Code work', details: ['step'], status: 'upcoming',
+          order: 1, type: 'code', updated_at: new Date().toISOString() },
+        { id: 'docs-work', title: 'Docs work', details: ['step'], status: 'upcoming',
+          order: 2, type: 'docs', updated_at: new Date().toISOString() },
+        { id: 'legacy-task', title: 'Legacy task', details: [], status: 'upcoming',
+          order: 3, updated_at: new Date().toISOString() }
+      ],
+      updated_at: new Date().toISOString()
+    };
+    await refresh();
+    const head = get('#tasks-current-body').children[0];
+    assert.equal(head.title, 'code-work', 'the first open task keeps the seat');
+    const badge = head.children[head.children.length - 1];
+    assert.equal(badge.className, 'task-type');
+    assert.equal(badge.textContent, 'Code');
+    assert.equal(badge.dataset.taskType, 'code');
+    const docsRow = get('#tasks-upcoming-body').children[0];
+    assert.equal(docsRow.children[docsRow.children.length - 1].className, 'task-type',
+      'a typed row carries its badge after the details');
+    assert.equal(get('#tasks-upcoming-body').children[1].children.length, 1,
+      'an Unspecified task keeps the row shape it had before types existed');
+    const filter = get('#task-type-filter');
+    filter.value = 'docs';
+    filter.events.change();
+    assert.equal(get('#tasks-current-body').children[0].title, 'docs-work',
+      'the head follows the filter');
+    assert.equal(get('#tasks-upcoming-body').children.length, 0,
+      'the filtered list shows the head only in its own div');
+    assert.equal(get('#tasks-finished-body').children.length, 1,
+      'finished rows filter too');
+    filter.value = 'code';
+    filter.events.change();
+    assert.equal(get('#tasks-finished-body').children.length, 0,
+      'a finished row of another type leaves the div');
+    filter.value = 'unspecified';
+    filter.events.change();
+    assert.equal(get('#tasks-current-body').children[0].title, 'legacy-task',
+      'the Unspecified filter finds old rows');
+    filter.value = 'all';
+    filter.events.change();
+    state.tasks = prior;
+    await refresh();
+  });
+
   await t.test("A blocked task never takes the Current seat while another task is open", async () => {
     // A report-linked task sorts first in its group, so the head alone would hand the Current div
     // to work the agent cannot start. The first unblocked task takes the seat instead.
@@ -779,7 +830,7 @@ test('preview client', async (t) => {
       return line;
     };
     noteKeysHere = ['id', 'text', 'at', 'acknowledged_at', 'ack_kind', 'ack_text', 'ack_edited_at', 'replies', 'ack_edited_seen_count', 'seen_at', 'task_id'];
-    taskKeysHere = ['id', 'title', 'details', 'status', 'order', 'blocked'];
+    taskKeysHere = ['id', 'title', 'details', 'status', 'order', 'blocked', 'type'];
     assert.deepEqual(lines, [
       ...cachedHere.notes.map(note => projectHere(note, noteKeysHere)),
       ...(cachedHere.tasks.upcoming || []).map(task => projectHere(task, taskKeysHere)),

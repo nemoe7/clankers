@@ -7359,3 +7359,56 @@ def test_publish_keeps_the_size_suffix_on_an_embedded_image():
     stored = store.report("sized")["markdown"]
     payload = base64.b64encode(raw).decode("ascii")
     assert f"![tile](data:image/png;base64,{payload} =32x)" in stored
+
+
+def test_task_type_writes_preserves_and_round_trips():
+  """One primary type rides the task through update, save and import."""
+  with tempfile.TemporaryDirectory() as type_dir:
+    store = preview.Store(type_dir, create=True)
+    created = store.write_task("typed", "Typed work", ["Step one"], task_type="code")
+    assert created["type"] == "code"
+    plain = store.write_task("plain", "Plain work", ["Step one"])
+    assert plain["type"] == "unspecified"
+    updated = store.write_task("typed", details=["Step one", "Step two"])
+    assert updated["type"] == "code", "an omitted flag preserves the type"
+    records = [
+      preview.saved_task_line(store.task_record(task_id))
+      for task_id in ("typed", "plain")
+    ]
+    assert records[0]["type"] == "code"
+    assert records[1]["type"] == "unspecified"
+    written = store.import_tasks(records, replace=True)
+    assert [row["type"] for row in written] == ["code", "unspecified"]
+    try:
+      store.write_task("bad", "Bad", ["Step"], task_type="mixed")
+    except ValueError as error:
+      assert "type" in str(error)
+    else:
+      raise AssertionError("an unknown task type was accepted")
+
+
+def test_task_type_cli_flag_and_print():
+  """The CLI sets a type, shows it on the row, and keeps it when a later call omits the flag."""
+  with tempfile.TemporaryDirectory() as type_dir:
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": type_dir}
+    preview.Store(type_dir, create=True).set_meta("port", guard_port())
+
+    def cli(*arguments):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "task", *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    made = cli("typed-task", "Typed", "Step", "--task-type", "docs")
+    assert made.returncode == 0, made.stderr
+    assert "type docs" in made.stdout
+    again = cli("typed-task", "Typed", "Step two")
+    assert again.returncode == 0, again.stderr
+    assert "type docs" in again.stdout, "a call without the flag keeps the type"
+    bare = cli("typed-task")
+    assert "type docs" in bare.stdout
+    unknown = cli("other-task", "Other", "Step", "--task-type", "mixed")
+    assert unknown.returncode != 0

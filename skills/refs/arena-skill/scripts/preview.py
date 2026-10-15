@@ -827,6 +827,9 @@ def field_html(question):
 
 
 TASK_STATUSES = ("upcoming", "finished")
+# One primary type per task, by deliverable. Old rows and old imports read Unspecified.
+TASK_UNSPECIFIED = "unspecified"
+TASK_TYPES = ("report", "code", "docs", "operations", "unspecified")
 TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 # A note ID is six hex characters, alone or followed by a hyphen and the rest for a row minted
 # before the six-character change, and the shape check above accepts it as a task name without this.
@@ -838,7 +841,8 @@ MAX_TASK_DETAILS = 40
 TASK_STEP_MAX = 120
 ECHO_DETAIL = 200
 TASK_COLUMNS = (
-  "id, title, details, status, position, updated_at, completed_at, blocked, report_id"
+  "id, title, details, status, position, updated_at, completed_at, blocked, report_id,"
+  " type"
 )
 TASK_ORDER = (
   "status DESC, CASE WHEN status = 'finished' THEN completed_at END DESC,"
@@ -879,6 +883,7 @@ TASK_LINE_KEYS = (
   "completed_at",
   "order",
   "report_id",
+  "type",
 )
 SUBMISSION_LINE_KEYS = (
   "id",
@@ -915,6 +920,7 @@ def task_row(row):
   }
   if len(row) > 8 and row[8]:
     shaped["report_id"] = row[8]
+  shaped["type"] = row[9] if len(row) > 9 and row[9] else TASK_UNSPECIFIED
   return shaped
 
 
@@ -953,6 +959,7 @@ def saved_task_line(record):
     raise TypeError("Every saved task is an object")
   line = {key: record.get(key) for key in TASK_LINE_KEYS}
   line["details"] = [str(item) for item in record.get("details") or []]
+  line["type"] = record.get("type") or TASK_UNSPECIFIED
   if not line.get("report_id"):
     line.pop("report_id", None)
   return line
@@ -1300,6 +1307,8 @@ def format_task_list(tasks, full=False):
     line = f"{order}{blocked_mark}  {status} {id_}"
     if report_id:
       line += f" report {report_id}"
+    if task.get("type") and task.get("type") != TASK_UNSPECIFIED:
+      line += f" type {task.get('type')}"
     lines.append(line)
   return "\n".join(lines)
 
@@ -1317,6 +1326,9 @@ def format_task(record):
     for detail in details
   ]
   first = f"task {id_}, order {order}, status {status}"
+  task_type = record.get("type")
+  if task_type and task_type != TASK_UNSPECIFIED:
+    first += f", type {task_type}"
   if report_id:
     first += f", report {report_id}"
   if blocked:
@@ -2693,7 +2705,8 @@ class Store:
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           completed_at TEXT,
-          blocked INTEGER NOT NULL DEFAULT 0
+          blocked INTEGER NOT NULL DEFAULT 0,
+          type TEXT NOT NULL DEFAULT 'unspecified'
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
@@ -2732,6 +2745,10 @@ class Store:
         db.execute("ALTER TABLE tasks ADD COLUMN report_id TEXT")
       if "completed_at" not in columns:
         db.execute("ALTER TABLE tasks ADD COLUMN completed_at TEXT")
+      if "type" not in columns:
+        db.execute(
+          "ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'unspecified'"
+        )
       db.execute(
         "UPDATE tasks SET completed_at = updated_at"
         " WHERE status = 'finished' AND completed_at IS NULL"
@@ -3199,6 +3216,7 @@ class Store:
     blocked=None,
     report_id=None,
     completed_at=None,
+    task_type=None,
     shared=None,
     append_details=False,
   ):
@@ -3210,6 +3228,8 @@ class Store:
     check_task(task_id, title, details)
     if status is not None and status not in TASK_STATUSES:
       raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
+    if task_type is not None and task_type not in TASK_TYPES:
+      raise ValueError(f"A task type is one of {', '.join(TASK_TYPES)}")
     stamp = now()
     with self.transaction(shared) as db:
       if append_details and not db.in_transaction:
@@ -3243,6 +3263,8 @@ class Store:
         blocked = stored["blocked"] if stored else False
       if report_id is None:
         report_id = stored.get("report_id") if stored else None
+      if task_type is None:
+        task_type = (stored.get("type") if stored else None) or TASK_UNSPECIFIED
       if report_id:
         identifier(report_id)
       if report_id and blocked and self.report_has_answers(db, report_id):
@@ -3270,6 +3292,7 @@ class Store:
         "completed_at": completed_at,
         "blocked": bool(blocked),
         "report_id": report_id,
+        "type": task_type,
       }
       if order is not None:
         index = max(0, min(order - 1, len(siblings)))
@@ -3281,12 +3304,12 @@ class Store:
       record["order"] = index + 1
       db.execute(
         "INSERT INTO tasks (id, title, details, status, position, created_at, updated_at,"
-        " completed_at, blocked, report_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        " completed_at, blocked, report_id, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         " ON CONFLICT(id) DO UPDATE SET title = excluded.title,"
         " details = excluded.details, status = excluded.status,"
         " position = excluded.position, updated_at = excluded.updated_at,"
         " completed_at = excluded.completed_at, blocked = excluded.blocked,"
-        " report_id = excluded.report_id",
+        " report_id = excluded.report_id, type = excluded.type",
         (
           task_id,
           title,
@@ -3298,6 +3321,7 @@ class Store:
           completed_at,
           1 if blocked else 0,
           report_id,
+          task_type,
         ),
       )
       # Write positions from the computed list.
@@ -4017,6 +4041,9 @@ class Store:
       check_task(record.get("id"), record.get("title"), details)
       if status is not None and status not in TASK_STATUSES:
         raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
+      task_type = record.get("type")
+      if task_type is not None and task_type not in TASK_TYPES:
+        raise ValueError(f"A task type is one of {', '.join(TASK_TYPES)}")
       if completed_at is not None:
         if not isinstance(completed_at, str):
           raise ValueError("A saved completion stamp is text")
@@ -4031,6 +4058,7 @@ class Store:
           record.get("blocked"),
           record.get("report_id"),
           completed_at,
+          task_type,
         )
       )
     with self.transaction(shared, autosave=autosave) as db:
@@ -5661,6 +5689,13 @@ def main():
   )
   task.add_argument("-s", "--status", choices=TASK_STATUSES, default=None)
   task.add_argument(
+    "--task-type",
+    dest="task_type",
+    choices=TASK_TYPES,
+    default=None,
+    help="Primary deliverable type; an omitted flag keeps a stored type",
+  )
+  task.add_argument(
     "-o",
     "--order",
     type=int,
@@ -5981,6 +6016,7 @@ def main():
         and args.report is None
         and args.msg_id is None
         and args.amend is None
+        and args.task_type is None
       ):
         # A bare ID reads the stored row without writing.
         resolved = store.resolve_id(task_id)
@@ -6016,6 +6052,7 @@ def main():
             args.order,
             args.blocked,
             args.report,
+            task_type=args.task_type,
             shared=shared,
             append_details=args.append_details,
           )
@@ -6029,6 +6066,7 @@ def main():
           args.order,
           args.blocked,
           args.report,
+          task_type=args.task_type,
           append_details=args.append_details,
         )
       print(format_task(record))

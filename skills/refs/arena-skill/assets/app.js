@@ -1471,6 +1471,15 @@ function taskRow(task) {
     details.replaceChildren(summary, list);
     rows.push(details);
   }
+  // The badge sits last, so the title and details keep the child positions the tests pin.
+  // An Unspecified task carries no badge, so old rows keep the shape they had.
+  if (task.type && task.type !== 'unspecified') {
+    const badge = document.createElement('span');
+    badge.className = 'task-type';
+    badge.textContent = task.type[0].toUpperCase() + task.type.slice(1);
+    badge.dataset.taskType = task.type;
+    rows.push(badge);
+  }
   item.replaceChildren(...rows);
   return item;
 }
@@ -1481,6 +1490,10 @@ function taskRow(task) {
 // A symbol rather than null: JSON.stringify of a missing task list is undefined, and undefined
 // normalised to null would equal a null sentinel and skip the first render entirely.
 let taskSignature = Symbol('tasks not yet rendered');
+// The filter lives beside the payload: a change re-renders the last tasks without
+// waiting for a poll, and a later poll renders with the filter still applied.
+let taskTypeFilter = 'all';
+let lastTasksPayload = null;
 
 function renderTasksIfChanged(tasks) {
   const signature = JSON.stringify(tasks);
@@ -1494,6 +1507,7 @@ function renderTasks(tasks) {
   const current = $('#tasks-current');
   const finished = $('#tasks-finished');
   const upcoming = $('#tasks-upcoming');
+  lastTasksPayload = tasks;
   if (!tasks) {
     status.textContent = 'No task list yet.';
     current.hidden = true;
@@ -1502,20 +1516,28 @@ function renderTasks(tasks) {
     return;
   }
   status.textContent = `Updated ${time(tasks.updated_at)}`;
+  const visible = task =>
+    taskTypeFilter === 'all' || (task.type || 'unspecified') === taskTypeFilter;
   // The first upcoming task no blocked mark holds gets a div of its own, so what the agent can
   // start next is visible without reading down a list. A task waiting on a report sorts first
   // in its group and would otherwise take that seat. It stays in Upcoming as well: removing it
   // would leave a hole in the authoritative order, and the copy button hands both stored
   // sections over as they are.
-  const head = tasks.upcoming.find(task => !task.blocked);
+  const shownUpcoming = tasks.upcoming.filter(visible);
+  const head = shownUpcoming.find(task => !task.blocked);
   $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
   current.hidden = !head;
-  $('#tasks-finished-body').replaceChildren(...tasks.finished.map(task => taskRow(task)));
+  $('#tasks-finished-body').replaceChildren(...tasks.finished.filter(visible).map(task => taskRow(task)));
   // The head already renders in its own div above. Re-listing it in Upcoming duplicates it.
-  $('#tasks-upcoming-body').replaceChildren(...tasks.upcoming.filter(task => task !== head).map(task => taskRow(task)));
+  $('#tasks-upcoming-body').replaceChildren(...shownUpcoming.filter(task => task !== head).map(task => taskRow(task)));
   finished.hidden = false;
   upcoming.hidden = false;
 }
+
+$('#task-type-filter').addEventListener('change', () => {
+  taskTypeFilter = $('#task-type-filter').value;
+  if (lastTasksPayload) renderTasks(lastTasksPayload);
+});
 const tabs = [$('#notes-tab'), $('#reports-tab'), $('#tasks-tab'), $('#downloads-tab')];
 // The Reports tab carries a pip rather than a count: what the owner needs from a tab is whether
 // something there is unread, not how many reports exist. A report is unread until the owner has
