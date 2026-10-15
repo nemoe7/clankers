@@ -37,7 +37,7 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- On a rule violation, publish a preview report when the violation is material, repeated, or uncorrected; a corrected routine slip with no impact takes one short receipt line instead. Suggest an amendment only when an identified rule gap contributed. Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
+- On a rule violation, MUST publish a preview report when the violation is material, repeated, or uncorrected; a corrected routine slip with no impact takes one short receipt line instead. Suggest an amendment only when an identified rule gap contributed. Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
 - NEVER block open or queued tasks while a rule-violation report waits for an answer; only a task linked to a report through `--report` waits on that report.
 
 ## General

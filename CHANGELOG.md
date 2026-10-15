@@ -32,6 +32,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The unrelated-findings reporting rule now starts with MUST, which marks the report as required.
 
+- The violation-report trigger line for material, repeated, or uncorrected violations also adds MUST.
+
 ### Fixed
 
 #### preview
