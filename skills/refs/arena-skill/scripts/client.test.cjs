@@ -770,6 +770,8 @@ test('preview client', async (t) => {
           answers: [
             { id: 'answer-abc123', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#pick}\n- (x) yes' },
             { id: 'answer-def456', at: '2026-10-15T06:00:00.000Z', text: 'Approved: ship it' },
+            { id: 'answer-long01', at: '2026-10-15T06:04:00.000Z',
+              text: 'Decision recorded for the record: the receipt line keeps every word of the answer text, past the step cap that manual details obey.' },
           ] },
       ],
       updated_at: new Date().toISOString(),
@@ -777,10 +779,17 @@ test('preview client', async (t) => {
     await refresh();
     const row = get('#tasks-upcoming-body').children[0];
     assert.equal(row.title, 'answered-task', 'the filler holds the head seat');
-    assert.equal(row.children.length, 3, 'the answer block sits after the details');
-    const answers = row.children[2];
+    assert.equal(row.children.length, 2, 'the receipt rides inside the details block');
+    const details = row.children[1];
+    assert.equal(details.className, 'task-details');
+    assert.ok(!details.open, 'the receipt stays hidden until expanded');
+    assert.equal(details.children[0].textContent, '4 details',
+      'the summary counts the receipt entries beside the manual steps');
+    const answers = details.children[2];
     assert.equal(answers.className, 'task-answers');
-    assert.equal(answers.children.length, 2, 'one entry per submission ID');
+    assert.equal(answers.children.length, 3, 'one entry per submission ID');
+    const long = answers.children[2].children[2];
+    assert.ok(long.textContent.length > 120, 'a receipt entry keeps text past the step cap');
     const first = answers.children[0];
     assert.equal(first.className, 'task-answer');
     assert.equal(first.children[0].tagName, 'code');
@@ -803,8 +812,8 @@ test('preview client', async (t) => {
     await refresh();
     const host = get('#tasks-upcoming-body').children[0];
     assert.equal(host.title, 'hostile-task', 'the filler still holds the head seat');
-    assert.equal(host.children.length, 2, 'a task with no details takes title then answers');
-    const hostileText = host.children[1].children[0].children[2];
+    assert.equal(host.children.length, 2, 'a task with no manual details still wraps the receipt');
+    const hostileText = host.children[1].children[1].children[0].children[2];
     assert.equal(hostileText.tagName, 'p', 'the answer text lands in a paragraph, not markup');
     assert.equal(hostileText.textContent, '<img onerror=alert(1)>', 'answer text stays text');
     state.tasks = prior;
@@ -3300,7 +3309,9 @@ test('a wide table scrolls sideways on its own and keeps its words whole', () =>
 });
 
 test('the toolbar and filter controls share the ui control sizes', () => {
-  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8');
+  // Comments ahead of a rule would ride in its selector text, so the sheet reads bare.
+  const css = fs.readFileSync(path.join(__dirname, '../assets/style.css'), 'utf8')
+    .replace(new RegExp('/\\*[\\s\\S]*?\\*/', 'g'), '');
   const html = fs.readFileSync(path.join(__dirname, '../assets/index.html'), 'utf8');
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   // The report icon buttons ride the shared icon-button class, so no rule names a square for them.
