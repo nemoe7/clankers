@@ -1506,7 +1506,8 @@ function reportsSignature(reports) {
     key === 'agent_seen_at' || key === 'ack_seen_at' ? undefined : value);
 }
 function reportLabel(report, position) {
-  return `${position + 1}.${!report.seen_at || ackUnread(report) ? ' *' : ''} ${report.title}`;
+  const markers = `${!report.seen_at || ackUnread(report) ? '*' : ''}${report.needs_answer ? '^' : ''}`;
+  return `${position + 1}.${markers ? ` ${markers}` : ''} ${report.title}`;
 }
 let ackBatchPending = false;
 function updateReportPip(reports) {

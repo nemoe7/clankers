@@ -1395,13 +1395,13 @@ test('preview client', async (t) => {
       '1. Fielded', 'a report already read is not starred in the select');
   });
 
-  await t.test("An unanswered form moves neither marker: the star and the pip report unread, and nothing e", async () => {
-    // An unanswered form moves neither marker: the star and the pip report unread, and nothing else.
+  await t.test("Unanswered forms add a caret without changing unread markers", async () => {
+    // The answer marker is separate from the unread star and pip.
     state.reports[0].needs_answer = true;
     await refresh();
     assert.equal(pip.hidden, true, 'an unanswered form leaves the pip alone');
     assert.equal(get('#report-select').children.find(item => item.value === 'r1').textContent,
-      '1. Fielded', 'an unanswered form leaves the star alone');
+      '1. ^ Fielded', 'an unanswered form adds a caret without an unread star');
     state.reports = [{ id: 'r1', title: 'Fielded', updated_at: new Date().toISOString(), seen_at: null }];
     await refresh();
     assert.equal(pip.hidden, false, 'a report with no read stamp is unread');
@@ -2075,6 +2075,34 @@ test('preview client', async (t) => {
     assert.equal(get('#copy-report').dataset.state, 'bad');
     assert.equal(get('#copy-report').title, 'There is no report to copy');
     get('#report-select').value = selectBefore;
+  });
+
+  await t.test('Report labels keep unseen stars and mark unanswered forms independently', async () => {
+    const keptReports = state.reports;
+    const keptSelect = get('#report-select').value;
+    get('#notes-tab').events.click();
+    const stamp = '2026-09-25T10:00:00';
+    try {
+      state.reports = [
+        { id: 'unseen-wait', title: 'Waiting', updated_at: stamp, seen_at: null, needs_answer: true },
+        { id: 'seen-wait', title: 'Seen waiting', updated_at: stamp, seen_at: stamp, needs_answer: true },
+        { id: 'unseen-done', title: 'Answered', updated_at: stamp, seen_at: null, needs_answer: false },
+        { id: 'seen-done', title: 'Read', updated_at: stamp, seen_at: stamp, needs_answer: false },
+        { id: 'new-ack', title: 'New ack', updated_at: stamp, seen_at: stamp, needs_answer: false,
+          latest_answer_acknowledged_at: '2026-09-25T10:01:00', ack_seen_at: null }
+      ];
+      await refresh();
+      assert.deepEqual(get('#report-select').children.map(option => option.textContent), [
+        '1. *^ Waiting', '2. ^ Seen waiting', '3. * Answered', '4. Read', '5. * New ack'
+      ]);
+      state.reports[1].needs_answer = false;
+      await refresh();
+      assert.equal(get('#report-select').children[1].textContent, '2. Seen waiting');
+    } finally {
+      state.reports = keptReports;
+      await refresh();
+      get('#report-select').value = keptSelect;
+    }
   });
 
   await t.test('The bulk eye marks only unread report acknowledgements once', async () => {

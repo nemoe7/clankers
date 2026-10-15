@@ -42,6 +42,8 @@ Report answers live in a separate `submissions` table and appear as `kind: repor
 Every resend creates a new submission. An answered report ID refuses republishing.
 The UI shows whether the agent answered the latest submission, not just an earlier one.
 
+`*` marks an unread report or acknowledgement. `^` marks a report that needs an answer. The markers are independent.
+
 The eye button marks all report acknowledgement receipts seen. It leaves message receipts and report-body read state unchanged.
 
 Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.

@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Report list entries add a caret for unanswered reports and retain their unread asterisk.
+
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
 
 ### Fixed
