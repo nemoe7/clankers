@@ -546,7 +546,7 @@ def test_http_boundaries():
     assert re.search(r"border-left:3px solid (rgb\(199,194,188\)|#c7c2bc)", css)
     assert re.search(r"\.draft-preview p\s*\{\s*white-space:\s*pre-wrap;?\s*\}", css)
     assert (
-      "#copy-report,#refresh-report,#mark-report-acks-seen,#unpublish-report{width:44px;height:44px;}"
+      "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:44px;height:44px;}"
       in css
     )
     assert re.search(
@@ -659,6 +659,7 @@ def test_http_boundaries():
         "copy-report",
         "refresh-report",
         "mark-report-acks-seen",
+        "next-report",
       ):
         block = page[page.index(f'id="{control}"') :]
         assert "title=" in block[: block.index(">")]
@@ -1046,7 +1047,7 @@ def test_http_boundaries():
       assert (
         ".report-toolbar{gap:8px;}"
         ".select-wrap{flex:1 1 0;min-width:0;max-width:none;}"
-        "#copy-report,#refresh-report,#mark-report-acks-seen,#unpublish-report{width:36px;height:36px;}}"
+        "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:36px;height:36px;}}"
         in page
       ), "the phone block still ends with the Reports toolbar rule"
       # The composer's outer rows give up the space they face.
@@ -1056,7 +1057,7 @@ def test_http_boundaries():
       # The report copy button matches the boxes beside it. They were 34px against 44px.
       # No negative assertion here: the combined rule contains the old single-selector text.
       assert (
-        "#copy-report,#refresh-report,#mark-report-acks-seen,#unpublish-report{width:44px;height:44px"
+        "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:44px;height:44px"
         in page
       )
       # A rule separates the tasks toolbar from the finished div, and details collapse.

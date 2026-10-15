@@ -834,6 +834,7 @@ async function refreshState() {
     // The pip tracks reports never opened. An edited report keeps its star alone. The separate
     // receipt tracks the selected report's latest answer.
     updateReportPip(state.reports);
+    updateReportNavigation();
     renderReportAcknowledgement();
     // The panel can show a report's end while its last scroll event was lost (a re-render moved the
     // panel, or the event landed a pixel short), so the poll takes the same look the tab click does.
@@ -1306,7 +1307,17 @@ function saveReportDraft() {
 }
 $('#report-form').addEventListener('input', () => { reportDirty = true; saveReportDraft(); });
 $('#report-form').addEventListener('change', () => { reportDirty = true; saveReportDraft(); });
+function nextReportId() {
+  const select = $('#report-select');
+  const options = [...select.children];
+  const position = options.findIndex(option => option.value === select.value);
+  return position < 0 ? '' : options[position + 1]?.value || '';
+}
+function updateReportNavigation() {
+  $('#next-report').disabled = !nextReportId();
+}
 async function loadReport(force = false) {
+  updateReportNavigation();
   const id = $('#report-select').value;
   // A report the agent unpublished keeps its body until the owner clicks away.
   if (id && heldReport && heldReport.id === id &&
@@ -1994,10 +2005,17 @@ $('#fetch-form').addEventListener('submit', async event => {
   } catch (error) { $('#fetch-status').textContent = `Queue not confirmed: ${error.message}. Check the list before retrying.`; }
   finally { button.disabled = false; }
 });
-$('#report-select').addEventListener('change', () => {
+function reportSelectionChanged() {
   releaseHeldReport($('#report-select').value);
   renderReportAcknowledgement();
-  loadReport();
+  return loadReport();
+}
+$('#report-select').addEventListener('change', reportSelectionChanged);
+$('#next-report').addEventListener('click', () => {
+  const id = nextReportId();
+  if (!id) return;
+  $('#report-select').value = id;
+  return reportSelectionChanged();
 });
 $('#refresh-report').addEventListener('click', () => { refreshState(); loadReport(true); });
 // A delete asks for a second click against the same report, the way the log's armed actions do,

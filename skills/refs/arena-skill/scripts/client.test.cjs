@@ -2157,6 +2157,42 @@ test('preview client', async (t) => {
     }
   });
 
+  await t.test('Next report follows list order and stops at the last report', async () => {
+    const keptReports = state.reports;
+    const keptSelect = get('#report-select').value;
+    get('#notes-tab').events.click();
+    try {
+      state.reports = ['next-one', 'next-two', 'next-three'].map(id => ({
+        id, title: id, updated_at: '2026-09-25T10:00:00', seen_at: '2026-09-25T10:01:00'
+      }));
+      await refresh();
+      get('#report-select').value = 'next-one';
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+      const button = get('#next-report');
+      assert.equal(typeof button.events.click, 'function');
+      assert.equal(button.disabled, false);
+      await button.events.click();
+      await tick();
+      assert.equal(get('#report-select').value, 'next-two');
+      assert.equal(get('#report').dataset.reportId, 'next-two');
+      await button.events.click();
+      await tick();
+      assert.equal(get('#report-select').value, 'next-three');
+      assert.equal(button.disabled, true);
+      await button.events.click();
+      assert.equal(get('#report-select').value, 'next-three', 'the last report must not wrap');
+      state.reports = [];
+      await refresh();
+      assert.equal(button.disabled, true);
+    } finally {
+      get('#notes-tab').events.click();
+      state.reports = keptReports;
+      await refresh();
+      get('#report-select').value = keptSelect;
+    }
+  });
+
   await t.test("A report delete asks for a second click against the same selection, then leaves the tab", async () => {
     const keptReports = state.reports;
     const keptSelect = get('#report-select').value;

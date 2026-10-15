@@ -46,6 +46,8 @@ The UI shows whether the agent answered the latest submission, not just an earli
 
 The eye button marks all report acknowledgement receipts seen. It leaves message receipts and report-body read state unchanged.
 
+Next report selects the next list entry and stops at the last entry. An empty list leaves it disabled.
+
 Owner notes, agent replies and draft rendering have no application length cap. Report answers, report sources, field definitions and tasks retain their limits. Request timeouts and structural checks stay. Browser, disk and proxy limits still apply.
 
 The task CLI appends supplied details with `--append` (`-A`). Without that flag, supplied details replace the stored list. Existing limits still apply.
