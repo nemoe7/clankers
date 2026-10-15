@@ -1100,7 +1100,7 @@ def test_http_boundaries():
       )
       # A rule separates the tasks toolbar from the finished div, and details collapse.
       assert (
-        ".tasks-layout>.row.tight{border-bottom:1px solid var(--border);padding-bottom:12px"
+        ".tasks-layout>.row.tight{align-items:end;border-bottom:1px solid var(--border);padding-bottom:12px"
         in page
       )
       assert ".task-details>summary{cursor:pointer;list-style-position:inside" in page
@@ -7684,3 +7684,18 @@ def test_cli_stamps_print_in_the_display_zone_while_storage_stays_utc(monkeypatc
     .splitlines()[0]
     .startswith("Inbox 2026-10-15T08:39:00+08:00:")
   )
+
+
+def test_report_state_cli_reads_publication_and_answers(tmp_path):
+  src = tmp_path / "one.md"
+  src.write_text("# one\n\nPick: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
+  store = preview.Store(tmp_path / "state", create=True)
+  store.publish("one", "First report", src)
+  text = preview.format_report_state(store.report_state())
+  assert "one First report" in text
+  assert "published: 20" in text, "a published report carries its stamp"
+  assert "viewed: never" in text, "an unviewed report says so"
+  assert "stale: no" in text and "answers: none" in text
+  solo = preview.format_report_state(store.report_state("one"))
+  assert "one First report" in solo and "stale: no" in solo
+  assert preview.format_report_state(store.report_state("nope")) == ""

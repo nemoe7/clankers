@@ -2788,6 +2788,26 @@ class ReportHeld(ValueError):
   pass
 
 
+def format_report_state(rows):
+  """Render report-state rows: publication, owner view stamp, answer visibility."""
+  lines = []
+  for row in rows:
+    lines.append(f"{row['id']} {row['title']}")
+    lines.append(f"  published: {row['published_at'] or 'never'}")
+    lines.append(f"  updated: {row['updated_at']}")
+    lines.append(f"  stale: {'yes' if row['stale'] else 'no'}")
+    lines.append(f"  viewed: {row['viewed_at'] or 'never'}")
+    if not row["answers"]:
+      lines.append("  answers: none")
+    for answer in row["answers"]:
+      lines.append(
+        f"  answers: {answer['id']} acknowledged"
+        f" {'yes' if answer['acknowledged'] else 'no'},"
+        f" agent-seen {'yes' if answer['seen'] else 'no'}"
+      )
+  return "\n".join(lines) + ("\n" if lines else "")
+
+
 class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
@@ -4429,6 +4449,43 @@ class Store:
     with closing(self.connect()) as db:
       return self.stale_report_rows(db)
 
+  def report_state(self, report_id=None):
+    """Row per report: publication, owner view stamp and answer visibility. No changes."""
+    with closing(self.connect()) as db:
+      rows = db.execute(
+        "SELECT id, title, published_at, updated_at, viewed_at FROM reports"
+        + (" WHERE id = ?" if report_id else "")
+        + " ORDER BY updated_at DESC",
+        (report_id,) if report_id else (),
+      ).fetchall()
+      stale = {row["id"] for row in self.stale_report_rows(db)}
+      out = []
+      for row in rows:
+        answers = db.execute(
+          "SELECT id, acknowledged_at, seen_at FROM submissions"
+          " WHERE report_id = ? ORDER BY seq",
+          (row["id"],),
+        ).fetchall()
+        out.append(
+          {
+            "id": row["id"],
+            "title": row["title"],
+            "published_at": row["published_at"],
+            "updated_at": row["updated_at"],
+            "viewed_at": row["viewed_at"],
+            "stale": row["id"] in stale,
+            "answers": [
+              {
+                "id": answer["id"],
+                "acknowledged": answer["acknowledged_at"] is not None,
+                "seen": answer["seen_at"] is not None,
+              }
+              for answer in answers
+            ],
+          }
+        )
+      return out
+
   def reminder(self, advance=False):
     """Count pending kinds without marking any message seen. Any count asks for an ack.
 
@@ -5815,6 +5872,11 @@ def main():
     "stale-reports",
     help="List stale published report IDs and reasons without changing state",
   )
+  report_state = commands.add_parser(
+    "report-state",
+    help="Print publication, owner view stamp and answer visibility for one report or all",
+  )
+  report_state.add_argument("report_id", nargs="?")
   task = commands.add_parser(
     "task",
     help=(
@@ -6086,7 +6148,7 @@ def main():
     # stays open so the recovery command itself always runs.
     if args.command not in {"serve", "init"}:
       require_server(store)
-    read_only = args.command in {"stale-reports", "note-list"}
+    read_only = args.command in {"stale-reports", "note-list", "report-state"}
     if not read_only:
       print(store.reminder(), file=sys.stderr, flush=True)
     if args.command != "serve" and not read_only:
@@ -6191,6 +6253,12 @@ def main():
       print(f"Stale reports {len(reports)}")
       for report in reports:
         print(f"{report['id']}\t{report['reason']}")
+    elif args.command == "report-state":
+      rows = store.report_state(args.report_id)
+      if args.report_id and not rows:
+        print(f"No report {args.report_id}")
+        raise SystemExit(1)
+      print(format_report_state(rows), end="")
     elif args.command == "task":
       task_id = args.id_arg
       if not task_id:
