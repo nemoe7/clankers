@@ -10,7 +10,7 @@
   - ARENA.md wins on Arena-specific handling, including pushing, pull requests, and merges.
 - ARENA.md's NEVER-edit-this-file clause is waived in this repository, the home of that file (refs, live and root copies) and the preview skill.
   - Mirror task-related source changes into installed copies in this repository without separate user authorization.
-  - The waiver NEVER covers a clause change; every clause change MUST wait for the approved report.
+  - Follow the clause-proposal and approval scope in [Reports and approval](#reports-and-approval).
 - Amend this file when a rule or decision proves durable and repo-wide; otherwise edit only when asked.
 
 ## Glossary
@@ -77,6 +77,7 @@ Read these first:
 
 ## Reports and approval
 
+- Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/AGENTS.md`; other AGENTS.md files are exempt.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
 - Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line.
   - Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
@@ -117,7 +118,7 @@ Read these first:
 - Skills in `skills/` follow the [Agent Skills specification](https://agentskills.io/specification).
 - Every `SKILL.md` needs YAML frontmatter using only `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools`.
 - `name` matches its directory.
-- Adapted skills record `metadata.upstream`; first-party ones record `metadata.origin`.
+- Record `metadata.upstream` for adapted skills.
 - The file stays under 500 lines.
 - A skill holds only what an agent needs to use it. NEVER add a design decision, background, rationale or history; those go to [CHANGELOG.md](CHANGELOG.md) or [docs/archive/arena-quirks.md](docs/archive/arena-quirks.md).
 

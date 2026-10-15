@@ -49,6 +49,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- House: Scope AGENTS.md clause approval to files under `rules/`, and remove the first-party origin requirement.
+
 - Preview: The read reminder names all repository AGENTS.md files and asks for reads only when current text is absent from context.
 
 - Preview: Group task search and type controls at the right, without a visible Type label. Keep the phone update age above them.
