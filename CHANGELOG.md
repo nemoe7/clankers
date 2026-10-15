@@ -62,6 +62,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The report's scroll-to-top arrow pins to the top of the reports frame instead of its foot.
 
+- Task-added receipts link the task ID in a code element, and the link opens the Tasks tab on that row.
+
 ### Fixed
 
 #### preview

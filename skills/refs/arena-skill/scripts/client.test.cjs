@@ -1004,6 +1004,35 @@ test('preview client', async (t) => {
       'a message with no task carries no marker');
   });
 
+  await t.test("A task receipt links its ID the way an ack reference does, so one click opens the Tasks tab", async () => {
+    const priorTasks = state.tasks;
+    state.notes[0].task_id = 'linked-receipt';
+    state.tasks = {
+      upcoming: [{ id: 'linked-receipt', title: 'Linked receipt', details: [], status: 'upcoming',
+        order: 1, updated_at: new Date().toISOString() }],
+      finished: [],
+      updated_at: new Date().toISOString()
+    };
+    await refresh();
+    try {
+      const marker = part(get('#history').children[0].children[2], 'receipt-task');
+      const link = part(marker, 'ack-reference');
+      assert.ok(link, 'the marker links the task ID');
+      assert.equal(link.dataset.referenceType, 'task', 'the link follows the task reference path');
+      assert.equal(link.dataset.referenceId, 'linked-receipt');
+      assert.equal(link.children[0].textContent, 'linked-receipt', 'the ID rides in a code element');
+      assert.match(marker.textContent, / · Task linked-receipt added$/);
+      let prevented = false;
+      documentEvents.click({ target: link, preventDefault: () => { prevented = true; } });
+      assert.equal(prevented, true, 'the receipt link takes the reference path');
+      assert.equal(get('#tasks-panel').hidden, false, 'the jump opens the Tasks tab');
+    } finally {
+      delete state.notes[0].task_id;
+      state.tasks = priorTasks;
+      await refresh();
+    }
+  });
+
   await t.test("A message the agent wrote used to say so through an origin tag; that key is gone from the", async () => {
     assert.equal(get('#history').children[0].children[0].className, 'raw-message',
       'a message the server sent without rendered HTML keeps the raw class');
