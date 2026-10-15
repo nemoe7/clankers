@@ -46,6 +46,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The distribute target lists add nemoe7/request-tracker, so the Arena suite and the Gemini release workflow both reach it.
 
+#### preview
+
+- The task filter, the report toolbar and the downloads input share the header control sizes. Selects and single-line inputs take the message search height, and the report icon buttons ride the icon-button square. The task filter also joins the select wrap, so its chevron and label match the report select.
+
 #### arena
 
 - A detached check wait finds the first check before it watches, polling the pinned branch head every five seconds for up to 120. A window that runs out, a moved head or a gh fault fails the run.
