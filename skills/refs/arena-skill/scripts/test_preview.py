@@ -1099,9 +1099,10 @@ def test_http_boundaries():
         not in page
       )
       # A rule separates the tasks toolbar from the finished div, and details collapse.
-      assert (
-        ".tasks-layout>.row.tight{align-items:end;border-bottom:1px solid var(--border);padding-bottom:12px"
-        in page
+      assert re.search(
+        r"\.tasks-layout>\.row\.tight\{[^}]*align-items:end;"
+        r"border-bottom:1px solid var\(--border\);padding-bottom:12px",
+        page,
       )
       assert ".task-details>summary{cursor:pointer;list-style-position:inside" in page
       assert ".task-title{cursor:pointer" in page

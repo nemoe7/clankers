@@ -49,6 +49,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: Group task search and type controls at the right, without a visible Type label. Keep the phone update age above them.
+
 - House: The root guide names the compressed live Kilo mode files.
 
 - Preview: Remove report status labels, and make the submission ID a composer link.

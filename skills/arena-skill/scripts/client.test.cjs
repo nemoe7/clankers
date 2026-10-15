@@ -3598,9 +3598,10 @@ test('the toolbar and filter controls share the ui control sizes', () => {
   const searchRule = rules.find(match => namesSelector(match, '#log-search'));
   assert.equal(heightOf(selectRule[2]), heightOf(searchRule[2]),
     'the select height follows the message search height');
-  // The task filter joins the report select's wrap, chevron and label included.
+  // The task filter keeps the report select's wrap and chevron.
   assert.match(html, /class="select-wrap task-filter"/, 'the task filter rides the shared select wrap');
-  assert.match(html, /<label for="task-type-filter">/, 'the task filter label names its select');
+  assert.match(html, /<select[^>]+id="task-type-filter"[^>]+aria-label="[^"]+"/,
+    'the task type select retains an accessible name without a visible label');
   // The downloads url input keeps the same single-line control height as the search and the selects.
   const fetchRule = rules.find(match => match[1].trim() === '.fetch-controls input');
   assert.equal(heightOf(fetchRule[2]), heightOf(searchRule[2]),
