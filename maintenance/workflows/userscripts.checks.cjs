@@ -7,7 +7,7 @@ const vm = require("node:vm");
 
 function loadChecks(file) {
   const source = fs.readFileSync(path.join(__dirname, "../../userscripts", file), "utf8");
-  // fetch resolves against the host realm at call time, so one case can drive it. The
+  // `fetch` resolves against the host realm at call time, so one case can drive it. The
   // session store lives in the VM realm too, so a case can plant a saved slug.
   const session = {
     value: null,
@@ -2345,7 +2345,7 @@ function checkStateDownload(api, session, logging) {
   assert.equal(stateAction("download", false), "block");
   assert.equal(stateAction("download", true), "download");
   assert.equal(stateAction("write", true), "write");
-  // The no-file card: a manual press always gets it, and an automatic tick gets it once
+  // The no-file card: a manual press always shows it, and an automatic tick shows it once
   // per unconfigured period.
   assert.equal(panelNeeded(true, true), true);
   assert.equal(panelNeeded(true, false), true);
@@ -2380,12 +2380,12 @@ function checkStateDownload(api, session, logging) {
   assert.match(errorLines[0], /500/);
   assert.doesNotMatch(errorLines[0], /localhost|api\/copy-state/);
   assert.equal(getLine(200, "http://localhost:8000"), "GET 200 http://localhost:8000");
-  // The owner's line texts: the no-file hint names the dialog it launches, a
+  // The owner's line texts: the no-file hint names the dialog it opens, a
   // stale state reads as a history mismatch, and a closed picker reads as a plain no-file line.
   assert.equal(STATE_LINES.hint, "no file selected; launching dialog");
   assert.equal(STATE_LINES.history, "history does not match");
   assert.equal(STATE_LINES.pickerClosed, "no file selected;");
-  // The refused copy reads as a GET too, and the missing frame reads plainly.
+  // The refused copy reads as a `GET` too, and the missing frame reads plainly.
   assert.equal(STATE_LINES.noPreview, "no preview detected");
   assert.equal(
     copyLine(500, "http://localhost:8000"),
@@ -2479,7 +2479,7 @@ function checkStateDownload(api, session, logging) {
   assert.equal(overwriteAsk(true, { kind: "download" }, false, false), false, "No file to protect");
   assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson with this state\?$/);
   console.log("ok state download 32");
-  // The session bar names an unpushed branch in a titled span. A pushed branch also gets an
+  // The session bar names an unpushed branch in a titled span. A pushed branch also has an
   // anchor with a /tree/ href. The repository anchor carries no branch.
   const element = (tag, title, href) => ({
     tag: tag,

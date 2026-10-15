@@ -1,7 +1,11 @@
 """Tests for code-comment prose coverage."""
 
+import json
+import subprocess
+import sys
 from pathlib import Path
 
+import extract_prose
 import lint_prose
 
 
@@ -15,7 +19,9 @@ const url = "https://example.test";
 // Write the state.
 """
 
-  assert lint_prose.userscript_prose(source) == "Prepare the state.\nWrite the state."
+  assert (
+    extract_prose.userscript_prose(source) == "Prepare the state.\nWrite the state."
+  )
 
 
 def test_userscript_metadata_sections_collect_required_prose():
@@ -26,7 +32,7 @@ def test_userscript_metadata_sections_collect_required_prose():
 // ==/UserScript==
 """
 
-  assert lint_prose.userscript_metadata_sections(source) == [
+  assert extract_prose.userscript_metadata_sections(source) == [
     "Example utility",
     "Hide panels.",
   ]
@@ -77,7 +83,7 @@ const url = "https://example.test";
 /* Read the state. */
 """
 
-  assert lint_prose.source_prose(Path("userscripts/example.user.js"), source) == (
+  assert extract_prose.source_prose(Path("userscripts/example.user.js"), source) == (
     "Set the URL.\nRead the state."
   )
 
@@ -88,7 +94,7 @@ def test_source_prose_reads_hash_comments_outside_strings():
 """
 
   assert (
-    lint_prose.source_prose(Path("example.yml"), source)
+    extract_prose.source_prose(Path("example.yml"), source)
     == "Read the name.\nSet the name."
   )
 
@@ -99,26 +105,71 @@ def test_lint_fails_advisory_findings_in_strict_mode():
 
 
 def test_code_targets_skip_vendored_content():
-  targets = lint_prose.code_targets()
+  targets = extract_prose.code_targets()
 
   assert Path("maintenance/lint_prose.py") in targets
   assert Path(".agents/skills/asd-ste100/scripts/ste-lint.py") not in targets
 
 
 def test_vendored_agent_skills_stay_out_of_code_targets():
-  assert lint_prose.is_vendored(Path(".agents/skills/ponytail/scripts/example.py"))
-  assert not lint_prose.is_vendored(
+  assert extract_prose.is_vendored(Path(".agents/skills/ponytail/scripts/example.py"))
+  assert not extract_prose.is_vendored(
     Path(".agents/skills/arena-skill/scripts/preview.py")
   )
 
 
-def test_strict_lint_checks_comment_sections_individually():
+def test_strict_lint_checks_synonyms_across_sections():
   assert (
     lint_prose.strict_lint(
       "example", ["Check the state.", "Validate the state."], False
     )
-    == 0
+    == 1
   )
   assert (
     lint_prose.strict_lint("example", ["Check and validate the state."], False) == 1
   )
+
+
+def test_file_synonyms_use_only_extracted_prose():
+  source = '# Check the state.\ndef validate_state():\n  return "Validate the state."'
+  sections = extract_prose.source_sections(Path("example.py"), source)
+  assert lint_prose.strict_lint("example.py", sections, False) == 0
+  assert lint_prose.strict_lint("first.py", ["Check the state."], False) == 0
+  assert lint_prose.strict_lint("second.py", ["Validate the state."], False) == 0
+  assert lint_prose.strict_lint("passive.py", ["The state was saved."], False) == 1
+
+
+def test_extract_prose_cli_groups_comments_and_docstrings(tmp_path):
+  first = tmp_path / "first.py"
+  first.write_text(
+    '"""Check the state."""\nordinary = "Do not collect this string"\n# Read the state.\n'
+  )
+  second = tmp_path / "second.js"
+  second.write_text(
+    'const ordinary = "Do not collect this string";\n// Write the state.\n'
+  )
+  script = Path(lint_prose.__file__).with_name("extract_prose.py")
+  result = subprocess.run(
+    [sys.executable, str(script), str(first), str(second)],
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stderr
+  assert json.loads(result.stdout) == {
+    str(first): ["Check the state.", "Read the state."],
+    str(second): ["Write the state."],
+  }
+
+
+def test_linter_consumes_grouped_extractor_output(tmp_path, monkeypatch):
+  source = tmp_path / "example.py"
+  source.write_text("# Read the state.\n")
+  monkeypatch.setattr(
+    lint_prose,
+    "extract_files",
+    lambda: {str(source): ["Check the state.", "Validate the state."]},
+    raising=False,
+  )
+  monkeypatch.setattr(lint_prose, "markdown_targets", list)
+  assert lint_prose.main() == 1

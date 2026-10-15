@@ -299,7 +299,7 @@ def test_report_receipt_ids():
 
 
 def test_report_unpublish():
-  "Deleting a report prunes the tab row only. Answers and the source file stay."
+  "Removing a report prunes the tab row only. Answers and the source file stay."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     source = Path(directory) / "pick.md"
@@ -1958,7 +1958,7 @@ def test_upload_filenames_are_unique():
 
 
 def test_upload_record_migration():
-  # Migration backfills existing single-file upload records so their parent note still displays a
+  # Migration backfills existing single-file upload records so their parent note still shows a
   # filename after this schema introduces note_id. Stored bytes are not renamed or removed.
   with tempfile.TemporaryDirectory() as old_upload_dir:
     old_db = Path(old_upload_dir) / "state.sqlite3"
@@ -3451,8 +3451,8 @@ def test_task_amend():
     other.write_task("extra", "Extra", ["Step one"])
     other.import_tasks(preview.parse_state_import(backup), replace=True)
     assert [item["id"] for item in other.list_tasks()] == ["docs-archive", "minify"]
-    # An invalid --replace changes nothing: deletion and writes share a transaction.
-    # Delete-first logic once lost the list to a later invalid record.
+    # An invalid --replace changes nothing: removal and writes share a transaction.
+    # Remove-first logic once lost the list to a later invalid record.
     before = other.list_tasks()
     for bad, flaw in (
       (
@@ -4886,7 +4886,7 @@ def test_reminder_rotation():
     assert "Tasks" in result.stdout
     tail = tail_at(offset + 2)
     assert result.stderr.strip() == f"calls 2 {pending}{tail}"
-    # A read does not erase the calls since the first unread message. Only a fresh backlog
+    # A read does not remove the calls since the first unread message. Only a fresh backlog
     # resets the tally. A message landing on an unacked pile leaves it running.
     rotate_store.read()
     assert rotate_store.reminder() == (f"calls 2 {pending}{tail_at(offset + 3)}")

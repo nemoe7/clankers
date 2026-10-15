@@ -27,7 +27,7 @@ flowchart TB
 
 ## Instruction budgets
 
-Latest measurements as of 2026-10-14. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file, except the proxies. Skill refs stay out.
+Latest measurements as of 2026-10-15. `maintenance/check.py --update` rebuilds the table and refuses drift. The table covers the arena suite: ARENA.md and every arena-skill file, one row per file, except the proxies. Skill refs stay out.
 
 | File | Measure | Current |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Latest measurements as of 2026-10-14. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 11,027 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 14,028 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
-| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,066 `B` |
+| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,065 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 148,614 `B` |
 | `skills/squash/SKILL.md` | `o200k_base` | 1,377 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |

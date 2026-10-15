@@ -2223,7 +2223,7 @@ test('preview client', async (t) => {
   });
 
   await t.test("The delete press stamps its acknowledgement before removal", async () => {
-    // The receipt appears atop the panel that the owner deletes from. The page stamps its acknowledgement before removal.
+    // The receipt appears atop the panel that the owner removes from. The page stamps its acknowledgement before removal.
     // The ack time sits past every stamp, so the tab's own open cannot clear it.
     const keptReports = state.reports;
     const keptSelect = get('#report-select').value;

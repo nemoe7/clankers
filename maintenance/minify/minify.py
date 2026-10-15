@@ -1,4 +1,4 @@
-"""Build compact preview assets, validate them, and repair distributed-copy drift."""
+"""Build compact preview assets, check them, and repair distributed-copy drift."""
 
 from __future__ import annotations
 
@@ -178,7 +178,7 @@ def check_stylesheet(built: str) -> None:
 
 
 def build() -> dict[str, tuple[str, str]]:
-  "Build and validate all outputs before the first write."
+  "Build and check all outputs before the first write."
   sources = {}
 
   for name, binary, flags in JOBS:

@@ -174,7 +174,7 @@ AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
 # silence after a turn never reads as a running bash call. The agent's next call clears it.
 TURN_ENDED_META = "turn_ended_at"
-# A removal deletes rows, so group stamps can move back. The state stamp also reads this mark.
+# Removing rows can move group stamps back. The state stamp also reads this mark.
 # The save stamp trigger rewrites a file that still has a removed report.
 REMOVED_META = "state_removed_at"
 # Agent report changes wait this long after a recorded owner view.
@@ -556,7 +556,7 @@ def when(value):
 
 
 def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
-  """Validate a restored receipt. Require all receipt fields or none. Reject a partial receipt so a note never
+  """Check a restored receipt. Require all receipt fields or none. Reject a partial receipt so a note never
   returns as answered."""
   carried = (acknowledged_at, ack_kind, ack_text)
   if all(value is None for value in carried):
@@ -578,7 +578,7 @@ def restore_receipt(acknowledged_at, ack_kind, ack_text, ack_edited_at=None):
 
 
 def restore_replies(replies, acknowledged):
-  """Validate replies from later acknowledgements. Require kind, text, and a stamp for each reply. Reject replies
+  """Check replies from later acknowledgements. Require kind, text, and a stamp for each reply. Reject replies
   on an unanswered record. Store the list as JSON text."""
   if not replies:
     return None
@@ -647,7 +647,7 @@ def reply_thread(record, notes, pending_ids):
 
 
 def restore_reply_seen_count(value, replies):
-  "Validate the saved count of viewed appended replies."
+  "Check the saved count of viewed appended replies."
   if value is None:
     return 0
   if type(value) is not int or value < 0:
@@ -658,7 +658,7 @@ def restore_reply_seen_count(value, replies):
 
 
 def submission_text(text):
-  "Validate flattened owner answers."
+  "Check flattened owner answers."
   if not isinstance(text, str) or not text.strip():
     raise ValueError("A report submission carries at least one answer")
   return text
@@ -956,7 +956,7 @@ def saved_task_line(record):
 
 
 def upload_name(name):
-  "Return the supplied file name for display and the download header."
+  "Return the supplied file name for labels and the download header."
   cleaned = Path(str(name or "")).name.strip()
   if not cleaned:
     raise ValueError("An upload needs a file name")
@@ -1039,7 +1039,7 @@ def body_digest(data):
 
 
 def save_body(target, data):
-  # Replace only a complete file, including repairs after a restore.
+  # Replace a file only when complete, including after a restore.
   with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as staged:
     temporary = Path(staged.name)
   try:
@@ -2523,7 +2523,7 @@ def check_task_steps(details):
 
 
 def check_task(task_id, title, details):
-  "Validate task fields before a write."
+  "Check task fields before a write."
   if not TASK_ID.match(task_id or ""):
     raise ValueError(
       "A task ID is 1-64 characters of lowercase letters, digits and hyphens,"
@@ -3174,7 +3174,7 @@ class Store:
 
   @contextmanager
   def transaction(self, db=None, autosave=True):
-    """Use one transaction for the work. Reuse a supplied transaction so imports can delete and write atomically.
+    """Use one transaction for the work. Reuse a supplied transaction so imports can remove and write atomically.
     Refresh the save file after an outer commit unless autosave is false."""
     if db is not None:
       yield db
@@ -3326,7 +3326,7 @@ class Store:
     )
 
   def remove_task(self, task_id):
-    "Delete one task and return its stored record. This lets the echo confirm the removal."
+    "Remove one task and return its stored record for the output."
     with self.transaction() as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
@@ -3384,7 +3384,7 @@ class Store:
     return kind
 
   def amend_task(self, prev_id, task_id):
-    """Move a stored task to a new ID and keep the rest, so a typo costs no deletion."""
+    """Move a stored task to a new ID and keep the rest, so a typo costs no removal."""
     check_task(task_id, None, None)
     stamp = now()
     with self.transaction() as db:
@@ -3642,7 +3642,7 @@ class Store:
           ):
             raise ValueError("This note ID already belongs to different files")
           # A restore can keep SQLite records but lose bytes. Repeating exactly the same request
-          # repairs missing bytes, not the note's acknowledgement or its attachment order.
+          # restores missing bytes, not the note's acknowledgement or its attachment order.
           for row, (_, _, data) in zip(rows, prepared):
             target = self.path.parent / UPLOAD_DIR / row["file"]
             if (
@@ -3739,7 +3739,7 @@ class Store:
     "Atomically take the oldest queued URL. Abandoned claims return after five minutes."
     stamp = now()
     with self.transaction(autosave=False) as db:
-      # UPDATE obtains SQLite's write lock before SELECT, so two browser tabs cannot take the
+      # `UPDATE` takes SQLite's write lock before `SELECT`, so two browser tabs cannot take the
       # same row. Active clients renew their lease while reading or sending a large file.
       db.execute(
         "UPDATE fetch_jobs SET status = 'queued', claim = NULL, lease_until = NULL,"
@@ -3940,7 +3940,7 @@ class Store:
     return receipt
 
   def import_reports(self, records, shared=None):
-    """Restore reports and published state from the save file. Use saved Markdown to rebuild report pages. Validate
+    """Restore reports and published state from the save file. Use saved Markdown to rebuild report pages. Check
     every record before writing."""
     if not isinstance(records, list):
       raise TypeError("Import a list of report objects")
@@ -3995,8 +3995,8 @@ class Store:
     return len(prepared)
 
   def import_tasks(self, records, replace=False, autosave=True, shared=None):
-    """Restore tasks from saved JSON. Validate every record before writes, then use one transaction. Reject an
-    invalid replacement before it deletes stored tasks."""
+    """Restore tasks from saved JSON. Check every record before writes, then use one transaction. Reject an
+    invalid replacement before it removes stored tasks."""
     if not isinstance(records, list):
       # The importer also calls this directly, so reject malformed records here.
       raise TypeError("Import a list of task objects")
@@ -4030,7 +4030,7 @@ class Store:
       )
     with self.transaction(shared, autosave=autosave) as db:
       if replace:
-        # Replacement records cannot inherit a title. Reject before deletion to name the offending record.
+        # Replacement records cannot inherit a title. Reject before removal to name the offending record.
         # A later error rolls back before an empty transaction appears saved.
         for task_id, title, *_ in prepared:
           stored = db.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -4375,7 +4375,7 @@ class Store:
         )
 
   def mark_replies_seen(self, record_id, count):
-    "Persist the number of appended replies displayed as viewed."
+    "Persist the number of appended replies shown as viewed."
     identifier(record_id)
     if type(count) is not int or count < 0:
       raise ValueError("A viewed-reply count is a nonnegative integer")
@@ -4944,7 +4944,7 @@ def handler(store):
           return
         if path == "/api/submissions":
           # The clipboard copy asks for the answer lines on click, scoped to the reports still in
-          # the tab. A deleted report's answers stay in the database and out of this copy.
+          # the tab. A removed report's answers stay in the database and out of this copy.
           live = {report["id"] for report in store.state()["reports"]}
           self.reply(
             200,
@@ -5103,7 +5103,7 @@ def handler(store):
           subject = (
             "Upload" if note_upload else "Download" if fetch_result else "Request body"
           )
-          # Discard at most one byte over the limit in chunks. Clients sending a wider body get
+          # Discard at most one byte over the limit in chunks. Clients sending a wider body receive
           # the 413 without forcing this server to buffer or read all of it.
           remaining = length if limit is not None and 0 < length <= limit + 1 else 0
           while remaining > 0:
@@ -5244,7 +5244,7 @@ def handler(store):
           self.reply(200, json.dumps(seen, ensure_ascii=False))
           return
         if report_unpublish:
-          # The page deletes a report only on the owner's two clicks, so the removal
+          # The page removes a report only on the owner's two clicks, so the removal
           # writes the inbox note that names it.
           store.unpublish(report_unpublish.group(1), dismissed_by_owner=True)
           self.reply(200, json.dumps({"unpublished": report_unpublish.group(1)}))

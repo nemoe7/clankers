@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+#### maintenance
+
+- A shared prose extractor groups code comments and docstrings by file. The prose linter uses these groups for file-wide synonym checks. First-party code prose now uses consistent terms.
+
 #### preview
 
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
