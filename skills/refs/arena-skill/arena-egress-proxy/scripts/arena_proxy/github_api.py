@@ -42,8 +42,11 @@ def request(
     return 502, json.dumps({"error": f"github unreachable: {error.reason}"}).encode()
 
 
-def log_tail(data, cap=LOG_CAP_BYTES, lines=LOG_TAIL_LINES):
-  """Return the tail of a run log zip as text, or None when the bytes are not a zip."""
+def log_tail(data, cap=LOG_CAP_BYTES, lines=LOG_TAIL_LINES, only_failed=False):
+  """Return the tail of a run log zip as text, or None when the bytes are not a zip.
+
+  With `only_failed`, keep whole only the step files that carry an error marker.
+  """
   try:
     archive = zipfile.ZipFile(io.BytesIO(data))
   except (zipfile.BadZipFile, OSError):
@@ -53,16 +56,25 @@ def log_tail(data, cap=LOG_CAP_BYTES, lines=LOG_TAIL_LINES):
     for name in sorted(archive.namelist()):
       if not name.endswith(".txt"):
         continue
-      buffer += f"\n===== {name} =====\n".encode()
+      block = bytearray()
       with archive.open(name) as handle:
         while True:
           chunk = handle.read(65536)
           if not chunk:
             break
-          buffer += chunk
-          if len(buffer) > cap:
-            del buffer[: len(buffer) - cap]
-  return "\n".join(buffer.decode("utf-8", "replace").splitlines()[-lines:]) + "\n"
+          block += chunk
+          if len(block) > cap:
+            del block[: len(block) - cap]
+      if only_failed and b"##[error]" not in block:
+        continue
+      buffer += f"\n===== {name} =====\n".encode()
+      buffer += block
+      if len(buffer) > cap:
+        del buffer[: len(buffer) - cap]
+  text = buffer.decode("utf-8", "replace")
+  if only_failed:
+    return text.strip("\n") + "\n"
+  return "\n".join(text.splitlines()[-lines:]) + "\n"
 
 
 def pull_context(repo, pr=None, path=None, ref="", token="", api=GITHUB_API):

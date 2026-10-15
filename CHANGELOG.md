@@ -37,6 +37,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 - Task detail updates accept an append flag. Replacement remains the default, and existing limits still apply.
 
 #### skills
+- The run-log route takes failed=1 and answers only the step blocks that carry an error marker, so an error hunt skips the passing steps.
 
 - The gpt-question skill gives every choice group its own Custom answer option and free-text input. The always-visible form-level field retires, and the mixed example enforces one, two and one-or-more selections.
 

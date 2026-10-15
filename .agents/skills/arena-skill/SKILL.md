@@ -140,7 +140,7 @@ https://<backend-host>/v1/<route>?key=<agent-key>&<parameters>
 
 | Route | Parameters | Returns |
 | --- | --- | --- |
-| `/v1/gh` | `key`, `path`, plus the path's own query | The GitHub API response through the owner's token, or the text tail of a run-log path |
+| `/v1/gh` | `key`, `path`, `failed=1` for failed steps only, plus the path's own query | The API answer, the run-log tail, or only its failed-step blocks with `failed=1` |
 | `/v1/fetch` | `key`, `url`, `mode`, `encoding`, `gzip`, `stage`, `id`, `index` | Text, JSON with base64, or one staged chunk |
 | `/v1/llm` | `key`, `prompt`, `model`, `system`, `image`, `file`, `ref`, `diff`, `repo`, `max_tokens`, or `id` | A job id, then status and text |
 
