@@ -585,12 +585,26 @@ def test_http_boundaries():
       "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:"
       not in css
     )
-    assert re.search(
-      r"\.select-wrap::after\{[^}]*border-top:5px solid var\(--muted\)", css
+    caret = re.search(r"\.select-wrap::after\{([^}]+)\}", css)
+    select = re.search(r"\.select-wrap select\{([^}]+)\}", css)
+    assert caret and select
+
+    def css_px(rule, name):
+      value = re.search(
+        rf"(?:^|;){re.escape(name)}:"
+        r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(px)?(?=[ ;]|$)",
+        rule,
+      )
+      assert value and (value[2] or float(value[1]) == 0)
+      return float(value[1])
+
+    assert re.search(r"(?:^|;)appearance:none(?:;|$)", select[1])
+    assert re.search(r"border-top:[^;]+ solid var\(--muted\)", caret[1])
+    assert css_px(caret[1], "border-top") > 0
+    caret_space = sum(
+      css_px(caret[1], name) for name in ("right", "border-left", "border-right")
     )
-    assert re.search(
-      r"\.select-wrap select\{appearance:none;padding-right:26px;\}", css
-    )
+    assert css_px(select[1], "padding-right") > caret_space
     # The green send flash is gone (owner: the footnote under the report covers it), so neither the
     # page nor the client script carries report-receipt. The footnote element stays.
     page = (preview.ASSETS / "index.html").read_text()
@@ -1161,7 +1175,7 @@ def test_http_boundaries():
         "the search box shares the form controls' border and radius"
       )
       assert "#log-filter" not in page and ".filter-wrap" not in page
-      assert "border-top:5px solid var(--muted)" in page, (
+      assert caret[0] in compact(page), (
         "the report select keeps its drawn caret, and it needs no blocked data image"
       )
       assert "data:image/svg+xml" not in page, "the preview CSP blocks data images"
