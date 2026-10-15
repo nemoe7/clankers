@@ -56,6 +56,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- A click that names a task lifts a hiding type filter or search query, so the row asked for is the row shown.
+
+- A task row's type badge sits beside the title, ahead of the details collapse, and the operations badge reads Ops.
+
 - The task panel header carries a search input beside the type filter. Rows narrow on title, ID, type and detail text as the query changes, case-insensitive. The head seat follows the filtered list.
 
 - A task's linked receipts collapse inside its details block, hidden until expanded, and the summary counts them beside the manual steps. Receipt text keeps every word past the step cap that manual details obey.

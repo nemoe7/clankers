@@ -635,13 +635,15 @@ test('preview client', async (t) => {
     await refresh();
     const head = get('#tasks-current-body').children[0];
     assert.equal(head.title, 'code-work', 'the first open task keeps the seat');
-    const badge = head.children[head.children.length - 1];
-    assert.equal(badge.className, 'task-type');
+    const badge = head.children[1];
+    assert.equal(badge.className, 'task-type', 'the badge rides beside the title');
     assert.equal(badge.textContent, 'Code');
     assert.equal(badge.dataset.taskType, 'code');
+    assert.equal(head.children[2].className, 'task-details',
+      'the details collapse follows the badge');
     const docsRow = get('#tasks-upcoming-body').children[0];
-    assert.equal(docsRow.children[docsRow.children.length - 1].className, 'task-type',
-      'a typed row carries its badge after the details');
+    assert.equal(docsRow.children[1].className, 'task-type',
+      'a typed row carries its badge beside the title');
     assert.equal(get('#tasks-upcoming-body').children[1].children.length, 1,
       'an Unspecified task keeps the row shape it had before types existed');
     const filter = get('#task-type-filter');
@@ -661,6 +663,50 @@ test('preview client', async (t) => {
     filter.events.change();
     assert.equal(get('#tasks-current-body').children[0].title, 'legacy-task',
       'the Unspecified filter finds old rows');
+    filter.value = 'all';
+    filter.events.change();
+    state.tasks = prior;
+    await refresh();
+  });
+
+  await t.test("The operations badge reads Ops and a task click lifts a hiding filter", async () => {
+    const prior = state.tasks;
+    const stamp = new Date().toISOString();
+    state.tasks = {
+      finished: [],
+      upcoming: [
+        { id: 'ops-task', title: 'Ops work', details: ['watch the queue'],
+          status: 'upcoming', order: 1, type: 'operations', updated_at: stamp },
+      ],
+      updated_at: stamp,
+    };
+    await refresh();
+    const head = get('#tasks-current-body').children[0];
+    assert.equal(head.children[1].textContent, 'Ops',
+      'the operations badge reads Ops');
+    const filter = get('#task-type-filter');
+    filter.value = 'docs';
+    filter.events.change();
+    assert.equal(get('#tasks-current-body').children.length, 0,
+      'the docs filter hides the operations row');
+    const link = new Element();
+    link.className = 'ack-reference';
+    link.dataset = { referenceType: 'task', referenceId: 'ops-task' };
+    documentEvents.click({ target: link, preventDefault: () => {} });
+    assert.equal(filter.value, 'operations', 'the click sets the filter to the target type');
+    assert.equal(get('#tasks-current-body').children[0].title, 'ops-task',
+      'the clicked task row comes into view');
+    const search = get('#task-search');
+    search.value = 'queue';
+    search.events.input();
+    assert.equal(get('#tasks-current-body').children.length, 1, 'the detail word keeps the row');
+    search.value = 'zzz';
+    search.events.input();
+    assert.equal(get('#tasks-current-body').children.length, 0, 'a wrong query hides the row');
+    documentEvents.click({ target: link, preventDefault: () => {} });
+    assert.equal(search.value, '', 'the click clears a query that hides the target');
+    assert.equal(get('#tasks-current-body').children[0].title, 'ops-task',
+      'the row returns after the query clears');
     filter.value = 'all';
     filter.events.change();
     state.tasks = prior;

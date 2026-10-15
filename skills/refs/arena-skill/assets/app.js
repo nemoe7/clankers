@@ -1469,6 +1469,15 @@ function taskRow(task) {
   title.setAttribute('role', 'button');
   title.setAttribute('aria-label', `${task.title}. Task ID ${task.id}. Press Enter to quote it`);
   const rows = [title];
+  // The badge rides beside the title, ahead of the details collapse, on owner note: the kind
+  // reads on the title line. An Unspecified task carries no badge, so old rows keep their shape.
+  if (task.type && task.type !== 'unspecified') {
+    const badge = document.createElement('span');
+    badge.className = 'task-type';
+    badge.textContent = task.type === 'operations' ? 'Ops' : task.type[0].toUpperCase() + task.type.slice(1);
+    badge.dataset.taskType = task.type;
+    rows.push(badge);
+  }
   const linked = task.answers && task.answers.length ? task.answers : null;
   if (task.details.length || linked) {
     // A <details> rather than a span, so a task carrying ten long lines costs one collapsed row
@@ -1517,15 +1526,6 @@ function taskRow(task) {
     }
     details.replaceChildren(...parts);
     rows.push(details);
-  }
-  // The badge sits last, so the title and details keep the child positions the tests pin.
-  // An Unspecified task carries no badge, so old rows keep the shape they had.
-  if (task.type && task.type !== 'unspecified') {
-    const badge = document.createElement('span');
-    badge.className = 'task-type';
-    badge.textContent = task.type[0].toUpperCase() + task.type.slice(1);
-    badge.dataset.taskType = task.type;
-    rows.push(badge);
   }
   item.replaceChildren(...rows);
   return item;
@@ -1824,7 +1824,22 @@ function followReference(type, id) {
     return;
   }
   const groups = ['upcoming', 'finished'];
-  if (!groups.some(group => (lastState.tasks?.[group] || []).some(item => item.id === id))) return;
+  const target = groups
+    .map(group => (lastState.tasks?.[group] || []).find(item => item.id === id))
+    .find(Boolean);
+  if (!target) return;
+  // A click that names a task brings the task with it: a hiding filter moves to the target
+  // type and a hiding query clears, on owner note, so the row asked for is the row shown.
+  const targetType = target.type || 'unspecified';
+  if (taskTypeFilter !== 'all' && taskTypeFilter !== targetType) {
+    taskTypeFilter = targetType;
+    $('#task-type-filter').value = targetType;
+  }
+  if (taskSearch && !taskHaystack(target).includes(taskSearch)) {
+    taskSearch = '';
+    $('#task-search').value = '';
+  }
+  renderTasks(lastTasksPayload);
   showTab($('#tasks-tab'));
   const row = [
     ...$('#tasks-current-body').children,
