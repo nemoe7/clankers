@@ -7457,3 +7457,157 @@ def test_tasks_carry_their_linked_answers():
       "a referenced answer stays in the export"
     )
     assert counts["answers"] == 2, counts
+
+
+def pr_check_root(directory):
+  """A repository root the discovery reads its branch from, with no gh calls of its own."""
+  root = Path(directory)
+  (root / ".git").mkdir(exist_ok=True)
+  (root / ".git" / "HEAD").write_text("ref: refs/heads/arena/session\n", "utf-8")
+  return root
+
+
+def fake_gh(heads, counts, calls):
+  """A stand-in for subprocess.run that answers the discovery reads and records every call."""
+
+  def run(argv, **kwargs):
+    calls.append([str(item) for item in argv])
+    if argv[:3] == ["gh", "pr", "list"]:
+      head = heads[
+        min(
+          len([c for c in calls if c[:3] == ["gh", "pr", "list"]]) - 1, len(heads) - 1
+        )
+      ]
+      return subprocess.CompletedProcess(argv, 0, stdout=f"{head}\n", stderr="")
+    if argv[:2] == ["gh", "api"]:
+      count = counts[
+        min(len([c for c in calls if c[:2] == ["gh", "api"]]) - 1, len(counts) - 1)
+      ]
+      return subprocess.CompletedProcess(argv, 0, stdout=f"{count}\n", stderr="")
+    return subprocess.CompletedProcess(argv, 0, stdout="watched\n", stderr="")
+
+  return run
+
+
+def test_the_pr_check_wait_finds_checks_before_it_watches(capsys):
+  """A pull-request check wait finds the first check before it runs the watch.
+
+  The wait pins the head it reads first, asks again every five seconds, and runs the watch
+  only once a check exists on that head."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    calls = []
+    sleeps = []
+    with (
+      patch("preview.resolve_repo_root", return_value=str(root)),
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch(
+        "preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0, 0, 3], calls)
+      ),
+      patch("preview.time.sleep", sleeps.append),
+    ):
+      code = preview.run_command(
+        directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
+      )
+    out = capsys.readouterr().out
+    assert code == 0, out
+    assert "watched" in out, "the watch runs once a check exists"
+    assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * 2, sleeps
+    pins = [call[2] for call in calls if call[:2] == ["gh", "api"]]
+    assert pins == ["repos/owner/repo/commits/abc1234/check-runs"] * 3, pins
+
+
+def test_the_pr_check_wait_fails_when_no_check_appears(capsys):
+  """A discovery window that runs out fails the run, and the watch never starts."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    calls = []
+    sleeps = []
+    with (
+      patch("preview.resolve_repo_root", return_value=str(root)),
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0], calls)),
+      patch("preview.time.sleep", sleeps.append),
+    ):
+      code = preview.run_command(
+        directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
+      )
+    out = capsys.readouterr().out
+    assert code == 1, "a timeout is a failure, never a pass"
+    assert "no check appeared" in out, out
+    polls = preview.PR_CHECK_DISCOVERY_SECONDS // preview.PR_CHECK_DISCOVERY_STEP
+    assert sleeps == [preview.PR_CHECK_DISCOVERY_STEP] * polls, (
+      "the window polls to its end"
+    )
+    assert not [call for call in calls if call[0] != "gh"], "the watch never ran"
+
+
+def test_the_pr_check_wait_fails_on_a_moved_head(capsys):
+  """A head that moves during the window fails the wait, because the pin no longer holds."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    calls = []
+    sleeps = []
+    with (
+      patch("preview.resolve_repo_root", return_value=str(root)),
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch(
+        "preview.subprocess.run",
+        side_effect=fake_gh(["abc1234", "def5678"], [0], calls),
+      ),
+      patch("preview.time.sleep", sleeps.append),
+    ):
+      code = preview.run_command(
+        directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
+      )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "head moved" in out, out
+    assert not [call for call in calls if call[0] != "gh"], "the watch never ran"
+
+
+def test_the_pr_check_wait_fails_on_a_gh_fault(capsys):
+  """A gh fault fails the wait instead of passing it or watching with no checks."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    calls = []
+    fault = subprocess.CompletedProcess(["gh"], 1, stdout="", stderr="auth failed")
+    with (
+      patch("preview.resolve_repo_root", return_value=str(root)),
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch(
+        "preview.subprocess.run",
+        side_effect=lambda *a, **k: calls.append(a[0]) or fault,
+      ),
+      patch("preview.time.sleep", lambda seconds: None),
+    ):
+      code = preview.run_command(
+        directory, "pr-checks", ["bash", "-c", "gh pr checks 107 --watch"]
+      )
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "gh did not read" in out, out
+
+
+def test_a_routed_line_that_is_not_a_check_wait_skips_discovery(capsys):
+  """Discovery belongs to the pull-request check wait alone, so other runs stay untouched."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = pr_check_root(directory)
+    calls = []
+    with (
+      patch("preview.resolve_repo_root", return_value=str(root)),
+      patch("preview.repo_slug", return_value="owner/repo"),
+      patch("preview.subprocess.run", side_effect=fake_gh(["abc1234"], [0], calls)),
+      patch("preview.time.sleep", lambda seconds: None),
+    ):
+      plain = preview.run_command(directory, "gates", ["bash", "-c", "echo plain"])
+      run_watch = preview.run_command(
+        directory, "run-watch", ["bash", "-c", "gh run watch 12345"]
+      )
+    out = capsys.readouterr().out
+    assert plain == 0 and run_watch == 0, out
+    assert "run gates done: exit 0" in out, "the plain line ran at once"
+    assert "run run-watch done: exit 0" in out, "a run watch needs no discovery"
+    assert not [call for call in calls if call[0] == "gh"], (
+      "no discovery read ran for either line"
+    )

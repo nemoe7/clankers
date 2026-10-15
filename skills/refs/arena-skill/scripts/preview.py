@@ -363,6 +363,101 @@ def pr_check_once(result, root):
     result.append(failed)
 
 
+# A check wait runs in two phases, because the installed gh exits on an empty check list
+# instead of waiting for the first check to appear.
+PR_CHECK_DISCOVERY_SECONDS = 120
+PR_CHECK_DISCOVERY_STEP = 5
+
+
+def pr_head_sha(root, branch, slug):
+  """The head SHA of the branch pull request, an empty string when it has none, or None on a fault."""
+  try:
+    listed = subprocess.run(
+      [
+        "gh",
+        "pr",
+        "list",
+        "--head",
+        branch,
+        "--json",
+        "headRefOid",
+        "--jq",
+        ".[0].headRefOid",
+      ],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+  except OSError:
+    return None
+  if listed.returncode:
+    return None
+  return listed.stdout.strip()
+
+
+def check_run_count(root, slug, sha):
+  """How many checks one commit carries, or None on a fault."""
+  try:
+    counted = subprocess.run(
+      ["gh", "api", f"repos/{slug}/commits/{sha}/check-runs", "--jq", ".total_count"],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+    )
+  except OSError:
+    return None
+  if counted.returncode:
+    return None
+  try:
+    return int(counted.stdout.strip())
+  except ValueError:
+    return None
+
+
+def pr_checks_discovery(
+  root=".",
+  seconds=PR_CHECK_DISCOVERY_SECONDS,
+  step=PR_CHECK_DISCOVERY_STEP,
+  sleep=None,
+):
+  """Wait for the first check on the branch pull request's head commit.
+
+  Return None once a check exists, so the caller runs its watch. Return the failure reason
+  when the wait must fail: no branch pull request, a gh fault, a head that moved, or a
+  window that ran out. The wait pins the head it reads first, so a later push never
+  satisfies it, and a window that runs out is a failure, never a pass.
+  """
+  # The pause resolves at call time, so a test can watch the window without waiting it.
+  pause = sleep or time.sleep
+  branch = workspace_branch(root)
+  slug = repo_slug(root)
+  if not branch or not slug:
+    return "no branch pull request to watch"
+  pinned = pr_head_sha(root, branch, slug)
+  if pinned is None:
+    return "gh did not read the pull request head"
+  if not pinned:
+    return "no branch pull request to watch"
+  polls = seconds // step + 1
+  for poll in range(polls):
+    if poll:
+      head = pr_head_sha(root, branch, slug)
+      if head is None:
+        return "gh did not read the pull request head"
+      if head != pinned:
+        return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
+    count = check_run_count(root, slug, pinned)
+    if count is None:
+      return "gh did not read the check runs"
+    if count:
+      return None
+    if poll + 1 < polls:
+      pause(step)
+  return f"no check appeared on {pinned[:7]} within {seconds} seconds"
+
+
 # The record kinds whose IDs are session-local: minted here, unresolvable elsewhere.
 SESSION_ID_TABLES = (
   ("notes", "note"),
@@ -1936,7 +2031,17 @@ def run_command(state_dir, name, argv):
     )
     return 2
   started = time.monotonic()
-  completed = subprocess.run(argv, capture_output=True, text=True, check=False)
+  # A pull-request check wait finds its first check before it watches, because the installed
+  # gh exits on an empty check list. A discovery failure stays a failure and never watches.
+  discovery = (
+    pr_checks_discovery(resolve_repo_root()) if pr_checks_command(argv) else None
+  )
+  if discovery:
+    completed = subprocess.CompletedProcess(
+      argv, 1, f"pr-checks wait failed: {discovery}\n", ""
+    )
+  else:
+    completed = subprocess.run(argv, capture_output=True, text=True, check=False)
   seconds = round(time.monotonic() - started, 1)
   output = (completed.stdout + completed.stderr).splitlines()
   tail = output[-RUN_TAIL_LINES:]
@@ -2208,6 +2313,12 @@ def long_run_name(line):
 def pr_check_line(line):
   """True when a command piece runs a long run the gate detaches."""
   return long_run_name(line) is not None
+
+
+def pr_checks_command(argv):
+  """True when this argv waits on a pull request's checks, so the discovery runs first."""
+  line = argv[-1] if len(argv) > 2 and argv[0] in SHELL_BASENAMES else " ".join(argv)
+  return long_run_name(line) == "pr-checks"
 
 
 def detached_seconds(started_at):

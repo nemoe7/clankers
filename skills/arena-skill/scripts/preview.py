@@ -119,6 +119,36 @@ def pr_failed_check(root='.'):
 def pr_check_once(result,root):
 	failed=pr_failed_check(root)
 	if failed:result.append(failed)
+PR_CHECK_DISCOVERY_SECONDS=120
+PR_CHECK_DISCOVERY_STEP=5
+def pr_head_sha(root,branch,slug):
+	try:listed=subprocess.run(['gh','pr','list','--head',branch,'--json','headRefOid','--jq','.[0].headRefOid'],cwd=root,capture_output=True,text=True,check=False)
+	except OSError:return None
+	if listed.returncode:return None
+	return listed.stdout.strip()
+def check_run_count(root,slug,sha):
+	try:counted=subprocess.run(['gh','api',f"repos/{slug}/commits/{sha}/check-runs",'--jq','.total_count'],cwd=root,capture_output=True,text=True,check=False)
+	except OSError:return None
+	if counted.returncode:return None
+	try:return int(counted.stdout.strip())
+	except ValueError:return None
+def pr_checks_discovery(root='.',seconds=PR_CHECK_DISCOVERY_SECONDS,step=PR_CHECK_DISCOVERY_STEP,sleep=None):
+	pause=sleep or time.sleep;branch=workspace_branch(root);slug=repo_slug(root)
+	if not branch or not slug:return'no branch pull request to watch'
+	pinned=pr_head_sha(root,branch,slug)
+	if pinned is None:return'gh did not read the pull request head'
+	if not pinned:return'no branch pull request to watch'
+	polls=seconds//step+1
+	for poll in range(polls):
+		if poll:
+			head=pr_head_sha(root,branch,slug)
+			if head is None:return'gh did not read the pull request head'
+			if head!=pinned:return f"the pull request head moved from {pinned[:7]} to {head[:7]}"
+		count=check_run_count(root,slug,pinned)
+		if count is None:return'gh did not read the check runs'
+		if count:return None
+		if poll+1<polls:pause(step)
+	return f"no check appeared on {pinned[:7]} within {seconds} seconds"
 SESSION_ID_TABLES=('notes','note'),('submissions','answer'),('reports','report'),('tasks','task')
 HEX7_RE=re.compile('[0-9a-f]{7}')
 MINT_ATTEMPTS=16
@@ -675,7 +705,10 @@ def run_command(state_dir,name,argv):
 	if not RUN_NAME.fullmatch(name or''):print('arena-preview route: the name takes 1 to 64 letters, digits, dot, dash or underscore.',flush=True);return 2
 	if argv[:1]==['--']:argv=argv[1:]
 	if not argv:print('arena-preview route: name a command after --, for example: route gates -- make check',flush=True);return 2
-	started=time.monotonic();completed=subprocess.run(argv,capture_output=True,text=True,check=False);seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=output[-RUN_TAIL_LINES:];verdict=tail[-1]if tail else'(no output)';path=run_record_path(state_dir,name);existing=json_record(path)or{};record={**existing,'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};write_run_record(path,record)
+	started=time.monotonic();discovery=pr_checks_discovery(resolve_repo_root())if pr_checks_command(argv)else None
+	if discovery:completed=subprocess.CompletedProcess(argv,1,f"pr-checks wait failed: {discovery}\n",'')
+	else:completed=subprocess.run(argv,capture_output=True,text=True,check=False)
+	seconds=round(time.monotonic()-started,1);output=(completed.stdout+completed.stderr).splitlines();tail=output[-RUN_TAIL_LINES:];verdict=tail[-1]if tail else'(no output)';path=run_record_path(state_dir,name);existing=json_record(path)or{};record={**existing,'name':name,'argv':argv,'exit':completed.returncode,'seconds':seconds,'finished_at':now(),'verdict':verdict,'tail':tail,'announced':False};write_run_record(path,record)
 	for line in tail:print(line,flush=True)
 	print(f"run {name} done: exit {completed.returncode} {seconds}s {verdict}",flush=True);return completed.returncode
 def live_runs(state_dir):
@@ -769,6 +802,7 @@ def long_run_name(line):
 				if word==first and tokens[index+2+position]==second:return name
 	return None
 def pr_check_line(line):return long_run_name(line)is not None
+def pr_checks_command(argv):line=argv[-1]if len(argv)>2 and argv[0]in SHELL_BASENAMES else' '.join(argv);return long_run_name(line)=='pr-checks'
 def detached_seconds(started_at):
 	try:
 		started=datetime.fromisoformat(str(started_at))
