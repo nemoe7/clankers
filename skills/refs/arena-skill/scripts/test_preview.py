@@ -22,6 +22,32 @@ from unittest.mock import patch
 
 import preview
 
+_GUARD_LISTENER = None
+_GUARD_PORT = None
+
+
+def guard_port():
+  """Return a listening test port, held for the process, that passes the server guard."""
+  global _GUARD_LISTENER, _GUARD_PORT
+  if _GUARD_PORT is None:
+    _GUARD_LISTENER = socket.socket()
+    _GUARD_LISTENER.bind(("127.0.0.1", 0))
+    _GUARD_LISTENER.listen(8)
+    _GUARD_PORT = str(_GUARD_LISTENER.getsockname()[1])
+
+    def drain():
+      # Every guard probe connects and closes. Without an accept the pending
+      # slots pile up and a later probe sees a refused port.
+      while True:
+        try:
+          connection, _ = _GUARD_LISTENER.accept()
+          connection.close()
+        except OSError:
+          return
+
+    threading.Thread(target=drain, daemon=True).start()
+  return _GUARD_PORT
+
 
 def request(method, path, body=None, headers=None, raw=False):
   client = http.client.HTTPConnection("127.0.0.1", app.server_port, timeout=5)
@@ -54,6 +80,7 @@ def test_edited_ack_stamp():
   "A second ack appends a reply block. The first answer stays."
   with tempfile.TemporaryDirectory() as edit_dir:
     edited = preview.Store(edit_dir, create=True)
+    edited.set_meta("port", guard_port())
     edited.note("edit-note", "Question")
     edited.submission("edit-answer", "form", "REPORT form: answer")
     ids = ["edit-note", "edit-answer"]
@@ -87,6 +114,7 @@ def test_edited_ack_stamp():
     saved.write_text(json.dumps(preview.saved_note_line(row)) + "\n")
     restored_dir = Path(edit_dir) / "restored"
     restored = preview.Store(restored_dir, create=True)
+    restored.set_meta("port", guard_port())
     subprocess.run(
       [
         sys.executable,
@@ -144,6 +172,7 @@ def test_reply_seen_persistence():
     root = Path(directory) / "arena-preview"
     backup = Path(directory) / "saved-state.ndjson"
     store = preview.Store(root, create=True, save_path=backup)
+    store.set_meta("port", guard_port())
     store.note("edited-note", "Question")
     form = Path(directory) / "form.md"
     form.write_text("# Form\n\nNo fields here.\n", encoding="utf-8")
@@ -239,7 +268,7 @@ def test_reply_seen_persistence():
       assert [line["ack_edited_seen_count"] for line in saved_lines] == [2, 2]
 
       restored_dir = Path(directory) / "restored"
-      preview.Store(restored_dir, create=True)
+      preview.Store(restored_dir, create=True).set_meta("port", guard_port())
       subprocess.run(
         [
           sys.executable,
@@ -303,6 +332,7 @@ def test_report_unpublish():
   "Removing a report prunes the tab row only. Answers and the source file stay."
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
     source = Path(directory) / "pick.md"
     source.write_text(
       "# Pick\n\nChoice? {#pick}\n- (x) one\n- ( ) two\n", encoding="utf-8"
@@ -394,6 +424,7 @@ def test_stale_reports_command_lists_ids_and_reasons():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
     store = preview.Store(root, create=True)
+    store.set_meta("port", guard_port())
     plain = root / "plain.md"
     plain.write_text("Information only, with no question to answer.\n", "utf-8")
     store.publish("plain", "Plain", plain)
@@ -587,6 +618,7 @@ def test_http_boundaries():
     assert "<img" not in preview.render("![x](javascript:alert(1) =10x10)")
     assert "&quot;" in preview.render('![q](https://example.com/a"b.png =10x10)')
     store = preview.Store(root, create=True, save_path=save_file)
+    store.set_meta("port", guard_port())
     source = root / "report.md"
     source.write_text(
       "# First\n\n| A | B |\n| --- | --- |\n| C | D |\n\n<script>alert(1)</script>\n\n[bad](javascript:alert(1))",
@@ -1569,7 +1601,7 @@ def test_http_boundaries():
       # One file, one reader for both kinds: `import-state` restores the note and the answer, and
       # the answer keeps its receipt, its read stamp and its task marker.
       round_trip = Path(directory) / "round-trip"
-      preview.Store(round_trip, create=True)
+      preview.Store(round_trip, create=True).set_meta("port", guard_port())
       imported = subprocess.run(
         [
           sys.executable,
@@ -2128,6 +2160,7 @@ def test_download_queue():
   global app
   with tempfile.TemporaryDirectory() as queue_dir:
     queue_store = preview.Store(Path(queue_dir) / "state", create=True)
+    queue_store.set_meta("port", guard_port())
     assert queue_store.state()["fetch_jobs"] == []
     app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(queue_store))
     worker = threading.Thread(target=app.serve_forever, daemon=True)
@@ -2553,6 +2586,7 @@ def test_task_refuses_a_note_id_as_its_name():
   # The write refuses a note ID and names the fix, so the agent gives the task a proper name instead.
   with tempfile.TemporaryDirectory() as note_id_dir:
     store = preview.Store(note_id_dir, create=True)
+    store.set_meta("port", guard_port())
     for note_id in ("c6b0af0", "c6b0af0-462e549f387100613fcede90b"):
       try:
         store.write_task(note_id, "Named after the note", ["Step one"])
@@ -2613,6 +2647,7 @@ def test_bare_ack_answers_the_one_pending_item():
   """A bare ack answers the one pending item, and two waiting items keep the ID required."""
   with tempfile.TemporaryDirectory() as bare_dir:
     store = preview.Store(bare_dir, create=True)
+    store.set_meta("port", guard_port())
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": bare_dir}
 
     def cli(*arguments):
@@ -2646,6 +2681,7 @@ def test_bare_task_reads_the_stored_row():
   """A task ID alone prints the stored task, and the read writes nothing back."""
   with tempfile.TemporaryDirectory() as read_dir:
     store = preview.Store(read_dir, create=True)
+    store.set_meta("port", guard_port())
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": read_dir}
 
     def cli(*arguments):
@@ -2705,6 +2741,7 @@ def test_clear_state():
   with tempfile.TemporaryDirectory() as clear_dir:
     clear_root = Path(clear_dir)
     store = preview.Store(clear_root, create=True)
+    store.set_meta("port", guard_port())
     store.note("clear-note", "Pending work")
     store.acknowledge(["clear-note"], "note", "Receipt")
     store.write_task("clear-task", "Track it", ["Step one"])
@@ -2859,6 +2896,7 @@ def test_read_stamps_on_delivery():
     # A successful CLI write stamps printed IDs Seen. A failed write leaves the note for the next read.
     # Pending IDs still print until acknowledgement.
     printed = preview.Store(printed_dir, create=True)
+    printed.set_meta("port", guard_port())
     printed.note("p-1", "printed once")
     printed.submission("answer-2", "form", "REPORT form Answers:\n  Choice: no")
     with patch.object(builtins, "print", side_effect=OSError("dropped delivery")):
@@ -2994,6 +3032,7 @@ def test_a_short_id_prefix_names_one_record():
   # An ID prefix can match two records. The error lists each record and kind. The caller must use a full ID.
   with tempfile.TemporaryDirectory() as short_dir:
     short = preview.Store(short_dir, create=True)
+    short.set_meta("port", guard_port())
     short.note("abcd123-0289082512830518", "first note")
     assert short.resolve_id("abcd123") == "abcd123-0289082512830518"
     assert short.resolve_id("abcd123-0289082512830518") == "abcd123-0289082512830518"
@@ -3044,6 +3083,7 @@ def test_short_flags_and_the_details_rename():
   with tempfile.TemporaryDirectory() as flag_dir:
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": flag_dir}
     preview.Store(flag_dir, create=True)
+    preview.Store(flag_dir, create=True).set_meta("port", guard_port())
 
     def cli(*args):
       return subprocess.run(
@@ -3064,6 +3104,7 @@ def test_short_flags_and_the_details_rename():
     assert cli("task-list", "-f").splitlines()[0] == "Tasks 1"
     assert cli("task-list").splitlines()[0] == "Tasks 0 upcoming"
     store = preview.Store(flag_dir)
+    store.set_meta("port", guard_port())
     store.note("1111111-2222-3333-4444-555555555555", "a note")
     acked = cli("ack", "1111111-2222-3333-4444-555555555555", "-r", "answer")
     assert "1111111" in acked
@@ -3373,6 +3414,7 @@ def test_report_linked_task_sorts_ahead_in_its_status():
 def test_task_report_flag_waits_for_an_answer_by_default():
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
     source = Path(directory) / "pick.md"
     source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
     store.publish("pick", "Pick one", source)
@@ -3415,6 +3457,7 @@ def test_task_report_flag_waits_for_an_answer_by_default():
 def test_task_report_link_refuses_missing_report():
   with tempfile.TemporaryDirectory() as cli_dir:
     cli_store = preview.Store(cli_dir, create=True)
+    cli_store.set_meta("port", guard_port())
     cli_store.write_task("keep", "Keep", ["Step one"])
     missing = subprocess.run(
       [
@@ -3618,6 +3661,7 @@ def test_shared_save_import():
   with tempfile.TemporaryDirectory() as mixed_dir:
     mixed_root = Path(mixed_dir)
     preview.Store(mixed_root, create=True)
+    preview.Store(mixed_root, create=True).set_meta("port", guard_port())
     mixed = mixed_root / "saved-state.ndjson"
     mixed.write_text(
       json.dumps(
@@ -3732,6 +3776,7 @@ def test_shared_save_import():
     # makes it acknowledged. Reading alone never stamps Seen.
     assert "0 pending" in read_out or "pending" not in read_out or "Inbox" in read_out
     restored = preview.Store(mixed_root)
+    restored.set_meta("port", guard_port())
     assert [row["id"] for row in restored.state()["notes"]] == ["saved-note"]
     assert [row["id"] for row in restored.submissions()] == ["saved-answer"]
     assert [task["id"] for task in restored.tasks()["upcoming"]] == ["saved-task"]
@@ -3751,6 +3796,7 @@ def test_restore_import():
 
   with tempfile.TemporaryDirectory() as restore_dir:
     restore = Path(restore_dir)
+    preview.Store(restore, create=True).set_meta("port", guard_port())
     script = str(Path(preview.__file__))
     # import-state creates the missing database itself, so no `init` runs first.
     log = restore / "log.jsonl"
@@ -4423,6 +4469,7 @@ def test_the_reminder_carries_the_running_status_line():
   """The hook reminder runs after every call, so the heartbeat reaches the agent."""
   with tempfile.TemporaryDirectory() as heartbeat_dir:
     preview.Store(heartbeat_dir, create=True)
+    preview.Store(heartbeat_dir, create=True).set_meta("port", guard_port())
     live_detached_placeholder(
       heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
     )
@@ -4450,6 +4497,7 @@ def test_the_reminder_carries_the_running_status_line():
 def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
   with tempfile.TemporaryDirectory() as heartbeat_dir:
     store = preview.Store(heartbeat_dir, create=True)
+    store.set_meta("port", guard_port())
     store.note("owner-note", "Read this first")
     live_detached_placeholder(
       heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
@@ -4469,6 +4517,7 @@ def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
 def test_reminder_reports_a_finished_run_without_a_second_line(capsys):
   with tempfile.TemporaryDirectory() as heartbeat_dir:
     preview.Store(heartbeat_dir, create=True)
+    preview.Store(heartbeat_dir, create=True).set_meta("port", guard_port())
     live_detached_placeholder(
       heartbeat_dir, "pr-checks", ["bash", "-c", "gh pr checks 7"]
     )
@@ -4770,6 +4819,7 @@ def test_dispatch_reminder():
   # marks a note seen.
   with tempfile.TemporaryDirectory() as reminder_dir:
     reminder_store = preview.Store(reminder_dir, create=True)
+    reminder_store.set_meta("port", guard_port())
     reminder_store.note("reminder-note", "Read this")
     reminder_script = str(Path(preview.__file__))
 
@@ -4876,6 +4926,7 @@ def test_reminder_rotation():
   # dispatch and a read do not, and the count resets when a new user item arrives.
   with tempfile.TemporaryDirectory() as rotate_dir:
     rotate_store = preview.Store(rotate_dir, create=True)
+    rotate_store.set_meta("port", guard_port())
     rotate_script = str(Path(preview.__file__))
     # The reference left the required reads, so the reminder names the two governing files.
     assert "Refresh: ARENA.md, SKILL.md." in preview.REMINDERS
@@ -4980,6 +5031,7 @@ def test_ack_task_reminder():
   # An ack reminds the agent to queue the note's work.
   with tempfile.TemporaryDirectory() as ack_dir:
     preview.Store(ack_dir, create=True).note("ack-work", "Needs work")
+    preview.Store(ack_dir, create=True).set_meta("port", guard_port())
     result = subprocess.run(
       [
         sys.executable,
@@ -5000,6 +5052,7 @@ def test_ack_task_reminder():
 def test_report_unread_markers():
   with tempfile.TemporaryDirectory() as marker_dir:
     marker_store = preview.Store(marker_dir, create=True)
+    marker_store.set_meta("port", guard_port())
     marker_source = Path(marker_dir) / "form.md"
     marker_source.write_text("Choice?\n- ( ) Yes\n- ( ) No\n\nCustom response: ___\n")
     marker_store.publish("form", "Form", marker_source)
@@ -5169,12 +5222,41 @@ def test_require_server_names_the_restart_command():
     finally:
       live.close()
     store.set_meta("port", "")
-    preview.require_server(store)
+    try:
+      preview.require_server(store)
+    except ValueError as error:
+      assert str(error) == "preview server is not up. Start it with arena-preview serve"
+    else:
+      raise AssertionError("a state with no served port passed the guard")
+
+
+def test_state_commands_break_while_the_server_is_not_up():
+  """A guarded state command exits with the server-not-up message when nothing serves."""
+  with tempfile.TemporaryDirectory() as directory:
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
+    init = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "init"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert init.returncode == 0, init.stderr
+    cli = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "task-list"],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert cli.returncode == 1, cli.stdout
+    assert "server is not up" in cli.stderr
 
 
 def test_poll_inbox():
   with tempfile.TemporaryDirectory() as poll_dir:
     store = preview.Store(poll_dir, create=True)
+    store.set_meta("port", guard_port())
     sleeps = []
 
     def sleeper(seconds):
@@ -6145,6 +6227,7 @@ def test_key_command_reads_the_recorded_key():
   """A later session reads the key from the state, because an acked note never returns."""
   with tempfile.TemporaryDirectory() as key_dir:
     store = preview.Store(key_dir, create=True)
+    store.set_meta("port", guard_port())
     script = str(Path(preview.__file__))
 
     def run():
@@ -6175,6 +6258,7 @@ def test_expired_agent_key_tells_the_agent_once():
   with tempfile.TemporaryDirectory() as state_dir:
     script = str(Path(preview.__file__))
     store = preview.Store(state_dir, create=True)
+    store.set_meta("port", guard_port())
     assert store.notice_expired_key() is None, "no key record says nothing"
     store.set_meta(
       preview.AGENT_KEY_META,
@@ -6220,6 +6304,7 @@ def test_agent_seen_at_is_stamped_by_the_cli():
   with tempfile.TemporaryDirectory() as state_dir:
     script = str(Path(preview.__file__))
     store = preview.Store(state_dir, create=True)
+    store.set_meta("port", guard_port())
     store.set_agent_key("stamp-check-0123456789abcdef", "https://h.example")
     result = subprocess.run(
       [sys.executable, script, "key"],
@@ -6482,6 +6567,7 @@ def test_ack_reads_a_file_when_the_text_carries_backticks():
     preview.Store(ack_dir, create=True)
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir}
     store = preview.Store(ack_dir)
+    store.set_meta("port", guard_port())
     store.note("first-note", "First question")
     store.note("second-note", "Second question")
     text = "Use `arena-preview read` and 'single quotes' here.\n\nA second line."
@@ -6589,6 +6675,7 @@ def test_task_detail_steps():
   script = str(Path(preview.__file__))
   with tempfile.TemporaryDirectory() as tasks_dir:
     preview.Store(tasks_dir, create=True)
+    preview.Store(tasks_dir, create=True).set_meta("port", guard_port())
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": tasks_dir}
     out = subprocess.run(
       [
@@ -6621,6 +6708,7 @@ def test_task_details_append_keeps_replacement_and_limits():
   script = str(Path(preview.__file__))
   with tempfile.TemporaryDirectory() as tasks_dir:
     store = preview.Store(tasks_dir, create=True)
+    store.set_meta("port", guard_port())
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": tasks_dir}
 
     def cli(*args):
@@ -6731,6 +6819,7 @@ def test_ack_stamps_the_read_line():
 
 def test_note_list_pages(tmp_path):
   store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
   for index in (1, 2, 0):
     store.note(
       f"history-{index}",
@@ -6793,6 +6882,7 @@ def test_note_reread_prints_every_match():
   with tempfile.TemporaryDirectory() as directory:
     root = Path(directory) / "arena-preview"
     store = preview.Store(root, create=True)
+    store.set_meta("port", guard_port())
     store.note("beef001-1111111111111111111111111", "first stored note")
     store.note(
       "beef001-2222222222222222222222222",

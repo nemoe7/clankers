@@ -489,7 +489,7 @@ def format_import_receipt(receipt):notes=receipt.get('notes',0);answers=receipt.
 def format_clear_state(counts):parts=[f"{k} {v}"for(k,v)in counts.items()];return'Cleared '+', '.join(parts)if parts else'Cleared'
 def require_server(store):
 	port=store.meta_value('port')
-	if not port:return
+	if not port:raise ValueError('preview server is not up. Start it with arena-preview serve')
 	with closing(socket.socket())as probe:
 		probe.settimeout(1)
 		if probe.connect_ex(('127.0.0.1',int(port)))==0:return
@@ -1464,8 +1464,8 @@ class Store:
 		counts={}
 		with self.transaction()as db:
 			for table in('notes','reports','submissions','tasks','uploads','fetch_jobs'):counts[table]=db.execute(f"SELECT count(*) FROM {table}").fetchone()[0];db.execute(f"DELETE FROM {table}")
-			key=db.execute('SELECT value FROM meta WHERE key = ?',(AGENT_KEY_META,)).fetchone();db.execute('DELETE FROM meta')
-			if key is not None:db.execute('INSERT INTO meta VALUES (?, ?)',(AGENT_KEY_META,key[0]))
+			kept=db.execute('SELECT key, value FROM meta WHERE key IN (?, ?)',(AGENT_KEY_META,'port')).fetchall();db.execute('DELETE FROM meta')
+			for(key,value)in kept:db.execute('INSERT INTO meta VALUES (?, ?)',(key,value))
 		return counts
 	def mark_report_seen(self,report_id):
 		identifier(report_id)
@@ -1750,6 +1750,7 @@ def main():
 			return 0
 		if args.command=='pr-check-tick':return pr_check_wait(state_dir,args.line,args.current_command)
 		if args.command=='rename':
+			require_server(Store(state_dir))
 			try:old_id=Store(state_dir).resolve_id(args.old_id)
 			except FileNotFoundError:print(f"No note, answer, report or task holds the ID {args.old_id}");return 1
 			except ValueError as error:print(error);return 1
@@ -1780,7 +1781,9 @@ def main():
 				return 1
 			if args.push and main_identical():print('HEAD equals `origin/main`, so the push carries nothing. Start new work from `origin/main`.',flush=True);return 1
 			return 0
-		store=Store(state_dir,create=args.command in{'serve','init','import-state'});read_only=args.command in{'stale-reports','note-list'}
+		store=Store(state_dir,create=args.command in{'serve','init','import-state'})
+		if args.command not in{'serve','init'}:require_server(store)
+		read_only=args.command in{'stale-reports','note-list'}
 		if not read_only:print(store.reminder(),file=sys.stderr,flush=True)
 		if args.command!='serve'and not read_only:store.touch_agent()
 		if args.command=='serve':

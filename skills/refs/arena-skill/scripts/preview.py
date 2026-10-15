@@ -1369,16 +1369,18 @@ def format_clear_state(counts):
 
 
 def require_server(store):
-  """Fail the poll while the preview server is down, so the agent restarts it.
+  """Break a guarded call while the preview server is not up, so the agent starts it.
 
-  `serve` records its bound port in the state, so a poll can tell a quiet
+  `serve` records its bound port in the state, so a call can tell a quiet
   inbox from a dead server: the port is the evidence, and a refused connect
-  means the owner's page is gone with it. The error names the restart command
-  as the script the installer puts on PATH, with the recorded port.
+  means the owner's page is gone with it. A state that never served has no
+  live preview either, so it breaks the same way. The error names the
+  restart command as the script the installer puts on PATH, with the
+  recorded port when one exists.
   """
   port = store.meta_value("port")
   if not port:
-    return
+    raise ValueError("preview server is not up. Start it with arena-preview serve")
   with closing(socket.socket()) as probe:
     probe.settimeout(1)
     if probe.connect_ex(("127.0.0.1", int(port))) == 0:
@@ -4594,7 +4596,8 @@ class Store:
     The owner asked for the page's clear as a command, so it runs while the server stays up: rows go, the schema
     and the page token stay. The transaction's autosave refreshes the save file to match, so the export does not
     keep the cleared state. Copy the state first to keep a backup. The agent key is channel plumbing the page
-    re-posts on load, not state the owner reads, so the record survives."""
+    re-posts on load, not state the owner reads, so the record survives. The recorded server port survives the
+    same way: the clear runs against a live server, and the next command needs the port to prove it."""
     counts = {}
     with self.transaction() as db:
       for table in (
@@ -4607,12 +4610,12 @@ class Store:
       ):
         counts[table] = db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
         db.execute(f"DELETE FROM {table}")
-      key = db.execute(
-        "SELECT value FROM meta WHERE key = ?", (AGENT_KEY_META,)
-      ).fetchone()
+      kept = db.execute(
+        "SELECT key, value FROM meta WHERE key IN (?, ?)", (AGENT_KEY_META, "port")
+      ).fetchall()
       db.execute("DELETE FROM meta")
-      if key is not None:
-        db.execute("INSERT INTO meta VALUES (?, ?)", (AGENT_KEY_META, key[0]))
+      for key, value in kept:
+        db.execute("INSERT INTO meta VALUES (?, ?)", (key, value))
     return counts
 
   def mark_report_seen(self, report_id):
@@ -5710,6 +5713,7 @@ def main():
     if args.command == "pr-check-tick":
       return pr_check_wait(state_dir, args.line, args.current_command)
     if args.command == "rename":
+      require_server(Store(state_dir))
       try:
         old_id = Store(state_dir).resolve_id(args.old_id)
       except FileNotFoundError:
@@ -5803,6 +5807,10 @@ def main():
       state_dir,
       create=args.command in {"serve", "init", "import-state"},
     )
+    # Every state command breaks while no preview answers. Only the setup pair
+    # stays open so the recovery command itself always runs.
+    if args.command not in {"serve", "init"}:
+      require_server(store)
     read_only = args.command in {"stale-reports", "note-list"}
     if not read_only:
       print(store.reminder(), file=sys.stderr, flush=True)

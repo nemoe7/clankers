@@ -11,7 +11,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `read` | List every pending note and report answer; mark only delivered IDs Seen, and stamp the parent report read by the agent |
 | `note-list [--page N] [--page-size N]` | List stored note IDs, including acknowledged and quiet notes, newest first; default page 1, 20 IDs per page, maximum 100; leave receipts and exports unchanged |
 | `note <id>` | Reread a stored note by its six or full characters; a short ID that matches several notes prints every match |
-| `key` | Print the recorded agent key, host and stamp; needs no server, and a later session recovers the key after acknowledging the quiet note |
+| `key` | Print the recorded agent key, host and stamp; breaks while the preview server is not up, and a later session recovers the key after acknowledging the quiet note |
 | `poll` | Wait for a pending inbox item before ending a turn; return at once with the task list for an unblocked upcoming task, and at once when the owner pressed Skip poll in the page. It prints a retry disclaimer at the start that names the 1800-second span. The shell `timeout` command must not wrap it; give the bash tool's timeout 1800 instead |
 | `route <name> -- <command>` | The gate's helper for a detected long run, and the call a failed start names: it starts the command detached under a name and records its tail and exit, so the verdict prints on a later call as `run <name> done: exit N`, with one status line per call while it runs |
 | `logs <name>` | Print a routed run's status and its recorded output tail; it works while the run lives and after its verdict |
@@ -32,8 +32,9 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `unpublish <id>` | Remove a report from the tab, keeping answers and source. Unacknowledged answers or unseen answer receipts return 409; a fresh owner view does not block agent unpublish. The page keeps an open report until the owner clicks away |
 | `stale-reports` | List stale published report IDs and reasons without changing state |
 | `rename <id> <new-id>` | Rename one stored note, report answer, report or task in place, so its answers, order and stamps survive |
-| `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token |
+| `clear-state` | Empty every state table in place; preserve the agent key, refresh the save file to match, and keep a running server's page token and recorded port |
 
+- Every command except `init` and `serve` breaks with a restart line while no preview answers, so the agent starts the server first.
 - Use complete IDs in CLI calls; cite their first six characters in prose.
 - Read notes, answers and tasks only through CLI `read`, `note ID`, `note-list`, `task ID` and `task-list`; use report HTTP endpoints only for required publication checks.
 - Keep `state.sqlite3` as storage, never a read path.
