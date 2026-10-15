@@ -22,7 +22,9 @@ function renderMessageMarkdown(source) {
   rendered = rendered.replace(/<p>[\s\S]*?<\/p>/g, paragraph => paragraph.replace(/<br\s*\/?>/g, ''));
   rendered = rendered.replace(new RegExp(`${imagePrefix}(\\d+)x`, 'g'), (_, index) => images[Number(index)]);
   return rendered.replace(/<pre>([\s\S]*?)<\/pre>/g, (_, inner) => {
-    const code = inner.replace(/<[^>]+>/g, '').replace(/&(?:#\d+|#x[\da-f]+|[a-z][\da-z]+);/gi, entity => messageMarkdown.utils.unescapeAll(entity));
+    const template = document.createElement('template');
+    template.innerHTML = inner;
+    const code = template.content.textContent;
     const payload = attribute(code).replaceAll('\n', '&#10;');
     const button = `<button type="button" class="copy-code" aria-label="Copy code" title="Copy code" data-code="${payload}">${icon('copy', 14).outerHTML}</button>`;
     return `<div class="code-block">${button}<pre>${inner}</pre></div>`;

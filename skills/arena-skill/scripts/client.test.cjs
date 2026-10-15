@@ -9,9 +9,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { File } = require('node:buffer');
+const { Parser } = require('htmlparser2');
 
 test('preview client', async (t) => {
   class Element {
+    get content() { return this; }
     // textContent reads through to children, the way a browser does, so a receipt built from two elements still asserts as one string.
     // Setting it clears the children, as in a browser. A bare string child is a text node, the way replaceChildren takes one.
     get textContent() {
@@ -51,7 +53,8 @@ test('preview client', async (t) => {
     // hit: the harness does the same, so a missing restore shows up as a jump to the top here exactly as it does on screen.
     set innerHTML(value) {
       this.inner = value; this.renders = (this.renders || 0) + 1;
-      this.text = value.replace(/<[^>]*>/g, '');
+      this.text = '';
+      new Parser({ ontext: text => { this.text += text; } }).end(value);
       this.children = [];
       const panel = elements.get('#reports-panel');
       if (this.id === 'report' && panel) panel.scrollTop = 0;
@@ -524,6 +527,10 @@ test('preview client', async (t) => {
   let copiesBeforeNotesOnly;
 
   await t.test("load the client", async () => {
+    const probe = new Element();
+    const literal = '&lt;script&gt;';
+    probe.innerHTML = `<code>${literal.replaceAll('&', '&amp;')}</code>`;
+    assert.equal(probe.content.textContent, literal, 'the fixture decodes HTML once without treating text as tags');
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/markdown-it.min.js'), 'utf8'), context);
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/message-markdown.js'), 'utf8'), context);
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../assets/app.js'), 'utf8'), context);
