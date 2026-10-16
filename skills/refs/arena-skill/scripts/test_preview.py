@@ -465,6 +465,94 @@ def test_pr_failed_check_breaks_poll():
       assert preview.poll_inbox(store) == 0
 
 
+@pytest.mark.parametrize("initial", ["", None])
+def test_poll_rechecks_pending_and_unknown_checks(initial, monkeypatch, capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory), create=True)
+    first_read = threading.Event()
+    release_failure = threading.Event()
+    failed_job = "Late preview failure"
+
+    def check(root="."):
+      if not first_read.is_set():
+        first_read.set()
+        return initial
+      assert release_failure.wait(5)
+      return failed_job
+
+    def sleeper(seconds):
+      assert first_read.wait(5)
+      release_failure.set()
+      time.sleep(seconds)
+
+    monkeypatch.setattr(preview, "PR_CHECK_POLL_SECONDS", 0, raising=False)
+    with (
+      patch("preview.pr_failed_check", side_effect=check),
+      patch("preview.POLL_INTERVAL", 0.001),
+      patch("preview.POLL_MAX_LOOPS", 100),
+    ):
+      try:
+        assert preview.poll_inbox(store, sleeper=sleeper) == 0
+      finally:
+        release_failure.set()
+    output = capsys.readouterr().out
+    assert "PR CHECKS FAILED:" in output
+    assert failed_job in output
+    assert store.polling() is False
+
+
+def test_poll_stops_monitor_after_a_note(monkeypatch, capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory), create=True)
+    message = "Already waiting in the inbox"
+    store.note("monitor-stop", message)
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+    rechecked = threading.Event()
+    errors = []
+    real_thread = threading.Thread
+
+    def check(root="."):
+      if started.is_set():
+        rechecked.set()
+        return "Unexpected read after poll end"
+      started.set()
+      assert release.wait(5)
+      return ""
+
+    class ObservedThread:
+      def __init__(self, target, args, daemon):
+        def run():
+          try:
+            target(*args)
+          except BaseException as error:
+            errors.append(error)
+          finally:
+            finished.set()
+
+        self.thread = real_thread(target=run, daemon=daemon)
+
+      def start(self):
+        self.thread.start()
+        assert started.wait(5)
+
+    monkeypatch.setattr(preview, "PR_CHECK_POLL_SECONDS", 0, raising=False)
+    with (
+      patch("preview.pr_failed_check", side_effect=check),
+      patch("preview.threading.Thread", ObservedThread),
+    ):
+      try:
+        assert preview.poll_inbox(store) == 0
+        assert message in capsys.readouterr().out
+      finally:
+        release.set()
+        assert finished.wait(5)
+      assert not rechecked.is_set()
+      assert not errors
+      assert store.polling() is False
+
+
 def test_pr_failed_check_does_not_outrank_a_note(capsys):
   # A note that lands while the check runs still breaks the poll: the loop reads the
   # note first, so the turn answers the owner before it reads the failure.
@@ -538,7 +626,7 @@ def test_pr_failed_check_reads_the_newest_run_per_name():
 
 
 def test_pr_check_once_reports_a_failure():
-  # One read per poll: the failed names land in the poll's list, and a gh fault, read
+  # Each read puts failed names in the poll's list, and a gh fault, read
   # as unknown, records nothing.
   result = []
   with patch("preview.pr_failed_check", return_value="Quality"):

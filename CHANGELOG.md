@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Poll checks the PR throughout its wait and reports failures that appear after startup. Inbox delivery stays independent.
+
 - The Send button uses its busy label to keep one width during submissions.
 
 - CLI run hints use shorter wording.

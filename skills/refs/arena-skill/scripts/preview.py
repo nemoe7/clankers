@@ -319,6 +319,7 @@ def repo_slug(root="."):
 
 
 FAILED_CONCLUSIONS = ("failure", "cancelled", "timed_out")
+PR_CHECK_POLL_SECONDS = 10
 
 
 def pr_failed_check(root="."):
@@ -326,7 +327,7 @@ def pr_failed_check(root="."):
 
   The poll runs this off its wait path, so a gh read never delays a note. A missing
   branch or pull request reads as an empty string. A gh fault reads as None, so the
-  next poll reads again instead of reporting a false all-clear. Only the newest run
+  monitor reads again instead of reporting a false all-clear. Only the newest run
   of each job name counts, so a passed re-run clears an older failure.
   """
   branch = workspace_branch(root)
@@ -392,13 +393,20 @@ def pr_failed_check(root="."):
 def pr_check_once(result, root):
   """Append the branch pull request's failed check names, when any check failed.
 
-  The poll runs one of these on a thread off its wait path, so the gh read never
-  delays a note and the poll breaks on a failure it sees. A gh fault reads as unknown
-  and records nothing.
+  The poll calls this from its background monitor, so the gh read never delays
+  a note. A gh fault reads as unknown and records nothing.
   """
   failed = pr_failed_check(root)
   if failed:
     result.append(failed)
+
+
+def pr_check_watch(result, root, stopped):
+  while not stopped.is_set():
+    pr_check_once(result, root)
+    if result:
+      return
+    stopped.wait(PR_CHECK_POLL_SECONDS)
 
 
 # A check wait runs in two phases, because the installed gh exits on an empty check list
@@ -2586,11 +2594,13 @@ def poll_inbox(store, sleeper=None):
     flush=True,
   )
   store.start_poll()
-  # One branch check per poll, on its own thread: the gh read never delays a note, and
-  # the loop reads its result instead of a cached row.
+  # The monitor rechecks until a failure or the poll ends. It never holds the inbox path.
   failures = []
+  stop_checks = threading.Event()
   threading.Thread(
-    target=pr_check_once, args=(failures, resolve_repo_root()), daemon=True
+    target=pr_check_watch,
+    args=(failures, resolve_repo_root(), stop_checks),
+    daemon=True,
   ).start()
   try:
     for index in range(POLL_MAX_LOOPS):
@@ -2648,6 +2658,7 @@ def poll_inbox(store, sleeper=None):
         sleeper(POLL_INTERVAL)
         store.stamp_polling()
   finally:
+    stop_checks.set()
     store.clear_polling()
   # The wait ran its whole span with nothing to read: the turn ends here.
   store.mark_turn_ended()

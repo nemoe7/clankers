@@ -116,6 +116,7 @@ def repo_slug(root='.'):
 	except OSError:return''
 	match=re.search('[:/]([^/:]+/[^/]+?)(?:\\.git)?$',url);return match.group(1)if match else''
 FAILED_CONCLUSIONS='failure','cancelled','timed_out'
+PR_CHECK_POLL_SECONDS=10
 def pr_failed_check(root='.'):
 	branch=workspace_branch(root);slug=repo_slug(root)
 	if not branch or not slug:return''
@@ -135,6 +136,11 @@ def pr_failed_check(root='.'):
 def pr_check_once(result,root):
 	failed=pr_failed_check(root)
 	if failed:result.append(failed)
+def pr_check_watch(result,root,stopped):
+	while not stopped.is_set():
+		pr_check_once(result,root)
+		if result:return
+		stopped.wait(PR_CHECK_POLL_SECONDS)
 PR_CHECK_DISCOVERY_SECONDS=120
 PR_CHECK_DISCOVERY_STEP=5
 def pr_head_sha(root,branch,slug):
@@ -886,7 +892,7 @@ def run_log_report(state_dir,name):
 	return 0
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};print('POLL: 1800 s. If cut, retry with tool timeout 1800 s.',file=sys.stderr,flush=True);store.start_poll();failures=[];threading.Thread(target=pr_check_once,args=(failures,resolve_repo_root()),daemon=True).start()
+	listing={'checked_at':None,'pending':[]};print('POLL: 1800 s. If cut, retry with tool timeout 1800 s.',file=sys.stderr,flush=True);store.start_poll();failures=[];stop_checks=threading.Event();threading.Thread(target=pr_check_watch,args=(failures,resolve_repo_root(),stop_checks),daemon=True).start()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)
@@ -897,7 +903,7 @@ def poll_inbox(store,sleeper=None):
 			if open_tasks:listing['tasks']=open_tasks;names=', '.join(item['id']for item in open_tasks);continue_line=f"CONTINUE: unblocked task {names}. Work it or block it; do not end the turn.";print(continue_line,flush=True);print(format_task_list(listing.get('tasks',[])),flush=True);return 0
 			if skip_poll_ready(store):store.take_skip_poll();store.mark_turn_ended();print('SKIP: owner pressed Skip poll. End the turn, no second poll.',flush=True);print(format_read(listing),flush=True);return 0
 			if index+1<POLL_MAX_LOOPS:sleeper(POLL_INTERVAL);store.stamp_polling()
-	finally:store.clear_polling()
+	finally:stop_checks.set();store.clear_polling()
 	store.mark_turn_ended();print('Poll ended: 0 pending.',flush=True);return 1
 def parse_state_import(text):
 	try:value=json.loads(text)
