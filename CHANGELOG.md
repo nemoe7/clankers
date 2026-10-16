@@ -74,6 +74,14 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The commit checkpoint reads local refs alone, and the push checkpoint keeps its fresh fetch. A commit line no longer waits on the network.
 
+#### workflows
+
+- The three change steps read one script, `maintenance/workflows/changed_paths.py`, for the base commit and the changed paths. The artifacts self-assertions move to `maintenance/workflows/check_artifacts.py`.
+
+- One `publish-proxy-images` matrix job replaces the two image jobs, and each row's flag decides whether that image builds. Seven pip installs gain a cache on their `actions/setup-python` step, which retires the two `actions/cache` steps.
+
+- The workflow gate now fails a docker build step that uses a `matrix.` value the job never declares.
+
 ### Fixed
 
 - Arena reference: fix attachment-limit and agent-unpublish view rules.

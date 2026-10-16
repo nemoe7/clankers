@@ -95,34 +95,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
-        run: |
-          set -eu
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base="$PR_BASE"
-          else
-            base="$PUSH_BEFORE"
-          fi
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            echo "base=missing" >> "$GITHUB_OUTPUT"
-            echo "Base commit is missing. Will validate versions without bump check."
-            echo "Versioned modules checked:"
-            echo "- userscripts/arena.user.js"
-            echo "- userscripts/chatgpt.user.js"
-            exit 0
-          fi
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          files=$(git diff --name-only "$base" HEAD -- userscripts/arena.user.js userscripts/chatgpt.user.js gpt-plugins/plugin.json gpt-plugins/skills || true)
-          if [ -n "$files" ]; then
-            printf '%s\n' "Affected files:" "$files"
-            {
-              echo "changed<<EOF"
-              printf '%s\n' "$files"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "No versioned modules changed."
-            echo "changed=" >> "$GITHUB_OUTPUT"
-          fi
+        # The base resolution and the path rules live in one script, which
+        # every change step calls.
+        run: python3 maintenance/workflows/changed_paths.py --step version-bumps
 
       - name: Set Up Python
         uses: actions/setup-python@v7
@@ -222,36 +197,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
-        run: |
-          set -eu
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base="$PR_BASE"
-          else
-            base="$PUSH_BEFORE"
-          fi
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Base commit is missing. Run the preview tests."
-            exit 0
-          fi
-          files=$(git diff --name-only "$base" HEAD -- \
-            skills/refs/arena-skill \
-            skills/arena-skill \
-            .agents/skills/arena-skill \
-            maintenance/minify/minify.py \
-            maintenance/minify/test_minify.py \
-            github/workflows \
-            pytest.ini \
-            package.json \
-            package-lock.json \
-            .github/workflows/ci.yml)
-          if [ -n "$files" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            printf '%s\n' "Preview paths changed:" "$files"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "No preview paths changed. Skip the preview tests."
-          fi
+        # The preview path list lives in one script, which the bump step reads too.
+        run: python3 maintenance/workflows/changed_paths.py --step preview-tests
 
       - name: Prepare The Runner
         if: steps.preview.outputs.run == 'true'
