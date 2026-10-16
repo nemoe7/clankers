@@ -2225,22 +2225,52 @@ def first_blocking_piece(line):
   return None
 
 
-def idle_wait(line):
-  """Name the bare sleep that holds a turn, so the gate stops it before it runs.
+# A shell keyword runs the command that follows it, so a piece may start with one.
+SHELL_KEYWORDS = ("do", "then", "else", "elif", "if", "for", "until", "while", "time")
 
-  The gate reads the shell's own command line, so the login wrapper comes off first.
-  A retry loop names its own command first, so it passes.
+
+def command_pieces(line):
+  """Split a shell line at its separators, so each piece stands on its own."""
+  text = unquote_commands(line)
+  for separator in ("&&", "||", ";", "|", "\n"):
+    text = text.replace(separator, "\x00")
+  return [piece.strip() for piece in text.split("\x00") if piece.strip()]
+
+
+def piece_head(piece):
+  """Name the command a piece runs, past assignments, shell keywords and a bash word."""
+  tokens = [token for token in piece.split() if token]
+  index = 0
+  while (
+    index < len(tokens) and "=" in tokens[index] and not tokens[index].startswith("-")
+  ):
+    index += 1
+  while index < len(tokens) and tokens[index].strip("\"'") in SHELL_KEYWORDS:
+    index += 1
+  if index < len(tokens) and tokens[index] == "bash":
+    index += 1
+    while index < len(tokens) and tokens[index].startswith("-"):
+      index += 1
+  if index >= len(tokens):
+    return ""
+  return tokens[index].rsplit("/", 1)[-1].strip("\"'")
+
+
+def idle_wait(line):
+  """Name a sleep that waits beside a preview call, so the gate stops it before it runs.
+
+  A sleep on its own runs, because the line holds nothing else. The gate reads the
+  shell's own command line, so the login wrapper comes off first.
   """
-  piece = first_blocking_piece(agent_line(line))
-  if not piece:
-    return None
-  head = piece.split()[0].rsplit("/", 1)[-1].strip("\"'")
-  if head != "sleep":
+  heads = [head for head in map(piece_head, command_pieces(agent_line(line))) if head]
+  if "sleep" not in heads or not any(
+    head in ("arena-preview", "preview.py") for head in heads
+  ):
     return None
   return (
-    "WAIT BLOCKED: a bare sleep holds the turn. Take the next queued task, or read the"
-    " run on a later call. A routed run keeps its verdict, and `arena-preview poll`"
-    " waits when the queue is empty."
+    "WAIT BLOCKED: a sleep beside a preview call holds the turn. Take the next queued"
+    " task, or read the run on a later call. A routed run keeps its verdict, and"
+    " `arena-preview poll` waits when the queue is empty."
   )
 
 
@@ -6513,7 +6543,7 @@ def main():
   )
   ack_tick.add_argument("line", help="The command line, as the hook read it")
   idle_tick = commands.add_parser(
-    "idle-tick", help="Refuse a line that only waits on a sleep"
+    "idle-tick", help="Refuse a line that sleeps beside a preview call"
   )
   idle_tick.add_argument("line", help="The command line, as the hook read it")
   serve_tick = commands.add_parser(

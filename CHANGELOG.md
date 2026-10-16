@@ -38,6 +38,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena gate: narrow the idle-wait block to a line that names both a `sleep` and an `arena-preview` call. A sleep on its own runs.
+
 - Preview: remove fixed URL-download and file-upload byte limits. Keep approval, URL checks, source rules, claims, nonempty bodies, and timeouts.
 
 - Userscripts: shorten overwrite prompts with context labels. Keep stamp directions, file targets, and save guards unchanged.

@@ -277,18 +277,25 @@ def test_command_lookup_does_not_start_a_run():
   assert preview_module.long_run_name("command -v pytest; pytest -q") == "pytest"
 
 
-def test_the_gate_blocks_a_bare_sleep_and_passes_a_retry_loop():
-  """A line whose first real command is a wait stops before it runs. A loop still runs."""
-  blocked = run("sleep 3; printf waited")
-  assert blocked.returncode == 130, blocked.stderr
-  assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
-  assert "waited" not in blocked.stdout, blocked.stdout
-  # A cwd keeps the stub's count gate quiet, so the loop line reaches the shell.
+def test_the_gate_passes_a_plain_sleep_and_blocks_a_sleep_beside_a_read():
+  """A sleep beside a preview call stops before it runs. A sleep on its own runs."""
+  # A cwd keeps the stub's count gate quiet, so the line reaches the shell.
+  allowed = run("sleep 1; printf slept", cwd="/tmp")
+  assert allowed.returncode == 0, allowed.stderr
+  assert "slept" in allowed.stdout, allowed.stdout
   looped = run("for i in 1 2; do sleep 0.01; done; printf loop-done", cwd="/tmp")
   assert looped.returncode == 0, looped.stderr
   assert "loop-done" in looped.stdout, looped.stdout
+  blocked = run("sleep 1; arena-preview logs gate-one; printf waited", cwd="/tmp")
+  assert blocked.returncode == 130, blocked.stderr
+  assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
+  assert "waited" not in blocked.stdout, blocked.stdout
   # The platform shells the line, so the gate reads an invocation ahead of the script.
-  wrapped = run("sleep 3; printf waited", line="/bin/bash -l -c sleep 3; printf waited")
+  wrapped = run(
+    "sleep 1; arena-preview logs gate-one; printf waited",
+    line="/bin/bash -l -c sleep 1; arena-preview logs gate-one; printf waited",
+    cwd="/tmp",
+  )
   assert wrapped.returncode == 130, wrapped.stderr
   assert "WAIT BLOCKED" in wrapped.stderr, wrapped.stderr
   assert "waited" not in wrapped.stdout, wrapped.stdout
