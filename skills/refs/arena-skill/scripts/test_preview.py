@@ -598,6 +598,17 @@ def test_http_boundaries():
       assert value and (value[2] or float(value[1]) == 0)
       return float(value[1])
 
+    def css_padding(rule):
+      value = re.search(r"(?:^|;)padding:([^;]+)", rule)
+      assert value
+      sides = [css_px(f"padding:{part}", "padding") for part in value[1].split()]
+      assert 1 <= len(sides) <= 4
+      if len(sides) <= 2:
+        sides *= 4 // len(sides)
+      elif len(sides) == 3:
+        sides.append(sides[1])
+      return sides
+
     assert re.search(r"(?:^|;)appearance:none(?:;|$)", select[1])
     assert re.search(r"border-top:[^;]+ solid var\(--muted\)", caret[1])
     assert css_px(caret[1], "border-top") > 0
@@ -1040,9 +1051,15 @@ def test_http_boundaries():
       assert "border-color:var(--accent)" not in page
       assert "padding-bottom:12px" in page
       assert "#report-form{min-width:0;margin-top:12px" in page
-      assert re.search(r"\.card\.compose\{[^}]*padding:8px 18px", page), (
-        "composer padding must override .card"
-      )
+      card = re.search(r"\.card\{([^}]+)\}", page)
+      composer = re.search(r"\.card\.compose\{([^}]+)\}", page)
+      assert card and composer, "composer padding must override .card"
+      assert all(
+        0 < compact_side < card_side
+        for compact_side, card_side in zip(
+          css_padding(composer[1]), css_padding(card[1])
+        )
+      ), "composer padding must stay positive and smaller than card padding"
       assert (
         ".message{margin-bottom:14px;background:var(--bubble);padding:8px 14px;border-radius:8px"
         in page

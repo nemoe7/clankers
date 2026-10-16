@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Client fixture comments describe scroll reset, report view stamps, and call counts.
 
+- Composer checks compare each padding side with the shared card padding.
+
 - Receipt dot checks compare width and height without a fixed size.
 
 - Quoted task titles keep the task ID tooltip.
