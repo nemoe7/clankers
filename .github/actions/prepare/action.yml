@@ -18,8 +18,8 @@ runs:
     - name: Cache Pip Downloads
       uses: actions/cache@v6
       with:
-        # There is no requirements file: the pins live in the workflow and in this action, so the
-        # two files are the honest cache key and any dependency change busts it.
+        # Hash the workflow and action files for this pip download-cache key.
+        # requirements.txt is not part of this hash.
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ inputs.pip-cache-key }}-${{ hashFiles('.github/workflows/ci.yml', '.github/actions/prepare/action.yml') }}
         restore-keys: ${{ runner.os }}-pip-${{ inputs.pip-cache-key }}-
