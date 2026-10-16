@@ -656,6 +656,53 @@ def main_drift_warning(root="."):
     return unavailable("cannot read Git state")
 
 
+def main_ancestor_warning(root="."):
+  """The push-blocking message when origin/main is not an ancestor of HEAD, else an empty string.
+
+  The read refreshes origin/main alone, so a branch with no remote counterpart still
+  yields a verdict. A fetch fault, a missing origin remote or an unreadable repository
+  yields no verdict, and the push checkpoint stays open.
+  """
+
+  def git(*arguments):
+    return subprocess.run(
+      ["git", *arguments],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+      timeout=30,
+      env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+
+  try:
+    if git("rev-parse", "--git-dir").returncode:
+      return ""
+    if git("remote", "get-url", "origin").returncode:
+      return ""
+    main_ref = "refs/remotes/origin/main"
+    arguments = ["fetch", "--quiet", "--no-tags"]
+    if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+      arguments.append("--unshallow")
+    if git(*arguments, "origin", f"+refs/heads/main:{main_ref}").returncode:
+      return ""
+    if git("rev-parse", "--verify", "--quiet", main_ref).returncode:
+      return ""
+    # Exit 0 holds the ancestry and exit 1 denies it. Any other code names a tip the
+    # repository cannot compare, so only the denial blocks the push.
+    if git("merge-base", "--is-ancestor", main_ref, "HEAD").returncode != 1:
+      return ""
+    return (
+      "PUSH BLOCKED: `origin/main` is not an ancestor of HEAD, so the push replays"
+      " onto a stale base. Run `git fetch origin` and `git rebase origin/main`,"
+      " then push again."
+    )
+  except subprocess.TimeoutExpired:
+    return ""
+  except (OSError, ValueError):
+    return ""
+
+
 def repo_slug(root="."):
   """The owner/name of the origin remote, or an empty string when it will not parse."""
   try:
@@ -6687,6 +6734,12 @@ def main():
           " Start new work from `origin/main`.",
           flush=True,
         )
+        return 1
+      # A branch that lacks the commits origin/main carries replays onto a stale base,
+      # and the pull request then shows the main diff. The checkpoint holds that push.
+      stale = main_ancestor_warning() if args.push else ""
+      if stale:
+        print(stale, flush=True)
         return 1
       return 0
     store = Store(

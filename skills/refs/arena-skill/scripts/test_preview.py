@@ -6579,6 +6579,68 @@ def test_push_gate_identical_to_main():
     )
 
 
+def test_push_gate_refuses_a_branch_that_lacks_origin_main():
+  """The push gate refuses a branch that does not hold the commits origin/main carries."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    remote, work, other = root / "remote.git", root / "work", root / "other"
+
+    def git(*arguments, cwd=root):
+      return subprocess.run(
+        ["git", *arguments], cwd=cwd, capture_output=True, text=True, check=False
+      )
+
+    def gate():
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "gate", "--push"],
+        cwd=work,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(root / "arena-state")},
+      )
+
+    git("init", "-q", "-b", "main", str(work))
+    git("config", "user.email", "test@example.com", cwd=work)
+    git("config", "user.name", "Test", cwd=work)
+    (work / "file.txt").write_text("one\n", encoding="utf-8")
+    git("add", "file.txt", cwd=work)
+    git("commit", "-q", "-m", "first", cwd=work)
+    git("init", "-q", "--bare", "-b", "main", str(remote))
+    git("remote", "add", "origin", str(remote), cwd=work)
+    git("push", "-q", "origin", "main", cwd=work)
+    git("switch", "-q", "-c", "topic", cwd=work)
+    (work / "file.txt").write_text("topic\n", encoding="utf-8")
+    git("commit", "-q", "-am", "topic work", cwd=work)
+    # The branch holds the whole of origin/main, so the checkpoint passes the push.
+    assert gate().returncode == 0
+    # A second clone lands a commit on main that this branch lacks.
+    git("clone", "-q", str(remote), str(other))
+    git("config", "user.email", "test@example.com", cwd=other)
+    git("config", "user.name", "Test", cwd=other)
+    (other / "main.txt").write_text("main\n", encoding="utf-8")
+    git("add", "main.txt", cwd=other)
+    git("commit", "-q", "-m", "main moves", cwd=other)
+    git("push", "-q", "origin", "main", cwd=other)
+    before = git("status", "--porcelain", cwd=work).stdout
+    blocked = gate()
+    assert blocked.returncode == 1
+    assert "origin/main" in blocked.stdout and "rebase" in blocked.stdout
+    # The check reads and fetches only: HEAD, the index and the work tree stay put.
+    assert git("status", "--porcelain", cwd=work).stdout == before
+    assert (
+      git("rev-parse", "HEAD", cwd=work).stdout.strip()
+      == git("rev-parse", "topic", cwd=work).stdout.strip()
+    )
+    # A replay onto the fresh tip holds the ancestry, so the checkpoint opens again.
+    git("fetch", "-q", "origin", cwd=work)
+    git("rebase", "-q", "origin/main", cwd=work)
+    assert gate().returncode == 0
+    # No origin remote means no verdict, so the checkpoint stays open.
+    git("remote", "remove", "origin", cwd=work)
+    assert gate().returncode == 0
+
+
 def test_key_command_reads_the_recorded_key():
   """A later session reads the key from the state, because an acked note never returns."""
   with tempfile.TemporaryDirectory() as key_dir:

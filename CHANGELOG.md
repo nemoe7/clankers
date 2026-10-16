@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Preview: add a skill inventory with full YAML descriptions, paths, and installed or repository labels.
 
+- Arena gate: block a push whose branch does not contain origin/main. Refresh the remote main tip first, and keep the checkpoint open on a fetch fault.
+
 #### system-prompts
 
 - Add a live experimental Wenyan NemoGPT prompt and its token-budget row. The canonical English prompt stays unchanged.
