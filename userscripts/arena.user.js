@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.45
+// @name         Arena.ai | NemoUtils | v1.10.46
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.45
+// @version      1.10.46
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2169,8 +2169,30 @@
     return !force && Boolean(moved) && hasHandle && plan.kind === "download";
   }
 
-  function overwriteLine(name) {
-    return "Preview URL or branch changed. Overwrite " + name + " with this state?";
+  function overwriteLine(name, context) {
+    var question = "Overwrite " + name + " with this state?";
+    if (!context) return "Preview URL or branch changed. " + question;
+    var reasons = [];
+    if (!(context.branch || context.lastScope)) {
+      reasons.push("Branch and remembered scope are missing.");
+    }
+    if (context.rememberedBase && context.rememberedBase !== context.base) {
+      reasons.push("Preview URL changed from " + context.rememberedBase + " to " + context.base + ".");
+    }
+    if (context.branch && context.rememberedBranch && context.branch !== context.rememberedBranch) {
+      reasons.push("Branch changed from " + context.rememberedBranch + " to " + context.branch + ".");
+    }
+    var before = stateRemembered(context.memory);
+    var after = stateMemory(context.stamp, context.stamps);
+    function compare(was, now) {
+      if (!was || !now) return "unknown";
+      return now < was ? "older" : now === was ? "same" : "forward";
+    }
+    return (reasons.join(" ") || "Cause unknown.") +
+      " History stamps: overall " + compare(before.stamp, after.stamp) +
+      ", notes " + compare(before.note, after.note) +
+      ", and tasks " + compare(before.task, after.task) +
+      ". Equal stamps do not prove equal file contents. " + question;
   }
 
   var RESET_WINDOW_MS = 150 * 1000;
@@ -2651,12 +2673,12 @@
       }
     }
 
-    function askOverwrite(handle, storeKey, manual) {
+    function askOverwrite(handle, storeKey, manual, context) {
       var askedKey = overwriteKey(storeKey);
       var shown = GM_getValue(askedKey, false);
       if (!panelNeeded(manual, shown)) return;
       GM_setValue(askedKey, true);
-      statePanel(overwriteLine(writtenName(handle, "the save file")), "Overwrite", function () {
+      statePanel(overwriteLine(writtenName(handle, "the save file"), context), "Overwrite", function () {
         fetchStateFile(true, true);
       });
     }
@@ -2787,7 +2809,16 @@
           }
           if (asks && !accepted) {
             logEvent("state", "confirmation", { filename: handle.name });
-            askOverwrite(handle, storeKey, manual);
+            askOverwrite(handle, storeKey, manual, {
+              branch: scope.branch,
+              rememberedBranch: rememberedBranch,
+              lastScope: lastScope,
+              base: base,
+              rememberedBase: rememberedBase,
+              memory: memory,
+              stamp: body.stamp,
+              stamps: body.stamps,
+            });
             return;
           }
           picked = handle || null;

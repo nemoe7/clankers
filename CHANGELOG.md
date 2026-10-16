@@ -24,6 +24,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### userscripts
+
+- Arena overwrite prompts show the specific cause and compare saved overall, note, and task stamps. Equal stamps do not prove equal file contents. Save guards stay unchanged.
+
 #### gpt-plugins
 
 - The release job downloads the checked package archive without decompression instead of building a second ZIP. Publication waits for the package job to pass.

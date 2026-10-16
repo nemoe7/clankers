@@ -1221,7 +1221,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
 
 {
   const { test } = require("node:test");
-  test("a healthy auto save cycle closes a lingering get error popup", () => {
+  test("auto save clears stale failures and explains overwrite confirmation", async () => {
     const source = fs.readFileSync(path.join(__dirname, "../../userscripts/arena.user.js"), "utf8");
     const saved = new Map();
     const menus = new Map();
@@ -1267,7 +1267,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
       MutationObserver: class { observe() {} disconnect() {} },
       setInterval: (callback) => { timers.push(callback); return timers.length; },
       clearInterval: () => {},
-      setTimeout: () => 0,
+      setTimeout: callback => { callback(); return 0; },
       clearTimeout: () => {},
       fetch: () => Promise.reject(new Error("offline")),
       Blob: class { constructor(parts) { this.parts = parts; } },
@@ -1300,5 +1300,37 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     timers.forEach((tick) => tick());
     respond(requests.length - 1, 200, healthy);
     assert.equal(panel(), null, "the next healthy auto save cycle closes the error popup");
+    const writes = [];
+    const handle = { name: "o.r.ndjson", createWritable: async () => ({
+      write: async text => { writes.push(text); }, close: async () => {},
+    }) };
+    context.indexedDB = { open() {
+      const opening = { result: { transaction: () => ({ objectStore: () => ({ get() {
+        const reading = { result: handle };
+        queueMicrotask(() => reading.onsuccess());
+        return reading;
+      } }) }) } };
+      queueMicrotask(() => opening.onsuccess());
+      return opening;
+    } };
+    saved.set("clankers-arena-state-stamp-o.r", JSON.stringify({ stamp, note: stamp, task: "" }));
+    iframe.src = "https://new-preview.example/";
+    const current = { stamp: "2026-10-16T09:00:00+00:00", stamps: { note: stamp }, text: "{\"saved\":true}" };
+    timers.forEach(tick => tick());
+    respond(requests.length - 1, 200, JSON.stringify(current));
+    await new Promise(setImmediate);
+    const prompt = panel();
+    assert.ok(prompt, "a URL move with a known file asks before writing");
+    assert.match(prompt.children[0].textContent, /Preview URL changed from https:\/\/preview\.example to https:\/\/new-preview\.example/);
+    assert.match(prompt.children[0].textContent, /overall forward, notes same, and tasks unknown/);
+    assert.match(prompt.children[0].textContent, /Equal stamps do not prove equal file contents/);
+    assert.deepEqual(writes, [], "prompt context must not grant permission to write");
+    const overwrite = prompt.children[1].children.find(button => button.textContent === "Overwrite");
+    overwrite.listeners.click();
+    respond(requests.length - 1, 200, JSON.stringify(current));
+    await new Promise(setImmediate);
+    assert.deepEqual(writes, [current.text], "the existing explicit confirmation still writes the fetched state");
+    assert.equal(JSON.parse(saved.get("clankers-arena-state-stamp-o.r")).stamp, current.stamp);
+
   });
 }
