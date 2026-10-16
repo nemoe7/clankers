@@ -10,6 +10,7 @@
   --muted: #b9b4ac;
   --border: #56504a;
   --accent: #e5bb8b;
+  --jump-hover: #fff;
   --focus: #524d47;
   /* Tabs sit on the panel, so their resting border is a step darker than --border. */
   --tab-border: #413d39;
@@ -30,6 +31,7 @@
   --muted: #655d53;
   --border: #c2b9ac;
   --accent: #795020;
+  --jump-hover: var(--accent);
   --focus: #8f5b13;
   --tab-border: var(--border);
   --dot-seen: #3f6ea8;
@@ -156,9 +158,8 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(12px);
   transition: color .15s, background-color .15s, border-color .15s;
 }
-/* Use the theme's text color at rest and the accent color on hover. */
 .log-newest svg { pointer-events: none; flex: none; }
-.log-newest:hover { color: var(--accent); }
+.log-newest:hover { color: var(--jump-hover); }
 .log-newest:active { color: var(--muted); }
 .log-newest:focus-visible { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--focus), 0 4px 6px rgb(0 0 0 / 25%); }
 /* Keep the report scroll-to-top button at the top of its frame. */

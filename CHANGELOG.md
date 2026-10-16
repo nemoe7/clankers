@@ -44,6 +44,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview: make jump-arrow hover icons white in the dark theme while keeping light-theme contrast.
+
 - Arena suite: check fresh remote branch tips at commit and push checkpoints. Handle shallow history, absorbed changes, and failed reads without moving working files.
 
 - GitHub workflows: retry temporary Gemini capacity errors within a request deadline, with capped waits and API timeouts.
