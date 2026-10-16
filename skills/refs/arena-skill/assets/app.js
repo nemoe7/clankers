@@ -1599,6 +1599,8 @@ function renderTasksIfChanged(tasks) {
   if (signature !== taskSignature) {
     taskSignature = signature;
     renderTasks(tasks);
+  } else if (tasks) {
+    $('#tasks-status').textContent = `Updated ${time(tasks.updated_at)}`;
   }
   for (const stamp of document.querySelectorAll('.task-answer time')) {
     stamp.textContent = time(stamp.dateTime);

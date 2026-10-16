@@ -1024,7 +1024,12 @@ test('preview client', async (t) => {
     // An unchanged poll must not rebuild the rows, or an opened details snaps shut three seconds later.
     opened = upcomingBody.children[0].children[1];
     opened.open = true;
+    const taskData = JSON.stringify(state.tasks);
+    get('#tasks-status').textContent = 'stale age';
     await refresh();
+    assert.ok(get('#tasks-status').textContent.endsWith(context.time(state.tasks.updated_at)),
+      'an unchanged poll refreshes the Updated age');
+    assert.equal(JSON.stringify(state.tasks), taskData, 'age refresh does not change task data');
     assert.equal(upcomingBody.children[0].children[1], opened, 'the row survives an unchanged poll');
     assert.equal(upcomingBody.children[0].children[1].open, true);
   });
