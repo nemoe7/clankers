@@ -130,6 +130,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Record task-link highlights: a destination row is marked for 2.5 seconds or until another tab opens.
 
+- The egress notice ignores loopback hosts: `localhost`, `127.0.0.1`, `::1`, and `0.0.0.0`. A `curl` call to the local preview server shows no notice. A remote host that is not in the allowlist still shows the notice.
+
 #### prose
 
 - Code comments and docstrings omit request history and describe current behavior. Documentation removes repeated introductions and uses sentence-case headings. Rule clauses and third-party copies do not change.

@@ -1686,6 +1686,8 @@ EGRESS_ALLOWLIST = frozenset(
     "dns.google",
   )
 )
+# Loopback hosts stay inside the sandbox, so the egress filter never sees them.
+LOOPBACK_HOSTS = frozenset(("localhost", "127.0.0.1", "::1", "0.0.0.0"))
 
 # The commands that open a network connection to a URL named on the line. A URL inside
 # any other command is text, so it must not raise the warning.
@@ -1703,8 +1705,10 @@ def egress_warning(line):
     return None
   hosts = []
   for found in URL_HOST_RE.finditer(text):
-    host = found.group(1).split(":", 1)[0].lower()
-    if host and host not in EGRESS_ALLOWLIST and host not in hosts:
+    host = found.group(1).lower()
+    # A bracketed IPv6 literal holds colons, so it ends at its closing bracket.
+    host = host[1:].split("]", 1)[0] if host.startswith("[") else host.split(":", 1)[0]
+    if host and host not in (EGRESS_ALLOWLIST | LOOPBACK_HOSTS) and host not in hosts:
       hosts.append(host)
   if not hosts:
     return None

@@ -592,6 +592,7 @@ def serve_warning(line):
 	if not found or int(found.group(1))==DEFAULT_PORT:return None
 	return f"arena-preview gate: that serve names port {found.group(1)}, not the standard {DEFAULT_PORT}. The owner's page and the poll follow the standard port. Name another only when 8000 is taken, and say so."
 EGRESS_ALLOWLIST=frozenset(('github.com','api.github.com','codeload.github.com','registry.npmjs.org','pypi.org','files.pythonhosted.org','dns.google'))
+LOOPBACK_HOSTS=frozenset(('localhost','127.0.0.1','::1','0.0.0.0'))
 FETCH_COMMAND_RE=re.compile('(?:^|[\\s;&|(])(?:curl|wget|git\\s+(?:clone|fetch|ls-remote|pull|push))\\b')
 URL_HOST_RE=re.compile('(?:https?|ftp)://([^/\\s\\"\'@?]+)')
 def egress_warning(line):
@@ -599,8 +600,8 @@ def egress_warning(line):
 	if not FETCH_COMMAND_RE.search(text):return None
 	hosts=[]
 	for found in URL_HOST_RE.finditer(text):
-		host=found.group(1).split(':',1)[0].lower()
-		if host and host not in EGRESS_ALLOWLIST and host not in hosts:hosts.append(host)
+		host=found.group(1).lower();host=host[1:].split(']',1)[0]if host.startswith('[')else host.split(':',1)[0]
+		if host and host not in EGRESS_ALLOWLIST|LOOPBACK_HOSTS and host not in hosts:hosts.append(host)
 	if not hosts:return None
 	names=', '.join(hosts);return f"arena-preview gate: {names} sits outside this sandbox's egress allowlist. The TLS handshake fails with SSL_ERROR_SYSCALL, which reads as a transient fault and never clears on a retry. Read it through the fetch_page tool instead."
 def first_blocking_piece(line):

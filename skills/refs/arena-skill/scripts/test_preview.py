@@ -7556,6 +7556,21 @@ def test_egress_warning_stays_quiet_on_an_allowed_host():
     assert preview.egress_warning(line) is None, line
 
 
+def test_egress_warning_skips_loopback_hosts():
+  """A loopback host stays inside the sandbox, so the notice names only the remote host on a line."""
+  for line in (
+    "curl -s http://127.0.0.1:8000/api/state",
+    "curl -s http://localhost:8000/api/reports/r/html",
+    "curl -s http://0.0.0.0:8000/",
+    "curl -s http://[::1]:8000/api/state",
+  ):
+    assert preview.egress_warning(line) is None, line
+  remote = preview.egress_warning("curl -s https://httpbin.org/get")
+  mixed = preview.egress_warning("curl -s http://localhost/ https://httpbin.org/get")
+  assert remote is not None
+  assert mixed == remote
+
+
 def test_egress_warning_ignores_a_url_no_command_fetches():
   """A URL inside any other command is text, so it must not raise the warning."""
   for line in (
