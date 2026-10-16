@@ -366,3 +366,41 @@ mark code { color: var(--text); }
 .download-row .fetch-url { font-family: ui-monospace, monospace; font-size: 13px; }
 .download-row .fetch-meta { color: var(--muted); font-size: 13px; }
 .download-row button { margin-top: 6px; }
+
+:root { --motion-duration: 160ms; --edge-fade: 12px; }
+@property --edge-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --edge-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@media (prefers-reduced-motion: no-preference) {
+  [role="tabpanel"] { animation: panel-enter var(--motion-duration) ease-out; }
+  @keyframes panel-enter { from { opacity: 0; } to { opacity: 1; } }
+  .task, .answer { transition: background-color var(--motion-duration) ease; }
+  @supports (interpolate-size: allow-keywords) {
+    details::details-content {
+      block-size: 0; overflow: clip; interpolate-size: allow-keywords;
+      transition: block-size var(--motion-duration) ease, content-visibility var(--motion-duration) allow-discrete;
+    }
+    details[open]::details-content { block-size: auto; }
+  }
+  @supports (animation-timeline: scroll(self)) {
+    /* A non-scrollable region keeps both fade lengths at zero. */
+    #history, [role="tabpanel"], .draft-preview {
+      mask-image: linear-gradient(to bottom, transparent, black var(--edge-start), black calc(100% - var(--edge-end)), transparent);
+      animation: edge-start linear both, edge-end linear both;
+      animation-timeline: scroll(self), scroll(self);
+      animation-range: 0px var(--edge-fade), calc(100% - var(--edge-fade)) 100%;
+    }
+    [role="tabpanel"] {
+      animation: panel-enter var(--motion-duration) ease-out, edge-start linear both, edge-end linear both;
+      animation-timeline: auto, scroll(self), scroll(self);
+      animation-range: normal, 0px var(--edge-fade), calc(100% - var(--edge-fade)) 100%;
+    }
+    @keyframes edge-start {
+      from { --edge-start: 0px; }
+      to { --edge-start: var(--edge-fade); }
+    }
+    @keyframes edge-end {
+      from { --edge-end: var(--edge-fade); }
+      to { --edge-end: 0px; }
+    }
+  }
+}

@@ -72,6 +72,7 @@ test('preview client', async (t) => {
     get lastElementChild() { return this.children.at(-1); }
     focus() { this.focused = true; }
     scrollIntoView() { this.scrolledIntoView = true; }
+    scrollTo(options) { this.lastScroll = options; this.scrollTop = options.top; }
     select() { this.selected = true; }
     setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
     remove() { this.removed = true; }
@@ -160,6 +161,7 @@ test('preview client', async (t) => {
     return { ok, status: ok ? 200 : 503, json: async () => JSON.parse(body), text: async () => body };
   };
   let coarsePointer = false;
+  let reducedMotion = false;
   const pointerListeners = [];
   const pendingWrites = new Map();
   const failedWrites = new Set();
@@ -168,7 +170,7 @@ test('preview client', async (t) => {
       addEventListener: (name, callback) => { windowEvents[name] = callback; },
       matchMedia: query => ({
         // A live getter: the client reads the query once and the pointer may change later.
-        get matches() { return query === '(pointer: coarse)' && coarsePointer; },
+        get matches() { return query === '(pointer: coarse)' ? coarsePointer : query === '(prefers-reduced-motion: reduce)' && reducedMotion; },
         addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
       }),
     },
@@ -2647,6 +2649,29 @@ test('preview client', async (t) => {
       state.reports = keptReports;
       await refresh();
       get('#report-select').value = keptSelect;
+    }
+  });
+
+  await t.test('Explicit jump scrolling follows the current reduced-motion preference', () => {
+    const history = get('#history');
+    const panel = get('#reports-panel');
+    const saved = [history.scrollTop, history.scrollHeight, panel.scrollTop, history.lastScroll, panel.lastScroll];
+    try {
+      for (const reduce of [false, true]) {
+        reducedMotion = reduce;
+        history.scrollHeight = Math.max(history.scrollHeight, history.clientHeight + 1);
+        get('#log-newest').events.click();
+        assert.ok(history.lastScroll, 'the explicit jump must use the native scrolling API');
+        assert.equal(history.lastScroll.top, history.scrollHeight);
+        assert.equal(history.lastScroll.behavior, reduce ? 'auto' : 'smooth');
+        get('#report-top').events.click();
+        assert.ok(panel.lastScroll);
+        assert.equal(panel.lastScroll.top, 0);
+        assert.equal(panel.lastScroll.behavior, reduce ? 'auto' : 'smooth');
+      }
+    } finally {
+      reducedMotion = false;
+      [history.scrollTop, history.scrollHeight, panel.scrollTop, history.lastScroll, panel.lastScroll] = saved;
     }
   });
 

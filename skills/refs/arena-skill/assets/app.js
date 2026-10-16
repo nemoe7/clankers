@@ -685,9 +685,12 @@ $('#history').addEventListener('scroll', () => {
 function updateLogJump() {
   $('#log-newest').hidden = logPinned || !messageNodes.size;
 }
+function scrollJump(element, top) {
+  element.scrollTo({top, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+}
 $('#log-newest').addEventListener('click', () => {
   const history = $('#history');
-  history.scrollTop = history.scrollHeight;
+  scrollJump(history, history.scrollHeight);
   logPinned = true;
   updateLogJump();
 });
@@ -1401,7 +1404,7 @@ function updateReportTop() {
   $('#report-top').hidden = panel.hidden || panel.scrollTop <= 0;
 }
 $('#report-top').addEventListener('click', () => {
-  $('#reports-panel').scrollTop = 0;
+  scrollJump($('#reports-panel'), 0);
   updateReportTop();
 });
 function updateReportNavigation() {
