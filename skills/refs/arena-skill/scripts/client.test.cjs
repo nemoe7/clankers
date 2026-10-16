@@ -100,6 +100,8 @@ test('preview client', async (t) => {
   get('#downloads-panel').hidden = true;
   get('#upload-file').files = [];
   get('#note').placeholder = 'What should happen next?';
+  get('#send').textContent = 'Send';
+  get('#send').dataset.busyLabel = 'Sending...';
   const storage = new Map();
   const root = { dataset: {} };
   let counter = 0;
@@ -3541,10 +3543,13 @@ test('preview client', async (t) => {
       assert.equal(get('#fetch-url').value, 'https://example.test/new-job.txt', 'failure keeps the URL');
       pendingWrites.clear(); failedWrites.clear();
 
+      const readySendLabel = get('#send').textContent;
       get('#note').value = 'Pending draft stays safe';
       hold('/api/notes');
       writing = get('#form').events.submit(event({}));
       assert.equal(get('#note').value, '', 'submission clears before the pending message renders');
+      assert.equal(get('#send').disabled, true, 'Send stays locked during a save');
+      assert.equal(get('#send').textContent, get('#send').dataset.busyLabel, 'the pending label names the active save');
       assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
       await refresh();
       assert.ok(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')));
@@ -3552,6 +3557,8 @@ test('preview client', async (t) => {
       release(); await writing;
       assert.equal(get('#history').children.some(row => row.textContent.includes('Pending draft stays safe')), false);
       assert.equal(get('#note').value, 'Pending draft stays safe', 'failure keeps the message draft');
+      assert.equal(get('#send').disabled, false);
+      assert.equal(get('#send').textContent, readySendLabel, 'failure restores the ready label');
       pendingWrites.clear(); failedWrites.clear();
 
       const nextDraft = 'A new draft while a message is pending';
@@ -3575,6 +3582,8 @@ test('preview client', async (t) => {
       get('#note').events.input();
       release(); await writing;
       assert.equal(get('#note').value, repeatedDraft, 'confirmation keeps a newly typed identical draft');
+      assert.equal(get('#send').disabled, false);
+      assert.equal(get('#send').textContent, readySendLabel, 'success restores the ready label');
       pendingWrites.clear(); failedWrites.clear();
 
       get('#note').value = 'The submitted draft';

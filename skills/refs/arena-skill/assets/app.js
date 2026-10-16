@@ -2,6 +2,7 @@
 const $ = selector => document.querySelector(selector);
 const note = $('#note');
 const send = $('#send');
+const sendIdleLabel = send.textContent;
 const status = $('#send-status');
 const key = 'arena-preview-v1';
 // Text above either paste limit becomes one attachment.
@@ -920,6 +921,7 @@ $('#form').addEventListener('submit', async event => {
   }
   save('pending', JSON.stringify(pending));
   send.disabled = picker.disabled = $('#attach-file').disabled = true;
+  send.textContent = send.dataset.busyLabel;
   status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : 'Sending…';
   const sending = { id: pending.id, text, at: new Date().toISOString(), pending: true };
   const apply = (state, result) => {
@@ -977,7 +979,10 @@ $('#form').addEventListener('submit', async event => {
       ? ` The combined upload is ${bytes(total)}; if it fails again, send fewer files per message.` : '';
     status.textContent = `Save not confirmed: ${error.message}. Draft${stagedFiles.length ? ' and files' : ''} kept; retry unchanged files and text with the same message ID.${hint}`;
   }
-  finally { send.disabled = picker.disabled = $('#attach-file').disabled = false; }
+  finally {
+    send.disabled = picker.disabled = $('#attach-file').disabled = false;
+    send.textContent = sendIdleLabel;
+  }
 });
 // A touch keyboard offers no Shift key, so there the Return key writes the newline and the Send
 // button sends. The hint names whichever the Return key does.

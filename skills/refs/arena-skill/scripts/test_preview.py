@@ -1230,9 +1230,8 @@ def test_http_boundaries():
         r"padding-left:0;list-style-position:inside",
         page,
       ), "message text lists sit flush"
-      # The send button carries one rule twice, the narrow-screen and the touch position fix,
-      # and no resize of its own.
-      assert re.findall(r"#send\{([^}]*)\}", page) == [
+      # The narrow-screen and touch rules keep Send at the right. The busy label sets its width.
+      assert re.findall(r"#send\{(margin-left:[^}]*)\}", page) == [
         "margin-left:auto;",
         "margin-left:auto;",
       ]
