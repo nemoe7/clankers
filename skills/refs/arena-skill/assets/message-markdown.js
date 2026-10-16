@@ -1,5 +1,58 @@
 'use strict';
-const messageMarkdown = markdownit('commonmark', { html: false, breaks: true }).enable(['table', 'strikethrough']);
+// Adapted from markdown-it-mark (MIT). See markdown-it.LICENSE.
+function highlightMarkdown(md) {
+  function tokenize(state, silent) {
+    if (silent || state.src[state.pos] !== '=') return false;
+    const scanned = state.scanDelims(state.pos, true);
+    let length = scanned.length;
+    if (length < 2) return false;
+    if (length % 2) {
+      state.push('text', '', 0).content = '=';
+      length--;
+    }
+    for (let i = 0; i < length; i += 2) {
+      state.push('text', '', 0).content = '==';
+      if (scanned.can_open || scanned.can_close) state.delimiters.push({
+        marker: 0x3D, length: 0, jump: i / 2, token: state.tokens.length - 1,
+        end: -1, open: scanned.can_open, close: scanned.can_close,
+      });
+    }
+    state.pos += scanned.length;
+    return true;
+  }
+  function postProcess(state, delimiters) {
+    const lone = [];
+    for (const start of delimiters) {
+      if (start.marker !== 0x3D || start.end === -1) continue;
+      const end = delimiters[start.end];
+      for (const [index, nesting] of [[start.token, 1], [end.token, -1]]) {
+        const token = state.tokens[index];
+        token.type = nesting === 1 ? 'mark_open' : 'mark_close';
+        token.tag = 'mark';
+        token.nesting = nesting;
+        token.markup = '==';
+        token.content = '';
+      }
+      const previous = state.tokens[end.token - 1];
+      if (previous.type === 'text' && previous.content === '=') lone.push(end.token - 1);
+    }
+    while (lone.length) {
+      const index = lone.pop();
+      let end = index + 1;
+      while (end < state.tokens.length && state.tokens[end].type === 'mark_close') end++;
+      end--;
+      if (index !== end) [state.tokens[index], state.tokens[end]] = [state.tokens[end], state.tokens[index]];
+    }
+  }
+  md.inline.ruler.before('emphasis', 'mark', tokenize);
+  md.inline.ruler2.before('emphasis', 'mark', state => {
+    postProcess(state, state.delimiters);
+    for (const meta of state.tokens_meta || []) {
+      if (meta && meta.delimiters) postProcess(state, meta.delimiters);
+    }
+  });
+}
+const messageMarkdown = markdownit('commonmark', { html: false, breaks: true }).enable(['table', 'strikethrough']).use(highlightMarkdown);
 messageMarkdown.renderer.rules.link_open = (tokens, index, options, env, renderer) => {
   const token = tokens[index];
   const href = token.attrGet('href') || '';

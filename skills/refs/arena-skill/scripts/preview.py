@@ -5183,6 +5183,70 @@ def sized_image(match, validate):
   )
 
 
+def highlight_markdown(parser):
+  """Add markdown-it-mark delimiters (MIT). See assets/markdown-it.LICENSE."""
+  from markdown_it.rules_inline.state_inline import Delimiter
+
+  def tokenize(state, silent):
+    if silent or state.src[state.pos] != "=":
+      return False
+    scanned = state.scanDelims(state.pos, True)
+    length = scanned.length
+    if length < 2:
+      return False
+    if length % 2:
+      state.push("text", "", 0).content = "="
+      length -= 1
+    for _ in range(0, length, 2):
+      state.push("text", "", 0).content = "=="
+      if scanned.can_open or scanned.can_close:
+        state.delimiters.append(
+          Delimiter(
+            marker=ord("="),
+            length=0,
+            token=len(state.tokens) - 1,
+            end=-1,
+            open=scanned.can_open,
+            close=scanned.can_close,
+          )
+        )
+    state.pos += scanned.length
+    return True
+
+  def post_process(state):
+    groups = [state.delimiters] + [
+      meta["delimiters"] for meta in state.tokens_meta if meta and "delimiters" in meta
+    ]
+    for delimiters in groups:
+      lone = []
+      for start in delimiters:
+        if start.marker != ord("=") or start.end == -1:
+          continue
+        end = delimiters[start.end]
+        for index, nesting in ((start.token, 1), (end.token, -1)):
+          token = state.tokens[index]
+          token.type = "mark_open" if nesting == 1 else "mark_close"
+          token.tag, token.nesting = "mark", nesting
+          token.markup, token.content = "==", ""
+        previous = state.tokens[end.token - 1]
+        if previous.type == "text" and previous.content == "=":
+          lone.append(end.token - 1)
+      while lone:
+        index = lone.pop()
+        end = index + 1
+        while end < len(state.tokens) and state.tokens[end].type == "mark_close":
+          end += 1
+        end -= 1
+        if index != end:
+          state.tokens[index], state.tokens[end] = (
+            state.tokens[end],
+            state.tokens[index],
+          )
+
+  parser.inline.ruler.before("emphasis", "mark", tokenize)
+  parser.inline.ruler2.before("emphasis", "mark", post_process)
+
+
 def render(markdown, breaks=False):
   try:
     from markdown_it import MarkdownIt
@@ -5195,6 +5259,7 @@ def render(markdown, breaks=False):
   parser = MarkdownIt("commonmark", {"html": False, "breaks": breaks}).enable(
     ["table", "strikethrough"]
   )
+  highlight_markdown(parser)
   parser.add_render_rule("link_open", open_link)
   parser.add_render_rule("image", render_image)
   tagged, images = hold_out(

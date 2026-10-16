@@ -3832,6 +3832,33 @@ test('preview client', async (t) => {
   });
 
 
+  await t.test('Highlights use safe Markdown tokens and leave code and destinations literal', () => {
+    const render = context.renderMessageMarkdown;
+    for (const [source, expected] of [
+      ['==safe==', '<mark>safe</mark>'],
+      ['==one **two**==', '<mark>one <strong>two</strong></mark>'],
+      ['**==safe==**', '<strong><mark>safe</mark></strong>'],
+      ['==one ~~gone~~==', '<mark>one <s>gone</s></mark>'],
+      ['==[safe](https://example.com)==', '<mark><a href="https://example.com"'],
+      ['==<script>alert(1)</script>==', '<mark>&lt;script&gt;alert(1)&lt;/script&gt;</mark>'],
+    ]) {
+      const html = render(source);
+      assert.ok(html.includes(expected), source);
+      assert.ok(!html.includes('<script>'), 'raw HTML stays escaped');
+    }
+    for (const source of ['`==code==`', '```text\n==code==\n```', String.raw`\==literal==`,
+      '== unmarked ==', '==unclosed', '====', '[label](https://example.com/==file==)']) {
+      assert.ok(!render(source).includes('<mark>'), source);
+    }
+    const unsafe = render('==[bad](javascript:alert(1))==');
+    assert.ok(unsafe.includes('<mark>'));
+    assert.ok(!unsafe.includes('href='));
+    const image = render('==text== ![image](https://example.com/image.png =20x10)');
+    assert.ok(image.includes('<mark>text</mark>'));
+    assert.ok(image.includes('<img src="https://example.com/image.png"'));
+    assert.ok(image.includes('width="20" height="10"'));
+  });
+
   await t.test('Successful message receipts retain Markdown until the state poll', async () => {
     const keptState = state;
     const keptSendHandler = sendHandler;

@@ -8450,3 +8450,46 @@ def test_legacy_task_restore_preserves_supplied_types(legacy, restored):
     written = store.import_tasks([record], replace=True)
     assert written[0]["type"] == restored
     assert store.list_tasks()[0]["type"] == restored
+
+
+@pytest.mark.parametrize(
+  "source, expected",
+  [
+    ("==safe==", "<mark>safe</mark>"),
+    ("==one **two**==", "<mark>one <strong>two</strong></mark>"),
+    ("**==safe==**", "<strong><mark>safe</mark></strong>"),
+    ("==one ~~gone~~==", "<mark>one <s>gone</s></mark>"),
+    ("==[safe](https://example.com)==", '<mark><a href="https://example.com"'),
+    (
+      "==<script>alert(1)</script>==",
+      "<mark>&lt;script&gt;alert(1)&lt;/script&gt;</mark>",
+    ),
+  ],
+)
+def test_inline_highlight_uses_safe_markdown_tokens(source, expected):
+  rendered = preview.render(source)
+  assert expected in rendered
+  assert "<script>" not in rendered
+
+
+@pytest.mark.parametrize(
+  "source",
+  [
+    "`==code==`",
+    "```text\n==code==\n```",
+    r"\==literal==",
+    "== unmarked ==",
+    "==unclosed",
+    "====",
+    "[label](https://example.com/==file==)",
+  ],
+)
+def test_inline_highlight_leaves_code_escapes_and_destinations_unchanged(source):
+  rendered = preview.render(source)
+  assert "<mark>" not in rendered
+
+
+def test_inline_highlight_keeps_link_validation():
+  rendered = preview.render("==[bad](javascript:alert(1))==")
+  assert "<mark>" in rendered
+  assert "href=" not in rendered
