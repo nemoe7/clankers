@@ -42,6 +42,23 @@ PULL_REQUEST_EVENT_RE = re.compile(r"github\.event_name\s*==\s*'pull_request'")
 
 SECRET_RE = re.compile(r"secrets\.([A-Za-z0-9_]+)")
 
+# A build step may name a matrix value instead of a literal directory. The gate reads the
+# name, so the job declares it or the step expands to an empty path.
+MATRIX_REF_RE = re.compile(r"matrix\.([A-Za-z0-9_]+)")
+MATRIX_KEYWORDS = ("include", "exclude")
+
+
+def matrix_names(job: dict) -> set[str]:
+  """Return the variable names the job matrix declares, plain keys and include rows."""
+  matrix = (job.get("strategy") or {}).get("matrix")
+  if not isinstance(matrix, dict):
+    return set()
+  names = set(matrix) - set(MATRIX_KEYWORDS)
+  for row in matrix.get("include") or []:
+    if isinstance(row, dict):
+      names |= set(row)
+  return names
+
 
 def credential_names(text: str) -> set[str]:
   """Return the stored credential names in text. The automatic token is not one."""
@@ -147,6 +164,15 @@ def audit_document(name: str, document: object) -> list[str]:
             f"{where}: the build context `{context}` must be a directory named "
             f"after the image `{image}`"
           )
+      declared = matrix_names(job)
+      for field in ("context", "file", "tags"):
+        value = with_block.get(field)
+        for variable in MATRIX_REF_RE.findall(str(value or "")):
+          if variable not in declared:
+            findings.append(
+              f"{where}: the build step uses `matrix.{variable}` in `{field}`, "
+              "which the job matrix does not declare"
+            )
     if runs_on_pull_request and not guarded_from_pull_request(job):
       for scope, value in (job.get("permissions") or {}).items():
         if scope in FORBIDDEN_PR_PERMISSIONS and value not in READ_ONLY_VALUES:

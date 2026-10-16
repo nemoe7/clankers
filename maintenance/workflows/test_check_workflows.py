@@ -300,6 +300,43 @@ def test_a_matching_publish_image_context_passes():
   assert findings(document) == []
 
 
+def build_matrix_document() -> dict:
+  document = copy.deepcopy(BASE)
+  document["jobs"]["work"]["steps"] = [
+    {
+      "name": "Build And Push",
+      "uses": "docker/build-push-action@v6",
+      "with": {
+        "context": "skills/arena-skill/${{ matrix.directory }}",
+        "file": "skills/arena-skill/${{ matrix.directory }}/Dockerfile",
+        "tags": "ghcr.io/${{ github.repository_owner }}/${{ matrix.directory }}:latest",
+      },
+    }
+  ]
+  return document
+
+
+def test_a_build_step_matrix_variable_must_be_declared():
+  document = build_matrix_document()
+  result = findings(document)
+  assert any(
+    "matrix.directory" in finding and "does not declare" in finding
+    for finding in result
+  ), "An undeclared matrix variable builds an empty path, so the gate must catch it"
+  document["jobs"]["work"]["strategy"] = {
+    "matrix": {"include": [{"directory": "arena-egress-proxy"}]}
+  }
+  assert findings(document) == []
+
+
+def test_a_plain_matrix_list_declares_its_variable():
+  document = build_matrix_document()
+  document["jobs"]["work"]["strategy"] = {
+    "matrix": {"directory": ["arena-egress-proxy"]}
+  }
+  assert findings(document) == []
+
+
 def pull_request_document(job: dict) -> dict:
   document = copy.deepcopy(BASE)
   document["on"]["pull_request"] = None
@@ -384,13 +421,9 @@ def test_changes_job_reports_the_image_groups():
   job = load_workflow("artifacts.yml")["jobs"]["changes"]
   assert set(job["outputs"]) == {"package", "rules", "egress", "preview"}
   script = "\n".join(step.get("run", "") for step in job["steps"])
-  for marker in (
-    "skills/arena-skill/arena-egress-proxy/*",
-    "skills/arena-skill/arena-preview-proxy/*",
-    "egress=true",
-    "preview=true",
-  ):
-    assert marker in script, marker
+  # The path rules moved to one script, so the job carries no path case block.
+  assert "maintenance/workflows/changed_paths.py --step artifacts" in script
+  assert "case " not in script
 
 
 def test_artifacts_release_job_keeps_the_release_semantics():
@@ -407,28 +440,37 @@ def test_artifacts_release_job_keeps_the_release_semantics():
   assert "gh release create" in script and "--clobber" in script
 
 
-def test_artifacts_carries_one_image_job_per_proxy_directory():
+def test_artifacts_publishes_both_proxy_images_from_one_matrix():
   jobs = load_workflow("artifacts.yml")["jobs"]
-  for name, directory, group in (
-    (
-      "publish-arena-egress-proxy-image",
-      "arena-egress-proxy",
-      "Publish-Arena-Egress-Proxy-Image-${{ github.repository }}",
-    ),
-    (
-      "publish-arena-preview-proxy-image",
-      "arena-preview-proxy",
-      "Publish-Arena-Preview-Proxy-Image-${{ github.repository }}",
-    ),
-  ):
-    job = jobs[name]
-    assert job["permissions"] == {"contents": "read", "packages": "write"}
-    assert "github.event_name != 'pull_request'" in job["if"]
-    assert job["concurrency"] == {"group": group, "cancel-in-progress": False}
-    step = next(
-      step
-      for step in job["steps"]
-      if str(step.get("uses", "")).startswith("docker/build-push-action@")
-    )
-    assert step["with"]["context"] == f"skills/arena-skill/{directory}"
-    assert step["with"]["tags"].endswith(f"/{directory}:latest")
+  # The two image jobs differ in path, context and tag alone, so one matrix carries both.
+  assert [name for name in jobs if "image" in name] == ["publish-proxy-images"]
+  job = jobs["publish-proxy-images"]
+  assert "github.event_name != 'pull_request'" in job["if"]
+  assert job["permissions"] == {"contents": "read", "packages": "write"}
+  assert job["concurrency"] == {
+    "group": "Publish-Proxy-Images-${{ github.repository }}",
+    "cancel-in-progress": False,
+  }
+  rows = job["strategy"]["matrix"]["include"]
+  assert [row["directory"] for row in rows] == [
+    "arena-egress-proxy",
+    "arena-preview-proxy",
+  ]
+  assert [row["changed"] for row in rows] == [
+    "${{ needs.changes.outputs.egress }}",
+    "${{ needs.changes.outputs.preview }}",
+  ]
+  # One row builds one image, so every step waits for its own row's flag.
+  assert all(step.get("if") == "matrix.changed == 'true'" for step in job["steps"])
+  build = next(
+    step
+    for step in job["steps"]
+    if str(step.get("uses", "")).startswith("docker/build-push-action@")
+  )
+  assert build["with"]["context"] == "skills/arena-skill/${{ matrix.directory }}"
+  assert build["with"]["file"] == (
+    "skills/arena-skill/${{ matrix.directory }}/Dockerfile"
+  )
+  assert build["with"]["tags"] == (
+    "ghcr.io/${{ github.repository_owner }}/${{ matrix.directory }}:latest"
+  )

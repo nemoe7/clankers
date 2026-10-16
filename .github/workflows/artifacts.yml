@@ -60,60 +60,8 @@ jobs:
           PUSH_BEFORE: ${{ github.event.before }}
           EGRESS_IMAGE: ${{ github.event.inputs.egress_image }}
           PREVIEW_IMAGE: ${{ github.event.inputs.preview_image }}
-        run: |
-          set -eu
-          package=false
-          rules=false
-          egress=false
-          preview=false
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$EVENT_REF" = "refs/heads/main" ]; then
-              package=true
-            fi
-            # An image publishes on its own input, so a dispatch that repackages the
-            # plugins never rebuilds a proxy image.
-            if [ "$EGRESS_IMAGE" = "true" ]; then
-              egress=true
-            fi
-            if [ "$PREVIEW_IMAGE" = "true" ]; then
-              preview=true
-            fi
-          else
-            if [ "$EVENT_NAME" = "pull_request" ]; then
-              base="$PR_BASE"
-            else
-              base="$PUSH_BEFORE"
-            fi
-            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
-              # A missing base runs both checks instead of skipping silently. An image
-              # publish stays out of it: it writes a registry tag the fallback cannot justify.
-              package=true
-              rules=true
-            else
-              files=$(git diff --name-only "$base" HEAD)
-              printf '%s\n' "$files"
-              for file in $files; do
-                case "$file" in
-                  gpt-plugins/* | maintenance/gpt_plugins/* | .github/workflows/artifacts.yml) package=true ;;
-                esac
-                case "$file" in
-                  rules/refs/*) ;;
-                  rules/* | maintenance/publish/publish.py | maintenance/publish/test_publish.py | .github/workflows/artifacts.yml) rules=true ;;
-                esac
-                case "$file" in
-                  skills/arena-skill/arena-egress-proxy/*) egress=true ;;
-                  skills/arena-skill/arena-preview-proxy/*) preview=true ;;
-                esac
-              done
-            fi
-          fi
-          {
-            echo "package=$package"
-            echo "rules=$rules"
-            echo "egress=$egress"
-            echo "preview=$preview"
-          } >> "$GITHUB_OUTPUT"
-          printf 'package=%s rules=%s egress=%s preview=%s\n' "$package" "$rules" "$egress" "$preview"
+        # The path rules live in one script, which three change steps call.
+        run: python3 maintenance/workflows/changed_paths.py --step artifacts
 
   validate-gpt-plugins:
     name: Validate GPT Plugins
@@ -143,88 +91,16 @@ jobs:
         with:
           # Keep the manifest validation on the interpreter the other workflows use.
           python-version: "3.11"
-
-      - name: Cache Pip Downloads
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gpt-plugins-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-gpt-plugins-
+          # The built-in pip cache keys on requirements.txt, so no cache step runs.
+          cache: pip
 
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt
 
       # The required behaviour of this file is part of the check: the triggers, the job
       # conditions, the version-bump flag, the archive name and the artifact name are assertions.
-      - name: Validate This Workflow Definition
-        run: |
-          python - <<'PY'
-          import yaml
-
-          path = ".github/workflows/artifacts.yml"
-
-          with open(path, encoding="utf-8") as handle:
-            workflow = yaml.safe_load(handle)
-
-          triggers = workflow.get("on", workflow.get(True))
-          push_paths = triggers["push"]["paths"]
-          pull_paths = triggers["pull_request"]["paths"]
-
-          assert triggers["push"]["branches"] == ["main"], triggers["push"]
-          for entry in ("gpt-plugins/**", "rules/**", "!rules/refs/**", path):
-            assert entry in push_paths, f"push paths miss {entry}: {push_paths}"
-          assert set(pull_paths) == {"gpt-plugins/**", "maintenance/gpt_plugins/**", path}, pull_paths
-          assert "workflow_dispatch" in triggers, "workflow_dispatch is missing"
-
-          jobs = workflow["jobs"]
-          assert jobs["validate-gpt-plugins"]["if"] == (
-            "github.event_name == 'pull_request' && needs.changes.outputs.package == 'true'"
-          ), jobs["validate-gpt-plugins"]["if"]
-          assert jobs["package-gpt-plugins"]["if"] == (
-            "needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main'"
-            " && github.event_name != 'pull_request'"
-          ), jobs["package-gpt-plugins"]["if"]
-          assert jobs["publish-clankers-rules"]["if"] == (
-            "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-            " && needs.changes.outputs.rules == 'true'"
-          ), jobs["publish-clankers-rules"]["if"]
-          assert jobs["package-gpt-plugins"]["needs"] == "changes", "the package job needs the path report"
-          assert jobs["publish-clankers-rules"]["needs"] == "changes", "the publish job needs the path report"
-
-          validate_runs = " ".join(str(step.get("run", "")) for step in jobs["validate-gpt-plugins"]["steps"])
-          assert "gate_gpt_plugins.py" in validate_runs
-          assert "--base-manifest" in validate_runs
-          assert "--self-check" in validate_runs
-          assert not any(
-            str(step.get("run", "")).strip().startswith("zip -r ")
-            for step in jobs["validate-gpt-plugins"]["steps"]
-          )
-          assert not any(
-            str(step.get("uses", "")).startswith("actions/upload-artifact")
-            for step in jobs["validate-gpt-plugins"]["steps"]
-          )
-
-          steps = jobs["package-gpt-plugins"]["steps"]
-          upload = next(step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact"))
-
-          assert upload["uses"] == "actions/upload-artifact@v7", upload["uses"]
-          assert upload["with"]["path"] == "gpt-plugins.zip", upload["with"]["path"]
-          assert upload["with"]["archive"] is False, upload["with"]["archive"]
-          assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
-          assert any(
-            str(step.get("run", "")).strip().startswith(
-              "python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "
-            )
-            for step in steps
-          ), "no packaging step"
-
-          publish_runs = " ".join(str(step.get("run", "")) for step in jobs["publish-clankers-rules"]["steps"])
-          assert "test_publish.py" in publish_runs
-          assert "pytest" in publish_runs
-          assert "publish.py" in publish_runs
-
-          print(f"{path}: PR validation, main package, rules publish, and version-bump assert are as required.")
-          PY
+      - name: Check The Workflow Contract
+        run: python maintenance/workflows/check_artifacts.py
 
       - name: Check Version Comparison
         run: python maintenance/gpt_plugins/gate_gpt_plugins.py --self-check
@@ -263,56 +139,14 @@ jobs:
         with:
           # Keep the manifest validation on the interpreter the other workflows use.
           python-version: "3.11"
-
-      - name: Cache Pip Downloads
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gpt-plugins-${{ hashFiles('requirements.txt') }}
-          restore-keys: ${{ runner.os }}-pip-gpt-plugins-
+          # The built-in pip cache keys on requirements.txt, so no cache step runs.
+          cache: pip
 
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Validate This Workflow Definition
-        run: |
-          python - <<'PY'
-          import yaml
-
-          path = ".github/workflows/artifacts.yml"
-
-          with open(path, encoding="utf-8") as handle:
-            workflow = yaml.safe_load(handle)
-
-          triggers = workflow.get("on", workflow.get(True))
-          push_paths = triggers["push"]["paths"]
-
-          assert triggers["push"]["branches"] == ["main"], triggers["push"]
-          for entry in ("gpt-plugins/**", "rules/**", "!rules/refs/**", path):
-            assert entry in push_paths, f"push paths miss {entry}: {push_paths}"
-
-          jobs = workflow["jobs"]
-          assert jobs["package-gpt-plugins"]["if"] == (
-            "needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main'"
-            " && github.event_name != 'pull_request'"
-          ), jobs["package-gpt-plugins"]["if"]
-
-          steps = jobs["package-gpt-plugins"]["steps"]
-          upload = next(step for step in steps if str(step.get("uses", "")).startswith("actions/upload-artifact"))
-
-          assert upload["uses"] == "actions/upload-artifact@v7", upload["uses"]
-          assert upload["with"]["path"] == "gpt-plugins.zip", upload["with"]["path"]
-          assert upload["with"]["archive"] is False, upload["with"]["archive"]
-          assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
-          assert any(
-            str(step.get("run", "")).strip().startswith(
-              "python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "
-            )
-            for step in steps
-          ), "no packaging step"
-
-          print(f"{path}: the package job keeps the archive and artifact assertions.")
-          PY
+      - name: Check The Workflow Contract
+        run: python maintenance/workflows/check_artifacts.py
 
       - name: Build And Check Plugin Archives
         run: python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir .
@@ -381,6 +215,7 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+          cache: pip
       - name: Install Test Dependencies
         run: python -m pip install pytest==9.1.1 pytest-xdist==3.6.1
       - name: Test Reconciliation Fixtures Without GitHub Credentials
@@ -419,6 +254,7 @@ jobs:
         with:
           # Keep the archive validation on the interpreter the other workflows use.
           python-version: "3.11"
+          cache: pip
 
       - name: Install Validation Dependencies
         run: python -m pip install -r requirements.txt
@@ -458,35 +294,50 @@ jobs:
               --notes "The GPT Plugins collection and six single-skill plugins at version $VERSION. Archive checks do not prove ChatGPT import support."
           fi
 
-  publish-arena-egress-proxy-image:
-    name: Publish Arena Egress Proxy Image
+  publish-proxy-images:
+    name: Publish Proxy Image (${{ matrix.directory }})
     needs: changes
-    if: needs.changes.outputs.egress == 'true' && github.event_name != 'pull_request'
+    if: |
+      github.event_name != 'pull_request'
+      && (needs.changes.outputs.egress == 'true' || needs.changes.outputs.preview == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
       # Two main pushes serialize, so one image write never races another.
-      group: Publish-Arena-Egress-Proxy-Image-${{ github.repository }}
+      group: Publish-Proxy-Images-${{ github.repository }}
       cancel-in-progress: false
     # A package write publishes the image. Every other scope stays read-only. Its `if`
     # names a non-pull-request event, so no pull request code ever runs with it.
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # One row per proxy image, and the row's own flag decides whether it builds.
+        include:
+          - directory: arena-egress-proxy
+            changed: ${{ needs.changes.outputs.egress }}
+          - directory: arena-preview-proxy
+            changed: ${{ needs.changes.outputs.preview }}
     steps:
       - name: Check Out Repository
+        if: matrix.changed == 'true'
         uses: actions/checkout@v7
         with:
           # The push uses the token from the login step, not a stored credential.
           persist-credentials: false
 
       - name: Set Up QEMU
+        if: matrix.changed == 'true'
         uses: docker/setup-qemu-action@v3
 
       - name: Set Up Buildx
+        if: matrix.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log In To GHCR
+        if: matrix.changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -494,58 +345,13 @@ jobs:
           password: ${{ github.token }}
 
       - name: Build And Push
+        if: matrix.changed == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: skills/arena-skill/arena-egress-proxy
-          file: skills/arena-skill/arena-egress-proxy/Dockerfile
+          context: skills/arena-skill/${{ matrix.directory }}
+          file: skills/arena-skill/${{ matrix.directory }}/Dockerfile
           push: true
           # An arm64 host pulls the right layer instead of emulating amd64.
           platforms: linux/amd64,linux/arm64
           # One mutable tag. The owner pulls latest and manages no versions.
-          tags: ghcr.io/${{ github.repository_owner }}/arena-egress-proxy:latest
-
-  publish-arena-preview-proxy-image:
-    name: Publish Arena Preview Proxy Image
-    needs: changes
-    if: needs.changes.outputs.preview == 'true' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    concurrency:
-      # Two main pushes serialize, so one image write never races another.
-      group: Publish-Arena-Preview-Proxy-Image-${{ github.repository }}
-      cancel-in-progress: false
-    # A package write publishes the image. Every other scope stays read-only. Its `if`
-    # names a non-pull-request event, so no pull request code ever runs with it.
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@v7
-        with:
-          # The push uses the token from the login step, not a stored credential.
-          persist-credentials: false
-
-      - name: Set Up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set Up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log In To GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Build And Push
-        uses: docker/build-push-action@v6
-        with:
-          context: skills/arena-skill/arena-preview-proxy
-          file: skills/arena-skill/arena-preview-proxy/Dockerfile
-          push: true
-          # An arm64 host pulls the right layer instead of emulating amd64.
-          platforms: linux/amd64,linux/arm64
-          # One mutable tag. The owner pulls latest and manages no versions.
-          tags: ghcr.io/${{ github.repository_owner }}/arena-preview-proxy:latest
+          tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.directory }}:latest
