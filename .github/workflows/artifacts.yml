@@ -358,7 +358,7 @@ jobs:
 
   release-gpt-plugins:
     name: Release GPT Plugins
-    needs: changes
+    needs: [changes, package-gpt-plugins]
     if: needs.changes.outputs.package == 'true' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -393,8 +393,11 @@ jobs:
           version="$(python -c "import json; print(json.load(open('gpt-plugins/plugin.json'))['version'])")"
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
 
-      - name: Package The Collection
-        run: cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills
+      - name: Download The Validated Archive
+        uses: actions/download-artifact@v8
+        with:
+          name: gpt-plugins.zip
+          skip-decompress: true
 
       - name: Verify The Archive
         run: |

@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### gpt-plugins
+
+- The release job downloads the checked package archive without decompression instead of building a second ZIP. Publication waits for the package job to pass.
+
 #### system-prompts
 
 - Prompt clauses limit tool use to actual access, keep required caveats, and apply corrections to the next action. Comparison rules state what each check proves. Two examples cover local backups and partial catalogs.
