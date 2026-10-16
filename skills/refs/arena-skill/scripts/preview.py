@@ -4502,10 +4502,11 @@ class Store:
         )
       return out
 
-  def reminder(self, advance=False):
+  def reminder(self, advance=False, routine=True):
     """Count pending kinds without marking any message seen. Any count asks for an ack.
 
-    The tail rotates through REMINDERS, one step per printed line. `advance` counts one hook poll, and that
+    The tail rotates through REMINDERS only with routine guidance.
+    `advance` counts one hook poll, and that
     count prints only beside a pending count, so an idle line carries the tail alone. A poll that finds nothing
     pending clears the count, so the printed number reports the bash calls since the owner's first still-unread
     message. Only `--reminder` advances it. A new note or form answer resets it only when it starts a fresh
@@ -4540,9 +4541,11 @@ class Store:
         else meta_number(db, POLLS_SINCE_MESSAGE) + (1 if advance else 0)
       )
       blocked = bool(gate_pending_count(db)) and polls >= GATE_THRESHOLD
-      db.execute(
-        "INSERT OR REPLACE INTO meta VALUES (?, ?)", (REMINDER_CURSOR, str(cursor + 1))
-      )
+      if routine:
+        db.execute(
+          "INSERT OR REPLACE INTO meta VALUES (?, ?)",
+          (REMINDER_CURSOR, str(cursor + 1)),
+        )
       if advance:
         db.execute(
           "INSERT OR REPLACE INTO meta VALUES (?, ?)", (POLLS_SINCE_MESSAGE, str(polls))
@@ -4556,7 +4559,7 @@ class Store:
     # "8. 1 note" for eight notes.
     unacked = [f"unacked {', '.join(counts)}"] if counts else []
     head = ["blocked"] if blocked else [f"calls {polls}"] if polls and counts else []
-    tail = reminder_tail(cursor, remaining, len(stale))
+    tail = reminder_tail(cursor, remaining, len(stale)) if routine else ""
     parts = [" ".join([*head, *unacked]).strip(), tail]
     return " | ".join(parts).strip(" |")
 
@@ -6192,7 +6195,13 @@ def main():
       require_server(store)
     read_only = args.command in {"stale-reports", "note-list", "report-state"}
     if not read_only:
-      print(store.reminder(), file=sys.stderr, flush=True)
+      routine = (
+        os.environ.get("ARENA_PREVIEW_SHELL_HOOK") != "1"
+        or os.environ.get("ARENA_PREVIEW_ROUTE") == "1"
+      )
+      reminder = store.reminder(routine=routine)
+      if reminder:
+        print(reminder, file=sys.stderr, flush=True)
     if args.command != "serve" and not read_only:
       # Store the agent CLI call as a durable debug-trap signal.
       # A preview left open after a turn then reports no agent activity.
@@ -6275,7 +6284,17 @@ def main():
       store.acknowledge(ids, kind, text)
       short = [i[:6] for i in ids]
       print("ok " + " ".join(short))
-      print("task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in ids))
+      untracked = [
+        record_id
+        for record_id in ids
+        if not any(
+          record.get("task_id")
+          for _, record in store.id_matches(record_id)
+          if record["id"] == record_id
+        )
+      ]
+      if untracked:
+        print("task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in untracked))
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
       print(f"Published {args.id}, {count} fields.")

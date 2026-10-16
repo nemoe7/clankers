@@ -137,6 +137,7 @@ strip_block "$MARKER"
   cat >> "$PROFILE" <<'EOF' || fail "cannot append to $PROFILE"
 
 # arena-preview-hook
+export ARENA_PREVIEW_SHELL_HOOK=1
 case "$(trap -p EXIT)" in
   *arena-preview-hook*) ;;
   *) trap 'rc=$?; "$HOME/.arena-preview-hook.sh"; exit "$rc"' EXIT ;;

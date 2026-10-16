@@ -8040,3 +8040,119 @@ def test_report_state_cli_reads_publication_and_answers(tmp_path):
   solo = preview.format_report_state(store.report_state("one"))
   assert "one First report" in solo and "stale: no" in solo
   assert preview.format_report_state(store.report_state("nope")) == ""
+
+
+def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    store.write_task("noise-task", "Open work", ["Keep it listed"])
+    script = str(Path(preview.__file__))
+    for hook in ("0", "1"):
+      with (
+        patch.dict(
+          os.environ,
+          {
+            "ARENA_PREVIEW_STATE_DIR": directory,
+            "ARENA_PREVIEW_SHELL_HOOK": hook,
+            "ARENA_PREVIEW_ROUTE": "0",
+          },
+        ),
+        patch.object(sys, "argv", [script, "task-list"]),
+      ):
+        assert preview.main() == 0
+      output = capsys.readouterr()
+      assert "Tasks" in output.out
+      if hook == "1":
+        assert output.err == "", "the active EXIT hook owns routine guidance"
+      else:
+        assert output.err.strip(), "standalone use retains routine guidance"
+    with (
+      patch.dict(
+        os.environ,
+        {
+          "ARENA_PREVIEW_STATE_DIR": directory,
+          "ARENA_PREVIEW_SHELL_HOOK": "1",
+          "ARENA_PREVIEW_ROUTE": "1",
+        },
+      ),
+      patch.object(sys, "argv", [script, "task-list"]),
+    ):
+      assert preview.main() == 0
+    assert capsys.readouterr().err.strip(), (
+      "a detached child retains its own routine guidance"
+    )
+    store.note("noise-note", "Pending work")
+    for hook in ("0", "1"):
+      with (
+        patch.dict(
+          os.environ,
+          {
+            "ARENA_PREVIEW_STATE_DIR": directory,
+            "ARENA_PREVIEW_SHELL_HOOK": hook,
+            "ARENA_PREVIEW_ROUTE": "0",
+          },
+        ),
+        patch.object(sys, "argv", [script, "task-list"]),
+      ):
+        assert preview.main() == 0
+      line = capsys.readouterr().err.strip()
+      assert line.startswith("unacked 1 note")
+      assert (" | " in line) == (hook == "0")
+    with (
+      patch.dict(
+        os.environ,
+        {
+          "ARENA_PREVIEW_STATE_DIR": directory,
+          "ARENA_PREVIEW_SHELL_HOOK": "1",
+          "ARENA_PREVIEW_ROUTE": "0",
+        },
+      ),
+      patch.object(sys, "argv", [script, "--reminder"]),
+    ):
+      assert preview.main() == 0
+    line = capsys.readouterr().out.strip()
+    assert "unacked 1 note | " in line, (
+      "the hook still prints both urgent and routine guidance"
+    )
+    assert store.state()["notes"][0]["seen_at"] is None
+
+
+def test_ack_task_hints_only_name_messages_without_a_task(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    store.write_task("tracked-task", "Tracked work", ["Keep it tracked"])
+    store.note("tracked-note", "Already tracked")
+    store.submission("tracked-answer", "fixture-report", "Already tracked")
+    store.note("free-note", "Not tracked")
+    store.submission("free-answer", "fixture-report", "Not tracked")
+    for record_id in ("tracked-note", "tracked-answer"):
+      store.mark_task(record_id, "tracked-task")
+    ids = ["tracked-note", "tracked-answer", "free-note", "free-answer"]
+    script = str(Path(preview.__file__))
+    with (
+      patch.dict(
+        os.environ,
+        {"ARENA_PREVIEW_STATE_DIR": directory, "ARENA_PREVIEW_SHELL_HOOK": "0"},
+      ),
+      patch.object(sys, "argv", [script, "ack", *ids, "--note", "Received"]),
+    ):
+      assert preview.main() == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "ok " + " ".join(record_id[:6] for record_id in ids)
+    assert "free-note" in lines[1] and "free-answer" in lines[1]
+    assert "tracked-note" not in lines[1] and "tracked-answer" not in lines[1]
+    with (
+      patch.dict(
+        os.environ,
+        {"ARENA_PREVIEW_STATE_DIR": directory, "ARENA_PREVIEW_SHELL_HOOK": "0"},
+      ),
+      patch.object(sys, "argv", [script, "ack", "tracked-note", "--note", "Confirmed"]),
+    ):
+      assert preview.main() == 0
+    assert capsys.readouterr().out.splitlines() == ["ok tracke"]
+    assert all(
+      record["acknowledged_at"]
+      for record in [*store.state()["notes"], *store.submissions()]
+    )

@@ -643,3 +643,39 @@ def test_a_missing_shim_runs_the_installer():
     )
     assert result.returncode == 0, result.stderr
     assert not marker.exists(), "a shim on PATH must skip the installer"
+
+
+def test_installed_exit_hook_marks_cli_children_and_preserves_exit_status() -> None:
+  installer = INSTALLER.read_text(encoding="utf-8")
+  match = re.search(r"# arena-preview-hook\n.*?\nEOF", installer, re.DOTALL)
+  assert match, "the installer must hold the EXIT trap profile block"
+  profile = match.group(0).removesuffix("\nEOF")
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    hook = root / ".arena-preview-hook.sh"
+    hook.write_text(
+      '#!/bin/sh\nprintf "hook:%s\\n" "${ARENA_PREVIEW_SHELL_HOOK:-unset}"\n',
+      encoding="utf-8",
+    )
+    hook.chmod(0o755)
+    block = root / "profile"
+    block.write_text(profile, encoding="utf-8")
+    result = subprocess.run(
+      [
+        "bash",
+        "--noprofile",
+        "--norc",
+        "-c",
+        f". {shlex.quote(str(block))}\n{shlex.quote(sys.executable)} -c "
+        + shlex.quote(
+          'import os; print("cli:" + os.environ.get("ARENA_PREVIEW_SHELL_HOOK", "unset"))'
+        )
+        + "\nexit 7",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=clean_env(HOME=directory, ARENA_PREVIEW_SHELL_HOOK=""),
+    )
+    assert result.returncode == 7
+    assert result.stdout.splitlines() == ["cli:1", "hook:1"]

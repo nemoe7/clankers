@@ -44,6 +44,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- The EXIT hook prints routine guidance once per shell call. Standalone and routed commands retain it, pending counts stay visible, and task hints name only messages without a task marker.
+
 - Poll checks the PR throughout its wait and reports failures that appear after startup. Inbox delivery stays independent.
 
 - The Send button uses its busy label to keep one width during submissions.
