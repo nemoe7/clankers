@@ -1672,30 +1672,99 @@ function renderTasks(tasks) {
   upcoming.hidden = false;
 }
 
-// The owner sorts the queue by dragging a row inside the Upcoming area. The drop sends the drawn
-// order, and the reply renders the stored queue, so a refused write leaves every row in place.
-let draggingTaskRow = null;
+// The owner sorts the queue by dragging a row inside the Upcoming area. A drag previews the landing
+// seat, and the drop renders that order at once, with the reply still authoritative.
+let draggingTaskId = null;
+let dragStartPayload = null;
+let previewIds = null;
 function queueTaskRows() {
   return [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children];
 }
 // Every other queue row keeps its place: the dragged row lands above the row under the pointer,
 // or after the last row when a drop lands on empty space.
-function drawnTaskIds(dragged, list, target) {
-  const ids = queueTaskRows().filter(row => row !== dragged).map(row => row.title);
-  const anchor = target || [...list.children].filter(row => row !== dragged).at(-1);
-  if (!anchor) {
-    return list === $('#tasks-current-body') ? [dragged.title, ...ids] : [...ids, dragged.title];
+function drawnTaskIds(list, anchorId) {
+  const ids = queueTaskRows().filter(row => row.title !== draggingTaskId).map(row => row.title);
+  const at = anchorId ? ids.indexOf(anchorId) : -1;
+  if (at >= 0) {
+    ids.splice(at, 0, draggingTaskId);
+    return ids;
   }
-  ids.splice(ids.indexOf(anchor.title) + (target ? 0 : 1), 0, dragged.title);
+  return list === $('#tasks-current-body') ? [draggingTaskId, ...ids] : [...ids, draggingTaskId];
+}
+// The drawn names refill the slots they came from, so an unlisted task keeps its own slot.
+function drawTaskOrder(ids) {
+  const stored = lastTasksPayload;
+  const drawn = ids.map(id => stored.upcoming.find(task => task.id === id));
+  let next = 0;
+  const upcoming = stored.upcoming
+    .map(task => (ids.includes(task.id) ? drawn[next++] : task))
+    .map((task, index) => ({ ...task, order: index + 1 }));
+  return { ...stored, upcoming, updated_at: new Date().toISOString() };
+}
+// Where every row sits now, so a row that makes way can slide from its old seat.
+function queueTops() {
+  const tops = new Map();
+  for (const row of queueTaskRows()) {
+    if (typeof row.getBoundingClientRect === 'function') {
+      tops.set(row.title, row.getBoundingClientRect().top);
+    }
+  }
+  return tops;
+}
+function slideTaskRows(before) {
+  for (const row of queueTaskRows()) {
+    const was = before.get(row.title);
+    if (was === undefined || typeof row.getBoundingClientRect !== 'function') continue;
+    const shift = was - row.getBoundingClientRect().top;
+    if (!shift || typeof row.animate !== 'function') continue;
+    row.animate([{ transform: `translateY(${shift}px)` }, { transform: 'translateY(0)' }],
+      { duration: 140, easing: 'ease-out' });
+  }
+}
+// The dragged row takes its seat as the pointer moves, and a line marks that seat. The status line
+// keeps its stored stamp, so a preview never reads as a saved order.
+function previewTaskOrder(list, anchor) {
+  const ids = drawnTaskIds(list, anchor ? anchor.title : null);
+  const shown = previewIds;
+  if (shown && shown.length === ids.length && shown.every((id, index) => id === ids[index])) {
+    return ids;
+  }
+  previewIds = ids;
+  const before = queueTops();
+  const status = $('#tasks-status').textContent;
+  renderTasksIfChanged(drawTaskOrder(ids));
+  $('#tasks-status').textContent = status;
+  for (const row of queueTaskRows()) {
+    delete row.dataset.drop;
+    if (row.title === draggingTaskId) row.dataset.dragging = 'true';
+    else if (anchor && row.title === anchor.title) row.dataset.drop = 'true';
+  }
+  slideTaskRows(before);
   return ids;
 }
-async function writeTaskOrder(ids) {
+function endTaskDrag() {
+  draggingTaskId = null;
+  dragStartPayload = null;
+  previewIds = null;
+  for (const row of queueTaskRows()) {
+    delete row.dataset.dragging;
+    delete row.dataset.drop;
+  }
+}
+// A drag that ends without a drop, by Escape or a release outside the queue, puts the rows back.
+function cancelTaskDrag() {
+  if (dragStartPayload) renderTasksIfChanged(dragStartPayload);
+  endTaskDrag();
+}
+async function writeTaskOrder(ids, stored) {
+  if (stored) renderTasksIfChanged(drawTaskOrder(ids));
   try {
     const reply = await (await request('/api/tasks/order', {
       method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({ ids })
     })).json();
     renderTasksIfChanged(reply);
   } catch (error) {
+    if (stored) renderTasksIfChanged(stored);
     $('#tasks-status').textContent = `Order not saved: ${error.message}`;
   }
 }
@@ -1703,33 +1772,38 @@ function draggableTaskRow(task, list) {
   const row = taskRow(task);
   row.draggable = true;
   row.addEventListener('dragstart', event => {
-    draggingTaskRow = row;
+    draggingTaskId = row.title;
+    dragStartPayload = lastTasksPayload;
+    previewIds = null;
     row.dataset.dragging = 'true';
     // Firefox starts no drag without payload data.
     if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
   });
   row.addEventListener('dragover', event => {
-    if (draggingTaskRow && draggingTaskRow !== row) event.preventDefault();
+    if (!draggingTaskId) return;
+    // The seat under the pointer takes the drop, the dragged row included.
+    event.preventDefault();
+    if (row.title !== draggingTaskId) previewTaskOrder(list, row);
   });
   row.addEventListener('drop', event => {
-    if (!draggingTaskRow || draggingTaskRow === row) return;
+    if (!draggingTaskId) return;
     event.preventDefault();
-    writeTaskOrder(drawnTaskIds(draggingTaskRow, list, row));
+    const ids = row.title === draggingTaskId && previewIds ? previewIds : drawnTaskIds(list, row.title);
+    void writeTaskOrder(ids, dragStartPayload);
+    endTaskDrag();
   });
-  row.addEventListener('dragend', () => {
-    delete row.dataset.dragging;
-    if (draggingTaskRow === row) draggingTaskRow = null;
-  });
+  row.addEventListener('dragend', cancelTaskDrag);
   return row;
 }
 for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body')]) {
   list.addEventListener('dragover', event => {
-    if (draggingTaskRow) event.preventDefault();
+    if (draggingTaskId) event.preventDefault();
   });
   list.addEventListener('drop', event => {
-    if (!draggingTaskRow || event.target !== list) return;
+    if (!draggingTaskId || event.target !== list) return;
     event.preventDefault();
-    writeTaskOrder(drawnTaskIds(draggingTaskRow, list, null));
+    void writeTaskOrder(previewIds || drawnTaskIds(list, null), dragStartPayload);
+    endTaskDrag();
   });
 }
 
