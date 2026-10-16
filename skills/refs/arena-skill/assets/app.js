@@ -1546,17 +1546,30 @@ function taskRow(task) {
       // This block permits no edits. The manual details above retain every CLI edit.
       const answers = document.createElement('div');
       answers.className = 'task-answers';
+      const reports = getState()?.reports || [];
       answers.replaceChildren(...linked.map((answer) => {
         const entry = document.createElement('div');
         entry.className = 'task-answer';
         const answerId = document.createElement('code');
         answerId.textContent = answer.id;
+        let answerLabel = answerId;
+        if (reports.some(report => report.id === answer.report_id)) {
+          const link = document.createElement('a');
+          link.className = 'ack-reference';
+          link.href = `#${ACK_REFERENCE_PANELS.report}`;
+          link.dataset.referenceType = 'report';
+          link.dataset.referenceId = answer.report_id;
+          link.append(answerId);
+          answerLabel = link;
+        }
         const stamp = document.createElement('time');
-        stamp.textContent = answer.at;
+        stamp.dateTime = answer.at;
+        stamp.title = stampDate(answer.at).toLocaleString();
+        stamp.textContent = time(answer.at);
         const text = document.createElement('p');
         text.className = 'task-answer-text';
         text.textContent = answer.text;
-        entry.replaceChildren(answerId, stamp, text);
+        entry.replaceChildren(answerLabel, stamp, text);
         return entry;
       }));
       parts.push(answers);
@@ -1569,7 +1582,6 @@ function taskRow(task) {
 }
 
 // Guard task rendering with a payload signature because rebuilding rows on every poll closes open <details> elements.
-// Use a symbol sentinel: JSON.stringify of a missing list yields undefined, and normalizing it to null must not skip the first render.
 let taskSignature = Symbol('tasks not yet rendered');
 // The filter lives beside the payload: a change re-renders the last tasks without
 // waiting for a poll, and a later poll renders with the filter still applied.
@@ -1580,10 +1592,17 @@ let taskSearch = '';
 let lastTasksPayload = null;
 
 function renderTasksIfChanged(tasks) {
-  const signature = JSON.stringify(tasks);
-  if (signature === taskSignature) return;
-  taskSignature = signature;
-  renderTasks(tasks);
+  const published = new Set((getState()?.reports || []).map(report => report.id));
+  const linked = [...(tasks?.upcoming || []), ...(tasks?.finished || [])]
+    .flatMap(task => (task.answers || []).map(answer => published.has(answer.report_id)));
+  const signature = JSON.stringify([tasks, linked]);
+  if (signature !== taskSignature) {
+    taskSignature = signature;
+    renderTasks(tasks);
+  }
+  for (const stamp of document.querySelectorAll('.task-answer time')) {
+    stamp.textContent = time(stamp.dateTime);
+  }
 }
 
 function taskHaystack(task) {

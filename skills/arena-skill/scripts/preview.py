@@ -1072,7 +1072,7 @@ class Store:
 		if not records:return None
 		answers=[{'id':link['id'],'at':clip_stamp(link['at']),'text':link['text'],'report_id':link['report_id'],'task_id':link['task_id']}for link in links]
 		for item in records:
-			linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text']}for answer in answers if answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id')]
+			linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text'],'report_id':answer['report_id']}for answer in answers if answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id')]
 			if linked:item['answers']=linked
 		return{'finished':[item for item in records if item['status']=='finished'],'upcoming':[item for item in records if item['status']=='upcoming'],'updated_at':max(item['updated_at']for item in records)}
 	def list_tasks(self):

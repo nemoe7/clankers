@@ -7778,6 +7778,7 @@ def test_tasks_carry_their_linked_answers():
     assert [entry["id"] for entry in linked] == ["answer-one", "answer-two"], linked
     assert linked[0]["text"] == "REPORT linked: one"
     assert linked[0]["at"], "the entry carries its answer time"
+    assert [entry["report_id"] for entry in linked] == ["linked", "linked"]
     # The named answer matches both links and still appears once.
     named = by_id["named-task"]["answers"]
     assert [entry["id"] for entry in named] == ["answer-one", "answer-two"], named

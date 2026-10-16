@@ -3358,7 +3358,12 @@ class Store:
     ]
     for item in records:
       linked = [
-        {"id": answer["id"], "at": answer["at"], "text": answer["text"]}
+        {
+          "id": answer["id"],
+          "at": answer["at"],
+          "text": answer["text"],
+          "report_id": answer["report_id"],
+        }
         for answer in answers
         if answer["task_id"] == item["id"]
         or (answer["report_id"] and answer["report_id"] == item.get("report_id"))

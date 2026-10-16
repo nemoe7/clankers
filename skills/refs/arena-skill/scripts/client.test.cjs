@@ -164,7 +164,18 @@ test('preview client', async (t) => {
         addEventListener: (name, callback) => { if (name === 'change') pointerListeners.push(callback); },
       }),
     },
-    document: { querySelector: get, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
+    document: { querySelector: get, querySelectorAll(selector) {
+      if (selector !== '.task-answer time') return [];
+      const matches = new Set();
+      const visit = (node, inAnswer = false) => {
+        if (!(node instanceof Element)) return;
+        const answer = inAnswer || node.className === 'task-answer';
+        if (answer && node.tagName === 'time') matches.add(node);
+        node.children.forEach(child => visit(child, answer));
+      };
+      elements.forEach(node => visit(node));
+      return [...matches];
+    }, createElement: tag => Object.assign(new Element(), { tagName: tag }), createElementNS: (namespace, tag) => Object.assign(new Element(), { tagName: tag, namespace }), createTextNode: () => new Element(), documentElement: root, body: { dataset: {}, append() {} }, addEventListener: (name, callback, capture) => { (capture === true ? documentCaptureEvents : documentEvents)[name] = callback; }, execCommand: () => execCommandResult },
     navigator: { clipboard: { writeText: async value => { if (clipboardFails) throw new Error('denied'); copied.push(value); } } },
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
     crypto: { randomUUID: () => `${String(++counter).padStart(6, '0')}-0000-4000-8000-000000000000` },
@@ -878,6 +889,8 @@ test('preview client', async (t) => {
 
   await t.test("A task carries its linked answers in a read-only block below the details", async () => {
     const prior = state.tasks;
+    const priorReports = state.reports;
+    state.reports = [{ id: 'answer-source', title: 'Source report', updated_at: new Date().toISOString() }];
     state.tasks = {
       finished: [],
       upcoming: [
@@ -886,8 +899,8 @@ test('preview client', async (t) => {
         { id: 'answered-task', title: 'Answered work', details: ['read it'], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString(),
           answers: [
-            { id: 'answer-abc123', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#pick}\n- (x) yes' },
-            { id: 'answer-def456', at: '2026-10-15T06:00:00.000Z', text: 'Approved: ship it' },
+            { id: 'answer-abc123', report_id: 'answer-source', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#pick}\n- (x) yes' },
+            { id: 'answer-def456', report_id: 'unpublished-source', at: '2026-10-15T06:00:00.000Z', text: 'Approved: ship it' },
             { id: 'answer-long01', at: '2026-10-15T06:04:00.000Z',
               text: 'Decision recorded for the record: the receipt line keeps every word of the answer text, past the step cap that manual details obey.' },
           ] },
@@ -910,11 +923,39 @@ test('preview client', async (t) => {
     assert.ok(long.textContent.length > 120, 'a receipt entry keeps text past the step cap');
     const first = answers.children[0];
     assert.equal(first.className, 'task-answer');
-    assert.equal(first.children[0].tagName, 'code');
-    assert.equal(first.children[0].textContent, 'answer-abc123', 'the entry names its answer');
+    assert.equal(first.children[0].tagName, 'a', 'a published source makes the submission ID clickable');
+    assert.equal(first.children[0].href, '#reports-panel');
+    assert.equal(first.children[0].dataset.referenceType, 'report');
+    assert.equal(first.children[0].dataset.referenceId, 'answer-source');
+    assert.equal(first.children[0].children[0].tagName, 'code', 'the linked ID stays monospace');
+    assert.equal(first.children[0].textContent, 'answer-abc123', 'the entry still names the submission');
+    assert.equal(answers.children[1].children[0].tagName, 'code', 'an unpublished source leaves a plain ID');
+    assert.equal(answers.children[2].children[0].tagName, 'code', 'legacy answers without a source stay plain');
     assert.equal(first.children[1].tagName, 'time');
-    assert.equal(first.children[1].textContent, '2026-10-15T05:44:00.000Z', 'the entry carries its time');
+    assert.equal(first.children[1].textContent, context.time('2026-10-15T05:44:00.000Z'), 'the answer time uses the shared relative clock');
+    assert.equal(first.children[1].dateTime, '2026-10-15T05:44:00.000Z', 'the stored UTC stamp stays intact');
+    assert.equal(first.children[1].title, context.stampDate('2026-10-15T05:44:00.000Z').toLocaleString(),
+      'the tooltip uses the full date in the browser timezone');
     assert.match(first.children[2].textContent, /\(x\) yes/, 'the field and value text shows');
+    details.open = true;
+    state.reports.push({ id: 'unrelated-source', title: 'Unrelated report', updated_at: new Date().toISOString() });
+    await refresh();
+    assert.equal(get('#tasks-upcoming-body').children[0], row, 'an unrelated publication does not rebuild task rows');
+    assert.equal(details.open, true, 'an unrelated publication keeps open details');
+    first.children[1].textContent = 'stale age';
+    await refresh();
+    assert.equal(get('#tasks-upcoming-body').children[0], row, 'age updates do not rebuild task rows');
+    assert.equal(first.children[1].textContent, context.time(first.children[1].dateTime),
+      'an unchanged poll refreshes the relative age');
+    state.reports = [];
+    await refresh();
+    const plain = get('#tasks-upcoming-body').children[0].children[1].children[2].children[0].children[0];
+    assert.equal(plain.tagName, 'code', 'unpublishing removes a source link without a task-data change');
+    assert.equal(plain.textContent, 'answer-abc123');
+    state.reports = [{ id: 'answer-source', title: 'Source report', updated_at: new Date().toISOString() }];
+    await refresh();
+    const restored = get('#tasks-upcoming-body').children[0].children[1].children[2].children[0].children[0];
+    assert.equal(restored.tagName, 'a', 'republishing restores the source link without a task-data change');
     // The row builds this block from the record, so hostile answer text stays text.
     state.tasks = {
       finished: [],
@@ -935,6 +976,7 @@ test('preview client', async (t) => {
     assert.equal(hostileText.tagName, 'p', 'the answer text lands in a paragraph, not markup');
     assert.equal(hostileText.textContent, '<img onerror=alert(1)>', 'answer text stays text');
     state.tasks = prior;
+    state.reports = priorReports;
     await refresh();
   });
 

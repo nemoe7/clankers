@@ -44,6 +44,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Task-answer IDs open their published source reports. Unpublished or missing sources keep plain IDs. Answer times use relative ages with full browser-local date tooltips.
+
 - The EXIT hook prints routine guidance once per shell call. Standalone and routed commands retain it, pending counts stay visible, and task hints name only messages without a task marker.
 
 - Poll checks the PR throughout its wait and reports failures that appear after startup. Inbox delivery stays independent.
