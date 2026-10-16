@@ -454,8 +454,11 @@ let unreadEdits = [];
 function updateEdits(notes) {
   unreadEdits = notes.filter(item => item.ack_edited_at
     && Number(item.ack_edited_seen_count || 0) < (item.replies || []).length);
-  $('#notes-pip').hidden = $('#log-edited').hidden = !unreadEdits.length;
-  $('#log-edited').textContent = unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
+  const button = $('#log-edited');
+  $('#notes-pip').hidden = button.hidden = !unreadEdits.length;
+  if (!unreadEdits.length) delete button.dataset.error;
+  button.textContent = button.dataset.error ? 'Not saved' : unreadEdits.length > 1 ? `New replies (${unreadEdits.length})` : 'New reply';
+  label(button, button.dataset.error || button.textContent);
 }
 const ACK_REFERENCE_PANELS = {note: 'notes-panel', report: 'reports-panel', task: 'tasks-panel'};
 function referenceTypes(state) {
@@ -483,6 +486,8 @@ function linkReferences(html, references) {
 $('#log-edited').addEventListener('click', async () => {
   const item = unreadEdits[0];
   if (!item) return;
+  const button = $('#log-edited');
+  delete button.dataset.error;
   showTab($('#notes-tab'));
   clearLogSearch();
   const answer = messageNodes.get(item.id).children[1];
@@ -510,7 +515,8 @@ $('#log-edited').addEventListener('click', async () => {
       return !message || Number(message.ack_edited_seen_count || 0) >= receipt.ack_edited_seen_count;
     });
   } catch (error) {
-    status.textContent = `Could not save reply status: ${error.message}`;
+    button.dataset.error = `Could not save reply status: ${error.message}`;
+    updateEdits(getState().notes);
   }
 });
 function showHistory(notes) {
@@ -922,7 +928,7 @@ $('#form').addEventListener('submit', async event => {
   save('pending', JSON.stringify(pending));
   send.disabled = picker.disabled = $('#attach-file').disabled = true;
   send.textContent = send.dataset.busyLabel;
-  status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : 'Sending…';
+  status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : '';
   const sending = { id: pending.id, text, at: new Date().toISOString(), pending: true };
   const apply = (state, result) => {
     const record = result ? { html: sending.html, ...result } : sending;
@@ -962,8 +968,7 @@ $('#form').addEventListener('submit', async event => {
       return response.json();
     });
     note.placeholder = clipPlaceholder(result.text);
-    status.textContent = result.acknowledged_at ? 'Saved · already acknowledged.'
-      : `Saved ${time(result.at)} · Message sent${attachments.length ? ` with ${attachments.length} file${attachments.length === 1 ? '' : 's'}` : ''}.`;
+    status.textContent = '';
     pending = null;
     save('pending', 'null');
     clearStagedFiles();
@@ -1176,12 +1181,12 @@ function quoteTaskId(title) {
   title.title = title.dataset.taskId;
 }
 // The tab buttons share one confirmation, and null text means there was nothing to copy.
-async function copyFrom(button, text, what, glyph = 'copy') {
+async function copyFrom(button, text, what, glyph = 'copy', failure = null) {
   // The label a copy came in with is the label it leaves behind, so a restored `Copy the state`
   // never names the wrong job.
   const before = button.title;
   const words = text === null ? null : await copyText(text);
-  const message = words || (text === null ? `There is no ${what} to copy`
+  const message = words || failure || (text === null ? `There is no ${what} to copy`
     : `Clipboard blocked; select the ${what} and copy it`);
   setIcon(button, words ? 'check' : 'x', 15);
   label(button, message);
@@ -1255,11 +1260,9 @@ copyStateButton.addEventListener('click', async () => {
   try { payload = await (await request('/api/copy-state')).json(); }
   catch { payload = null; }
   if (!payload || !payload.text) {
-    status.textContent = 'The state route did not answer; nothing is copied.';
-    return;
+    return copyFrom(copyStateButton, null, 'state', 'copy', 'The state route did not answer; nothing is copied.');
   }
   await copyFrom(copyStateButton, payload.text, 'state');
-  status.textContent = 'Copied state as NDJSON.';
 });
 $('#copy-report').addEventListener('click', async () => {
   const id = $('#report-select').value;
@@ -2295,14 +2298,15 @@ function paintSkipPoll(skipPoll) {
   const button = $('#skip-poll');
   const armed = Boolean(skipPoll);
   button.setAttribute('aria-pressed', armed ? 'true' : 'false');
-  button.dataset.state = armed ? 'good' : '';
-  label(button, armed
+  button.dataset.state = button.dataset.error ? 'bad' : armed ? 'good' : '';
+  label(button, button.dataset.error || (armed
     ? `Skip poll armed ${time(skipPoll)}; the agent ends its wait`
-    : 'Ask the agent to end its wait now');
+    : 'Ask the agent to end its wait now'));
 }
 $('#skip-poll').addEventListener('click', async () => {
   const button = $('#skip-poll');
   if (button.disabled) return;
+  delete button.dataset.error;
   button.disabled = true;
   // The painted button carries the server's own answer, so the press always flips what the
   // poll last reported and a stale view cannot re-arm a flag the owner just cleared.
@@ -2312,10 +2316,10 @@ $('#skip-poll').addEventListener('click', async () => {
       method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({ skip: arm })
     })).json(), (state, answer) => { state.skip_poll = answer.skip_poll; });
     paintSkipPoll(answer.skip_poll);
-    status.textContent = answer.skip_poll
-      ? 'Skip poll armed; the agent ends its wait now.'
-      : 'Skip poll cleared; the agent keeps waiting.';
-  } catch (error) { status.textContent = `Skip poll failed: ${error.message}.`; }
+  } catch (error) {
+    button.dataset.error = `Skip poll failed: ${error.message}.`;
+    paintSkipPoll(getState()?.skip_poll);
+  }
   finally { button.disabled = false; }
 });
 refreshState();

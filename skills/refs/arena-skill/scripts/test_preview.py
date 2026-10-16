@@ -775,6 +775,11 @@ def test_http_boundaries():
       assert 'id="log-search"' in page and 'id="log-empty"' in page
       assert 'id="log-filter"' not in page and 'id="refresh-notes"' not in page
       assert 'id="composer-toggle"' not in page and "data-composer" not in page
+      assert re.search(
+        r'<p\b(?=[^>]*\bid="send-status")(?=[^>]*\brole="status")'
+        r'(?=[^>]*\baria-live="polite")[^>]*>\s*</p>',
+        page,
+      ), "the empty composer feedback region keeps its live semantics"
       # The log's jump bar ships in the page, inside the wrapper that positions it over the scroll area.
       assert 'id="log-newest"' in page and 'class="log-scroll"' in page
       assert 'id="reports-scroll-frame"' in page

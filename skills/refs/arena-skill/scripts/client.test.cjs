@@ -1135,8 +1135,8 @@ test('preview client', async (t) => {
       (cachedHere.tasks.upcoming || []).length + (cachedHere.tasks.finished || []).length,
       'every cached task rides the copy');
     assert.equal(get('#copy-state').dataset.state, 'good', 'the click reports through the button');
-    assert.notEqual(get('#send-status').textContent, statusBeforeCopy,
-      'the copy reports in the status without pinned wording');
+    assert.equal(get('#send-status').textContent, statusBeforeCopy,
+      'the copy reports through its own control, not the composer');
     state.tasks.upcoming = [];
     await refresh();
     assert.equal(get('#tasks-current').hidden, true, 'an empty queue has no current task');
@@ -1197,9 +1197,7 @@ test('preview client', async (t) => {
   await t.test("A cleared field collapses back to the stylesheet's min-height instead of keeping its grown", async () => {
     // A cleared field collapses back to the stylesheet's min-height instead of keeping its grown size.
     assert.equal(get('#note').style.height, '');
-    assert.match(get('#send-status').textContent, /Saved/);
-    assert.match(get('#send-status').textContent, /· Message sent\./);
-    assert.doesNotMatch(get('#send-status').textContent, /awaiting acknowledgement/);
+    assert.equal(get('#send-status').textContent, '', 'successful sends do not leave routine footer text');
     assert.equal(get('#note').placeholder, 'keep draft');
     await tick();
     get('#note').value = 'sent while typing';
@@ -2290,6 +2288,7 @@ test('preview client', async (t) => {
     };
     await refresh();
     stateCopyButton = get('#copy-state');
+    const composerBeforeCopy = get('#send-status').textContent;
     cacheKey = [...storage.keys()].find(item => item.endsWith(':state-cache'));
     assert.ok(cacheKey, 'every successful poll caches the copy the state button copies');
     copied.length = 0;
@@ -2297,23 +2296,22 @@ test('preview client', async (t) => {
     await tick();
     assert.equal(copied.length, 1, 'the button copies the cache');
     assert.ok(copied[0].split('\n').filter(Boolean).length > 1, 'the copy carries note and task lines');
-    assert.equal(get('#send-status').textContent, 'Copied state as NDJSON.');
+    assert.equal(get('#send-status').textContent, composerBeforeCopy, 'copy success leaves composer feedback alone');
     assert.equal(stateCopyButton.dataset.state, 'good');
     storage.delete(cacheKey);
     copied.length = 0;
     stateCopyButton.events.click();
     await tick();
     assert.equal(copied.length, 1, 'the server export copies without a client cache');
-    assert.match(get('#send-status').textContent,
-      /^Copied state as NDJSON/);
+    assert.equal(get('#send-status').textContent, composerBeforeCopy, 'server export stays in its own control');
     state.copyStateFails = true;
     copied.length = 0;
     stateCopyButton.events.click();
     await new Promise(done => setTimeout(done, 1200));
     await tick();
     assert.equal(copied.length, 0, 'a down route copies nothing');
-    assert.equal(get('#send-status').textContent,
-      'The state route did not answer; nothing is copied.');
+    assert.equal(get('#send-status').textContent, composerBeforeCopy, 'copy failure leaves composer feedback alone');
+    assert.equal(stateCopyButton.dataset.state, 'bad', 'copy failure stays visible on its control');
     delete state.copyStateFails;
   });
 
@@ -2889,7 +2887,7 @@ test('preview client', async (t) => {
     assert.equal(uploadCalls.length, calls + 2, 'exactly one replay follows the drop');
     assert.equal(uploadCalls.at(-1).id, uploadCalls.at(-2).id, 'the replay keeps the note ID');
     assert.deepEqual(uploadCalls.at(-1).files.map(file => file.name), ['retry.bin']);
-    assert.match(get('#send-status').textContent, /^Saved /);
+    assert.equal(get('#send-status').textContent, '', 'a confirmed upload leaves no routine success footer');
     assert.equal(state.notes.length, notes + 1, 'the replay writes no second note');
     assert.equal(get('#staged-files').hidden, true, 'a saved note clears its chips');
   });
@@ -3280,12 +3278,15 @@ test('preview client', async (t) => {
       await pendingWrite;
       replySeenWait = null;
       assert.equal(get('#log-edited').hidden, false, 'the old receipt cannot clear a newer reply');
+      const composerBeforeReplyFailure = get('#send-status').textContent;
       replySeenError = true;
       const failed = get('#log-edited').events.click();
       assert.equal(get('#log-edited').hidden, true);
       await failed;
       assert.equal(get('#log-edited').hidden, false, 'a failed write restores the indicator');
-      assert.match(get('#send-status').textContent, /Could not save reply status/);
+      assert.equal(get('#send-status').textContent, composerBeforeReplyFailure, 'reply feedback stays outside the composer');
+      assert.match(get('#log-edited').title, /Write failed/, 'the reply control retains its failure detail');
+      assert.match(get('#log-edited').getAttribute('aria-label'), /Write failed/, 'the reply failure has an accessible label');
       replySeenError = false;
       await get('#log-edited').events.click();
       assert.equal(get('#log-edited').hidden, true);
@@ -3491,6 +3492,7 @@ test('preview client', async (t) => {
   await t.test('Skip poll toggles one flag, and a poll consumes the arm', async () => {
     // The press must write no note: the agent reads the flag, ends its wait, and no stale
     // "skip poll" line waits in the log for a later turn to misread.
+    const composerBeforeSkip = get('#send-status').textContent;
     state.skip_poll = null;
     await refresh();
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
@@ -3504,7 +3506,7 @@ test('preview client', async (t) => {
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'true');
     assert.equal(get('#skip-poll').dataset.state, 'good');
     assert.match(get('#skip-poll').getAttribute('aria-label'), /^Skip poll armed /);
-    assert.equal(get('#send-status').textContent, 'Skip poll armed; the agent ends its wait now.');
+    assert.equal(get('#send-status').textContent, composerBeforeSkip, 'arming Skip poll leaves composer feedback alone');
     // A second press clears the flag, so the owner can take the skip back.
     get('#skip-poll').events.click();
     await tick();
@@ -3512,7 +3514,7 @@ test('preview client', async (t) => {
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
     assert.equal(get('#skip-poll').dataset.state, '');
     assert.equal(get('#skip-poll').getAttribute('aria-label'), 'Ask the agent to end its wait now');
-    assert.equal(get('#send-status').textContent, 'Skip poll cleared; the agent keeps waiting.');
+    assert.equal(get('#send-status').textContent, composerBeforeSkip, 'clearing Skip poll leaves composer feedback alone');
     // An armed flag ends the wait, and the next state paints the button unarmed again.
     get('#skip-poll').events.click();
     await tick();
@@ -3521,6 +3523,18 @@ test('preview client', async (t) => {
     await refresh();
     assert.equal(get('#skip-poll').getAttribute('aria-pressed'), 'false');
     assert.equal(get('#skip-poll').dataset.state, '');
+    failedWrites.add('/api/skip-poll');
+    try {
+      await get('#skip-poll').events.click();
+      assert.equal(get('#send-status').textContent, composerBeforeSkip, 'Skip poll errors stay outside the composer');
+      assert.equal(get('#skip-poll').dataset.state, 'bad', 'the failed control remains visible');
+      assert.match(get('#skip-poll').title, /Write failed/);
+      assert.match(get('#skip-poll').getAttribute('aria-label'), /Write failed/);
+    } finally {
+      failedWrites.delete('/api/skip-poll');
+      await get('#skip-poll').events.click();
+      await get('#skip-poll').events.click();
+    }
   });
   await t.test("Quoting a task title leaves the row tooltip on the task ID", async () => {
     const priorTasks = state.tasks;
