@@ -24,6 +24,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Rules and skills: use Line, Diff, and Reason amendment tables, with highlights, strikethrough, and separate exact final clauses.
+
 - Preview: require explicit types for normal new tasks. Add Ops and Misc choices, type definitions, and light/dark badge colors. Preserve stored types and use Misc for missing legacy types.
 
 #### system-prompts

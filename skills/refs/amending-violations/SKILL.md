@@ -3,8 +3,7 @@ name: amending-violations
 description: >-
   Write an amendment to the NEMOGPT system prompt when one of its instructions causes
   undesirable behavior. Holds the guidelines for writing a system prompt and the output
-  format: one row per changed line, with the current wording, the amended wording and
-  the reason.
+  format: one row per changed line, with an inline diff and the reason.
 license: MIT. LICENSE.txt has complete terms
 metadata:
   argument-hint: "[instruction]"
@@ -22,9 +21,11 @@ Answer in the format of our amendment proposals:
 
 `Citation:` the instruction the amendment follows from
 
-`| Line | Current | Amended | Reason |`
+`| Line | Diff | Reason |`
 
-Quote the current wording and the amended wording verbatim. Keep the amended line a bare rule; put the behavior and the expected effect in the Reason cell.
+Quote the exact final clause verbatim below the table, without diff markup or deleted text. Keep the final clause a bare rule; put the behavior and the expected effect in the Reason cell.
+
+In Diff, keep unchanged wording verbatim, strike only removed text with ~~...~~, highlight only inserted text with ==...==, and omit change labels.
 
 End with the decision list:
 

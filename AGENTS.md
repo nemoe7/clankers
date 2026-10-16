@@ -79,8 +79,9 @@ Read these first:
 
 - Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/AGENTS.md`; other AGENTS.md files are exempt.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
-- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Current | Amended | Reason` row per changed line.
-  - Quote both versions verbatim; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
+- Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Diff | Reason` row per changed line.
+  - Quote the exact final clause verbatim below its table, without diff markup or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.
+  - In Diff, keep unchanged wording verbatim, strike only removed text with ~~...~~, highlight only inserted text with ==...==, and omit change labels.
   - Omit only unchanged context with `...`.
   - Quote clauses in double quotes, NEVER backticks, in proposals, acks, and reports.
   - Each clause takes approve, squash (re-propose squashed via the `squash` skill; do not land), reject, or custom.
