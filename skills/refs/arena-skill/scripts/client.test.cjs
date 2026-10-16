@@ -48,6 +48,13 @@ test('preview client', async (t) => {
         this.children.push(child);
       }
     }
+    insertBefore(child, reference) {
+      this.children = this.children.filter(item => item !== child);
+      const index = this.children.indexOf(reference);
+      this.children.splice(index < 0 ? this.children.length : index, 0, child);
+      return child;
+    }
+    removeChild(child) { this.children = this.children.filter(item => item !== child); return child; }
     replaceChildren(...children) { this.children = children; this.replacements = (this.replacements || 0) + 1; }
     // Reset report scroll when replacing content, as browser layout does.
     set innerHTML(value) {
@@ -3308,7 +3315,9 @@ test('preview client', async (t) => {
       await refresh();
       replySeenWait = new Promise(resolve => { release = resolve; });
       const destination = get('#history').children[0].children[1];
+      const historyReplacements = get('#history').replacements;
       pendingWrite = get('#log-edited').events.click();
+      assert.equal(get('#history').replacements, historyReplacements, 'keep the focused answer attached during the optimistic render');
       assert.equal(destination.dataset.highlight, 'true', 'highlight the reached answer before its write completes');
       assert.equal(destination.scrolledIntoView, true);
       assert.equal(destination.focused, true);
@@ -3317,6 +3326,7 @@ test('preview client', async (t) => {
       await refresh();
       assert.equal(get('#log-edited').hidden, true, 'a pending write survives a refresh');
       assert.equal(destination.dataset.highlight, 'true', 'a poll preserves the destination highlight');
+      assert.equal(get('#history').replacements, historyReplacements, 'a poll must not detach the focused answer');
       state.notes[0].replies.push({ kind: 'reply', text: 'Newer answer', at: '2026-10-13T03:03:00' });
       state.notes[0].ack_edited_at = '2026-10-13T03:03:00';
       await refresh();

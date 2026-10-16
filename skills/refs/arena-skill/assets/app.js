@@ -647,7 +647,16 @@ function showHistory(notes) {
 // Offset the scroll by their added height so the owner keeps the same message in view.
 function renderHistoryWindow(notes) {
   const history = $('#history');
-  history.replaceChildren(...notes.slice(-historyShown).map(item => messageNodes.get(item.id)));
+  const place = history.scrollTop;
+  const rows = notes.slice(-historyShown).map(item => messageNodes.get(item.id));
+  const current = new Set(rows);
+  for (const child of Array.from(history.children)) {
+    if (!current.has(child)) history.removeChild(child);
+  }
+  rows.forEach((row, index) => {
+    if (history.children[index] !== row) history.insertBefore(row, history.children[index] || null);
+  });
+  history.scrollTop = place;
 }
 
 function loadOlderMessages() {
