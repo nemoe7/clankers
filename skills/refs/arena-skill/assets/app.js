@@ -921,9 +921,10 @@ $('#form').addEventListener('submit', async event => {
   status.textContent = attachments.length ? `Sending ${attachments.length} file${attachments.length === 1 ? '' : 's'} with message…` : 'Sending…';
   const sending = { id: pending.id, text, at: new Date().toISOString(), pending: true };
   const apply = (state, result) => {
+    const record = result ? { html: sending.html, ...result } : sending;
     const position = state.notes.findIndex(item => item.id === sending.id);
-    if (position < 0) state.notes.push(result || sending);
-    else if (result) state.notes[position] = result;
+    if (position < 0) state.notes.push(record);
+    else if (result) state.notes[position] = record;
   };
   try {
     note.value = '';
