@@ -48,6 +48,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview: show preview-ID rename commands for task and report conflicts. Keep repository-facing names unchanged.
+
 - Preview: keep normal code text color inside Markdown highlights.
 
 - Preview: make only jump-arrow icons white on dark-theme hover. Keep the resting button surface and light-theme contrast.

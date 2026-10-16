@@ -8,6 +8,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import socket
 import sqlite3
@@ -703,6 +704,15 @@ def commit_id_report(hits):
     lines.append(f"  {path}:{number}: {kind} {named}")
 
   lines.append("Strip the citation, then commit again.")
+  renames = {ident for _, _, _, kind, ident in hits if kind in {"task", "report"}}
+  if renames:
+    lines.append(
+      "If this is a name collision, rename the preview record, not repository content:"
+    )
+    lines.extend(
+      f"  arena-preview rename {shlex.quote(ident)} NEW-ID" for ident in sorted(renames)
+    )
+    lines.append("Replace NEW-ID with an unused preview ID.")
   return "\n".join(lines)
 
 

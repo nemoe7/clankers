@@ -7344,6 +7344,26 @@ def test_commit_trap_names_a_staged_session_id():
     assert "doc.md:3" in report and note_id in report
 
 
+def test_commit_report_offers_preview_rename_for_task_and_report_collisions():
+  task_id = "request-tracker"
+  report_id = "release-notes"
+  note_id = "a1b2c3"
+  hits = [
+    ("tracker.py", 1, task_id, "task", task_id),
+    ("other.py", 2, task_id, "task", task_id),
+    ("release.md", 3, report_id, "report", report_id),
+    ("notes.md", 4, note_id, "note", note_id),
+  ]
+  report = preview.commit_id_report(hits)
+  commands = {f"arena-preview rename {ident} NEW-ID" for ident in (task_id, report_id)}
+  assert commands.issubset({line.strip() for line in report.splitlines()})
+  assert len(
+    [line for line in report.splitlines() if "arena-preview rename" in line]
+  ) == len(commands)
+  assert f"arena-preview rename {note_id} NEW-ID" not in report
+  assert all(f"{path}:{number}" in report for path, number, *_ in hits)
+
+
 def test_commit_trap_ignores_a_git_sha():
   """A SHA that is no session ID passes: the match list comes from the database."""
   with tempfile.TemporaryDirectory() as directory:

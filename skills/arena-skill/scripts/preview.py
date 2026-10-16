@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import shutil
 import socket
 import sqlite3
@@ -237,7 +238,9 @@ def commit_id_report(hits):
 	if not hits:return None
 	lines=['COMMIT BLOCKED: the staged change cites a session-local ID. That ID exists only in this session, so a reader of the repository cannot resolve it.']
 	for(path,number,token,kind,ident)in hits:named=ident if token==ident else f"{token} of {ident}";lines.append(f"  {path}:{number}: {kind} {named}")
-	lines.append('Strip the citation, then commit again.');return'\n'.join(lines)
+	lines.append('Strip the citation, then commit again.');renames={ident for(_,_,_,kind,ident)in hits if kind in{'task','report'}}
+	if renames:lines.append('If this is a name collision, rename the preview record, not repository content:');lines.extend(f"  arena-preview rename {shlex.quote(ident)} NEW-ID"for ident in sorted(renames));lines.append('Replace NEW-ID with an unused preview ID.')
+	return'\n'.join(lines)
 def new_id():return uuid.uuid4().hex[:6]
 def seconds_since(value):
 	if not value:return None
