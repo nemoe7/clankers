@@ -120,7 +120,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      # The original workflow cancelled an older run in this group. Keep that at job level.
+      # Cancel older runs in this group at job level.
       group: Validate-GPT-Plugins-${{ github.ref }}
       cancel-in-progress: true
     steps:
@@ -248,7 +248,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      # The original workflow cancelled an older run in this group. Keep that at job level.
+      # Cancel older runs in this group at job level.
       group: Package-GPT-Plugins-${{ github.ref }}
       cancel-in-progress: true
     steps:

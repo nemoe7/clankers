@@ -1,4 +1,4 @@
-# WENYAN CHATGPT EXPERIMENT
+# Wenyan ChatGPT experiment
 
 Experimental only. It is not authoritative or validated.
 

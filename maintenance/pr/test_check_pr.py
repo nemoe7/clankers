@@ -316,9 +316,8 @@ def test_main_exit_codes(tmp_path: Path, capsys):
 def test_the_contract_runs_the_version_bump_checks(tmp_path: Path, monkeypatch):
   """A changed userscript without a higher version fails the contract.
 
-  The pull request's Version Bumps job checks the versioned modules and then requires a
-  bumped version for every changed one. The contract runs both, so a local pass matches the
-  remote verdict instead of missing it."""
+  The contract and the Version Bumps job check each versioned module.
+  Both require a higher version for every changed module."""
   base = tmp_path / "arena.user.js"
   base.write_text(
     "// ==UserScript==\n// @name         x | v99.0.0\n// @version      99.0.0\n"

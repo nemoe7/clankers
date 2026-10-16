@@ -1022,8 +1022,7 @@ def validate(errors: list[str]) -> tuple[int, int]:
 def run_check(name: str, errors: list[str], check: Callable[[], Any]) -> Any:
   """Run one named check, print its verdict and span, and return what it reported.
 
-  The count is the check's own: every check appends to one shared list, so the line
-  names the check that added the problems instead of blaming the whole run.
+  Checks append errors to one shared list. Count only the errors this check adds.
   """
   started = time.perf_counter()
   before = len(errors)

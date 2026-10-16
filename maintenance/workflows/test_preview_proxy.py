@@ -1,9 +1,7 @@
-"""Check the preview proxy always serves an installable HTML main page.
+"""Check that the preview proxy serves an installable HTML main page.
 
-The proxy injects the manifest link into the preview HTML, and the viewer root carries the
-same link on its own page. The root once answered a plain-text line with an empty DOM, so no
-manifest ever landed and Chrome never offered the install.
-This test starts the real server on a loopback port and reads what it answers.
+The proxy injects a manifest link into preview HTML. The viewer root also carries this link.
+Start the server on a loopback port and check its responses.
 """
 
 from __future__ import annotations

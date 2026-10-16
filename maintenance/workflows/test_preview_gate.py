@@ -282,7 +282,7 @@ def test_a_read_alone_stays_quiet():
 
 
 def test_a_read_beside_work_meets_the_gate():
-  # A read no longer licenses other calls: the work meets the gate first.
+  # Work beside an inbox read must pass the gate before it runs.
   result = run('cd /tmp && echo ran && : "arena-preview read"')
   assert result.returncode == 130, result.stderr
   assert "ran" not in result.stdout
@@ -341,8 +341,7 @@ def test_the_gate_names_a_port_that_is_not_the_default():
 
 
 def test_a_silenced_read_meets_the_count_gate():
-  # A quiet chain that discards the reminder used to meet the gate.
-  # Now the gate ignores >/dev/null for arena-preview commands as a debug trap.
+  # The gate treats >/dev/null on arena-preview commands as a debug trap and ignores it.
   result = run("cd /tmp && arena-preview read >/dev/null 2>&1")
   assert result.returncode == 0, result.stderr
 

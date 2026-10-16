@@ -235,7 +235,6 @@ a { color: #6ea3d6; text-underline-offset: 3px; }
 .report th, .report td { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; overflow-wrap: normal; }
 /* A message table is a receipt, not a document: tight rows stop three columns from eating the tab. */
 .message-text th, .message-text td { text-align: left; border-bottom: 1px solid var(--border); padding: 3px 8px; overflow-wrap: normal; }
-/* Rendered message text used to borrow the report class, which said the wrong thing about a note. */
 /* Use the same code background wherever Markdown renders. A message fence and draft-preview fence are the same block. */
 pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg); }
 .code-block { position: relative; }

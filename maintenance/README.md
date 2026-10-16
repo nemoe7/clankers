@@ -1,9 +1,5 @@
 # Maintenance
 
-Repository maintenance procedures and validation tools live here.
-
-Repository checks live in `maintenance/`.
-
 ## Rule maintenance
 
 1. Amend the appropriate file in `rules/refs/` first. Then mirror the amendment into the live file and compress only the new or affected line.
@@ -68,7 +64,7 @@ Verbatim baselines would exceed live budgets. Refs preserve originals, identical
 
 ### Formatting
 
-Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/`, plus `rules/wenyan/README.md` — 11 files in all.
+Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/`, plus `rules/wenyan/README.md`. This set contains 11 files.
 
 The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
 

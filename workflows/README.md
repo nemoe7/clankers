@@ -2,9 +2,7 @@
 
 Each workflow is a self-contained Markdown file usable as-is across coding-agent platforms.
 
-Contents:
-
-- [init-docs](init-docs.md) — bootstrap and reconcile repository documentation for downstream users and agents.
+- [init-docs](init-docs.md): bootstrap and reconcile repository documentation for downstream users and agents.
 
 ## Format
 

@@ -11,7 +11,7 @@ Tampermonkey userscripts for Arena.ai and chatgpt.com.
 
 1. Install Tampermonkey in the browser.
 2. Open its dashboard and create a new script.
-3. Paste one bundle\'s `.user.js` contents and save.
+3. Paste one bundle's `.user.js` contents and save.
 4. Repeat for the other domain if needed.
 
 To migrate, disable or remove the five old scripts before enabling the bundles. Reload open Arena and ChatGPT tabs to stop old timers and observers. Old installations do not become bundles automatically.
@@ -24,7 +24,7 @@ The baseline is `refs/arena-prompt-fill.txt`. The served `arena-prompt-fill.txt`
 
 Eleven switches default to On. Auto trim ships OFF because it removes transcript content from the page. On a matching page, open the Tampermonkey menu and select a command such as `Composer — fill (ON)`. The ChatGPT bundle keeps its own `Auto Think: ON — toggle` shape.
 
-Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module\'s entries stay together. The modules sit in one order:
+Every Arena entry leads with its module, and a switch shows its saved setting in parentheses. One module's entries stay together. The modules sit in one order:
 
 1. Composer
 2. Proxy
@@ -34,7 +34,7 @@ Every Arena entry leads with its module, and a switch shows its saved setting in
 6. Page
 7. Userscript
 
-Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature\'s observers, timers and listeners.
+Switches apply immediately in the current tab. Other open tabs use saved settings on their next reload. Disabling stops the feature's observers, timers and listeners.
 
 The bundles use `GM_getValue` and `GM_setValue` for saved settings, plus menu registration and removal, and they hold no check code. Switches never reload the page. Disabling a hiding feature restores its own DOM changes where the page has not replaced them. Earlier automatic clicks and inserted prompt text remain.
 
@@ -46,7 +46,7 @@ Only debug mode includes repository names and filenames. Keys, message text, pag
 
 Title logs require a title or emoji change. Debug adds decision conditions for that change. ChatGPT keeps its existing `[NemoUtils]` output.
 
-## Arena Prompt Fill
+## Arena prompt fill
 
 The feature fills the composer on `/agent` and on `/agent/`, not on paths with a trailing segment.
 
@@ -75,7 +75,7 @@ The message then carries a six-step checklist:
 3. Take the smallest change that holds: reuse first, one line second, new code last, and add nothing the task does not ask for.
 4. Write the failing check before new or changed executable behavior, and reproduce a bug before the fix.
 5. Keep the behavior, interfaces, validation and security that stand.
-6. Run the project\'s own gate, and read the result before the report.
+6. Run the project's own gate, and read the result before the report.
 
 Six rules follow the checklist:
 
@@ -86,7 +86,7 @@ Six rules follow the checklist:
 - screenshots and corrections through the steering channel, with each image read directly
 - a closing report of the change, the checks and the open items
 
-## Arena Auto-send Wake Up
+## Arena auto-send wake up
 
 `Composer — auto-send wake up` defaults to On. On Arena composer and session pages, it clicks Send message after a random 0–5 second delay. The whole composer text must equal `wake up`. Case changes, whitespace, and other text do not match.
 
@@ -96,7 +96,7 @@ The same switch fills an empty composer when the latest message root contains a 
 
 Auto-wake logs `filled` after an error-recovery insert and `clicked` after the Send button click. These events contain no message text and do not prove server acceptance.
 
-## Arena Transcript Trim
+## Arena transcript trim
 
 This switch ships OFF, and OFF stops the trim: a reload redraws the transcript from Arena, so removed rows return. On `/agent/*`, ON keeps the newest `50` row nodes across all message roots and removes older rows first. The row limit cannot fall below `20`.
 
@@ -111,27 +111,27 @@ The command takes one row limit:
 - it converts a saved two-value plan to its row limit
 - an empty or too small answer keeps the old plan
 
-## Arena Security Check Hold
+## Arena security check hold
 
 While the Arena security check shows, the tab title carries the shield emoji and the automatic posts wait. The held work is the prompt fill, the Open Steering click, the auto-wake click, and the proxy key posts. Each tab reads its own page. The held work resumes when the check clears.
 
-## Arena Userscript Pause
+## Arena userscript pause
 
 One entry, `Userscript — pause all`, stops every feature where it stands: the observers, the timers, the automatic posts and the tab title. The press applies at once, with no reload, and the entry then reads `Userscript — resume all`. The resume brings back every feature whose own switch is ON and leaves the others off.
 
 The script saves the pause, so a reload keeps it. Each feature switch stays in the menu while paused.
 
-## Arena State Save Notices
+## Arena state save notices
 
 Persistent state notices clear after a successful file close or download-manager callback. Failed saves keep their notices. Temporary success messages keep their existing timeout.
 
 A browser-link download has no completion callback, so it does not clear a failure notice.
 
-## Arena State Reset Window
+## Arena state reset window
 
 The `State — reset-window overwrite` switch ships On. Within 150 seconds either side of 02:00, 08:00, 14:00 and 20:00 PHT, a preview URL that changed writes to the file without the overwrite prompt. A branch change, a missing branch and every hour outside that window keep the prompt.
 
-## Arena Tab Title
+## Arena tab title
 
 On `/agent/*`, ON reads the repository name from the GitHub link in the session header and sets the tab title to `Arena | <repository>`. If the link is absent, it reads a valid repository name before ` read ` in the session title button. State-file naming uses the same fallback before a stale tab title.
 
@@ -157,7 +157,7 @@ A finished row keeps its shimmer or its pulse in the page, so a row counts only 
 
 A process card carries a play icon and the process name, so it takes 🖥️ as the newest message of a live turn.
 
-## ChatGPT Hide Elements
+## ChatGPT hide elements
 
 On any `chatgpt.com` path, the feature adds `hidden` to eight elements:
 
@@ -172,7 +172,7 @@ On any `chatgpt.com` path, the feature adds `hidden` to eight elements:
 
 A MutationObserver repeats the work when the page changes.
 
-## ChatGPT Auto Think
+## ChatGPT auto think
 
 On any `chatgpt.com` path, the feature clicks the Think pill every second while `aria-pressed` is `false`.
 

@@ -2723,19 +2723,15 @@ def check_task(task_id, title, details):
       raise ValueError(f"A task detail must be {MAX_TASK_DETAIL} characters or fewer")
 
 
-# A report can carry one allowlisted list form: report prose is agent-authored, and the
 # An image the agent sized: `![alt](src =320x200)`, or `=320x` for a scaled height.
 SIZED_IMAGE = re.compile(r"!\[([^\]\n]*)\]\((\S+?)\s+=(\d+)x(\d*)\)")
 
 
 def hold_out(markdown, pattern, build, slug):
-  """Replace each match with a placeholder and return the text and what it held.
+  """Replace each match with a placeholder and return the text and stored HTML.
 
-  Two things must survive the renderer untouched: allowlisted list markup, and an
-  image the agent sized. Both hold the real HTML aside, render, then put it back,
-  so this is one helper rather than two. `build` returns the HTML for a match, or
-  None to leave the match alone.
-  """
+  Preserve allowlisted list markup and sized images during rendering, then restore their HTML.
+  `build` returns HTML for a match, or None to leave it unchanged."""
   held = []
 
   def hold(match):
@@ -4874,11 +4870,11 @@ class Store:
   def clear_state(self):
     """Empty every state table in one transaction and return the row counts.
 
-    The owner asked for the page's clear as a command, so it runs while the server stays up: rows go, the schema
-    and the page token stay. The transaction's autosave refreshes the save file to match, so the export does not
-    keep the cleared state. Copy the state first to keep a backup. The agent key is channel plumbing the page
-    re-posts on load, not state the owner reads, so the record survives. The recorded server port survives the
-    same way: the clear runs against a live server, and the next command needs the port to prove it."""
+    Keep the server running, the schema, and the page token. Autosave updates the save file to match the empty state.
+    Copy the state first to keep a backup.
+
+    Keep the agent key record that the page posts on load.
+    Keep the recorded server port for the next command's live-server check."""
     counts = {}
     with self.transaction() as db:
       for table in (
@@ -5131,11 +5127,10 @@ PARAGRAPH_BREAK = re.compile(r"<br\s*/?>")
 
 
 def drop_paragraph_breaks(rendered):
-  """Take the `<br>` out of a paragraph, on the owner's suggestion.
+  """Remove `<br>` tags from paragraphs and keep source newlines.
 
-  With breaks on, markdown-it turns each newline into a `<br>` and the owner found the result too airy next to
-  the message log, where a line breaks through `white-space: pre-wrap` and needs no tag. A paragraph now keeps
-  its source newlines and no break. A `<br>` inside any other element, a list item for one, stays as it was."""
+  The message log uses `white-space: pre-wrap`, so source newlines already create line breaks.
+  Keep `<br>` tags in other elements, including list items."""
   return PARAGRAPH.sub(lambda match: PARAGRAPH_BREAK.sub("", match.group(0)), rendered)
 
 
@@ -5238,7 +5233,7 @@ def handler(store):
               ack for report in state["reports"] for ack in report["acknowledgements"]
             ]:
               # No `breaks`: the log sets `white-space: pre-wrap`, so the newline the source carries is the line break.
-              # A `<br>` beside it doubled every gap, which is what the owner saw and removed by hand in the browser.
+              # A `<br>` would add a second break beside each source newline.
               if "text" in item:
                 item["html"] = render(item["text"])
               if item.get("ack_kind") == "reply" and item.get("ack_text"):
@@ -5607,13 +5602,10 @@ def resolve_state_dir():
 
 
 def ensure_installed():
-  """Run the installer once when the shim is off PATH, then go on.
+  """Run the installer once when the shim is absent from PATH.
 
-  A restored sandbox loses the shim and the hooks, and the next preview call then had to
-  wait for the installer by hand. The call starts the installer itself, so one command
-  carries the whole setup. A guarded run skips it, and a checkout without the live skill
-  has nothing to install.
-  """
+  Restore the shim and hooks before continuing the preview command.
+  Skip installation in a guarded run or a checkout without the live skill."""
   if os.environ.get("ARENA_PREVIEW_NO_BOOTSTRAP") or shutil.which("arena-preview"):
     return
   for ancestor in Path(__file__).resolve().parents:
@@ -6145,7 +6137,7 @@ def main():
         if blocked_calls is not None:
           print(f"BASH BLOCKED AFTER {blocked_calls} CALLS.", flush=True)
         if args.push:
-          # The owner asked a blocked push to say what stopped and what clears it.
+          # Name the pending item and the steps that allow the push.
           print(
             "PUSH BLOCKED: a note or answer awaits an ack, so nothing left the"
             " sandbox. Read the inbox, ack every item, push again.",

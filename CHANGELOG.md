@@ -60,6 +60,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Record task-link highlights: a destination row is marked for 2.5 seconds or until another tab opens.
 
+#### prose
+
+- Code comments and docstrings omit request history and describe current behavior. Documentation removes repeated introductions and uses sentence-case headings. Rule clauses and third-party copies do not change.
+
 ## 2026-10-15
 
 ### Added
