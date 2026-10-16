@@ -2975,7 +2975,7 @@ def test_bare_task_reads_the_stored_row():
     assert "answer-unrelated" not in retained.stdout
     missing = cli("task", "read-nothing")
     assert missing.returncode != 0
-    assert "holds the ID read-nothing" in missing.stdout + missing.stderr
+    assert "No task is stored under read-nothing." in missing.stdout + missing.stderr
 
 
 def test_init_reports_the_state_path():
@@ -3388,6 +3388,8 @@ def test_task_list_prints_a_linked_report_answer():
     listed = preview.format_task_list(store.list_tasks()).splitlines()
     assert any(line.startswith("    answer answer-1, at ") for line in listed), listed
     assert "    REPORT pick: one" in listed, listed
+    # The row labels the report link and the type, so neither reads as the title.
+    assert any(" | waits on pick | type misc" in line for line in listed), listed
     # A task with no linked answer keeps the older list shape.
     store.write_task("second", "Second upcoming", ["Step two"], task_type="misc")
     lines = preview.format_task_list(store.list_tasks()).splitlines()
@@ -4606,7 +4608,7 @@ def test_a_logs_call_reads_the_routed_run_status_and_output():
     assert "first" in done.stdout, done.stdout
     missing = cli("logs", "nothing")
     assert missing.returncode == 1, missing.stdout
-    assert "No routed gate named nothing." in missing.stdout + missing.stderr
+    assert "No routed run named nothing." in missing.stdout + missing.stderr
 
 
 def test_a_failed_background_start_keeps_the_refusal(capsys, monkeypatch):
@@ -7834,6 +7836,9 @@ def test_cli_help_keeps_usage():
   assert not cli.stderr
   # The description names the two command sets, so the hook names read as hooks.
   flat = " ".join(cli.stdout.split())
+  assert (
+    "The platform's hooks call the -tick commands, `gate`, `inbox-line` and" in flat
+  )
   assert "-A append, -m message, -r report" in flat
   assert "--task-type type" in flat
 
@@ -8529,6 +8534,7 @@ def test_ack_task_hints_only_name_messages_without_a_task(capsys):
       assert preview.main() == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0] == "ok " + " ".join(record_id[:6] for record_id in ids)
+    assert lines[1].startswith('link it with: arena-preview task <id> "<title>" -m ')
     assert "free-note" in lines[1] and "free-answer" in lines[1]
     assert "tracked-note" not in lines[1] and "tracked-answer" not in lines[1]
     with (
@@ -8897,6 +8903,96 @@ def test_a_missing_record_refusal_prints_on_stderr(tmp_path):
   assert (
     "No note, answer, report or task holds the ID nope" in renamed.stderr.splitlines()
   )
+
+
+def test_a_missing_task_names_the_task(tmp_path):
+  """A task read reports its own miss, with the period the other refusals carry."""
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  cli = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "task", "nothing-here"],
+    capture_output=True,
+    text=True,
+    check=False,
+    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+  )
+  assert cli.returncode == 1, cli.stdout
+  assert cli.stdout == ""
+  assert (
+    "Preview error: No task is stored under nothing-here." in cli.stderr.splitlines()
+  )
+
+
+def test_a_missing_state_file_names_the_path(tmp_path):
+  """An unreadable import source reads as a miss, not as a raw errno."""
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  missing = tmp_path / "no-such.ndjson"
+  cli = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "import-state", str(missing)],
+    capture_output=True,
+    text=True,
+    check=False,
+    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+  )
+  assert cli.returncode == 1, cli.stdout
+  assert cli.stdout == ""
+  assert f"Preview error: No such state file: {missing}" in cli.stderr.splitlines()
+
+
+def test_the_import_receipt_names_the_fate(tmp_path):
+  """The receipt reports whether the import replaces the live state or merges by ID."""
+  receipt = {"notes": 1, "answers": 2, "reports": 3, "tasks": 4}
+  replaced = preview.format_import_receipt(receipt)
+  assert replaced == (
+    "Imported notes 1, answers 2, reports 3, tasks 4; the live state was replaced"
+  )
+  merged = preview.format_import_receipt(receipt, merged=True)
+  assert merged.endswith(", tasks 4; merged by ID")
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  store.note("kept-note", "Keep me")
+  env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)}
+  source = str(store.save_path)
+  assert store.save_path.is_file(), "a state write saves the backup the import reads"
+  for flags, tail in (
+    ([], "; the live state was replaced"),
+    (["--merge"], "; merged by ID"),
+  ):
+    cli = subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), "import-state", *flags, source],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+    assert cli.returncode == 0, cli.stderr
+    assert cli.stdout.strip().endswith(tail), cli.stdout
+
+
+def test_a_queued_download_names_the_owner_click(tmp_path):
+  """The queue line reads as prose and names the Approve click that unblocks it."""
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  cli = subprocess.run(
+    [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "download-request",
+      "https://example.com/x",
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+  )
+  assert cli.returncode == 0, cli.stderr
+  lines = cli.stdout.splitlines()
+  assert re.fullmatch(
+    r"Queued \S+ https://example\.com/x \(proxy off\), approval pending, status queued",
+    lines[0],
+  ), lines
+  assert lines[1] == "Ask the owner to Approve it on the Preview page."
 
 
 def test_a_published_field_reads_in_the_singular(tmp_path):

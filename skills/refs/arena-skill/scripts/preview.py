@@ -1428,7 +1428,11 @@ RENAME_TABLES = ("notes", "submissions", "reports", "tasks")
 
 # The importer carries note, task, and answer lines through one schema.
 # Name keys here so the writer and reader stay aligned. The default save path stays inside the ignored state directory.
-CLI_DESCRIPTION = "Notes, reports, tasks and the preview server for Arena steering."
+CLI_DESCRIPTION = (
+  "Notes, reports, tasks and the preview server for Arena steering. The platform's"
+  " hooks call the -tick commands, `gate`, `inbox-line` and `route-run`; the rest are"
+  " the agent's."
+)
 SAVED_STATE = "saved-state.ndjson"
 NOTE_LINE_KEYS = (
   "id",
@@ -1915,9 +1919,9 @@ def format_task_list(tasks, full=False):
     blocked_mark = "*" if blocked else ""
     line = f"{order}{blocked_mark}  {status} {id_}"
     if report_id:
-      line += f" report {report_id}"
+      line += f" | waits on {report_id}"
     if task.get("type") and task.get("type") != TASK_UNSPECIFIED:
-      line += f" type {task.get('type')}"
+      line += f" | type {task.get('type')}"
     lines.append(line)
     for detail in task.get("details", []):
       lines.append(f"    {detail}")
@@ -1973,27 +1977,35 @@ def format_key(record):
 
 
 def format_fetch_job(job):
+  """Render one download request: what waits in the queue and the owner's next click."""
   id_ = job.get("id")
   url = job.get("url")
   allow_proxy = job.get("allow_proxy")
   approval = job.get("approval")
   status = job.get("status")
-  parts = [f"Queued {id_} {url}"]
+  line = f"Queued {id_} {url}"
   if allow_proxy is not None:
-    parts[0] += f" proxy={allow_proxy}"
+    line += f" (proxy {'on' if allow_proxy else 'off'})"
   if approval:
-    parts[0] += f" approval={approval}"
+    line += f", approval {approval}"
   if status:
-    parts[0] += f" status={status}"
+    line += f", status {status}"
+  parts = [line]
+  if approval == "pending":
+    parts.append("Ask the owner to Approve it on the Preview page.")
   return "\n".join(parts)
 
 
-def format_import_receipt(receipt):
+def format_import_receipt(receipt, merged=False):
   notes = receipt.get("notes", 0)
   answers = receipt.get("answers", 0)
   reports = receipt.get("reports", 0)
   tasks = receipt.get("tasks", 0)
-  return f"Imported notes {notes}, answers {answers}, reports {reports}, tasks {tasks}"
+  fate = "merged by ID" if merged else "the live state was replaced"
+  return (
+    f"Imported notes {notes}, answers {answers}, reports {reports}, tasks {tasks};"
+    f" {fate}"
+  )
 
 
 def format_clear_state(counts):
@@ -2452,7 +2464,7 @@ def routed_record(state_dir, name):
   path = run_record_path(state_dir, name)
   record = json_record(path)
   if record is None:
-    raise ValueError(f"No routed gate named {name}.")
+    raise ValueError(f"No routed run named {name}.")
   return reconcile_routed_record(path, record)
 
 
@@ -7098,7 +7110,10 @@ def main():
         )
       ]
       if untracked:
-        print("task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in untracked))
+        print(
+          "link it with: "
+          + "; ".join(f'arena-preview task <id> "<title>" -m {i}' for i in untracked)
+        )
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
       plural = "" if count == 1 else "s"
@@ -7157,7 +7172,10 @@ def main():
         and args.amend is None
         and args.task_type is None
       ):
-        # A bare ID reads the stored row without writing.
+        # A bare ID reads the stored row without writing. An ID that names nothing at
+        # all reads as a task miss here, since this is the task command.
+        if not store.id_matches(task_id):
+          raise ValueError(f"No task is stored under {task_id}.")
         resolved = store.resolve_id(task_id)
         tasks = store.tasks() or {}
         record = next(
@@ -7170,7 +7188,7 @@ def main():
           None,
         )
         if record is None:
-          raise ValueError(f"No task is stored under {resolved}")
+          raise ValueError(f"No task is stored under {resolved}.")
         print(format_task(record, full=True))
         return 0
       details = args.task_details
@@ -7223,11 +7241,19 @@ def main():
     elif args.command == "task-list":
       print(format_task_list(store.list_tasks(), args.full))
     elif args.command == "import-state":
-      text = (
-        args.source.read_text(encoding="utf-8") if args.source else sys.stdin.read()
-      )
+      if args.source:
+        try:
+          text = args.source.read_text(encoding="utf-8")
+        except OSError as error:
+          raise ValueError(
+            f"No such state file: {error.filename or args.source}"
+          ) from None
+      else:
+        text = sys.stdin.read()
       print(
-        format_import_receipt(store.import_state(text, args.replace_tasks, args.merge))
+        format_import_receipt(
+          store.import_state(text, args.replace_tasks, args.merge), args.merge
+        )
       )
     elif args.command == "clear-state":
       print(format_clear_state(store.clear_state()))
