@@ -258,6 +258,7 @@ pre { padding: 10px; border-radius: 6px; overflow-x: auto; background: var(--bg)
 /* Inline code shares the message background.
    Receipt IDs opt out by class. */
 :not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+mark code { color: var(--text); }
 .report blockquote { margin-left: 0; padding-left: 16px; color: var(--muted); border-left: 3px solid rgb(199, 194, 188); }
 .draft-preview blockquote { border-left-color: rgb(199, 194, 188); }
 @media (max-width: 760px) {

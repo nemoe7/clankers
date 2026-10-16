@@ -46,6 +46,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview: keep normal code text color inside Markdown highlights.
+
 - Preview: make only jump-arrow icons white on dark-theme hover. Keep the resting button surface and light-theme contrast.
 
 - Arena suite: check fresh remote branch tips at commit and push checkpoints. Handle shallow history, absorbed changes, and failed reads without moving working files.
