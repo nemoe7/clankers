@@ -2763,6 +2763,72 @@ def test_bare_task_reads_the_stored_row():
     assert read.stdout.splitlines()[0] == "task read-task, order 1, status upcoming"
     assert "- Step one" in read.stdout and "- Step two" in read.stdout
     assert store.list_tasks()[0] == before
+    source = Path(read_dir) / "linked.md"
+    source.write_text("# Linked\n", encoding="utf-8")
+    store.publish("linked", "Linked", source)
+    long_detail = "A stored detail " * 30
+    store.write_task("read-task", details=[long_detail], report_id="linked")
+    report_text = "REPORT linked: " + "Report answer " * 30
+    direct_text = "REPORT other: " + "Direct answer " * 30
+    store.submission("answer-report", "linked", report_text)
+    store.submission(
+      "answer-both", "linked", "REPORT linked: both links", task_id="read-task"
+    )
+    store.submission("answer-direct", "other", direct_text, task_id="read-task")
+    store.submission("answer-unrelated", "other", "Unrelated answer must stay out")
+
+    def stored_content():
+      with closing(store.connect()) as db:
+        data = [
+          line for line in db.iterdump() if not line.startswith('INSERT INTO "meta"')
+        ]
+        operational = {
+          preview.REMINDER_CURSOR,
+          preview.AGENT_SEEN_META,
+          preview.TURN_ENDED_META,
+        }
+        meta = {
+          row["key"]: row["value"]
+          for row in db.execute("SELECT * FROM meta")
+          if row["key"] not in operational
+        }
+      return data, meta
+
+    before_read = stored_content()
+    full_read = cli("task", "read-task")
+    assert full_read.returncode == 0, full_read.stderr
+    assert long_detail in full_read.stdout
+    assert report_text in full_read.stdout and direct_text in full_read.stdout
+    linked = store.tasks()["upcoming"][0]["answers"]
+    for answer in linked:
+      assert full_read.stdout.count(answer["id"]) == 1
+      assert answer["at"] in full_read.stdout
+    assert full_read.stdout.index("answer-report") < full_read.stdout.index(
+      "answer-both"
+    )
+    assert full_read.stdout.index("answer-both") < full_read.stdout.index(
+      "answer-direct"
+    )
+    assert "answer-unrelated" not in full_read.stdout
+    assert "Unrelated answer must stay out" not in full_read.stdout
+    assert stored_content() == before_read
+    written_again = cli("task", "read-task", "--append", "-d", "Another step")
+    assert written_again.returncode == 0, written_again.stderr
+    assert long_detail not in written_again.stdout
+    assert report_text not in written_again.stdout
+    listed = cli("task-list")
+    assert listed.returncode == 0, listed.stderr
+    assert long_detail in listed.stdout and report_text not in listed.stdout
+    store.write_task("read-task", status="finished")
+    finished = cli("task", "read-task")
+    assert finished.returncode == 0, finished.stderr
+    assert long_detail in finished.stdout and report_text in finished.stdout
+    store.unpublish("linked", dismissed_by_owner=True)
+    retained = cli("task", "read-task")
+    assert retained.returncode == 0, retained.stderr
+    assert report_text in retained.stdout and direct_text in retained.stdout
+    assert retained.stdout.count("answer-both") == 1
+    assert "answer-unrelated" not in retained.stdout
     missing = cli("task", "read-nothing")
     assert missing.returncode != 0
     assert "holds the ID read-nothing" in missing.stdout + missing.stderr

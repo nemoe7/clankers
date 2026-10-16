@@ -1450,7 +1450,7 @@ def format_task_list(tasks, full=False):
   return "\n".join(lines)
 
 
-def format_task(record):
+def format_task(record, full=False):
   id_ = record.get("id")
   order = record.get("order")
   status = record.get("status")
@@ -1458,10 +1458,14 @@ def format_task(record):
   blocked = record.get("blocked")
   title = record.get("title") or ""
   details = record.get("details") or []
-  cut = [
-    detail[:ECHO_DETAIL] + ("\u2026" if len(detail) > ECHO_DETAIL else "")
-    for detail in details
-  ]
+  cut = (
+    details
+    if full
+    else [
+      detail[:ECHO_DETAIL] + ("\u2026" if len(detail) > ECHO_DETAIL else "")
+      for detail in details
+    ]
+  )
   first = f"task {id_}, order {order}, status {status}"
   task_type = record.get("type")
   if task_type and task_type != TASK_UNSPECIFIED:
@@ -1471,6 +1475,9 @@ def format_task(record):
   if blocked:
     first += ", blocked"
   lines = [first, title] + [f"- {d}" for d in cut]
+  if full:
+    for answer in record.get("answers", []):
+      lines.extend([f"answer {answer['id']}, at {answer['at']}", answer["text"]])
   return "\n".join(lines)
 
 
@@ -3367,11 +3374,7 @@ class Store:
     return [task_row(row) for row in rows]
 
   def task_record(self, task_id):
-    """One task as stored, or None when the table holds no row under that ID.
-
-    The read form of the task command uses this, so a look at the queue never
-    writes a row back.
-    """
+    """Read one stored task without writing. Return None when no row holds the ID."""
     with closing(self.connect()) as db:
       row = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)
@@ -6315,10 +6318,19 @@ def main():
       ):
         # A bare ID reads the stored row without writing.
         resolved = store.resolve_id(task_id)
-        record = store.task_record(resolved)
+        tasks = store.tasks() or {}
+        record = next(
+          (
+            item
+            for status in TASK_STATUSES
+            for item in tasks.get(status, [])
+            if item["id"] == resolved
+          ),
+          None,
+        )
         if record is None:
           raise ValueError(f"No task is stored under {resolved}")
-        print(format_task(record))
+        print(format_task(record, full=True))
         return 0
       details = args.task_details
       if details is None and args.detail_arg:

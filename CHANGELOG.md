@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Bare task reads print full details and linked answers. Task writes and task-list output do not change.
+
 - Successful message sends retain rendered Markdown until the next state response.
 
 - Search checks compare input height with the shared icon square and its minimum height.
