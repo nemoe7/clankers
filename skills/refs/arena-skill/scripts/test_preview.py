@@ -8162,3 +8162,77 @@ def test_ack_task_hints_only_name_messages_without_a_task(capsys):
       record["acknowledged_at"]
       for record in [*store.state()["notes"], *store.submissions()]
     )
+
+
+def test_skills_lists_full_yaml_descriptions_and_prefers_installed_names(capsys):
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    entries = [
+      (
+        ".agents/skills/shared",
+        "shared",
+        "description: >\n  Installed full description,\n  with a colon: preserve it.",
+      ),
+      ("skills/shared", "shared", 'description: "Duplicate repository entry"'),
+      (
+        "skills/repo-only",
+        "repo-only",
+        (
+          "description: |\n  First line: keep it all.\n  Second line: keep this too.\n"
+          "  Unicode 雙語: # metadata stays intact."
+        ),
+      ),
+      ("skills/refs/hidden", "hidden", 'description: "Template entry"'),
+    ]
+    for folder, name, description in entries:
+      target = root / folder / "SKILL.md"
+      target.parent.mkdir(parents=True)
+      target.write_text(
+        f"---\nname: {name}\n{description}\n---\nDO-NOT-PRINT-THE-SKILL-BODY\n",
+        encoding="utf-8",
+      )
+    with (
+      patch.object(preview, "resolve_repo_root", return_value=str(root)),
+      patch.object(
+        preview, "Store", side_effect=AssertionError("listing must not open state")
+      ),
+      patch.object(sys, "argv", ["preview.py", "skills"]),
+    ):
+      assert preview.main() == 0
+    output = capsys.readouterr()
+    assert output.err == ""
+    assert ".agents/skills/shared/SKILL.md" in output.out
+    installed = next(
+      line
+      for line in output.out.splitlines()
+      if ".agents/skills/shared/SKILL.md" in line
+    )
+    repository = next(
+      line for line in output.out.splitlines() if "skills/repo-only/SKILL.md" in line
+    )
+    assert "installed" in installed.lower(), "the source kind stays beside its path"
+    assert "repository" in repository.lower(), "the source kind stays beside its path"
+    assert "Installed full description, with a colon: preserve it." in output.out
+    assert "skills/repo-only/SKILL.md" in output.out
+    assert "First line: keep it all." in output.out
+    assert "Second line: keep this too." in output.out
+    assert "Unicode 雙語: # metadata stays intact." in output.out
+    assert "Duplicate repository entry" not in output.out
+    assert "Template entry" not in output.out
+    assert "DO-NOT-PRINT-THE-SKILL-BODY" not in output.out
+
+
+def test_skills_reports_missing_yaml_dependency_instead_of_partial_parsing(capsys):
+  original = builtins.__import__
+
+  def missing_yaml(name, *args, **kwargs):
+    if name == "yaml":
+      raise ImportError("fixture dependency unavailable")
+    return original(name, *args, **kwargs)
+
+  with (
+    patch.object(builtins, "__import__", side_effect=missing_yaml),
+    patch.object(sys, "argv", ["preview.py", "skills"]),
+  ):
+    assert preview.main() == 1
+  assert "PyYAML" in capsys.readouterr().err

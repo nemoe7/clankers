@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Preview: add a skill inventory with full YAML descriptions, paths, and installed or repository labels.
+
 #### system-prompts
 
 - Add a live experimental Wenyan NemoGPT prompt and its token-budget row. The canonical English prompt stays unchanged.

@@ -5608,6 +5608,39 @@ def resolve_repo_root():
   return str(Path.cwd())
 
 
+def print_skills():
+  try:
+    import yaml
+  except ImportError as error:
+    raise RuntimeError("PyYAML is required; rerun the preview installer") from error
+  root = Path(resolve_repo_root())
+  skills = {}
+  for kind, directory in (
+    ("installed", root / ".agents" / "skills"),
+    ("repository", root / "skills"),
+  ):
+    for path in sorted(directory.glob("*/SKILL.md")):
+      if kind == "repository" and path.parent.name == "refs":
+        continue
+      lines = path.read_text(encoding="utf-8-sig").splitlines()
+      try:
+        if not lines or lines[0].strip() != "---":
+          raise ValueError("missing YAML frontmatter")
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+        metadata = yaml.safe_load("\n".join(lines[1:end]))
+        if not isinstance(metadata, dict) or not all(
+          isinstance(metadata.get(key), str) and metadata[key].strip()
+          for key in ("name", "description")
+        ):
+          raise ValueError("name and description must be nonempty text")
+      except (ValueError, StopIteration, yaml.YAMLError) as error:
+        raise ValueError(f"Invalid skill metadata in {path}: {error}") from error
+      name = metadata["name"]
+      skills.setdefault(name.casefold(), (name, kind, path, metadata["description"]))
+  for name, kind, path, description in skills.values():
+    print(f"{name} [{kind}] {path}\n{description}\n")
+
+
 def resolve_state_dir():
   "ARENA_PREVIEW_STATE_DIR wins. Otherwise the repository arena-state."
   configured = os.environ.get("ARENA_PREVIEW_STATE_DIR")
@@ -5747,6 +5780,10 @@ def main():
   init = commands.add_parser("init", help="Create the state directory and its database")
   init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
   commands.add_parser("read", help="Print every pending note, answer and upload")
+  commands.add_parser(
+    "skills",
+    help="List skill names, full descriptions, and paths without loading skills",
+  )
   note_list = commands.add_parser(
     "note-list",
     help="List stored note IDs by page, newest first, including acknowledged notes",
@@ -6042,6 +6079,9 @@ def main():
       return 0
     if not args.command:
       parser.error("a command is required")
+    if args.command == "skills":
+      print_skills()
+      return 0
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
     if args.command == "image-data-uri":
