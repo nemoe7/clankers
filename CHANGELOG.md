@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-16
 
+### Changed
+
+#### Vendored skills
+
+- Remove unused upstream documentation, plugin manifests, agent metadata, issue templates, and package checks. Keep skill files, required references, scripts, examples, and licenses unchanged.
+
 ### Fixed
 
 #### gpt-plugins
