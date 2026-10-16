@@ -3738,6 +3738,63 @@ def test_task_finish_blocked_refused():
     assert cleared["status"] == "finished" and cleared["blocked"] is False
 
 
+def test_task_order_write_reorders_the_queue():
+  """The page's drag posts the drawn order, and the stored queue follows the reply."""
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory) / "arena-preview"
+    store = preview.Store(root, create=True)
+    store.set_meta("port", guard_port())
+    for task_id in ("first", "second", "third"):
+      store.write_task(task_id, task_id.title(), ["A step"], task_type="code")
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    worker = threading.Thread(target=app.serve_forever, daemon=True)
+    worker.start()
+    headers = {"Content-Type": "application/json"}
+    status, _, body = request(
+      "POST",
+      "/api/tasks/order",
+      json.dumps({"ids": ["third", "first", "second"]}),
+      headers,
+    )
+    assert status == 200, body
+    payload = json.loads(body)
+    assert [task["id"] for task in payload["upcoming"]] == ["third", "first", "second"]
+    assert [task["order"] for task in payload["upcoming"]] == [1, 2, 3]
+    # The reply, the page's poll payload and a stored read name the same queue.
+    assert [task["id"] for task in preview.Store(root).tasks()["upcoming"]] == [
+      "third",
+      "first",
+      "second",
+    ]
+    assert [task["id"] for task in preview.Store(root).list_tasks()] == [
+      "third",
+      "first",
+      "second",
+    ]
+    # A filter or a search draws part of the queue, so the tasks left out keep their slots.
+    filtered, _, filtered_body = request(
+      "POST", "/api/tasks/order", json.dumps({"ids": ["first", "third"]}), headers
+    )
+    assert filtered == 200, filtered_body
+    assert [task["id"] for task in json.loads(filtered_body)["upcoming"]] == [
+      "first",
+      "third",
+      "second",
+    ]
+    # The route refuses a name no upcoming task holds, or a name sent twice, and writes nothing.
+    for bad_ids in (["second", "gone"], ["second", "second"]):
+      refused, _, _ = request(
+        "POST", "/api/tasks/order", json.dumps({"ids": bad_ids}), headers
+      )
+      assert refused == 400, bad_ids
+    assert [task["id"] for task in preview.Store(root).list_tasks()] == [
+      "first",
+      "third",
+      "second",
+    ]
+
+
 def test_task_report_link_unblocks_on_answer():
   # A blocked task names the report it waits on. The owner's answer clears the mark.
   with tempfile.TemporaryDirectory() as link_dir:

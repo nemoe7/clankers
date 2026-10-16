@@ -1659,13 +1659,78 @@ function renderTasks(tasks) {
   // Preserve stored order and the copy button's two stored sections.
   const shownUpcoming = tasks.upcoming.filter(visible);
   const head = shownUpcoming.find(task => !task.blocked);
-  $('#tasks-current-body').replaceChildren(...(head ? [taskRow(head)] : []));
+  // The current seat and the upcoming list read as one queue, so a dragged row crosses both.
+  const currentBody = $('#tasks-current-body');
+  const upcomingBody = $('#tasks-upcoming-body');
+  currentBody.replaceChildren(...(head ? [draggableTaskRow(head, currentBody)] : []));
   current.hidden = !head;
   $('#tasks-finished-body').replaceChildren(...tasks.finished.filter(visible).map(task => taskRow(task)));
   // The head already renders in its own div above. Re-listing it in Upcoming duplicates it.
-  $('#tasks-upcoming-body').replaceChildren(...shownUpcoming.filter(task => task !== head).map(task => taskRow(task)));
+  const restUpcoming = shownUpcoming.filter(task => task !== head);
+  upcomingBody.replaceChildren(...restUpcoming.map(task => draggableTaskRow(task, upcomingBody)));
   finished.hidden = false;
   upcoming.hidden = false;
+}
+
+// The owner sorts the queue by dragging a row inside the Upcoming area. The drop sends the drawn
+// order, and the reply renders the stored queue, so a refused write leaves every row in place.
+let draggingTaskRow = null;
+function queueTaskRows() {
+  return [...$('#tasks-current-body').children, ...$('#tasks-upcoming-body').children];
+}
+// Every other queue row keeps its place: the dragged row lands above the row under the pointer,
+// or after the last row when a drop lands on empty space.
+function drawnTaskIds(dragged, list, target) {
+  const ids = queueTaskRows().filter(row => row !== dragged).map(row => row.title);
+  const anchor = target || [...list.children].filter(row => row !== dragged).at(-1);
+  if (!anchor) {
+    return list === $('#tasks-current-body') ? [dragged.title, ...ids] : [...ids, dragged.title];
+  }
+  ids.splice(ids.indexOf(anchor.title) + (target ? 0 : 1), 0, dragged.title);
+  return ids;
+}
+async function writeTaskOrder(ids) {
+  try {
+    const reply = await (await request('/api/tasks/order', {
+      method: 'POST', headers: writeHeaders('application/json'), body: JSON.stringify({ ids })
+    })).json();
+    renderTasksIfChanged(reply);
+  } catch (error) {
+    $('#tasks-status').textContent = `Order not saved: ${error.message}`;
+  }
+}
+function draggableTaskRow(task, list) {
+  const row = taskRow(task);
+  row.draggable = true;
+  row.addEventListener('dragstart', event => {
+    draggingTaskRow = row;
+    row.dataset.dragging = 'true';
+    // Firefox starts no drag without payload data.
+    if (event.dataTransfer) event.dataTransfer.setData('text/plain', row.title);
+  });
+  row.addEventListener('dragover', event => {
+    if (draggingTaskRow && draggingTaskRow !== row) event.preventDefault();
+  });
+  row.addEventListener('drop', event => {
+    if (!draggingTaskRow || draggingTaskRow === row) return;
+    event.preventDefault();
+    writeTaskOrder(drawnTaskIds(draggingTaskRow, list, row));
+  });
+  row.addEventListener('dragend', () => {
+    delete row.dataset.dragging;
+    if (draggingTaskRow === row) draggingTaskRow = null;
+  });
+  return row;
+}
+for (const list of [$('#tasks-current-body'), $('#tasks-upcoming-body')]) {
+  list.addEventListener('dragover', event => {
+    if (draggingTaskRow) event.preventDefault();
+  });
+  list.addEventListener('drop', event => {
+    if (!draggingTaskRow || event.target !== list) return;
+    event.preventDefault();
+    writeTaskOrder(drawnTaskIds(draggingTaskRow, list, null));
+  });
 }
 
 $('#task-type-filter').addEventListener('change', () => {

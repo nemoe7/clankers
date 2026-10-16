@@ -4076,6 +4076,38 @@ class Store:
       self.renumber(db)
     return record
 
+  def reorder_tasks(self, ids):
+    """Move the named upcoming tasks into the drawn order and return the page payload.
+
+    The page sends the rows it shows, so a filter or a search can leave tasks out: an unlisted
+    task keeps its slot, and the drawn names refill the slots they came from."""
+    if (
+      not isinstance(ids, list)
+      or not ids
+      or not all(isinstance(item, str) for item in ids)
+    ):
+      raise ValueError("ids must be a list of one or more task IDs")
+    if len(set(ids)) != len(ids):
+      raise ValueError("Each task ID appears once in ids")
+    with self.transaction() as db:
+      rows = db.execute(
+        "SELECT id FROM tasks WHERE status = ? ORDER BY position, id", ("upcoming",)
+      ).fetchall()
+      stored = [row["id"] for row in rows]
+      for task_id in ids:
+        if task_id not in stored:
+          raise ValueError(f"No upcoming task holds {task_id}")
+      drawn = iter(ids)
+      wanted = set(ids)
+      sequence = [next(drawn) if task_id in wanted else task_id for task_id in stored]
+      for position, task_id in enumerate(sequence, 1):
+        db.execute("UPDATE tasks SET position = ? WHERE id = ?", (position, task_id))
+      db.execute(
+        f"UPDATE tasks SET updated_at = ? WHERE id IN ({', '.join('?' for _ in ids)})",
+        (now(), *ids),
+      )
+    return self.tasks()
+
   @staticmethod
   def report_has_answers(db, report_id):
     """Whether this report already holds an answer, so no task waits on it."""
@@ -5995,6 +6027,7 @@ def handler(store):
       note_upload = path == "/api/notes/with-file"
       agent_key_post = path == "/api/key"
       skip_poll_post = path == "/api/skip-poll"
+      task_order_post = path == "/api/tasks/order"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
         path
@@ -6014,6 +6047,7 @@ def handler(store):
         and not fetch_post
         and not agent_key_post
         and not skip_poll_post
+        and not task_order_post
       ):
         self.problem(404, "Not found")
         return
@@ -6102,6 +6136,12 @@ def handler(store):
             raise ValueError("skip must be true or false")
           self.reply(
             200, json.dumps(store.request_skip_poll(armed), ensure_ascii=False)
+          )
+          return
+        if task_order_post:
+          # The page sends the drawn rows alone, so one drop writes the queue order.
+          self.reply(
+            200, json.dumps(store.reorder_tasks(payload.get("ids")), ensure_ascii=False)
           )
           return
         if path == "/api/fetch-jobs":
