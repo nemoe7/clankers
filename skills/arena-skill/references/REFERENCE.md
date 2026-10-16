@@ -115,10 +115,16 @@ A detached `gh pr checks` wait first looks for a check on the branch head, once 
 
 Task IDs have 1–64 lowercase letters, digits or hyphens and start with a letter or digit; use a short kebab-case title. Titles have at most 200 characters. A task has at most 40 details of 2000 characters each. Existing IDs update; omitted fields keep stored values.
 
+### Task types
+
+Choose the primary deliverable type: `report` for findings or assessments, `code` for source or configuration changes, `docs` for documentation or rule text, `ops` for repository, environment, build, test, or release operations, and `misc` for other work.
+
+### Options
+
 | Flag | Use |
 | --- | --- |
 | `--status upcoming` or `--status finished` | Set status; new tasks start upcoming |
-| `--task-type report\|code\|docs\|operations\|unspecified` | Set the primary deliverable type; an omitted flag keeps a stored type, and a task without one reads `unspecified` |
+| `--task-type report\|code\|docs\|ops\|misc` | Required for normal new tasks; omit on updates to keep the stored type. Restore missing legacy types as `misc` |
 | `--order N` | Set 1-based position in the task's status group |
 | Repeatable `--task-details` | Set the detail lines; the arguments replace the stored details |
 | `--task-details ""` | Clear stored details |

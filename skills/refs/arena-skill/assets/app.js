@@ -1498,6 +1498,10 @@ $('#report-form').addEventListener('submit', async event => {
 });
 // The CLI writes task status, and the Tasks tab reads it on the state poll.
 // Build rows with textContent so hostile titles remain text.
+function taskFilterType(task) {
+  if (task.type === 'operations') return 'ops';
+  return task.type === 'unspecified' ? 'misc' : task.type || 'misc';
+}
 function taskRow(task) {
   const item = document.createElement('li');
   item.className = 'task';
@@ -1516,11 +1520,12 @@ function taskRow(task) {
   const rows = [title];
   // The badge sits beside the title, ahead of the details collapse.
   // An Unspecified task has no badge, so old rows keep their shape.
-  if (task.type && task.type !== 'unspecified') {
+  const type = task.type || 'misc';
+  if (type !== 'unspecified') {
     const badge = document.createElement('span');
     badge.className = 'task-type';
-    badge.textContent = task.type === 'operations' ? 'Ops' : task.type[0].toUpperCase() + task.type.slice(1);
-    badge.dataset.taskType = task.type;
+    badge.textContent = type === 'operations' ? 'Ops' : type[0].toUpperCase() + type.slice(1);
+    badge.dataset.taskType = type;
     rows.push(badge);
   }
   const linked = task.answers && task.answers.length ? task.answers : null;
@@ -1634,7 +1639,7 @@ function renderTasks(tasks) {
   }
   status.textContent = `Updated ${time(tasks.updated_at)}`;
   const visible = task =>
-    (taskTypeFilter === 'all' || (task.type || 'unspecified') === taskTypeFilter)
+    (taskTypeFilter === 'all' || taskFilterType(task) === taskTypeFilter)
     && (!taskSearch || taskHaystack(task).includes(taskSearch));
   // Show the first unblocked upcoming task separately. Report-blocked tasks may sort first in the stored list.
   // Preserve stored order and the copy button's two stored sections.
@@ -1874,7 +1879,7 @@ function followReference(type, id) {
   if (!target) return;
   // A task reference switches a type filter that hides its target to the target type.
   // It clears a search query only when that query hides the target.
-  const targetType = target.type || 'unspecified';
+  const targetType = taskFilterType(target);
   if (taskTypeFilter !== 'all' && taskTypeFilter !== targetType) {
     taskTypeFilter = targetType;
     $('#task-type-filter').value = targetType;

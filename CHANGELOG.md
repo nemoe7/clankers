@@ -22,6 +22,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: require explicit types for normal new tasks. Add Ops and Misc choices, type definitions, and light/dark badge colors. Preserve stored types and use Misc for missing legacy types.
+
 #### system-prompts
 
 - The experimental NemoGPT prompt mixes Wenyan with English words and terms after in-context token checks. Its `o200k_base` count falls from 3,847 to 3,327. The English baseline stays at 3,347.

@@ -349,7 +349,9 @@ def field_html(question):
 	return f"{body}{group}</div></div>"
 TASK_STATUSES='upcoming','finished'
 TASK_UNSPECIFIED='unspecified'
-TASK_TYPES='report','code','docs','operations','unspecified'
+TASK_MISC='misc'
+TASK_TYPES='report','code','docs','ops','misc'
+TASK_LEGACY_TYPES='operations',TASK_UNSPECIFIED
 TASK_ID=re.compile('^[a-z0-9][a-z0-9-]{0,63}$')
 NOTE_ID=re.compile('^[0-9a-f]{6,7}(?:-[0-9a-f]+)?$')
 MAX_TASK_TITLE=200
@@ -370,7 +372,7 @@ REPORT_LINE_KEYS='id','title','markdown','published_at','seen_at'
 def task_row(row):
 	shaped={'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5],'completed_at':row[6]if len(row)>6 else None,'blocked':bool(row[7])if len(row)>7 else False}
 	if len(row)>8 and row[8]:shaped['report_id']=row[8]
-	shaped['type']=row[9]if len(row)>9 and row[9]else TASK_UNSPECIFIED;return shaped
+	shaped['type']=row[9]if len(row)>9 and row[9]else TASK_MISC;return shaped
 def saved_note_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved note is an object')
 	return{key:record.get(key)for key in NOTE_LINE_KEYS}
@@ -383,7 +385,7 @@ def saved_report_line(record):
 def state_ndjson(lines):return''.join(json.dumps(line,ensure_ascii=False)+'\n'for line in lines)
 def saved_task_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved task is an object')
-	line={key:record.get(key)for key in TASK_LINE_KEYS};line['details']=[str(item)for item in record.get('details')or[]];line['type']=record.get('type')or TASK_UNSPECIFIED
+	line={key:record.get(key)for key in TASK_LINE_KEYS};line['details']=[str(item)for item in record.get('details')or[]];line['type']=record.get('type')or TASK_MISC
 	if not line.get('report_id'):line.pop('report_id',None)
 	return line
 def upload_name(name):
@@ -966,7 +968,7 @@ class Store:
 		if not create and not existed:raise FileNotFoundError(f"Inbox missing: {self.path}. The sandbox may have been reset, so follow the restore routine: run scripts/install.sh from the repository root, start `arena-preview serve --port 8000` with the start_process tool, then `arena-preview read`.")
 		if create and not existed:directory.mkdir(parents=True,exist_ok=True,mode=448)
 		with closing(self.connect())as db,db:
-			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,\n          quiet INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,\n          seq INTEGER, seen_at TEXT,\n          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,\n          ack_seen_at TEXT, viewed_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT,\n          blocked INTEGER NOT NULL DEFAULT 0,\n          type TEXT NOT NULL DEFAULT 'unspecified'\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
+			db.executescript("\n        CREATE TABLE IF NOT EXISTS notes (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          text TEXT NOT NULL, at TEXT NOT NULL, acknowledged_at TEXT,\n          ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0,\n          quiet INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS reports (\n          id TEXT PRIMARY KEY, title TEXT NOT NULL,\n          markdown TEXT NOT NULL, updated_at TEXT NOT NULL, published_at TEXT,\n          seq INTEGER, seen_at TEXT,\n          ever_seen INTEGER NOT NULL DEFAULT 0, agent_seen_at TEXT,\n          ack_seen_at TEXT, viewed_at TEXT\n        );\n        CREATE TABLE IF NOT EXISTS submissions (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          report_id TEXT NOT NULL, text TEXT NOT NULL, at TEXT NOT NULL,\n          acknowledged_at TEXT, ack_kind TEXT, ack_text TEXT, seen_at TEXT, replies TEXT,\n          ack_edited_seen_count INTEGER NOT NULL DEFAULT 0\n        );\n        CREATE TABLE IF NOT EXISTS uploads (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL, note_id TEXT,\n          name TEXT NOT NULL, type TEXT NOT NULL, size INTEGER NOT NULL,\n          sha256 TEXT NOT NULL, file TEXT NOT NULL, at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS fetch_jobs (\n          seq INTEGER PRIMARY KEY, id TEXT UNIQUE NOT NULL,\n          url TEXT NOT NULL, allow_proxy INTEGER NOT NULL CHECK (allow_proxy IN (0, 1)),\n          status TEXT NOT NULL CHECK (status IN ('queued', 'fetching', 'saved', 'failed')),\n          approval TEXT NOT NULL DEFAULT 'approved'\n            CHECK (approval IN ('pending', 'approved', 'denied')),\n          claim TEXT, lease_until TEXT, error TEXT, source TEXT,\n          name TEXT, type TEXT, size INTEGER, sha256 TEXT, file TEXT,\n          at TEXT NOT NULL, updated_at TEXT NOT NULL\n        );\n        CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n        CREATE TABLE IF NOT EXISTS tasks (\n          id TEXT PRIMARY KEY,\n          title TEXT NOT NULL,\n          details TEXT NOT NULL DEFAULT '[]',\n          status TEXT NOT NULL DEFAULT 'upcoming'\n            CHECK (status IN ('upcoming', 'finished')),\n          position INTEGER NOT NULL,\n          created_at TEXT NOT NULL,\n          updated_at TEXT NOT NULL,\n          completed_at TEXT,\n          blocked INTEGER NOT NULL DEFAULT 0,\n          type TEXT NOT NULL DEFAULT 'misc'\n        );\n      ");columns={row['name']for row in db.execute('PRAGMA table_info(notes)')}
 			for column in('ack_kind','ack_text','ack_edited_at','seen_at','task_id','replies'):
 				if column not in columns:db.execute(f"ALTER TABLE notes ADD COLUMN {column} TEXT")
 			if'ack_edited_seen_count'not in columns:db.execute('ALTER TABLE notes ADD COLUMN ack_edited_seen_count INTEGER NOT NULL DEFAULT 0')
@@ -977,7 +979,7 @@ class Store:
 			if'blocked'not in columns:db.execute('ALTER TABLE tasks ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0')
 			if'report_id'not in columns:db.execute('ALTER TABLE tasks ADD COLUMN report_id TEXT')
 			if'completed_at'not in columns:db.execute('ALTER TABLE tasks ADD COLUMN completed_at TEXT')
-			if'type'not in columns:db.execute("ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'unspecified'")
+			if'type'not in columns:db.execute("ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'misc'")
 			db.execute("UPDATE tasks SET completed_at = updated_at WHERE status = 'finished' AND completed_at IS NULL");columns={row['name']for row in db.execute('PRAGMA table_info(submissions)')}
 			if'ack_edited_at'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN ack_edited_at TEXT')
 			if'seen_at'not in columns:db.execute('ALTER TABLE submissions ADD COLUMN seen_at TEXT')
@@ -1093,12 +1095,13 @@ class Store:
 		if db is not None:yield db;return
 		with closing(self.connect())as own,own:yield own
 		if autosave:self.autosave()
-	def write_task(self,task_id,title=None,details=None,status=None,order=None,blocked=None,report_id=None,completed_at=None,task_type=None,shared=None,append_details=False):
+	def write_task(self,task_id,title=None,details=None,status=None,order=None,blocked=None,report_id=None,completed_at=None,task_type=None,shared=None,append_details=False,restoring=False):
 		details=[str(item)for item in details if str(item).strip()]if details else None
 		if append_details and not details:raise ValueError('Appending requires at least one task detail')
 		check_task(task_id,title,details)
 		if status is not None and status not in TASK_STATUSES:raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
-		if task_type is not None and task_type not in TASK_TYPES:raise ValueError(f"A task type is one of {', '.join(TASK_TYPES)}")
+		allowed_types=TASK_TYPES+TASK_LEGACY_TYPES if restoring else TASK_TYPES
+		if task_type is not None and task_type not in allowed_types:raise ValueError(f"A task type is one of {', '.join(allowed_types)}")
 		stamp=now()
 		with self.transaction(shared)as db:
 			if append_details and not db.in_transaction:db.execute('BEGIN IMMEDIATE')
@@ -1116,7 +1119,9 @@ class Store:
 			else:completed_at=None
 			if blocked is None:blocked=stored['blocked']if stored else False
 			if report_id is None:report_id=stored.get('report_id')if stored else None
-			if task_type is None:task_type=(stored.get('type')if stored else None)or TASK_UNSPECIFIED
+			if task_type is None:
+				if stored is None and not restoring:raise ValueError('A new task needs an explicit type')
+				task_type=(stored.get('type')if stored else None)or TASK_MISC
 			if report_id:identifier(report_id)
 			if report_id and blocked and self.report_has_answers(db,report_id):blocked=False
 			if report_id and blocked and(not stored or not stored['blocked']or stored.get('report_id')!=report_id):
@@ -1366,7 +1371,7 @@ class Store:
 			details=[str(item)for item in record.get('details')or[]if str(item).strip()];status=record.get('status');completed_at=record.get('completed_at');check_task(record.get('id'),record.get('title'),details)
 			if status is not None and status not in TASK_STATUSES:raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
 			task_type=record.get('type')
-			if task_type is not None and task_type not in TASK_TYPES:raise ValueError(f"A task type is one of {', '.join(TASK_TYPES)}")
+			if task_type is not None and task_type not in TASK_TYPES+TASK_LEGACY_TYPES:raise ValueError(f"A task type is one of {', '.join(TASK_TYPES+TASK_LEGACY_TYPES)}")
 			if completed_at is not None:
 				if not isinstance(completed_at,str):raise ValueError('A saved completion stamp is text')
 				when(completed_at)
@@ -1377,7 +1382,7 @@ class Store:
 					stored=db.execute('SELECT 1 FROM tasks WHERE id = ?',(task_id,)).fetchone()
 					if title is None and not stored:raise ValueError(f"A new task needs a title: {task_id}")
 				db.execute('DELETE FROM tasks')
-			written=[self.write_task(*item,shared=db)for item in prepared]
+			written=[self.write_task(*item,shared=db,restoring=True)for item in prepared]
 		return written
 	def renumber(self,db):
 		for status in TASK_STATUSES:

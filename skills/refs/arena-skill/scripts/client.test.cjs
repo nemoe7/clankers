@@ -633,13 +633,13 @@ test('preview client', async (t) => {
     // has to land: stateBusy swallows a refresh while another is still in flight.
     await new Promise(resolve => setTimeout(resolve, 0));
     state.tasks = {
-      finished: [{ id: 'shipped', title: 'Dots in the receipt', details: [], status: 'finished',
+      finished: [{ type: 'unspecified', id: 'shipped', title: 'Dots in the receipt', details: [], status: 'finished',
         order: 1, updated_at: new Date().toISOString() }],
       upcoming: [
-        { id: 'docs-archive', title: '<img onerror=alert(1)> dir',
+        { type: 'unspecified', id: 'docs-archive', title: '<img onerror=alert(1)> dir',
           details: ['move BUDGET-EXCEPTIONS.md', 'write arena-quirks.md'], status: 'upcoming',
           order: 1, updated_at: new Date().toISOString() },
-        { id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
+        { type: 'unspecified', id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString() }
       ],
       updated_at: new Date().toISOString()
@@ -661,6 +661,48 @@ test('preview client', async (t) => {
     assert.match(upcomingBody.children[0].children[1].children[0].textContent, /\d+ detail/, 'the summary counts the details');
   });
 
+  await t.test("Canonical task types carry badges and filter legacy missing types as Misc", async () => {
+    const prior = state.tasks;
+    const filter = get('#task-type-filter');
+    const types = ['report', 'code', 'docs', 'ops', 'misc'];
+    const stamp = new Date().toISOString();
+    try {
+      state.tasks = {
+        finished: [],
+        upcoming: [
+          ...types.map((type, index) => ({ id: `new-${type}`, title: `New ${type}`,
+            details: [], status: 'upcoming', order: index + 1, type, updated_at: stamp })),
+          { id: 'missing-type', title: 'Old task', details: [], status: 'upcoming',
+            order: types.length + 1, updated_at: stamp },
+        ],
+        updated_at: stamp,
+      };
+      filter.value = 'all';
+      filter.events.change();
+      await refresh();
+      const rows = [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
+      assert.equal(rows.length, state.tasks.upcoming.length);
+      for (const row of rows) {
+        const task = state.tasks.upcoming.find(item => item.id === row.title);
+        const badge = row.children.find(child => child.className === 'task-type');
+        assert.ok(badge, 'each task has a visible type');
+        assert.equal(badge.dataset.taskType, task.type || 'misc');
+      }
+      for (const type of types) {
+        filter.value = type;
+        filter.events.change();
+        const visible = [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
+        const expected = state.tasks.upcoming.filter(task => (task.type || 'misc') === type);
+        assert.deepEqual(visible.map(row => row.title), expected.map(task => task.id));
+      }
+    } finally {
+      filter.value = 'all';
+      filter.events.change();
+      state.tasks = prior;
+      await refresh();
+    }
+  });
+
   await t.test("A typed task carries a type badge and the type filter hides other types", async () => {
     // One primary type per task shows as a badge, and the filter narrows every div.
     const prior = state.tasks;
@@ -672,7 +714,7 @@ test('preview client', async (t) => {
           order: 1, type: 'code', updated_at: new Date().toISOString() },
         { id: 'docs-work', title: 'Docs work', details: ['step'], status: 'upcoming',
           order: 2, type: 'docs', updated_at: new Date().toISOString() },
-        { id: 'legacy-task', title: 'Legacy task', details: [], status: 'upcoming',
+        { type: 'unspecified', id: 'legacy-task', title: 'Legacy task', details: [], status: 'upcoming',
           order: 3, updated_at: new Date().toISOString() }
       ],
       updated_at: new Date().toISOString()
@@ -704,7 +746,7 @@ test('preview client', async (t) => {
     filter.events.change();
     assert.equal(get('#tasks-finished-body').children.length, 0,
       'a finished row of another type leaves the div');
-    filter.value = 'unspecified';
+    filter.value = 'misc';
     filter.events.change();
     assert.equal(get('#tasks-current-body').children[0].title, 'legacy-task',
       'the Unspecified filter finds old rows');
@@ -721,7 +763,7 @@ test('preview client', async (t) => {
       finished: [],
       upcoming: [
         { id: 'ops-task', title: 'Ops work', details: ['watch the queue'],
-          status: 'upcoming', order: 1, type: 'operations', updated_at: stamp },
+          status: 'upcoming', order: 1, type: 'ops', updated_at: stamp },
       ],
       updated_at: stamp,
     };
@@ -738,7 +780,7 @@ test('preview client', async (t) => {
     link.className = 'ack-reference';
     link.dataset = { referenceType: 'task', referenceId: 'ops-task' };
     documentEvents.click({ target: link, preventDefault: () => {} });
-    assert.equal(filter.value, 'operations', 'the click sets the filter to the target type');
+    assert.equal(filter.value, 'ops', 'the click sets the filter to the target type');
     assert.equal(get('#tasks-current-body').children[0].title, 'ops-task',
       'the clicked task row comes into view');
     const search = get('#task-search');
@@ -764,9 +806,9 @@ test('preview client', async (t) => {
     state.tasks = {
       finished: [],
       upcoming: [
-        { id: 'alpha-task', title: 'Alpha wiring', details: ['trace the proxy'],
+        { type: 'unspecified', id: 'alpha-task', title: 'Alpha wiring', details: ['trace the proxy'],
           status: 'upcoming', order: 1, updated_at: stamp },
-        { id: 'beta-task', title: 'Beta docs', details: ['rewrite the changelog'],
+        { type: 'unspecified', id: 'beta-task', title: 'Beta docs', details: ['rewrite the changelog'],
           status: 'upcoming', order: 2, updated_at: stamp },
       ],
       updated_at: stamp,
@@ -858,9 +900,9 @@ test('preview client', async (t) => {
     // to work the agent cannot start. The first unblocked task takes the seat instead.
     const saved = state.tasks.upcoming;
     state.tasks.upcoming = [
-      { id: 'waits-on-report', title: 'Blocked work', details: ['waits'], status: 'upcoming',
+      { type: 'unspecified', id: 'waits-on-report', title: 'Blocked work', details: ['waits'], status: 'upcoming',
         order: 1, blocked: true, updated_at: new Date().toISOString() },
-      { id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
+      { type: 'unspecified', id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
         order: 2, updated_at: new Date().toISOString() }
     ];
     await refresh();
@@ -888,9 +930,9 @@ test('preview client', async (t) => {
     // to work the agent cannot start. The first unblocked task takes the seat instead.
     const saved = state.tasks.upcoming;
     state.tasks.upcoming = [
-      { id: 'waits-on-report', title: 'Blocked work', details: ['waits'], status: 'upcoming',
+      { type: 'unspecified', id: 'waits-on-report', title: 'Blocked work', details: ['waits'], status: 'upcoming',
         order: 1, blocked: true, updated_at: new Date().toISOString() },
-      { id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
+      { type: 'unspecified', id: 'second', title: 'Second in line', details: ['its only detail'], status: 'upcoming',
         order: 2, updated_at: new Date().toISOString() }
     ];
     await refresh();
@@ -934,7 +976,7 @@ test('preview client', async (t) => {
   await t.test("Finished tasks keep the backend completion order", async () => {
     const original = state.tasks.finished.slice();
     state.tasks.finished = [
-      { id: 'latest', title: 'Latest finished', details: [], status: 'finished', order: 2 },
+      { type: 'unspecified', id: 'latest', title: 'Latest finished', details: [], status: 'finished', order: 2 },
       ...original
     ];
     await refresh();
@@ -951,9 +993,9 @@ test('preview client', async (t) => {
     state.tasks = {
       finished: [],
       upcoming: [
-        { id: 'filler-task', title: 'Filler', details: [], status: 'upcoming',
+        { type: 'unspecified', id: 'filler-task', title: 'Filler', details: [], status: 'upcoming',
           order: 1, updated_at: new Date().toISOString() },
-        { id: 'answered-task', title: 'Answered work', details: ['read it'], status: 'upcoming',
+        { type: 'unspecified', id: 'answered-task', title: 'Answered work', details: ['read it'], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString(),
           answers: [
             { id: 'answer-abc123', report_id: 'answer-source', at: '2026-10-15T05:44:00.000Z', text: 'Choice? {#pick}\n- (x) yes' },
@@ -1017,9 +1059,9 @@ test('preview client', async (t) => {
     state.tasks = {
       finished: [],
       upcoming: [
-        { id: 'filler-task', title: 'Filler', details: [], status: 'upcoming',
+        { type: 'unspecified', id: 'filler-task', title: 'Filler', details: [], status: 'upcoming',
           order: 1, updated_at: new Date().toISOString() },
-        { id: 'hostile-task', title: 'Hostile', details: [], status: 'upcoming',
+        { type: 'unspecified', id: 'hostile-task', title: 'Hostile', details: [], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString(),
           answers: [{ id: 'answer-z', at: '2026-10-15T06:10:00.000Z', text: '<img onerror=alert(1)>' }] },
       ],
@@ -1235,7 +1277,7 @@ test('preview client', async (t) => {
     const priorTasks = state.tasks;
     state.notes[0].task_id = 'linked-receipt';
     state.tasks = {
-      upcoming: [{ id: 'linked-receipt', title: 'Linked receipt', details: ['A linked detail'], status: 'upcoming',
+      upcoming: [{ type: 'unspecified', id: 'linked-receipt', title: 'Linked receipt', details: ['A linked detail'], status: 'upcoming',
         order: 1, updated_at: new Date().toISOString() }],
       finished: [],
       updated_at: new Date().toISOString()
@@ -2282,7 +2324,7 @@ test('preview client', async (t) => {
     state = {
       notes: [{ id: 'saved', text: 'cached here', at: new Date().toISOString(), acknowledged_at: null }],
       reports: [],
-      tasks: { finished: [], upcoming: [{ id: 'saved-task', title: 'Cached here', details: [],
+      tasks: { finished: [], upcoming: [{ type: 'unspecified', id: 'saved-task', title: 'Cached here', details: [],
         status: 'upcoming', order: 1, updated_at: new Date().toISOString() }] },
       last_check: null
     };
@@ -3361,8 +3403,8 @@ test('preview client', async (t) => {
       ],
       tasks: {
         upcoming: [
-          { id: 'task-ref', title: 'Linked task', details: [], status: 'upcoming', order: 1 },
-          { id: 'duplicate-ref', title: 'Duplicate task', details: [], status: 'upcoming', order: 2 }
+          { type: 'unspecified', id: 'task-ref', title: 'Linked task', details: [], status: 'upcoming', order: 1 },
+          { type: 'unspecified', id: 'duplicate-ref', title: 'Duplicate task', details: [], status: 'upcoming', order: 2 }
         ],
         finished: [], updated_at: '2026-09-22T12:00:00'
       },
@@ -3540,9 +3582,9 @@ test('preview client', async (t) => {
     const priorTasks = state.tasks;
     state.tasks = {
       upcoming: [
-        { id: 'head-filler', title: 'Head filler', details: [], status: 'upcoming',
+        { type: 'unspecified', id: 'head-filler', title: 'Head filler', details: [], status: 'upcoming',
           order: 1, updated_at: new Date().toISOString() },
-        { id: 'hover-stays', title: 'Hover stays', details: [], status: 'upcoming',
+        { type: 'unspecified', id: 'hover-stays', title: 'Hover stays', details: [], status: 'upcoming',
           order: 2, updated_at: new Date().toISOString() }
       ],
       finished: [],

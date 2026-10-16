@@ -968,9 +968,11 @@ def field_html(question):
 
 
 TASK_STATUSES = ("upcoming", "finished")
-# One primary type per task, by deliverable. Old rows and old imports read Unspecified.
+# One primary type per task, by deliverable. Stored legacy values stay unchanged.
 TASK_UNSPECIFIED = "unspecified"
-TASK_TYPES = ("report", "code", "docs", "operations", "unspecified")
+TASK_MISC = "misc"
+TASK_TYPES = ("report", "code", "docs", "ops", "misc")
+TASK_LEGACY_TYPES = ("operations", TASK_UNSPECIFIED)
 TASK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 # A note ID is six hex characters, alone or followed by a hyphen and the rest for a row minted
 # before the six-character change, and the shape check above accepts it as a task name without this.
@@ -1061,7 +1063,7 @@ def task_row(row):
   }
   if len(row) > 8 and row[8]:
     shaped["report_id"] = row[8]
-  shaped["type"] = row[9] if len(row) > 9 and row[9] else TASK_UNSPECIFIED
+  shaped["type"] = row[9] if len(row) > 9 and row[9] else TASK_MISC
   return shaped
 
 
@@ -1100,7 +1102,7 @@ def saved_task_line(record):
     raise TypeError("Every saved task is an object")
   line = {key: record.get(key) for key in TASK_LINE_KEYS}
   line["details"] = [str(item) for item in record.get("details") or []]
-  line["type"] = record.get("type") or TASK_UNSPECIFIED
+  line["type"] = record.get("type") or TASK_MISC
   if not line.get("report_id"):
     line.pop("report_id", None)
   return line
@@ -2893,7 +2895,7 @@ class Store:
           updated_at TEXT NOT NULL,
           completed_at TEXT,
           blocked INTEGER NOT NULL DEFAULT 0,
-          type TEXT NOT NULL DEFAULT 'unspecified'
+          type TEXT NOT NULL DEFAULT 'misc'
         );
       """)
       columns = {row["name"] for row in db.execute("PRAGMA table_info(notes)")}
@@ -2933,9 +2935,7 @@ class Store:
       if "completed_at" not in columns:
         db.execute("ALTER TABLE tasks ADD COLUMN completed_at TEXT")
       if "type" not in columns:
-        db.execute(
-          "ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'unspecified'"
-        )
+        db.execute("ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'misc'")
       db.execute(
         "UPDATE tasks SET completed_at = updated_at"
         " WHERE status = 'finished' AND completed_at IS NULL"
@@ -3433,6 +3433,7 @@ class Store:
     task_type=None,
     shared=None,
     append_details=False,
+    restoring=False,
   ):
     """Insert or update a task and return it. Keep omitted title and detail values. Use a supplied transaction so
     imports remain atomic."""
@@ -3442,8 +3443,9 @@ class Store:
     check_task(task_id, title, details)
     if status is not None and status not in TASK_STATUSES:
       raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
-    if task_type is not None and task_type not in TASK_TYPES:
-      raise ValueError(f"A task type is one of {', '.join(TASK_TYPES)}")
+    allowed_types = TASK_TYPES + TASK_LEGACY_TYPES if restoring else TASK_TYPES
+    if task_type is not None and task_type not in allowed_types:
+      raise ValueError(f"A task type is one of {', '.join(allowed_types)}")
     stamp = now()
     with self.transaction(shared) as db:
       if append_details and not db.in_transaction:
@@ -3478,7 +3480,9 @@ class Store:
       if report_id is None:
         report_id = stored.get("report_id") if stored else None
       if task_type is None:
-        task_type = (stored.get("type") if stored else None) or TASK_UNSPECIFIED
+        if stored is None and not restoring:
+          raise ValueError("A new task needs an explicit type")
+        task_type = (stored.get("type") if stored else None) or TASK_MISC
       if report_id:
         identifier(report_id)
       if report_id and blocked and self.report_has_answers(db, report_id):
@@ -4278,8 +4282,10 @@ class Store:
       if status is not None and status not in TASK_STATUSES:
         raise ValueError(f"A task is either {' or '.join(TASK_STATUSES)}")
       task_type = record.get("type")
-      if task_type is not None and task_type not in TASK_TYPES:
-        raise ValueError(f"A task type is one of {', '.join(TASK_TYPES)}")
+      if task_type is not None and task_type not in TASK_TYPES + TASK_LEGACY_TYPES:
+        raise ValueError(
+          f"A task type is one of {', '.join(TASK_TYPES + TASK_LEGACY_TYPES)}"
+        )
       if completed_at is not None:
         if not isinstance(completed_at, str):
           raise ValueError("A saved completion stamp is text")
@@ -4306,7 +4312,7 @@ class Store:
           if title is None and not stored:
             raise ValueError(f"A new task needs a title: {task_id}")
         db.execute("DELETE FROM tasks")
-      written = [self.write_task(*item, shared=db) for item in prepared]
+      written = [self.write_task(*item, shared=db, restoring=True) for item in prepared]
     return written
 
   def renumber(self, db):

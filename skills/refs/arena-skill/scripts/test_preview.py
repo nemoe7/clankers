@@ -2624,7 +2624,9 @@ def test_autosave_export():
     assert autosave_store.save_path.read_text(encoding="utf-8") == first
     autosave_store.acknowledge(["autosave-note"], "note", "Receipt")
     assert "Receipt" in autosave_store.save_path.read_text(encoding="utf-8")
-    autosave_task = autosave_store.write_task("autosave-task", "Track it", ["Step one"])
+    autosave_task = autosave_store.write_task(
+      "autosave-task", "Track it", ["Step one"], task_type="misc"
+    )
     assert "autosave-task" in autosave_store.save_path.read_text(encoding="utf-8")
     assert autosave_task["id"] == "autosave-task"
     # A restore drops the database and keeps the export, so rebuilding must not touch it.
@@ -2722,7 +2724,7 @@ def test_task_needs_one_detail():
       raise AssertionError("A task without a detail was accepted")
     except ValueError:
       pass
-    store.write_task("kept", "Kept", ["Step one"])
+    store.write_task("kept", "Kept", ["Step one"], task_type="misc")
     try:
       store.write_task("kept", details=[""])
       raise AssertionError("Clearing the last detail was accepted")
@@ -2741,13 +2743,15 @@ def test_task_refuses_a_note_id_as_its_name():
     store.set_meta("port", guard_port())
     for note_id in ("c6b0af0", "c6b0af0-462e549f387100613fcede90b"):
       try:
-        store.write_task(note_id, "Named after the note", ["Step one"])
+        store.write_task(
+          note_id, "Named after the note", ["Step one"], task_type="misc"
+        )
         raise AssertionError(f"A note ID was accepted as a task ID: {note_id}")
       except ValueError as error:
         assert "proper name" in str(error), error
     # A plain name still lands, and a name that only looks hex stays a name.
-    store.write_task("fix-the-widget", "Name the job", ["Step one"])
-    store.write_task("deadbeef", "Eight hex characters", ["Step one"])
+    store.write_task("fix-the-widget", "Name the job", ["Step one"], task_type="misc")
+    store.write_task("deadbeef", "Eight hex characters", ["Step one"], task_type="misc")
     assert [task["id"] for task in store.list_tasks()] == ["fix-the-widget", "deadbeef"]
     # The CLI prints the same refusal for the agent to read.
     cli = subprocess.run(
@@ -2846,13 +2850,25 @@ def test_bare_task_reads_the_stored_row():
       )
 
     written = cli(
-      "task", "read-task", "Read the queue", "-d", "Step one", "-d", "Step two"
+      "task",
+      "read-task",
+      "Read the queue",
+      "-d",
+      "Step one",
+      "-d",
+      "Step two",
+      "--task-type",
+      "misc",
     )
     assert written.returncode == 0, written.stderr
     before = store.list_tasks()[0]
     read = cli("task", "read-task")
     assert read.returncode == 0, read.stderr
-    assert read.stdout.splitlines()[0] == "task read-task, order 1, status upcoming"
+    expected = (
+      f"task {before['id']}, order {before['order']}, status {before['status']}, "
+      f"type {before['type']}"
+    )
+    assert read.stdout.splitlines()[0] == expected
     assert "- Step one" in read.stdout and "- Step two" in read.stdout
     assert store.list_tasks()[0] == before
     source = Path(read_dir) / "linked.md"
@@ -2962,7 +2978,7 @@ def test_clear_state():
     store.set_meta("port", guard_port())
     store.note("clear-note", "Pending work")
     store.acknowledge(["clear-note"], "note", "Receipt")
-    store.write_task("clear-task", "Track it", ["Step one"])
+    store.write_task("clear-task", "Track it", ["Step one"], task_type="misc")
     source = clear_root / "pick.md"
     source.write_text("# Pick\n\nChoice? {#pick}\n- (x) one\n", encoding="utf-8")
     store.publish("pick", "Pick one", source)
@@ -3287,9 +3303,11 @@ def test_bare_task_list_names_the_current_task():
   # `--full` still prints every task, finished included, so the order stays readable.
   with tempfile.TemporaryDirectory() as bare_dir:
     bare = preview.Store(bare_dir, create=True)
-    bare.write_task("done-one", "Finished work", ["Step one"], status="finished")
-    bare.write_task("first", "First upcoming", ["Step one"])
-    bare.write_task("second", "Second upcoming", ["Step one"])
+    bare.write_task(
+      "done-one", "Finished work", ["Step one"], status="finished", task_type="misc"
+    )
+    bare.write_task("first", "First upcoming", ["Step one"], task_type="misc")
+    bare.write_task("second", "Second upcoming", ["Step one"], task_type="misc")
     lines = preview.format_task_list(bare.list_tasks()).splitlines()
     assert lines[0] == "Tasks 2 upcoming"
     assert "current first" in lines[1]
@@ -3387,11 +3405,15 @@ def test_short_flags_and_the_details_rename():
       ).stdout
 
     for flag in ("--details", "--task-details", "-d"):
-      out = cli("task", "flag-task", "Flags", flag, "one\ntwo")
+      out = cli("task", "flag-task", "Flags", flag, "one\ntwo", "--task-type", "misc")
       assert "one" in out and "two" in out, flag
-    assert "blocked" in cli("task", "flag-task", "Flags", "-b")
-    assert "blocked" not in cli("task", "flag-task", "Flags", "-u")
-    out = cli("task", "flag-task", "Flags", "-s", "finished", "-o", "1")
+    assert "blocked" in cli("task", "flag-task", "Flags", "-b", "--task-type", "misc")
+    assert "blocked" not in cli(
+      "task", "flag-task", "Flags", "-u", "--task-type", "misc"
+    )
+    out = cli(
+      "task", "flag-task", "Flags", "-s", "finished", "-o", "1", "--task-type", "misc"
+    )
     assert "status finished" in out and "order 1" in out
     assert cli("task-list", "-f").splitlines()[0] == "Tasks 1"
     assert cli("task-list").splitlines()[0] == "Tasks 0 upcoming"
@@ -3415,6 +3437,7 @@ def test_task_list():
       "docs-archive",
       "Move to new docs/archive/ dir",
       ["move BUDGET-EXCEPTIONS.md", "write arena-quirks.md"],
+      task_type="misc",
     )
     assert record["status"] == "upcoming" and record["order"] == 1
     listed = tasks_store.state()["tasks"]
@@ -3431,9 +3454,9 @@ def test_task_list():
     assert len(moved["details"]) == 2 and moved["order"] == 1
     assert tasks_store.state()["tasks"]["finished"][0]["id"] == "docs-archive"
     assert tasks_store.state()["tasks"]["upcoming"] == []
-    tasks_store.write_task("task-a", "A", ["Step one"])
-    tasks_store.write_task("task-b", "B", ["Step one"])
-    tasks_store.write_task("task-c", "C", ["Step one"], order=1)
+    tasks_store.write_task("task-a", "A", ["Step one"], task_type="misc")
+    tasks_store.write_task("task-b", "B", ["Step one"], task_type="misc")
+    tasks_store.write_task("task-c", "C", ["Step one"], order=1, task_type="misc")
     upcoming = tasks_store.state()["tasks"]["upcoming"]
     assert [item["id"] for item in upcoming] == ["task-c", "task-a", "task-b"]
     assert [item["order"] for item in upcoming] == [1, 2, 3]
@@ -3447,9 +3470,12 @@ def test_task_list():
       (lambda: tasks_store.write_task("Bad ID"), "A task ID with a space was accepted"),
       (lambda: tasks_store.write_task("no-title"), "A new task without a title passed"),
       (lambda: tasks_store.write_task("huge", "x" * 201), "An oversized title passed"),
-      (lambda: tasks_store.write_task("many", "M", ["d"] * 41), "41 details passed"),
       (
-        lambda: tasks_store.write_task("deep", "D", ["y" * 2001]),
+        lambda: tasks_store.write_task("many", "M", ["d"] * 41, task_type="misc"),
+        "41 details passed",
+      ),
+      (
+        lambda: tasks_store.write_task("deep", "D", ["y" * 2001], task_type="misc"),
         "A huge detail passed",
       ),
       (
@@ -3467,7 +3493,9 @@ def test_task_list():
     # The printed task cuts a long detail to save the agent tokens. The stored row keeps
     # it whole.
     long_detail = "y" * 400
-    printed = preview.format_task(tasks_store.write_task("long", "Long", [long_detail]))
+    printed = preview.format_task(
+      tasks_store.write_task("long", "Long", [long_detail], task_type="misc")
+    )
     assert f"- {'y' * 200}\u2026" in printed
     assert tasks_store.state()["tasks"]["upcoming"][-1]["details"] == [long_detail]
     try:
@@ -3476,7 +3504,9 @@ def test_task_list():
     except ValueError:
       pass
     assert "<img onerror=alert(1)>" in preview.format_task(
-      tasks_store.write_task("hostile", "<img onerror=alert(1)>", ["Step one"])
+      tasks_store.write_task(
+        "hostile", "<img onerror=alert(1)>", ["Step one"], task_type="misc"
+      )
     )
 
 
@@ -3484,7 +3514,7 @@ def test_task_completion_time_tracks_transitions_and_finished_order():
   with tempfile.TemporaryDirectory() as task_dir:
     store = preview.Store(task_dir, create=True)
     for task_id in ("alpha", "bravo", "charlie"):
-      store.write_task(task_id, task_id.title(), ["Step one"])
+      store.write_task(task_id, task_id.title(), ["Step one"], task_type="misc")
     with patch.object(preview, "now", return_value="2026-10-13T01:00:00+00:00"):
       first_finish = store.write_task("alpha", status="finished")
     assert first_finish["completed_at"] == "2026-10-13T01:00:00+00:00"
@@ -3596,10 +3626,10 @@ def test_shared_ids_refused():
     source = Path(shared_dir) / "plan.md"
     source.write_text("# Plan\n", encoding="utf-8")
     store.publish("plan", "Plan", source)
-    store.write_task("build", "Build it", ["Step one"])
+    store.write_task("build", "Build it", ["Step one"], task_type="misc")
     for attempt, message in (
       (
-        lambda: store.write_task("plan", "Plan task", ["Step one"]),
+        lambda: store.write_task("plan", "Plan task", ["Step one"], task_type="misc"),
         "already names a report",
       ),
       (lambda: store.amend_task("build", "plan"), "already names a report"),
@@ -3636,7 +3666,7 @@ def test_task_finish_blocked_refused():
   with tempfile.TemporaryDirectory() as blocked_dir:
     blocked_store = preview.Store(blocked_dir, create=True)
     blocked_store.write_task(
-      "await", "Await the owner answer", ["Step one"], blocked=True
+      "await", "Await the owner answer", ["Step one"], blocked=True, task_type="misc"
     )
     # A blocked task stays upcoming: finishing it needs the mark cleared first.
     try:
@@ -3658,14 +3688,21 @@ def test_task_report_link_unblocks_on_answer():
     source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
     link_store.publish("pick", "Pick one", source)
     linked = link_store.write_task(
-      "ship", "Ship the change", ["wait for the pick"], blocked=True, report_id="pick"
+      "ship",
+      "Ship the change",
+      ["wait for the pick"],
+      blocked=True,
+      report_id="pick",
+      task_type="misc",
     )
     assert linked["blocked"] is True and linked["report_id"] == "pick"
     assert link_store.list_tasks()[0]["report_id"] == "pick"
     # The mark holds through an unrelated update while the report stays unanswered.
     held = link_store.write_task("ship", details=["wait for the pick still"])
     assert held["blocked"] is True and held["report_id"] == "pick"
-    link_store.write_task("other", "Other wait", ["Step one"], blocked=True)
+    link_store.write_task(
+      "other", "Other wait", ["Step one"], blocked=True, task_type="misc"
+    )
     revision = link_store.report("pick")["updated_at"]
     link_store.submit_report("pick", "answer-1", {"pick": "yes"}, revision)
     tasks = {item["id"]: item for item in link_store.list_tasks()}
@@ -3673,7 +3710,12 @@ def test_task_report_link_unblocks_on_answer():
     assert tasks["other"]["blocked"] is True
     # A link to a report that already has its answer never keeps the mark.
     late = link_store.write_task(
-      "late", "Late link", ["Step one"], blocked=True, report_id="pick"
+      "late",
+      "Late link",
+      ["Step one"],
+      blocked=True,
+      report_id="pick",
+      task_type="misc",
     )
     assert late["blocked"] is False
 
@@ -3685,9 +3727,15 @@ def test_report_linked_task_sorts_ahead_in_its_status():
     source = Path(sort_dir) / "pick.md"
     source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
     sort_store.publish("pick", "Pick one", source)
-    sort_store.write_task("plain", "Plain", ["Step one"], order=1)
+    sort_store.write_task("plain", "Plain", ["Step one"], order=1, task_type="misc")
     sort_store.write_task(
-      "linked", "Linked", ["Step one"], order=2, report_id="pick", blocked=True
+      "linked",
+      "Linked",
+      ["Step one"],
+      order=2,
+      report_id="pick",
+      blocked=True,
+      task_type="misc",
     )
     upcoming = [
       item["id"] for item in sort_store.list_tasks() if item["status"] == "upcoming"
@@ -3710,7 +3758,7 @@ def test_task_report_flag_waits_for_an_answer_by_default():
     source = Path(directory) / "pick.md"
     source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
     store.publish("pick", "Pick one", source)
-    store.write_task("waiting", "Waiting", ["Keep this detail"])
+    store.write_task("waiting", "Waiting", ["Keep this detail"], task_type="misc")
 
     def link(*args):
       return subprocess.run(
@@ -3750,7 +3798,7 @@ def test_task_report_link_refuses_missing_report():
   with tempfile.TemporaryDirectory() as cli_dir:
     cli_store = preview.Store(cli_dir, create=True)
     cli_store.set_meta("port", guard_port())
-    cli_store.write_task("keep", "Keep", ["Step one"])
+    cli_store.write_task("keep", "Keep", ["Step one"], task_type="misc")
     missing = subprocess.run(
       [
         sys.executable,
@@ -3780,7 +3828,7 @@ def test_task_report_link_survives_save_and_import():
     source.write_text("Pick one: {#pick}\n\n- ( ) yes\n- ( ) no\n", encoding="utf-8")
     save_store.publish("pick", "Pick one", source)
     save_store.write_task(
-      "ship", "Ship it", ["Step one"], blocked=True, report_id="pick"
+      "ship", "Ship it", ["Step one"], blocked=True, report_id="pick", task_type="misc"
     )
     save_store.save_state({"notes": [], "tasks": save_store.tasks()})
     lines = [json.loads(line) for line in save_store.save_path.read_text().splitlines()]
@@ -3796,9 +3844,16 @@ def test_task_amend():
   with tempfile.TemporaryDirectory() as amend_dir:
     amend_store = preview.Store(amend_dir, create=True)
     amend_store.write_task(
-      "docz-archive", "Move to docs/archive/", ["one", "two"], "upcoming", 1
+      "docz-archive",
+      "Move to docs/archive/",
+      ["one", "two"],
+      "upcoming",
+      1,
+      task_type="misc",
     )
-    amend_store.write_task("minify", "Minify the live build", ["Step one"])
+    amend_store.write_task(
+      "minify", "Minify the live build", ["Step one"], task_type="misc"
+    )
     amend_store.amend_task("docz-archive", "docs-archive")
     fixed = amend_store.write_task("docs-archive")
     assert fixed["title"] == "Move to docs/archive/"
@@ -3834,7 +3889,7 @@ def test_task_amend():
     (Path(amend_dir) / "lines").mkdir()
     other = preview.Store(Path(amend_dir) / "lines", create=True)
     assert len(other.import_tasks(preview.parse_state_import(lines))) == 2
-    other.write_task("extra", "Extra", ["Step one"])
+    other.write_task("extra", "Extra", ["Step one"], task_type="misc")
     other.import_tasks(preview.parse_state_import(backup), replace=True)
     assert [item["id"] for item in other.list_tasks()] == ["docs-archive", "minify"]
     # An invalid --replace changes nothing: removal and writes share a transaction.
@@ -4161,6 +4216,8 @@ def test_restore_import():
         "Answer it",
         "--msg-id",
         "plain",
+        "--task-type",
+        "misc",
       ],
       capture_output=True,
       text=True,
@@ -4179,6 +4236,8 @@ def test_restore_import():
         "orphan",
         "No message",
         "Answer it",
+        "--task-type",
+        "misc",
         "--msg-id",
         "0f0f0f0f-0000-4000-8000-000000000000",
       ],
@@ -5140,7 +5199,7 @@ def test_dispatch_reminder():
     assert "0 tasks left." not in tails(0)
     for command, remaining in (
       (["task-list"], 0),
-      (["task", "reminder-task", "Track work", "Step one"], 1),
+      (["task", "reminder-task", "Track work", "Step one", "--task-type", "misc"], 1),
     ):
       result = subprocess.run(
         [sys.executable, reminder_script, *command],
@@ -5239,7 +5298,7 @@ def test_reminder_rotation():
     )
     assert preview.TASK_REMINDER in preview.REMINDERS
     # One open task keeps every entry visible for the rotation checks.
-    rotate_store.write_task("rotate-task", "Open work", ["Step one"])
+    rotate_store.write_task("rotate-task", "Open work", ["Step one"], task_type="misc")
 
     def tail_at(index, remaining=1):
       return preview.reminder_tail(index, remaining)
@@ -5306,13 +5365,13 @@ def test_reminder_hides_task_entry_with_no_open_task():
   with tempfile.TemporaryDirectory() as hidden_dir:
     hidden_store = preview.Store(hidden_dir, create=True)
     hidden_store.write_task(
-      "done-task", "Finished work", ["Step one"], status="finished"
+      "done-task", "Finished work", ["Step one"], status="finished", task_type="misc"
     )
     task_at = preview.REMINDERS.index(preview.TASK_REMINDER)
     for _ in range(task_at):
       hidden_store.reminder()
     assert hidden_store.reminder() == preview.REMINDERS[task_at + 1]
-    hidden_store.write_task("open-task", "Open work", ["Step one"])
+    hidden_store.write_task("open-task", "Open work", ["Step one"], task_type="misc")
     for _ in range(len(preview.REMINDERS) - 1):
       hidden_store.reminder()
     assert hidden_store.reminder() == "1 task left."
@@ -5602,7 +5661,11 @@ def test_poll_inbox():
       def tasking_sleeper(seconds):
         sleeps.append(seconds)
         store.write_task(
-          "mid-wait", "Appears during the wait", ["Step one"], status="upcoming"
+          "mid-wait",
+          "Appears during the wait",
+          ["Step one"],
+          status="upcoming",
+          task_type="misc",
         )
 
       sleeps.clear()
@@ -5675,7 +5738,7 @@ def test_poll_blocked_tasks():
 
     try:
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = 10, 3
-      store.write_task("open-task", "Open work", ["Step one"])
+      store.write_task("open-task", "Open work", ["Step one"], task_type="misc")
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
@@ -5927,7 +5990,7 @@ def test_turn_end_marker():
       # An unblocked task continues the turn as well.
       store.touch_agent()
       store.acknowledge(["end-note"], "reply", "done")
-      store.write_task("end-task", "Work waits", ["Step one"])
+      store.write_task("end-task", "Work waits", ["Step one"], task_type="misc")
       assert run_poll() == 0
       assert store.state()["turn_ended_at"] is None
       store.write_task("end-task", status="finished")
@@ -5988,7 +6051,7 @@ def test_newest_stamp_follows_every_mutation():
     ack_stamp = store.newest_stamp()
     assert ack_stamp and ack_stamp != note_stamp
     # A task change moves it too.
-    store.write_task("stamp-task", "A task", ["Step one"], order=1)
+    store.write_task("stamp-task", "A task", ["Step one"], order=1, task_type="misc")
     assert store.newest_stamp() != ack_stamp
 
 
@@ -5998,7 +6061,9 @@ def test_copy_state_carries_the_note_and_task_stamps():
   with tempfile.TemporaryDirectory() as stamp_dir:
     store = preview.Store(Path(stamp_dir) / "arena-preview", create=True)
     store.note("pair-note", "first", at="2026-10-05T09:00:00")
-    store.write_task("pair-task", "A task after the note", ["Step one"])
+    store.write_task(
+      "pair-task", "A task after the note", ["Step one"], task_type="misc"
+    )
     app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
     threading.Thread(target=app.serve_forever, daemon=True).start()
     payload = json.loads(request("GET", "/api/copy-state")[2])
@@ -6977,6 +7042,8 @@ def test_task_detail_steps():
         "Steps",
         "--task-details",
         "read it\n\n fix it \ncheck it",
+        "--task-type",
+        "misc",
       ],
       capture_output=True,
       text=True,
@@ -7011,7 +7078,9 @@ def test_task_details_append_keeps_replacement_and_limits():
         env=env,
       )
 
-    assert cli("task", "append-task", "Append", "one").returncode == 0
+    assert (
+      cli("task", "append-task", "Append", "one", "--task-type", "misc").returncode == 0
+    )
     result = cli("task", "append-task", "--append", "--details", "two\nthree")
     assert result.returncode == 0, result.stderr
     assert store.task_record("append-task")["details"] == ["one", "two", "three"]
@@ -7404,7 +7473,7 @@ def test_rename_repoints_a_task_from_the_records_that_name_it():
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.note("aaaaaaa-1111111111111111111111111", "a note")
-    store.write_task("old-name", "A title", ["One step"])
+    store.write_task("old-name", "A title", ["One step"], task_type="misc")
     store.mark_task("aaaaaaa-1111111111111111111111111", "old-name")
 
     kind = store.rename_entity("old-name", "new-name")
@@ -7429,8 +7498,8 @@ def test_rename_refuses_an_id_another_record_holds():
   """One ID names one record, so a rename onto a taken ID fails and moves nothing."""
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
-    store.write_task("first-task", "A title", ["One step"])
-    store.write_task("second-task", "Another title", ["One step"])
+    store.write_task("first-task", "A title", ["One step"], task_type="misc")
+    store.write_task("second-task", "Another title", ["One step"], task_type="misc")
 
     try:
       store.rename_entity("first-task", "second-task")
@@ -7709,8 +7778,8 @@ def test_task_type_writes_preserves_and_round_trips():
     store = preview.Store(type_dir, create=True)
     created = store.write_task("typed", "Typed work", ["Step one"], task_type="code")
     assert created["type"] == "code"
-    plain = store.write_task("plain", "Plain work", ["Step one"])
-    assert plain["type"] == "unspecified"
+    plain = store.write_task("plain", "Plain work", ["Step one"], task_type="misc")
+    assert plain["type"] == "misc"
     updated = store.write_task("typed", details=["Step one", "Step two"])
     assert updated["type"] == "code", "an omitted flag preserves the type"
     records = [
@@ -7718,9 +7787,9 @@ def test_task_type_writes_preserves_and_round_trips():
       for task_id in ("typed", "plain")
     ]
     assert records[0]["type"] == "code"
-    assert records[1]["type"] == "unspecified"
+    assert records[1]["type"] == "misc"
     written = store.import_tasks(records, replace=True)
-    assert [row["type"] for row in written] == ["code", "unspecified"]
+    assert [row["type"] for row in written] == ["code", "misc"]
     try:
       store.write_task("bad", "Bad", ["Step"], task_type="mixed")
     except ValueError as error:
@@ -7746,6 +7815,10 @@ def test_task_type_cli_flag_and_print():
 
     made = cli("typed-task", "Typed", "Step", "--task-type", "docs")
     assert made.returncode == 0, made.stderr
+
+    missing = cli("missing-type", "Missing a type", "Step")
+    assert missing.returncode != 0
+    assert "type" in missing.stderr.lower()
     assert "type docs" in made.stdout
     again = cli("typed-task", "Typed", "Step two")
     assert again.returncode == 0, again.stderr
@@ -7769,12 +7842,20 @@ def test_tasks_carry_their_linked_answers():
     )
     store.publish("linked", "Linked pick", source)
     store.write_task(
-      "linked-task", "Track the pick", ["Read the answer"], report_id="linked"
+      "linked-task",
+      "Track the pick",
+      ["Read the answer"],
+      report_id="linked",
+      task_type="misc",
     )
     store.write_task(
-      "named-task", "Answer named directly", ["Read it"], report_id="linked"
+      "named-task",
+      "Answer named directly",
+      ["Read it"],
+      report_id="linked",
+      task_type="misc",
     )
-    store.write_task("bare-task", "No link", ["Step one"])
+    store.write_task("bare-task", "No link", ["Step one"], task_type="misc")
     store.submission("answer-one", "linked", "REPORT linked: one")
     store.submission("answer-two", "linked", "REPORT linked: two", task_id="named-task")
     upcoming = store.state()["tasks"]["upcoming"]
@@ -8052,7 +8133,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
-    store.write_task("noise-task", "Open work", ["Keep it listed"])
+    store.write_task("noise-task", "Open work", ["Keep it listed"], task_type="misc")
     script = str(Path(preview.__file__))
     for hook in ("0", "1"):
       with (
@@ -8128,7 +8209,9 @@ def test_ack_task_hints_only_name_messages_without_a_task(capsys):
   with tempfile.TemporaryDirectory() as directory:
     store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
-    store.write_task("tracked-task", "Tracked work", ["Keep it tracked"])
+    store.write_task(
+      "tracked-task", "Tracked work", ["Keep it tracked"], task_type="misc"
+    )
     store.note("tracked-note", "Already tracked")
     store.submission("tracked-answer", "fixture-report", "Already tracked")
     store.note("free-note", "Not tracked")
@@ -8269,7 +8352,7 @@ def test_blocked_tasks_reject_known_reports_without_answer_fields(tmp_path):
     "Manual",
     ["Wait on an external dependency"],
     blocked=True,
-    task_type="operations",
+    task_type="ops",
   )
   assert manual["blocked"] and manual["report_id"] is None
   questions = tmp_path / "questions.md"
@@ -8290,3 +8373,80 @@ def test_blocked_tasks_reject_known_reports_without_answer_fields(tmp_path):
   store.publish("question-report", "Information now", questions)
   retained = store.write_task("fielded", title="Updated old task")
   assert retained["blocked"] and retained["report_id"] == fielded["report_id"]
+
+
+def test_normal_new_task_requires_an_explicit_type():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    with pytest.raises(ValueError, match="type"):
+      store.write_task("needs-type", "Needs a chosen type", ["One step"])
+    assert store.list_tasks() == []
+
+
+@pytest.mark.parametrize("chosen", ["report", "code", "docs", "ops", "misc"])
+def test_canonical_task_type_and_omitted_update(chosen):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    record = store.write_task(
+      "chosen-type", "Chosen type", ["One step"], task_type=chosen
+    )
+    assert record["type"] == chosen
+    updated = store.write_task(record["id"], title="An amended title")
+    assert updated["type"] == chosen
+
+
+@pytest.mark.parametrize("legacy", ["operations", "unspecified"])
+def test_normal_new_task_refuses_legacy_type_names(legacy):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    with pytest.raises(ValueError, match="type"):
+      store.write_task(
+        "legacy-normal", "Use the canonical name", ["One step"], task_type=legacy
+      )
+    assert store.list_tasks() == []
+
+
+@pytest.mark.parametrize("legacy", ["operations", "unspecified"])
+def test_legacy_stored_type_survives_without_other_row_changes(legacy):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    before = store.write_task(
+      "legacy-type", "Preserve this row", ["One step"], task_type="report"
+    )
+    before = store.list_tasks()[0]
+    with closing(store.connect()) as db, db:
+      db.execute("UPDATE tasks SET type = ? WHERE id = ?", (legacy, before["id"]))
+    migrated = preview.Store(directory)
+    assert migrated.list_tasks() == [{**before, "type": legacy}]
+
+
+def test_legacy_database_without_type_uses_misc():
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    before = store.write_task(
+      "old-schema", "Preserve this row", ["One step"], task_type="report"
+    )
+    before = store.list_tasks()[0]
+    with closing(store.connect()) as db, db:
+      db.execute("ALTER TABLE tasks DROP COLUMN type")
+    migrated = preview.Store(directory)
+    assert migrated.list_tasks() == [{**before, "type": "misc"}]
+
+
+@pytest.mark.parametrize(
+  "legacy,restored",
+  [(None, "misc"), ("unspecified", "unspecified"), ("operations", "operations")],
+)
+def test_legacy_task_restore_preserves_supplied_types(legacy, restored):
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    record = {
+      "id": "old-backup",
+      "title": "Restore an old task",
+      "details": ["One step"],
+    }
+    if legacy is not None:
+      record["type"] = legacy
+    written = store.import_tasks([record], replace=True)
+    assert written[0]["type"] == restored
+    assert store.list_tasks()[0]["type"] == restored
