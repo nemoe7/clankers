@@ -56,6 +56,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Arena reference: fix attachment-limit and agent-unpublish view rules.
+
 - Preview: keep reply focus during receipt and poll renders. Reuse visible history rows without replacing the list.
 
 - Preview: show preview-ID rename commands for task and report conflicts. Keep repository-facing names unchanged.

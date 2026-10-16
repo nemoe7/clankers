@@ -147,8 +147,8 @@ A task row shows the answers linked to it in a read-only block under its details
 - Source edits do not update a published report: call `publish` again.
 - A report that has answers refuses republishing under the same ID; publish its update under a new ID.
 - Delete a report the owner no longer needs with `unpublish <id>`; its sent answers and its `.md` source under the state directory stay.
-- An unseen answer ack holds the removal, and the agent's own call waits the minute after the owner's last look at the report.
-- The page's own press passes that window, because the click is the owner's decision.
+- Block agent unpublish for an unseen answer ack, not for a fresh owner view.
+- Let the owner remove a report through the page without these agent-side guards.
 - Verify the rendered report before telling the owner it is available.
 - An image renders from its URL.
 - `![alt](src =320x200)` sets its size, and `=320x` scales the height.
@@ -183,7 +183,7 @@ Which checks must pass first? {#release-checks}
 
 ## Uploaded notes and Downloads
 
-Each file on a composed note is 1–50MB. `read` returns the note with an `attachments[]` list that carries each file's byte size; read an image record's `path` before acknowledging the single note ID, and read a text record with caution. `present: false` means the record remains but the bytes do not.
+Keep composed-note files nonempty, with no application byte cap. `read` returns the note with an `attachments[]` list that carries each file's byte size; read an image record's `path` before acknowledging the single note ID, and read a text record with caution. `present: false` means the record remains but the bytes do not.
 
 An agent asks with `download-request <url>`. That queues a pending job. The owner approves or denies it before the browser fetches the URL. Add `--allow-proxy` only for that URL. Reject credentials in URLs. Each completed job sends one inbox note with the saved path. Retry failures in Downloads; report CORS, network and size failures. A restore may keep a job record but lose the file. The NDJSON backup does not restore jobs or file bytes.
 
