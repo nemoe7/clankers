@@ -2270,16 +2270,16 @@ LONG_RUN_WORDS = (
   (("gradlew", "test"), "gradle-tests"),
 )
 WORKTREE_STEP = (
-  "NEXT TASK: a queued task that edits files continues in a worktree while this runs:"
-  " `arena-preview worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`."
+  "NEXT: work queued file task in worktree while this runs: `arena-preview "
+  "worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`."
 )
 DETACHED_NOTICE = (
-  "RUN DETACHED: `{name}` runs in the background, so the call ends clean;"
-  " its verdict prints on a later call. " + WORKTREE_STEP
+  "RUN DETACHED: `{name}` runs in background, call ends clean. Verdict on "
+  "later call. " + WORKTREE_STEP
 )
 DETACHED_BLOCK = (
-  "RUN BLOCKED: the background start failed, so the wait never left."
-  " Run `arena-preview route {name} -- <the same line>` instead."
+  "RUN BLOCKED: background start failed, wait not started. Use `arena-preview "
+  "route {name} -- <the same line>` instead."
 )
 # A detached record older than this stops printing its status line, so a killed child
 # leaves no forever-running line.
@@ -2552,8 +2552,7 @@ def route_command(state_dir, name, argv):
     print(f"arena-preview route: the start of `{name}` failed.", flush=True)
     return 1
   print(
-    f"routed {name}: the run continues in the background, and its verdict prints on a"
-    f" later call. {WORKTREE_STEP}",
+    f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",
     file=sys.stderr,
     flush=True,
   )
@@ -2582,7 +2581,7 @@ def poll_inbox(store, sleeper=None):
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
   # The Bash timeout can cut it short, so tell agents to retry with a tool timeout of 1800.
   print(
-    "POLL: 1800 s; a cut call retries with the tool timeout at 1800.",
+    "POLL: 1800 s. If cut, retry with tool timeout 1800 s.",
     file=sys.stderr,
     flush=True,
   )

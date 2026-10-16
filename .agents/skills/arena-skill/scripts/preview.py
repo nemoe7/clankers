@@ -784,9 +784,9 @@ PR_CHECK_WRAPPERS='env','command','timeout','xargs','nice','nohup','stdbuf','sud
 PR_CHECK_NAMES=('pr','checks','pr-checks'),('run','watch','run-watch')
 LONG_RUN_HEADS={'pytest':'pytest','py.test':'pytest','tox':'tox','nox':'nox'}
 LONG_RUN_WORDS=(('npm','test'),'npm-tests'),(('npm','run','test*'),'npm-tests'),(('yarn','test'),'yarn-tests'),(('pnpm','test'),'pnpm-tests'),(('make','test'),'make-tests'),(('npx','jest'),'npx-tests'),(('npx','vitest'),'npx-tests'),(('npx','mocha'),'npx-tests'),(('npx','ava'),'npx-tests'),(('go','test'),'go-tests'),(('cargo','test'),'cargo-tests'),(('dotnet','test'),'dotnet-tests'),(('mvn','test'),'mvn-tests'),(('mvnw','test'),'mvn-tests'),(('gradle','test'),'gradle-tests'),(('gradlew','test'),'gradle-tests')
-WORKTREE_STEP='NEXT TASK: a queued task that edits files continues in a worktree while this runs: `arena-preview worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`.'
-DETACHED_NOTICE='RUN DETACHED: `{name}` runs in the background, so the call ends clean; its verdict prints on a later call. '+WORKTREE_STEP
-DETACHED_BLOCK='RUN BLOCKED: the background start failed, so the wait never left. Run `arena-preview route {name} -- <the same line>` instead.'
+WORKTREE_STEP='NEXT: work queued file task in worktree while this runs: `arena-preview worktree start --gate <gate-name> [--allow <glob>] <name> <destination>`.'
+DETACHED_NOTICE='RUN DETACHED: `{name}` runs in background, call ends clean. Verdict on later call. '+WORKTREE_STEP
+DETACHED_BLOCK='RUN BLOCKED: background start failed, wait not started. Use `arena-preview route {name} -- <the same line>` instead.'
 DETACHED_STATUS_SECONDS=7200
 DETACH_DRY_RUN='ARENA_PREVIEW_DETACH_DRY'
 def long_run_words(tokens,index,head):
@@ -877,7 +877,7 @@ def route_command(state_dir,name,argv):
 	if argv[:1]==['--']:argv=argv[1:]
 	if not argv:print('arena-preview route: name a command after --, for example: route gates -- make check',flush=True);return 2
 	if not detach_run(state_dir,name,argv):print(f"arena-preview route: the start of `{name}` failed.",flush=True);return 1
-	print(f"routed {name}: the run continues in the background, and its verdict prints on a later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
+	print(f"routed {name}: background run. Verdict on later call. {WORKTREE_STEP}",file=sys.stderr,flush=True);return 0
 def run_log_report(state_dir,name):
 	record=routed_record(state_dir,name)
 	if record.get('exit')is None:elapsed=detached_seconds(record.get('started_at'));age=f" {elapsed}s"if elapsed is not None else'';print(f"run {name} running{age}");print(WORKTREE_STEP);return 0
@@ -886,7 +886,7 @@ def run_log_report(state_dir,name):
 	return 0
 def poll_inbox(store,sleeper=None):
 	if sleeper is None:sleeper=time.sleep
-	listing={'checked_at':None,'pending':[]};print('POLL: 1800 s; a cut call retries with the tool timeout at 1800.',file=sys.stderr,flush=True);store.start_poll();failures=[];threading.Thread(target=pr_check_once,args=(failures,resolve_repo_root()),daemon=True).start()
+	listing={'checked_at':None,'pending':[]};print('POLL: 1800 s. If cut, retry with tool timeout 1800 s.',file=sys.stderr,flush=True);store.start_poll();failures=[];threading.Thread(target=pr_check_once,args=(failures,resolve_repo_root()),daemon=True).start()
 	try:
 		for index in range(POLL_MAX_LOOPS):
 			listing=store.read(include_quiet=False)

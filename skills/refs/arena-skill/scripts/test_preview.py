@@ -5634,7 +5634,7 @@ def test_poll_retry_disclaimer():
       builtins.print = original
     assert code == 1
     assert printed[0].startswith("POLL: 1800 s")
-    assert "retries with the tool timeout at 1800" in printed[0]
+    assert f"If cut, retry with tool timeout {saved[0] * saved[1]} s." in printed[0]
 
 
 def test_skip_poll():
