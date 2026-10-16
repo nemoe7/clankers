@@ -2959,7 +2959,10 @@ def test_bare_task_reads_the_stored_row():
     assert report_text not in written_again.stdout
     listed = cli("task-list")
     assert listed.returncode == 0, listed.stderr
-    assert long_detail in listed.stdout and report_text not in listed.stdout
+    assert long_detail in listed.stdout
+    # The listing matches the page: both linked answers show, the unrelated one stays out.
+    assert report_text in listed.stdout and direct_text in listed.stdout
+    assert "Unrelated answer must stay out" not in listed.stdout
     store.write_task("read-task", status="finished")
     finished = cli("task", "read-task")
     assert finished.returncode == 0, finished.stderr
@@ -3368,6 +3371,28 @@ def test_bare_task_list_names_the_current_task():
     assert preview.format_task_list(empty.list_tasks()).splitlines() == [
       "Tasks 0 upcoming"
     ]
+
+
+def test_task_list_prints_a_linked_report_answer():
+  """A report answer linked to a task prints in the list, the way the page links it."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.write_task(
+      "first",
+      "First upcoming",
+      ["Step one"],
+      task_type="misc",
+      report_id="pick",
+    )
+    store.submission("answer-1", "pick", "REPORT pick: one")
+    listed = preview.format_task_list(store.list_tasks()).splitlines()
+    assert any(line.startswith("    answer answer-1, at ") for line in listed), listed
+    assert "    REPORT pick: one" in listed, listed
+    # A task with no linked answer keeps the older list shape.
+    store.write_task("second", "Second upcoming", ["Step two"], task_type="misc")
+    lines = preview.format_task_list(store.list_tasks()).splitlines()
+    assert lines.count("    Step two") == 1
+    assert sum(line.startswith("    answer ") for line in lines) == 1
 
 
 def test_a_short_id_prefix_names_one_record():
