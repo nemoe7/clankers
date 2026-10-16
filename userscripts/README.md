@@ -159,7 +159,7 @@ A process card carries a play icon and the process name, so it takes 🖥️ as 
 
 ## ChatGPT hide elements
 
-On any `chatgpt.com` path, the feature adds `hidden` to eight elements:
+On any `chatgpt.com` path, the feature adds `hidden` to twelve managed targets:
 
 - The div that holds the Claim offer button.
 - The div that holds the Free offer button.
@@ -169,8 +169,11 @@ On any `chatgpt.com` path, the feature adds `hidden` to eight elements:
 - The Library sidebar entries, in the collapsed rail and in the open nav list.
 - The Free badge.
 - The prompt textarea header banner.
+- The header Upgrade and Share controls.
+- The sidebar Upgrade control.
+- The Upgrade to Plus row, without hiding adjacent actions.
 
-A MutationObserver repeats the work when the page changes.
+Each target has a saved, default-on menu switch. The Hide elements switch controls all targets without changing their saved preferences or Auto Think. One MutationObserver repeats the work when the page changes, and turning hiding off restores only nodes the script hid.
 
 ## ChatGPT auto think
 

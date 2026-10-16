@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Userscripts: hide ChatGPT header Upgrade and Share controls, sidebar Upgrade, and Upgrade to Plus. Add saved switches for all managed hiding targets.
+
 - Preview: add a skill inventory with full YAML descriptions, paths, and installed or repository labels.
 
 #### system-prompts

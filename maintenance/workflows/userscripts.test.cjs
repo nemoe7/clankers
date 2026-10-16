@@ -3,6 +3,21 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
+const chatgptTargets = {
+  "hide-claim-offer": "Hide — Claim offer",
+  "hide-free-offer": "Hide — Free offer",
+  "hide-mode-toggle": "Hide — mode toggle",
+  "hide-codex": "Hide — Codex",
+  "hide-images": "Hide — Images",
+  "hide-library": "Hide — Library",
+  "hide-free-badge": "Hide — Free badge",
+  "hide-prompt-header": "Hide — prompt header",
+  "hide-header-upgrade": "Hide — header Upgrade",
+  "hide-header-share": "Hide — header Share",
+  "hide-sidebar-upgrade": "Hide — sidebar Upgrade",
+  "hide-plus-upsell": "Hide — Upgrade to Plus",
+};
+
 const bundles = {
   arena: {
     features: { "auto-wake": 1, "prompt-fill": 1, "open-steering": 1, "preview-sandbox": 1, "hide-composer": 1, "auto-scroll": 1, "transcript-trim": 1, "transcript-alerts": 1, "tab-title": 1, "state-download": 0, "keep-awake": 0 },
@@ -45,6 +60,7 @@ const bundles = {
   chatgpt: {
     features: { "hide-elements": 1, "auto-think": 0 },
     labels: { "hide-elements": "Hide elements", "auto-think": "Auto Think" },
+    alwaysMenus: { "hide-elements": Object.keys(chatgptTargets).length },
     baseObservers: 0,
     featureIntervals: { "auto-think": 1 },
   },
@@ -81,7 +97,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     alwaysTotal +
     keys.reduce((total, key) => total + (isOn(saved, key) ? (extraMenus[key] || 0) : 0), 0);
 
-  function load() {
+  function load(documentOverride) {
     const menus = new Map();
     const logs = [];
     const intervals = [];
@@ -94,7 +110,7 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     const context = {
       console: Object.fromEntries(["log", "warn", "error"].map((level) => [level, (...args) => logs.push(args)])), URL,
       location: { href: `https://${domain === "arena" ? "arena.ai/agent" : "chatgpt.com/"}`, pathname: "/agent" },
-      document: {
+      document: documentOverride || {
         documentElement: {},
         querySelector() { return null; },
         querySelectorAll(selector) { return selector.includes('aria-pressed="false"') ? [pill] : []; },
@@ -234,6 +250,85 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     stored.clear();
   }
 
+  if (domain === "chatgpt") {
+    for (const [key, label] of Object.entries(chatgptTargets)) {
+      stored.clear();
+      let page = load();
+      const targetMenu = () => [...page.menus.values()].find((item) => item.label.startsWith(label + ":"));
+      assert.ok(targetMenu(), `Every managed target has a menu: ${key}`);
+      assert.ok(reads(targetMenu().label, true), `${key} ships on`);
+      const beforeFailure = { ...page.active };
+      refuseWrite = true;
+      try {
+        try { targetMenu().callback(); }
+        catch (error) { assert.match(error.message, /Storage write failed/); }
+      } finally { refuseWrite = false; }
+      assert.equal(stored.has(key), false, "A failed write keeps the saved preference");
+      assert.ok(reads(targetMenu().label, true), "A failed write keeps the target switch on");
+      assert.deepEqual(page.active, beforeFailure, "A failed write keeps feature activity");
+      targetMenu().callback();
+      assert.equal(stored.get(key), false);
+      assert.ok(reads(targetMenu().label, false));
+      assert.equal(page.active.observers, observersFor(stored), "Individual switches share the existing observer");
+      page = load();
+      assert.ok(reads(targetMenu().label, false), "Reload keeps each target preference");
+      menuFor(page, "hide-elements").callback();
+      assert.equal(page.active.observers, observersFor(stored));
+      assert.ok(targetMenu(), "Individual preferences stay available while the master is off");
+      targetMenu().callback();
+      assert.equal(stored.get(key), true);
+      assert.equal(page.active.observers, observersFor(stored), "A target switch cannot enable the master");
+      menuFor(page, "auto-think").callback();
+      assert.equal(page.active.intervals, intervalsFor(stored), "The master leaves Auto Think independent");
+      menuFor(page, "hide-elements").callback();
+      assert.equal(page.active.observers, observersFor(stored));
+      assert.equal(page.active.intervals, intervalsFor(stored));
+      assert.ok(reads(targetMenu().label, true));
+    }
+    stored.clear();
+    function managedNode(hidden) {
+      const attrs = new Map();
+      if (hidden !== undefined) attrs.set("hidden", hidden);
+      return {
+        hasAttribute(name) { return attrs.has(name); },
+        getAttribute(name) { return attrs.has(name) ? attrs.get(name) : null; },
+        setAttribute(name, value) { attrs.set(name, String(value)); },
+        removeAttribute(name) { attrs.delete(name); },
+      };
+    }
+    const mode = managedNode();
+    const codex = managedNode();
+    const prehidden = [managedNode(""), managedNode("until-found")];
+    const scoped = load({
+      documentElement: {},
+      querySelector(selector) {
+        return selector === "div.\\@container\\/home-mode-toggle" ? mode : null;
+      },
+      querySelectorAll(selector) {
+        if (selector === 'button[data-sidebar-destination="builtin:codex"]') return [codex];
+        if (selector === 'button[data-sidebar-destination="builtin:images"]') return prehidden;
+        return [];
+      },
+    });
+    const modeMenu = () => [...scoped.menus.values()].find((item) =>
+      item.label.startsWith(chatgptTargets["hide-mode-toggle"] + ":"));
+    assert.ok(mode.hasAttribute("hidden") && codex.hasAttribute("hidden"));
+    modeMenu().callback();
+    assert.equal(mode.hasAttribute("hidden"), false, "An individual switch restores its own target");
+    assert.equal(codex.hasAttribute("hidden"), true, "Other managed targets stay hidden");
+    const thinkIntervals = scoped.active.intervals;
+    menuFor(scoped, "hide-elements").callback();
+    assert.equal(codex.hasAttribute("hidden"), false, "The master restores owned hides");
+    assert.equal(scoped.active.intervals, thinkIntervals, "The master does not stop Auto Think");
+    modeMenu().callback();
+    assert.equal(mode.hasAttribute("hidden"), false, "The master still wins over an individual switch");
+    menuFor(scoped, "hide-elements").callback();
+    assert.ok(mode.hasAttribute("hidden") && codex.hasAttribute("hidden"));
+    assert.deepEqual(prehidden.map((node) => node.getAttribute("hidden")), ["", "until-found"],
+      "The userscript does not restore or rewrite hides it did not own");
+    stored.clear();
+  }
+
   if (countMenu) {
     stored.clear();
     const counted = load();
@@ -352,10 +447,8 @@ for (const [domain, bundle] of Object.entries(bundles)) {
   assert.equal(allOff.active.intervals, 0);
   assert.equal(allOff.menus.size, keys.length + (bundle.globalMenus || 0) + alwaysTotal);
   assert.ok(
-    [...allOff.menus.values()]
-      .filter((item) => switchLike(item.label))
-      .every((item) => reads(item.label, false)),
-    "Every feature switch reads OFF",
+    keys.every((key) => reads(menuFor(allOff, key).label, false)),
+    "Every disabled feature switch reads OFF; independent target preferences stay unchanged",
   );
   assert.deepEqual(allOff.active, { observers: baseObservers, intervals: 0, clicks: 0 });
 

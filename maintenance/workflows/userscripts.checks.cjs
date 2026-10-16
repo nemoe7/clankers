@@ -1799,6 +1799,38 @@ function checkHideElements(api) {
       return selector === HEADER_DIV_SELECTOR ? headerDiv : null;
     },
   };
+  function action(text) {
+    var button = fakeElement();
+    button.textContent = text;
+    button.getAttribute = function () { return null; };
+    return button;
+  }
+  var headerUpgradeButton = action("Upgrade");
+  var headerShareButton = action("Share");
+  var sidebarUpgradeButton = action("Upgrade");
+  var plusButton = action("Upgrade to Plus");
+  var mixedPlusButton = action("Upgrade to Plus");
+  var unrelatedShare = action("Share");
+  var unrelatedUpgrade = action("Upgrade");
+  var otherHeaderUpgrade = action("Upgrade project");
+  var otherHeaderShare = action("Share feedback");
+  var otherSidebarUpgrade = action("Upgrade guide");
+  function actionGroup(buttons) {
+    var group = fakeElement();
+    group.textContent = buttons.map(function (button) { return button.textContent; }).join("");
+    group.querySelectorAll = function (selector) { return selector === "button" ? buttons : []; };
+    buttons.forEach(function (button) { button.closest = function () { return group; }; });
+    return group;
+  }
+  var headerUpgrade = actionGroup([headerUpgradeButton]);
+  var headerShare = actionGroup([headerShareButton]);
+  var sharedHeaderUpgrade = action("Upgrade");
+  var sharedHeaderOther = action("Keep");
+  var sharedHeaderGroup = actionGroup([sharedHeaderUpgrade, sharedHeaderOther]);
+  var sidebarUpgrade = actionGroup([sidebarUpgradeButton]);
+  var plusRow = actionGroup([plusButton]);
+  var unrelatedRow = actionGroup([action("Retry"), action("View details")]);
+  var mixedRow = actionGroup([mixedPlusButton, action("View details")]);
   // One document answers every selector, so the sync pass itself is under test: a target left out of syncDocument leaves its element unhidden here.
   // The library answers twice, once for the collapsed rail and once for the open nav list.
   var fullDoc = {
@@ -1809,7 +1841,11 @@ function checkHideElements(api) {
       return null;
     },
     querySelectorAll: function (selector) {
-      if (selector === "button") return [claimButton, freeButton];
+      if (selector === "button") return [claimButton, freeButton, headerUpgradeButton,
+        headerShareButton, sidebarUpgradeButton, plusButton, unrelatedShare, unrelatedUpgrade];
+      if (selector === "header button") return [headerUpgradeButton, headerShareButton, otherHeaderUpgrade, otherHeaderShare, sharedHeaderUpgrade, sharedHeaderOther];
+      if (selector === "#app-shell-sidebar button") return [sidebarUpgradeButton, otherSidebarUpgrade];
+      if (selector === "div.flex.flex-wrap.items-center.justify-center.gap-2") return [plusRow, unrelatedRow, mixedRow];
       if (selector === CODEX_ITEM_SELECTOR) return [codexItem];
       if (selector === IMAGES_ITEM_SELECTOR) return [imagesItem];
       if (selector === LIBRARY_ITEM_SELECTOR) return [libraryRailItem, libraryListItem];
@@ -1866,6 +1902,12 @@ function checkHideElements(api) {
     libraryListItem,
     freeBadge,
     headerDiv,
+    headerUpgrade,
+    headerShare,
+    sharedHeaderUpgrade,
+    sidebarUpgrade,
+    plusRow,
+    mixedPlusButton,
   ];
   for (i = 0; i < synced.length; i += 1) {
     if (!synced[i].hasAttribute("hidden")) {
@@ -1873,6 +1915,12 @@ function checkHideElements(api) {
       failed += 1;
     }
   }
+  [unrelatedShare, unrelatedUpgrade, unrelatedRow, mixedRow, otherHeaderUpgrade, otherHeaderShare, otherSidebarUpgrade, sharedHeaderGroup, sharedHeaderOther].forEach(function (el) {
+    if (el.hasAttribute("hidden")) {
+      console.error("unrelated action was hidden");
+      failed += 1;
+    }
+  });
   if (failed) {
     throw new Error(failed + " checks failed");
   }

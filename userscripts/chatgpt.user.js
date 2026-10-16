@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChatGPT.com | NemoUtils
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.3.6
+// @version      1.3.7
 // @description  Hide interface elements and auto-click Think with saved feature switches
 // @author       nemoe7
 // @icon         https://chatgpt.com/favicon.ico
@@ -77,6 +77,34 @@
     }
   }
 
+  var hideOptions = {};
+  var syncHidden = null;
+  [
+    ["claim-offer", "Claim offer"],
+    ["free-offer", "Free offer"],
+    ["mode-toggle", "mode toggle"],
+    ["codex", "Codex"],
+    ["images", "Images"],
+    ["library", "Library"],
+    ["free-badge", "Free badge"],
+    ["prompt-header", "prompt header"],
+    ["header-upgrade", "header Upgrade"],
+    ["header-share", "header Share"],
+    ["sidebar-upgrade", "sidebar Upgrade"],
+    ["plus-upsell", "Upgrade to Plus"],
+  ].forEach(function (target) {
+    var key = target[0];
+    hideOptions[key] = false;
+    runFeature("hide-" + key, "Hide — " + target[1], function () {
+      hideOptions[key] = true;
+      if (syncHidden) syncHidden();
+      return function () {
+        hideOptions[key] = false;
+        if (syncHidden) syncHidden();
+      };
+    });
+  });
+
   runFeature("hide-elements", "Hide elements", function () {
 
     var CLAIM_TEXT = "Claim offer";
@@ -125,6 +153,33 @@
       return doc.querySelector(HEADER_DIV_SELECTOR);
     }
 
+    var ACTION_GROUP_SELECTOR = "div.pointer-events-auto.flex.shrink-0.items-center.no-drag";
+    var PLUS_ROW_SELECTOR = "div.flex.flex-wrap.items-center.justify-center.gap-2";
+
+    function actionNode(button, selector, text) {
+      var group = button.closest(selector);
+      return group && group.querySelectorAll("button").length === 1 &&
+        String(group.textContent || "").trim() === text ? group : button;
+    }
+
+    function collectActions(doc, selector, text, groupSelector, collect) {
+      var buttons = doc.querySelectorAll(selector);
+      var i;
+      for (i = 0; i < buttons.length; i += 1) {
+        if (String(buttons[i].textContent || "").trim() === text) {
+          collect(actionNode(buttons[i], groupSelector, text));
+        }
+      }
+    }
+
+    function collectPlusRows(doc, collect) {
+      var rows = doc.querySelectorAll(PLUS_ROW_SELECTOR);
+      var i;
+      for (i = 0; i < rows.length; i += 1) {
+        collectActions(rows[i], "button", "Upgrade to Plus", PLUS_ROW_SELECTOR, collect);
+      }
+    }
+
     var hiddenElements = new Set();
 
     function hideElement(el) {
@@ -136,23 +191,42 @@
       return true;
     }
 
-    function hideAll(doc, selector) {
+    function hideAll(doc, selector, apply) {
       var found = doc.querySelectorAll(selector);
       var i;
       for (i = 0; i < found.length; i += 1) {
-        hideElement(found[i]);
+        (apply || hideElement)(found[i]);
       }
     }
 
     function syncDocument(doc) {
-      hideElement(findClaimDiv(doc));
-      hideElement(findFreeOfferDiv(doc));
-      hideElement(findModeToggle(doc));
-      hideAll(doc, CODEX_ITEM_SELECTOR);
-      hideAll(doc, IMAGES_ITEM_SELECTOR);
-      hideAll(doc, LIBRARY_ITEM_SELECTOR);
-      hideElement(findFreeBadge(doc));
-      hideElement(findHeaderDiv(doc));
+      var wanted = new Set();
+      function collect(el) { if (el) wanted.add(el); }
+      if (hideOptions["claim-offer"]) collect(findClaimDiv(doc));
+      if (hideOptions["free-offer"]) collect(findFreeOfferDiv(doc));
+      if (hideOptions["mode-toggle"]) collect(findModeToggle(doc));
+      if (hideOptions.codex) hideAll(doc, CODEX_ITEM_SELECTOR, collect);
+      if (hideOptions.images) hideAll(doc, IMAGES_ITEM_SELECTOR, collect);
+      if (hideOptions.library) hideAll(doc, LIBRARY_ITEM_SELECTOR, collect);
+      if (hideOptions["free-badge"]) collect(findFreeBadge(doc));
+      if (hideOptions["prompt-header"]) collect(findHeaderDiv(doc));
+      if (hideOptions["header-upgrade"]) {
+        collectActions(doc, "header button", "Upgrade", ACTION_GROUP_SELECTOR, collect);
+      }
+      if (hideOptions["header-share"]) {
+        collectActions(doc, "header button", "Share", ACTION_GROUP_SELECTOR, collect);
+      }
+      if (hideOptions["sidebar-upgrade"]) {
+        collectActions(doc, "#app-shell-sidebar button", "Upgrade", "div.contents", collect);
+      }
+      if (hideOptions["plus-upsell"]) collectPlusRows(doc, collect);
+      hiddenElements.forEach(function (el) {
+        if (!wanted.has(el)) {
+          if (el.getAttribute("hidden") === "") el.removeAttribute("hidden");
+          hiddenElements.delete(el);
+        }
+      });
+      wanted.forEach(hideElement);
     }
 
     function sync() {
@@ -184,6 +258,7 @@
       return;
     }
 
+    syncHidden = sync;
     var observer = new MutationObserver(sync);
     observer.observe(document.documentElement, {
       subtree: true,
@@ -193,6 +268,7 @@
     window.addEventListener("popstate", sync);
     sync();
     return function () {
+      syncHidden = null;
       observer.disconnect();
       window.removeEventListener("popstate", sync);
       hiddenElements.forEach(function (el) { if (el.getAttribute("hidden") === "") el.removeAttribute("hidden"); });
