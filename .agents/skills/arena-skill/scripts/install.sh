@@ -154,9 +154,19 @@ _arena_preview_gate() {
   # case: pr-state
   case "\$BASH_COMMAND" in
     *gh*|*git*|*curl*|*wget*)
-      if ! "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" pr-state-tick "\$BASH_COMMAND"; then
-        exit 130
-      fi
+      # A read line holds no write shape, so the gate spends no spawn on it.
+      # Quotes and backslashes come off first: the veto parses the same words.
+      _arena_preview_write="\${BASH_COMMAND//\"/}"
+      _arena_preview_write="\${_arena_preview_write//\'/}"
+      _arena_preview_write="\${_arena_preview_write//\\\\/}"
+      case " \${_arena_preview_write,,} " in
+        *[[:space:]]push[[:space:]]*|*[[:space:]]merge[[:space:]]*|*[[:space:]]close[[:space:]]*|*[[:space:]]reopen[[:space:]]*|*[[:space:]]api[[:space:]]*|*repos/*|*graphql*|*github.com*)
+          if ! "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" pr-state-tick "\$BASH_COMMAND"; then
+            exit 130
+          fi
+          ;;
+      esac
+      unset _arena_preview_write
       ;;
   esac
   # Arena gates only an agent call shell. That shell hosts each long-lived process through a launcher script.

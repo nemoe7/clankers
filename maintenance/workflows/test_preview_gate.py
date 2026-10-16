@@ -27,6 +27,9 @@ INSTALLER = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
 
 STUB = """#!/bin/sh
 # The classifiers are pure, so the stub answers with the real ones.
+if [ -n "${ARENA_PREVIEW_TEST_CALLS:-}" ]; then
+  printf '%s\n' "$*" >> "$ARENA_PREVIEW_TEST_CALLS"
+fi
 if [ "$1" = "pr-state-tick" ]; then
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
@@ -167,21 +170,27 @@ def run(
   cwd: str | None = None,
   state: Path | None = None,
   line: str | None = None,
+  calls: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
   if state is None:
     with tempfile.TemporaryDirectory() as directory:
-      return run_in(command, Path(directory), cwd, line)
-  return run_in(command, state, cwd, line)
+      return run_in(command, Path(directory), cwd, line, calls)
+  return run_in(command, state, cwd, line, calls)
 
 
 def run_in(
-  command: str, root: Path, cwd: str | None = None, line: str | None = None
+  command: str,
+  root: Path,
+  cwd: str | None = None,
+  line: str | None = None,
+  calls: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command against a state directory, with the gate sourced and trapped.
 
   A caller may pass the command line the gate reads, which carries the shell invocation
-  that the platform puts in front of every script.
+  that the platform puts in front of every script. A caller may also ask the stub to
+  log the calls it answered, which shows whether a line reached the gate at all.
   """
   stub = root / "stub.sh"
   import sys
@@ -232,6 +241,7 @@ def run_in(
       ARENA_PREVIEW_STATE_DIR=str(root),
       ARENA_PREVIEW_DETACH_DRY="1",
       ARENA_PREVIEW_TEST_DRIFT="1" if cwd else "0",
+      **({"ARENA_PREVIEW_TEST_CALLS": str(calls)} if calls else {}),
     ),
   )
 
@@ -807,6 +817,43 @@ def test_pr_state_veto_precedes_platform_and_count_bypasses():
       assert result.returncode == 130, (command, result.stdout, result.stderr)
       assert "PR STATE BLOCKED" in result.stderr, (command, result.stderr)
       assert "mutation-reached" not in result.stdout, command
+
+
+def test_the_veto_prefilter_keeps_every_write_and_skips_a_read():
+  """A read line spends no spawn, and each write shape still reaches the veto."""
+  for command in (
+    "git status --porcelain",
+    "git diff --stat",
+    "git add --dry-run .",
+    "gh --version",
+  ):
+    with tempfile.TemporaryDirectory() as directory:
+      calls = Path(directory) / "calls"
+      result = run(command, state=Path(directory), calls=calls)
+      assert result.returncode == 0, (command, result.stderr)
+      log = calls.read_text(encoding="utf-8") if calls.exists() else ""
+      assert "pr-state-tick" not in log, (command, log)
+  writes = (
+    "gh pr merge 110",
+    "gh pr close 110",
+    "gh pr reopen 110",
+    'gh pr "merge" 110',
+    "env -u GH_TOKEN gh pr merge 110",
+    "gh api -X DELETE repos/nemoe7/clankers/git/refs/heads/main",
+    "curl -X DELETE https://api.github.com/repos/nemoe7/clankers/git/refs/heads/main",
+    "curl -X DELETE https://API.GitHub.com/repos/nemoe7/clankers/git/refs/heads/main",
+    "git push origin main",
+    "bash -c 'gh pr merge 110'",
+    "gh api graphql -f query='mutation { mergePullRequest(input: {}) { id } }'",
+  )
+  for command in writes:
+    assert preview_module.pr_state_warning(command), command
+    with tempfile.TemporaryDirectory() as directory:
+      calls = Path(directory) / "calls"
+      result = run(command, state=Path(directory), calls=calls)
+      assert result.returncode == 130, (command, result.stderr)
+      assert "PR STATE BLOCKED" in result.stderr, (command, result.stderr)
+      assert "pr-state-tick" in calls.read_text(encoding="utf-8"), command
 
 
 def test_pr_state_veto_keeps_reads_comments_and_metadata_edits():

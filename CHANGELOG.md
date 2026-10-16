@@ -66,6 +66,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A gate that meets a bare sleep line, or a second `logs` read before a run has a verdict, stops it with a hint. Retry loops and the verdict read stay unchanged.
 
+- A read line skips the PR-state veto spawn. The check keeps the spawn for every write shape, with quotes and backslashes removed first.
+
 ### Fixed
 
 - Arena reference: fix attachment-limit and agent-unpublish view rules.
