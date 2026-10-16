@@ -7652,6 +7652,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
     "ack-tick",
     "serve-tick",
     "pr-check-tick",
+    "main-drift-tick",
     "egress-tick",
     "commit-tick",
     "gate",

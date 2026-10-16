@@ -46,11 +46,21 @@ fi
 if [ "$1" = "worktree-tick" ]; then
   exec __PYTHON__ __PREVIEW__ worktree-tick "$2"
 fi
+if [ "$1" = "main-drift-tick" ]; then
+  if [ "${ARENA_PREVIEW_TEST_DRIFT:-}" = "1" ]; then
+    exec __PYTHON__ __PREVIEW__ main-drift-tick
+  fi
+  exit 0
+fi
 if [ "$1" = "commit-tick" ]; then
   # Not a pure classifier: it reads the repository's staged diff and the session
   # database. Forwarding it would let the host repository's own staged content
   # decide these drift tests, so the stub answers "nothing to block" and the ID
   # trap keeps its own tests in test_preview.py.
+  exit 0
+fi
+# Drift fixtures have no inbox, so their dry-run push may reach Git.
+if [ "$1" = "gate" ] && [ "${ARENA_PREVIEW_TEST_DRIFT:-}" = "1" ]; then
   exit 0
 fi
 exit 1
@@ -207,6 +217,7 @@ def run_in(
       # The tick writes its record under the temp state and starts no real wait.
       ARENA_PREVIEW_STATE_DIR=str(root),
       ARENA_PREVIEW_DETACH_DRY="1",
+      ARENA_PREVIEW_TEST_DRIFT="1" if cwd else "0",
     ),
   )
 
@@ -679,3 +690,63 @@ def test_installed_exit_hook_marks_cli_children_and_preserves_exit_status() -> N
     )
     assert result.returncode == 7
     assert result.stdout.splitlines() == ["cli:1", "hook:1"]
+
+
+def test_remote_drift_refreshes_shallow_refs_without_replaying_absorbed_work():
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    source = git_repo(root)
+
+    def git(repo, *args):
+      return subprocess.check_output(
+        ["git", "-C", str(repo), *args],
+        text=True,
+        stderr=subprocess.PIPE,
+        env={
+          **os.environ,
+          "GIT_AUTHOR_NAME": "t",
+          "GIT_AUTHOR_EMAIL": "t@t",
+          "GIT_COMMITTER_NAME": "t",
+          "GIT_COMMITTER_EMAIL": "t@t",
+        },
+      ).strip()
+
+    git(source, "branch", "main", "origin/main")
+    origin = root / "origin.git"
+    git(source, "clone", "--bare", str(source), str(origin))
+    checkout = root / "checkout"
+    git(source, "clone", "--depth=1", "--branch=work", origin.as_uri(), str(checkout))
+    git(checkout, "fetch", "--depth=1", "origin", "main:refs/remotes/origin/main")
+    git(checkout, "reset", "--hard", "origin/main")
+    git(checkout, "update-ref", "refs/remotes/origin/main", "origin/work")
+    head = git(checkout, "rev-parse", "HEAD")
+    untouched = checkout / "keep.txt"
+    untouched.write_text("preserve this working file\n")
+    before = git(checkout, "status", "--porcelain")
+    result = run("git push --dry-run origin work", cwd=str(checkout))
+    behind = git(origin, "rev-list", "--count", "work..main")
+    assert (
+      f"Remote branch work is {behind} commit(s) behind origin/main" in result.stderr
+    ), result.stderr
+    assert result.returncode == 0, result.stderr
+    assert git(checkout, "rev-parse", "HEAD") == head
+    assert git(checkout, "status", "--porcelain") == before
+    assert untouched.read_text() == "preserve this working file\n"
+    assert git(checkout, "rev-parse", "--is-shallow-repository") == "false"
+
+    rewritten = git(
+      origin, "commit-tree", "main^{tree}", "-p", "work", "-m", "rebased work"
+    )
+    git(origin, "update-ref", "refs/heads/work", rewritten)
+    result = run("git push --dry-run origin work", cwd=str(checkout))
+    assert "identical trees" in result.stderr, result.stderr
+    assert "do not replay" in result.stderr, result.stderr
+    assert "Replay your commits" not in result.stderr, result.stderr
+    assert git(checkout, "rev-parse", "HEAD") == head
+    assert git(checkout, "status", "--porcelain") == before
+
+    git(checkout, "remote", "set-url", "origin", str(root / "missing.git"))
+    result = run("git push --dry-run origin work", cwd=str(checkout))
+    assert "Remote branch check unavailable" in result.stderr, result.stderr
+    assert "behind origin/main" not in result.stderr, result.stderr
+    assert git(checkout, "rev-parse", "HEAD") == head

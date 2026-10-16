@@ -302,6 +302,88 @@ def main_identical(root="."):
     return False
 
 
+def main_drift_warning(root="."):
+  """Read fresh origin tips without moving HEAD, the index, or working files."""
+
+  def git(*arguments):
+    return subprocess.run(
+      ["git", *arguments],
+      cwd=root,
+      capture_output=True,
+      text=True,
+      check=False,
+      timeout=30,
+      env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+
+  def unavailable(reason):
+    return f"Remote branch check unavailable: {reason}; behind count is unknown."
+
+  try:
+    if git("rev-parse", "--git-dir").returncode:
+      return ""
+    remote = git("remote", "get-url", "origin")
+    if remote.returncode == 0:
+      branch = git("symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
+      if not branch:
+        return unavailable("detached HEAD")
+      shallow = git("rev-parse", "--is-shallow-repository").stdout.strip() == "true"
+      main_ref = "refs/remotes/origin/main"
+      branch_ref = f"refs/remotes/origin/{branch}"
+      refs = list(
+        dict.fromkeys(
+          [
+            f"+refs/heads/main:{main_ref}",
+            f"+refs/heads/{branch}:{branch_ref}",
+          ]
+        )
+      )
+      arguments = ["fetch", "--quiet", "--no-tags"]
+      if shallow:
+        arguments.append("--unshallow")
+      fetched = git(*arguments, "origin", *refs)
+      if fetched.returncode:
+        return unavailable(f"origin fetch failed (exit {fetched.returncode})")
+      if git("rev-parse", "--is-shallow-repository").stdout.strip() != "false":
+        return unavailable("history is still shallow")
+      if git("merge-base", main_ref, branch_ref).returncode:
+        return unavailable("main and branch have no shared history")
+      counts = git("rev-list", "--left-right", "--count", f"{main_ref}...{branch_ref}")
+      if counts.returncode:
+        return unavailable("cannot compare remote tips")
+      behind, _ahead = map(int, counts.stdout.split())
+      if git("diff", "--quiet", main_ref, branch_ref, "--").returncode == 0:
+        if behind:
+          return (
+            f"Remote branch {branch} and origin/main have identical trees; "
+            "do not replay those commits. Start new work from main."
+          )
+      elif behind:
+        return (
+          f"Remote branch {branch} is {behind} commit(s) behind origin/main. "
+          "Check whether main absorbed its commits before rebasing."
+        )
+    # Preserve the local checkpoint for unpublished repositories and local drift.
+    if main_identical(root):
+      return ""
+    if git("rev-parse", "--is-shallow-repository").stdout.strip() == "true":
+      visible = git("rev-list", "--count", "origin/main").stdout.strip()
+      if visible in {"", "0", "1"}:
+        return ""
+    count = git("rev-list", "--count", "HEAD..origin/main")
+    if count.returncode == 0 and int(count.stdout.strip()) > 0:
+      return (
+        f"Local check: origin/main carries {count.stdout.strip()} commit(s) "
+        "this branch lacks. Replay your commits over main: run git fetch "
+        "origin and git rebase origin/main, then push."
+      )
+    return ""
+  except subprocess.TimeoutExpired:
+    return unavailable("Git timed out")
+  except (OSError, ValueError):
+    return unavailable("cannot read Git state")
+
+
 def repo_slug(root="."):
   """The owner/name of the origin remote, or an empty string when it will not parse."""
   try:
@@ -5961,6 +6043,10 @@ def main():
   pr_check_tick.add_argument(
     "--command", dest="current_command", help="The command the DEBUG trap reached"
   )
+  main_drift_tick = commands.add_parser(
+    "main-drift-tick", help="Check fresh remote branch drift at commit/push checkpoints"
+  )
+  main_drift_tick.add_argument("--repo", default=".")
   egress_tick = commands.add_parser(
     "egress-tick",
     help="Warn when a line fetches a host the sandbox egress filter blocks",
@@ -6210,6 +6296,11 @@ def main():
       return 0
     if args.command == "serve-tick":
       warning = serve_warning(args.line)
+      if warning:
+        print(warning, file=sys.stderr)
+      return 0
+    if args.command == "main-drift-tick":
+      warning = main_drift_warning(args.repo)
       if warning:
         print(warning, file=sys.stderr)
       return 0
