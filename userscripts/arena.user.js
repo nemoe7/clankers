@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Arena.ai | NemoUtils | v1.10.46
+// @name         Arena.ai | NemoUtils | v1.10.47
 // @namespace    https://github.com/nemoe7/clankers
-// @version      1.10.46
+// @version      1.10.47
 // @description  Prompt fill, Steering preview, composer hiding, transcript auto-scroll, and a repository tab title with saved feature switches
 // @author       nemoe7
 // @icon         https://arena.ai/favicon.ico
@@ -2170,17 +2170,17 @@
   }
 
   function overwriteLine(name, context) {
-    var question = "Overwrite " + name + " with this state?";
-    if (!context) return "Preview URL or branch changed. " + question;
+    var question = "Overwrite " + name + "?";
+    if (!context) return "URL or branch changed. " + question;
     var reasons = [];
     if (!(context.branch || context.lastScope)) {
-      reasons.push("Branch and remembered scope are missing.");
+      reasons.push("Branch/scope: unknown");
     }
     if (context.rememberedBase && context.rememberedBase !== context.base) {
-      reasons.push("Preview URL changed from " + context.rememberedBase + " to " + context.base + ".");
+      reasons.push("URL: " + context.rememberedBase + " -> " + context.base);
     }
     if (context.branch && context.rememberedBranch && context.branch !== context.rememberedBranch) {
-      reasons.push("Branch changed from " + context.rememberedBranch + " to " + context.branch + ".");
+      reasons.push("Branch: " + context.rememberedBranch + " -> " + context.branch);
     }
     var before = stateRemembered(context.memory);
     var after = stateMemory(context.stamp, context.stamps);
@@ -2188,11 +2188,11 @@
       if (!was || !now) return "unknown";
       return now < was ? "older" : now === was ? "same" : "forward";
     }
-    return (reasons.join(" ") || "Cause unknown.") +
-      " History stamps: overall " + compare(before.stamp, after.stamp) +
+    return (reasons.join("; ") || "Cause: unknown") +
+      "; stamps: overall " + compare(before.stamp, after.stamp) +
       ", notes " + compare(before.note, after.note) +
       ", and tasks " + compare(before.task, after.task) +
-      ". Equal stamps do not prove equal file contents. " + question;
+      ". Stamps do not prove equal file contents. " + question;
   }
 
   var RESET_WINDOW_MS = 150 * 1000;

@@ -1414,9 +1414,9 @@ for (const [domain, bundle] of Object.entries(bundles)) {
     await new Promise(setImmediate);
     const prompt = panel();
     assert.ok(prompt, "a URL move with a known file asks before writing");
-    assert.match(prompt.children[0].textContent, /Preview URL changed from https:\/\/preview\.example to https:\/\/new-preview\.example/);
+    assert.match(prompt.children[0].textContent, /URL: https:\/\/preview\.example -> https:\/\/new-preview\.example/);
     assert.match(prompt.children[0].textContent, /overall forward, notes same, and tasks unknown/);
-    assert.match(prompt.children[0].textContent, /Equal stamps do not prove equal file contents/);
+    assert.match(prompt.children[0].textContent, /Stamps do not prove equal file contents/);
     assert.deepEqual(writes, [], "prompt context must not grant permission to write");
     const overwrite = prompt.children[1].children.find(button => button.textContent === "Overwrite");
     overwrite.listeners.click();

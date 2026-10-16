@@ -2579,7 +2579,7 @@ function checkStateDownload(api, session, logging) {
     false,
     "a URL that did not move needs no acceptance",
   );
-  assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson with this state\?$/);
+  assert.match(overwriteLine("clankers-main.ndjson"), /Overwrite clankers-main\.ndjson\?$/);
   const overwriteContext = {
     branch: "main", rememberedBranch: "main", lastScope: "clankers-main",
     base: "https://new.arena.site", rememberedBase: "https://old.arena.site",
@@ -2588,19 +2588,19 @@ function checkStateDownload(api, session, logging) {
     stamps: { note: "2026-10-05T19:00:00", task: "2026-10-05T18:00:00" },
   };
   const urlPrompt = overwriteLine("clankers-main.ndjson", overwriteContext);
-  assert.match(urlPrompt, /Preview URL changed from https:\/\/old\.arena\.site to https:\/\/new\.arena\.site/);
-  assert.doesNotMatch(urlPrompt, /Branch changed/);
+  assert.match(urlPrompt, /URL: https:\/\/old\.arena\.site -> https:\/\/new\.arena\.site/);
+  assert.doesNotMatch(urlPrompt, /Branch:/);
   assert.match(urlPrompt, /overall forward, notes same, and tasks same/);
-  assert.match(urlPrompt, /Equal stamps do not prove equal file contents/);
-  assert.match(urlPrompt, /Overwrite clankers-main\.ndjson with this state\?/);
+  assert.match(urlPrompt, /Stamps do not prove equal file contents/);
+  assert.match(urlPrompt, /Overwrite clankers-main\.ndjson\?/);
   const branchPrompt = overwriteLine("file.ndjson", {
     ...overwriteContext, base: overwriteContext.rememberedBase, branch: "dev",
   });
-  assert.match(branchPrompt, /Branch changed from main to dev/);
-  assert.doesNotMatch(branchPrompt, /Preview URL changed/);
+  assert.match(branchPrompt, /Branch: main -> dev/);
+  assert.doesNotMatch(branchPrompt, /URL:/);
   const bothPrompt = overwriteLine("file.ndjson", { ...overwriteContext, branch: "dev" });
-  assert.match(bothPrompt, /Preview URL changed/);
-  assert.match(bothPrompt, /Branch changed from main to dev/);
+  assert.match(bothPrompt, /URL:/);
+  assert.match(bothPrompt, /Branch: main -> dev/);
   const olderPrompt = overwriteLine("file.ndjson", {
     ...overwriteContext, stamp: "2026-10-04T20:00:00",
     stamps: { note: "2026-10-04T19:00:00", task: "2026-10-06T18:00:00" },
@@ -2613,8 +2613,8 @@ function checkStateDownload(api, session, logging) {
   const unknownPrompt = overwriteLine("file.ndjson", {
     ...overwriteContext, stamp: "", stamps: null, branch: "", lastScope: "",
   });
-  assert.match(unknownPrompt, /Branch and remembered scope are missing/);
-  assert.doesNotMatch(unknownPrompt, /Branch changed/);
+  assert.match(unknownPrompt, /Branch\/scope: unknown/);
+  assert.doesNotMatch(unknownPrompt, /Branch:/);
   assert.match(unknownPrompt, /overall unknown, notes unknown, and tasks unknown/);
 
   console.log("ok state download 32");
