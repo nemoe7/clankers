@@ -8,6 +8,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+#### system-prompts
+
+- Prompt clauses limit tool use to actual access, keep required caveats, and apply corrections to the next action. Comparison rules state what each check proves. Two examples cover local backups and partial catalogs.
+
 #### preview
 
 - Poll checks the PR throughout its wait and reports failures that appear after startup. Inbox delivery stays independent.
