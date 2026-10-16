@@ -7666,6 +7666,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
   ).stdout
   actual = set(re.search(r"\{([a-z,\-]+)\}", help_text).group(1).split(","))
   internal = {
+    "pr-state-tick",
     "inbox-line",
     "route-run",
     "worktree-tick",

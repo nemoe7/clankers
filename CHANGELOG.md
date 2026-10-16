@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Arena gate: veto recognized PR-state writes before DEBUG bypasses. Keep reads, comments, metadata edits, and permitted pushes.
+
 - Preview: add guarded stale-report removal under `report unpublish --stale`. Retain answers, sources, and existing commands.
 
 - Arena archive: record workspace totals and uncertain snapshot coverage.

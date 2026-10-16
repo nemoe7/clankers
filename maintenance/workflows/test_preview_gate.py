@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "skills" / "refs" / "arena-skill" / "scripts"))
@@ -26,6 +27,9 @@ INSTALLER = ROOT / "skills" / "refs" / "arena-skill" / "scripts" / "install.sh"
 
 STUB = """#!/bin/sh
 # The classifiers are pure, so the stub answers with the real ones.
+if [ "$1" = "pr-state-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ "$@"
+fi
 if [ "$1" = "inbox-line" ]; then
   exec __PYTHON__ __PREVIEW__ inbox-line "$2"
 fi
@@ -750,3 +754,141 @@ def test_remote_drift_refreshes_shallow_refs_without_replaying_absorbed_work():
     assert "Remote branch check unavailable" in result.stderr, result.stderr
     assert "behind origin/main" not in result.stderr, result.stderr
     assert git(checkout, "rev-parse", "HEAD") == head
+
+
+def test_pr_state_veto_precedes_platform_and_count_bypasses():
+  commands = [
+    "gh pr close 7",
+    "gh pr reopen 7",
+    "gh pr merge 7 --squash",
+    "gh api -X PATCH repos/o/r/pulls/7 -f state=closed",
+    "gh api -X PUT repos/o/r/pulls/7/merge",
+    "gh api -X PUT repos/o/r/pulls/7/merge-async",
+    "gh api -X POST repos/o/r/merges -f head=topic -f base=main",
+    "gh api -X DELETE repos/o/r/git/refs/heads/topic",
+    "git push origin --delete topic",
+    "git push origin :topic",
+  ]
+  with patch.dict(
+    os.environ, {"_arena_preview_platform": "1", "_arena_preview_gate_checked": "1"}
+  ):
+    for command in commands:
+      result = run(
+        "gh() { printf mutation-reached; }; git() { printf mutation-reached; }; "
+        + command
+      )
+      assert result.returncode == 130, (command, result.stdout, result.stderr)
+      assert "PR STATE BLOCKED" in result.stderr, (command, result.stderr)
+      assert "mutation-reached" not in result.stdout, command
+
+
+def test_pr_state_veto_keeps_reads_comments_and_metadata_edits():
+  commands = [
+    "git push origin topic",
+    "gh pr close 7 --help",
+    "gh pr view 7",
+    'gh pr comment 7 --body "gh pr close 7 is forbidden"',
+    'gh pr edit 7 --title "Block gh pr close" --body "mergePullRequest is forbidden"',
+    'gh api -X PATCH repos/o/r/pulls/7 -f title=New -f body="gh pr close 7"',
+    "gh api -X PATCH repos/o/r/pulls/7 --input payload.json",
+  ]
+  with patch.dict(os.environ, {"_arena_preview_platform": "1"}):
+    for command in commands:
+      result = run(
+        "gh() { printf metadata-reached; }; git() { printf metadata-reached; }; "
+        + command
+      )
+      assert result.returncode == 0, (command, result.stderr)
+      assert "metadata-reached" in result.stdout, command
+      assert "PR STATE BLOCKED" not in result.stderr, command
+
+
+def test_pr_state_classifier_keeps_payloads_separate_from_shell_code():
+  cases = [
+    ("command gh pr close 7", True),
+    ("bash -c 'echo start\ngh pr close 7'", True),
+    ('printf "%s" ";" "gh" "pr" "close" "7"', False),
+    ("cat <<EOF\ngh pr close 7\nEOF", False),
+    ("env FLAG=1 /usr/bin/gh --repo o/r pr merge 7 --auto", True),
+    ("bash -c 'echo start; gh pr reopen 7'", True),
+    ("gh api repos/o/r/merges -f head=topic -f base=main", True),
+    ("curl -f -X PUT https://api.github.com/repos/o/r/pulls/7/merge", True),
+    ("gh api -X PATCH repos/o/r/issues/7 -f state=closed", True),
+    ("gh api -X DELETE repos/o/r/git/refs/heads%2Ftopic", True),
+    ("gh pr close 7 --help", False),
+    ("gh --help pr close 7", False),
+    ("gh pr view 7", False),
+    ("gh api -X GET repos/o/r/pulls/7/merge", False),
+    ("git push origin topic", False),
+    ("git push main topic", False),
+    ("git push origin HEAD:main", True),
+    ("git push --dry-run origin --delete topic", False),
+    ("git push -o --delete origin topic", False),
+    ("git push origin --delete topic", True),
+    ("git push --force-with-lease origin topic", False),
+    ('printf "%s" "gh pr close 7"', False),
+    ('gh pr edit 7 --body "state=closed closePullRequest(input:{})"', False),
+  ]
+  for query, blocked in [
+    ("query { viewer {login} } # closePullRequest(input:{})", False),
+    (
+      'mutation { x: closePullRequest(input:{pullRequestId:"example"}) {clientMutationId} }',
+      True,
+    ),
+    (
+      'mutation { mergePullRequest(input:{pullRequestId:"example"}) {clientMutationId} }',
+      True,
+    ),
+    (
+      'mutation { enablePullRequestAutoMerge(input:{pullRequestId:"example"}) {clientMutationId} }',
+      True,
+    ),
+    (
+      'mutation { enqueuePullRequest(input:{pullRequestId:"example"}) {clientMutationId} }',
+      True,
+    ),
+    (
+      'mutation { updatePullRequest(input:{pullRequestId:"example",state:CLOSED}) {clientMutationId} }',
+      True,
+    ),
+    (
+      (
+        'mutation { updatePullRequest(input:{pullRequestId:"example",title:"closePullRequ'
+        'est(input:{})"}) {clientMutationId} }'
+      ),
+      False,
+    ),
+    (
+      'query { repository(owner:"o",name:"r") { pullRequest(number:7) {state} } }',
+      False,
+    ),
+  ]:
+    cases.append(("gh api graphql -f " + shlex.quote("query=" + query), blocked))
+  for query, variables, blocked in [
+    (
+      "mutation($input:UpdatePullRequestInput!) {updatePullRequest(input:$input){clientMutationId}}",
+      {"input": {"state": "CLOSED"}},
+      True,
+    ),
+    (
+      "mutation($chosen:PullRequestState!) {updatePullRequest(input:{state:$chosen}){clientMutationId}}",
+      {"chosen": "OPEN"},
+      True,
+    ),
+    (
+      'mutation {updatePullRequest(input:{title:"Metadata"}){clientMutationId}}',
+      {"state": "CLOSED"},
+      False,
+    ),
+  ]:
+    command = "gh api graphql -f " + shlex.quote("query=" + query)
+    command += " -f " + shlex.quote("variables=" + json.dumps(variables))
+    cases.append((command, blocked))
+  with tempfile.TemporaryDirectory() as directory:
+    path = Path(directory) / "payload.json"
+    path.write_text(json.dumps({"state": "closed"}))
+    cases.append(
+      (f"gh api -X PATCH repos/o/r/pulls/7 --input {shlex.quote(str(path))}", True)
+    )
+    for command, blocked in cases:
+      assert bool(preview_module.pr_state_warning(command)) == blocked, command

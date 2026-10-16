@@ -90,6 +90,7 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 
 | Case | Trigger | Answer |
 | --- | --- | --- |
+| `pr-state` | visible `gh pr close`, `gh pr reopen`, `gh pr merge`, equivalent API writes, or destructive head-ref operations | `exit 130` before bypasses. Reads, comments, title/body edits, and permitted working-branch pushes pass |
 | `shell-shape` | a caller that is not `bash`, `sh`, `dash`, `ksh` or `zsh` | pass, so a hosted process keeps its shell |
 | `shell-line` | every gated shell | the command line is read once per shell, so a command costs no read |
 | `platform-shell` | the platform's probe or its own hosted process | pass, and mark the shell once |

@@ -25,7 +25,7 @@ from email.parser import BytesParser
 from fnmatch import fnmatchcase
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit, urlunsplit
+from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 try:
@@ -278,6 +278,279 @@ def gate_pending_count(db):
     "SELECT (SELECT count(*) FROM notes WHERE acknowledged_at IS NULL AND quiet = 0)"
     " + (SELECT count(*) FROM submissions WHERE acknowledged_at IS NULL)"
   ).fetchone()[0]
+
+
+def pr_state_warning(line):
+  """Reject recognized PR-state writes without executing the command or payload."""
+
+  def payload(text):
+    if text.startswith("@"):
+      try:
+        text = Path(text[1:]).read_text(encoding="utf-8")
+      except (OSError, UnicodeError):
+        return {}
+    try:
+      value = json.loads(text)
+      return value if isinstance(value, dict) else {}
+    except (ValueError, TypeError):
+      return {}
+
+  def api_write(words, client):
+    method, endpoint, data = "", "", {}
+    has_body = False
+    index = 0
+    while index < len(words):
+      word = words[index]
+      option, equal, value = word.partition("=")
+      if option in (
+        {
+          "-X",
+          "--method",
+          "--request",
+          "-d",
+          "--data",
+          "--data-raw",
+          "--data-binary",
+          "--json",
+          "--post-data",
+          "--body-data",
+          "--input",
+          "--post-file",
+          "--body-file",
+        }
+        | ({"-f", "-F", "--field", "--raw-field"} if client == "gh" else set())
+      ):
+        if not equal:
+          index += 1
+          value = words[index] if index < len(words) else ""
+        has_body = has_body or option not in {"-X", "--method", "--request"}
+        if option in {"-X", "--method", "--request"}:
+          method = value.upper()
+        elif option in {"-f", "-F", "--field", "--raw-field"}:
+          key, separator, field = value.partition("=")
+          if separator:
+            if option in {"-F", "--field"} and field.startswith("@") and field != "@-":
+              try:
+                field = Path(field[1:]).read_text(encoding="utf-8")
+              except (OSError, UnicodeError):
+                field = ""
+            keys = [key for key in re.split(r"\[|\]", key) if key]
+            target = data
+            for key in keys[:-1]:
+              target = target.setdefault(key, {})
+              if not isinstance(target, dict):
+                break
+            if keys and isinstance(target, dict):
+              try:
+                target[keys[-1]] = json.loads(field)
+              except ValueError:
+                target[keys[-1]] = field
+        elif option in {"--input", "--post-file", "--body-file"}:
+          if value != "-":
+            data.update(payload("@" + value))
+        else:
+          data.update(payload(value))
+      elif len(word) > 2 and word[:2] in (
+        {"-X", "-d"} | ({"-f", "-F"} if client == "gh" else set())
+      ):
+        words = [word[:2], word[2:], *words[index + 1 :]]
+        index = 0
+        continue
+      elif word.startswith(("https://", "http://")):
+        url = urlsplit(word)
+        if client == "gh" or url.hostname == "api.github.com":
+          endpoint = url.path.strip("/")
+          data.update({key: values[-1] for key, values in parse_qs(url.query).items()})
+      elif client == "gh" and (
+        word == "graphql" or word.lstrip("/").startswith("repos/")
+      ):
+        endpoint = word.strip("/").split("?", 1)[0]
+      index += 1
+    endpoint = unquote(endpoint)
+    method = method or ("POST" if has_body else "GET")
+    if endpoint == "graphql":
+      query = data.get("query", "")
+      if not isinstance(query, str):
+        return False
+      # Quoted titles and bodies are data, not mutation fields.
+      query = re.sub(r'"""[\s\S]*?"""|"(?:\\.|[^"\\])*"', '""', query)
+      query = re.sub(r"#[^\n]*", "", query)
+      if re.search(
+        (
+          "\\b(?:closePullRequest|reopenPullRequest|mergePullRequest|enablePullRequestAutoMe"
+          "rge|enqueuePullRequest|deleteRef|updateRef|mergeBranch|createCommitOnBranch)\\s*\\"
+          "("
+        ),
+        query,
+      ):
+        return True
+      if re.search(r"\bupdatePullRequest\s*\(", query):
+        if re.search(r"\bstate\s*:\s*(?:CLOSED|OPEN)\b", query):
+          return True
+        variables = data.get("variables", {})
+        if isinstance(variables, str):
+          variables = payload(variables)
+
+        def state_input(value):
+          return isinstance(value, dict) and any(
+            (key == "state" and item in ("CLOSED", "OPEN")) or state_input(item)
+            for key, item in value.items()
+          )
+
+        if isinstance(variables, dict) and any(
+          state_input(variables.get(name))
+          for name in re.findall(r"\binput\s*:\s*\$(\w+)", query)
+        ):
+          return True
+        if isinstance(variables, dict):
+          return any(
+            variables.get(name) in ("CLOSED", "OPEN")
+            for name in re.findall(r"\bstate\s*:\s*\$(\w+)", query)
+          )
+      return False
+    if method == "GET" or method == "HEAD":
+      return False
+    if re.fullmatch(r"repos/[^/]+/[^/]+/pulls/\d+/merge(?:-async)?", endpoint):
+      return True
+    if re.fullmatch(r"repos/[^/]+/[^/]+/merges", endpoint):
+      return True
+    if re.match(r"repos/[^/]+/[^/]+/git/refs/heads/", endpoint):
+      return method in {"DELETE", "PATCH"}
+    return bool(
+      method == "PATCH"
+      and re.fullmatch(r"repos/[^/]+/[^/]+/(?:pulls|issues)/\d+", endpoint)
+      and data.get("state") in ("closed", "open")
+    )
+
+  def blocked(words):
+    while words:
+      executable = Path(words[0]).name
+      if "=" in words[0] and not words[0].startswith("-"):
+        words = words[1:]
+      elif executable in {"command", "builtin", "exec", "env", "sudo"}:
+        if executable == "command" and any(word in {"-v", "-V"} for word in words[1:]):
+          return False
+        words = words[1:]
+        while words and words[0].startswith("-"):
+          option = words.pop(0)
+          if option in {"-u", "--unset", "--user", "-g", "--group"} and words:
+            words.pop(0)
+      else:
+        break
+    if not words:
+      return False
+    executable, arguments = Path(words[0]).name, words[1:]
+    if executable in {"bash", "sh", "dash", "zsh", "ksh"}:
+      for index, word in enumerate(arguments[:-1]):
+        if word.startswith("-") and "c" in word:
+          return script_write(arguments[index + 1])
+      return False
+    if executable == "git":
+      if "push" not in arguments:
+        return False
+      position = arguments.index("push")
+      prefix, remaining = arguments[:position], arguments[position + 1 :]
+      targets, destructive, read_only, remote_option, tags_only = (
+        [],
+        False,
+        False,
+        False,
+        False,
+      )
+      index = 0
+      while index < len(remaining):
+        word = remaining[index]
+        option, equal, _ = word.partition("=")
+        if option in {"-o", "--push-option", "--receive-pack", "--exec", "--repo"}:
+          remote_option = remote_option or option == "--repo"
+          if not equal:
+            index += 1
+        elif word in {"--help", "-h", "--dry-run", "-n"}:
+          read_only = True
+        elif option in {"--delete", "-d", "--mirror", "--all", "--prune"}:
+          destructive = True
+        elif word == "--tags":
+          tags_only = True
+        elif not word.startswith("-"):
+          targets.append(word)
+        index += 1
+      if read_only:
+        return False
+      if destructive:
+        return True
+      refs = targets if remote_option else targets[1:]
+      if refs:
+        return any(
+          word.lstrip("+").startswith(":")
+          or word.rsplit(":", 1)[-1].removeprefix("refs/heads/").lstrip("+") == "main"
+          for word in refs
+        )
+      if tags_only:
+        return False
+      try:
+        branch = subprocess.run(
+          ["git", *prefix, "symbolic-ref", "--quiet", "--short", "HEAD"],
+          capture_output=True,
+          text=True,
+          check=False,
+        )
+        return branch.returncode == 0 and branch.stdout.strip() == "main"
+      except OSError:
+        return False
+    if executable == "gh":
+      while arguments and arguments[0].startswith("-"):
+        option = arguments.pop(0)
+        if option in {"--help", "-h", "--version"}:
+          return False
+        if option in {"-R", "--repo", "--hostname"} and arguments:
+          arguments.pop(0)
+      if len(arguments) >= 2 and arguments[0] == "pr":
+        if arguments[1] not in {"close", "reopen", "merge"}:
+          return False
+        value_flags = {
+          "--comment",
+          "--body",
+          "--subject",
+          "--match-head-commit",
+          "--author-email",
+          "--repo",
+          "-R",
+          "-b",
+        }
+        return not any(
+          word in {"--help", "-h"}
+          and (index == 0 or arguments[index - 1] not in value_flags)
+          for index, word in enumerate(arguments)
+        )
+      return bool(
+        arguments and arguments[0] == "api" and api_write(arguments[1:], "gh")
+      )
+    return executable in {"curl", "wget"} and api_write(arguments, executable)
+
+  def script_write(text):
+    start, quote, escaped = 0, "", False
+    for index, char in enumerate(text):
+      if escaped:
+        escaped = False
+      elif char == "\\" and quote != "'":
+        escaped = True
+      elif quote:
+        if char == quote:
+          quote = ""
+      elif char in "\"'":
+        quote = char
+      elif char in ";&|\n":
+        if blocked(shlex.split(text[start:index])):
+          return True
+        start = index + 1
+    return blocked(shlex.split(text[start:]))
+
+  try:
+    if blocked(shlex.split(line)):
+      return "PR STATE BLOCKED: visible PR-state write; use reads or metadata edits."
+  except ValueError:
+    return None
+  return None
 
 
 def main_identical(root="."):
@@ -5970,6 +6243,8 @@ def main():
     "path", type=Path, help="One local PNG, JPEG, GIF or WebP file up to 2 MiB"
   )
   commands.add_parser("key", help="Print the recorded agent key, host and use line")
+  pr_state = commands.add_parser("pr-state-tick", help="Reject visible PR-state writes")
+  pr_state.add_argument("line", help="The command as the DEBUG hook read it")
   inbox_line = commands.add_parser(
     "inbox-line",
     help="Report whether a command line that names an inbox call runs nothing else",
@@ -6256,6 +6531,12 @@ def main():
       parser.error("a command is required")
     if args.command == "skills":
       print_skills()
+      return 0
+    if args.command == "pr-state-tick":
+      warning = pr_state_warning(args.line)
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
       return 0
     if args.command == "inbox-line":
       return 0 if quiet_inbox_line(args.line) else 1
