@@ -153,10 +153,15 @@ button svg, .icon-button svg { pointer-events: none; flex: none; }
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap;
   min-height: 0; padding: 4px 12px; font-size: 12px; font-weight: 400; border-radius: 4px;
-  border-color: var(--tab-border); background: var(--panel);
-  background: color-mix(in srgb, var(--panel) 60%, transparent); color: var(--text);
+  border-color: var(--tab-border);
+  color: var(--text);
   box-shadow: 0 4px 6px rgb(0 0 0 / 25%); backdrop-filter: blur(12px);
   transition: color .15s, background-color .15s, border-color .15s;
+}
+/* Keep the resting surface on hover. Only the arrow brightens. */
+.log-newest, .log-newest:hover:not(:disabled) {
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
 }
 .log-newest svg { pointer-events: none; flex: none; }
 .log-newest:hover { color: var(--jump-hover); }
