@@ -48,6 +48,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### Arena suite
 
+- Clarify when to read required files after context replacement and read reminders. Keep the reminder text and tracking unchanged.
+
 - Require a new skill installation after Arena skill source changes. Rule-file changes and installed-copy-only changes do not trigger it.
 
 - Declare reasoning status once in the first reply to a new chat message. Tool results, steering notes, compaction, summaries, and agent continuation do not start a new turn.
