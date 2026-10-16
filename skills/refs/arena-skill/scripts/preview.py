@@ -1492,6 +1492,42 @@ def task_row(row):
   return shaped
 
 
+def link_task_answers(db, records):
+  """Attach each task's linked answers, one entry per submission ID.
+
+  The page block and the CLI list share this read: every answer of the task's report
+  plus any answer that names the task. A task with no link keeps its record unchanged.
+  """
+  links = db.execute(
+    "SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq"
+  ).fetchall()
+  answers = [
+    {
+      "id": link["id"],
+      "at": clip_stamp(link["at"]),
+      "text": link["text"],
+      "report_id": link["report_id"],
+      "task_id": link["task_id"],
+    }
+    for link in links
+  ]
+  for item in records:
+    linked = [
+      {
+        "id": answer["id"],
+        "at": answer["at"],
+        "text": answer["text"],
+        "report_id": answer["report_id"],
+      }
+      for answer in answers
+      if answer["task_id"] == item["id"]
+      or (answer["report_id"] and answer["report_id"] == item.get("report_id"))
+    ]
+    if linked:
+      item["answers"] = linked
+  return records
+
+
 def saved_note_line(record):
   """Return the keys a saved note line carries, and nothing else."""
   if not isinstance(record, dict):
@@ -1885,6 +1921,9 @@ def format_task_list(tasks, full=False):
     lines.append(line)
     for detail in task.get("details", []):
       lines.append(f"    {detail}")
+    for answer in task.get("answers", []):
+      lines.append(f"    answer {answer['id']}, at {answer['at']}")
+      lines.append(f"    {answer['text']}")
   return "\n".join(lines)
 
 
@@ -3842,36 +3881,10 @@ class Store:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
-      links = db.execute(
-        "SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq"
-      ).fetchall()
-    records = [task_row(row) for row in rows]
-    if not records:
-      return None
-    answers = [
-      {
-        "id": link["id"],
-        "at": clip_stamp(link["at"]),
-        "text": link["text"],
-        "report_id": link["report_id"],
-        "task_id": link["task_id"],
-      }
-      for link in links
-    ]
-    for item in records:
-      linked = [
-        {
-          "id": answer["id"],
-          "at": answer["at"],
-          "text": answer["text"],
-          "report_id": answer["report_id"],
-        }
-        for answer in answers
-        if answer["task_id"] == item["id"]
-        or (answer["report_id"] and answer["report_id"] == item.get("report_id"))
-      ]
-      if linked:
-        item["answers"] = linked
+      records = [task_row(row) for row in rows]
+      if not records:
+        return None
+      link_task_answers(db, records)
     return {
       "finished": [item for item in records if item["status"] == "finished"],
       "upcoming": [item for item in records if item["status"] == "upcoming"],
@@ -3884,7 +3897,7 @@ class Store:
       rows = db.execute(
         f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}"
       ).fetchall()
-    return [task_row(row) for row in rows]
+      return link_task_answers(db, [task_row(row) for row in rows])
 
   def task_record(self, task_id):
     """Read one stored task without writing. Return None when no row holds the ID."""

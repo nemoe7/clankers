@@ -22,7 +22,7 @@ Run every command as the bare `arena-preview`; the script under the installed `a
 | `ack <id> --reply <markdown>` | Answer one delivered ID with a rendered reply; single-quote the text, because a backtick inside double quotes runs as a shell command |
 | `ack <id> --note <text>` | Answer one delivered ID with one plain line; quote it the same way |
 | `ack <id> --reply-file <path>` | Read the rendered reply from a file, so no shell quoting touches a backtick; `--note-file` reads the plain line the same way. The gate warns when an inline ack text holds a backtick inside double quotes |
-| `task-list [-f]` | List upcoming task IDs, order, status, report links and set type marks. With -f, include finished tasks. Use task ID for details |
+| `task-list [-f]` | List upcoming task IDs, order, status, report links, set type marks and each linked report answer with its stamp and text. With -f, include finished tasks. Use task ID for details |
 | `task ID` | Print one stored task: its title, status, order, primary type when set, report link, blocked mark and every detail |
 | `task ID TITLE [DETAIL ...]` | Add or update a task; every task carries at least one detail, and reject a write that leaves none; one task holds one job, so several jobs mean several tasks rather than one task with many details; `--msg-id` is optional and only a note-born or report-born task carries it; `--blocked` or `--unblocked` sets the blocked mark |
 | `task-remove ID` | Remove a task entered by mistake |

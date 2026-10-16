@@ -106,6 +106,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Task search marks matching titles, details, and linked answers. Detail matches and task-reference links open the details without changing stored task data.
 
+- `task-list` prints each linked report answer under its task with its stamp and text, the way the page links it. A task with no linked answer keeps its older shape.
+
 - The task panel refreshes the Updated age on unchanged state polls. Task rows, open details, and stored data stay unchanged.
 
 - Task-answer IDs open their published source reports. Unpublished or missing sources keep plain IDs. Answer times use relative ages with full browser-local date tooltips.

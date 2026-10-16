@@ -536,6 +536,12 @@ def task_row(row):
 	shaped={'id':row[0],'title':row[1],'details':json.loads(row[2]),'status':row[3],'order':row[4],'updated_at':row[5],'completed_at':row[6]if len(row)>6 else None,'blocked':bool(row[7])if len(row)>7 else False}
 	if len(row)>8 and row[8]:shaped['report_id']=row[8]
 	shaped['type']=row[9]if len(row)>9 and row[9]else TASK_MISC;return shaped
+def link_task_answers(db,records):
+	links=db.execute('SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq').fetchall();answers=[{'id':link['id'],'at':clip_stamp(link['at']),'text':link['text'],'report_id':link['report_id'],'task_id':link['task_id']}for link in links]
+	for item in records:
+		linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text'],'report_id':answer['report_id']}for answer in answers if answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id')]
+		if linked:item['answers']=linked
+	return records
 def saved_note_line(record):
 	if not isinstance(record,dict):raise TypeError('Every saved note is an object')
 	return{key:record.get(key)for key in NOTE_LINE_KEYS}
@@ -691,6 +697,7 @@ def format_task_list(tasks,full=False):
 		if task.get('type')and task.get('type')!=TASK_UNSPECIFIED:line+=f" type {task.get('type')}"
 		lines.append(line)
 		for detail in task.get('details',[]):lines.append(f"    {detail}")
+		for answer in task.get('answers',[]):lines.append(f"    answer {answer['id']}, at {answer['at']}");lines.append(f"    {answer['text']}")
 	return'\n'.join(lines)
 def format_task(record,full=False):
 	id_=record.get('id');order=record.get('order');status=record.get('status');report_id=record.get('report_id');blocked=record.get('blocked');title=record.get('title')or'';details=record.get('details')or[];cut=details if full else[detail[:ECHO_DETAIL]+('…'if len(detail)>ECHO_DETAIL else'')for detail in details];first=f"task {id_}, order {order}, status {status}";task_type=record.get('type')
@@ -1254,17 +1261,13 @@ class Store:
 				tasks['updated_at']=clip_stamp(tasks['updated_at'])
 			polling=self.polling();return{'notes':notes,'reports':reports,'tasks':tasks,'uploads':uploads,'fetch_jobs':fetch_jobs,'workspace':workspace_usage(),'last_check':clip_stamp(meta.get('last_check')),'polling':polling,'waiting_for_gates':polling and bool(live_runs(self.path.parent)),'polling_since':clip_stamp(meta.get(POLL_SINCE_META))if polling else None,'skip_poll':clip_stamp(meta.get(SKIP_POLL_META)),'calls_since_message':meta_number(db,POLLS_SINCE_MESSAGE),'agent_key':self.agent_key(),'agent_seen_at':clip_stamp(meta.get(AGENT_SEEN_META)),'turn_ended_at':clip_stamp(meta.get(TURN_ENDED_META)),'agent_call_ended_at':clip_stamp(meta.get(AGENT_CALL_ENDED_META))}
 	def tasks(self):
-		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();links=db.execute('SELECT id, report_id, task_id, text, at FROM submissions ORDER BY at, seq').fetchall()
-		records=[task_row(row)for row in rows]
-		if not records:return None
-		answers=[{'id':link['id'],'at':clip_stamp(link['at']),'text':link['text'],'report_id':link['report_id'],'task_id':link['task_id']}for link in links]
-		for item in records:
-			linked=[{'id':answer['id'],'at':answer['at'],'text':answer['text'],'report_id':answer['report_id']}for answer in answers if answer['task_id']==item['id']or answer['report_id']and answer['report_id']==item.get('report_id')]
-			if linked:item['answers']=linked
+		with closing(self.connect())as db:
+			rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();records=[task_row(row)for row in rows]
+			if not records:return None
+			link_task_answers(db,records)
 		return{'finished':[item for item in records if item['status']=='finished'],'upcoming':[item for item in records if item['status']=='upcoming'],'updated_at':max(item['updated_at']for item in records)}
 	def list_tasks(self):
-		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall()
-		return[task_row(row)for row in rows]
+		with closing(self.connect())as db:rows=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks ORDER BY {TASK_ORDER}").fetchall();return link_task_answers(db,[task_row(row)for row in rows])
 	def task_record(self,task_id):
 		with closing(self.connect())as db:row=db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?",(task_id,)).fetchone()
 		return task_row(row)if row else None
