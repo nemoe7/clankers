@@ -3307,11 +3307,16 @@ test('preview client', async (t) => {
         replies: [{ kind: 'reply', text: 'Second answer', at: '2026-10-13T03:02:00' }] }];
       await refresh();
       replySeenWait = new Promise(resolve => { release = resolve; });
+      const destination = get('#history').children[0].children[1];
       pendingWrite = get('#log-edited').events.click();
+      assert.equal(destination.dataset.highlight, 'true', 'highlight the reached answer before its write completes');
+      assert.equal(destination.scrolledIntoView, true);
+      assert.equal(destination.focused, true);
       assert.equal(get('#log-edited').hidden, true, 'do not wait for the server receipt');
       assert.equal(get('#notes-pip').hidden, true);
       await refresh();
       assert.equal(get('#log-edited').hidden, true, 'a pending write survives a refresh');
+      assert.equal(destination.dataset.highlight, 'true', 'a poll preserves the destination highlight');
       state.notes[0].replies.push({ kind: 'reply', text: 'Newer answer', at: '2026-10-13T03:03:00' });
       state.notes[0].ack_edited_at = '2026-10-13T03:03:00';
       await refresh();

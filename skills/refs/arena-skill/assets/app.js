@@ -494,6 +494,7 @@ $('#log-edited').addEventListener('click', async () => {
   answer.scrollIntoView({block: 'center'});
   answer.setAttribute('tabindex', '-1');
   answer.focus({preventScroll: true});
+  markJumpHighlight(answer);
   const replyCount = (item.replies || []).length;
   const apply = (state, receipt) => {
     const message = state.notes.find(note => note.id === item.id);
@@ -1804,7 +1805,7 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 function showTab(tab) {
-  clearTaskHighlight();
+  clearJumpHighlight();
   const left = tab === tabs[1] ? null : shownReportId();
   for (const item of tabs) {
     const selected = tab === item;
@@ -1823,30 +1824,30 @@ function showTab(tab) {
     releaseHeldReport(null);
   }
 }
-// Highlight the task row reached through a reference link, then clear the mark after a short delay or a tab change.
+// Highlight a task or answer reached by a jump. Clear the mark after a short delay or a tab change.
 // Keep the row, its data, and its order unchanged.
-let taskHighlightRow = null;
-let taskHighlightTimer = 0;
+let jumpHighlightRow = null;
+let jumpHighlightTimer = 0;
 
-function clearTaskHighlight() {
-  if (taskHighlightTimer) {
-    clearTimeout(taskHighlightTimer);
-    taskHighlightTimer = 0;
+function clearJumpHighlight() {
+  if (jumpHighlightTimer) {
+    clearTimeout(jumpHighlightTimer);
+    jumpHighlightTimer = 0;
   }
-  if (taskHighlightRow) {
-    delete taskHighlightRow.dataset.highlight;
-    taskHighlightRow = null;
+  if (jumpHighlightRow) {
+    delete jumpHighlightRow.dataset.highlight;
+    jumpHighlightRow = null;
   }
 }
 
-function markTaskHighlight(row) {
-  clearTaskHighlight();
-  taskHighlightRow = row;
+function markJumpHighlight(row) {
+  clearJumpHighlight();
+  jumpHighlightRow = row;
   row.dataset.highlight = 'true';
-  taskHighlightTimer = setTimeout(() => {
-    taskHighlightTimer = 0;
+  jumpHighlightTimer = setTimeout(() => {
+    jumpHighlightTimer = 0;
     delete row.dataset.highlight;
-    taskHighlightRow = null;
+    jumpHighlightRow = null;
   }, 2500);
 }
 
@@ -1901,7 +1902,7 @@ function followReference(type, id) {
   if (details) details.open = true;
   title.scrollIntoView({block: 'center'});
   title.focus({preventScroll: true});
-  markTaskHighlight(row);
+  markJumpHighlight(row);
 }
 for (const tab of tabs) {
   tab.addEventListener('click', () => showTab(tab));
