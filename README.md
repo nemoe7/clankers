@@ -33,7 +33,7 @@ Latest measurements as of 2026-10-16. `maintenance/check.py --update` rebuilds t
 | --- | --- | --- |
 | `userscripts/arena-prompt-fill.txt` | `o200k_base` | 356 `tok` |
 | `rules/AGENTS.md` | `o200k_base` | 1,612 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 19,889 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 20,020 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,497 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,500 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 444 `tok` |
@@ -45,7 +45,7 @@ Latest measurements as of 2026-10-16. `maintenance/check.py --update` rebuilds t
 | `system-prompts/NEMOGPT.md` | `o200k_base` | 3,347 `tok` |
 | `system-prompts/wenyan/NEMOGPT.md` | `o200k_base` | 3,847 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,587 `tok` |
-| `skills/arena-skill/SKILL.md` | `o200k_base` | 3,915 `tok` |
+| `skills/arena-skill/SKILL.md` | `o200k_base` | 3,929 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,930 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,373 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 60,045 `B` |

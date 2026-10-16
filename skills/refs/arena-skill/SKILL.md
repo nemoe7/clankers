@@ -13,7 +13,7 @@ Use this guide and its Markdown references for instructions. Do not read shipped
 
 ## Start here
 
-1. Run `<skill>/scripts/install.sh` from the repository root, once per session.
+1. Run `<skill>/scripts/install.sh` from the repository root at session start and after this skill’s source files change, before the next CLI call or preview-server start.
 2. Start the preview as Setup step 3 describes.
 3. Read the inbox with `arena-preview read`, and answer with `arena-preview ack`.
 4. When a call needs the recorded agent key, after a 401 or an owner question, run `arena-preview key`; it prints the key, the host and the stamp. The call breaks with the restart line while the preview server is not up.

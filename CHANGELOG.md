@@ -18,6 +18,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+#### Arena suite
+
+- Require a new skill installation after Arena skill source changes. Rule-file changes and installed-copy-only changes do not trigger it.
+
 #### Vendored skills
 
 - Remove unused upstream documentation, plugin manifests, agent metadata, issue templates, and package checks. Keep skill files, required references, scripts, examples, and licenses unchanged.
