@@ -283,6 +283,13 @@ _arena_preview_gate() {
       case \$? in
         1) exit 130 ;;
       esac
+      # Block a push when origin/main is not an ancestor of HEAD: the branch must contain main.
+      if git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+        if ! git merge-base --is-ancestor origin/main HEAD >/dev/null 2>&1; then
+          printf '%s\n' "Push blocked: origin/main is not an ancestor of this branch; rebase onto origin/main before pushing." >&2
+          exit 130
+        fi
+      fi
       "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" gate --push --line "\$_arena_preview_line" 2>/dev/null
       case \$? in
         1) exit 130 ;;
