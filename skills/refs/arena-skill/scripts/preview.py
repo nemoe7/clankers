@@ -3484,6 +3484,18 @@ class Store:
       if report_id and blocked and self.report_has_answers(db, report_id):
         # The wait is over before it starts when the report already has its answer.
         blocked = False
+      if (
+        report_id
+        and blocked
+        and (
+          not stored or not stored["blocked"] or stored.get("report_id") != report_id
+        )
+      ):
+        report = db.execute(
+          "SELECT markdown FROM reports WHERE id = ?", (report_id,)
+        ).fetchone()
+        if report is not None and not parse_fields(report["markdown"])[1]:
+          raise ValueError("A blocked task needs a report with answer fields")
       if status == "finished" and blocked:
         raise ValueError(
           f"Task {task_id} is blocked; clear the mark with --unblocked first"

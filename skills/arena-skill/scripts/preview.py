@@ -1119,6 +1119,9 @@ class Store:
 			if task_type is None:task_type=(stored.get('type')if stored else None)or TASK_UNSPECIFIED
 			if report_id:identifier(report_id)
 			if report_id and blocked and self.report_has_answers(db,report_id):blocked=False
+			if report_id and blocked and(not stored or not stored['blocked']or stored.get('report_id')!=report_id):
+				report=db.execute('SELECT markdown FROM reports WHERE id = ?',(report_id,)).fetchone()
+				if report is not None and not parse_fields(report['markdown'])[1]:raise ValueError('A blocked task needs a report with answer fields')
 			if status=='finished'and blocked:raise ValueError(f"Task {task_id} is blocked; clear the mark with --unblocked first")
 			siblings=[task_row(item)for item in db.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE status = ? AND id != ? ORDER BY position, id",(status,task_id)).fetchall()];record={'id':task_id,'title':title,'details':details,'status':status,'order':len(siblings)+1,'updated_at':stamp,'completed_at':completed_at,'blocked':bool(blocked),'report_id':report_id,'type':task_type}
 			if order is not None:index=max(0,min(order-1,len(siblings)))

@@ -8236,3 +8236,57 @@ def test_skills_reports_missing_yaml_dependency_instead_of_partial_parsing(capsy
   ):
     assert preview.main() == 1
   assert "PyYAML" in capsys.readouterr().err
+
+
+def test_blocked_tasks_reject_known_reports_without_answer_fields(tmp_path):
+  store = preview.Store(tmp_path / "state", create=True)
+  plain = tmp_path / "plain.md"
+  plain.write_text("# Information\n\nNo questions.\n", encoding="utf-8")
+  store.publish("plain-report", "Information", plain)
+  with pytest.raises(ValueError, match="field"):
+    store.write_task(
+      "new-blocked",
+      "Blocked",
+      ["Wait on the report"],
+      blocked=True,
+      report_id="plain-report",
+      task_type="code",
+    )
+  assert store.task_record("new-blocked") is None
+  linked = store.write_task(
+    "linked",
+    "Linked",
+    ["Read the report"],
+    report_id="plain-report",
+    task_type="report",
+  )
+  assert not linked["blocked"] and linked["report_id"] == "plain-report"
+  with pytest.raises(ValueError, match="field"):
+    store.write_task("linked", blocked=True)
+  assert not store.task_record("linked")["blocked"]
+  manual = store.write_task(
+    "manual",
+    "Manual",
+    ["Wait on an external dependency"],
+    blocked=True,
+    task_type="operations",
+  )
+  assert manual["blocked"] and manual["report_id"] is None
+  questions = tmp_path / "questions.md"
+  questions.write_text(
+    "# Question\n\nChoose: {#pick}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8"
+  )
+  store.publish("question-report", "Question", questions)
+  fielded = store.write_task(
+    "fielded",
+    "Fielded",
+    ["Wait on an answer"],
+    blocked=True,
+    report_id="question-report",
+    task_type="report",
+  )
+  assert fielded["blocked"]
+  questions.write_text("# Information only\n", encoding="utf-8")
+  store.publish("question-report", "Information now", questions)
+  retained = store.write_task("fielded", title="Updated old task")
+  assert retained["blocked"] and retained["report_id"] == fielded["report_id"]

@@ -36,6 +36,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Preview: reject new blocked task links to reports without answer fields. Keep existing tasks and informational links.
+
 #### userscripts
 
 - Arena overwrite prompts show the specific cause and compare saved overall, note, and task stamps. Equal stamps do not prove equal file contents. Save guards stay unchanged.
