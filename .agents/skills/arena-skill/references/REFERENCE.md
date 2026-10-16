@@ -112,6 +112,15 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 
 A blocked call repeats its reason on stderr, and every case above answers one bash call: the gate never holds the turn.
 
+Every message carries one class. The prefix names the class, and the class fixes the stream and the exit code.
+
+| Class | Prefix | Stream and exit |
+| --- | --- | --- |
+| advisory | `arena-preview gate:` | stderr, 0, and the call still runs |
+| refusal | `Preview error:` | stderr, 1 |
+| verdict | an all-caps opener, such as `WAIT BLOCKED:` or `READ INBOX NOW.` | stdout for the gate and a poll, stderr for a wait, 130 or 1, and 0 when a poll line hands the turn back |
+| hint | `arena-preview:` | stderr, 0, or 2 from the wrapper |
+
 A detached `gh pr checks` wait first looks for a check on the branch head, once every five seconds for up to 120. The watch runs only after a check appears, and a window that runs out, a moved head or a gh fault fails the run.
 
 ## Tasks
