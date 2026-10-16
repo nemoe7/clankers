@@ -48,6 +48,7 @@ EXPECTED_BUDGETS = {
   "rules/kilo/plan.md": "o200k_base",
   "rules/COMMIT-SPEC.txt": "o200k_base",
   "system-prompts/NEMOGPT.md": "o200k_base",
+  "system-prompts/wenyan/NEMOGPT.md": "o200k_base",
   "skills/amending-violations/SKILL.md": "o200k_base",
   "skills/arena-skill/SKILL.md": "o200k_base",
   "skills/arena-skill/README.md": "o200k_base",
