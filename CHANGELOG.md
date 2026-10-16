@@ -160,6 +160,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Record task-link highlights: a destination row is marked for 2.5 seconds or until another tab opens.
 
+- Message search marks the matched words inside an agent reply. Row filtering and the copy button stay unchanged.
+
 #### prose
 
 - Code comments and docstrings omit request history and describe current behavior. Documentation removes repeated introductions and uses sentence-case headings. Rule clauses and third-party copies do not change.

@@ -2230,6 +2230,29 @@ test('preview client', async (t) => {
     assert.equal(inner.textContent, 'beta alpha', 'the nested text stands as it stood');
   });
 
+  await t.test("The search lights a match inside the agent reply block", async () => {
+    // The reply block rides on the row, so a query that matches only its words marks them there.
+    state.notes = [
+      { id: 'n1', text: 'plain', at: logStamp, acknowledged_at: logStamp,
+        ack_kind: 'note', ack_text: 'landed the delta fix' }
+    ];
+    await refresh();
+    await tick();
+    const answer = messageRow('n1').children[1];
+    const hits = node => node.children.filter(child =>
+      typeof child !== 'string' && child.className === 'search-hit');
+    get('#log-search').value = 'delta';
+    get('#log-search').events.input();
+    assert.equal(messageRow('n1').hidden, false, 'the row stays while its reply matches');
+    assert.equal(hits(answer.children[0]).length, 1, 'the match in the reply wears a mark');
+    assert.equal(hits(answer.children[0])[0].textContent, 'delta', 'the mark covers the match');
+    assert.equal(answer.children[0].textContent, 'landed the delta fix', 'the reply text stays whole');
+    get('#log-search').value = '';
+    get('#log-search').events.input();
+    assert.equal(hits(answer.children[0]).length, 0, 'clearing the box takes the reply mark back');
+    assert.equal(answer.children[0].textContent, 'landed the delta fix', 'the reply stands as it stood');
+  });
+
   await t.test("A longer search re-marks text that a shorter search marked", async () => {
     // The shorter search leaves a mark on "a". The longer search must still mark "alpha" whole.
     state.notes = [{ id: 'n1', text: 'Alpha beta', at: logStamp, acknowledged_at: null }];

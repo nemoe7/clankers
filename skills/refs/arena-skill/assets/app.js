@@ -760,9 +760,11 @@ function markNode(node, query) {
 }
 function markRowMatches(node, query) {
   // Keep rows that match the query, and mark the matching words so the owner can find them immediately.
-  // Search plain or rendered message text and the receipt ID.
+  // Search plain or rendered message text, the agent reply block, and the receipt ID.
+  const answer = node.children[1];
   const receipt = node.children[2];
   markNode(node.children[0], query);
+  if (answer) markNode(answer, query);
   if (receipt && receipt.children[0]) markNode(receipt.children[0], query);
 }
 function applyLogSearch() {
