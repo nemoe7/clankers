@@ -11,7 +11,6 @@ import secrets
 import shlex
 import shutil
 import socket
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -20,20 +19,32 @@ import time
 import uuid
 from contextlib import closing, contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
-from email import policy
-from email.parser import BytesParser
 from fnmatch import fnmatchcase
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
-try:
-  import markdown_it  # noqa: F401
+# markdown-it-py loads on first use: serve needs it, and a gate tick that never renders
+# Markdown must not pay for the import. None until the first check.
+HAS_RENDERER = None
 
-  HAS_RENDERER = True
-except ImportError:
-  HAS_RENDERER = False
+# sqlite3 loads on first use too: only the store needs it, and a gate tick never opens
+# one. None until `sqlite_api` runs.
+sqlite3 = None
+
+
+def __getattr__(name):
+  """Serve the http.server classes on first use, so a gate tick skips that import.
+
+  A serve needs both names, and the checks build a server straight from this module.
+  Name them here, and a line that only reads the gate pays nothing for the server.
+  """
+  if name in ("BaseHTTPRequestHandler", "ThreadingHTTPServer"):
+    from http import server
+
+    return getattr(server, name)
+  raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
@@ -1664,6 +1675,9 @@ class RequestBody:
 
 @contextmanager
 def stream_note_attachments(content_type, stream, length):
+  from email import policy
+  from email.parser import BytesParser
+
   if any(char in content_type for char in "\r\n"):
     raise ValueError("Invalid multipart boundary")
   header = BytesParser(policy=policy.default).parsebytes(
@@ -3240,6 +3254,20 @@ def format_report_state(rows):
   return "\n".join(lines) + ("\n" if lines else "")
 
 
+def sqlite_api():
+  """Import sqlite3 on first use and return it.
+
+  A gate tick reads the command line and never opens the store, so the driver waits for
+  the first state call. Every sqlite3 reference goes through here, so an error path keeps
+  working whichever command raised it.
+  """
+  global sqlite3
+  if sqlite3 is None:
+    import sqlite3
+
+  return sqlite3
+
+
 class Store:
   def __init__(self, directory, create=False, save_path=None):
     directory = Path(directory).resolve()
@@ -3496,8 +3524,8 @@ class Store:
       ]
 
   def connect(self):
-    db = sqlite3.connect(self.path, timeout=5)
-    db.row_factory = sqlite3.Row
+    db = sqlite_api().connect(self.path, timeout=5)
+    db.row_factory = sqlite_api().Row
     return db
 
   def note(
@@ -5521,8 +5549,21 @@ def render_image(renderer, tokens, index, options, env):
   return renderer.image(tokens, index, options, env)
 
 
+def has_renderer():
+  """Import markdown-it-py on first use. Return whether this interpreter holds it."""
+  global HAS_RENDERER
+  if HAS_RENDERER is None:
+    try:
+      import markdown_it  # noqa: F401
+    except ImportError:
+      HAS_RENDERER = False
+    else:
+      HAS_RENDERER = True
+  return HAS_RENDERER
+
+
 def require_renderer():
-  if not HAS_RENDERER:
+  if not has_renderer():
     raise SystemExit(
       "serve needs markdown-it-py: install it in the preview venv with "
       "`python -m pip install markdown-it-py`, then start the server with that "
@@ -5687,6 +5728,8 @@ def render(markdown, breaks=False):
 
 
 def handler(store):
+  from http.server import BaseHTTPRequestHandler
+
   token = secrets.token_urlsafe(32)
 
   class Handler(BaseHTTPRequestHandler):
@@ -5851,7 +5894,7 @@ def handler(store):
         self.problem(404, "Not found")
       except FileNotFoundError as error:
         self.problem(404, error)
-      except (OSError, sqlite3.Error, RuntimeError) as error:
+      except (OSError, sqlite_api().Error, RuntimeError) as error:
         self.problem(503, error)
 
     def do_POST(self):
@@ -6079,7 +6122,7 @@ def handler(store):
         self.problem(404, error)
       except (ValueError, TypeError, UnicodeDecodeError) as error:
         self.problem(400, error)
-      except (OSError, sqlite3.Error, RuntimeError) as error:
+      except (OSError, sqlite_api().Error, RuntimeError) as error:
         self.problem(503, error)
 
   return Handler
@@ -6766,6 +6809,8 @@ def main():
       # A preview left open after a turn then reports no agent activity.
       store.touch_agent()
     if args.command == "serve":
+      from http.server import ThreadingHTTPServer
+
       require_renderer()
       with ThreadingHTTPServer(("0.0.0.0", args.port), handler(store)) as server:
         store.set_meta("port", str(server.server_port))
@@ -7001,7 +7046,7 @@ def main():
     ValueError,
     TypeError,
     KeyError,
-    sqlite3.Error,
+    sqlite_api().Error,
     RuntimeError,
   ) as error:
     print(f"Preview error: {error}", file=sys.stderr)

@@ -2798,6 +2798,40 @@ def test_agent_line_drops_the_harness_wrapper():
     ]
 
 
+def test_tick_lines_skip_the_serve_and_store_imports():
+  """A tick that never renders, serves or opens state must not import those modules.
+
+  The gate spawns this script for every line that names git or gh, so their import cost
+  lands on every such command. argparse is not on the list: the tick runs main, and main
+  builds the CLI before it dispatches, so that import stays.
+  """
+  with tempfile.TemporaryDirectory() as directory:
+    result = subprocess.run(
+      [
+        sys.executable,
+        "-X",
+        "importtime",
+        preview.__file__,
+        "pr-state-tick",
+        "git status",
+      ],
+      capture_output=True,
+      text=True,
+      check=False,
+      cwd=directory,
+      env={**os.environ, "ARENA_PREVIEW_STATE_DIR": directory},
+    )
+  assert result.returncode == 0, result.stderr
+  for module in (
+    "markdown_it",
+    "http.server",
+    "email.policy",
+    "email.parser",
+    "sqlite3",
+  ):
+    assert module not in result.stderr, f"{module} rides on every gated line"
+
+
 def test_bare_ack_answers_the_one_pending_item():
   """A bare ack answers the one pending item, and two waiting items keep the ID required."""
   with tempfile.TemporaryDirectory() as bare_dir:

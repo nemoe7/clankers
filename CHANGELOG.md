@@ -60,6 +60,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Remove unused upstream documentation, plugin manifests, agent metadata, issue templates, and package checks. Keep skill files, required references, scripts, examples, and licenses unchanged.
 
+#### preview
+
+- A gated shell line loads the Markdown renderer, the HTTP server, and the store only where they are needed. Each `git` or `gh` line costs about 55 ms less, and gate verdicts stay the same.
+
 ### Fixed
 
 - Arena reference: fix attachment-limit and agent-unpublish view rules.
