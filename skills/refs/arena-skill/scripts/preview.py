@@ -2328,6 +2328,22 @@ GATE_NOISE = ("tail", "grep", "head")
 
 RUN_NAME = re.compile(r"[A-Za-z0-9._-]{1,64}")
 RUN_TAIL_LINES = 40
+# The gh watch loop prints its own advice and reprints every check each frame.
+RUN_FOOTER_RE = re.compile(
+  r"^Refreshing checks status every \d+ seconds\. Press Ctrl\+C to quit\.$"
+)
+
+
+def clean_run_tail(lines):
+  """Drop the watch footer, then keep one copy of a repeated line in its last place."""
+  kept = []
+  for line in lines:
+    if RUN_FOOTER_RE.match(line):
+      continue
+    if line in kept:
+      kept.remove(line)
+    kept.append(line)
+  return kept
 
 
 def run_record_path(state_dir, name):
@@ -2687,7 +2703,7 @@ def run_command(state_dir, name, argv):
     completed = subprocess.run(argv, capture_output=True, text=True, check=False)
   seconds = round(time.monotonic() - started, 1)
   output = (completed.stdout + completed.stderr).splitlines()
-  tail = output[-RUN_TAIL_LINES:]
+  tail = clean_run_tail(output[-RUN_TAIL_LINES:])
   verdict = tail[-1] if tail else "(no output)"
   path = run_record_path(state_dir, name)
   existing = json_record(path) or {}
@@ -3178,7 +3194,7 @@ def run_log_report(state_dir, name):
     print(WORKTREE_STEP)
     return 0
   print(f"run {name} done: exit {record['exit']} {record.get('seconds')}s")
-  for line in record.get("tail") or []:
+  for line in clean_run_tail(record.get("tail") or []):
     print(line)
   return 0
 
@@ -3190,7 +3206,8 @@ def poll_inbox(store, sleeper=None):
   # A full wait ends for messages, tasks, or failed branch checks. A heartbeat lights the page dot.
   # The Bash timeout can cut it short, so tell agents to retry with a tool timeout of 1800.
   print(
-    "POLL: 1800 s. If cut, retry with tool timeout 1800 s.",
+    "arena-preview: poll waits up to 1800 s. Set the bash tool timeout to 1800 s,"
+    " so a cut wait still returns its listing.",
     file=sys.stderr,
     flush=True,
   )
@@ -6819,7 +6836,9 @@ def main():
         print(f"arena-preview: {reminder}", file=sys.stderr, flush=True)
       return 0
     if not args.command:
-      parser.error("a command is required")
+      parser.error(
+        "a command is required; run arena-preview --help for the command list"
+      )
     if args.command == "skills":
       print_skills()
       return 0
@@ -7158,7 +7177,9 @@ def main():
     elif args.command == "task":
       task_id = args.id_arg
       if not task_id:
-        raise ValueError("A task needs an ID")
+        raise ValueError(
+          'A task needs an ID: arena-preview task <id> "<title>" -m <msg-id>'
+        )
       if (
         args.title_arg is None
         and not args.detail_arg

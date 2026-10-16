@@ -5863,7 +5863,7 @@ def test_poll_blocked_tasks():
       assert sleeps == [], "unblocked work ends the wait before the first sleep"
       assert "open-task" in printed[-1]
       # The early return names the task on stderr, so no session reads it as an empty wait.
-      assert printed[0].startswith("POLL: 1800 s")
+      assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
       # One line, one stream: the agent reads both, so a duplicate only costs tokens.
       assert printed[1] == (
         "CONTINUE: unblocked task open-task. Work it or block it; do not end the turn."
@@ -5907,8 +5907,8 @@ def test_poll_retry_disclaimer():
       preview.POLL_INTERVAL, preview.POLL_MAX_LOOPS = saved
       builtins.print = original
     assert code == 1
-    assert printed[0].startswith("POLL: 1800 s")
-    assert f"If cut, retry with tool timeout {saved[0] * saved[1]} s." in printed[0]
+    assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
+    assert f"Set the bash tool timeout to {saved[0] * saved[1]} s" in printed[0]
 
 
 def test_skip_poll():
@@ -5964,7 +5964,7 @@ def test_skip_poll():
       code, sleeps = run_poll()
       assert code == 0
       assert sleeps == [], "a skip ends the wait before the first sleep"
-      assert printed[0].startswith("POLL: 1800 s")
+      assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -6009,7 +6009,7 @@ def test_skip_poll():
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
-      assert printed[0].startswith("POLL: 1800 s")
+      assert printed[0].startswith("arena-preview: poll waits up to 1800 s.")
       assert printed[1] == (
         "SKIP: owner pressed Skip poll. End the turn, no second poll."
       )
@@ -7809,6 +7809,8 @@ def test_cli_argument_errors_omit_usage(args):
   assert cli.stderr.startswith("arena-preview"), cli.stderr
   assert "error:" in cli.stderr and "preview.py" not in cli.stderr
   assert "usage:" not in cli.stderr.casefold()
+  if not args:
+    assert "run arena-preview --help for the command list" in cli.stderr
   if args and args[-1].startswith("not-"):
     assert args[-1] in cli.stderr
 
@@ -7821,7 +7823,9 @@ def test_cli_missing_task_id_keeps_validation(tmp_path, monkeypatch, capsys):
   assert preview.main() == 1
   output = capsys.readouterr()
   assert not output.out
-  assert "A task needs an ID" in output.err
+  assert (
+    'A task needs an ID: arena-preview task <id> "<title>" -m <msg-id>' in output.err
+  )
   assert "usage:" not in output.err.casefold()
 
 
@@ -9019,6 +9023,43 @@ def test_a_published_field_reads_in_the_singular(tmp_path):
   )
   assert cli.returncode == 0, cli.stderr
   assert cli.stdout.splitlines()[0] == "Published one-report, 1 field."
+
+
+def test_the_run_tail_reads_one_watch_frame():
+  """A repeated line keeps its last place, and the watch loop's own advice goes."""
+  lines = [
+    "Tests\tpending\t0\thttps://example.com/1",
+    "Quality\tpass\t32s\thttps://example.com/2",
+    "Refreshing checks status every 10 seconds. Press Ctrl+C to quit.",
+    "Tests\tpending\t0\thttps://example.com/1",
+    "Quality\tpass\t32s\thttps://example.com/2",
+  ]
+  assert preview.clean_run_tail(lines) == lines[:2]
+  assert preview.clean_run_tail([]) == []
+  assert preview.clean_run_tail(["one", "two"]) == ["one", "two"]
+
+
+def test_a_repeated_run_line_prints_once(tmp_path):
+  """The printed tail drops the repeated frame and the watch footer."""
+  preview.Store(tmp_path, create=True).set_meta("port", guard_port())
+  code = (
+    "print('Tests  pass\\nQuality  pass\\nTests  pass\\nQuality  pass\\n"
+    "Refreshing checks status every 10 seconds. Press Ctrl+C to quit.')"
+  )
+  assert (
+    preview.run_command(tmp_path, "repeat", ["--", sys.executable, "-c", code]) == 0
+  )
+  cli = subprocess.run(
+    [sys.executable, str(Path(preview.__file__)), "logs", "repeat"],
+    capture_output=True,
+    text=True,
+    check=False,
+    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+  )
+  assert cli.returncode == 0, cli.stderr
+  lines = cli.stdout.splitlines()
+  assert lines[0].startswith("run repeat done: exit 0 "), lines
+  assert lines[1:] == ["Tests  pass", "Quality  pass"], lines
 
 
 def test_egress_warning_ignores_the_local_preview():
