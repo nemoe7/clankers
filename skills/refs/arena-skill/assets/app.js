@@ -1212,7 +1212,7 @@ document.addEventListener('input', event => {
   if (slot) slot.checked = Boolean(target.value.trim());
 });
 document.addEventListener('click', event => {
-  const target = event.target;
+  const target = event.target?.closest?.('.copy-code, .note-id, .task-title') || event.target;
   const reference = target?.closest?.('a.ack-reference') ||
     (typeof target?.className === 'string' && target.className.split(' ').includes('ack-reference')
       ? target : null);
@@ -1575,9 +1575,11 @@ function taskRow(task) {
       parts.push(answers);
     }
     details.replaceChildren(...parts);
+    if (taskSearch && parts.slice(1).some(part => part.textContent.toLowerCase().includes(taskSearch))) details.open = true;
     rows.push(details);
   }
   item.replaceChildren(...rows);
+  if (taskSearch) markNode(item, taskSearch);
   return item;
 }
 
@@ -1604,11 +1606,13 @@ function renderTasksIfChanged(tasks) {
   }
   for (const stamp of document.querySelectorAll('.task-answer time')) {
     stamp.textContent = time(stamp.dateTime);
+    if (taskSearch) markNode(stamp, taskSearch);
   }
 }
 
 function taskHaystack(task) {
-  return [task.title, task.id, task.type || 'unspecified', ...(task.details || [])]
+  return [task.title, task.id, task.type || 'unspecified', ...(task.details || []),
+    ...(task.answers || []).flatMap(answer => [answer.id, answer.text])]
     .join(' ').toLowerCase();
 }
 
@@ -1885,6 +1889,8 @@ function followReference(type, id) {
   ].find(item => item.title === id);
   const title = row && row.children[0];
   if (!title) return;
+  const details = row.querySelector('details');
+  if (details) details.open = true;
   title.scrollIntoView({block: 'center'});
   title.focus({preventScroll: true});
   markTaskHighlight(row);

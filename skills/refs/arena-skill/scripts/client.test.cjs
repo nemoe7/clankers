@@ -59,6 +59,7 @@ test('preview client', async (t) => {
       if (this.id === 'report' && panel) panel.scrollTop = 0;
     }
     get innerHTML() { return this.inner; }
+    querySelector(selector) { return this.children.find(child => child.tagName === selector) || null; }
     querySelectorAll(selector) { return this.fields && selector === '.question[data-field]' ? this.fields : []; }
     contains(node) { return this === node || this.children.some(child => child instanceof Element && child.contains(node)); }
     get lastElementChild() { return this.children.at(-1); }
@@ -796,6 +797,62 @@ test('preview client', async (t) => {
     await refresh();
   });
 
+  await t.test('Task search marks literal matches and opens matching detail bodies', async () => {
+    const prior = state.tasks;
+    const at = new Date().toISOString();
+    const search = get('#task-search');
+    const hits = node => (node.children || []).flatMap(child => typeof child === 'string' ? []
+      : [...(child.className === 'search-hit' ? [child.textContent] : []), ...hits(child)]);
+    const head = () => get('#tasks-current-body').children[0];
+    const details = () => head().children.find(child => child.className === 'task-details');
+    const query = value => { search.value = value; search.events.input(); };
+    state.tasks = { updated_at: at, finished: [], upcoming: [
+      { id: 'alpha-search', title: 'Alpha wiring', details: ['Trace PROXY; <img onerror=alert(1)> stays text.'],
+        type: 'code', status: 'upcoming', order: 1, updated_at: at },
+      { id: 'beta-search', title: 'Beta docs', details: ['Read the changelog'],
+        type: 'docs', status: 'upcoming', order: 2, updated_at: at,
+        answers: [{ id: 'receipt-search', at, text: 'Confirmed support' }] },
+    ] };
+    const original = JSON.stringify(state.tasks);
+    await refresh();
+    try {
+      query('proxy');
+      assert.equal(head().title, 'alpha-search');
+      assert.deepEqual(hits(head()), ['PROXY'], 'the visible match preserves its case');
+      assert.equal(details().open, true, 'a detail match opens its body');
+      const row = head();
+      await refresh();
+      assert.equal(head(), row, 'an unchanged poll retains the marked row');
+      assert.equal(details().open, true, 'an unchanged poll retains the open body');
+      query('BETA');
+      assert.deepEqual(hits(head()), ['Beta'], 'title matches are marked case-insensitively');
+      assert.ok(!details().open, 'a title-only match does not open unrelated details');
+      const draft = get('#note').value;
+      const title = head().children[0];
+      const marked = title.children.find(child => child.className === 'search-hit');
+      marked.closest = selector => selector.includes('.task-title') ? title : null;
+      documentEvents.click({ target: marked, preventDefault() {} });
+      assert.match(get('#note').value, /^RE: beta-search/, 'a click on marked title text still quotes its task');
+      get('#note').value = draft;
+      get('#tasks-tab').events.click();
+      query('confirmed');
+      assert.equal(head().title, 'beta-search', 'answer text is searchable inside the details');
+      assert.deepEqual(hits(head()), ['Confirmed']);
+      assert.equal(details().open, true, 'an answer match opens its body');
+      query('<img');
+      assert.deepEqual(hits(head()), ['<img'], 'markup-shaped input stays literal');
+      assert.match(details().textContent, /<img onerror=alert\(1\)>/);
+      query('');
+      assert.deepEqual(hits(get('#tasks-current-body')), [], 'clearing removes the marks');
+      assert.ok(!details().open, 'clearing restores the normal collapsed body');
+      assert.equal(JSON.stringify(state.tasks), original, 'search leaves stored task data unchanged');
+    } finally {
+      query('');
+      state.tasks = prior;
+      await refresh();
+    }
+  });
+
   await t.test("A blocked task never takes the Current seat while another task is open", async () => {
     // A report-linked task sorts first in its group, so the head alone would hand the Current div
     // to work the agent cannot start. The first unblocked task takes the seat instead.
@@ -1180,7 +1237,7 @@ test('preview client', async (t) => {
     const priorTasks = state.tasks;
     state.notes[0].task_id = 'linked-receipt';
     state.tasks = {
-      upcoming: [{ id: 'linked-receipt', title: 'Linked receipt', details: [], status: 'upcoming',
+      upcoming: [{ id: 'linked-receipt', title: 'Linked receipt', details: ['A linked detail'], status: 'upcoming',
         order: 1, updated_at: new Date().toISOString() }],
       finished: [],
       updated_at: new Date().toISOString()
@@ -1198,6 +1255,9 @@ test('preview client', async (t) => {
       documentEvents.click({ target: link, preventDefault: () => { prevented = true; } });
       assert.equal(prevented, true, 'the receipt link takes the reference path');
       assert.equal(get('#tasks-panel').hidden, false, 'the jump opens the Tasks tab');
+      const target = get('#tasks-current-body').children[0];
+      assert.equal(target.children.find(child => child.className === 'task-details').open, true,
+        'a task-reference link opens its target details');
     } finally {
       delete state.notes[0].task_id;
       state.tasks = priorTasks;
