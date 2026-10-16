@@ -2182,6 +2182,25 @@ def first_blocking_piece(line):
   return None
 
 
+def idle_wait(line):
+  """Name the bare sleep that holds a turn, so the gate stops it before it runs.
+
+  The gate reads the shell's own command line, so the login wrapper comes off first.
+  A retry loop names its own command first, so it passes.
+  """
+  piece = first_blocking_piece(agent_line(line))
+  if not piece:
+    return None
+  head = piece.split()[0].rsplit("/", 1)[-1].strip("\"'")
+  if head != "sleep":
+    return None
+  return (
+    "WAIT BLOCKED: a bare sleep holds the turn. Take the next queued task, or read the"
+    " run on a later call. A routed run keeps its verdict, and `arena-preview poll`"
+    " waits when the queue is empty."
+  )
+
+
 def quiet_inbox_line(line):
   """True when a command line that names an inbox call runs nothing else."""
   return first_blocking_piece(line) is None
@@ -2198,6 +2217,32 @@ RUN_TAIL_LINES = 40
 
 def run_record_path(state_dir, name):
   return Path(state_dir) / "runs" / f"{name}.json"
+
+
+def read_marker_path(state_dir, name):
+  return Path(state_dir) / "runs" / f"{name}.read"
+
+
+def run_read_stamp(state_dir, name):
+  """Return the start stamp of the run an earlier read named, or None."""
+  try:
+    return read_marker_path(state_dir, name).read_text(encoding="utf-8").strip()
+  except OSError:
+    return None
+
+
+def mark_run_read(state_dir, name, record):
+  """Record one read of a live run, so the next read waits for its verdict.
+
+  The marker holds the run's start stamp. A fresh run under the same name carries
+  another stamp, so its first read stands, and the run record stays untouched.
+  """
+  marker = read_marker_path(state_dir, name)
+  try:
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(str(record.get("started_at") or ""), encoding="utf-8")
+  except OSError:
+    pass
 
 
 ROUTE_START_FAILED = "routed child failed to start; rerun the gate"
@@ -2994,9 +3039,24 @@ def route_command(state_dir, name, argv):
 
 
 def run_log_report(state_dir, name):
-  """Print one routed run's recorded status and its output tail."""
+  """Print one routed run's recorded status and its output tail.
+
+  A second read of a run that has no verdict yet is a wait, not work, so the gate stops
+  it: one read per verdict is what the gate allows, and the verdict keeps.
+  """
   record = routed_record(state_dir, name)
   if record.get("exit") is None:
+    stamp = str(record.get("started_at") or "")
+    if run_read_stamp(state_dir, name) == stamp:
+      print(
+        f"WAIT BLOCKED: run {name} has no verdict yet. Take the next queued task, or"
+        " read it on a later call. The verdict keeps, and `arena-preview poll` waits"
+        " when the queue is empty.",
+        file=sys.stderr,
+        flush=True,
+      )
+      return 130
+    mark_run_read(state_dir, name, record)
     elapsed = detached_seconds(record.get("started_at"))
     age = f" {elapsed}s" if elapsed is not None else ""
     print(f"run {name} running{age}")
@@ -6395,6 +6455,10 @@ def main():
     help="Warn when an inline ack text holds a backtick the shell will substitute",
   )
   ack_tick.add_argument("line", help="The command line, as the hook read it")
+  idle_tick = commands.add_parser(
+    "idle-tick", help="Refuse a line that only waits on a sleep"
+  )
+  idle_tick.add_argument("line", help="The command line, as the hook read it")
   serve_tick = commands.add_parser(
     "serve-tick",
     help="Warn when a serve names a port other than the default",
@@ -6670,6 +6734,12 @@ def main():
       warning = tick_warning(args.line)
       if warning:
         print(warning, file=sys.stderr)
+      return 0
+    if args.command == "idle-tick":
+      warning = idle_wait(args.line)
+      if warning:
+        print(warning, file=sys.stderr)
+        return 1
       return 0
     if args.command == "serve-tick":
       warning = serve_warning(args.line)

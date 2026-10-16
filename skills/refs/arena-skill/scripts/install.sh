@@ -201,6 +201,16 @@ _arena_preview_gate() {
   # A detached route runs its own line. Its marker prevents the gate from matching its family twice.
   # case: route-marker
   case "\${ARENA_PREVIEW_ROUTE:-}" in 1) return 0 ;; esac
+  # A bare sleep holds the turn. The tick reads the whole line, so a loop that names its
+  # own command first still passes, and the gate stops only a line that leads with a wait.
+  # case: idle-wait
+  case "\$BASH_COMMAND" in
+    *sleep*)
+      if ! "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" idle-tick "\$_arena_preview_line"; then
+        exit 130
+      fi
+      ;;
+  esac
   # A PR-check wait runs in the background. The gate detaches it, prints its status, and prevents a second run here.
   # case: long-run
   case "\$BASH_COMMAND" in

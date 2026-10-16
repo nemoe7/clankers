@@ -7767,6 +7767,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
     "route-run",
     "worktree-tick",
     "ack-tick",
+    "idle-tick",
     "serve-tick",
     "pr-check-tick",
     "main-drift-tick",
@@ -8187,6 +8188,78 @@ def test_logs_repeats_the_worktree_step_while_a_run_is_still_going(tmp_path, cap
   assert preview.WORKTREE_STEP in out, (
     "a live run repeats the worktree step on every logs call"
   )
+
+
+def test_idle_wait_names_a_bare_sleep_only():
+  """The first real command decides: a bare sleep waits, and a retry loop works."""
+  assert preview.idle_wait("sleep 45")
+  assert preview.idle_wait("cd /home/user/repo && sleep 5")
+  assert preview.idle_wait("/usr/bin/sleep 2; git status")
+  assert preview.idle_wait("for i in 1 2; do sleep 0.01; done") is None
+  assert (
+    preview.idle_wait("until curl -sf http://127.0.0.1:1/x; do sleep 1; done") is None
+  )
+  assert preview.idle_wait("grep -n sleep notes.md") is None
+  assert preview.idle_wait("git status") is None
+  assert preview.idle_wait("") is None
+  # The gate hands the shell's own command line, which carries the invocation.
+  assert preview.idle_wait("/bin/bash -l -c sleep 45")
+  assert preview.idle_wait("/bin/bash -l -c cd /srv/app && sleep 5")
+  assert preview.idle_wait("/bin/bash -l -c for i in 1 2; do sleep 0.01; done") is None
+  assert preview.idle_wait("/bin/bash -l -c git status") is None
+
+
+def test_idle_tick_blocks_a_bare_sleep():
+  """The hook reads the answer: a bare sleep exits 1, and a retry loop exits 0."""
+  with tempfile.TemporaryDirectory() as directory:
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
+
+    def cli(line):
+      return subprocess.run(
+        [sys.executable, str(Path(preview.__file__)), "idle-tick", line],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+      )
+
+    blocked = cli("sleep 45")
+    assert blocked.returncode == 1, blocked.stdout
+    assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
+    allowed = cli("for i in 1 2; do sleep 0.01; done")
+    assert allowed.returncode == 0, allowed.stderr
+
+
+def test_a_second_read_of_a_running_run_is_blocked(tmp_path, capsys):
+  """One read names the live status. A second read while it runs is a wait."""
+  runs = tmp_path / "runs"
+  runs.mkdir()
+  pid = os.getpid()
+  record = {
+    "name": "gate-one",
+    "detached": True,
+    "exit": None,
+    "started_at": None,
+    "tail": [],
+    "pid": pid,
+    "pid_started_at": preview.process_start_identity(pid),
+  }
+  (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
+  assert preview.run_log_report(tmp_path, "gate-one") == 0
+  assert "run gate-one running" in capsys.readouterr().out
+  assert preview.run_log_report(tmp_path, "gate-one") == 130
+  assert "WAIT BLOCKED" in capsys.readouterr().err
+  record["exit"] = 0
+  record["seconds"] = 3
+  (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
+  assert preview.run_log_report(tmp_path, "gate-one") == 0
+  assert "run gate-one done: exit 0" in capsys.readouterr().out
+  # A fresh run under the same name carries another stamp, so its first read stands.
+  record["exit"] = None
+  record["started_at"] = "2026-10-16T15:00:00+00:00"
+  (runs / "gate-one.json").write_text(json.dumps(record), encoding="utf-8")
+  assert preview.run_log_report(tmp_path, "gate-one") == 0
+  assert "run gate-one running" in capsys.readouterr().out
 
 
 def test_init_tz_flag_stores_the_display_zone(tmp_path):

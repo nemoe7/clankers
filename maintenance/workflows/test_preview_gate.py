@@ -47,6 +47,9 @@ if [ "$1" = "pr-check-tick" ]; then
   export ARENA_PREVIEW_DETACH_DRY=1
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
+if [ "$1" = "idle-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ idle-tick "$2"
+fi
 if [ "$1" = "worktree-tick" ]; then
   exec __PYTHON__ __PREVIEW__ worktree-tick "$2"
 fi
@@ -160,19 +163,26 @@ def test_the_hook_skips_the_platform_shells() -> None:
 
 
 def run(
-  command: str, cwd: str | None = None, state: Path | None = None
+  command: str,
+  cwd: str | None = None,
+  state: Path | None = None,
+  line: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
   if state is None:
     with tempfile.TemporaryDirectory() as directory:
-      return run_in(command, Path(directory), cwd)
-  return run_in(command, state, cwd)
+      return run_in(command, Path(directory), cwd, line)
+  return run_in(command, state, cwd, line)
 
 
 def run_in(
-  command: str, root: Path, cwd: str | None = None
+  command: str, root: Path, cwd: str | None = None, line: str | None = None
 ) -> subprocess.CompletedProcess[str]:
-  """Run one command against a state directory, with the gate sourced and trapped."""
+  """Run one command against a state directory, with the gate sourced and trapped.
+
+  A caller may pass the command line the gate reads, which carries the shell invocation
+  that the platform puts in front of every script.
+  """
   stub = root / "stub.sh"
   import sys
 
@@ -204,7 +214,7 @@ def run_in(
     + str(gate_file)
     + '"\n'
     + "_arena_preview_line="
-    + shlex.quote(command)
+    + shlex.quote(line if line is not None else command)
     + "\n"
     + "trap '_arena_preview_gate : # arena-preview-gate' DEBUG\n"
     + command
@@ -255,6 +265,23 @@ def test_command_lookup_does_not_start_a_run():
     assert "lookup-complete" not in result.stdout
   assert preview_module.long_run_name("command -p pytest") == "pytest"
   assert preview_module.long_run_name("command -v pytest; pytest -q") == "pytest"
+
+
+def test_the_gate_blocks_a_bare_sleep_and_passes_a_retry_loop():
+  """A line whose first real command is a wait stops before it runs. A loop still runs."""
+  blocked = run("sleep 3; printf waited")
+  assert blocked.returncode == 130, blocked.stderr
+  assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
+  assert "waited" not in blocked.stdout, blocked.stdout
+  # A cwd keeps the stub's count gate quiet, so the loop line reaches the shell.
+  looped = run("for i in 1 2; do sleep 0.01; done; printf loop-done", cwd="/tmp")
+  assert looped.returncode == 0, looped.stderr
+  assert "loop-done" in looped.stdout, looped.stdout
+  # The platform shells the line, so the gate reads an invocation ahead of the script.
+  wrapped = run("sleep 3; printf waited", line="/bin/bash -l -c sleep 3; printf waited")
+  assert wrapped.returncode == 130, wrapped.stderr
+  assert "WAIT BLOCKED" in wrapped.stderr, wrapped.stderr
+  assert "waited" not in wrapped.stdout, wrapped.stdout
 
 
 def test_the_gate_refuses_to_replay_a_mixed_line():

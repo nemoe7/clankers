@@ -64,6 +64,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A gated shell line loads the Markdown renderer, the HTTP server, and the store only where they are needed. Each `git` or `gh` line costs about 55 ms less, and gate verdicts stay the same.
 
+- A gate that meets a bare sleep line, or a second `logs` read before a run has a verdict, stops it with a hint. Retry loops and the verdict read stay unchanged.
+
 ### Fixed
 
 - Arena reference: fix attachment-limit and agent-unpublish view rules.
