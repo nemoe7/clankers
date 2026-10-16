@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'gpt-plugins/**'
+      - 'maintenance/gpt_plugins/**'
       - 'rules/**'
       - '!rules/refs/**'
       - 'maintenance/publish/publish.py'
@@ -16,6 +17,7 @@ on:
     branches: ['**']
     paths:
       - 'gpt-plugins/**'
+      - 'maintenance/gpt_plugins/**'
       - '.github/workflows/artifacts.yml'
   workflow_dispatch:
     inputs:
@@ -92,7 +94,7 @@ jobs:
               printf '%s\n' "$files"
               for file in $files; do
                 case "$file" in
-                  gpt-plugins/* | .github/workflows/artifacts.yml) package=true ;;
+                  gpt-plugins/* | maintenance/gpt_plugins/* | .github/workflows/artifacts.yml) package=true ;;
                 esac
                 case "$file" in
                   rules/refs/*) ;;
@@ -171,7 +173,7 @@ jobs:
           assert triggers["push"]["branches"] == ["main"], triggers["push"]
           for entry in ("gpt-plugins/**", "rules/**", "!rules/refs/**", path):
             assert entry in push_paths, f"push paths miss {entry}: {push_paths}"
-          assert pull_paths == ["gpt-plugins/**", path], f"pull_request paths are {pull_paths}"
+          assert set(pull_paths) == {"gpt-plugins/**", "maintenance/gpt_plugins/**", path}, pull_paths
           assert "workflow_dispatch" in triggers, "workflow_dispatch is missing"
 
           jobs = workflow["jobs"]
@@ -190,7 +192,7 @@ jobs:
           assert jobs["publish-clankers-rules"]["needs"] == "changes", "the publish job needs the path report"
 
           validate_runs = " ".join(str(step.get("run", "")) for step in jobs["validate-gpt-plugins"]["steps"])
-          assert "check_gpt_plugins.py" in validate_runs
+          assert "gate_gpt_plugins.py" in validate_runs
           assert "--base-manifest" in validate_runs
           assert "--self-check" in validate_runs
           assert not any(
@@ -210,8 +212,9 @@ jobs:
           assert upload["with"]["archive"] is False, upload["with"]["archive"]
           assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
           assert any(
-            str(step.get("run", "")).strip()
-            == "cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills"
+            str(step.get("run", "")).strip().startswith(
+              "python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "
+            )
             for step in steps
           ), "no packaging step"
 
@@ -236,9 +239,9 @@ jobs:
           git show "$BASE:gpt-plugins/plugin.json" > "$RUNNER_TEMP/base-plugin.json"
           changed="$(git diff --name-only "$BASE" HEAD -- gpt-plugins/plugin.json gpt-plugins/skills)"
           if [ -n "$changed" ]; then
-            python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json"
+            python maintenance/gpt_plugins/gate_gpt_plugins.py --base-manifest "$RUNNER_TEMP/base-plugin.json" --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
           else
-            python maintenance/gpt_plugins/gate_gpt_plugins.py
+            python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "$RUNNER_TEMP/gpt-plugin-assets"
           fi
 
   package-gpt-plugins:
@@ -302,29 +305,63 @@ jobs:
           assert upload["with"]["archive"] is False, upload["with"]["archive"]
           assert "name" not in upload["with"], "direct uploads use the filename as the artifact name"
           assert any(
-            str(step.get("run", "")).strip()
-            == "cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills"
+            str(step.get("run", "")).strip().startswith(
+              "python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir "
+            )
             for step in steps
           ), "no packaging step"
 
           print(f"{path}: the package job keeps the archive and artifact assertions.")
           PY
 
-      - name: Validate The Plugin Collection
-        run: python maintenance/gpt_plugins/gate_gpt_plugins.py
-
-      - name: Package The Collection
-        run: cd gpt-plugins && zip -r ../gpt-plugins.zip plugin.json skills
+      - name: Build And Check Plugin Archives
+        run: python maintenance/gpt_plugins/gate_gpt_plugins.py --package-dir .
 
       - name: Verify The Archive
         run: |
           unzip -l gpt-plugins.zip
-          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip
+          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
 
       - name: Upload The Plugin Archive
         uses: actions/upload-artifact@v7
         with:
           path: gpt-plugins.zip
+          archive: false
+
+      - name: Upload gpt-quirks Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-quirks.zip
+          archive: false
+
+      - name: Upload gpt-handoff Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-handoff.zip
+          archive: false
+
+      - name: Upload gpt-planning Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-planning.zip
+          archive: false
+
+      - name: Upload gpt-github Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-github.zip
+          archive: false
+
+      - name: Upload gpt-display Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-display.zip
+          archive: false
+
+      - name: Upload gpt-question Archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: gpt-question.zip
           archive: false
 
   publish-clankers-rules:
@@ -396,13 +433,14 @@ jobs:
       - name: Download The Validated Archive
         uses: actions/download-artifact@v8
         with:
-          name: gpt-plugins.zip
+          pattern: gpt-*.zip
+          merge-multiple: true
           skip-decompress: true
 
       - name: Verify The Archive
         run: |
           unzip -l gpt-plugins.zip
-          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip
+          python maintenance/gpt_plugins/gate_gpt_plugins.py --archive gpt-plugins.zip --archives-dir .
 
       - name: Publish The Release
         env:
@@ -412,12 +450,12 @@ jobs:
           set -eu
           tag="gpt-plugins-v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" gpt-plugins.zip --clobber
+            gh release upload "$tag" gpt-*.zip --clobber
           else
-            gh release create "$tag" gpt-plugins.zip \
+            gh release create "$tag" gpt-*.zip \
               --title "GPT Plugins $VERSION" \
               --target "$GITHUB_SHA" \
-              --notes "The GPT Plugins collection at version $VERSION, packaged from gpt-plugins/plugin.json."
+              --notes "The GPT Plugins collection and six single-skill plugins at version $VERSION. Archive checks do not prove ChatGPT import support."
           fi
 
   publish-arena-egress-proxy-image:

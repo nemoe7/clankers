@@ -6,6 +6,12 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-16
 
+### Added
+
+#### gpt-plugins
+
+- The package job builds seven complete archives. Each single-skill archive has its own name, the collection's version, all skill references, and dependency notes. The release job uses the checked archives without rebuilding them.
+
 ### Changed
 
 #### Vendored skills

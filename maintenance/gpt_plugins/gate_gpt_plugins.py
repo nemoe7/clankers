@@ -49,6 +49,16 @@ FENCED_CODE_BLOCK = re.compile(
 )
 
 
+DEPENDENCY_NOTES = {
+  "gpt-handoff": "References gpt-planning and Ponytail. Neither dependency is included.",
+  "gpt-planning": "References gpt-handoff. That skill is not included.",
+  "gpt-github": "Uses GitHub tools from the host. No GitHub tools are included.",
+  "gpt-display": "Uses rendering and file features from the host. No host features are included.",
+  "gpt-question": "Uses interactive form features from the host. No host features are included.",
+  "gpt-quirks": "Uses file references from the host. No host tools are included.",
+}
+
+
 def shipped_paths() -> list[Path]:
   """Return the collection files the archive carries, in a stable order."""
   paths = [MANIFEST]
@@ -67,6 +77,59 @@ def shipped_paths() -> list[Path]:
 def archive_members() -> dict[str, Path]:
   """Return archive-root paths and their source files."""
   return {path.relative_to(PLUGIN).as_posix(): path for path in shipped_paths()}
+
+
+def archive_contents(skill: str | None = None) -> dict[str, bytes]:
+  """Return complete archive payloads without changing the shipped skill files."""
+  if skill is None:
+    return {name: source.read_bytes() for name, source in archive_members().items()}
+  if skill not in EXPECTED_SKILLS:
+    raise ValueError(f"Unknown skill: {skill}")
+  manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+  metadata, _ = check.parse_frontmatter(
+    (SHIPPED / skill / "SKILL.md").read_text(encoding="utf-8")
+  )
+  manifest.update(name=skill, description=metadata["description"])
+  contents = {
+    name: source.read_bytes()
+    for name, source in archive_members().items()
+    if name.startswith(f"skills/{skill}/")
+  }
+  contents["plugin.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
+  notes = (
+    f"# {skill}\n\nVersion: {manifest['version']}.\n\n"
+    f"{DEPENDENCY_NOTES[skill]}\n\n"
+    "The host supplies tools and interface features. This ZIP does not install them. "
+    "Archive checks do not prove ChatGPT import support.\n"
+  )
+  contents["README.md"] = notes.encode()
+  return contents
+
+
+def package_archives(directory: Path) -> dict[str, Path]:
+  """Build the collection and each single-skill plugin once."""
+  directory.mkdir(parents=True, exist_ok=True)
+  archives = {}
+  for skill in (None, *EXPECTED_SKILLS):
+    name = skill or PLUGIN_NAME
+    archive = directory / f"{name}.zip"
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as opened:
+      for member, contents in archive_contents(skill).items():
+        opened.writestr(member, contents)
+    archives[name] = archive
+  return archives
+
+
+def check_archives(directory: Path, errors: list[str]) -> None:
+  """Check all release assets, including their names and complete payloads."""
+  expected = {f"{name}.zip" for name in (PLUGIN_NAME, *EXPECTED_SKILLS)}
+  found = {path.name for path in directory.glob("gpt-*.zip")}
+  if found != expected:
+    errors.append(
+      f"{directory}: archive set differs: missing={sorted(expected - found)} extra={sorted(found - expected)}"
+    )
+  for skill in (None, *EXPECTED_SKILLS):
+    check_archive(directory / f"{skill or PLUGIN_NAME}.zip", errors, skill=skill)
 
 
 def load_schema(source: str, errors: list[str]) -> dict | None:
@@ -406,13 +469,15 @@ def run_self_check() -> None:
   print("ok version, compression-structure, fenced-code and archive-layout checks")
 
 
-def check_archive(archive: Path, errors: list[str]) -> None:
-  """Check the zip carries exactly the shipped bytes, and no refs."""
+def check_archive(
+  archive: Path, errors: list[str], *, skill: str | None = None
+) -> None:
+  """Check exact payloads for the collection or a complete single-skill plugin."""
   if not archive.is_file():
     errors.append(f"{archive}: missing archive")
     return
 
-  expected = archive_members()
+  expected = archive_contents(skill)
 
   with zipfile.ZipFile(archive) as opened:
     members = [name for name in opened.namelist() if not name.endswith("/")]
@@ -426,10 +491,8 @@ def check_archive(archive: Path, errors: list[str]) -> None:
       )
 
     for name in sorted(listed & set(expected)):
-      if opened.read(name) != expected[name].read_bytes():
-        errors.append(
-          f"{archive.name}: {name} differs from {expected[name].relative_to(ROOT)}"
-        )
+      if opened.read(name) != expected[name]:
+        errors.append(f"{archive.name}: {name} differs from its expected payload")
 
 
 def main() -> int:
@@ -441,6 +504,15 @@ def main() -> int:
   )
   parser.add_argument("--archive", help="Packaged zip to verify against the collection")
   parser.add_argument(
+    "--skill", choices=EXPECTED_SKILLS, help="Single skill in --archive"
+  )
+  parser.add_argument(
+    "--package-dir", type=Path, help="Build and check all plugin archives here"
+  )
+  parser.add_argument(
+    "--archives-dir", type=Path, help="Check all downloaded plugin archives here"
+  )
+  parser.add_argument(
     "--base-manifest",
     help="Require plugin.json version greater than this base manifest",
   )
@@ -450,6 +522,8 @@ def main() -> int:
     help="Run version-parser assertions and exit",
   )
   arguments = parser.parse_args()
+  if arguments.skill and not arguments.archive:
+    parser.error("--skill requires --archive")
 
   if arguments.self_check:
     run_self_check()
@@ -460,13 +534,29 @@ def main() -> int:
   check_tree(errors)
   check_collections(errors)
   check_references(errors)
-  check_manifest(load_schema(arguments.schema, errors), errors)
+  schema = load_schema(arguments.schema, errors)
+  check_manifest(schema, errors)
+  if schema is not None and not errors:
+    import jsonschema
+
+    validator = jsonschema.Draft202012Validator(schema)
+    for skill in EXPECTED_SKILLS:
+      manifest = json.loads(archive_contents(skill)["plugin.json"])
+      for problem in validator.iter_errors(manifest):
+        errors.append(f"{skill}/plugin.json: schema violation: {problem.message}")
 
   if arguments.base_manifest:
     check_version_bump(Path(arguments.base_manifest), errors)
 
   if arguments.archive:
-    check_archive(Path(arguments.archive), errors)
+    check_archive(Path(arguments.archive), errors, skill=arguments.skill)
+
+  if arguments.package_dir and not errors:
+    package_archives(arguments.package_dir)
+    check_archives(arguments.package_dir, errors)
+
+  if arguments.archives_dir:
+    check_archives(arguments.archives_dir, errors)
 
   if errors:
     for error in errors:
@@ -482,6 +572,9 @@ def main() -> int:
 
   if arguments.archive:
     scope += f", plus the {Path(arguments.archive).name} listing"
+
+  if arguments.package_dir or arguments.archives_dir:
+    scope += ", plus all collection and single-skill archives"
 
   print(f"gpt-plugins validation passed: {scope}.")
   return 0

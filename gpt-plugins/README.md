@@ -1,6 +1,6 @@
 # GPT Plugins
 
-One Agent Plugins 1.0.0 collection for GPT-specific skills. The manifest `plugin.json` owns the plugin metadata and version.
+One Agent Plugins 1.0.0 collection and six single-skill plugins for GPT-specific skills. The manifest `plugin.json` owns the plugin metadata and version.
 
 | Path | Purpose |
 | --- | --- |
@@ -37,8 +37,28 @@ flowchart TB
   Z --> R[release under a gpt-plugins-v tag]
 ```
 
-`.github/workflows/artifacts.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch. Pushes to `main` write `gpt-plugins.zip` as a direct Actions artifact. On-demand runs package only from `main`.
+`.github/workflows/artifacts.yml` checks the collection on pull requests. A pull request that changes shipped plugin files must raise the `plugin.json` version above the base branch.
 
-The `release-gpt-plugins` job in `.github/workflows/artifacts.yml` downloads the package job's checked ZIP and publishes those unchanged bytes. The GitHub Release uses the versioned tag `gpt-plugins-v<version>`, taken from `plugin.json`.
+Pushes to `main` write the seven ZIPs below as direct Actions artifacts. On-demand runs package only from `main`.
 
-A tag that exists keeps its release and gets the fresh asset, so the download URL stays stable. The archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow fails on a missing or invalid plugin file.
+The `release-gpt-plugins` job in `.github/workflows/artifacts.yml` downloads the package job's checked ZIPs and publishes those unchanged bytes. The GitHub Release uses the versioned tag `gpt-plugins-v<version>`, taken from `plugin.json`.
+
+A tag that exists keeps its release and gets the fresh asset, so the download URL stays stable. The collection archive carries `plugin.json` and `skills/` only, so `refs/` and this README stay out of it. The workflow fails on a missing or invalid plugin file.
+
+## Release assets
+
+Every single-skill ZIP has a unique manifest name and the collection version. It carries one complete skill, all its references, and a generated README with dependency notes. The collection ZIP keeps all six skills.
+
+| Asset | Dependencies outside that ZIP |
+| --- | --- |
+| `gpt-plugins.zip` | Ponytail for handoff audits, plus host tools and interface features |
+| `gpt-quirks.zip` | Host file references and tools |
+| `gpt-handoff.zip` | `gpt-planning` and Ponytail |
+| `gpt-planning.zip` | `gpt-handoff` |
+| `gpt-github.zip` | Host GitHub tools |
+| `gpt-display.zip` | Host rendering and file features |
+| `gpt-question.zip` | Host interactive form features |
+
+The single-skill ZIPs do not bundle the other skills or install host tools. Archive checks do not prove ChatGPT import support. No ChatGPT import test ran for this change.
+
+The checker builds and checks all seven ZIPs with `--package-dir`. It checks downloaded ZIPs with `--archives-dir`. The existing `--archive` flag checks the collection, or one single-skill ZIP when paired with `--skill`.
