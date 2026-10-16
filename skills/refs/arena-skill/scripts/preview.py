@@ -2105,25 +2105,40 @@ def unquote_commands(line):
 INLINE_ACK_RE = re.compile(r"--(?:reply|note)\s+\"")
 
 
+def bare_backtick(text):
+  """True when text holds a backtick the shell substitutes. An odd backslash run escapes none."""
+  index = 0
+  while True:
+    index = text.find("`", index)
+    if index < 0:
+      return False
+    slashes = 0
+    while index - slashes - 1 >= 0 and text[index - slashes - 1] == "\\":
+      slashes += 1
+    if slashes % 2 == 0:
+      return True
+    index += 1
+
+
 def tick_warning(line):
-  """A warning when an inline ack text carries a backtick inside double quotes.
+  """A warning when an inline ack text carries an unescaped backtick inside double quotes.
 
   The shell runs a backtick in double quotes as a command and substitutes its output, so the
   ticks vanish before the tool sees the text. The gate reads the command line before that
   expansion, so this is the one place the loss can be named before it happens.
   """
   found = INLINE_ACK_RE.search(line or "")
-  if not found or "`" not in line[found.end() :]:
+  if not found or not bare_backtick(line[found.end() :]):
     return None
   return (
     "arena-preview gate: that ack text sits in double quotes, so the shell runs each"
-    " backtick as a command and the ticks vanish. Single-quote the text, or pass"
-    " --reply-file <path>."
+    " unescaped backtick as a command and the ticks vanish. Single-quote the text, or"
+    " pass --reply-file <path>."
   )
 
 
 SERVE_PORT_RE = re.compile(
-  r"(?:arena-preview|preview\.py)\s+serve\b[^\n]*?--port(?:=|\s+)(\d+)"
+  r"(?:arena-preview|preview\.py)\s+serve\b[^\n]*?(?:--port|-p)(?:=|\s*)(\d+)"
 )
 
 
@@ -2135,8 +2150,9 @@ def serve_warning(line):
     return None
   return (
     f"arena-preview gate: that serve names port {found.group(1)}, not the standard"
-    f" {DEFAULT_PORT}. The owner's page and the poll follow the standard port. Name"
-    " another only when 8000 is taken, and say so."
+    f" {DEFAULT_PORT}. The page the owner has open follows the standard address, and"
+    f" the poll follows the recorded port. Name another only when {DEFAULT_PORT} is"
+    " taken, and say so."
   )
 
 
@@ -2160,6 +2176,15 @@ FETCH_COMMAND_RE = re.compile(
   r"(?:^|[\s;&|(])(?:curl|wget|git\s+(?:clone|fetch|ls-remote|pull|push))\b"
 )
 URL_HOST_RE = re.compile(r"(?:https?|ftp)://([^/\s\"'@?]+)")
+# The preview server listens on the loopback address, so a read of it never leaves the sandbox.
+LOOPBACK_HOSTS = frozenset(("127.0.0.1", "localhost", "::1"))
+
+
+def url_host(authority):
+  """Return the host of a URL authority, with the IPv6 brackets and any port removed."""
+  if authority.startswith("["):
+    return authority.split("]", 1)[0].lstrip("[").lower()
+  return authority.split(":", 1)[0].lower()
 
 
 def egress_warning(line):
@@ -2170,8 +2195,13 @@ def egress_warning(line):
     return None
   hosts = []
   for found in URL_HOST_RE.finditer(text):
-    host = found.group(1).split(":", 1)[0].lower()
-    if host and host not in EGRESS_ALLOWLIST and host not in hosts:
+    host = url_host(found.group(1))
+    if (
+      host
+      and host not in EGRESS_ALLOWLIST
+      and host not in LOOPBACK_HOSTS
+      and host not in hosts
+    ):
       hosts.append(host)
   if not hosts:
     return None
@@ -6436,7 +6466,9 @@ class PreviewArgumentParser(argparse.ArgumentParser):
 
 
 def main():
-  parser = PreviewArgumentParser(description=CLI_DESCRIPTION)
+  # The wrapper runs this file as `arena-preview`, so the parser prints that name in
+  # usage and errors.
+  parser = PreviewArgumentParser(description=CLI_DESCRIPTION, prog="arena-preview")
   parser.add_argument(
     "-r",
     "--reminder",
@@ -6665,8 +6697,8 @@ def main():
     "task",
     help=(
       "Write or update a task; TASK-ID alone prints the stored row; -s status,"
-      " -o order, -d details, -m note, -r report, -b blocked, -u unblocked,"
-      " -a amend"
+      " -o order, -d details, -A append, -m message, -r report, -b blocked,"
+      " -u unblocked, -a amend, --task-type type"
     ),
   )
   task.add_argument("id_arg", nargs="?", metavar="TASK-ID")
@@ -6772,7 +6804,7 @@ def main():
       # A pending inbox item outranks a routed status. Otherwise one routed status or one
       # reminder line is enough for the agent to act.
       if "unacked " in reminder or not run_notices(state_dir, show_running=True):
-        print(reminder, flush=True)
+        print(f"arena-preview: {reminder}", file=sys.stderr, flush=True)
       return 0
     if not args.command:
       parser.error("a command is required")
@@ -6791,7 +6823,7 @@ def main():
       try:
         print(image_data_uri(args.path))
       except ValueError as error:
-        print(error)
+        print(error, file=sys.stderr)
         return 1
       return 0
     if args.command == "worktree-tick":
@@ -6856,15 +6888,17 @@ def main():
       try:
         old_id = Store(state_dir).resolve_id(args.old_id)
       except FileNotFoundError:
-        print(f"No note, answer, report or task holds the ID {args.old_id}")
+        print(
+          f"No note, answer, report or task holds the ID {args.old_id}", file=sys.stderr
+        )
         return 1
       except ValueError as error:
-        print(error)
+        print(error, file=sys.stderr)
         return 1
       try:
         kind = Store(state_dir).rename_entity(old_id, args.new_id)
       except ValueError as error:
-        print(error)
+        print(error, file=sys.stderr)
         return 1
       print(f"ok {kind} {old_id} -> {args.new_id}")
       return 0
@@ -6966,7 +7000,7 @@ def main():
       )
       reminder = store.reminder(routine=routine)
       if reminder:
-        print(reminder, file=sys.stderr, flush=True)
+        print(f"arena-preview: {reminder}", file=sys.stderr, flush=True)
     if args.command != "serve" and not read_only:
       # Store the agent CLI call as a durable debug-trap signal.
       # A preview left open after a turn then reports no agent activity.
@@ -6989,6 +7023,9 @@ def main():
     elif args.command == "note-list":
       ids, total = store.list_note_ids(args.page, args.page_size)
       pages = max(1, (total + args.page_size - 1) // args.page_size)
+      if args.page > pages:
+        print(f"Page {args.page} is past the last page ({pages}).", file=sys.stderr)
+        return 1
       print(f"Notes page {args.page}/{pages} ({total} total; newest first)")
       for note_id in ids:
         print(note_id)
@@ -7064,7 +7101,8 @@ def main():
         print("task? " + "; ".join(f'task <id> "<title>" -m {i}' for i in untracked))
     elif args.command == "publish":
       count = store.publish(args.id, args.title, args.source)
-      print(f"Published {args.id}, {count} fields.")
+      plural = "" if count == 1 else "s"
+      print(f"Published {args.id}, {count} field{plural}.")
       if not count and "{#" in Path(args.source).read_text("utf-8"):
         # A `{#id}` marker on its own parses as prose. The owner then sees no answer form.
         print(
@@ -7079,7 +7117,7 @@ def main():
         try:
           removed = store.unpublish(report_id, stale_only=True)
         except ReportHeld as error:
-          print(f"Skipped {report_id}: {error}")
+          print(f"Skipped {report_id}: {error}", file=sys.stderr)
           held = True
           continue
         if removed:
@@ -7099,7 +7137,7 @@ def main():
     elif args.command == "report-state":
       rows = store.report_state(args.report_id)
       if args.report_id and not rows:
-        print(f"No report {args.report_id}")
+        print(f"No report {args.report_id}", file=sys.stderr)
         raise SystemExit(1)
       print(format_report_state(rows), end="")
     elif args.command == "task":

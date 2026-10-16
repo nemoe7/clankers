@@ -3135,7 +3135,7 @@ def test_image_data_uri_refuses_a_non_image():
       check=False,
     )
     assert cli.returncode == 1, cli.stdout
-    assert "not a supported image" in cli.stdout
+    assert not cli.stdout and "not a supported image" in cli.stderr
 
 
 def test_image_data_uri_refuses_a_file_over_the_cap():
@@ -3150,7 +3150,7 @@ def test_image_data_uri_refuses_a_file_over_the_cap():
       check=False,
     )
     assert cli.returncode == 1, cli.stdout
-    assert "cap" in cli.stdout
+    assert not cli.stdout and "cap" in cli.stderr
 
 
 def test_image_payload_refuses_growth_after_the_size_check(tmp_path, monkeypatch):
@@ -4976,8 +4976,10 @@ def test_reminder_prioritizes_an_inbox_item_over_a_live_run():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": heartbeat_dir},
     )
     assert result.returncode == 0, result.stderr
-    assert "unacked 1 note" in result.stdout, result.stdout
-    assert result.stderr == ""
+    assert result.stdout == ""
+    assert result.stderr.startswith("arena-preview: calls 1 unacked 1 note | "), (
+      result.stderr
+    )
 
 
 def test_reminder_reports_a_finished_run_without_a_second_line(capsys):
@@ -5325,7 +5327,7 @@ def test_dispatch_reminder():
       )
       assert "Tasks" in result.stdout or "task" in result.stdout
       line = result.stderr.strip()
-      assert line == pending_prefix + reminder_tail(line, remaining)
+      assert line == "arena-preview: " + pending_prefix + reminder_tail(line, remaining)
       assert reminder_store.state()["notes"][0]["seen_at"] is None
     result = subprocess.run(
       [sys.executable, reminder_script, "read"],
@@ -5336,7 +5338,7 @@ def test_dispatch_reminder():
     )
     assert "Inbox" in result.stdout
     line = result.stderr.strip()
-    assert line == pending_prefix + reminder_tail(line, 1)
+    assert line == "arena-preview: " + pending_prefix + reminder_tail(line, 1)
     delivered = reminder_store.state()["notes"][0]["seen_at"]
     assert delivered is not None
     assert reminder_store.state()["notes"][0]["acknowledged_at"] is None
@@ -5441,8 +5443,8 @@ def test_reminder_rotation():
         env={**os.environ, "ARENA_PREVIEW_STATE_DIR": rotate_dir},
       )
       tail = tail_at(cursor)
-      assert result.stdout.strip() == f"calls {polls} {pending}{tail}"
-      assert result.stderr == ""
+      assert result.stdout == ""
+      assert result.stderr.strip() == f"arena-preview: calls {polls} {pending}{tail}"
     result = subprocess.run(
       [sys.executable, rotate_script, "task-list"],
       capture_output=True,
@@ -5452,7 +5454,7 @@ def test_reminder_rotation():
     )
     assert "Tasks" in result.stdout
     tail = tail_at(offset + 2)
-    assert result.stderr.strip() == f"calls 2 {pending}{tail}"
+    assert result.stderr.strip() == f"arena-preview: calls 2 {pending}{tail}"
     # A read does not remove the calls since the first unread message. Only a fresh backlog
     # resets the tally. A message landing on an unacked pile leaves it running.
     rotate_store.read()
@@ -7173,6 +7175,12 @@ def test_tick_warning_reads_the_quoting_shape():
   lossy = preview.tick_warning('arena-preview ack abc --reply "see `read` now"')
   assert lossy and "backtick" in lossy and "--reply-file" in lossy
   assert preview.tick_warning('arena-preview ack abc --note "see `read` now"')
+  # An escaped tick reaches the tool as text, so it stays quiet. An even backslash run
+  # leaves the tick bare, and the shell still substitutes it.
+  assert (
+    preview.tick_warning('arena-preview ack abc --reply "see \\`read\\` now"') is None
+  )
+  assert preview.tick_warning('arena-preview ack abc --reply "see \\\\`read` now"')
   # A quoted line, a file form, a tick before the flag and a plain line all stay quiet.
   assert preview.tick_warning("arena-preview ack abc --reply 'see `read` now'") is None
   assert (
@@ -7195,10 +7203,14 @@ def test_serve_warning_reads_the_port():
   """
   off = preview.serve_warning("arena-preview serve --port 8123")
   assert off and "8123" in off and "8000" in off
+  assert "The page the owner has open follows the standard address" in off
   assert preview.serve_warning("arena-preview serve --port=8123")
+  assert preview.serve_warning("arena-preview serve -p 8123")
+  assert preview.serve_warning("arena-preview serve -p8123")
   assert preview.serve_warning("cd repo && preview.py serve --port 8123")
   # The default, an absent flag and a non-serve line all stay quiet.
   assert preview.serve_warning("arena-preview serve --port 8000") is None
+  assert preview.serve_warning("arena-preview serve -p 8000") is None
   assert preview.serve_warning("arena-preview serve") is None
   assert preview.serve_warning("arena-preview read") is None
   assert preview.serve_warning("arena-preview serve-tick 'arena-preview serve'") is None
@@ -7392,8 +7404,9 @@ def test_note_list_pages(tmp_path):
     "history-0",
   ]
   last = run("--page", "3", "--page-size", "2")
-  assert last.returncode == 0
-  assert last.stdout.splitlines() == ["Notes page 3/2 (3 total; newest first)"]
+  assert last.returncode == 1, last.stdout
+  assert last.stdout == ""
+  assert last.stderr.strip() == "Page 3 is past the last page (2)."
   default = run()
   assert default.returncode == 0
   assert len(default.stdout.splitlines()) == 4
@@ -7791,7 +7804,8 @@ def test_cli_argument_errors_omit_usage(args):
   )
   assert cli.returncode == 2
   assert not cli.stdout
-  assert "error:" in cli.stderr
+  assert cli.stderr.startswith("arena-preview"), cli.stderr
+  assert "error:" in cli.stderr and "preview.py" not in cli.stderr
   assert "usage:" not in cli.stderr.casefold()
   if args and args[-1].startswith("not-"):
     assert args[-1] in cli.stderr
@@ -7818,6 +7832,10 @@ def test_cli_help_keeps_usage():
   )
   assert "usage:" in cli.stdout.casefold()
   assert not cli.stderr
+  # The description names the two command sets, so the hook names read as hooks.
+  flat = " ".join(cli.stdout.split())
+  assert "-A append, -m message, -r report" in flat
+  assert "--task-type type" in flat
 
 
 def test_reference_commands_table_lists_every_agent_facing_command():
@@ -8465,7 +8483,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
       ):
         assert preview.main() == 0
       line = capsys.readouterr().err.strip()
-      assert line.startswith("unacked 1 note")
+      assert line.startswith("arena-preview: unacked 1 note")
       assert (" | " in line) == (hook == "0")
     with (
       patch.dict(
@@ -8479,7 +8497,7 @@ def test_cli_hook_keeps_pending_counts_without_duplicate_routine_guidance(capsys
       patch.object(sys, "argv", [script, "--reminder"]),
     ):
       assert preview.main() == 0
-    line = capsys.readouterr().out.strip()
+    line = capsys.readouterr().err.strip()
     assert "unacked 1 note | " in line, (
       "the hook still prints both urgent and routine guidance"
     )
@@ -8807,7 +8825,7 @@ def test_report_unpublish_stale_keeps_guards_answers_and_sources(tmp_path, capsy
   assert "ready" in output.out and "plain" in output.out
   assert any(
     line.partition("held")[2].strip(" :\t")
-    for line in output.out.splitlines()
+    for line in output.err.splitlines()
     if "held" in line
   )
   assert {row["id"] for row in store.submissions()} == {
@@ -8848,3 +8866,70 @@ def test_report_unpublish_stale_rechecks_changed_publication(tmp_path):
     assert preview.main() == 0
   assert [row["id"] for row in store.state()["reports"]] == ["changed"]
   assert form.exists()
+
+
+def test_a_missing_record_refusal_prints_on_stderr(tmp_path):
+  """Every not-found line in the refusal class lands on stderr with rc 1."""
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)}
+
+  def cli(*arguments):
+    return subprocess.run(
+      [sys.executable, str(Path(preview.__file__)), *arguments],
+      capture_output=True,
+      text=True,
+      check=False,
+      env=env,
+    )
+
+  report = cli("report-state", "no-such-report")
+  assert report.returncode == 1, report.stdout
+  assert report.stdout == ""
+  assert "No report no-such-report" in report.stderr.splitlines()
+  image = cli("image-data-uri", str(tmp_path / "no-such-image.png"))
+  assert image.returncode == 1, image.stdout
+  assert image.stdout == ""
+  assert any(line.endswith(" is not a file") for line in image.stderr.splitlines())
+  renamed = cli("rename", "nope", "other")
+  assert renamed.returncode == 1, renamed.stdout
+  assert renamed.stdout == ""
+  assert (
+    "No note, answer, report or task holds the ID nope" in renamed.stderr.splitlines()
+  )
+
+
+def test_a_published_field_reads_in_the_singular(tmp_path):
+  """One counted field prints as `field`, the way the reminder prints `1 note`."""
+  store = preview.Store(tmp_path, create=True)
+  store.set_meta("port", guard_port())
+  source = tmp_path / "one.md"
+  source.write_text("# One\n\nPick one: {#pick}\n\n- ( ) yes\n", encoding="utf-8")
+  cli = subprocess.run(
+    [
+      sys.executable,
+      str(Path(preview.__file__)),
+      "publish",
+      "-i",
+      "one-report",
+      "-t",
+      "One",
+      str(source),
+    ],
+    capture_output=True,
+    text=True,
+    check=False,
+    env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(tmp_path)},
+  )
+  assert cli.returncode == 0, cli.stderr
+  assert cli.stdout.splitlines()[0] == "Published one-report, 1 field."
+
+
+def test_egress_warning_ignores_the_local_preview():
+  """The preview listens on loopback, so a read of it never leaves the sandbox."""
+  for line in (
+    "curl -sS http://127.0.0.1:8000/api/state",
+    "curl -sS http://localhost:8000/api/state",
+    "curl -sS http://[::1]:8000/api/state",
+  ):
+    assert preview.egress_warning(line) is None, line

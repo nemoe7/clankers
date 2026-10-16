@@ -74,6 +74,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - The commit checkpoint reads local refs alone, and the push checkpoint keeps its fresh fetch. A commit line no longer waits on the network.
 
+- The CLI prints one message class per line, so the prefix tells a refusal from an advisory. The parser names itself `arena-preview`, a singular count reads as `field`, and a page past the last refuses on stderr.
+
+- The task-list row labels its report link as `waits on`, and the task type follows it. A run tail drops the watch loop's repeated frame and its footer, and the reminder and the poll opener carry the `arena-preview:` hint prefix.
+
 #### workflows
 
 - The three change steps read one script, `maintenance/workflows/changed_paths.py`, for the base commit and the changed paths. The artifacts self-assertions move to `maintenance/workflows/check_artifacts.py`.
