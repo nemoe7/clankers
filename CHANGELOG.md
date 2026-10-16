@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- GitHub workflows: retry temporary Gemini capacity errors within a request deadline, with capped waits and API timeouts.
+
 - Preview: reject new blocked task links to reports without answer fields. Keep existing tasks and informational links.
 
 #### userscripts

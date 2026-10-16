@@ -297,7 +297,7 @@ def test_release_pipeline():
   # The chunk rounds cap the output. The compact combine round stays uncapped.
   sent = []
 
-  def capture_call(model, action, payload):
+  def capture_call(model, action, payload, **_kwargs):
     sent.append(payload)
     return {
       "candidates": [
@@ -604,12 +604,24 @@ def test_release_pipeline():
     release.COOLDOWNS.clear()
     release.TOKEN_COUNTS.clear()
     release.COOLDOWNS.update({"a": 400.0, "b": 110.0})
-    clock.monotonic.side_effect = [100.0, 100.0] + [200.0] * 6
+    now = [100.0]
+    clock.monotonic.side_effect = lambda: now[0]
+    clock.sleep.side_effect = lambda delay: now.__setitem__(0, now[0] + delay)
+    expected_wait = release.COOLDOWNS["b"] - now[0]
     assert release.generate({}, [], ["a", "b"]) == "ok"
-    clock.sleep.assert_called_once_with(15.0)
-    assert release.COOLDOWNS["b"] == 265.0
+    clock.sleep.assert_called_once_with(expected_wait)
+    assert (
+      release.COOLDOWNS["b"]
+      == now[0] + release.SUCCESS_COOLDOWN + release.SAFETY_SECONDS
+    )
     release.COOLDOWNS.clear()
-  with patch.object(release, "gemini_call", side_effect=RuntimeError("HTTP 503")):
+  with (
+    patch.object(release, "gemini_call", side_effect=RuntimeError("HTTP 503")),
+    patch.object(release, "time") as clock,
+  ):
+    now = [0.0]
+    clock.monotonic.side_effect = lambda: now[0]
+    clock.sleep.side_effect = lambda delay: now.__setitem__(0, now[0] + delay)
     fails(
       lambda: release.generate({}, [], ["a", "b"]),
       "Every Gemini model failed: a: HTTP 503; b: HTTP 503",
@@ -1200,6 +1212,161 @@ def test_evidence_scope():
       os.chdir(original)
 
 
+def test_capacity_retry_budget():
+  from collections import Counter
+
+  now, waits, calls, answered = [0.0], [], [], []
+
+  def sleep(delay):
+    assert 0 < delay <= release.REQUEST_DEADLINE_SECONDS - now[0]
+    waits.append(delay)
+    now[0] += delay
+
+  def attempt(_context, _evidence, rung, **kwargs):
+    calls.append((rung, kwargs.get("timeout")))
+    if len(calls) == 1:
+      raise RuntimeError("Gemini generateContent failed: HTTP 503")
+    if rung == "b":
+      raise RuntimeError("Gemini generateContent failed: HTTP 400")
+    return "recovered"
+
+  with (
+    patch.object(release, "measured", return_value=1),
+    patch.object(release, "summary"),
+    patch.object(release.time, "monotonic", side_effect=lambda: now[0]),
+    patch.object(release.time, "sleep", side_effect=sleep),
+    patch("random.uniform", return_value=0.0),
+    patch.object(release, "generate_once", side_effect=attempt) as send,
+  ):
+    release.COOLDOWNS.clear()
+    assert release.generate({}, [], ["a", "b"], answered.append) == "recovered"
+    assert [rung for rung, _ in calls] == ["a", "b", "a"]
+    assert answered == ["a"]
+    assert waits == [release.CAPACITY_BACKOFF_SECONDS]
+    assert all(0 < timeout <= release.API_TIMEOUT_SECONDS for _, timeout in calls)
+
+    now[0] = 0.0
+    waits.clear()
+    answered.clear()
+    release.COOLDOWNS.clear()
+    send.side_effect = RuntimeError("Gemini generateContent failed: HTTP 503")
+    send.reset_mock()
+    for _ in range(2):
+      fails(
+        lambda: release.generate({}, [], ["a", "b"], answered.append),
+        "Every Gemini model failed",
+      )
+    attempts = Counter(call.args[2] for call in send.call_args_list)
+    assert attempts == {rung: 2 * (release.CAPACITY_RETRIES + 1) for rung in ("a", "b")}
+    assert not answered
+    first = release.CAPACITY_BACKOFF_SECONDS
+    second = min(first * 2, release.CAPACITY_MAX_BACKOFF_SECONDS)
+    assert waits == [first, second] * 2
+
+    now[0] = 0.0
+    waits.clear()
+    release.COOLDOWNS.clear()
+    budget = release.REQUEST_DEADLINE_SECONDS
+    send.reset_mock()
+    with (
+      patch.object(
+        release, "CAPACITY_BACKOFF_SECONDS", release.CAPACITY_MAX_BACKOFF_SECONDS * 2
+      ),
+      patch("random.uniform", return_value=release.CAPACITY_JITTER_SECONDS),
+    ):
+      fails(
+        lambda: release.generate({}, [], ["a"], answered.append),
+        "Every Gemini model failed",
+      )
+    assert (
+      waits
+      == [release.CAPACITY_MAX_BACKOFF_SECONDS + release.CAPACITY_JITTER_SECONDS]
+      * release.CAPACITY_RETRIES
+    )
+    elapsed = 0.0
+    for call, wait in zip(send.call_args_list, [0.0] + waits):
+      elapsed += wait
+      assert call.kwargs["timeout"] == min(
+        release.API_TIMEOUT_SECONDS, budget - elapsed
+      )
+
+    now[0] = 0.0
+    waits.clear()
+    release.COOLDOWNS.clear()
+    send.reset_mock()
+    send.side_effect = RuntimeError(
+      "Gemini generateContent failed: HTTP 503: earlier HTTP 429"
+    )
+    fails(
+      lambda: release.generate({}, [], ["a"], answered.append),
+      "Every Gemini model failed",
+    )
+    assert send.call_count == release.CAPACITY_RETRIES + 1
+
+    now[0] = 0.0
+    waits.clear()
+    release.COOLDOWNS.clear()
+    send.side_effect = [
+      RuntimeError("Gemini generateContent failed: HTTP 400: upstream HTTP 503"),
+      "valid",
+    ]
+    assert release.generate({}, [], ["a", "b"]) == "valid"
+    assert "a" not in release.COOLDOWNS
+
+    now[0] = 0.0
+    waits.clear()
+    release.COOLDOWNS.clear()
+    hint = budget * 2
+    send.reset_mock()
+    send.side_effect = RuntimeError(
+      f"Gemini generateContent failed: HTTP 429: retry in {hint}s"
+    )
+    try:
+      release.generate({}, [], ["a"], answered.append)
+    except RuntimeError as error:
+      assert "deadline" in str(error) and "HTTP 429" in str(error)
+    else:
+      raise AssertionError("The deadline must stop a cooling request")
+    assert now[0] == budget and sum(waits) == budget
+    assert send.call_count == 1 and not answered
+    assert release.COOLDOWNS["a"] == hint + release.SAFETY_SECONDS
+
+    def late(_context, _evidence, _rung, **kwargs):
+      now[0] += budget
+      raise RuntimeError("Gemini generateContent failed: HTTP 503")
+
+    now[0] = 0.0
+    waits.clear()
+    release.COOLDOWNS.clear()
+    send.reset_mock()
+    send.side_effect = late
+    fails(lambda: release.generate({}, [], ["a"], answered.append), "deadline")
+    assert send.call_count == 1 and not waits and not answered
+
+    def late_success(_context, _evidence, _rung, **kwargs):
+      now[0] += budget + release.CAPACITY_BACKOFF_SECONDS
+      return "too late"
+
+    now[0] = 0.0
+    release.COOLDOWNS.clear()
+    send.side_effect = late_success
+    fails(lambda: release.generate({}, [], ["a"], answered.append), "deadline")
+    assert not answered
+
+    now[0] = 0.0
+    release.COOLDOWNS.clear()
+    send.reset_mock()
+    send.side_effect = [
+      RuntimeError("Gemini generateContent failed: HTTP 400"),
+      "valid",
+    ]
+    assert release.generate({}, [], ["a", "b"], answered.append) == "valid"
+    assert [call.args[2] for call in send.call_args_list] == ["a", "b"]
+    assert not waits and answered == ["b"]
+  release.COOLDOWNS.clear()
+
+
 if __name__ == "__main__":
   test_release_pipeline()
   test_evidence_scope()
+  test_capacity_retry_budget()

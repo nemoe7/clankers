@@ -14,6 +14,8 @@ Run **Gemini Release Draft** with no proposal run ID to propose a release. The p
 - The summary lists selected and omitted commit IDs and reason codes. A mixed commit sends only its selected paths.
 - The job has a 60-minute timeout. Gemini requests send repository history to Google and can incur API costs.
 
+HTTP 503 permits two more attempts per model per request. Its wait starts at 5 seconds, doubles to a 60-second cap, and adds up to 5 seconds of random delay. The 300-second request deadline caps waits and API timeouts, while HTTP 429 retry hints and safety margins stay unchanged.
+
 ## Check
 
 ```cmd
