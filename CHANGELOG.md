@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Arena archive: record workspace totals and uncertain snapshot coverage.
+
 - Preview: briefly highlight the answer reached through New reply. Keep focus, scrolling, and read receipts unchanged.
 
 - Arena preview: add safe inline Markdown highlights to report and message text, with theme highlight colors.

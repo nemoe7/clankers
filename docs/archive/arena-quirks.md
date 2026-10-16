@@ -36,6 +36,12 @@ Rule: read alerts from the bot's review comments or from an owner export. Never 
 
 ## Sandbox lifetime
 
+### Workspace totals and snapshot limits
+
+2026-10-16: a workspace check reported 175.57 MB in 4,527 files, against a reported 128.00 MB snapshot cap. These workspace totals do not show snapshot contents.
+
+The documented limit is best effort: about 128 MB or 10,000 files across cumulative turn-end patchsets. No evidence establishes a GitHub-connected-chat exemption. The total alone does not establish data loss or complete persistence.
+
 ### Mid-turn sandbox restore
 
 A reset can return HEAD to the branch base and delete ignored directories. In two observed resets on 2026-09-24, tooling, virtual environments and hooks under the home directory disappeared, and the preview server stopped. The first reset deleted preview SQLite state. The second kept it.
