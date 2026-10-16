@@ -132,6 +132,8 @@ test('preview client', async (t) => {
   const viewCalls = [];
   const viewActive = [];
   const skipCalls = [];
+  const orderWrites = [];
+  let orderFails = false;
   const replySeenCalls = [];
   let replySeenWait = null;
   let replySeenError = false;
@@ -244,6 +246,22 @@ test('preview client', async (t) => {
         skipCalls.push(posted);
         state.skip_poll = posted.skip === false ? null : '2026-10-06T09:00:00';
         return response({ skip_poll: state.skip_poll });
+      }
+      if (url === '/api/tasks/order') {
+        writeTokens.push(options.headers['X-Preview-Token']);
+        if (orderFails) return { ok: false, status: 503, text: async () => JSON.stringify({ error: 'Write failed' }) };
+        const ids = JSON.parse(options.body).ids;
+        orderWrites.push(ids);
+        // The reply is the stored payload, the same shape the poll returns.
+        const drawn = ids.map(id => state.tasks.upcoming.find(task => task.id === id));
+        const slots = state.tasks.upcoming
+          .map((task, index) => ids.includes(task.id) ? index : -1)
+          .filter(index => index >= 0);
+        const next = [...state.tasks.upcoming];
+        slots.forEach((slot, position) => { next[slot] = drawn[position]; });
+        next.forEach((task, index) => { task.order = index + 1; });
+        state.tasks = { ...state.tasks, upcoming: next };
+        return response(state.tasks);
       }
       if (url === '/api/markdown') return { ok: true, text: async () => '<strong>draft</strong>' };
       if (url === '/api/notes') {
@@ -763,6 +781,62 @@ test('preview client', async (t) => {
     filter.events.change();
     state.tasks = prior;
     await refresh();
+  });
+
+  await t.test("A queue drag writes the drawn order, and a refused write puts the rows back", async () => {
+    const prior = state.tasks;
+    const stamp = new Date().toISOString();
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+    state.tasks = {
+      finished: [],
+      upcoming: ['first', 'second', 'third'].map((id, index) => ({
+        id, title: `${id} task`, details: [], status: 'upcoming', order: index + 1,
+        type: 'code', updated_at: stamp,
+      })),
+      updated_at: stamp,
+    };
+    try {
+      await refresh();
+      const rows = () => [...get('#tasks-current-body').children, ...get('#tasks-upcoming-body').children];
+      const grab = row => row.events.dragstart(event({ target: row, dataTransfer: { setData() {} } }));
+      assert.deepEqual(rows().map(row => row.title), ['first', 'second', 'third']);
+      assert.equal(rows()[0].draggable, true, 'a queue row is draggable');
+      // A drop lands the dragged row above the row under the pointer.
+      const dragged = rows()[2];
+      grab(dragged);
+      assert.equal(dragged.dataset.dragging, 'true', 'the dragged row reads as dragged');
+      const drop = event({ target: rows()[0] });
+      rows()[0].events.drop(drop);
+      assert.equal(drop.prevented, true, 'the drop takes the dragged row');
+      dragged.events.dragend(event({ target: dragged }));
+      assert.equal(dragged.dataset.dragging, undefined, 'the cue clears');
+      await settle();
+      assert.deepEqual(orderWrites.at(-1), ['third', 'first', 'second'], 'the write carries the drawn order');
+      assert.equal(writeTokens.at(-1), servedToken, 'the write carries the page token');
+      assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'the reply re-renders the rows');
+      assert.equal(get('#tasks-current-body').children.length, 1, 'one task keeps the seat');
+      // A drop on the list background moves the row to the end of that list.
+      const last = rows()[1];
+      grab(last);
+      const background = event({ target: get('#tasks-upcoming-body') });
+      get('#tasks-upcoming-body').events.drop(background);
+      last.events.dragend(event({ target: last }));
+      await settle();
+      assert.deepEqual(orderWrites.at(-1), ['third', 'second', 'first'], 'the background drop appends the row');
+      // A refused write drops the drawn rows and names the failure.
+      orderFails = true;
+      const refused = rows()[2];
+      grab(refused);
+      rows()[0].events.drop(event({ target: rows()[0] }));
+      refused.events.dragend(event({ target: refused }));
+      await settle();
+      assert.deepEqual(rows().map(row => row.title), ['third', 'second', 'first'], 'the refused write keeps the stored rows');
+      assert.match(get('#tasks-status').textContent, /not saved/i);
+    } finally {
+      orderFails = false;
+      state.tasks = prior;
+      await refresh();
+    }
   });
 
   await t.test("The operations badge reads Ops and a task click lifts a hiding filter", async () => {

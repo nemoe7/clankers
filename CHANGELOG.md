@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Preview: sort the task queue by dragging a row. Write the drawn order, keep unlisted tasks in place, and report a failed write in the status line.
+
 - Preview: add native tab, highlight, scroll-edge, and details transitions. Use smooth top/bottom jumps unless reduced motion is active.
 
 - Arena gate: veto recognized PR-state writes before DEBUG bypasses. Keep reads, comments, metadata edits, and permitted pushes.

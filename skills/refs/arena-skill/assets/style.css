@@ -324,6 +324,7 @@ mark code { color: var(--text); }
   border-bottom: 1px solid var(--border); padding-bottom: 12px;
 }
 #task-search { justify-self: end; }
+.task[data-dragging] { opacity: 0.5; }
 .task-details { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
 .task-details > summary { cursor: pointer; list-style-position: inside; }
 .task-detail-list { margin: 2px 0 0; padding-left: 18px; }
