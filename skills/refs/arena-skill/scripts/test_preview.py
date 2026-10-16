@@ -8272,11 +8272,11 @@ def test_logs_repeats_the_worktree_step_while_a_run_is_still_going(tmp_path, cap
   )
 
 
-def test_idle_wait_names_a_bare_sleep_only():
-  """The first real command decides: a bare sleep waits, and a retry loop works."""
-  assert preview.idle_wait("sleep 45")
-  assert preview.idle_wait("cd /home/user/repo && sleep 5")
-  assert preview.idle_wait("/usr/bin/sleep 2; git status")
+def test_idle_wait_names_a_sleep_beside_a_preview_call():
+  """The line decides: a sleep on its own runs, and a sleep beside a preview call waits."""
+  assert preview.idle_wait("sleep 45") is None
+  assert preview.idle_wait("cd /home/user/repo && sleep 5") is None
+  assert preview.idle_wait("/usr/bin/sleep 2; git status") is None
   assert preview.idle_wait("for i in 1 2; do sleep 0.01; done") is None
   assert (
     preview.idle_wait("until curl -sf http://127.0.0.1:1/x; do sleep 1; done") is None
@@ -8284,15 +8284,21 @@ def test_idle_wait_names_a_bare_sleep_only():
   assert preview.idle_wait("grep -n sleep notes.md") is None
   assert preview.idle_wait("git status") is None
   assert preview.idle_wait("") is None
+  assert preview.idle_wait("arena-preview read | tail -1") is None
+  # A sleep that shares the line with a preview call holds the turn on a run.
+  assert preview.idle_wait("sleep 45; arena-preview logs gate-one")
+  assert preview.idle_wait("arena-preview logs gate-one; sleep 5")
+  assert preview.idle_wait("sleep 1 && arena-preview poll")
+  assert preview.idle_wait("until arena-preview logs gate-one; do sleep 2; done")
   # The gate hands the shell's own command line, which carries the invocation.
-  assert preview.idle_wait("/bin/bash -l -c sleep 45")
-  assert preview.idle_wait("/bin/bash -l -c cd /srv/app && sleep 5")
+  assert preview.idle_wait("/bin/bash -l -c sleep 45") is None
+  assert preview.idle_wait("/bin/bash -l -c sleep 45; arena-preview logs gate-one")
   assert preview.idle_wait("/bin/bash -l -c for i in 1 2; do sleep 0.01; done") is None
   assert preview.idle_wait("/bin/bash -l -c git status") is None
 
 
-def test_idle_tick_blocks_a_bare_sleep():
-  """The hook reads the answer: a bare sleep exits 1, and a retry loop exits 0."""
+def test_idle_tick_blocks_a_sleep_beside_a_preview_call():
+  """The hook reads the answer: a sleep alone exits 0, and a sleep beside a read exits 1."""
   with tempfile.TemporaryDirectory() as directory:
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
 
@@ -8305,11 +8311,13 @@ def test_idle_tick_blocks_a_bare_sleep():
         env=env,
       )
 
-    blocked = cli("sleep 45")
+    allowed = cli("sleep 45")
+    assert allowed.returncode == 0, allowed.stderr
+    looped = cli("for i in 1 2; do sleep 0.01; done")
+    assert looped.returncode == 0, looped.stderr
+    blocked = cli("sleep 45; arena-preview logs gate-one")
     assert blocked.returncode == 1, blocked.stdout
     assert "WAIT BLOCKED" in blocked.stderr, blocked.stderr
-    allowed = cli("for i in 1 2; do sleep 0.01; done")
-    assert allowed.returncode == 0, allowed.stderr
 
 
 def test_a_second_read_of_a_running_run_is_blocked(tmp_path, capsys):

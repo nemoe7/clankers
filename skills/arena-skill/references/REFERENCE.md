@@ -97,7 +97,7 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
 | `main-moved` | `git commit` or `git push` | the drift check once per shell, from local refs at the commit line and with a fresh fetch at the push line, then the line runs |
 | `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |
-| `idle-wait` | a line whose first real command is `sleep` | `exit 130` before the sleep, so the turn takes queued work. A retry loop names its own command first and passes |
+| `idle-wait` | a line that names both a `sleep` and an `arena-preview` call | `exit 130` before the sleep, so the turn takes queued work. A sleep on its own runs |
 | `long-run` | `gh pr checks`, `gh run watch`, or a test runner head (`pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test` and the rest) | the call ends clean and the run continues, or `exit 130` when the start fails. Any run of 10 seconds or more is a long run too, and MUST use `route` |
 | `bare-path` | a line that spells out the installed `preview.py` or `arena-preview` | the bare-call notice once per shell, then the line runs |
 | `proxy-route` | a read of code-scanning alerts or workflow run logs | the proxy notice once per shell, then the line runs |
