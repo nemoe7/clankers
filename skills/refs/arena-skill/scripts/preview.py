@@ -4962,16 +4962,22 @@ class Store:
       )
     return len(fields)
 
-  def unpublish(self, report_id, dismissed_by_owner=False):
+  def unpublish(self, report_id, dismissed_by_owner=False, *, stale_only=False):
     """Remove only the report tab row. Keep answers and the Markdown source."""
     identifier(report_id)
     with self.transaction() as db:
+      if stale_only:
+        db.execute("BEGIN IMMEDIATE")
       row = db.execute(
         "SELECT title, ack_seen_at, viewed_at FROM reports WHERE id = ?",
         (report_id,),
       ).fetchone()
       if row is None:
+        if stale_only:
+          return False
         raise FileNotFoundError("Report not found")
+      if stale_only and report_id not in self.stale_report_ids(db):
+        return False
       if not dismissed_by_owner:
         # The page holds the open report, so the owner's view never blocks this removal.
         self.guard_report_change(db, report_id, row, hold_view=False)
@@ -4990,6 +4996,9 @@ class Store:
             now(),
           ),
         )
+
+    if stale_only:
+      return True
 
   def clear_state(self):
     """Empty every state table in one transaction and return the row counts.
@@ -6111,6 +6120,12 @@ def main():
   publish.add_argument("source", type=Path)
   publish.add_argument("-i", "--id", required=True)
   publish.add_argument("-t", "--title", required=True)
+  report = commands.add_parser("report", help="Report batch actions")
+  report_actions = report.add_subparsers(dest="report_action", required=True)
+  report_unpublish = report_actions.add_parser(
+    "unpublish", help="Remove stale reports through existing guards"
+  )
+  report_unpublish.add_argument("--stale", action="store_true", required=True)
   unpublish = commands.add_parser(
     "unpublish", help="Withdraw a published report by its ID"
   )
@@ -6515,6 +6530,21 @@ def main():
           " the `- ( ) option` lines follow.",
           file=sys.stderr,
         )
+    elif args.command == "report":
+      held = False
+      for record in store.stale_reports():
+        report_id = record["id"]
+        try:
+          removed = store.unpublish(report_id, stale_only=True)
+        except ReportHeld as error:
+          print(f"Skipped {report_id}: {error}")
+          held = True
+          continue
+        if removed:
+          print(f"Unpublished {report_id}. Answers and source file remain.")
+        else:
+          print(f"Skipped {report_id}: no longer stale or published.")
+      return 1 if held else 0
     elif args.command == "unpublish":
       report_id = store.resolve_id(args.report_id)
       store.unpublish(report_id)

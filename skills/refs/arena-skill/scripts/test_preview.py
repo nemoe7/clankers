@@ -8514,3 +8514,77 @@ def test_inline_highlight_keeps_link_validation():
   rendered = preview.render("==[bad](javascript:alert(1))==")
   assert "<mark>" in rendered
   assert "href=" not in rendered
+
+
+def test_report_unpublish_stale_keeps_guards_answers_and_sources(tmp_path, capsys):
+  directory = tmp_path / "state"
+  store = preview.Store(directory, create=True)
+  store.set_meta("port", guard_port())
+  plain = tmp_path / "plain.md"
+  plain.write_text("# Information\n", encoding="utf-8")
+  form = tmp_path / "form.md"
+  form.write_text("Choose: {#pick}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
+  store.publish("plain", "Information", plain)
+  for report in ["ready", "held", "pending", "unread"]:
+    store.publish(report, "Question", form)
+  for report in ["ready", "held", "unread"]:
+    store.submission("answer-" + report, report, "REPORT: Yes")
+  for report in ["ready", "held"]:
+    store.acknowledge(["answer-" + report], "reply", "Received")
+  store.mark_report_ack_seen("ready")
+  store.publish("tail", "More information", plain)
+  with (
+    patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(directory)}),
+    patch.object(sys, "argv", ["preview.py", "report", "unpublish", "--stale"]),
+  ):
+    assert preview.main() == 1
+  output = capsys.readouterr()
+  assert {row["id"] for row in store.state()["reports"]} == {
+    "held",
+    "pending",
+    "unread",
+  }
+  assert "ready" in output.out and "plain" in output.out
+  assert any(
+    line.partition("held")[2].strip(" :\t")
+    for line in output.out.splitlines()
+    if "held" in line
+  )
+  assert {row["id"] for row in store.submissions()} == {
+    "answer-ready",
+    "answer-held",
+    "answer-unread",
+  }
+  assert plain.exists() and form.exists()
+  with (
+    patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(directory)}),
+    patch.object(sys, "argv", ["preview.py", "unpublish", "pending"]),
+  ):
+    assert preview.main() == 0
+  assert {row["id"] for row in store.state()["reports"]} == {"held", "unread"}
+
+
+def test_report_unpublish_stale_rechecks_changed_publication(tmp_path):
+  directory = tmp_path / "state"
+  store = preview.Store(directory, create=True)
+  store.set_meta("port", guard_port())
+  plain = tmp_path / "plain.md"
+  plain.write_text("# Information\n", encoding="utf-8")
+  form = tmp_path / "form.md"
+  form.write_text("Choose: {#pick}\n\n- ( ) Yes\n- ( ) No\n", encoding="utf-8")
+  store.publish("changed", "Information", plain)
+  original = preview.Store.stale_reports
+
+  def changed_candidates(current):
+    rows = original(current)
+    current.publish("changed", "New question", form)
+    return rows
+
+  with (
+    patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(directory)}),
+    patch.object(sys, "argv", ["preview.py", "report", "unpublish", "--stale"]),
+    patch.object(preview.Store, "stale_reports", changed_candidates),
+  ):
+    assert preview.main() == 0
+  assert [row["id"] for row in store.state()["reports"]] == ["changed"]
+  assert form.exists()
