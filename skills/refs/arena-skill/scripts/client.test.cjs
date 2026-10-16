@@ -783,7 +783,7 @@ test('preview client', async (t) => {
     await refresh();
   });
 
-  await t.test("A queue drag writes the drawn order, and a refused write puts the rows back", async () => {
+  await t.test("A queue drag previews the seat, writes the drawn order, and restores a refused write", async () => {
     const prior = state.tasks;
     const stamp = new Date().toISOString();
     const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -801,20 +801,35 @@ test('preview client', async (t) => {
       const grab = row => row.events.dragstart(event({ target: row, dataTransfer: { setData() {} } }));
       assert.deepEqual(rows().map(row => row.title), ['first', 'second', 'third']);
       assert.equal(rows()[0].draggable, true, 'a queue row is draggable');
-      // A drop lands the dragged row above the row under the pointer.
-      const dragged = rows()[2];
-      grab(dragged);
-      assert.equal(dragged.dataset.dragging, 'true', 'the dragged row reads as dragged');
+      // A drag previews the seat: the queue redraws in the drawn order, and the seat keeps a mark.
+      grab(rows()[2]);
+      assert.equal(rows()[2].dataset.dragging, 'true', 'the dragged row reads as dragged');
+      const hover = event({ target: rows()[0] });
+      rows()[0].events.dragover(hover);
+      assert.equal(hover.prevented, true, 'the seat under the pointer takes the drag');
+      assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'the drag previews the drawn order');
+      assert.equal(orderWrites.length, 0, 'a preview writes nothing');
+      assert.equal(rows()[0].dataset.dragging, 'true', 'the dragged cue follows the row to its seat');
+      assert.equal(rows()[1].dataset.drop, 'true', 'the row below the seat carries the mark');
+      // The drop writes the previewed order, and the reply re-renders the rows.
       const drop = event({ target: rows()[0] });
       rows()[0].events.drop(drop);
       assert.equal(drop.prevented, true, 'the drop takes the dragged row');
-      dragged.events.dragend(event({ target: dragged }));
-      assert.equal(dragged.dataset.dragging, undefined, 'the cue clears');
+      rows()[1].events.dragend(event({ target: rows()[1] }));
+      assert.ok(rows().every(row => row.dataset.dragging === undefined), 'the dragged cue clears');
+      assert.ok(rows().every(row => row.dataset.drop === undefined), 'the seat mark clears');
       await settle();
       assert.deepEqual(orderWrites.at(-1), ['third', 'first', 'second'], 'the write carries the drawn order');
       assert.equal(writeTokens.at(-1), servedToken, 'the write carries the page token');
       assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'the reply re-renders the rows');
       assert.equal(get('#tasks-current-body').children.length, 1, 'one task keeps the seat');
+      // A drag that ends without a drop puts the stored rows back and writes nothing.
+      grab(rows()[2]);
+      rows()[0].events.dragover(event({ target: rows()[0] }));
+      assert.deepEqual(rows().map(row => row.title), ['second', 'third', 'first'], 'a preview moves the row under the hand');
+      rows()[0].events.dragend(event({ target: rows()[0] }));
+      assert.deepEqual(rows().map(row => row.title), ['third', 'first', 'second'], 'a cancelled drag restores the stored rows');
+      assert.equal(orderWrites.length, 1, 'a cancelled drag writes nothing');
       // A drop on the list background moves the row to the end of that list.
       const last = rows()[1];
       grab(last);

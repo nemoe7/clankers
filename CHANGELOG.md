@@ -8,7 +8,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
-- Preview: sort the task queue by dragging a row. Write the drawn order, keep unlisted tasks in place, and report a failed write in the status line.
+- Preview: sort the task queue by dragging a row. Preview the landing seat and render the drawn order at once, keeping unlisted tasks in place. Restore the stored rows on a failed write.
 
 - Preview: add native tab, highlight, scroll-edge, and details transitions. Use smooth top/bottom jumps unless reduced motion is active.
 
