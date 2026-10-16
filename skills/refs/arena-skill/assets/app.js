@@ -8,7 +8,6 @@ const key = 'arena-preview-v1';
 // Text above either paste limit becomes one attachment.
 const PASTE_LINE_LIMIT = 15;
 const PASTE_CHAR_LIMIT = 1500;
-const MAX_FETCH = 102_400_000;
 const BINARY_TIMEOUT = 600_000;
 let pending = null;
 let stateBusy = false;
@@ -2092,7 +2091,6 @@ function renderFetchIfChanged(jobs) {
 }
 
 async function fetchRemote(job) {
-  const limit = job.origin === 'owner' ? Infinity : MAX_FETCH;
   // Direct access first, then the two CORS proxies: the fallback needs no opt-in.
   const candidates = [
     { source: 'direct', label: 'Direct', url: job.url },
@@ -2110,10 +2108,8 @@ async function fetchRemote(job) {
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       if (new URL(response.url).protocol !== 'https:') throw new Error('Redirect did not end at HTTPS');
-      const declared = Number(response.headers.get('content-length') || 0);
-      if (declared > limit) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
       if (!response.body || typeof response.body.getReader !== 'function') {
-        throw new Error('This browser cannot stream a response to check its size');
+        throw new Error('This browser cannot stream the response');
       }
       const reader = response.body.getReader();
       const chunks = [];
@@ -2123,7 +2119,6 @@ async function fetchRemote(job) {
           const { done, value } = await reader.read();
           if (done) break;
           size += value.byteLength;
-          if (size > limit) throw new RangeError(`Download exceeds ${MAX_FETCH.toLocaleString()} bytes`);
           chunks.push(value);
         }
       } catch (error) {
@@ -2134,7 +2129,7 @@ async function fetchRemote(job) {
       const type = response.headers.get('content-type') || 'application/octet-stream';
       return { body: new Blob(chunks, { type }), type, source: candidate.source };
     } catch (error) {
-      if (error instanceof RangeError) throw error; // Proxies cannot override a per-file limit.
+      if (error instanceof RangeError) throw error;
       failures.push(`${candidate.label}: ${error.message || String(error)}`);
     } finally { clearTimeout(timer); }
   }

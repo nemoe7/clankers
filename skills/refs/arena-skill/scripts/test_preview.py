@@ -849,7 +849,7 @@ def test_http_boundaries():
       assert 'id="staged-files"' in page
       assert 'id="uploads-list"' not in page and 'id="uploads-history"' not in page
       assert 'id="fetch-url"' in page and 'id="fetch-proxy"' not in page
-      assert "Up to 102.4 MB per URL" in page
+      assert "Up to 102.4 MB per URL" not in page
       assert "Keep this page open while transfers run." in page
       assert "not measured" not in page
       assert 'id="workspace-use"' in page
@@ -2519,7 +2519,7 @@ def test_download_queue():
       )
       assert status == 201 and json.loads(completed)["source"] == "codetabs"
 
-      # The download route refuses a declared excess. The store keeps a large upload.
+      # A completed claim cannot accept another body. The store keeps a large upload.
       status, _, _problem = request(
         "POST",
         f"/api/fetch-jobs/{proxy['id']}/result?name=large.bin",
@@ -2528,11 +2528,10 @@ def test_download_queue():
           **auth,
           **proxy_headers,
           "Content-Type": "application/octet-stream",
-          "Content-Length": str(preview.MAX_FETCH + 2),
+          "Content-Length": str(preview.SNAPSHOT_CAP_BYTES + 2),
         },
       )
       assert status == 409
-      assert preview.MAX_FETCH == 102_400_000
       large = queue_store.save_upload(
         "large.bin", "application/octet-stream", b"x" * 5_000_001
       )
@@ -6116,7 +6115,7 @@ def test_workspace_usage():
     usage = preview.workspace_usage(root)
   assert usage["bytes"] == 4 and usage["files"] == 1
   assert usage["documented_cap_bytes"] == 128_000_000
-  assert usage["download_cap_bytes"] == preview.MAX_FETCH == 102_400_000
+  assert usage["download_cap_bytes"] is None
 
 
 def test_owner_limits_and_streams():
@@ -6138,26 +6137,27 @@ def test_owner_limits_and_streams():
     except ValueError:
       pass
     claim = store.claim_fetch()
-    with patch.object(preview, "MAX_FETCH", 4):
+    with tempfile.TemporaryFile() as stream:
+      data = preview.FileBody(stream)
+      chunk = b"x" * 65536
+      while len(data) <= preview.SNAPSHOT_CAP_BYTES:
+        data.write(chunk)
       saved = store.complete_fetch(
-        owner["id"],
-        claim["claim"],
-        "x" * 300 + ".txt",
-        "text/plain",
-        "direct",
-        b"12345",
+        owner["id"], claim["claim"], "x" * 300 + ".txt", "text/plain", "direct", data
       )
-      assert Path(saved["path"]).read_bytes() == b"12345"
+      assert saved["size"] == len(data) == Path(saved["path"]).stat().st_size
       agent = store.enqueue_fetch("https://example.com/a", False, pending=True)
       store.decide_fetch(agent["id"], "approved")
       claim = store.claim_fetch()
-      try:
-        store.complete_fetch(
-          agent["id"], claim["claim"], "a.txt", "text/plain", "direct", b"12345"
-        )
-        raise AssertionError("Approval removed the agent limit")
-      except ValueError:
-        pass
+      saved = store.complete_fetch(
+        agent["id"], claim["claim"], "a.txt", "text/plain", "direct", data
+      )
+      assert saved["size"] == len(data) == Path(saved["path"]).stat().st_size
+      digest = hashlib.sha256()
+      with Path(saved["path"]).open("rb") as stored:
+        for part in iter(lambda: stored.read(len(chunk)), b""):
+          digest.update(part)
+      assert digest.hexdigest() == data.digest()
     blob = b"a" * 65525 + b"\r\n--boundaryX!" + b"\x00\xff"
     parts = [
       ("id", None, b"streamed"),

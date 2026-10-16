@@ -28,6 +28,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: remove fixed URL-download and file-upload byte limits. Keep approval, URL checks, source rules, claims, nonempty bodies, and timeouts.
+
 - Userscripts: shorten overwrite prompts with context labels. Keep stamp directions, file targets, and save guards unchanged.
 
 - Rules and skills: use Line, Diff, and Reason amendment tables, with highlights, strikethrough, and separate exact final clauses.

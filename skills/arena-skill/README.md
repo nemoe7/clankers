@@ -81,11 +81,7 @@ The browser fetches directly first. The owner can allow AllOrigins, then CodeTab
 for that URL only. Both proxies see the full URL. The URL validator rejects embedded credentials.
 The server holds `fetch_jobs` rows and five-minute claims. An active browser renews its claim.
 An abandoned claim returns to the queue. Jobs run one at a time in each open browser.
-Agent-requested downloads keep the 102,400,000-byte cap after approval. Owner-queued downloads have no application byte cap. Stored origin controls both browser and server checks. Older jobs retain the cap because their origin is unknown.
-That cap is 80% of the documented 128,000,000-byte snapshot figure.
-The figure is not measured.
-It came from a workspace without GitHub.
-One session reported 512 MB.
+URL downloads have no application byte cap. Approval, URL validation, source checks, and claim rules still apply. Browser, memory, disk, and transfer limits still apply.
 Completed bytes go under `<state-dir>/downloads/`, outside SQLite.
 The saved result writes one inbox note with a path. Jobs and notes can outlive file bytes.
 The NDJSON backup does not include jobs or file bytes.

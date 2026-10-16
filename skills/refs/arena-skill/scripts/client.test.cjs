@@ -3201,19 +3201,19 @@ test('preview client', async (t) => {
     await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
     assert.notEqual(streamBehavior.cancelled, true);
 
-    // Approved agent and legacy jobs must still enforce both byte checks.
+    // Approved agent and legacy jobs also pass the old byte thresholds.
     for (const [suffix, behavior] of [['declared', { declared: 102_400_001 }], ['stream', { chunks: [{ byteLength: 102_400_001 }] }]]) {
       const url = `https://files.example.org/agent-${suffix}.bin`;
       remoteBehaviors.set(url, behavior);
-      state.fetch_jobs.unshift({ id: `agent-${suffix}`, url, origin: suffix === 'declared' ? 'agent' : undefined, status: 'queued', approval: 'approved', allow_proxy: true });
+      state.fetch_jobs.unshift({ id: `agent-${suffix}`, url, origin: suffix === 'declared' ? 'agent' : undefined, status: 'queued', approval: 'approved', allow_proxy: true, error: null });
       callsBeforeLimit = remoteCalls.length;
       resultsBeforeLimit = resultCalls.length;
       await refresh();
-      await waitFor(() => state.fetch_jobs[0]?.status === 'failed');
+      await waitFor(() => state.fetch_jobs[0]?.status === 'saved');
       assert.equal(remoteCalls.length, callsBeforeLimit + 1);
-      assert.equal(resultCalls.length, resultsBeforeLimit);
-      assert.match(state.fetch_jobs[0].error, /102,400,000 bytes/);
-      if (suffix === 'stream') assert.equal(behavior.cancelled, true);
+      assert.equal(resultCalls.length, resultsBeforeLimit + 1);
+      assert.equal(state.fetch_jobs[0].error, null);
+      if (suffix === 'stream') assert.notEqual(behavior.cancelled, true);
     }
     lost = 'https://files.example.org/lost.bin';
     remoteBehaviors.set(lost, { chunks: [Uint8Array.from([1])] });

@@ -32,7 +32,6 @@ IDENTIFIER=re.compile('[a-zA-Z0-9_-]{1,80}\\Z')
 REPLY_REFERENCE=re.compile('^RE:\\s*([a-zA-Z0-9_-]{1,80})(?:\\s|$)',re.IGNORECASE)
 MAX_REPORT=2000000
 SNAPSHOT_CAP_BYTES=128000000
-MAX_FETCH=SNAPSHOT_CAP_BYTES*80//100
 IMAGE_DATA_URI_MAX_BYTES=2*1024*1024
 WORKSPACE_SKIP={'.arena','.cache','.git','.local','.mypy_cache','.next','.nox','.npm','.nuxt','.output','.parcel-cache','.pytest_cache','.ruff_cache','.svelte-kit','.tox','.turbo','.venv','.vite','__pycache__','build','coverage','dist','node_modules','out','target'}
 FETCH_LEASE=timedelta(minutes=5)
@@ -46,7 +45,7 @@ def workspace_usage(root=None):
 			try:total+=(Path(dirpath)/name).stat().st_size
 			except OSError:continue
 			count+=1
-	return{'bytes':total,'files':count,'documented_cap_bytes':SNAPSHOT_CAP_BYTES,'download_cap_bytes':MAX_FETCH}
+	return{'bytes':total,'files':count,'documented_cap_bytes':SNAPSHOT_CAP_BYTES,'download_cap_bytes':None}
 FENCE=re.compile('^ {0,3}(`{3,}|~{3,})')
 CHOICE=re.compile('^\\s*[-*]\\s+\\(([ xX]?)\\)\\s+(\\S.*?)\\s*$')
 CHECKBOX=re.compile('^\\s*[-*]\\s+\\[([ xX]?)\\]\\s+(\\S.*?)\\s*$')
@@ -1357,7 +1356,6 @@ class Store:
 		try:
 			with self.transaction(autosave=False)as db:
 				row=self.claimed_fetch(db,job_id,claim)
-				if row['origin']!='owner'and len(data)>MAX_FETCH:raise ValueError(f"A download must be 1–{MAX_FETCH:,} bytes")
 				if source!='direct'and not row['allow_proxy']:raise ValueError('Proxy fallback was not enabled for this URL')
 				directory=self.path.parent/FETCH_DIR;directory.mkdir(parents=True,exist_ok=True,mode=448);target=directory/f"{job_id}{Path(cleaned).suffix[:16]}";save_body(target,data);target.chmod(384);stamp=now();db.execute("UPDATE fetch_jobs SET status = 'saved', source = ?, name = ?, type = ?, size = ?, sha256 = ?, file = ?, error = NULL, claim = NULL, lease_until = NULL, updated_at = ? WHERE id = ?",(source,cleaned,file_type,len(data),body_digest(data),target.name,stamp,job_id));message=f"Download: {cleaned} ({len(data)} B, {file_type}) from {urlsplit(row['url']).hostname} via {source} saved to {target}";db.execute('INSERT INTO notes (id, text, at) VALUES (?, ?, ?)',(job_id,message,stamp));result=db.execute('SELECT * FROM fetch_jobs WHERE id = ?',(job_id,)).fetchone()
 		except Exception:
@@ -1774,16 +1772,10 @@ def handler(store):
 			elif content_type!='application/json'and not fetch_result:self.problem(415,'Expected application/json');return
 			try:
 				if self.headers.get('Transfer-Encoding')or len(self.headers.get_all('Content-Length',[]))!=1:raise ValueError('Send one Content-Length and no Transfer-Encoding')
-				length=int(self.headers.get('Content-Length','0'));limit=None
+				length=int(self.headers.get('Content-Length','0'))
 				if fetch_result:
-					with closing(store.connect())as db:job=store.claimed_fetch(db,fetch_post.group(1),self.headers.get('X-Fetch-Claim',''));limit=MAX_FETCH if job['origin']!='owner'else None
-				if length<=0 or limit is not None and length>limit:
-					subject='Upload'if note_upload else'Download'if fetch_result else'Request body';remaining=length if limit is not None and 0<length<=limit+1 else 0
-					while remaining>0:
-						chunk=self.rfile.read(min(65536,remaining))
-						if not chunk:break
-						remaining-=len(chunk)
-					self.problem(413,f"{subject} has an invalid length"if limit is None else f"{subject} must be 1–{limit:,} bytes");return
+					with closing(store.connect())as db:store.claimed_fetch(db,fetch_post.group(1),self.headers.get('X-Fetch-Claim',''))
+				if length<=0:subject='Upload'if note_upload else'Download'if fetch_result else'Request body';self.problem(413,f"{subject} has an invalid length");return
 				if note_upload:
 					with stream_note_attachments(content_type,self.rfile,length)as parsed:note=store.note_with_uploads(*parsed)
 					for key in('at','acknowledged_at','ack_edited_at','seen_at'):note[key]=clip_stamp(note[key])

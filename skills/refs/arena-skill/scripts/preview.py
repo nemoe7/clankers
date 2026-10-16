@@ -39,10 +39,8 @@ ASSETS = Path(__file__).resolve().parents[1] / "assets"
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]{1,80}\Z")
 REPLY_REFERENCE = re.compile(r"^RE:\s*([a-zA-Z0-9_-]{1,80})(?:\s|$)", re.IGNORECASE)
 MAX_REPORT = 2_000_000
-# Documented snapshot cap, not a measured limit. The 128 MB figure was for a workspace
-# without GitHub. One session reported 512 MB. Downloads use 80% of the documented figure.
+# Documented snapshot cap, not a measured limit.
 SNAPSHOT_CAP_BYTES = 128_000_000
-MAX_FETCH = SNAPSHOT_CAP_BYTES * 80 // 100
 # A data URI lands inside a Markdown message row, so the cap keeps one pasted image sane.
 IMAGE_DATA_URI_MAX_BYTES = 2 * 1024 * 1024
 WORKSPACE_SKIP = {
@@ -95,7 +93,7 @@ def workspace_usage(root=None):
     "bytes": total,
     "files": count,
     "documented_cap_bytes": SNAPSHOT_CAP_BYTES,
-    "download_cap_bytes": MAX_FETCH,
+    "download_cap_bytes": None,
   }
 
 
@@ -4208,8 +4206,6 @@ class Store:
     try:
       with self.transaction(autosave=False) as db:
         row = self.claimed_fetch(db, job_id, claim)
-        if row["origin"] != "owner" and len(data) > MAX_FETCH:
-          raise ValueError(f"A download must be 1–{MAX_FETCH:,} bytes")
         if source != "direct" and not row["allow_proxy"]:
           raise ValueError("Proxy fallback was not enabled for this URL")
         directory = self.path.parent / FETCH_DIR
@@ -5588,31 +5584,16 @@ def handler(store):
         ):
           raise ValueError("Send one Content-Length and no Transfer-Encoding")
         length = int(self.headers.get("Content-Length", "0"))
-        limit = None
         if fetch_result:
           with closing(store.connect()) as db:
-            job = store.claimed_fetch(
+            store.claimed_fetch(
               db, fetch_post.group(1), self.headers.get("X-Fetch-Claim", "")
             )
-            limit = MAX_FETCH if job["origin"] != "owner" else None
-        if length <= 0 or (limit is not None and length > limit):
+        if length <= 0:
           subject = (
             "Upload" if note_upload else "Download" if fetch_result else "Request body"
           )
-          # Discard at most one byte over the limit in chunks. Clients sending a wider body receive
-          # the 413 without forcing this server to buffer or read all of it.
-          remaining = length if limit is not None and 0 < length <= limit + 1 else 0
-          while remaining > 0:
-            chunk = self.rfile.read(min(65536, remaining))
-            if not chunk:
-              break
-            remaining -= len(chunk)
-          self.problem(
-            413,
-            f"{subject} has an invalid length"
-            if limit is None
-            else f"{subject} must be 1–{limit:,} bytes",
-          )
+          self.problem(413, f"{subject} has an invalid length")
           return
         if note_upload:
           with stream_note_attachments(content_type, self.rfile, length) as parsed:
