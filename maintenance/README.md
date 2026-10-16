@@ -23,7 +23,7 @@ Arena uses the `arena-skill` skill for one Notes / Reports preview. Keep reports
 
 Compress wording and sections, not meaning. Keep every negation, condition, command, number, and caveat. Match the generic core in meaning, not byte for byte, except for push, PR, and merge authorization.
 
-ARENA.md always pushes and keeps a PR open so work survives a limit. Core forbids pushes and PRs unless asked but has no merge clause. Arena never merges without owner authorization, then uses rebase only: rebase onto the target, then merge, so no merge commit lands. Do not repeat Arena-managed branch mechanics beyond that.
+ARENA.md always pushes and keeps a PR open so work survives a limit. Core forbids pushes and PRs unless asked but has no merge clause. NEVER merge a pull request as an Arena agent, even with authorization or instructions to merge. Do not repeat Arena-managed branch mechanics beyond that.
 
 The duplication of the core is deliberate. In Arena, no platform loads ARENA.md or AGENTS.md on its own. So the file stands alone instead of overlaying the core, and it takes effect only after the agent has it in context. Exploration does not gate activation.
 
