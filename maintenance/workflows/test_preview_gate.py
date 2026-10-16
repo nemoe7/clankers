@@ -58,7 +58,7 @@ if [ "$1" = "worktree-tick" ]; then
 fi
 if [ "$1" = "main-drift-tick" ]; then
   if [ "${ARENA_PREVIEW_TEST_DRIFT:-}" = "1" ]; then
-    exec __PYTHON__ __PREVIEW__ main-drift-tick
+    exec __PYTHON__ __PREVIEW__ "$@"
   fi
   exit 0
 fi
@@ -731,6 +731,49 @@ def test_installed_exit_hook_marks_cli_children_and_preserves_exit_status() -> N
     )
     assert result.returncode == 7
     assert result.stdout.splitlines() == ["cli:1", "hook:1"]
+
+
+def test_a_commit_line_keeps_the_drift_read_local():
+  """The commit checkpoint reads local refs, and the push checkpoint fetches first."""
+  with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    source = git_repo(root)
+
+    def git(repo, *args):
+      return subprocess.check_output(
+        ["git", "-C", str(repo), *args],
+        text=True,
+        stderr=subprocess.PIPE,
+        env={
+          **os.environ,
+          "GIT_AUTHOR_NAME": "t",
+          "GIT_AUTHOR_EMAIL": "t@t",
+          "GIT_COMMITTER_NAME": "t",
+          "GIT_COMMITTER_EMAIL": "t@t",
+        },
+      ).strip()
+
+    git(source, "branch", "main", "origin/main")
+    origin = root / "origin.git"
+    git(source, "clone", "--bare", str(source), str(origin))
+    checkout = root / "checkout"
+    git(source, "clone", "--depth=1", "--branch=work", origin.as_uri(), str(checkout))
+    git(checkout, "fetch", "--depth=1", "origin", "main:refs/remotes/origin/main")
+    git(checkout, "reset", "--hard", "origin/main")
+    git(checkout, "update-ref", "refs/remotes/origin/main", "origin/work")
+    git(checkout, "config", "user.name", "t")
+    git(checkout, "config", "user.email", "t@t")
+    stale = git(checkout, "rev-parse", "refs/remotes/origin/main")
+    committed = run("git commit --allow-empty -m commit-check", cwd=str(checkout))
+    assert committed.returncode == 0, committed.stderr
+    assert git(checkout, "rev-parse", "refs/remotes/origin/main") == stale, (
+      "the commit line must read local refs alone"
+    )
+    pushed = run("git push --dry-run origin work", cwd=str(checkout))
+    assert pushed.returncode == 0, pushed.stderr
+    assert git(checkout, "rev-parse", "refs/remotes/origin/main") != stale, (
+      "the push line refreshes the remote tips"
+    )
 
 
 def test_remote_drift_refreshes_shallow_refs_without_replaying_absorbed_work():

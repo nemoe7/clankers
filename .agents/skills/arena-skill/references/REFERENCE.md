@@ -95,7 +95,7 @@ The profile gate and the EXIT hook beside it hold one case per shape below. Ever
 | `shell-line` | every gated shell | the command line is read once per shell, so a command costs no read |
 | `platform-shell` | the platform's probe or its own hosted process | pass, and mark the shell once |
 | `task-reminder` | `git commit`, `git push` or `gh pr checks` | the task-list notice once per shell, then the line runs |
-| `main-moved` | `git commit` or `git push` | the fresh remote/local drift check once per shell, including shallow and absorbed history, then the line runs |
+| `main-moved` | `git commit` or `git push` | the drift check once per shell, from local refs at the commit line and with a fresh fetch at the push line, then the line runs |
 | `route-marker` | a shell the gate started itself (`ARENA_PREVIEW_ROUTE=1`) | pass, so a detached run never matches its own family |
 | `idle-wait` | a line whose first real command is `sleep` | `exit 130` before the sleep, so the turn takes queued work. A retry loop names its own command first and passes |
 | `long-run` | `gh pr checks`, `gh run watch`, or a test runner head (`pytest`, `node --test`, `npm test`, `make test`, `go test`, `cargo test` and the rest) | the call ends clean and the run continues, or `exit 130` when the start fails. Any run of 10 seconds or more is a long run too, and MUST use `route` |

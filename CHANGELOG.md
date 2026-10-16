@@ -68,6 +68,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - A read line skips the PR-state veto spawn. The check keeps the spawn for every write shape, with quotes and backslashes removed first.
 
+- The commit checkpoint reads local refs alone, and the push checkpoint keeps its fresh fetch. A commit line no longer waits on the network.
+
 ### Fixed
 
 - Arena reference: fix attachment-limit and agent-unpublish view rules.

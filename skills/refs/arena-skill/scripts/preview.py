@@ -585,8 +585,12 @@ def main_identical(root="."):
     return False
 
 
-def main_drift_warning(root="."):
-  """Read fresh origin tips without moving HEAD, the index, or working files."""
+def main_drift_warning(root=".", fresh=True):
+  """Read origin tips without moving HEAD, the index, or working files.
+
+  A fresh read fetches the remote tips first, which the push checkpoint pays for.
+  The commit checkpoint passes fresh False and reads the local refs alone.
+  """
 
   def git(*arguments):
     return subprocess.run(
@@ -606,7 +610,7 @@ def main_drift_warning(root="."):
     if git("rev-parse", "--git-dir").returncode:
       return ""
     remote = git("remote", "get-url", "origin")
-    if remote.returncode == 0:
+    if fresh and remote.returncode == 0:
       branch = git("symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
       if not branch:
         return unavailable("detached HEAD")
@@ -6473,9 +6477,15 @@ def main():
     "--command", dest="current_command", help="The command the DEBUG trap reached"
   )
   main_drift_tick = commands.add_parser(
-    "main-drift-tick", help="Check fresh remote branch drift at commit/push checkpoints"
+    "main-drift-tick", help="Check remote branch drift at commit and push checkpoints"
   )
   main_drift_tick.add_argument("--repo", default=".")
+  main_drift_tick.add_argument(
+    "--local",
+    dest="local_read",
+    action="store_true",
+    help="Read the local refs alone, with no fetch",
+  )
   egress_tick = commands.add_parser(
     "egress-tick",
     help="Warn when a line fetches a host the sandbox egress filter blocks",
@@ -6747,7 +6757,7 @@ def main():
         print(warning, file=sys.stderr)
       return 0
     if args.command == "main-drift-tick":
-      warning = main_drift_warning(args.repo)
+      warning = main_drift_warning(args.repo, fresh=not args.local_read)
       if warning:
         print(warning, file=sys.stderr)
       return 0

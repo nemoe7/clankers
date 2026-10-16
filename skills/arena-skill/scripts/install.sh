@@ -198,12 +198,18 @@ _arena_preview_gate() {
       ;;
   esac
   # A branch that trails origin/main replays onto a stale base.
-  # Run this check once per shell. Check only lines that name a commit or push.
+  # The commit line reads local refs. The push line refreshes the remote tips first.
   # case: main-moved
   case "\$BASH_COMMAND" in
-    *"git commit"*|*"git push"*)
-      if [ -z "\${_arena_preview_main_checked:-}" ]; then
-        _arena_preview_main_checked=1
+    *"git commit"*)
+      if [ -z "\${_arena_preview_main_local:-}" ]; then
+        _arena_preview_main_local=1
+        "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" main-drift-tick --local
+      fi
+      ;;
+    *"git push"*)
+      if [ -z "\${_arena_preview_main_fresh:-}" ]; then
+        _arena_preview_main_fresh=1
         "$VENV/bin/python" "$REPO_ROOT/$SKILL_REL/scripts/preview.py" main-drift-tick
       fi
       ;;
