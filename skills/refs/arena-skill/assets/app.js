@@ -4,8 +4,9 @@ const note = $('#note');
 const send = $('#send');
 const status = $('#send-status');
 const key = 'arena-preview-v1';
-// A text paste over this length becomes one attachment instead of filling the composer.
-const PASTE_LINE_LIMIT = 25;
+// Text above either paste limit becomes one attachment.
+const PASTE_LINE_LIMIT = 15;
+const PASTE_CHAR_LIMIT = 1500;
 const MAX_FETCH = 102_400_000;
 const BINARY_TIMEOUT = 600_000;
 let pending = null;
@@ -318,11 +319,12 @@ compose.addEventListener('paste', event => {
   const images = Array.from(clip?.files || []).filter(file => file.type.startsWith('image/'));
   const text = clip?.getData('text/plain') || '';
   if (!images.length) {
-    // A paste of many lines becomes one attachment, so a pasted log never fills the composer.
-    if (text.split('\n').length <= PASTE_LINE_LIMIT) return;
+    const lines = text.split('\n').length;
+    // A Unicode character uses at most two UTF-16 units. Inspect only enough text to decide the limit.
+    if (lines < PASTE_LINE_LIMIT && Array.from(text.slice(0, PASTE_CHAR_LIMIT * 2 + 1)).length <= PASTE_CHAR_LIMIT) return;
     event.preventDefault();
     const stamp = Date.now();
-    const base = `${text.split('\n').length}-pasted-lines-${stamp}`;
+    const base = `${lines}-pasted-lines-${stamp}`;
     const names = new Set(stagedFiles.map(file => file.name));
     let name = `${base}.txt`;
     for (let index = 2; names.has(name); index++) name = `${base}-${index}.txt`;

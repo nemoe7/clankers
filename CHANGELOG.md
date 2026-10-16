@@ -10,6 +10,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
+- Text pastes with 15 or more lines, or more than 1,500 Unicode characters, become staged files. Image pastes, existing drafts, and Send behavior stay unchanged.
+
 - Bare task reads print full details and linked answers. Task writes and task-list output do not change.
 
 - Successful message sends retain rendered Markdown until the next state response.

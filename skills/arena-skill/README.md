@@ -63,6 +63,7 @@ Finished tasks show newest completion first. Upcoming tasks keep their stored or
 The composer sends one note plus files through `/api/notes/with-file`.
 Pasted clipboard images join staged attachments with epoch-millisecond names, image extensions and numeric suffixes for collisions. Text paste stays native. Images keep the same retry path.
 Each note has one ID and acknowledgement. `read` lists files in `attachments[]`.
+Text-only pastes with 15 or more lines, or more than 1,500 Unicode characters, become staged text files. The count covers the pasted text, not the existing draft.
 Files stay outside SQLite in `<state-dir>/uploads/`.
 Name stored files with the note ID's first six characters, Unix epoch seconds, and the original filename. Replace spaces with hyphens.
 Only duplicate names add `-2`, `-3`, and so on after the timestamp. Keep existing files unchanged.

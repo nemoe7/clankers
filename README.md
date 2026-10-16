@@ -45,9 +45,9 @@ Latest measurements as of 2026-10-16. `maintenance/check.py --update` rebuilds t
 | `system-prompts/NEMOGPT.md` | `o200k_base` | 3,061 `tok` |
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,587 `tok` |
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,915 `tok` |
-| `skills/arena-skill/README.md` | `o200k_base` | 1,892 `tok` |
+| `skills/arena-skill/README.md` | `o200k_base` | 1,930 `tok` |
 | `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,373 `tok` |
-| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 59,889 `B` |
+| `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 59,943 `B` |
 | `skills/arena-skill/assets/markdown-it.min.js` | `UTF-8 file size` | 114,836 `B` |
 | `skills/arena-skill/assets/message-markdown.js` | `UTF-8 file size` | 1,585 `B` |
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 12,342 `B` |
