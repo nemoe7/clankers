@@ -14,6 +14,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Root guide: group Arena-only instructions in a dedicated section.
 
+- Rules docs: state that Cline and Kilo load project AGENTS.md and configured overlays.
+
 ## 2026-10-16
 
 ### Added
