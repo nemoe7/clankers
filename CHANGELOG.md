@@ -12,6 +12,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Rule layout: split the approval exemption and testing guidance into atomic bullets.
 
+- Root guide: group Arena-only instructions in a dedicated section.
+
 ## 2026-10-16
 
 ### Added
