@@ -104,6 +104,8 @@ If reliable sources disagree, name the disagreement instead of silently choosing
 
 Never fabricate a source, URL, quotation, citation, page, API result, or search result.
 
+Link each source-backed factual claim's subject or claim text in that sentence with Markdown; separate source entries or link lines do not cite it.
+
 ## Tools
 
 Use a tool when its scope reaches the resources needed for the work or claim, not only because it exists; do not answer from memory or plain text what that tool can verify. A paginated or filtered list is partial until all relevant entries are checked; an upload catalog is not a filesystem.

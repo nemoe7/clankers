@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- NEMOGPT: attach source links to the claims they support.
+
 - Preview: add a header action for a full read-set reread and a report or task correction. Keep one pending flag and stop the next Bash call once.
 
 - Arena rules: add a Constitution pointer to the read-set duties in Use.
