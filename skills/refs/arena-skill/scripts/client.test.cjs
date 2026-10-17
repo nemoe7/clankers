@@ -169,6 +169,7 @@ test('preview client', async (t) => {
   let reducedMotion = false;
   const pointerListeners = [];
   const pendingWrites = new Map();
+  const interruptCalls = [];
   const failedWrites = new Set();
   const context = {
     window: {
@@ -249,6 +250,12 @@ test('preview client', async (t) => {
         skipCalls.push(posted);
         state.skip_poll = posted.skip === false ? null : '2026-10-06T09:00:00';
         return response({ skip_poll: state.skip_poll });
+      }
+      if (url === '/api/agent-interrupt') {
+        writeTokens.push(options.headers['X-Preview-Token']);
+        interruptCalls.push(JSON.parse(options.body));
+        state.agent_interrupt_pending = true;
+        return response({ agent_interrupt_pending: true });
       }
       if (url === '/api/tasks/order') {
         writeTokens.push(options.headers['X-Preview-Token']);
@@ -4093,6 +4100,69 @@ test('preview client', async (t) => {
       sendHandler = keptSendHandler;
       state = keptState;
       await tick();
+      await refresh();
+    }
+  });
+
+
+  await t.test('The header interrupt carries context without a note or a dialog', async () => {
+    const keptState = state;
+    const notesBefore = sent.length;
+    const draft = get('#note').value;
+    state = { ...state, reports: [{ id: 'context-report', title: 'Context',
+      updated_at: new Date().toISOString(), seen_at: new Date().toISOString() }],
+      tasks: { finished: [], upcoming: [{ id: 'current-work', title: 'Current work',
+        status: 'upcoming', order: 1, details: [] }] }, agent_interrupt_pending: false };
+    try {
+      get('#notes-tab').events.click();
+      await refresh(); await tick();
+      const button = get('#agent-interrupt');
+      assert.equal(typeof button.events.click, 'function');
+      assert.equal(button.getAttribute('aria-pressed'), 'false');
+      let release;
+      pendingWrites.set('/api/agent-interrupt', new Promise(resolve => { release = resolve; }));
+      const pending = button.events.click();
+      assert.equal(button.disabled, true);
+      assert.equal(button.getAttribute('aria-busy'), 'true');
+      await button.events.click();
+      release();
+      pendingWrites.delete('/api/agent-interrupt');
+      await pending;
+      assert.equal(interruptCalls.length, 1, 'a repeated busy press sends no second request');
+      assert.equal(interruptCalls.at(-1).tab, 'notes');
+      assert.equal(button.getAttribute('aria-pressed'), 'true');
+      assert.equal(button.getAttribute('aria-busy'), 'false');
+      assert.equal(button.dataset.state, 'bad', 'the server-reported pending flag is red');
+      assert.equal(button.disabled, false);
+      state.agent_interrupt_pending = false;
+      await refresh();
+      assert.equal(button.getAttribute('aria-pressed'), 'false', 'the hook consumption clears the button');
+      assert.equal(button.dataset.state, '');
+      get('#reports-tab').events.click();
+      await tick(); await tick();
+      const selected = get('#report-select').value;
+      const reportStatus = get('#report-status').textContent;
+      await button.events.click();
+      assert.equal(interruptCalls.at(-1).tab, 'reports');
+      assert.equal(interruptCalls.at(-1).report_id, selected);
+      assert.equal(get('#report-select').value, selected);
+      assert.equal(get('#report-status').textContent, reportStatus, 'the action has no report status line');
+      get('#tasks-tab').events.click();
+      await button.events.click();
+      assert.equal(interruptCalls.at(-1).tab, 'tasks');
+      assert.equal(sent.length, notesBefore, 'the action writes no note');
+      assert.equal(get('#note').value, draft, 'the action keeps the composer draft');
+      state.agent_interrupt_pending = false;
+      await refresh();
+      failedWrites.add('/api/agent-interrupt');
+      await button.events.click();
+      assert.equal(button.disabled, false, 'a failed request can be retried');
+      assert.equal(button.getAttribute('aria-pressed'), 'false');
+      assert.match(button.title, /Write failed/);
+    } finally {
+      pendingWrites.delete('/api/agent-interrupt');
+      failedWrites.delete('/api/agent-interrupt');
+      state = keptState;
       await refresh();
     }
   });

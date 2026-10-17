@@ -380,6 +380,8 @@ mark code { color: var(--text); }
 @property --edge-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @property --edge-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @media (prefers-reduced-motion: no-preference) {
+  #agent-interrupt[aria-busy="true"] svg { animation: reread-spin 1s linear infinite; }
+  @keyframes reread-spin { to { transform: rotate(360deg); } }
   [role="tabpanel"] { animation: panel-enter var(--motion-duration) ease-out; }
   @keyframes panel-enter { from { opacity: 0; } to { opacity: 1; } }
   .task, .answer { transition: background-color var(--motion-duration) ease; }

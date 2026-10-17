@@ -30,6 +30,9 @@ STUB = """#!/bin/sh
 if [ -n "${ARENA_PREVIEW_TEST_CALLS:-}" ]; then
   printf '%s\n' "$*" >> "$ARENA_PREVIEW_TEST_CALLS"
 fi
+if [ "$1" = "interrupt-tick" ]; then
+  exec __PYTHON__ __PREVIEW__ "$@"
+fi
 if [ "$1" = "pr-state-tick" ]; then
   exec __PYTHON__ __PREVIEW__ "$@"
 fi
@@ -1016,3 +1019,29 @@ def test_pr_state_classifier_keeps_payloads_separate_from_shell_code():
     )
     for command, blocked in cases:
       assert bool(preview_module.pr_state_warning(command)) == blocked, command
+
+
+def test_header_interrupt_precedes_hook_bypasses():
+  env_factory = clean_env
+  for command, line, routed in [
+    ("printf reached", "arena-preview read", False),
+    ("true", "true", False),
+    ("true", "true", True),
+  ]:
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      store = preview_module.Store(root, create=True)
+      notice = "Header reread request"
+      store.set_meta("agent_interrupt", notice)
+      with patch(
+        __name__ + ".clean_env",
+        side_effect=lambda routed=routed, **kwargs: {
+          **env_factory(**kwargs),
+          "ARENA_PREVIEW_ROUTE": "1" if routed else "0",
+        },
+      ):
+        result = run(command, state=root, line=line)
+      assert result.returncode == 130, result.stderr
+      assert notice in result.stderr
+      assert "reached" not in result.stdout
+      assert store.meta_value("agent_interrupt") is None

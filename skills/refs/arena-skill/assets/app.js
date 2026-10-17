@@ -840,6 +840,7 @@ function renderState() {
   renderFetchIfChanged(state.fetch_jobs || []);
   renderAgentKey(state.agent_key);
   paintSkipPoll(state.skip_poll);
+  paintInterrupt(state.agent_interrupt_pending);
   showWorkspace(state.workspace);
   const signature = reportsSignature(state.reports);
   if (signature !== listSignature) {
@@ -2441,6 +2442,34 @@ $('#unpublish-report').addEventListener('click', async () => {
     if (!select.value || select.value === id) { select.value = id; await loadReport(true); }
     $('#report-status').textContent = `Delete failed: ${error.message}`;
   } finally { button.disabled = false; }
+});
+function paintInterrupt(pending) {
+  const button = $('#agent-interrupt');
+  button.setAttribute('aria-pressed', pending ? 'true' : 'false');
+  button.dataset.state = pending || button.dataset.error ? 'bad' : '';
+  label(button, button.dataset.error || (pending
+    ? 'Read-set reread is pending'
+    : 'Ask the agent to read the full read set again before continuing'));
+}
+$('#agent-interrupt').addEventListener('click', async () => {
+  const button = $('#agent-interrupt');
+  if (button.disabled) return;
+  delete button.dataset.error;
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  const tab = tabs.find(item => item.getAttribute('aria-selected') === 'true').id.replace('-tab', '');
+  try {
+    await optimisticWrite(() => {}, async () => (await request('/api/agent-interrupt', {
+      method: 'POST', headers: writeHeaders('application/json'),
+      body: JSON.stringify({ tab, report_id: tab === 'reports' ? $('#report-select').value || null : null })
+    })).json(), (state, result) => { state.agent_interrupt_pending = result.agent_interrupt_pending; });
+  } catch (error) {
+    button.dataset.error = `Request failed: ${error.message}. Click to retry.`;
+    paintInterrupt(getState()?.agent_interrupt_pending);
+  } finally {
+    button.disabled = false;
+    button.setAttribute('aria-busy', 'false');
+  }
 });
 // Skip poll toggles a one-shot flag that ends the agent's wait without leaving a note for a later turn.
 // A second press cancels the skip, so an early press cannot force the wait to end.

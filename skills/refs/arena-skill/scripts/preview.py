@@ -187,6 +187,7 @@ AGENT_KEY_META = "agent_key"
 AGENT_KEY_EXPIRY_SECONDS = 1200
 AGENT_KEY_EXPIRY_META = "agent_key_expired_at"
 AGENT_SEEN_META = "agent_seen_at"
+AGENT_INTERRUPT_META = "agent_interrupt"
 AGENT_CALL_ENDED_META = "agent_call_ended_at"
 # A poll that returns with nothing to read ends the turn. The header reads this mark, so the
 # silence after a turn never reads as a running bash call. The agent's next call clears it.
@@ -3946,6 +3947,7 @@ class Store:
         "polling_since": (clip_stamp(meta.get(POLL_SINCE_META)) if polling else None),
         # The page paints its Skip poll button from this stamp until a poll consumes it.
         "skip_poll": clip_stamp(meta.get(SKIP_POLL_META)),
+        "agent_interrupt_pending": bool(meta.get(AGENT_INTERRUPT_META)),
         # The message log header names the bash calls since the owner's last message.
         "calls_since_message": meta_number(db, POLLS_SINCE_MESSAGE),
         # The Downloads tab shows the key the userscript holds.
@@ -4991,6 +4993,44 @@ class Store:
     """True while a poll heartbeat sits inside the freshness window."""
     age = seconds_since(self.meta_value(POLLING_META))
     return age is not None and 0 <= age < POLLING_FRESH_SECONDS
+
+  def request_interrupt(self, tab, report_id=None):
+    if not isinstance(tab, str) or tab not in {
+      "notes",
+      "reports",
+      "tasks",
+      "downloads",
+    }:
+      raise ValueError("tab must name a preview tab")
+    notice = (
+      "Read ARENA.md, root AGENTS.md, every nested AGENTS.md, and arena-skill "
+      "SKILL.md in full again before continuing."
+    )
+    if tab == "reports" and report_id is not None:
+      self.report(report_id)
+      notice += f" Report {report_id} violates the rules. Fix it."
+    elif tab == "tasks":
+      task = current_task((self.tasks() or {}).get("upcoming", []))
+      if task:
+        notice += (
+          f" Work on task {task['id']}: {task['title']}."
+          " If you are working on something else, correct the task list."
+        )
+      else:
+        notice += (
+          " No current task is listed. Correct the task list if work is in progress."
+        )
+    self.set_meta(AGENT_INTERRUPT_META, notice)
+    return {"agent_interrupt_pending": True}
+
+  def take_interrupt(self):
+    with closing(self.connect()) as db, db:
+      db.execute("BEGIN IMMEDIATE")
+      row = db.execute(
+        "SELECT value FROM meta WHERE key = ?", (AGENT_INTERRUPT_META,)
+      ).fetchone()
+      db.execute("DELETE FROM meta WHERE key = ?", (AGENT_INTERRUPT_META,))
+      return row["value"] if row else None
 
   def request_skip_poll(self, armed=True):
     "Arm or clear the owner's Skip poll press. The next poll consumes an armed flag once."
@@ -6116,6 +6156,7 @@ def handler(store):
       note_upload = path == "/api/notes/with-file"
       agent_key_post = path == "/api/key"
       skip_poll_post = path == "/api/skip-poll"
+      interrupt_post = path == "/api/agent-interrupt"
       task_order_post = path == "/api/tasks/order"
       fetch_result = bool(fetch_post and fetch_post.group(2) == "result")
       if (
@@ -6136,6 +6177,7 @@ def handler(store):
         and not fetch_post
         and not agent_key_post
         and not skip_poll_post
+        and not interrupt_post
         and not task_order_post
       ):
         self.problem(404, "Not found")
@@ -6218,6 +6260,15 @@ def handler(store):
             raise ValueError("host must be one https origin, with no path")
           store.set_agent_key(candidate, host)
           self.reply(200, json.dumps(store.agent_key(), ensure_ascii=False))
+          return
+        if interrupt_post:
+          self.reply(
+            200,
+            json.dumps(
+              store.request_interrupt(payload.get("tab"), payload.get("report_id")),
+              ensure_ascii=False,
+            ),
+          )
           return
         if skip_poll_post:
           armed = payload.get("skip", True)
@@ -6516,6 +6567,9 @@ def main():
   init = commands.add_parser("init", help="Create the state directory and its database")
   init.add_argument("--tz", help="An IANA zone for CLI stamps. The TZ env still wins")
   commands.add_parser("read", help="Print every pending note, answer and upload")
+  commands.add_parser(
+    "interrupt-tick", help="Consume the header request and stop one Bash call"
+  )
   commands.add_parser(
     "skills",
     help="List skill names, full descriptions, and paths without loading skills",
@@ -6839,6 +6893,14 @@ def main():
       parser.error(
         "a command is required; run arena-preview --help for the command list"
       )
+    if args.command == "interrupt-tick":
+      if fresh_state:
+        return 0
+      notice = Store(state_dir, create=False).take_interrupt()
+      if notice:
+        print(notice, file=sys.stderr)
+        return 1
+      return 0
     if args.command == "skills":
       print_skills()
       return 0

@@ -7870,6 +7870,7 @@ def test_reference_commands_table_lists_every_agent_facing_command():
   ).stdout
   actual = set(re.search(r"\{([a-z,\-]+)\}", help_text).group(1).split(","))
   internal = {
+    "interrupt-tick",
     "pr-state-tick",
     "inbox-line",
     "route-run",
@@ -9069,3 +9070,53 @@ def test_egress_warning_ignores_the_local_preview():
     "curl -sS http://[::1]:8000/api/state",
   ):
     assert preview.egress_warning(line) is None, line
+
+
+def test_header_interrupt_route_and_one_shot_cli(capsys):
+  global app
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(Path(directory) / "state", create=True)
+    source = Path(directory) / "report.md"
+    source.write_text("# Open report\n", encoding="utf-8")
+    store.publish("open-report", "Open report", source)
+    store.write_task("current-work", "Current work", ["Verify it"], task_type="code")
+    app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    store.set_meta("port", str(app.server_port))
+    threading.Thread(target=app.serve_forever, daemon=True).start()
+    headers = {"Content-Type": "application/json"}
+    try:
+      assert request("POST", "/api/agent-interrupt", "{}")[0] == 415
+      for tab, expected in [
+        ("notes", None),
+        ("reports", "open-report"),
+        ("tasks", "current-work"),
+      ]:
+        status, _, body = request(
+          "POST",
+          "/api/agent-interrupt",
+          json.dumps({"tab": tab, "report_id": "open-report"}),
+          headers,
+        )
+        assert status == 200, body
+        assert json.loads(body)["agent_interrupt_pending"]
+        assert store.state()["agent_interrupt_pending"]
+        with (
+          patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": str(store.path.parent)}),
+          patch.object(sys, "argv", [str(Path(preview.__file__)), "interrupt-tick"]),
+        ):
+          assert preview.main() == 1
+          message = capsys.readouterr().err
+          assert all(name in message for name in ["ARENA.md", "AGENTS.md", "SKILL.md"])
+          if expected:
+            assert expected in message
+          assert preview.main() == 0
+          assert capsys.readouterr().err == ""
+        assert not store.state()["agent_interrupt_pending"]
+        assert store.state()["notes"] == []
+      assert (
+        request("POST", "/api/agent-interrupt", '{"tab":"invalid"}', headers)[0] == 400
+      )
+      assert not store.state()["agent_interrupt_pending"]
+    finally:
+      app.shutdown()
+      app.server_close()
