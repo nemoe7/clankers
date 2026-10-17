@@ -35,7 +35,7 @@ A deployed rule file keeps two bold clauses at most, so the emphasis keeps its m
 
 | File | Bold clauses |
 | --- | --- |
-| `AGENTS.md` | the honesty rule |
+| `CORE.md` | the honesty rule |
 | `ARENA.md` | the planned final commit list, the `-f body=@path` ban |
 | `CLINE.md` | `STOP`, the self-assignment ban |
 | root `AGENTS.md` | the two markdownlint settings |
@@ -64,7 +64,7 @@ Verbatim baselines would exceed live budgets. Refs preserve originals, identical
 
 ### Formatting
 
-Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `AGENTS.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/`, plus `rules/wenyan/README.md`. This set contains 11 files.
+Markdown linting applies to the agent rule files under `rules/`, and that includes `rules/refs/`. The linted files are `CORE.md`, `ARENA.md`, `CLINE.md`, `KILO.md`, and the six Markdown files in `rules/refs/`, plus `rules/wenyan/README.md`. This set contains 11 files.
 
 The excluded files are the ChatGPT text files and this specification. The other exclusions are root-level Markdown, the skills, and the `rules/refs/kilo/` and `rules/kilo/` mode overrides. The required blank first line and `###` heading of a mode override fail MD001 and MD041.
 

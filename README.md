@@ -32,7 +32,7 @@ Latest measurements as of 2026-10-17. `maintenance/check.py --update` rebuilds t
 | File | Measure | Current |
 | --- | --- | --- |
 | `userscripts/arena-prompt-fill.txt` | `o200k_base` | 356 `tok` |
-| `rules/AGENTS.md` | `o200k_base` | 1,614 `tok` |
+| `rules/CORE.md` | `o200k_base` | 1,613 `tok` |
 | `rules/ARENA.md` | `UTF-8 file size` | 20,782 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,497 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,500 `chars` |

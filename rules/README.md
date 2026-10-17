@@ -10,7 +10,7 @@ The installer uses only the Python standard library.
 
 | File or directory | Purpose |
 | --- | --- |
-| [rules/AGENTS.md](AGENTS.md) | Generic core rules |
+| [rules/CORE.md](CORE.md) | Generic core rules |
 | [rules/CLINE.md](CLINE.md) | Cline-specific overlay |
 | [rules/KILO.md](KILO.md) | Kilo Code overlay |
 | [rules/ARENA.md](ARENA.md) | Self-contained Arena rules, optimized for file size |
@@ -56,7 +56,7 @@ python3 rules/apply.py
 
 ```mermaid
 flowchart TB
-  S[rules/AGENTS.md] --> A[apply.py: diff, confirm, copy]
+  S[rules/CORE.md] --> A[apply.py: diff, confirm, copy]
   C[rules/CLINE.md] --> A
   A --> G[.agents/AGENTS.md]
   A --> K[Documents/Cline/Rules/CLINE.md]
@@ -75,7 +75,7 @@ Current destinations cause an exit without a prompt.
 
 | Source | Destination relative to the base directory |
 | --- | --- |
-| `rules/AGENTS.md` | `.agents/AGENTS.md` |
+| `rules/CORE.md` | `.agents/AGENTS.md` |
 | `rules/CLINE.md` | `Documents/Cline/Rules/CLINE.md` |
 
 The base is `Path.home()` unless `APPLY_RULES_BASE` is nonempty. The script does not need `USERPROFILE`. An empty override uses home. Check these installer paths against your agent setup.

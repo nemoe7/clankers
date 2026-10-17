@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Rule sources: rename the generic core files to CORE.md. Keep installed AGENTS.md names.
+
 - Preview: mark a report read when its body opens, without a scroll or dwell. Keep the view heartbeat and answer fallback. Retry a failed read on a later check.
 
 - Preview: remove the CLI prefix from routine reminder lines on stderr.

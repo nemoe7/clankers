@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
+import sys
+
 import check
 
 FIVE_SENTENCES = "One. Two. Three. Four. Five."
@@ -74,3 +79,27 @@ def test_run_check_counts_only_the_problems_it_added(capsys):
 def test_lint_count_claims_include_root_agent_guide():
   root = check.ROOT / "AGENTS.md"
   assert any(document == root for document, _ in check.LINT_COUNT_CLAIMS)
+
+
+def test_core_source_installs_to_agents(tmp_path):
+  rules = tmp_path / "rules"
+  rules.mkdir()
+  shutil.copy2(check.RULES / "apply.py", rules / "apply.py")
+  core = rules / "CORE.md"
+  core.write_text("Generic rules\n", encoding="utf-8")
+  overlay = rules / "CLINE.md"
+  overlay.write_text("Cline rules\n", encoding="utf-8")
+  base = tmp_path / "profile"
+  result = subprocess.run(
+    [sys.executable, str(rules / "apply.py"), "--yes"],
+    env={**os.environ, "APPLY_RULES_BASE": str(base)},
+    capture_output=True,
+    text=True,
+    check=False,
+  )
+  assert result.returncode == 0, result.stdout + result.stderr
+  assert (base / ".agents" / "AGENTS.md").read_bytes() == core.read_bytes()
+  assert (
+    base / "Documents" / "Cline" / "Rules" / "CLINE.md"
+  ).read_bytes() == overlay.read_bytes()
+  assert not (base / ".agents" / core.name).exists()

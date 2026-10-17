@@ -37,7 +37,7 @@ NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 EXPECTED_BUDGETS = {
   "userscripts/arena-prompt-fill.txt": "o200k_base",
-  "rules/AGENTS.md": "o200k_base",
+  "rules/CORE.md": "o200k_base",
   "rules/ARENA.md": "UTF-8 file size",
   "rules/CHATGPT-CUSTOM.txt": "Unicode chars",
   "rules/CHATGPT-MORE.txt": "Unicode chars",
@@ -89,13 +89,13 @@ LINT_CONFIG = ROOT / ".markdownlint-cli2.jsonc"
 
 # The markdownlint scope, recomputed from LINT_CONFIG on every run.
 EXPECTED_LINTED = (
-  "rules/AGENTS.md",
   "rules/ARENA.md",
   "rules/CLINE.md",
+  "rules/CORE.md",
   "rules/KILO.md",
-  "rules/refs/AGENTS.md",
   "rules/refs/ARENA.md",
   "rules/refs/CLINE.md",
+  "rules/refs/CORE.md",
   "rules/refs/GUIDELINES.md",
   "rules/refs/KILO.md",
   "rules/refs/README.md",
@@ -134,7 +134,7 @@ LINT_COUNT_CLAIMS = (
 
 # Rule refs baselines hold full wording. Live files compress it. Compression may
 # merge rule lines but never add them, so live counts stay at or below refs.
-SECTIONED_PAIRS = ("AGENTS.md", "ARENA.md", "CLINE.md", "KILO.md")
+SECTIONED_PAIRS = ("CORE.md", "ARENA.md", "CLINE.md", "KILO.md")
 PLAIN_PAIRS = ("CHATGPT-CUSTOM.txt", "CHATGPT-MORE.txt", "COMMIT-SPEC.txt")
 
 # Kilo mode overrides live under a directory on both sides, so the check pairs them by

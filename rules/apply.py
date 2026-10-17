@@ -8,7 +8,7 @@ RULES = Path(__file__).parent
 BASE = Path(os.environ.get("APPLY_RULES_BASE") or Path.home())
 
 MAPPINGS = [
-  (RULES / "AGENTS.md", BASE / ".agents" / "AGENTS.md"),
+  (RULES / "CORE.md", BASE / ".agents" / "AGENTS.md"),
   (RULES / "CLINE.md", BASE / "Documents" / "Cline" / "Rules" / "CLINE.md"),
 ]
 

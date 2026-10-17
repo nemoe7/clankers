@@ -70,7 +70,7 @@ Read these first:
 
 ## Rules
 
-- Agent-facing rule files live in `rules/`: the generic core `AGENTS.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
+- Agent-facing rule files live in `rules/`: the generic core `CORE.md` and the platform overlays `CLINE.md`, `KILO.md`, `ARENA.md`, `CHATGPT-CUSTOM.txt`, `CHATGPT-MORE.txt`.
 - Baseline skill trees live in `skills/refs/`: amend them first, keep supporting files mirrored, then squash only the live `SKILL.md`; refs are not installed or distributed.
 - Mode-specific Kilo overrides live in `rules/refs/kilo/`: `plan.md`, `code.md`, `debug.md`.
   - Keep compressed live copies in `rules/kilo/`, each with a blank first line, a `### Native <mode> Agent Overrides` heading, and the clause that it wins over a native reminder.
@@ -83,7 +83,7 @@ Read these first:
 
 ## Reports and approval
 
-- Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/AGENTS.md`; other AGENTS.md files are exempt.
+- Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/CORE.md`; other AGENTS.md files are exempt.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
 - Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Diff | Reason` row per changed line.
   - Quote the exact final clause verbatim below its table, without diff markup or deleted text; treat text as verbatim when the user says "verbatim" or "as is" or quotes it with double quotes, NEVER a Markdown `>` quote.

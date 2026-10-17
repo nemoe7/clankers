@@ -11,7 +11,7 @@ See [maintenance/README.md](../../maintenance/README.md) for the refs-first main
 
 ## Files
 
-- `AGENTS.md`: uncompressed core rules.
+- `CORE.md`: uncompressed core rules.
 - `ARENA.md`: uncompressed Arena rules.
 - `CHATGPT-CUSTOM.txt`: uncompressed ChatGPT instructions for the `Custom Instructions` field of Personalization.
 - `CHATGPT-MORE.txt`: uncompressed Personalization `More about you`: precedence, response rules, and overflow work rules.
