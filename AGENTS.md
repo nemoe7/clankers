@@ -38,7 +38,6 @@
 
 ## Glossary
 
-- all = CORE.md + ARENA.md + CHATGPT
 - arena = [ARENA.md](ARENA.md)
 - house = this repository; house rules = root AGENTS.md
 - arena suite = ARENA.md and arena-skill files
@@ -83,6 +82,8 @@ Read these first:
 
 ## Reports and approval
 
+- MUST include ARENA and CHATGPT amendment proposals in the same report as each CORE amendment proposal.
+- MUST name the failure and the check that verifies each proposed amendment.
 - Apply this section's AGENTS.md proposal and approval requirements only to `rules/**/CORE.md`; other AGENTS.md files are exempt.
 - Any agent-facing material MUST NEVER contain rationale, narrative, or facts that drive a clause.
 - Before editing a clause, show the proposal under each refs file path, live mirrors omitted: one `Line | Diff | Reason` row per changed line.
@@ -114,6 +115,10 @@ Read these first:
 
 ## Budgets
 
+- Keep root `AGENTS.md` outside the instruction measurement table.
+- NEVER use instruction measurements as fixed size ceilings.
+- Target a smaller size than the previous version for every amended instruction file.
+- Accept unavoidable size growth.
 - Rule files, `SKILL.md` entry points, and workflow files have budgets tracked in [README.md](README.md#instruction-budgets).
 - Re-measure and update the table when changing them.
 

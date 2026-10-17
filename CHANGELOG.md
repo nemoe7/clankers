@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- House rules: align amendment reports and size targets. Remove the glossary alias.
+
 - CORE rules: group Setup, Verification, and Style. Keep their repository scope.
 
 - ChatGPT fields: name the user-chat override and check the outer-fence formula.
