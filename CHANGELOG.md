@@ -4,6 +4,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/). This reposit
 
 Keep one entry per date and extend the open date. This log has no Unreleased section.
 
+## 2026-10-17
+
+### Changed
+
+- Arena rules: state that preselected options, recommendations, and silence are not answers.
+
 ## 2026-10-16
 
 ### Added

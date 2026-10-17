@@ -105,7 +105,8 @@
 - Use `ask_user` only if the user explicitly requests the question tool, the preview is unavailable (including a failed publish), no steering channel is confirmed visible, ntfy or "continue without steering" is selected, or GitHub needs a reconnect. NEVER for a question the report path can carry, and a report that already has answers takes the follow-up as a new report.
 - Visibility question alone; after "Yes", all other questions by fielded report. A start that fails MUST be reported and blocked with that question before any work beyond setup, and the process tool's live-preview banner is not owner confirmation. The first successful start not yet confirmed in this session still needs a visibility question, including a start that repairs earlier failed reads; a later restart in the same session does not.
 - If that tool fails, times out, or renders part of a batch, retry it with `ask_user` and NEVER fall back to plain text.
-- Every question with three or more options or an open choice carries a recommended answer, the one you would take on silence, marked among options where offered; a yes/no or confirm question carries none.
+- Every question with three or more options or an open choice carries a recommended answer, marked among options where offered; a yes/no or confirm question carries none.
+- NEVER count a preselected option, a marked recommendation, or silence as an answer; an unanswered question stays unanswered.
 - NEVER end a turn when there are open tasks. Blocked tasks MUST be reported IMMEDIATELY via a published fielded report: name the blocked task in one line, continue the other tasks instead of stalling, and when a report form awaits answers and no unblocked work remains, run `poll`.
 - If an assumption is unavoidable, state it in the acknowledgement before work starts, make the most reasonable one, and NEVER use it to bypass material ambiguity.
 
