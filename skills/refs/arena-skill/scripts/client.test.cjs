@@ -630,7 +630,7 @@ test('preview client', async (t) => {
     await get('#preview-note').events.click();
     assert.equal(get('#note').hidden, true);
     assert.equal(get('#preview-note').getAttribute('aria-pressed'), 'true');
-    assert.equal(get('#preview-note').children[0].children[0].getAttribute('fill'), 'currentColor', 'the markdown mark is a filled path');
+    assert.equal(get('#preview-note').children[0].getAttribute('class'), 'lucide lucide-file-code-2', 'Markdown preview uses a Lucide file icon');
     assert.equal(get('#preview-note').children.length, 1, 'the markdown mark stands alone');
     assert.equal(get('#draft-preview').innerHTML, '<strong>draft</strong>');
     assert.equal(sent.length, 0);
@@ -825,7 +825,7 @@ test('preview client', async (t) => {
       assert.notEqual(rows()[0].draggable, true, 'the task row leaves text selection to the browser');
       assert.notEqual(taskTitle(rows()[0]).draggable, true, 'the title is not a drag target');
       assert.equal(dragHandle(rows()[0]).draggable, true, 'the bullet handle starts the drag');
-      assert.equal(dragHandle(rows()[0]).textContent, '•', 'the list bullet is the drag handle');
+      assert.equal(dragHandle(rows()[0]).children[0].getAttribute('class'), 'lucide lucide-dot', 'the Lucide dot is the list bullet');
       assert.equal(rows()[0].dataset.dragHandle, 'true', 'the draggable row hides its native marker');
       assert.equal(rows()[0].events.dragstart, undefined, 'dragstart is not attached to the task row');
       assert.equal(taskTitle(rows()[0]).events.dragstart, undefined, 'dragstart is not attached to the title');
@@ -4156,11 +4156,17 @@ test('preview client', async (t) => {
       const pending = button.events.click();
       assert.equal(button.disabled, true);
       assert.equal(button.getAttribute('aria-busy'), 'true');
+      const busyNode = button.children.at(-1);
+      const busyIcon = busyNode?.getAttribute('class');
+      await refresh();
+      assert.equal(button.children.at(-1), busyNode, 'a poll does not restart the loader');
       await button.events.click();
       release();
       pendingWrites.delete('/api/agent-interrupt');
       await pending;
       assert.equal(interruptCalls.length, 1, 'a repeated busy press sends no second request');
+      assert.equal(busyIcon, 'lucide lucide-loader-circle', 'a pending write uses the Lucide loader, not the flag');
+      assert.equal(button.children.at(-1)?.getAttribute('class'), 'lucide lucide-flag', 'the flag returns after the write');
       assert.equal(interruptCalls.at(-1).tab, 'notes');
       assert.equal(button.getAttribute('aria-pressed'), 'true');
       assert.equal(button.getAttribute('aria-busy'), 'false');
@@ -4189,6 +4195,8 @@ test('preview client', async (t) => {
       failedWrites.add('/api/agent-interrupt');
       await button.events.click();
       assert.equal(button.disabled, false, 'a failed request can be retried');
+      assert.equal(button.children.at(-1).getAttribute('class'), 'lucide lucide-flag', 'a failed write restores the flag');
+      assert.equal(button.getAttribute('aria-busy'), 'false');
       assert.equal(button.getAttribute('aria-pressed'), 'false');
       assert.match(button.title, /Write failed/);
     } finally {

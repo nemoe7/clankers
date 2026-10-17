@@ -673,7 +673,7 @@ def test_http_boundaries():
       "#copy-report,#refresh-report,#mark-report-acks-seen,#next-report,#unpublish-report{width:"
       not in css
     )
-    caret = re.search(r"\.select-wrap::after\{([^}]+)\}", css)
+    caret = re.search(r"\.select-caret\{([^}]+)\}", css)
     select = re.search(r"\.select-wrap select\{([^}]+)\}", css)
     assert caret and select
 
@@ -698,11 +698,9 @@ def test_http_boundaries():
       return sides
 
     assert re.search(r"(?:^|;)appearance:none(?:;|$)", select[1])
-    assert re.search(r"border-top:[^;]+ solid var\(--muted\)", caret[1])
-    assert css_px(caret[1], "border-top") > 0
-    caret_space = sum(
-      css_px(caret[1], name) for name in ("right", "border-left", "border-right")
-    )
+    assert "pointer-events:none" in caret[1]
+    assert css_px(caret[1], "width") > 0
+    caret_space = sum(css_px(caret[1], name) for name in ("right", "width"))
     assert css_px(select[1], "padding-right") > caret_space
     # The page and client script have no report-receipt flash.
     # Keep the report acknowledgement element.
@@ -785,7 +783,10 @@ def test_http_boundaries():
       assert 'id="reports-scroll-frame"' in page
       assert re.search(r"\.report-scroll-frame\s*\{[^}]*position:\s*relative", page)
       assert 'aria-label="Scroll to bottom"' in page
-      assert '<svg width="14" height="14" viewBox="0 0 24 24"' in page
+      assert (
+        '<svg class="lucide lucide-arrow-down" width="14" height="14" viewBox="0 0 24 24"'
+        in page
+      )
       assert "↓ Latest message" not in page
       newest = re.search(r"\.log-newest\s*\{([^}]+)\}", compact(page))
       edited = re.search(r"\.log-edited\s*\{([^}]+)\}", compact(page))
@@ -861,10 +862,12 @@ def test_http_boundaries():
         r'<button[^>]*id="log-newest"[^>]*>(.*?)</button>', page, re.DOTALL
       )
       assert jump is not None
+      static_icons = re.findall(r"<svg\b[^>]*>", page)
+      assert static_icons and all('class="lucide ' in item for item in static_icons)
       arrow = jump.group(1)
       assert 'width="14" height="14"' in arrow
-      assert 'stroke="currentColor"' in arrow and 'stroke-width="1.5"' in arrow
-      assert 'd="M12 3L12 21M12 21L20.5 12.5M12 21L3.5 12.5"' in arrow
+      assert 'stroke="currentColor"' in arrow and 'stroke-width="2"' in arrow
+      assert 'class="lucide lucide-arrow-down"' in arrow
       # The search box says what it does without a visible label: the placeholder names the
       # gesture and the aria-label carries it for the screen reader.
       assert re.search(
@@ -1378,7 +1381,7 @@ def test_http_boundaries():
       )
       assert 'data-code="print(1)&#10;"' in block and "<pre><code" in block
       # The copy button carries Lucide's copy shape, vendored inline like the page's own.
-      assert 'title="Copy code"' in block and "<svg" in block
+      assert 'title="Copy code"' in block and 'class="lucide lucide-copy"' in block
       assert 'd="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"' in block
       assert (
         preview.add_copy_buttons(preview.render("no code here")).count("copy-code") == 0

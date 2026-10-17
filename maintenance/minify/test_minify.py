@@ -316,12 +316,13 @@ def test_compact_copies_drift_and_runtime():
     "assets/message-markdown.js",
     "assets/markdown-it.min.js",
     "assets/markdown-it.LICENSE",
+    "assets/lucide.LICENSE",
     "assets/style.css",
     "assets/index.html",
     "scripts/preview.py",
   }
   for relative, (source, compact) in sources.items():
-    if relative in {"assets/markdown-it.min.js", "assets/markdown-it.LICENSE"}:
+    if relative in minify.COPIED_ASSETS:
       assert compact == source, relative
     else:
       assert len(compact.encode()) < len(source.encode()), relative

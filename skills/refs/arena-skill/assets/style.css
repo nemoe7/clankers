@@ -208,11 +208,10 @@ code.note-id { font-family: ui-monospace, monospace; font-size: 1em; background:
 .report-toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .select-wrap { flex: 1 1 240px; max-width: 500px; position: relative; }
 /* Both selects share the drawn chevron. The native arrow stays hidden. */
-/* Position sits on the wrap, which also holds the label, so the triangle anchors to the bottom half where the select box lives. */
-.select-wrap::after {
-  content: ""; position: absolute; right: 10px; bottom: 17px; transform: translateY(50%);
-  border-left: 5px solid transparent; border-right: 5px solid transparent;
-  border-top: 5px solid var(--muted); pointer-events: none;
+/* Position sits on the wrap, which also holds the label, so the chevron anchors to the bottom half where the select box lives. */
+.select-caret {
+  position: absolute; right: 8px; bottom: 17px; width: 16px; height: 16px; transform: translateY(50%);
+  color: var(--muted); pointer-events: none;
 }
 .select-wrap select { appearance: none; padding-right: 26px; }
 /* The log search is a header control, not a form field. It uses 34px icon-button height and no minimum width. */
