@@ -194,6 +194,12 @@ def load_workflow(name: str) -> dict:
   )
 
 
+def test_ci_triggers_main_push_and_all_branch_pull_requests():
+  triggers = gate_workflows.triggers_of(load_workflow("ci.yml"))
+  assert triggers["push"]["branches"] == ["main"]
+  assert triggers["pull_request"]["branches"] == ["**"]
+
+
 def test_artifacts_triggers_keep_both_path_families():
   triggers = gate_workflows.triggers_of(load_workflow("artifacts.yml"))
   push_paths = triggers["push"]["paths"]

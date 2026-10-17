@@ -6,6 +6,10 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ## 2026-10-17
 
+### Added
+
+- Maintenance: cover both CI branch triggers and register the root guide's markdownlint count.
+
 ### Changed
 
 - Arena rules: state that preselected options, recommendations, and silence are not answers.
@@ -80,7 +84,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 #### preview
 
-- A gated shell line loads the Markdown renderer, the HTTP server, and the store only where they are needed. Each `git` or `gh` line costs about 55 ms less, and gate verdicts stay the same.
+- A gated shell line loads the Markdown renderer, the HTTP server, and the store on demand. Each `git` or `gh` line costs about 55 ms less, and gate verdicts stay the same.
 
 - A gate that meets a bare sleep line, or a second `logs` read before a run has a verdict, stops it with a hint. Retry loops and the verdict read stay unchanged.
 
@@ -200,7 +204,7 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 - Log pill checks compare rounded corners without a fixed radius.
 
-- Record task-link highlights: a destination row is marked for 2.5 seconds or until another tab opens.
+- Task-link highlights: mark the destination row for 2.5 seconds or until another tab opens.
 
 - Message search marks the matched words inside an agent reply. Row filtering and the copy button stay unchanged.
 
