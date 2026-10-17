@@ -8,6 +8,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Added
 
+- Arena rules: add a Constitution pointer to the read-set duties in Use.
+
 - Maintenance: cover both CI branch triggers and register the root guide's markdownlint count.
 
 - Preview tasks: use the visible bullet as the drag handle and keep task titles selectable.
