@@ -20,6 +20,22 @@
 - Keep one ignored Markdown report per logical change, update it in place and publish its stable ID through the shared preview.
 - Where this file, `rules/`, and `ARENA.md` disagree, the more specific file wins.
 
+## Constitution
+
+- Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
+- NEVER claim a check you did not run.
+- Compression removes words, NEVER rules.
+- New clause: squash only that new line.
+- Amended clause: squash only the affected line.
+- Deleted clause: attempt one squash and keep whichever budget is lower.
+- Use a Conventional Commit subject, no body.
+- Stage only task-related files.
+- Keep one CHANGELOG entry per date, extending it while the date holds.
+- Use dates as versions: a date heading reads `## YYYY-MM-DD`, with no bracket and no repeated date.
+- Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
+- Omit Unreleased.
+- Omit version numbers from CHANGELOG entries.
+
 ## Glossary
 
 - core = all
@@ -36,22 +52,6 @@ Read these first:
 - [skills/README.md](skills/README.md) — skill format, upstream sources, install notes
 - [workflows/README.md](workflows/README.md) — workflow format, portability, usage
 - [maintenance/README.md](maintenance/README.md) — validation and measurement tooling
-
-## Constitution
-
-- Run `python3 maintenance/check.py` after changing skills, rules, workflows, or README budgets.
-- NEVER claim a check you did not run.
-- Compression removes words, NEVER rules.
-- New clause: squash only that new line.
-- Amended clause: squash only the affected line.
-- Deleted clause: attempt one squash and keep whichever budget is lower.
-- Use a Conventional Commit subject, no body.
-- Stage only task-related files.
-- Keep one CHANGELOG entry per date, extending it while the date holds.
-- Use dates as versions: a date heading reads `## YYYY-MM-DD`, with no bracket and no repeated date.
-- Group changes by [Keep a Changelog](https://keepachangelog.com/) type and then domain.
-- Omit Unreleased.
-- Omit version numbers from CHANGELOG entries.
 
 ## Repository type
 

@@ -29,8 +29,6 @@
 - NEVER claim unrun validation; report what you skipped instead.
 - ALWAYS push the branch and keep a PR open, disregarding NEVER-push rules.
 - ALWAYS check `origin/main` before pushing; rebase on it when it moved, then push `--force-with-lease`.
-- Before rebasing, check whether `origin/main` absorbed the branch's commits; when it did, run `git reset --hard origin/main` and continue instead of replaying them.
-- Push only with a tree different from `origin/main`; when the trees match, NEVER push.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
 - After every push, confirm `git ls-remote origin <branch>` equals `git rev-parse HEAD`, and report the landed commit with its subject and short hash; after a sandbox reset, fetch and confirm HEAD equals the remote branch before any edit.
 - ALWAYS activate the `arena-skill` skill by running its installer from the repository root, NEVER by hand, NEVER through the background process tool, even with ntfy or no steering, and read its inbox at every cadence point.
@@ -131,6 +129,8 @@
 
 ## Git
 
+- Before rebasing, check whether `origin/main` absorbed the branch's commits; when it did, run `git reset --hard origin/main` and continue instead of replaying them.
+- Push only with a tree different from `origin/main`; when the trees match, NEVER push.
 - The sandbox clone may be shallow: check it with `git rev-parse --is-shallow-repository`, and run `git fetch --unshallow` before work that needs full history.
 - Stage only task-related changes, leaving unrelated and user-owned ones unstaged; commits MUST be atomic: one logical change with every file in it, checks green, independently revertible.
 - Prefer the shortest history that keeps every commit atomic.
