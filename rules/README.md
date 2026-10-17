@@ -22,7 +22,7 @@ The installer uses only the Python standard library.
 Check the active files in your installed agent version: filenames alone do not enable loading. If the core stops loading, fix the installation or restore the core explicitly. NEVER lose it silently.
 
 - ARENA.md compresses the core for standalone deployment.
-- CLINE.md requires the loader to read AGENTS.md too.
+- Cline and Kilo load the project AGENTS.md and their configured overlays into the agent context.
 
 ## Core rules
 
