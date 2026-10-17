@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Maintenance: sort README budget paths alphabetically and link them to their repository files.
+
 - Arena rules: move the Chromium setup procedure to the skill reference.
 
 - Preview: let a second header reread press cancel the pending request. Keep consumed requests in force.

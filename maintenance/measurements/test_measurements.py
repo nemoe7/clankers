@@ -14,10 +14,10 @@ def test_budget_updates_handle_additions_removals_and_measurements(
   monkeypatch.setattr(
     check,
     "EXPECTED_BUDGETS",
-    {"one.md": "UTF-8 file size", "two.md": "UTF-8 file size"},
+    {"Zed.md": "UTF-8 file size", "alpha.md": "UTF-8 file size"},
   )
-  (root / "one.md").write_text("one", encoding="utf-8")
-  (root / "two.md").write_text("two!", encoding="utf-8")
+  (root / "Zed.md").write_text("one", encoding="utf-8")
+  (root / "alpha.md").write_text("two!", encoding="utf-8")
   check.README.write_text(
     "# Example\n\nLatest measurements as of 2000-01-01.\n\n"
     "| File | Measure | Current |\n| --- | --- | --- |\n"
@@ -27,13 +27,18 @@ def test_budget_updates_handle_additions_removals_and_measurements(
   assert check.update_readme_measurements()
   text = check.README.read_text(encoding="utf-8")
   assert "retired.md" not in text
-  assert "| `one.md` | `UTF-8 file size` | 3 `B` |" in text
-  assert "| `two.md` | `UTF-8 file size` | 4 `B` |" in text
+  expected = sorted(check.EXPECTED_BUDGETS, key=str.casefold)
+  assert list(check.read_budget_table()) == expected
+  for relative in expected:
+    kind = check.EXPECTED_BUDGETS[relative]
+    size = len((root / relative).read_bytes())
+    assert f"| [`{relative}`]({relative}) | `{kind}` | {size} `B` |" in text
+    assert check.read_budget_table()[relative] == (kind, f"{size} B")
   assert text.endswith("Keep this paragraph.\n")
   assert not check.update_readme_measurements()
-  del check.EXPECTED_BUDGETS["one.md"]
+  del check.EXPECTED_BUDGETS["Zed.md"]
   assert check.update_readme_measurements()
-  assert "one.md" not in check.README.read_text(encoding="utf-8")
+  assert "Zed.md" not in check.README.read_text(encoding="utf-8")
   before = check.README.read_bytes()
   check.EXPECTED_BUDGETS["missing.md"] = "UTF-8 file size"
   try:

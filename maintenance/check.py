@@ -514,12 +514,16 @@ def update_readme_measurements() -> bool:
     end += 1
 
   table = [header, "| --- | --- | --- |\n"]
-  for relative, kind in EXPECTED_BUDGETS.items():
+  for relative, kind in sorted(
+    EXPECTED_BUDGETS.items(), key=lambda item: item[0].casefold()
+  ):
     path = ROOT / relative
     if not path.is_file():
       raise RuntimeError(f"README budget path missing: {relative}")
     current = f"{measure(path, kind):,}"
-    table.append(f"| `{relative}` | `{kind}` | {current} `{format_unit(kind)}` |\n")
+    table.append(
+      f"| [`{relative}`]({relative}) | `{kind}` | {current} `{format_unit(kind)}` |\n"
+    )
 
   updated = "".join(lines[:start] + table + lines[end:])
   if updated == text:
