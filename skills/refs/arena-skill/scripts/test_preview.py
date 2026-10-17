@@ -88,11 +88,11 @@ def test_edited_ack_stamp():
     edited.submission("edit-answer", "form", "REPORT form: answer")
     ids = ["edit-note", "edit-answer"]
     with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
-      edited.acknowledge(ids, "reply", "First answer")
+      edited.acknowledge(ids, "First answer")
     first = edited.state()["notes"][0]
     assert first["ack_edited_at"] is None and first["replies"] == []
     with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
-      edited.acknowledge(ids, "reply", "Second answer")
+      edited.acknowledge(ids, "Second answer")
     row = edited.state()["notes"][0]
     assert row["acknowledged_at"] == "2026-09-22T12:00:00"
     assert row["ack_text"] == "First answer", "the first answer is not replaced"
@@ -104,10 +104,10 @@ def test_edited_ack_stamp():
     assert answer["ack_edited_at"] == row["ack_edited_at"]
     assert answer["replies"] == row["replies"]
     with patch.object(preview, "now", return_value="2026-09-22T12:02:00"):
-      edited.acknowledge(ids, "note", "Second answer")
+      edited.acknowledge(ids, "Second answer")
     row = edited.state()["notes"][0]
     assert row["ack_edited_at"] == "2026-09-22T12:02:00"
-    assert [reply["kind"] for reply in row["replies"]] == ["reply", "note"]
+    assert [reply["kind"] for reply in row["replies"]] == ["reply", "reply"]
     assert preview.Store(edit_dir).state()["notes"][0]["replies"] == row["replies"]
     with_html = preview.Store(edit_dir).state()["notes"][0]
     assert "html" not in with_html["replies"][0], (
@@ -183,9 +183,9 @@ def test_reply_seen_persistence():
     store.submission("edited-answer", "form", "REPORT form: answer")
     ids = ["edited-note", "edited-answer"]
     with patch.object(preview, "now", return_value="2026-09-22T12:00:00"):
-      store.acknowledge(ids, "reply", "First answer")
+      store.acknowledge(ids, "First answer")
     with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
-      store.acknowledge(ids, "reply", "Second answer")
+      store.acknowledge(ids, "Second answer")
 
     app = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
     worker = threading.Thread(target=app.serve_forever, daemon=True)
@@ -205,7 +205,7 @@ def test_reply_seen_persistence():
       # The next two replies share a timestamp with the previous reply. Count, not time,
       # distinguishes the unseen blocks and keeps the earlier seen marker intact.
       with patch.object(preview, "now", return_value="2026-09-22T12:01:00"):
-        store.acknowledge(ids, "note", "Third answer")
+        store.acknowledge(ids, "Third answer")
       note = preview.Store(root).state()["notes"][0]
       answer = preview.Store(root).submissions()[0]
       assert len(note["replies"]) == 2 and len(answer["replies"]) == 2
@@ -313,12 +313,12 @@ def test_report_receipt_ids():
     assert report["latest_answer_id"] == "answer-one"
     assert report["latest_answer_acknowledged_at"] is None
     assert "REPORT receipt: Yes" not in json.dumps(report)
-    receipt_store.acknowledge(["answer-one"], "note", "Received")
+    receipt_store.acknowledge(["answer-one"], "Received")
     report = receipt_store.state()["reports"][0]
     assert report["latest_answer_acknowledged_at"] == preview.clip_stamp(
       receipt_store.submissions()[-1]["acknowledged_at"]
     )
-    receipt_store.acknowledge(["answer-one"], "reply", "Second reply")
+    receipt_store.acknowledge(["answer-one"], "Second reply")
     history = receipt_store.state()["reports"][0]["acknowledgements"]
     assert history[0]["ack_text"] == "Received"
     assert history[0]["replies"][0]["text"] == "Second reply"
@@ -435,7 +435,7 @@ def test_stale_reports_command_lists_ids_and_reasons():
     answered.write_text("Pick one: {#answered}\n\n- ( ) a\n- ( ) b\n", "utf-8")
     store.publish("answered", "Answered", answered)
     store.submission("answered-reply", "answered", "REPORT answered: a")
-    store.acknowledge(["answered-reply"], "reply", "Received")
+    store.acknowledge(["answered-reply"], "Received")
     before = store.state()["reports"]
     result = subprocess.run(
       [sys.executable, str(Path(preview.__file__)), "stale-reports"],
@@ -924,30 +924,29 @@ def test_http_boundaries():
         == 400
       )
       for broken in (
-        (["message-1", "unknown"], "reply", "done"),
-        (["message-1"], "shout", "done"),
-        (["message-1"], "reply", ""),
-        (["message-1"], "reply", 3),
+        (["message-1", "unknown"], "done"),
+        (["message-1"], ""),
+        (["message-1"], 3),
       ):
         try:
           store.acknowledge(*broken)
           raise AssertionError(f"Invalid receipt accepted: {broken}")
         except ValueError:
           assert store.read()["pending"]
-      store.acknowledge(["message-1"], "reply", "Fixed in `preview.py`.")
+      store.acknowledge(["message-1"], "Fixed in `preview.py`.")
       stamp = store.state()["notes"][0]["acknowledged_at"]
       assert len(stamp) == 19, (
         "the state surface carries second stamps, no ms or offset"
       )
       assert store.state()["notes"][0]["ack_text"] == "Fixed in `preview.py`."
-      store.acknowledge(["message-1"], "note", "and rechecked")
+      store.acknowledge(["message-1"], "and rechecked")
       row = store.state()["notes"][0]
       assert row["acknowledged_at"] == stamp
       assert (
         row["ack_kind"] == "reply" and row["ack_text"] == "Fixed in `preview.py`."
       ), "a second ack appends; the first answer stays"
       assert [(reply["kind"], reply["text"]) for reply in row["replies"]] == [
-        ("note", "and rechecked")
+        ("reply", "and rechecked")
       ]
       assert preview.Store(root).read()["pending"] == []
       assert len(preview.Store(root).state()["notes"]) == 1
@@ -962,12 +961,16 @@ def test_http_boundaries():
       served_note = json.loads(state_body)["notes"][0]
       assert "&lt;script&gt;" in served_note["html"]
       assert "<code>preview.py</code>" in served_note["ack_html"]
-      # A note block rides plain: the route renders reply blocks only.
       assert served_note["replies"] == [
-        {"kind": "note", "text": "and rechecked", "at": served_note["ack_edited_at"]}
+        {
+          "kind": "reply",
+          "text": "and rechecked",
+          "at": served_note["ack_edited_at"],
+          "html": "<p>and rechecked</p>\n",
+        }
       ]
       assert served_note["seen_at"] is not None
-      store.acknowledge(["message-1"], "reply", "<script>alert(1)</script> **safe**")
+      store.acknowledge(["message-1"], "<script>alert(1)</script> **safe**")
       status, _, state_body = request("GET", "/api/state")
       served_note = json.loads(state_body)["notes"][0]
       appended = served_note["replies"][1]
@@ -1531,7 +1534,7 @@ def test_http_boundaries():
       )
       assert request("POST", "/api/reports/fields/submit", submission, auth)[0] == 201
       assert len(store.submissions()) == len(sent) + 1
-      store.acknowledge([pending[-1]["id"]], "note", "read")
+      store.acknowledge([pending[-1]["id"]], "read")
       assert pending[-1]["id"] not in {row["id"] for row in store.read()["pending"]}
       assert (
         request(
@@ -1962,8 +1965,8 @@ def test_read_attaches_reply_threads():
     store = preview.Store(thread_dir, create=True)
     store.note("root", "hello", at="2026-10-13T00:00:00+00:00")
     store.note("middle", "RE: root\nfrom the middle", at="2026-10-13T00:01:00+00:00")
-    store.acknowledge(["root"], "note", "read")
-    store.acknowledge(["middle"], "note", "read")
+    store.acknowledge(["root"], "read")
+    store.acknowledge(["middle"], "read")
     store.note("child", "RE: middle\nworld", at="2026-10-13T00:02:00+00:00")
     listing = store.read()
     child = listing["pending"][0]
@@ -1978,7 +1981,7 @@ def test_read_attaches_reply_threads():
     store.note("missing", "RE: absent\nno parent")
     store.note("cycle-a", "RE: cycle-b\na")
     store.note("cycle-b", "RE: cycle-a\nb")
-    store.acknowledge(["cycle-a", "cycle-b"], "note", "read")
+    store.acknowledge(["cycle-a", "cycle-b"], "read")
     store.note("cycle-c", "RE: cycle-a\nc")
     pending = {record["id"]: record for record in store.read()["pending"]}
     assert not pending["duplicate"].get("thread")
@@ -2018,7 +2021,7 @@ def test_note_owns_one_attachment():
     assert [item["id"] for item in attached.read()["pending"]] == ["linked-note"]
     assert attached.state()["notes"][0]["attachment_name"] == "old name.bin"
     assert attached.read()["pending"][0]["attachment_path"] == record["path"]
-    attached.acknowledge(["linked-note"], "note", "Seen")
+    attached.acknowledge(["linked-note"], "Seen")
     again = attached.note_with_uploads(
       "linked-note",
       "Read this file",
@@ -2071,7 +2074,7 @@ def test_multi_file_note():
     assert [item["name"] for item in multi.state()["notes"][0]["attachments"]] == [
       file[0] for file in files
     ]
-    multi.acknowledge(["several-note"], "note", "Read all three")
+    multi.acknowledge(["several-note"], "Read all three")
     again = multi.note_with_uploads("several-note", "Three files", files)
     assert (
       preview.clip_stamp(again["acknowledged_at"])
@@ -2627,7 +2630,7 @@ def test_autosave_export():
     assert "autosave-note" in first
     autosave_store.reminder(advance=True)
     assert autosave_store.save_path.read_text(encoding="utf-8") == first
-    autosave_store.acknowledge(["autosave-note"], "note", "Receipt")
+    autosave_store.acknowledge(["autosave-note"], "Receipt")
     assert "Receipt" in autosave_store.save_path.read_text(encoding="utf-8")
     autosave_task = autosave_store.write_task(
       "autosave-task", "Track it", ["Step one"], task_type="misc"
@@ -2665,7 +2668,7 @@ def test_empty_reads_do_not_autosave(tmp_path, monkeypatch):
   preview.print_read(store)
   assert saves, "delivery must save the Seen receipt"
   assert json.loads(store.save_path.read_text().splitlines()[0])["seen_at"]
-  store.acknowledge(["saved-note"], "note", "Keep receipts")
+  store.acknowledge(["saved-note"], "Keep receipts")
   assert "Keep receipts" in store.save_path.read_text()
   saves.clear()
   preview.print_read(store)
@@ -2854,18 +2857,18 @@ def test_bare_ack_answers_the_one_pending_item():
         env=env,
       )
 
-    empty = cli("ack", "-n", "Nothing waits.")
+    empty = cli("ack", "Nothing waits.")
     assert empty.returncode != 0, empty.stdout
     assert "No pending" in empty.stdout + empty.stderr
     store.note("bare-one", "One note waits")
-    answered = cli("ack", "-n", "Answered without an ID.")
+    answered = cli("ack", "Answered without an ID.")
     assert answered.returncode == 0, answered.stderr
     assert answered.stdout.splitlines()[0] == "ok bare-o"
     assert store.read()["pending"] == []
     # Two pending items stay ambiguous, and the refusal names both.
     store.note("bare-two", "Second note")
     store.note("bare-three", "Third note")
-    refused = cli("ack", "-n", "Which one?")
+    refused = cli("ack", "Which one?")
     combined = refused.stdout + refused.stderr
     assert refused.returncode != 0, combined
     assert "bare-two" in combined and "bare-three" in combined
@@ -3019,7 +3022,7 @@ def test_clear_state():
     store = preview.Store(clear_root, create=True)
     store.set_meta("port", guard_port())
     store.note("clear-note", "Pending work")
-    store.acknowledge(["clear-note"], "note", "Receipt")
+    store.acknowledge(["clear-note"], "Receipt")
     store.write_task("clear-task", "Track it", ["Step one"], task_type="misc")
     source = clear_root / "pick.md"
     source.write_text("# Pick\n\nChoice? {#pick}\n- (x) one\n", encoding="utf-8")
@@ -3202,7 +3205,7 @@ def test_legacy_note_import():
     migrated = preview.Store(legacy, create=True)
     assert [row["id"] for row in migrated.state()["notes"]] == ["old", "answered"]
     assert migrated.state()["notes"][1]["seen_at"] == "2026-01-02T00:00:00"
-    migrated.acknowledge(["old"], "note", "still here")
+    migrated.acknowledge(["old"], "still here")
     assert migrated.state()["notes"][0]["ack_text"] == "still here"
     assert migrated.state()["notes"][0]["seen_at"] is not None
 
@@ -3235,7 +3238,7 @@ def test_seen_receipts():
     assert unread.state()["notes"][0]["seen_at"] == stamped
     unread.read()
     assert unread.state()["notes"][0]["seen_at"] == stamped
-    unread.acknowledge(["s-1"], "reply", "read, then answered")
+    unread.acknowledge(["s-1"], "read, then answered")
     assert unread.state()["notes"][0]["seen_at"] == stamped
 
 
@@ -3276,7 +3279,7 @@ def test_read_stamps_on_delivery():
       env={**os.environ, "ARENA_PREVIEW_STATE_DIR": str(printed_dir)},
     )
     assert printed.state()["notes"][0]["seen_at"] == first
-    printed.acknowledge(["p-1"], "note", "answered after the stamp")
+    printed.acknowledge(["p-1"], "answered after the stamp")
     assert [row["id"] for row in printed.read()["pending"]] == ["answer-2"]
 
 
@@ -3313,7 +3316,7 @@ def test_report_agent_seen_receipt():
     assert receipt.state()["reports"][0]["agent_seen_at"] == "2026-09-30T04:11:00"
     # An ack implies the read: the receipt moves forward with it and the answer gains Seen.
     with patch.object(preview, "now", return_value="2026-09-30T04:12:00"):
-      receipt.acknowledge(["answer-1"], "reply", "Read and answered")
+      receipt.acknowledge(["answer-1"], "Read and answered")
     assert receipt.state()["reports"][0]["agent_seen_at"] == "2026-09-30T04:12:00"
     assert receipt.submissions()[0]["seen_at"] is not None
 
@@ -3435,7 +3438,7 @@ def test_a_short_id_prefix_names_one_record():
     script = str(Path(preview.__file__))
     env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": short_dir}
     out = subprocess.run(
-      [sys.executable, script, "ack", "abcd123-0289082512830518", "-r", "answered"],
+      [sys.executable, script, "ack", "abcd123-0289082512830518", "answered"],
       capture_output=True,
       text=True,
       check=True,
@@ -3443,7 +3446,7 @@ def test_a_short_id_prefix_names_one_record():
     ).stdout
     assert "abcd12" in out
     prefixed = subprocess.run(
-      [sys.executable, script, "ack", "abcd123-9999", "-r", "answered too"],
+      [sys.executable, script, "ack", "abcd123-9999", "answered too"],
       capture_output=True,
       text=True,
       check=True,
@@ -3486,7 +3489,7 @@ def test_short_flags_and_the_details_rename():
     store = preview.Store(flag_dir)
     store.set_meta("port", guard_port())
     store.note("1111111-2222-3333-4444-555555555555", "a note")
-    acked = cli("ack", "1111111-2222-3333-4444-555555555555", "-r", "answer")
+    acked = cli("ack", "1111111-2222-3333-4444-555555555555", "answer")
     assert "1111111" in acked
     report = Path(flag_dir) / "report.md"
     report.write_text("# Report\n\nBody text.\n", encoding="utf-8")
@@ -4471,7 +4474,7 @@ def test_unacknowledged_call_trap():
       result.stdout
     )
     assert preview.quiet_inbox_line("arena-preview read") is True
-    assert preview.quiet_inbox_line("arena-preview ack abcdef --note Done") is True
+    assert preview.quiet_inbox_line("arena-preview ack abcdef Done") is True
 
 
 def test_bash_gate():
@@ -4499,10 +4502,9 @@ def test_bash_gate():
     assert (
       blocked.stdout.strip() == "BASH BLOCKED AFTER 6 CALLS.\n"
       "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
-      " note: `arena-preview ack <id> --reply <markdown>` or"
-      " `arena-preview ack <id> --note <text>`."
+      " note: `arena-preview ack <id> <markdown>`."
     )
-    gate_store.acknowledge(["gate-note"], "note", "Cleared")
+    gate_store.acknowledge(["gate-note"], "Cleared")
     assert gate_store.gate()
     cleared = subprocess.run(
       [sys.executable, gate_script, "gate"],
@@ -4547,10 +4549,9 @@ def test_bash_gate():
     assert pushed.stdout.startswith("PUSH BLOCKED: "), pushed.stdout
     assert (
       "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack every"
-      " note: `arena-preview ack <id> --reply <markdown>` or"
-      " `arena-preview ack <id> --note <text>`." in pushed.stdout
+      " note: `arena-preview ack <id> <markdown>`." in pushed.stdout
     )
-    gate_store.acknowledge(["push-note"], "note", "Cleared")
+    gate_store.acknowledge(["push-note"], "Cleared")
     assert gate_store.gate(pending_only=True) is True
     cleared_push = subprocess.run(
       [sys.executable, gate_script, "gate", "--push"],
@@ -5023,9 +5024,7 @@ def test_shell_command_text_drops_the_launcher():
 def test_first_blocking_piece_names_the_part_that_blocks():
   """A blocked call names its first part that is not an inbox call or an inert prefix."""
   assert (
-    preview.first_blocking_piece(
-      "arena-preview read && arena-preview ack a1 --note 'x'"
-    )
+    preview.first_blocking_piece("arena-preview read && arena-preview ack a1 'x'")
     is None
   )
   assert preview.first_blocking_piece("arena-preview read | tail -1") == "tail -1"
@@ -5282,7 +5281,7 @@ def test_gate_hint_names_the_banned_tools_without_cd():
     assert plain.returncode == 1
     assert "Omit them" not in plain.stdout
     # A line that passes the gate keeps its own counsel, whatever it runs.
-    hint_store.acknowledge(["hint-note"], "note", "Cleared")
+    hint_store.acknowledge(["hint-note"], "Cleared")
     passing = run_gate("cd /home/user && grep note log")
     assert passing.returncode == 0
     assert passing.stdout.strip() == ""
@@ -5369,7 +5368,6 @@ def test_dispatch_reminder():
         reminder_script,
         "ack",
         "reminder-note",
-        "--note",
         "Received",
       ],
       capture_output=True,
@@ -5383,7 +5381,7 @@ def test_dispatch_reminder():
     form_line = reminder_store.reminder()
     form_prefix = "unacked 1 answer | "
     assert form_line == form_prefix + reminder_tail(form_line, 1)
-    reminder_store.acknowledge(["form-answer"], "note", "Received")
+    reminder_store.acknowledge(["form-answer"], "Received")
     for index in range(3):
       reminder_store.note(f"mixed-{index}", "Pending")
     for name in ("one.txt", "two.txt"):
@@ -5466,7 +5464,7 @@ def test_reminder_rotation():
     rotate_store.read()
     assert rotate_store.reminder() == (f"calls 2 {pending}{tail_at(offset + 3)}")
     # An ack empties the queue, so idle polls stop counting, and a fresh note starts at one.
-    rotate_store.acknowledge(["rotate-note"], "note", "Done")
+    rotate_store.acknowledge(["rotate-note"], "Done")
     assert rotate_store.meta_value(preview.POLLS_SINCE_MESSAGE) == "0"
     assert rotate_store.reminder(advance=True) == tail_at(offset + 4)
     assert rotate_store.reminder(advance=True) == tail_at(offset + 5)
@@ -5511,7 +5509,6 @@ def test_ack_task_reminder():
         str(Path(preview.__file__)),
         "ack",
         "ack-work",
-        "--note",
         "Ok",
       ],
       capture_output=True,
@@ -6010,7 +6007,7 @@ def test_skip_poll():
       assert "skip-n" in printed[-1]
       assert store.skip_poll_requested() is True
       # Once the ack empties the queue, the next poll consumes the skip it held.
-      store.acknowledge(["skip-note"], "reply", "done")
+      store.acknowledge(["skip-note"], "done")
       printed.clear()
       code, sleeps = run_poll()
       assert code == 0 and sleeps == []
@@ -6113,7 +6110,7 @@ def test_turn_end_marker():
       assert store.state()["turn_ended_at"] is None
       # An unblocked task continues the turn as well.
       store.touch_agent()
-      store.acknowledge(["end-note"], "reply", "done")
+      store.acknowledge(["end-note"], "done")
       store.write_task("end-task", "Work waits", ["Step one"], task_type="misc")
       assert run_poll() == 0
       assert store.state()["turn_ended_at"] is None
@@ -6171,7 +6168,7 @@ def test_newest_stamp_follows_every_mutation():
     note_stamp = store.newest_stamp()
     assert note_stamp
     # A receipt is a change to the state a restore carries, so an ack moves the stamp.
-    store.acknowledge(["stamp-note"], "reply", "done")
+    store.acknowledge(["stamp-note"], "done")
     ack_stamp = store.newest_stamp()
     assert ack_stamp and ack_stamp != note_stamp
     # A task change moves it too.
@@ -6251,7 +6248,7 @@ def test_owner_limits_and_streams():
     text = "👋" * 150_001
     assert store.note("long-owner", text)["text"] == text
     long_reply = "a" * 15_001
-    store.acknowledge(["long-owner"], "reply", long_reply)
+    store.acknowledge(["long-owner"], long_reply)
     assert store.state()["notes"][0]["ack_text"] == long_reply
     url = "https://example.com/" + "a" * 3000
     owner = store.enqueue_fetch(url, False)
@@ -6342,7 +6339,7 @@ def test_unified_import_atomicity():
     assert not store.save_path.exists(), "Import must not overwrite the source backup"
     receipt_at = "2026-09-20T22:05:11+00:00"
     store.note("already-here", "Existing message")
-    store.acknowledge(["already-here"], "reply", "Existing answer")
+    store.acknowledge(["already-here"], "Existing answer")
     existing = next(n for n in store.state()["notes"] if n["id"] == "already-here")
     imported = [
       {
@@ -6556,14 +6553,14 @@ def test_quiet_notes_need_no_ack():
     assert "unacked 1 note" in store.reminder(advance=True)
     store.note("quiet-later", "More information", quiet=True)
     assert store.calls_since_message() == 1
-    store.acknowledge(["owner-note"], "note", "Done")
+    store.acknowledge(["owner-note"], "Done")
     assert store.calls_since_message() == 0
     assert "unacked" not in store.reminder()
     assert store.gate(pending_only=True)
     store.submission("owner-answer", "form", "Decision")
     assert store.pending_ack() == "owner-answer"
     assert "unacked 1 answer" in store.reminder(advance=True)
-    store.acknowledge(["owner-answer"], "note", "Done")
+    store.acknowledge(["owner-answer"], "Done")
     assert store.calls_since_message() == 0
 
 
@@ -6981,7 +6978,7 @@ def test_report_changes_hold_unseen_answers_and_acknowledgements():
         raise AssertionError("An unseen answer allowed an agent report change")
       except preview.ReportHeld as error:
         assert "unacknowledged answer" in str(error)
-    store.acknowledge(["answer-1"], "reply", "Received")
+    store.acknowledge(["answer-1"], "Received")
     for change in (
       lambda: store.publish("pick", "Pick revised", source),
       lambda: store.unpublish("pick"),
@@ -7005,7 +7002,7 @@ def test_report_changes_hold_a_fresh_view_of_an_answered_report():
     source.write_text("# Pick\n", encoding="utf-8")
     store.publish("pick", "Pick", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
-    store.acknowledge(["answer-1"], "reply", "Received")
+    store.acknowledge(["answer-1"], "Received")
     store.mark_report_ack_seen("pick")
     store.mark_report_viewed("pick")
     with patch.object(preview, "seconds_since", return_value=0):
@@ -7035,7 +7032,7 @@ def test_agent_unpublish_passes_the_view_hold():
         raise AssertionError("An unacknowledged answer allowed the removal")
       except preview.ReportHeld as error:
         assert "unacknowledged" in str(error)
-      store.acknowledge(["answer-1"], "reply", "Received")
+      store.acknowledge(["answer-1"], "Received")
       try:
         store.unpublish("pick")
         raise AssertionError("An unseen acknowledgement allowed the removal")
@@ -7070,7 +7067,7 @@ def test_report_view_active_false_clears_the_stamp():
     source.write_text("# Pick\n", encoding="utf-8")
     store.publish("pick", "Pick", source)
     store.submission("answer-1", "pick", "REPORT pick: one")
-    store.acknowledge(["answer-1"], "reply", "Received")
+    store.acknowledge(["answer-1"], "Received")
     store.mark_report_ack_seen("pick")
     store.mark_report_viewed("pick")
     cleared = store.mark_report_viewed("pick", active=False)
@@ -7102,75 +7099,29 @@ def test_unpublish_route_allows_owner_to_remove_unseen_report():
     assert store.state()["reports"] == []
 
 
-def test_ack_reads_a_file_when_the_text_carries_backticks():
-  """An acknowledgement reads text from a file when it contains backticks. The file preserves backticks and quotes
-  without shell expansion. Require exactly one text source."""
-  script = str(Path(preview.__file__))
-  with tempfile.TemporaryDirectory() as ack_dir:
-    preview.Store(ack_dir, create=True)
-    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": ack_dir}
-    store = preview.Store(ack_dir)
+def test_ack_reads_stdin_when_the_text_carries_backticks():
+  """Redirected input preserves backticks and quotes. Empty input writes no receipt."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
     store.set_meta("port", guard_port())
-    store.note("first-note", "First question")
-    store.note("second-note", "Second question")
-    text = "Use `arena-preview read` and 'single quotes' here.\n\nA second line."
-    source = Path(ack_dir) / "reply.md"
+    store.note("stdin-note", "Question")
+    text = "Use `arena-preview read` and 'single quotes'.\n\nA second line."
+    source = Path(directory) / "reply.md"
     source.write_text(text, encoding="utf-8")
-    out = subprocess.run(
-      [sys.executable, script, "ack", "first-note", "--reply-file", str(source)],
-      capture_output=True,
-      text=True,
-      check=True,
-      env=env,
-    ).stdout
-    assert out.startswith("ok first-")
-    note = preview.Store(ack_dir).state()["notes"][0]
-    assert note["ack_kind"] == "reply"
-    assert note["ack_text"] == text, "the stored text keeps every backtick and quote"
-    # The plain note form reads a file too, and its stored kind follows the flag.
-    plain = Path(ack_dir) / "note.txt"
-    plain.write_text("Kept `as is`", encoding="utf-8")
-    subprocess.run(
-      [sys.executable, script, "ack", "second-note", "--note-file", str(plain)],
-      capture_output=True,
-      text=True,
-      check=True,
-      env=env,
+    env = {**os.environ, "ARENA_PREVIEW_STATE_DIR": directory}
+    argv = [sys.executable, preview.__file__, "ack", "stdin-note", "-"]
+    empty = subprocess.run(
+      argv, input="", capture_output=True, text=True, env=env, check=False
     )
-    assert preview.Store(ack_dir).state()["notes"][1]["ack_text"] == "Kept `as is`"
-    both = subprocess.run(
-      [
-        sys.executable,
-        script,
-        "ack",
-        "first-note",
-        "--reply",
-        "one",
-        "--reply-file",
-        str(source),
-      ],
-      capture_output=True,
-      text=True,
-      check=False,
-      env=env,
-    )
-    assert both.returncode != 0 and "exactly one" in both.stderr
-    # A missing file is a clean refusal, not a traceback.
-    missing = subprocess.run(
-      [
-        sys.executable,
-        script,
-        "ack",
-        "second-note",
-        "--reply-file",
-        "/nope/missing.md",
-      ],
-      capture_output=True,
-      text=True,
-      check=False,
-      env=env,
-    )
-    assert missing.returncode != 0 and "Cannot read" in missing.stderr
+    assert empty.returncode != 0
+    assert store.state()["notes"][0]["acknowledged_at"] is None
+    with source.open(encoding="utf-8") as stream:
+      result = subprocess.run(
+        argv, stdin=stream, capture_output=True, text=True, env=env, check=True
+      )
+    assert result.stdout.startswith("ok stdin-")
+    note = store.state()["notes"][0]
+    assert note["ack_kind"] == "reply" and note["ack_text"] == text
 
 
 def test_tick_warning_reads_the_quoting_shape():
@@ -7179,23 +7130,17 @@ def test_tick_warning_reads_the_quoting_shape():
   The trap reads the command line before expansion, so the lossy shape is visible: an inline
   ack text in double quotes with a backtick in it.
   """
-  lossy = preview.tick_warning('arena-preview ack abc --reply "see `read` now"')
-  assert lossy and "backtick" in lossy and "--reply-file" in lossy
-  assert preview.tick_warning('arena-preview ack abc --note "see `read` now"')
+  lossy = preview.tick_warning('arena-preview ack abc "see `read` now"')
+  assert lossy and "backtick" in lossy and "stdin" in lossy
+  assert preview.tick_warning('arena-preview ack "see `read` now"')
   # An escaped tick reaches the tool as text, so it stays quiet. An even backslash run
   # leaves the tick bare, and the shell still substitutes it.
-  assert (
-    preview.tick_warning('arena-preview ack abc --reply "see \\`read\\` now"') is None
-  )
-  assert preview.tick_warning('arena-preview ack abc --reply "see \\\\`read` now"')
+  assert preview.tick_warning('arena-preview ack abc "see \\`read\\` now"') is None
+  assert preview.tick_warning('arena-preview ack abc "see \\\\`read` now"')
   # A quoted line, a file form, a tick before the flag and a plain line all stay quiet.
-  assert preview.tick_warning("arena-preview ack abc --reply 'see `read` now'") is None
-  assert (
-    preview.tick_warning("arena-preview ack abc --reply-file /tmp/reply.md") is None
-  )
-  assert (
-    preview.tick_warning('echo `date` && arena-preview ack abc --reply "plain"') is None
-  )
+  assert preview.tick_warning("arena-preview ack abc 'see `read` now'") is None
+  assert preview.tick_warning("arena-preview ack abc - < reply.md") is None
+  assert preview.tick_warning('echo `date` && arena-preview ack abc "plain"') is None
   assert (
     preview.tick_warning("arena-preview task x title --task-details 'a `tick`'") is None
   )
@@ -7370,7 +7315,7 @@ def test_ack_stamps_the_read_line():
       store.read()
       assert store.state()["last_check"] == "2026-09-22T12:00:00"
     with patch.object(preview, "now", return_value="2026-09-22T12:05:00"):
-      store.acknowledge(["stamped-note"], "note", "Handled")
+      store.acknowledge(["stamped-note"], "Handled")
       assert store.state()["last_check"] == "2026-09-22T12:05:00"
 
 
@@ -7384,7 +7329,7 @@ def test_note_list_pages(tmp_path):
       at="2026-10-13T00:00:00" if index == 0 else "2026-10-14T00:00:00",
       quiet=index == 1,
     )
-  store.acknowledge(["history-2"], "note", "Already answered")
+  store.acknowledge(["history-2"], "Already answered")
   before = store.state()["notes"]
   saved = store.save_path.stat().st_mtime_ns
 
@@ -8539,7 +8484,7 @@ def test_ack_task_hints_only_name_messages_without_a_task(capsys):
         os.environ,
         {"ARENA_PREVIEW_STATE_DIR": directory, "ARENA_PREVIEW_SHELL_HOOK": "0"},
       ),
-      patch.object(sys, "argv", [script, "ack", *ids, "--note", "Received"]),
+      patch.object(sys, "argv", [script, "ack", *ids, "Received"]),
     ):
       assert preview.main() == 0
     lines = capsys.readouterr().out.splitlines()
@@ -8552,7 +8497,7 @@ def test_ack_task_hints_only_name_messages_without_a_task(capsys):
         os.environ,
         {"ARENA_PREVIEW_STATE_DIR": directory, "ARENA_PREVIEW_SHELL_HOOK": "0"},
       ),
-      patch.object(sys, "argv", [script, "ack", "tracked-note", "--note", "Confirmed"]),
+      patch.object(sys, "argv", [script, "ack", "tracked-note", "Confirmed"]),
     ):
       assert preview.main() == 0
     assert capsys.readouterr().out.splitlines() == ["ok tracke"]
@@ -8824,7 +8769,7 @@ def test_report_unpublish_stale_keeps_guards_answers_and_sources(tmp_path, capsy
   for report in ["ready", "held", "unread"]:
     store.submission("answer-" + report, report, "REPORT: Yes")
   for report in ["ready", "held"]:
-    store.acknowledge(["answer-" + report], "reply", "Received")
+    store.acknowledge(["answer-" + report], "Received")
   store.mark_report_ack_seen("ready")
   store.publish("tail", "More information", plain)
   with (
@@ -9151,3 +9096,77 @@ def test_header_interrupt_route_and_one_shot_cli(capsys):
     finally:
       app.shutdown()
       app.server_close()
+
+
+def test_ack_has_one_flagless_markdown_input(capsys):
+  """Inline and stdin use the same rendered receipt for notes and report answers."""
+  with tempfile.TemporaryDirectory() as directory:
+    store = preview.Store(directory, create=True)
+    store.set_meta("port", guard_port())
+    store.note("inline-note", "Question")
+    store.submission("stdin-answer", "form", "REPORT form: answer")
+    text = "**Received** `without flags`"
+    with (
+      patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+      patch.object(sys, "argv", [preview.__file__, "ack", "inline-note", text]),
+    ):
+      assert preview.main() == 0
+    with (
+      patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+      patch.object(sys, "argv", [preview.__file__, "ack", "-"]),
+      patch("sys.stdin.read", return_value=text),
+    ):
+      assert preview.main() == 0
+    note = store.state()["notes"][0]
+    answer = store.submissions()[0]
+    assert note["ack_kind"] == answer["ack_kind"] == "reply"
+    assert note["ack_text"] == answer["ack_text"] == text
+    assert store.read()["pending"] == []
+    stamp = "2026-10-17T00:00:00"
+    store.note(
+      "legacy-note",
+      "Old question",
+      acknowledged_at=stamp,
+      ack_kind="note",
+      ack_text="**Keep plain**",
+      replies=[{"kind": "note", "text": "`Old plain reply`", "at": stamp}],
+    )
+    store.acknowledge(["legacy-note"], text)
+    legacy = next(row for row in store.state()["notes"] if row["id"] == "legacy-note")
+    assert legacy["ack_kind"] == "note" and legacy["ack_text"] == "**Keep plain**"
+    assert [row["kind"] for row in legacy["replies"]] == ["note", "reply"]
+    server = preview.ThreadingHTTPServer(("127.0.0.1", 0), preview.handler(store))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+      client = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=5)
+      client.request("GET", "/api/state")
+      response = client.getresponse()
+      assert response.status == 200
+      rows = {row["id"]: row for row in json.loads(response.read())["notes"]}
+      client.close()
+      assert "<strong>Received</strong>" in rows["inline-note"]["ack_html"]
+      old = rows["legacy-note"]
+      assert "ack_html" not in old and "html" not in old["replies"][0]
+      assert "<strong>Received</strong>" in old["replies"][1]["html"]
+    finally:
+      server.shutdown()
+      server.server_close()
+    for flag in [
+      "--reply",
+      "--note",
+      "--reply-file",
+      "--note-file",
+      "-r",
+      "-n",
+      "-R",
+      "-N",
+    ]:
+      with (
+        patch.dict(os.environ, {"ARENA_PREVIEW_STATE_DIR": directory}),
+        patch.object(sys, "argv", [preview.__file__, "ack", "inline-note", flag, text]),
+        pytest.raises(SystemExit) as error,
+      ):
+        preview.main()
+      assert error.value.code != 0
+    assert store.state()["notes"][0]["replies"] == []
+    capsys.readouterr()

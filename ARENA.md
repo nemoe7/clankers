@@ -44,7 +44,7 @@
 
 - The stderr reminder is the only read schedule; the Bash gate is a repair, NEVER the schedule. Block mechanics: skill reference, Read cadence. A call with no reminder line MAY signal a sandbox reset: run the reset steps before other work.
 - Before the first start there is no inbox.
-- Ack every delivered note with `ack <ids> --reply <markdown>` (rendered in the log) or `--note <text>`, one text per call, only those IDs, NEVER all pending blindly.
+- Ack each delivered note with `ack <id> <Markdown>`, rendered in the log; one text per call, only those IDs, NEVER all pending blindly.
 - Refer to a note by its ID, NEVER by its sequence number: the first six characters in prose, task details, reports and notes; extend the prefix when two notes share it.
 - Receipt is not completion. Ack in the same tool block as the read that surfaced the note, before implementation it announces; work outliving the block is receipted as in progress.
 - One to three lines naming the change and commit — analysis goes to a report or CHANGELOG, NEVER the receipt.

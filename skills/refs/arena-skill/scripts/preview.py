@@ -2115,7 +2115,7 @@ def unquote_commands(line):
 
 
 # An inline ack text in double quotes, which is the shape the shell substitutes.
-INLINE_ACK_RE = re.compile(r"--(?:reply|note)\s+\"")
+INLINE_ACK_RE = re.compile(r'(?:arena-preview|preview\.py)\s+ack(?:\s+[\w.-]+)*\s+"')
 
 
 def bare_backtick(text):
@@ -2146,7 +2146,7 @@ def tick_warning(line):
   return (
     "arena-preview gate: that ack text sits in double quotes, so the shell runs each"
     " unescaped backtick as a command and the ticks vanish. Single-quote the text, or"
-    " pass --reply-file <path>."
+    " pass stdin with `ack <id> - < reply.md`."
   )
 
 
@@ -5425,11 +5425,9 @@ class Store:
       )
     return rows[0]["id"]
 
-  def acknowledge(self, ids, kind, text):
+  def acknowledge(self, ids, text):
     """Store the first acknowledgement as a receipt. Append each later reply without replacing earlier text. Use
     `ack_edited_at` for the latest reply stamp."""
-    if kind not in {"note", "reply"}:
-      raise ValueError("Every acknowledgement is a note or a reply, with its text")
     text = note_text(text)
     stamp = now()
     with self.transaction() as db:
@@ -5445,11 +5443,11 @@ class Store:
             db.execute(
               f"UPDATE {table} SET acknowledged_at = ?, ack_kind = ?, ack_text = ?,"
               " seen_at = COALESCE(seen_at, ?) WHERE id = ?",
-              (stamp, kind, text, stamp, record_id),
+              (stamp, "reply", text, stamp, record_id),
             )
           else:
             more = replies_list(row["replies"]) + [
-              {"kind": kind, "text": text, "at": stamp}
+              {"kind": "reply", "text": text, "at": stamp}
             ]
             db.execute(
               f"UPDATE {table} SET replies = ?, ack_edited_at = ? WHERE id = ?",
@@ -6745,20 +6743,10 @@ def main():
   )
   ack = commands.add_parser(
     "ack",
-    help="Answer a note; a bare call answers the one pending item; -r replies, -n notes,"
-    " -R and -N read the answer from a file",
+    help="Answer notes with Markdown; omit IDs for one pending item; - reads stdin",
   )
   ack.add_argument("ids", nargs="*")
-  ack.add_argument("-r", "--reply", help="Markdown answer shown in the message log")
-  ack.add_argument("-n", "--note", help="Short plain answer shown in the message log")
-  # A backtick inside double quotes runs as a command, so the shell eats the ticks before this
-  # tool sees the text. The file forms carry it as it stands.
-  ack.add_argument(
-    "-R", "--reply-file", type=Path, help="Read the Markdown answer from this file"
-  )
-  ack.add_argument(
-    "-N", "--note-file", type=Path, help="Read the plain answer from this file"
-  )
+  ack.add_argument("markdown", help="Markdown answer, or - to read it from stdin")
   publish = commands.add_parser(
     "publish", help="Publish a report; -i names the ID, -t the title"
   )
@@ -7052,8 +7040,7 @@ def main():
           )
         print(
           "READ INBOX NOW. Only a bare `arena-preview read` passes. Then ack"
-          " every note: `arena-preview ack <id> --reply"
-          " <markdown>` or `arena-preview ack <id> --note <text>`.",
+          " every note: `arena-preview ack <id> <markdown>`.",
           flush=True,
         )
         hint = gate_line_hint(args.line)
@@ -7165,28 +7152,16 @@ def main():
         format_fetch_job(store.enqueue_fetch(args.url, args.allow_proxy, pending=True))
       )
     elif args.command == "ack":
-      sources = (args.reply, args.note, args.reply_file, args.note_file)
-      if sum(source is not None for source in sources) != 1:
-        raise ValueError(
-          "Choose exactly one of --reply, --note, --reply-file or --note-file"
-        )
-      if args.reply is not None:
-        kind, text = "reply", args.reply
-      elif args.note is not None:
-        kind, text = "note", args.note
-      else:
-        source = args.reply_file if args.reply_file is not None else args.note_file
-        kind = "reply" if args.reply_file is not None else "note"
-        try:
-          text = source.read_text(encoding="utf-8")
-        except OSError as error:
-          raise ValueError(f"Cannot read {source}: {error.strerror or error}") from None
+      try:
+        text = sys.stdin.read() if args.markdown == "-" else args.markdown
+      except (OSError, UnicodeError) as error:
+        raise ValueError(f"Cannot read acknowledgement stdin: {error}") from None
       ids = (
         [store.resolve_id(token) for token in args.ids]
         if args.ids
         else [store.pending_ack()]
       )
-      store.acknowledge(ids, kind, text)
+      store.acknowledge(ids, text)
       short = [i[:6] for i in ids]
       print("ok " + " ".join(short))
       untracked = [

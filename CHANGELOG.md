@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Preview: use one flagless Markdown acknowledgement input. Read redirected text with `ack <id> -`. Retain stored receipts.
+
 - Maintenance: sort README budget paths alphabetically and link them to their repository files.
 
 - Arena rules: move the Chromium setup procedure to the skill reference.

@@ -376,12 +376,12 @@ def test_the_gate_names_a_backtick_the_shell_will_eat():
   The trap reads the command line before the shell expands it, so the backtick is still there
   to see. The warning names the file form, and the ack still runs.
   """
-  lossy = run(': "arena-preview ack abc" --reply "use `echo tick` now"')
+  lossy = run(': arena-preview ack abc "use `echo tick` now"')
   assert lossy.returncode == 0, lossy.stderr
   assert "backtick" in lossy.stderr, lossy.stderr
-  assert "--reply-file" in lossy.stderr, lossy.stderr
+  assert "stdin" in lossy.stderr, lossy.stderr
   # Single quotes keep the ticks: the line stays quiet.
-  safe = run(": \"arena-preview ack abc\" --reply 'use `echo tick` now'")
+  safe = run(": arena-preview ack abc 'use `echo tick` now'")
   assert safe.returncode == 0, safe.stderr
   assert "backtick" not in safe.stderr, safe.stderr
 
@@ -420,19 +420,19 @@ def test_the_inbox_line_classifier():
   assert quiet("export PATH=/y; arena-preview read")
   assert quiet("arena-preview ack a; arena-preview ack b; arena-preview task x")
   assert quiet("arena-preview poll")
-  assert quiet('arena-preview ack abc --reply "one line\ntwo lines"')
+  assert quiet('arena-preview ack abc "one line\ntwo lines"')
   assert quiet("arena-preview read 2>&1")
   assert quiet("arena-preview read >/dev/null 2>&1")
   assert quiet("arena-preview read > /dev/null 2>&1")
   assert quiet("arena-preview read 2>/dev/null")
   assert quiet("arena-preview ack abc &>/dev/null")
-  assert not quiet('arena-preview ack abc --reply "$(rm -rf /tmp/x)"')
+  assert not quiet('arena-preview ack abc "$(rm -rf /tmp/x)"')
   # Single quotes never substitute in bash, so formatting and dollars ride an ack unchecked.
   # Double quotes keep their substitution refused.
-  assert quiet("arena-preview ack abc --reply 'task `x` is queued'")
-  assert quiet("arena-preview ack abc --reply 'the $(pwd) path'")
-  assert not quiet('arena-preview ack abc --reply "task `x` is queued"')
-  assert not quiet('arena-preview ack abc --reply "the $(pwd) path"')
+  assert quiet("arena-preview ack abc 'task `x` is queued'")
+  assert quiet("arena-preview ack abc 'the $(pwd) path'")
+  assert not quiet('arena-preview ack abc "task `x` is queued"')
+  assert not quiet('arena-preview ack abc "the $(pwd) path"')
   assert not quiet("pytest -q; arena-preview read >/dev/null 2>&1")
   assert not quiet("cd /x && echo ran && arena-preview read")
   assert not quiet("git push origin main && arena-preview ack a")
