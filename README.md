@@ -33,7 +33,7 @@ Latest measurements as of 2026-10-17. `maintenance/check.py --update` rebuilds t
 | --- | --- | --- |
 | `userscripts/arena-prompt-fill.txt` | `o200k_base` | 356 `tok` |
 | `rules/CORE.md` | `o200k_base` | 1,613 `tok` |
-| `rules/ARENA.md` | `UTF-8 file size` | 20,651 `B` |
+| `rules/ARENA.md` | `UTF-8 file size` | 20,475 `B` |
 | `rules/CHATGPT-CUSTOM.txt` | `Unicode chars` | 1,497 `chars` |
 | `rules/CHATGPT-MORE.txt` | `Unicode chars` | 1,500 `chars` |
 | `rules/CLINE.md` | `o200k_base` | 444 `tok` |
@@ -47,7 +47,7 @@ Latest measurements as of 2026-10-17. `maintenance/check.py --update` rebuilds t
 | `skills/amending-violations/SKILL.md` | `o200k_base` | 1,607 `tok` |
 | `skills/arena-skill/SKILL.md` | `o200k_base` | 3,965 `tok` |
 | `skills/arena-skill/README.md` | `o200k_base` | 1,876 `tok` |
-| `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,835 `tok` |
+| `skills/arena-skill/references/REFERENCE.md` | `o200k_base` | 4,909 `tok` |
 | `skills/arena-skill/assets/app.js` | `UTF-8 file size` | 66,715 `B` |
 | `skills/arena-skill/assets/markdown-it.min.js` | `UTF-8 file size` | 114,836 `B` |
 | `skills/arena-skill/assets/message-markdown.js` | `UTF-8 file size` | 2,690 `B` |

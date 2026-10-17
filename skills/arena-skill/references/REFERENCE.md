@@ -54,6 +54,14 @@ Refer to a note in prose by the first six characters of its ID. Use the full ID 
 
 When an acknowledgement refers to a report or task, use `ack --reply` and put its exact full ID in inline backticks; the six-character shortening applies to note IDs only. Use IDs unique across notes, reports and tasks so the client can link them; `publish` and `task` refuse an ID the other holds.
 
+## Chromium
+
+- Install `@sparticuz/chromium` from npm for Chromium work.
+- Extract `al2023.tar.br` with the package's exported `inflate`.
+- Call `setupLambdaEnvironment("/tmp/al2023/lib")` for library and font paths.
+- Launch the package's extracted binary.
+- NEVER use a Playwright-managed browser.
+
 ## External channel (ntfy)
 
 - Use this only after the owner selects the external channel.

@@ -179,15 +179,13 @@ Consequence: the sandbox-to-PC direction has no working file route from a previe
 Rule: hand a file to the PC as text through the clipboard. NEVER report a download as delivered, because the preview page cannot see the PC's disk.
 ## Chromium for E2E tests
 
-The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Use `@sparticuz/chromium` from reachable npm. Observation date unrecorded.
+The sandbox blocks the normal Chromium installation paths: the Playwright browser CDN, Google CDNs and `apt`. Observation date unrecorded.
 
-### Install
+Current setup: [Chromium recipe](../../skills/arena-skill/references/REFERENCE.md#chromium).
 
-```bash
-npm install @sparticuz/chromium
-```
+### Recorded environment
 
-Extract the four brotli archives in the package with its helper:
+The source-project notes recorded these archive destinations:
 
 | Archive | Destination |
 | --- | --- |
@@ -196,9 +194,7 @@ Extract the four brotli archives in the package with its helper:
 | fonts | `/tmp/fonts` |
 | SwiftShader | `/tmp` |
 
-### Run
-
-The source project's E2E suite accepts a non-Playwright binary through `DAEDALUS_E2E_CHROMIUM`. Set it and the required runtime variables:
+The source project's E2E suite accepted a non-Playwright binary through `DAEDALUS_E2E_CHROMIUM`. The recorded runtime values follow:
 
 ```bash
 export DAEDALUS_E2E_CHROMIUM=/tmp/chromium
@@ -206,7 +202,7 @@ export LD_LIBRARY_PATH=/tmp/al2023/lib:/tmp
 export VK_ICD_FILENAMES=/tmp/vk_swiftshader_icd.json
 ```
 
-`LD_LIBRARY_PATH` needs both directories. SwiftShader cannot start without the ICD file in `VK_ICD_FILENAMES`.
+The recorded setup used both `LD_LIBRARY_PATH` directories. SwiftShader needed the ICD file named by `VK_ICD_FILENAMES`.
 
 ### Known gap
 

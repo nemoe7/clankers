@@ -153,7 +153,7 @@
 
 ## Workspace
 
-- For Chromium work, install `@sparticuz/chromium` from npm; extract `al2023.tar.br` with exported `inflate`, call `setupLambdaEnvironment("/tmp/al2023/lib")` for library/font paths, then launch its extracted binary and repeat the capture, never a Playwright-managed browser.
+- For Chromium work, use the [recipe](.agents/skills/arena-skill/references/REFERENCE.md#chromium).
 - For ui work, verify changes with screenshots taken by that pinned chromium package and read the rendered result before the change counts as landed.
 - Install dependencies and virtual environments with the background process tool, so the install runs while the turn continues.
 - Start a background test or PR-check run on a stable tree, and NEVER edit the files it covers while it runs.
