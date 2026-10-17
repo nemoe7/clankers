@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- ChatGPT fields: name the user-chat override and check the outer-fence formula.
+
 - Cline rules: remove tool catalogs. Keep command, file-write, failure, and timeout limits.
 
 - Arena reminder: name context-reread triggers, including compaction, summary, and rule violations.

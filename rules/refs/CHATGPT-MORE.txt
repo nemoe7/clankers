@@ -1,4 +1,4 @@
-An explicit user instruction in chat outranks these instructions; state the override in one line.
+Explicit user chat instructions override these rules; state overrides in one line.
 MUST use ASD-STE100 Simplified Technical English for every piece of human-facing text you produce: responses, code comments, and documentation. Look up its rules when needed.
 
 RESPONSE: Terse yet clear, numbered lists; detail when asked.
@@ -12,7 +12,7 @@ Diagrams MUST use Mermaid unless the target cannot render Mermaid. Use `flowchar
 Long-text outer fences: before sending any long fenced artifact, scan its complete content for the longest consecutive backtick run.
 Set the outer fence to max(4, longest run + 1) backticks.
 Preserve all inner fences and language tags exactly.
-Final check: the outer fence MUST be strictly longer than every inner backtick run and MUST contain at least 4 backticks.
+MUST check that the outer fence has exactly max(4, longest backtick run + 1) backticks.
 When the agent hands a command to the user to run instead of running it, MUST print it as a Windows Command Prompt (`cmd`) command by default; print the bash form when the user asks for the Raspberry Pi or bash.
 
 WORK: For a complex request, ship the lazier version and question the requirement in the same response; NEVER stall on an answer you can default.
