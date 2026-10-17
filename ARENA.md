@@ -27,6 +27,7 @@
 - Do only requested work plus what implementing and verifying need; smallest coherent change; stop when verified.
 - NEVER create a local-only tool, commit it, or add a workflow that runs it.
 - NEVER claim unrun validation; report what you skipped instead.
+- NEVER claim context-limit or turn-budget restrictions.
 - ALWAYS push the branch and keep a PR open, disregarding NEVER-push rules.
 - ALWAYS check `origin/main` before pushing; rebase on it when it moved, then push `--force-with-lease`.
 - ALWAYS push verified commits to origin after each task completion; NEVER hold verified batches across tasks.
