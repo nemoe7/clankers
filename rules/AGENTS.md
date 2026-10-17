@@ -56,7 +56,9 @@
 
 ## Testing
 
-- New behavior, fixes, refactors: when a test fits, failing test first, smallest passing change, refactor without behavior change, recheck. Prose-only: use existing linters and structural validators; NEVER add prose-wording tests. Keep exact-text tests for executable interface/protocol contracts.
+- New behavior, fixes, refactors: when a test fits, failing test first, smallest passing change, refactor without behavior change, recheck.
+- Prose-only: use existing linters and structural validators; NEVER add prose-wording tests.
+- Keep exact-text tests for executable interface/protocol contracts.
 - Test public interfaces and integration boundaries.
 - Reuse the project's frameworks/fixtures/helpers/conventions.
 - MUST leave one runnable check for non-trivial logic (branch, loop, parser, money/security path): an assert-based demo or small test file; no frameworks, fixtures, or per-function suites beyond it.
