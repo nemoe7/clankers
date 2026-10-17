@@ -54,7 +54,7 @@ Latest measurements as of 2026-10-17. `maintenance/check.py --update` rebuilds t
 | `skills/arena-skill/assets/index.html` | `UTF-8 file size` | 14,414 `B` |
 | `skills/arena-skill/assets/style.css` | `UTF-8 file size` | 18,375 `B` |
 | `skills/arena-skill/scripts/arena-preview` | `UTF-8 file size` | 574 `B` |
-| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 15,962 `B` |
+| `skills/arena-skill/scripts/install.sh` | `UTF-8 file size` | 16,002 `B` |
 | `skills/arena-skill/scripts/preview.py` | `UTF-8 file size` | 183,450 `B` |
 | `skills/squash/SKILL.md` | `o200k_base` | 1,377 `tok` |
 | `skills/web-interface-guidelines/SKILL.md` | `o200k_base` | 528 `tok` |

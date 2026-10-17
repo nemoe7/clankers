@@ -42,6 +42,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Fixed
 
+- Arena gate: consume a header reread request only in an agent shell. Keep hosted processes, platform probes, and routed runs active.
+
 - Preview tasks: add a bottom drop target and save its appended order. Restore the saved order after a refused write.
 
 - Preview: cancel a prior copy timer before it can clear newer button feedback.

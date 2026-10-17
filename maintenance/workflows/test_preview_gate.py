@@ -174,12 +174,13 @@ def run(
   state: Path | None = None,
   line: str | None = None,
   calls: Path | None = None,
+  routed: bool = False,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command in a shell whose $0 is bash, the shape the gate protects."""
   if state is None:
     with tempfile.TemporaryDirectory() as directory:
-      return run_in(command, Path(directory), cwd, line, calls)
-  return run_in(command, state, cwd, line, calls)
+      return run_in(command, Path(directory), cwd, line, calls, routed)
+  return run_in(command, state, cwd, line, calls, routed)
 
 
 def run_in(
@@ -188,6 +189,7 @@ def run_in(
   cwd: str | None = None,
   line: str | None = None,
   calls: Path | None = None,
+  routed: bool = False,
 ) -> subprocess.CompletedProcess[str]:
   """Run one command against a state directory, with the gate sourced and trapped.
 
@@ -209,7 +211,7 @@ def run_in(
   # The tested command line may call the real CLI for its answer. A stub on PATH
   # keeps that answer free of an installation, so the test runs anywhere.
   bin_dir = root / "bin"
-  bin_dir.mkdir()
+  bin_dir.mkdir(exist_ok=True)
   cli = bin_dir / "arena-preview"
   cli.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
   cli.chmod(0o755)
@@ -243,6 +245,7 @@ def run_in(
       # The tick writes its record under the temp state and starts no real wait.
       ARENA_PREVIEW_STATE_DIR=str(root),
       ARENA_PREVIEW_DETACH_DRY="1",
+      **({"ARENA_PREVIEW_ROUTE": "1"} if routed else {}),
       ARENA_PREVIEW_TEST_DRIFT="1" if cwd else "0",
       **({"ARENA_PREVIEW_TEST_CALLS": str(calls)} if calls else {}),
     ),
@@ -1022,26 +1025,46 @@ def test_pr_state_classifier_keeps_payloads_separate_from_shell_code():
 
 
 def test_header_interrupt_precedes_hook_bypasses():
-  env_factory = clean_env
-  for command, line, routed in [
-    ("printf reached", "arena-preview read", False),
-    ("true", "true", False),
-    ("true", "true", True),
+  for command, line in [
+    ("printf reached", "arena-preview read"),
+    ("true", "true"),
   ]:
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
       store = preview_module.Store(root, create=True)
       notice = "Header reread request"
       store.set_meta("agent_interrupt", notice)
-      with patch(
-        __name__ + ".clean_env",
-        side_effect=lambda routed=routed, **kwargs: {
-          **env_factory(**kwargs),
-          "ARENA_PREVIEW_ROUTE": "1" if routed else "0",
-        },
-      ):
-        result = run(command, state=root, line=line)
+      result = run(command, state=root, line=line)
       assert result.returncode == 130, result.stderr
       assert notice in result.stderr
       assert "reached" not in result.stdout
       assert store.meta_value("agent_interrupt") is None
+
+
+def test_reread_waits_for_the_agent_shell():
+  for line, routed in (
+    ("bash -l /tmp/arena-workspace/procs/preview/run.cmd", False),
+    ("ss -ltn", False),
+    ("netstat -ltn", False),
+    ("source ~/.profile", False),
+    ("mkdir -p '/home/user'", False),
+    ("printf routed-work", True),
+  ):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      store = preview_module.Store(root, create=True)
+      store.request_interrupt("notes")
+      calls = root / "calls"
+      hosted = run(
+        "printf platform-active", state=root, line=line, calls=calls, routed=routed
+      )
+      assert hosted.returncode == 0, (line, hosted.stderr)
+      assert hosted.stdout == "platform-active", line
+      assert store.state()["agent_interrupt_pending"], line
+      log = calls.read_text() if calls.exists() else ""
+      assert "interrupt-tick" not in log, (line, log)
+      agent = run("printf agent-work", state=root)
+      assert agent.returncode == 130, agent.stderr
+      assert "agent-work" not in agent.stdout
+      assert "Read ARENA.md" in agent.stderr
+      assert not store.state()["agent_interrupt_pending"]
