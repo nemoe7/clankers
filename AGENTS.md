@@ -38,7 +38,7 @@
 
 ## Glossary
 
-- core = all
+- all = CORE.md + ARENA.md + CHATGPT
 - arena = [ARENA.md](ARENA.md)
 - house = this repository; house rules = root AGENTS.md
 - arena suite = ARENA.md and arena-skill files
