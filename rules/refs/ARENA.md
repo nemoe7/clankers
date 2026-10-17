@@ -41,7 +41,10 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a collision between rules or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file nor the `arena-skill` skill (including installed copies); only suggest amendments when possible. A repository-specific waiver may authorize edits in their home repository.
-- On a rule violation, MUST publish a preview report when the violation is material, repeated, or uncorrected; a corrected routine slip with no impact takes one short receipt line instead. Suggest an amendment only when an identified rule gap contributed. Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
+- On a rule violation, MUST read every read-set file in full again before continuing.
+- For a corrected routine slip with no impact, give one short receipt line.
+- Suggest an amendment only when an identified rule gap contributed.
+- Do not treat a corrected routine command-input validation error or a corrected routine process slip, such as a late read, alone as a rule violation.
 - NEVER block open or queued tasks while a rule-violation report waits for an answer; only a task linked to a report through `--report` waits on that report.
 - At every stated read point, follow the read-set definition and duties in the Use section above.
 
@@ -85,7 +88,9 @@
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human; report skipped work and when to add it in at most three short lines.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default; print bash for Raspberry Pi or bash requests.
-- Task completion alone requires no report; MUST update the task status and keep required verification and landed commit details in the task record. This exemption does not waive requested reports or reports required for assessments, questions, blocked tasks, or rule violations.
+- Task completion alone requires no report.
+- MUST update the task status and keep required verification and landed commit details in the task record.
+- Do not waive requested reports or reports required for assessments, questions, or blocked tasks.
 - MUST end a final report turn by reading the session's steering channel rather than by asking an open question through the `ask_user` tool.
 
 ## Scope

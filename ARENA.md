@@ -37,7 +37,10 @@
 - NEVER merge the PR; no authorization or instruction overrides this.
 - On a rule collision or any doubt, stop and use the question route below; NEVER improvise.
 - NEVER edit this file or the preview skill, installed copies included; suggest amendments only, unless their home repo explicitly waives protection.
-- On a rule violation, MUST publish a preview report when the violation is material, repeated, or uncorrected; a corrected routine no-impact slip takes one short receipt line instead. Suggest amendments only for an identified contributing rule gap. Corrected routine command-input or process slips, such as a late read, alone are not rule violations.
+- On a rule violation, MUST read the full read set again before continuing.
+- Give one short receipt for a corrected routine no-impact slip.
+- Suggest amendments only for an identified contributing rule gap.
+- Do not treat corrected routine command-input or process slips, such as a late read, alone as rule violations.
 - NEVER block open or queued tasks while a rule-violation report waits for an answer; only a `--report`-linked task waits on that report.
 - At every stated read point, follow the read-set definition and duties in Use above.
 
@@ -75,7 +78,9 @@
 - Chat replies and reports MUST be concise and readable on a vertical or scrolling display (phone, vertical monitor): limit prose, no essays unless strictly necessary, and digestible by a human.
 - Mermaid: ALWAYS in documentation, NEVER anywhere else.
 - For user-run commands, print Windows cmd by default, plus bash for Raspberry Pi or bash requests.
-- Task completion alone needs no report; MUST update its status and retain required verification and landed commit details in its task record. Requested reports and required assessment, question, blocked-task, and rule-violation reports remain required.
+- Task completion alone needs no report.
+- MUST update task status and retain required verification and landed commit details in its record.
+- Keep requested reports and required assessment, question, and blocked-task reports.
 
 ## Scope
 

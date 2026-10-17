@@ -20,6 +20,8 @@ Keep one entry per date and extend the open date. This log has no Unreleased sec
 
 ### Changed
 
+- Arena suite: require a full read-set reread after a rule violation. Keep routine-slip receipts and separate report duties.
+
 - Arena rules: forbid claims of context-limit or turn-budget restrictions.
 
 - Preview: use one flagless Markdown acknowledgement input. Read redirected text with `ack <id> -`. Retain stored receipts.

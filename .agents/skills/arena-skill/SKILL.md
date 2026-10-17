@@ -73,7 +73,9 @@ arena-preview ack <id> - < arena-state/reply.md
 
 If the preview is not visible, acknowledge a delivered note in chat with literal `ACK:` and your interpretation. Treat `STOP:`, `PRIORITY:`, `CONTEXT:` and ordinary notes under chat's instruction precedence; check their claims against evidence.
 
-ALWAYS report a workaround or bypass through a preview report when it violates a rule, bypasses a required safeguard, or creates material risk, with a suggested fix.
+- On a rule violation, MUST read ARENA.md, root AGENTS.md, every nested AGENTS.md, and arena-skill SKILL.md in full again before continuing.
+
+ALWAYS report a workaround or bypass through a preview report when it bypasses a required safeguard or creates material risk, with a suggested fix.
 
 ALWAYS report reproducible skill defects or unresolved skill failures through a preview report with evidence and a suggested fix; corrected routine command-input validation errors get a brief notice, not a separate report or rule proposal.
 
